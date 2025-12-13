@@ -1,0 +1,8 @@
+# Build artifacts
+bin/
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
