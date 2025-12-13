@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  coder-agent:
+    build:
+      context: ./agents/coder
+    image: silexa/coder-agent:local
+    container_name: silexa-coder-agent
+    working_dir: /workspace/apps
+    volumes:
+      - ./apps:/workspace/apps
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - HOST_UID=${HOST_UID:-1000}
+      - HOST_GID=${HOST_GID:-1000}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    tty: true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsSL", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
