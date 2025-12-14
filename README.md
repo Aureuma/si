@@ -1,13 +1,17 @@
 # Silexa Substrate
 
-Silexa is an AI-first substrate for orchestrating multiple coding agents. It lives at `/opt/silexa` on the host and uses Docker for isolation between app builds while allowing the core agent to run directly on the host.
+Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads) on a single host. It lives at `/opt/silexa` on the host and uses Docker for isolation between app builds while allowing the core agent to run directly on the host.
 
 ## Layout
 - `bootstrap.sh`: Host bootstrap for Ubuntu LTS (Docker, systemd, Node.js, git config).
-- `docker-compose.yml`: Services for agents (currently a coder agent container).
+- `docker-compose.yml`: Services for agents (manager + dyads + coder agent).
 - `apps/`: Application repos built by agents (one repo per app).
-- `agents/`: Agent-specific code and tooling. `agents/coder` contains the Go-based coder agent container image.
-- `bin/`: Helper binaries/scripts for local orchestration (e.g., `bin/coder-up.sh`).
+- `agents/`: Agent-specific code and tooling.
+  - `coder`: Go-based agent container exposing `:8080/healthz` with docker/socket mounts for nested builds.
+  - `actor`: Node 22 base image for interactive CLI agents (install LLM tools like codex-cli inside the running container as needed).
+  - `critic`: Go watcher that reads actor container logs via the Docker socket and sends heartbeats to the manager.
+  - `manager`: Go service collecting critic heartbeats for monitoring.
+- `bin/`: Helper scripts (e.g., `bin/coder-up.sh`).
 
 ## Bootstrapping
 Run on Ubuntu LTS as root or via sudo:
@@ -18,23 +22,35 @@ sudo /opt/silexa/bootstrap.sh
 
 The script installs Docker CE (with buildx/compose), enables systemd services, sets git config to `SHi-ON <shawn@azdam.com>`, installs Node.js (Nodesource LTS, default 22.x), and initializes the git repo in `/opt/silexa`. After it completes, re-login so docker group membership takes effect.
 
-## Coder agent container
-Build and start the coder agent container (uses Go 1.22, exposes `:8080/healthz`, mounts `apps/`, and has docker socket access for nested builds):
+## Dyads (Actor + Critic) and Manager
+- Actors (`actor-web`, `actor-research`) are Node-based containers mounting `/opt/silexa/apps` and the docker socket; they run idle (`tail -f /dev/null`) so you can `docker exec -it` into them and drive interactive LLM CLIs (e.g., install `npm i -g @openai/codex-cli` inside the container if available).
+- Critics (`critic-web`, `critic-research`) run Go monitors that pull recent logs from their paired actor via the Docker socket and send periodic heartbeats to the manager.
+- Manager (`manager`) listens on `:9090` and records heartbeats; fetch recent beats via `http://localhost:9090/beats`.
+
+Bring everything up (manager + two dyads + coder agent):
 
 ```bash
 cd /opt/silexa
-HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d coder-agent
-# or
-/opt/silexa/bin/coder-up.sh
+HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d
 ```
 
-Health check:
+Check health and beats:
 
 ```bash
-curl -fsSL http://localhost:8080/healthz
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+curl -fsSL http://localhost:9090/beats
 ```
 
+Open an interactive actor session (example for web dyad) and install your CLI tooling inside it:
+
+```bash
+docker exec -it silexa-actor-web bash
+# inside container: npm i -g <your-llm-cli>
+```
+
+The critics will mirror actor logs to their stdout and heartbeat to the manager; extend the critic to add richer policy/feedback loops as needed.
+
 ## Next steps
-- Install Codex CLI on the host (requires Node.js) to drive the core agent.
-- Add app repositories under `apps/` and start building with isolated Docker builds.
-- Extend `agents/` with additional agent containers as workflows evolve.
+- Install Codex CLI (or another LLM-driven CLI) inside actor containers per task.
+- Add more dyads by copying actor/critic service blocks in `docker-compose.yml` and pointing `ACTOR_CONTAINER` accordingly.
+- Wire higher-level task queues to feed work into actors and surface signals from manager to department heads.

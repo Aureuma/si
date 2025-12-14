@@ -1,4 +1,13 @@
 services:
+  manager:
+    build:
+      context: ./agents/manager
+    image: silexa/manager:local
+    container_name: silexa-manager
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
   coder-agent:
     build:
       context: ./agents/coder
@@ -20,3 +29,59 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+
+  actor-web:
+    build:
+      context: ./agents/actor
+    image: silexa/actor:local
+    container_name: silexa-actor-web
+    working_dir: /workspace/apps
+    volumes:
+      - ./apps:/workspace/apps
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ROLE=webdev
+    tty: true
+    restart: unless-stopped
+
+  critic-web:
+    build:
+      context: ./agents/critic
+    image: silexa/critic:local
+    container_name: silexa-critic-web
+    depends_on:
+      - actor-web
+      - manager
+    environment:
+      - ACTOR_CONTAINER=silexa-actor-web
+      - MANAGER_URL=http://manager:9090
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "0:0"
+    restart: unless-stopped
+
+  actor-research:
+    image: silexa/actor:local
+    container_name: silexa-actor-research
+    working_dir: /workspace/apps
+    volumes:
+      - ./apps:/workspace/apps
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ROLE=research
+    tty: true
+    restart: unless-stopped
+
+  critic-research:
+    image: silexa/critic:local
+    container_name: silexa-critic-research
+    depends_on:
+      - actor-research
+      - manager
+    environment:
+      - ACTOR_CONTAINER=silexa-actor-research
+      - MANAGER_URL=http://manager:9090
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    user: "0:0"
+    restart: unless-stopped
