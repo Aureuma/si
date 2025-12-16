@@ -10,6 +10,10 @@ This doc outlines how a dyad (Actor+Critic) can exercise services and infrastruc
 - Main endpoint: `curl -fsSL http://localhost:18080/` (expect greeting)
 - Cleanup: `docker stop test-sample && docker rm test-sample`
 
+## QA smoke helper
+- `bin/qa-smoke.sh` (uses sample-go-service by default) spins up a container on `silexa_default`, hits `/healthz` and `/`, and reports ✅/❌. Optional Telegram notify via `TELEGRAM_CHAT_ID`/`NOTIFY_URL`.
+- Override app image via `APP_IMAGE`; port via `PORT`.
+
 ## Dyad usage pattern
 - Actor steps: build images, run containers in `silexa_default` network, run curl-driven smoke tests.
 - Critic steps: tail actor logs and heartbeat to manager; optional alert via Telegram when tests fail or hang.
