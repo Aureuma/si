@@ -10,7 +10,7 @@ check_ssh() {
   if ! command -v sshd >/dev/null 2>&1; then
     report "SSHD: not installed"
     return
-  }
+  fi
   conf=$(sshd -T 2>/dev/null || true)
   prl=$(printf '%s\n' "$conf" | awk '/^permitrootlogin/ {print $2}')
   pass=$(printf '%s\n' "$conf" | awk '/^passwordauthentication/ {print $2}')
