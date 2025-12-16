@@ -155,6 +155,20 @@ services:
     user: "0:0"
     restart: unless-stopped
 
+  mcp-gateway:
+    build:
+      context: ./tools/mcp-gateway
+    image: silexa/mcp-gateway:local
+    container_name: silexa-mcp-gateway
+    mem_limit: 512m
+    cpus: "0.5"
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./data/mcp-gateway:/catalog
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
 secrets:
   telegram_bot_token:
     file: ./secrets/telegram_bot_token
