@@ -10,3 +10,7 @@ node_modules/
 secrets/
 .env
 !secrets/README.md
+
+# Data persistence files
+data/
+!data/manager/.gitkeep

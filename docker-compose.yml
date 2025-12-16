@@ -21,9 +21,12 @@ services:
     environment:
       - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - DATA_DIR=/data
     ports:
       - "9090:9090"
     restart: unless-stopped
+    volumes:
+      - ./data/manager:/data
 
   coder-agent:
     build:
