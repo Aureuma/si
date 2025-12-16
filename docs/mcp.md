@@ -14,6 +14,7 @@ We bundle Docker's MCP Gateway so actors/critics can access MCP servers through 
 ### Usage from actors/critics
 - Point MCP clients/SDKs to `http://mcp-gateway:8088` (inside compose network) or `http://localhost:8088` from host.
 - Critics/actors can rely on the shared gateway to discover servers instead of running bespoke ones per container.
+- Codex CLI: use `configs/codex-mcp-config.toml` and place it at `~/.config/codex/config.toml` inside the actor/critic container (helper: `bin/apply-codex-mcp-config.sh <container>`).
 
 ### Operations
 - Build/start: `bin/mcp-gateway-up.sh`.
