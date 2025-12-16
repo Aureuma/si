@@ -54,6 +54,8 @@ func main() {
     }
     bot.Debug = false
 
+    setCommands(bot, logger)
+
     n := &notifier{bot: bot, chatID: chatID, logger: logger, managerURL: managerURL}
 
     mux := http.NewServeMux()
@@ -68,6 +70,18 @@ func main() {
     logger.Printf("telegram notifier listening on :8081 for chat %v", chatID)
     if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
         logger.Fatalf("server error: %v", err)
+    }
+}
+
+func setCommands(bot *tgbotapi.BotAPI, logger *log.Logger) {
+    cmds := []tgbotapi.BotCommand{
+        {Command: "status", Description: "Get system status summary"},
+        {Command: "task", Description: "Create a human task"},
+        {Command: "help", Description: "Show available commands"},
+    }
+    req := tgbotapi.NewSetMyCommands(cmds...)
+    if _, err := bot.Request(req); err != nil {
+        logger.Printf("set commands error: %v", err)
     }
 }
 
