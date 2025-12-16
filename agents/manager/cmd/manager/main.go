@@ -108,7 +108,7 @@ func (n *notifier) maybeSend(msg string, chatID *int64) {
     if targetChat == nil {
         targetChat = n.chatID
     }
-    if targetChat == nil || *targetChat <= 0 {
+    if targetChat == nil {
         n.logger.Printf("skip notify: no chat id provided")
         return
     }
