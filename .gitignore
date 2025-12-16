@@ -5,3 +5,7 @@ node_modules/
 
 # Logs
 *.log
+
+# Secrets/env
+secrets/
+.env
