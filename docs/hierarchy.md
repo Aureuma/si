@@ -4,21 +4,26 @@
 - Engineering: web, backend, infra
 - Research: research
 - Marketing: marketing
+- Security: creds (credentials oversight)
 
-Each dyad is spawned with `bin/spawn-dyad.sh <name> [role] [department]` and carries labels/env:
-- `silexa.dyad=<name>`
-- `silexa.department=<department>`
-- `silexa.role=<role>`
-- env: `ROLE`, `DEPARTMENT`
+Spawn dyads with `bin/spawn-dyad.sh <name> [role] [department]`; labels/env set:
+- Labels: `silexa.dyad=<name>`, `silexa.department=<department>`, `silexa.role=<role>`
+- Env: `ROLE`, `DEPARTMENT`
 
 ## Reporting paths
-- Critics send heartbeats to Manager (`/beats`).
-- Feedback: POST `/feedback` with `{severity, message, source, context}` (use `bin/add-feedback.sh`). Persisted to `data/manager/tasks.json`.
-- Human tasks: POST `/human-tasks` (or `bin/add-human-task.sh`); persisted and optionally notified via Telegram.
-- Telegram: Bot at `:8081/notify`; Manager notifies via `TELEGRAM_NOTIFY_URL`/`TELEGRAM_CHAT_ID`.
+- Heartbeats: Critics -> Manager `/beats`.
+- Feedback: POST `/feedback` (`bin/add-feedback.sh {severity,message,source,context}`) persisted and reviewable.
+- Human tasks: POST `/human-tasks` (`bin/add-human-task.sh ...`), persisted, optional Telegram notify.
+- Access requests: POST `/access-requests` (`bin/request-access.sh ...`), resolve via `/access-requests/resolve` (`bin/resolve-access.sh`).
+- Telegram: bot at `:8081/notify`; Manager uses `TELEGRAM_NOTIFY_URL`/`TELEGRAM_CHAT_ID` for alerts.
 
-## Usage
+## Oversight expectations
+- Security/creds dyad reviews access requests and sensitive feedback; can resolve/deny via `bin/resolve-access.sh`.
+- Department leads (human) should review `/feedback` and `/human-tasks` and act on items relevant to their dyads.
+
+## Usage quick refs
 - List dyads: `sudo bin/list-dyads.sh`.
-- Spawn: `bin/spawn-dyad.sh backend backend engineering`.
-- Feedback example: `bin/add-feedback.sh warn "infra actor needs codex login" critic-infra "ssh -N -L ..."`.
-- Human task example: `bin/add-human-task.sh "Codex login" "ssh -N -L ..." "http://127.0.0.1:PORT/..." "15m" "silexa-actor-infra" "keep tunnel alive"`.
+- File access request: `bin/request-access.sh "actor-infra" "secrets/telegram_bot_token" "read" "reason" "security"`.
+- Resolve access: `bin/resolve-access.sh <id> approved|denied [by] [notes]`.
+- File feedback: `bin/add-feedback.sh warn "issue" source "context"`.
+- File human task: `bin/add-human-task.sh "title" "commands" "url" "timeout" "requested_by" "notes"`.
