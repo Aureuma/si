@@ -29,3 +29,4 @@ Recommended next actions:
 3) Install/configure `unattended-upgrades`, `fail2ban`, `auditd`.
 4) Provide Docker Hub PAT as a secret if using dockerhub MCP; otherwise disable that catalog entry.
 5) Run `bin/security-audit.sh` and record findings in manager `/feedback`.
+6) Optional tooling: `bin/install-crowdsec.sh`, `bin/install-fail2ban.sh`, `bin/configure-ufw.sh` (run as root).
