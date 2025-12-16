@@ -425,10 +425,12 @@ func (s *store) load(logger *log.Logger) {
         return
     }
     var payload struct {
-        Tasks     []humanTask `json:"tasks"`
-        Feedbacks []feedback  `json:"feedbacks"`
-        NextTask  int         `json:"next_id"`
-        NextFeedback int      `json:"next_feedback_id"`
+        Tasks         []humanTask    `json:"tasks"`
+        Feedbacks     []feedback     `json:"feedbacks"`
+        Access        []accessRequest `json:"access_requests"`
+        NextTask      int            `json:"next_id"`
+        NextFeedback  int            `json:"next_feedback_id"`
+        NextAccess    int            `json:"next_access_id"`
     }
     if err := json.Unmarshal(b, &payload); err != nil {
         logger.Printf("tasks decode error: %v", err)
@@ -436,8 +438,10 @@ func (s *store) load(logger *log.Logger) {
     }
     s.tasks = payload.Tasks
     s.feedbacks = payload.Feedbacks
+    s.access = payload.Access
     s.nextTaskID = payload.NextTask
     s.nextFeedbackID = payload.NextFeedback
+    s.nextAccessID = payload.NextAccess
 }
 
 func (s *store) persistLocked() {
@@ -445,11 +449,13 @@ func (s *store) persistLocked() {
         return
     }
     payload := struct {
-        Tasks        []humanTask `json:"tasks"`
-        Feedbacks    []feedback  `json:"feedbacks"`
-        NextTask     int         `json:"next_id"`
-        NextFeedback int         `json:"next_feedback_id"`
-    }{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID}
+        Tasks        []humanTask    `json:"tasks"`
+        Feedbacks    []feedback     `json:"feedbacks"`
+        NextTask     int            `json:"next_id"`
+        NextFeedback int            `json:"next_feedback_id"`
+        Access       []accessRequest `json:"access_requests,omitempty"`
+        NextAccess   int             `json:"next_access_id,omitempty"`
+    }{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID}
     b, err := json.MarshalIndent(payload, "", "  ")
     if err != nil {
         return
