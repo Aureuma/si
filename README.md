@@ -23,9 +23,9 @@ sudo /opt/silexa/bootstrap.sh
 The script installs Docker CE (with buildx/compose), enables systemd services, sets git config to `SHi-ON <shawn@azdam.com>`, installs Node.js (Nodesource LTS, default 22.x), and initializes the git repo in `/opt/silexa`. After it completes, re-login so docker group membership takes effect.
 
 ## Dyads (Actor + Critic) and Manager
-- Actors (`actor-web`, `actor-research`) are Node-based containers mounting `/opt/silexa/apps` and the docker socket; they run idle (`tail -f /dev/null`) so you can `docker exec -it` into them and drive interactive LLM CLIs (e.g., install `npm i -g @openai/codex-cli` inside the container if available).
+- Actors (`actor-web`, `actor-research`) are Node-based containers mounting `/opt/silexa/apps` and the docker socket; they run idle (`tail -f /dev/null`) so you can `docker exec -it` into them and drive interactive LLM CLIs (install inside the container as needed).
 - Critics (`critic-web`, `critic-research`) run Go monitors that pull recent logs from their paired actor via the Docker socket and send periodic heartbeats to the manager.
-- Manager (`manager`) listens on `:9090` and records heartbeats; fetch recent beats via `http://localhost:9090/beats`.
+- Manager (`manager`) listens on `:9090` and records heartbeats; fetch beats via `http://localhost:9090/beats`.
 
 Bring everything up (manager + two dyads + coder agent):
 
@@ -49,6 +49,20 @@ docker exec -it silexa-actor-web bash
 ```
 
 The critics will mirror actor logs to their stdout and heartbeat to the manager; extend the critic to add richer policy/feedback loops as needed.
+
+## Dynamic dyads (self-hosted spawning)
+- Build base images once: `bin/build-images.sh`.
+- Spawn a new dyad (actor+critic) on the shared network without editing compose:
+
+```bash
+bin/spawn-dyad.sh <name> [role]
+# example: bin/spawn-dyad.sh marketing research
+```
+
+- Teardown a dyad: `bin/teardown-dyad.sh <name>`.
+- Run commands in an actor: `bin/run-task.sh silexa-actor-<name> <command...>`.
+
+All dyads share `/opt/silexa/apps` and `/var/run/docker.sock`, so they can build new services or extend Silexa itself. Critics auto-heartbeat to the manager so the management layer can watch liveness and logs.
 
 ## Next steps
 - Install Codex CLI (or another LLM-driven CLI) inside actor containers per task.
