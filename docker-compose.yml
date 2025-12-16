@@ -4,6 +4,8 @@ services:
       context: ./agents/telegram-bot
     image: silexa/telegram-bot:local
     container_name: silexa-telegram-bot
+    mem_limit: 128m
+    cpus: "0.25"
     environment:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
@@ -19,6 +21,8 @@ services:
       context: ./agents/resource-broker
     image: silexa/resource-broker:local
     container_name: silexa-resource-broker
+    mem_limit: 256m
+    cpus: "0.5"
     environment:
       - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
@@ -34,6 +38,8 @@ services:
       context: ./agents/infra-broker
     image: silexa/infra-broker:local
     container_name: silexa-infra-broker
+    mem_limit: 256m
+    cpus: "0.5"
     environment:
       - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
@@ -49,6 +55,8 @@ services:
       context: ./agents/manager
     image: silexa/manager:local
     container_name: silexa-manager
+    mem_limit: 256m
+    cpus: "0.5"
     environment:
       - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
@@ -64,6 +72,8 @@ services:
       context: ./agents/coder
     image: silexa/coder-agent:local
     container_name: silexa-coder-agent
+    mem_limit: 2g
+    cpus: "1.5"
     working_dir: /workspace/apps
     volumes:
       - ./apps:/workspace/apps
@@ -86,6 +96,8 @@ services:
       context: ./agents/actor
     image: silexa/actor:local
     container_name: silexa-actor-web
+    mem_limit: 1g
+    cpus: "1.0"
     working_dir: /workspace/apps
     volumes:
       - ./apps:/workspace/apps
@@ -100,6 +112,8 @@ services:
       context: ./agents/critic
     image: silexa/critic:local
     container_name: silexa-critic-web
+    mem_limit: 512m
+    cpus: "0.75"
     depends_on:
       - actor-web
       - manager
@@ -114,6 +128,8 @@ services:
   actor-research:
     image: silexa/actor:local
     container_name: silexa-actor-research
+    mem_limit: 1g
+    cpus: "1.0"
     working_dir: /workspace/apps
     volumes:
       - ./apps:/workspace/apps
@@ -126,6 +142,8 @@ services:
   critic-research:
     image: silexa/critic:local
     container_name: silexa-critic-research
+    mem_limit: 512m
+    cpus: "0.75"
     depends_on:
       - actor-research
       - manager
