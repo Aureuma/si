@@ -108,10 +108,12 @@ func (n *notifier) maybeSend(msg string, chatID *int64) {
     if targetChat == nil {
         targetChat = n.chatID
     }
-    payload := map[string]interface{}{"message": msg}
-    if targetChat != nil {
-        payload["chat_id"] = *targetChat
+    if targetChat == nil || *targetChat <= 0 {
+        n.logger.Printf("skip notify: no chat id provided")
+        return
     }
+    payload := map[string]interface{}{"message": msg}
+    payload["chat_id"] = *targetChat
     b, _ := json.Marshal(payload)
     req, err := http.NewRequest(http.MethodPost, n.url, bytes.NewReader(b))
     if err != nil {
