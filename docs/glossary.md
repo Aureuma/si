@@ -3,6 +3,7 @@
 - **Actor**: Node-based container where interactive LLM CLI runs (e.g., Codex CLI). Mounts `/opt/silexa/apps` and docker.sock so it can build/run other services.
 - **Critic**: Go container that tails its Actor's docker logs and heartbeats to the Manager, enabling oversight/feedback.
 - **Dyad**: Paired Actor + Critic assigned to a domain (e.g., web, research). Managed together for work and monitoring.
+- **Department**: Logical grouping (e.g., engineering, marketing) assigned to a Dyad via `spawn-dyad.sh <name> <role> <department>`; exported to containers via `DEPARTMENT` env.
 - **Manager**: Go service at `:9090` that collects heartbeats from Critics (liveness/visibility). Extendable for richer signals.
 - **Human Action Queue**: Append-only list (`docs/human_queue.md`) where agents record blocking human tasks (e.g., browser-based OAuth, hardware tokens) with exact commands and timeout windows. Humans clear items once resolved.
 - **Telegram Bot**: Go control-plane service listening on `:8081/notify` to push human-queue items to Telegram. Uses `TELEGRAM_BOT_TOKEN` (from secret) and optionally `TELEGRAM_CHAT_ID` (env); callers can also supply `chat_id` per message.

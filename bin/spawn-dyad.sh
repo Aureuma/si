@@ -2,12 +2,13 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: spawn-dyad.sh <name> [role]" >&2
+  echo "usage: spawn-dyad.sh <name> [role] [department]" >&2
   exit 1
 fi
 
 NAME="$1"
 ROLE="${2:-generic}"
+DEPT="${3:-$ROLE}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NETWORK="silexa_default"
 MANAGER_URL="${MANAGER_URL:-http://silexa-manager:9090}"
@@ -28,6 +29,7 @@ else
     -v "$ROOT_DIR/apps:/workspace/apps" \
     -v /var/run/docker.sock:/var/run/docker.sock \
     -e ROLE="$ROLE" \
+    -e DEPARTMENT="$DEPT" \
     silexa/actor:local tail -f /dev/null
 fi
 
@@ -41,6 +43,8 @@ else
     -v /var/run/docker.sock:/var/run/docker.sock \
     -e ACTOR_CONTAINER="silexa-actor-${NAME}" \
     -e MANAGER_URL="$MANAGER_URL" \
+    -e DEPARTMENT="$DEPT" \
+    -e ROLE="$ROLE" \
     silexa/critic:local
 fi
 
