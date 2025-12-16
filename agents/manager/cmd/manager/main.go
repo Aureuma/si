@@ -35,11 +35,22 @@ type humanTask struct {
     CompletedAt *time.Time `json:"completed_at,omitempty"`
 }
 
+type feedback struct {
+    ID        int       `json:"id"`
+    Source    string    `json:"source"`
+    Severity  string    `json:"severity"` // info|warn|error
+    Message   string    `json:"message"`
+    Context   string    `json:"context"`
+    CreatedAt time.Time `json:"created_at"`
+}
+
 type store struct {
     mu    sync.Mutex
     beats []heartbeat
     tasks []humanTask
-    nextID int
+    nextTaskID int
+    feedbacks []feedback
+    nextFeedbackID int
     dataPath string
 }
 
@@ -63,8 +74,8 @@ func (s *store) latest() []heartbeat {
 func (s *store) addTask(t humanTask) humanTask {
     s.mu.Lock()
     defer s.mu.Unlock()
-    s.nextID++
-    t.ID = s.nextID
+    s.nextTaskID++
+    t.ID = s.nextTaskID
     t.Status = "open"
     t.CreatedAt = time.Now().UTC()
     s.tasks = append(s.tasks, t)
@@ -96,6 +107,28 @@ func (s *store) completeTask(id int) bool {
         }
     }
     return false
+}
+
+func (s *store) addFeedback(f feedback) feedback {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    s.nextFeedbackID++
+    f.ID = s.nextFeedbackID
+    if f.Severity == "" {
+        f.Severity = "info"
+    }
+    f.CreatedAt = time.Now().UTC()
+    s.feedbacks = append(s.feedbacks, f)
+    s.persistLocked()
+    return f
+}
+
+func (s *store) listFeedback() []feedback {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    out := make([]feedback, len(s.feedbacks))
+    copy(out, s.feedbacks)
+    return out
 }
 
 type notifier struct {
@@ -209,6 +242,26 @@ func main() {
         http.Error(w, "not found", http.StatusNotFound)
     })
 
+    http.HandleFunc("/feedback", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+            f := st.listFeedback()
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(f)
+        case http.MethodPost:
+            var fb feedback
+            if err := json.NewDecoder(r.Body).Decode(&fb); err != nil || fb.Message == "" {
+                http.Error(w, "invalid payload", http.StatusBadRequest)
+                return
+            }
+            created := st.addFeedback(fb)
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(created)
+        default:
+            w.WriteHeader(http.StatusMethodNotAllowed)
+        }
+    })
+
     addr := ":9090"
     logger.Printf("manager listening on %s", addr)
     if err := http.ListenAndServe(addr, nil); err != nil {
@@ -268,15 +321,19 @@ func (s *store) load(logger *log.Logger) {
         return
     }
     var payload struct {
-        Tasks []humanTask `json:"tasks"`
-        Next  int         `json:"next_id"`
+        Tasks     []humanTask `json:"tasks"`
+        Feedbacks []feedback  `json:"feedbacks"`
+        NextTask  int         `json:"next_id"`
+        NextFeedback int      `json:"next_feedback_id"`
     }
     if err := json.Unmarshal(b, &payload); err != nil {
         logger.Printf("tasks decode error: %v", err)
         return
     }
     s.tasks = payload.Tasks
-    s.nextID = payload.Next
+    s.feedbacks = payload.Feedbacks
+    s.nextTaskID = payload.NextTask
+    s.nextFeedbackID = payload.NextFeedback
 }
 
 func (s *store) persistLocked() {
@@ -284,9 +341,11 @@ func (s *store) persistLocked() {
         return
     }
     payload := struct {
-        Tasks []humanTask `json:"tasks"`
-        Next  int         `json:"next_id"`
-    }{Tasks: s.tasks, Next: s.nextID}
+        Tasks        []humanTask `json:"tasks"`
+        Feedbacks    []feedback  `json:"feedbacks"`
+        NextTask     int         `json:"next_id"`
+        NextFeedback int         `json:"next_feedback_id"`
+    }{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID}
     b, err := json.MarshalIndent(payload, "", "  ")
     if err != nil {
         return
