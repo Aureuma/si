@@ -6,6 +6,7 @@ Use these metrics to steer dyads and departments. All can be posted to the manag
 - **Lead time**: median time from task open to close per department (`lead_time_minutes` with unit `minutes`).
 - **Blocker pressure**: count of open human tasks + pending access requests (`blockers_open`). Track trend day over day.
 - **Reliability**: failed vs successful runs of QA smoke or deployments (`qa_fail_rate`, `deploy_fail_rate` as percentages).
+- **Visual quality**: count of visual diffs per run and time-to-approval (`visual_regressions`, `visual_baseline_age_days`).
 - **Utilization**: active dyads per department vs planned (`dyads_active`).
 - **Cost guardrail**: estimated cloud spend deltas pre-deploy (`deploy_cost_delta`), and number of cost vetoes (`cost_veto_count`).
 - **Security**: credentials rotations per week, pending secret requests (`creds_rotated`, `creds_requests_pending`).

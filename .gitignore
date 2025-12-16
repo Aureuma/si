@@ -16,3 +16,4 @@ data/
 !data/manager/.gitkeep
 !data/resource-broker/.gitkeep
 !data/infra-broker/.gitkeep
+.artifacts/
