@@ -72,6 +72,7 @@ All dyads share `/opt/silexa/apps` and `/var/run/docker.sock`, so they can build
 - Create a structured human task (stored in manager and optionally forwarded to Telegram):  
   `TELEGRAM_CHAT_ID=<id> bin/add-human-task.sh "Codex login for actor web" "ssh -N -L 127.0.0.1:47123:ACTOR_IP:PORT user@host" "http://127.0.0.1:47123/..." "15m" "silexa-actor-web" "keep tunnel alive until callback"`  
   Then check `curl -fsSL http://localhost:9090/human-tasks`.
+- Mark a task complete: `bin/complete-human-task.sh <id>`.
 - Record the blocking step in `docs/human_queue.md` so humans have a durable checklist; critics/agents can also call `/notify` inside the cluster (URL `http://telegram-bot:8081/notify`). Payload supports `{ "message": "...", "chat_id": 123456789 }`.
 
 ## Codex CLI login flow (pattern)

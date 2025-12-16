@@ -10,3 +10,4 @@
 - **Secrets handling**: Prefer docker secrets for tokens (e.g., `secrets/telegram_bot_token` mounted into containers). Environment variables are allowed for dev but should be avoided for long-lived credentials.
 - **RBAC for secrets**: Only services that need a secret mount it (e.g., Telegram bot mounts its token; other containers do not). Avoid sharing docker socket to services that don’t require it; keep minimal permissions per container.
 - **Human notification flow**: When an agent hits a browser-required step (e.g., `codex login`), it appends to the Human Action Queue and optionally calls the Telegram bot `/notify` endpoint to alert operators with the exact tunnel command and URL.
+- **Human tasks helper scripts**: `bin/add-human-task.sh` to create tasks (optionally Telegram), `bin/complete-human-task.sh` to close tasks, `bin/notify-human.sh` for ad-hoc messages.
