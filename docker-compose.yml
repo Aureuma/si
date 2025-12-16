@@ -14,6 +14,21 @@ services:
     ports:
       - "8081:8081"
 
+  resource-broker:
+    build:
+      context: ./agents/resource-broker
+    image: silexa/resource-broker:local
+    container_name: silexa-resource-broker
+    environment:
+      - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - DATA_DIR=/data
+    volumes:
+      - ./data/resource-broker:/data
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+
   manager:
     build:
       context: ./agents/manager
