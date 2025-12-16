@@ -30,6 +30,9 @@ else
     -v /var/run/docker.sock:/var/run/docker.sock \
     -e ROLE="$ROLE" \
     -e DEPARTMENT="$DEPT" \
+    --label "silexa.dyad=${NAME}" \
+    --label "silexa.department=${DEPT}" \
+    --label "silexa.role=${ROLE}" \
     silexa/actor:local tail -f /dev/null
 fi
 
@@ -45,6 +48,9 @@ else
     -e MANAGER_URL="$MANAGER_URL" \
     -e DEPARTMENT="$DEPT" \
     -e ROLE="$ROLE" \
+    --label "silexa.dyad=${NAME}" \
+    --label "silexa.department=${DEPT}" \
+    --label "silexa.role=${ROLE}" \
     silexa/critic:local
 fi
 
