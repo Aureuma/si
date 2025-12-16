@@ -44,6 +44,20 @@ type feedback struct {
     CreatedAt time.Time `json:"created_at"`
 }
 
+type accessRequest struct {
+    ID         int       `json:"id"`
+    Requester  string    `json:"requester"`  // dyad or actor/critic
+    Department string    `json:"department"`
+    Resource   string    `json:"resource"`
+    Action     string    `json:"action"`
+    Reason     string    `json:"reason"`
+    Status     string    `json:"status"` // pending|approved|denied
+    CreatedAt  time.Time `json:"created_at"`
+    ResolvedAt *time.Time `json:"resolved_at,omitempty"`
+    ResolvedBy string    `json:"resolved_by,omitempty"`
+    Notes      string    `json:"notes,omitempty"`
+}
+
 type store struct {
     mu    sync.Mutex
     beats []heartbeat
@@ -51,6 +65,8 @@ type store struct {
     nextTaskID int
     feedbacks []feedback
     nextFeedbackID int
+    access []accessRequest
+    nextAccessID int
     dataPath string
 }
 
@@ -129,6 +145,45 @@ func (s *store) listFeedback() []feedback {
     out := make([]feedback, len(s.feedbacks))
     copy(out, s.feedbacks)
     return out
+}
+
+func (s *store) addAccess(r accessRequest) accessRequest {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    s.nextAccessID++
+    r.ID = s.nextAccessID
+    if r.Status == "" {
+        r.Status = "pending"
+    }
+    r.CreatedAt = time.Now().UTC()
+    s.access = append(s.access, r)
+    s.persistLocked()
+    return r
+}
+
+func (s *store) listAccess() []accessRequest {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    out := make([]accessRequest, len(s.access))
+    copy(out, s.access)
+    return out
+}
+
+func (s *store) resolveAccess(id int, status, by, notes string) bool {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    for i := range s.access {
+        if s.access[i].ID == id {
+            s.access[i].Status = status
+            now := time.Now().UTC()
+            s.access[i].ResolvedAt = &now
+            s.access[i].ResolvedBy = by
+            s.access[i].Notes = notes
+            s.persistLocked()
+            return true
+        }
+    }
+    return false
 }
 
 type notifier struct {
@@ -260,6 +315,55 @@ func main() {
         default:
             w.WriteHeader(http.StatusMethodNotAllowed)
         }
+    })
+
+    http.HandleFunc("/access-requests", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+            list := st.listAccess()
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(list)
+        case http.MethodPost:
+            var ar accessRequest
+            if err := json.NewDecoder(r.Body).Decode(&ar); err != nil || ar.Requester == "" || ar.Resource == "" || ar.Action == "" {
+                http.Error(w, "invalid payload", http.StatusBadRequest)
+                return
+            }
+            created := st.addAccess(ar)
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(created)
+        default:
+            w.WriteHeader(http.StatusMethodNotAllowed)
+        }
+    })
+
+    http.HandleFunc("/access-requests/resolve", func(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            w.WriteHeader(http.StatusMethodNotAllowed)
+            return
+        }
+        idStr := r.URL.Query().Get("id")
+        status := r.URL.Query().Get("status")
+        if idStr == "" || status == "" {
+            http.Error(w, "id and status required", http.StatusBadRequest)
+            return
+        }
+        if status != "approved" && status != "denied" {
+            http.Error(w, "status must be approved or denied", http.StatusBadRequest)
+            return
+        }
+        id, err := strconv.Atoi(idStr)
+        if err != nil || id <= 0 {
+            http.Error(w, "invalid id", http.StatusBadRequest)
+            return
+        }
+        by := r.URL.Query().Get("by")
+        notes := r.URL.Query().Get("notes")
+        if st.resolveAccess(id, status, by, notes) {
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+        http.Error(w, "not found", http.StatusNotFound)
     })
 
     addr := ":9090"
