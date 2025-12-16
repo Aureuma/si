@@ -1,18 +1,21 @@
 # Maintenance & Vital Signs
 
 ## Health checks
-- Manager: `curl -fsSL http://localhost:9090/healthz` (add when available)
+- Manager: add /healthz if needed (not present yet)
 - Telegram bot: `curl -fsSL http://localhost:8081/healthz`
+- Resource brokers: `http://localhost:9091/healthz`, `http://localhost:9092/healthz`
 - Critic heartbeats: `curl -fsSL http://localhost:9090/beats` (ensure recent timestamps)
 - Status snapshot: `bin/report-status.sh` (optional Telegram)
 - Escalation: `bin/escalate-blockers.sh`
+- Pre-deploy cost/risk gate: `bin/pre-deploy-check.sh` (summarizes tasks/access/resource/infra requests; optional Telegram)
 
 ## Garbage collection
 - `bin/cleanup-dyads.sh`: removes stopped dyad containers and prunes dangling images.
   - Safe to run periodically via cron/systemd.
 
 ## Persistence
-- Manager tasks/feedback/access are persisted in `data/manager/tasks.json`. Ensure volume is mounted.
+- Manager tasks/feedback/access/metrics persisted in `data/manager/tasks.json`.
+- Brokers persisted in `data/resource-broker/requests.json` and `data/infra-broker/infra_requests.json`.
 
 ## Access and secrets
 - Use access requests for sensitive resources; resolve via security dyad/human.
@@ -22,6 +25,7 @@
 - Spawn/destroy/list/status: `bin/dyadctl.sh` (labels applied for filtering/cleanup).
 - Web team: `bin/spawn-web-team.sh` to provision planner/builder/QA dyads.
 
-## Alerts
-- Telegram chat configured via `.env` (`TELEGRAM_CHAT_ID`); `NOTIFY_URL` points to bot `/notify`.
-- Consider scheduling `bin/report-status.sh` and `bin/escalate-blockers.sh` for periodic reporting.
+## Alerts and schedules (suggested)
+- Daily: `report-status.sh`, `health-monitor.sh` (sane thresholds), `cleanup-dyads.sh`.
+- Weekly: `review-cron.sh`, `escalate-blockers.sh`.
+- Pre-deploy: `pre-deploy-check.sh` with Telegram to gate costly/infra actions.
