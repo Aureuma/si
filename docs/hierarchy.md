@@ -19,6 +19,7 @@ Spawn dyads with `bin/spawn-dyad.sh <name> [role] [department]`; labels/env set:
 - `bin/escalate-blockers.sh` — escalate open tasks/pending access via feedback/Telegram
 - `bin/review-cron.sh` — high-stakes review snapshot (emoji-prefixed) for scheduled runs
 - Profiles: actor/critic starting contexts live in `profiles/`; print with `bin/actor-context.sh <profile>` (e.g., actor-web, actor-infra, critic-web, critic-infra, critic-qa, critic-research).
+- Capability office: model/tool recommendations per role via `bin/dyad-capability.sh <role>` (see `docs/capability-office.md` for scope and guardrails).
 
 ## Reporting paths
 - Heartbeats: Critics -> Manager `/beats`.
