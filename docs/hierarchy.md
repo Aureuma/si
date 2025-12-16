@@ -18,6 +18,7 @@ Spawn dyads with `bin/spawn-dyad.sh <name> [role] [department]`; labels/env set:
 - `bin/report-status.sh` — emoji-bar summary of tasks/access/feedback; optional Telegram send
 - `bin/escalate-blockers.sh` — escalate open tasks/pending access via feedback/Telegram
 - `bin/review-cron.sh` — high-stakes review snapshot (emoji-prefixed) for scheduled runs
+- Profiles: actor/critic starting contexts live in `profiles/`; print with `bin/actor-context.sh <profile>` (e.g., actor-web, actor-infra, critic-web, critic-infra, critic-qa, critic-research).
 
 ## Reporting paths
 - Heartbeats: Critics -> Manager `/beats`.
