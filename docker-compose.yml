@@ -29,6 +29,21 @@ services:
       - "9091:9091"
     restart: unless-stopped
 
+  infra-broker:
+    build:
+      context: ./agents/infra-broker
+    image: silexa/infra-broker:local
+    container_name: silexa-infra-broker
+    environment:
+      - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - DATA_DIR=/data
+    volumes:
+      - ./data/infra-broker:/data
+    ports:
+      - "9092:9092"
+    restart: unless-stopped
+
   manager:
     build:
       context: ./agents/manager
