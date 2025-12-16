@@ -23,6 +23,7 @@ type notifier struct {
 type notifyPayload struct {
     Message string `json:"message"`
     ChatID  *int64  `json:"chat_id,omitempty"`
+    Emoji   string `json:"emoji,omitempty"`
 }
 
 type taskPayload struct {
@@ -91,14 +92,14 @@ func (n *notifier) handleHumanTask(w http.ResponseWriter, r *http.Request) {
         io.Copy(io.Discard, resp.Body)
         resp.Body.Close()
     }
-    msgLines := []string{"Human task created", "Title: " + p.Title, "Commands: " + p.Commands}
+    msgLines := []string{"✅ Human task created", "📝 " + p.Title, "💻 " + p.Commands}
     if p.RequestedBy != "" {
-        msgLines = append(msgLines, "Requested by: "+p.RequestedBy)
+        msgLines = append(msgLines, "🙋 " + p.RequestedBy)
     }
     if p.Notes != "" {
-        msgLines = append(msgLines, "Notes: "+p.Notes)
+        msgLines = append(msgLines, "🗒 " + p.Notes)
     }
-    n.send(strings.Join(msgLines, "\n"), nil)
+    n.send(strings.Join(msgLines, "\n"), nil, "")
     w.WriteHeader(http.StatusNoContent)
 }
 
@@ -117,11 +118,11 @@ func (n *notifier) handleNotify(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "invalid payload", http.StatusBadRequest)
         return
     }
-    n.send(payload.Message, payload.ChatID)
+    n.send(payload.Message, payload.ChatID, payload.Emoji)
     w.WriteHeader(http.StatusNoContent)
 }
 
-func (n *notifier) send(msg string, chatID *int64) {
+func (n *notifier) send(msg string, chatID *int64, emoji string) {
     targetChat := chatID
     if targetChat == nil {
         targetChat = n.chatID
@@ -130,7 +131,11 @@ func (n *notifier) send(msg string, chatID *int64) {
         n.logger.Printf("skip notify: no chat id provided")
         return
     }
+    if emoji != "" {
+        msg = emoji + " " + msg
+    }
     m := tgbotapi.NewMessage(*targetChat, msg)
+    m.ParseMode = "Markdown"
     if _, err := n.bot.Send(m); err != nil {
         n.logger.Printf("send error: %v", err)
     } else {
