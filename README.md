@@ -14,6 +14,7 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 - `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
 - `data/manager`: Persistent storage for manager human tasks (`tasks.json`); mounted via compose.
 - `bin/`: Helper scripts (e.g., `bin/coder-up.sh`).
+- `bin/app-db.sh`: Per-app Postgres lifecycle (create/drop/list/creds) with isolated containers and data dirs under `data/db-*`.
 
 ## Bootstrapping
 Run on Ubuntu LTS as root or via sudo:
