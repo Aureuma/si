@@ -18,6 +18,9 @@ services:
       context: ./agents/manager
     image: silexa/manager:local
     container_name: silexa-manager
+    environment:
+      - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     ports:
       - "9090:9090"
     restart: unless-stopped
