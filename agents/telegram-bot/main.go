@@ -14,18 +14,19 @@ import (
 
 type notifier struct {
     bot    *tgbotapi.BotAPI
-    chatID int64
+    chatID *int64
     logger *log.Logger
 }
 
 type notifyPayload struct {
-    Message string `json:"message"`
+    Message string  `json:"message"`
+    ChatID  *int64  `json:"chat_id,omitempty"`
 }
 
 func main() {
     logger := log.New(os.Stdout, "telegram-bot ", log.LstdFlags|log.LUTC)
     token := readToken()
-    chatID := mustChatID()
+    chatID := readChatID()
 
     bot, err := tgbotapi.NewBotAPI(token)
     if err != nil {
@@ -43,7 +44,11 @@ func main() {
     mux.HandleFunc("/notify", n.handleNotify)
 
     srv := &http.Server{Addr: ":8081", Handler: mux}
-    logger.Printf("telegram notifier listening on :8081 for chat %d", chatID)
+    if chatID != nil {
+        logger.Printf("telegram notifier listening on :8081 (default chat %d)", *chatID)
+    } else {
+        logger.Printf("telegram notifier listening on :8081 (chat id must be supplied per message)")
+    }
     if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
         logger.Fatalf("server error: %v", err)
     }
@@ -64,7 +69,15 @@ func (n *notifier) handleNotify(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "invalid payload", http.StatusBadRequest)
         return
     }
-    msg := tgbotapi.NewMessage(n.chatID, payload.Message)
+    chat := n.chatID
+    if payload.ChatID != nil {
+        chat = payload.ChatID
+    }
+    if chat == nil {
+        http.Error(w, "chat id required (payload.chat_id or env)", http.StatusBadRequest)
+        return
+    }
+    msg := tgbotapi.NewMessage(*chat, payload.Message)
     if _, err := n.bot.Send(msg); err != nil {
         n.logger.Printf("send error: %v", err)
         http.Error(w, "send error", http.StatusBadGateway)
@@ -92,16 +105,16 @@ func readToken() string {
     return tok
 }
 
-func mustChatID() int64 {
+func readChatID() *int64 {
     raw := os.Getenv("TELEGRAM_CHAT_ID")
     if raw == "" {
-        log.Fatalf("TELEGRAM_CHAT_ID required")
+        return nil
     }
     id, err := strconv.ParseInt(raw, 10, 64)
     if err != nil {
         log.Fatalf("invalid TELEGRAM_CHAT_ID: %v", err)
     }
-    return id
+    return &id
 }
 
 func trimBytes(b []byte) []byte {
