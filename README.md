@@ -12,6 +12,7 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 - `critic`: Go watcher that reads actor container logs via the Docker socket and sends heartbeats to the manager.
 - `manager`: Go service collecting critic heartbeats for monitoring.
 - `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
+- `data/manager`: Persistent storage for manager human tasks (`tasks.json`); mounted via compose.
 - `bin/`: Helper scripts (e.g., `bin/coder-up.sh`).
 
 ## Bootstrapping
@@ -56,12 +57,15 @@ The critics will mirror actor logs to their stdout and heartbeat to the manager;
 - Spawn a new dyad (actor+critic) on the shared network without editing compose:
 
 ```bash
-bin/spawn-dyad.sh <name> [role]
-# example: bin/spawn-dyad.sh marketing research
+bin/spawn-dyad.sh <name> [role] [department]
+# examples:
+#   bin/spawn-dyad.sh marketing research marketing
+#   bin/spawn-dyad.sh backend backend engineering
 ```
 
 - Teardown a dyad: `bin/teardown-dyad.sh <name>`.
 - Run commands in an actor: `bin/run-task.sh silexa-actor-<name> <command...>`.
+- List running dyads (docker access required): `sudo bin/list-dyads.sh`.
 
 All dyads share `/opt/silexa/apps` and `/var/run/docker.sock`, so they can build new services or extend Silexa itself. Critics auto-heartbeat to the manager so the management layer can watch liveness and logs.
 
