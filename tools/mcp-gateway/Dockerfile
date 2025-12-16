@@ -14,4 +14,4 @@ EXPOSE 8088
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["gateway", "run", "--transport", "streaming", "--host", "0.0.0.0", "--port", "8088", "--catalog", "/catalog/catalog.yaml"]
+CMD ["gateway", "run", "--transport", "streaming", "--port", "8088", "--catalog", "/catalog/catalog.yaml", "--enable-all-servers"]
