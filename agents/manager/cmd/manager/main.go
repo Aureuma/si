@@ -6,6 +6,7 @@ import (
     "log"
     "net/http"
     "os"
+    "path/filepath"
     "strconv"
     "strings"
     "sync"
@@ -39,6 +40,7 @@ type store struct {
     beats []heartbeat
     tasks []humanTask
     nextID int
+    dataPath string
 }
 
 func (s *store) add(h heartbeat) {
@@ -66,6 +68,7 @@ func (s *store) addTask(t humanTask) humanTask {
     t.Status = "open"
     t.CreatedAt = time.Now().UTC()
     s.tasks = append(s.tasks, t)
+    s.persistLocked()
     return t
 }
 
@@ -88,6 +91,7 @@ func (s *store) completeTask(id int) bool {
             now := time.Now().UTC()
             s.tasks[i].Status = "done"
             s.tasks[i].CompletedAt = &now
+            s.persistLocked()
             return true
         }
     }
@@ -134,7 +138,8 @@ func (n *notifier) maybeSend(msg string, chatID *int64) {
 
 func main() {
     logger := log.New(os.Stdout, "manager ", log.LstdFlags|log.LUTC)
-    st := &store{}
+    dataDir := envOr("DATA_DIR", "/data")
+    st := newStore(dataDir, logger)
     notif := buildNotifier(logger)
 
     http.HandleFunc("/heartbeat", func(w http.ResponseWriter, r *http.Request) {
@@ -211,6 +216,13 @@ func main() {
     }
 }
 
+func envOr(key, def string) string {
+    if v := os.Getenv(key); v != "" {
+        return v
+    }
+    return def
+}
+
 func buildNotifier(logger *log.Logger) *notifier {
     url := os.Getenv("TELEGRAM_NOTIFY_URL")
     if url == "" {
@@ -237,4 +249,50 @@ func formatTaskMessage(t humanTask) string {
         "Requested by: " + t.RequestedBy,
         "Notes: " + t.Notes,
     }, "\n"))
+}
+
+func newStore(dataDir string, logger *log.Logger) *store {
+    _ = os.MkdirAll(dataDir, 0o755)
+    s := &store{dataPath: filepath.Join(dataDir, "tasks.json")}
+    s.load(logger)
+    return s
+}
+
+func (s *store) load(logger *log.Logger) {
+    b, err := os.ReadFile(s.dataPath)
+    if err != nil {
+        if os.IsNotExist(err) {
+            return
+        }
+        logger.Printf("tasks load error: %v", err)
+        return
+    }
+    var payload struct {
+        Tasks []humanTask `json:"tasks"`
+        Next  int         `json:"next_id"`
+    }
+    if err := json.Unmarshal(b, &payload); err != nil {
+        logger.Printf("tasks decode error: %v", err)
+        return
+    }
+    s.tasks = payload.Tasks
+    s.nextID = payload.Next
+}
+
+func (s *store) persistLocked() {
+    if s.dataPath == "" {
+        return
+    }
+    payload := struct {
+        Tasks []humanTask `json:"tasks"`
+        Next  int         `json:"next_id"`
+    }{Tasks: s.tasks, Next: s.nextID}
+    b, err := json.MarshalIndent(payload, "", "  ")
+    if err != nil {
+        return
+    }
+    tmp := s.dataPath + ".tmp"
+    if err := os.WriteFile(tmp, b, 0o644); err == nil {
+        _ = os.Rename(tmp, s.dataPath)
+    }
 }
