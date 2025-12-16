@@ -12,6 +12,8 @@ import (
 func main() {
     actor := envOr("ACTOR_CONTAINER", "silexa-actor-web")
     manager := envOr("MANAGER_URL", "http://manager:9090")
+    logInterval := durationEnv("CRITIC_LOG_INTERVAL", 5*time.Second)
+    beatInterval := durationEnv("CRITIC_BEAT_INTERVAL", 30*time.Second)
     logger := log.New(os.Stdout, "critic ", log.LstdFlags|log.LUTC)
 
     mon, err := internal.NewMonitor(actor, manager, logger)
@@ -20,8 +22,8 @@ func main() {
     }
 
     ctx := context.Background()
-    tickLogs := time.NewTicker(5 * time.Second)
-    tickBeat := time.NewTicker(30 * time.Second)
+    tickLogs := time.NewTicker(logInterval)
+    tickBeat := time.NewTicker(beatInterval)
     defer tickLogs.Stop()
     defer tickBeat.Stop()
 
@@ -43,6 +45,15 @@ func main() {
 func envOr(key, def string) string {
     if v := os.Getenv(key); v != "" {
         return v
+    }
+    return def
+}
+
+func durationEnv(key string, def time.Duration) time.Duration {
+    if v := os.Getenv(key); v != "" {
+        if d, err := time.ParseDuration(v); err == nil && d > 0 {
+            return d
+        }
     }
     return def
 }
