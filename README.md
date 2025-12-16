@@ -66,10 +66,10 @@ bin/spawn-dyad.sh <name> [role]
 All dyads share `/opt/silexa/apps` and `/var/run/docker.sock`, so they can build new services or extend Silexa itself. Critics auto-heartbeat to the manager so the management layer can watch liveness and logs.
 
 ## Human-in-the-loop notifications (Telegram)
-- Secrets: put the bot token into `secrets/telegram_bot_token` (file content is the raw token string). Do **not** commit secrets. Set `TELEGRAM_CHAT_ID` in `.env` (see `.env.example`).
+- Secrets: put the bot token into `secrets/telegram_bot_token` (file content is the raw token string). Do **not** commit secrets. Optionally set `TELEGRAM_CHAT_ID` in `.env` (see `.env.example`), or supply `chat_id` per message.
 - Start/refresh services: `HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d telegram-bot manager ...`
-- Send a notification from host: `bin/notify-human.sh "Codex login needed: run ssh -N -L 127.0.0.1:47123:ACTOR_IP:PORT user@host; then open http://127.0.0.1:47123/..."`
-- Record the blocking step in `docs/human_queue.md` so humans have a durable checklist; critics/agents can also call `/notify` inside the cluster (URL `http://telegram-bot:8081/notify`).
+- Send a notification from host: `TELEGRAM_CHAT_ID=<your_chat_id> bin/notify-human.sh "Codex login needed: run ssh -N -L 127.0.0.1:47123:ACTOR_IP:PORT user@host; then open http://127.0.0.1:47123/..."` 
+- Record the blocking step in `docs/human_queue.md` so humans have a durable checklist; critics/agents can also call `/notify` inside the cluster (URL `http://telegram-bot:8081/notify`). Payload supports `{ "message": "...", "chat_id": 123456789 }`.
 
 ## Codex CLI login flow (pattern)
 1) Actor runs `npm i -g @openai/codex` then `codex login` (gets a local callback URL + port).
