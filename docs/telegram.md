@@ -7,6 +7,7 @@ The Telegram bot provides a light-weight control plane for humans:
 - `/task Title | command | notes` — create a human task stored in the manager and linked to the current chat. Use this for anything that needs manual action (e.g., Codex login tunnel).
 - `/help` — quick usage help.
 - Any non-command message is recorded as feedback in the manager (source is the chat ID). Use `/task` for actionable work.
+- Replies to bot messages are also recorded as feedback with context about the original message, keeping discussion threads tied to the notification.
 
 ### Deployment
 - Token is supplied via docker secret `secrets/telegram_bot_token` (raw token text). Chat ID comes from `TELEGRAM_CHAT_ID` env or per-message payload.
