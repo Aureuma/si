@@ -33,3 +33,6 @@ Spawn dyads with `bin/spawn-dyad.sh <name> [role] [department]`; labels/env set:
 - Resolve access: `bin/resolve-access.sh <id> approved|denied [by] [notes]`.
 - File feedback: `bin/add-feedback.sh warn "issue" source "context"`.
 - File human task: `bin/add-human-task.sh "title" "commands" "url" "timeout" "requested_by" "notes"`.
+
+## Reporting snapshots
+- `bin/report-status.sh` (uses manager APIs) to summarize open tasks, pending access requests, and recent feedback. Optional Telegram send via `TELEGRAM_CHAT_ID`/`NOTIFY_URL`.
