@@ -14,23 +14,29 @@ import (
 )
 
 type notifier struct {
-    bot    *tgbotapi.BotAPI
-    chatID *int64
-    logger *log.Logger
+    bot        *tgbotapi.BotAPI
+    chatID     *int64
+    logger     *log.Logger
     managerURL string
 }
 
+type button struct {
+    Text string `json:"text"`
+    URL  string `json:"url,omitempty"`
+}
+
 type notifyPayload struct {
-    Message string `json:"message"`
-    ChatID  *int64  `json:"chat_id,omitempty"`
-    Emoji   string `json:"emoji,omitempty"`
+    Message string   `json:"message"`
+    ChatID  *int64   `json:"chat_id,omitempty"`
+    Emoji   string   `json:"emoji,omitempty"`
+    Buttons []button `json:"buttons,omitempty"`
 }
 
 type taskPayload struct {
-    Title   string `json:"title"`
-    Commands string `json:"commands"`
+    Title       string `json:"title"`
+    Commands    string `json:"commands"`
     RequestedBy string `json:"requested_by"`
-    Notes   string `json:"notes"`
+    Notes       string `json:"notes"`
 }
 
 func main() {
@@ -81,10 +87,10 @@ func (n *notifier) handleHumanTask(w http.ResponseWriter, r *http.Request) {
         return
     }
     payload := map[string]string{
-        "title": p.Title,
-        "commands": p.Commands,
+        "title":        p.Title,
+        "commands":     p.Commands,
         "requested_by": p.RequestedBy,
-        "notes": p.Notes,
+        "notes":        p.Notes,
     }
     body, _ := json.Marshal(payload)
     resp, err := http.Post(n.managerURL+"/human-tasks", "application/json", bytes.NewReader(body))
@@ -94,12 +100,12 @@ func (n *notifier) handleHumanTask(w http.ResponseWriter, r *http.Request) {
     }
     msgLines := []string{"✅ Human task created", "📝 " + p.Title, "💻 " + p.Commands}
     if p.RequestedBy != "" {
-        msgLines = append(msgLines, "🙋 " + p.RequestedBy)
+        msgLines = append(msgLines, "🙋 "+p.RequestedBy)
     }
     if p.Notes != "" {
-        msgLines = append(msgLines, "🗒 " + p.Notes)
+        msgLines = append(msgLines, "🗒 "+p.Notes)
     }
-    n.send(strings.Join(msgLines, "\n"), nil, "")
+    n.send(strings.Join(msgLines, "\n"), nil, "", nil)
     w.WriteHeader(http.StatusNoContent)
 }
 
@@ -118,11 +124,11 @@ func (n *notifier) handleNotify(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "invalid payload", http.StatusBadRequest)
         return
     }
-    n.send(payload.Message, payload.ChatID, payload.Emoji)
+    n.send(payload.Message, payload.ChatID, payload.Emoji, payload.Buttons)
     w.WriteHeader(http.StatusNoContent)
 }
 
-func (n *notifier) send(msg string, chatID *int64, emoji string) {
+func (n *notifier) send(msg string, chatID *int64, emoji string, buttons []button) {
     targetChat := chatID
     if targetChat == nil {
         targetChat = n.chatID
@@ -136,6 +142,14 @@ func (n *notifier) send(msg string, chatID *int64, emoji string) {
     }
     m := tgbotapi.NewMessage(*targetChat, msg)
     m.ParseMode = "Markdown"
+    if len(buttons) > 0 {
+        rows := make([][]tgbotapi.InlineKeyboardButton, 0, len(buttons))
+        for _, b := range buttons {
+            btn := tgbotapi.NewInlineKeyboardButtonURL(b.Text, b.URL)
+            rows = append(rows, []tgbotapi.InlineKeyboardButton{btn})
+        }
+        m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
+    }
     if _, err := n.bot.Send(m); err != nil {
         n.logger.Printf("send error: %v", err)
     } else {
