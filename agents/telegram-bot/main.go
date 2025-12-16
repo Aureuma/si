@@ -115,6 +115,10 @@ func (n *notifier) pollUpdates() {
 			continue
 		}
 		chatID := update.Message.Chat.ID
+		if update.Message.ReplyToMessage != nil {
+			n.handleReply(chatID, update.Message)
+			continue
+		}
 		if update.Message.IsCommand() {
 			n.handleCommand(chatID, update.Message)
 			continue
@@ -246,6 +250,34 @@ func (n *notifier) handlePlain(chatID int64, text string) {
 		resp.Body.Close()
 	}
 	n.send("Noted. For actionable work, use /task Title | command | notes", &chatID, "📥", nil)
+}
+
+func (n *notifier) handleReply(chatID int64, msg *tgbotapi.Message) {
+	trimmed := strings.TrimSpace(msg.Text)
+	if trimmed == "" {
+		return
+	}
+	orig := strings.TrimSpace(msg.ReplyToMessage.Text)
+	if len(orig) > 200 {
+		orig = orig[:200] + "…"
+	}
+	payload := map[string]string{
+		"source":   fmt.Sprintf("human-reply:%d", chatID),
+		"severity": "info",
+		"message":  trimmed,
+		"context":  fmt.Sprintf("reply_to:%d %s", msg.ReplyToMessage.MessageID, orig),
+	}
+	body, _ := json.Marshal(payload)
+	resp, err := http.Post(n.managerURL+"/feedback", "application/json", bytes.NewReader(body))
+	if err == nil {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+	ack := "Captured reply"
+	if orig != "" {
+		ack += fmt.Sprintf(" (re: %s)", orig)
+	}
+	n.send(ack, &chatID, "📬", nil)
 }
 
 func (n *notifier) send(msg string, chatID *int64, emoji string, buttons []button) {
