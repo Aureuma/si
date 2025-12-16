@@ -58,6 +58,17 @@ type accessRequest struct {
     Notes      string    `json:"notes,omitempty"`
 }
 
+type metric struct {
+    ID         int       `json:"id"`
+    Dyad       string    `json:"dyad"`
+    Department string    `json:"department"`
+    Name       string    `json:"name"`
+    Value      float64   `json:"value"`
+    Unit       string    `json:"unit"`
+    RecordedBy string    `json:"recorded_by"`
+    CreatedAt  time.Time `json:"created_at"`
+}
+
 type store struct {
     mu    sync.Mutex
     beats []heartbeat
@@ -67,6 +78,8 @@ type store struct {
     nextFeedbackID int
     access []accessRequest
     nextAccessID int
+    metrics []metric
+    nextMetricID int
     dataPath string
 }
 
@@ -184,6 +197,25 @@ func (s *store) resolveAccess(id int, status, by, notes string) bool {
         }
     }
     return false
+}
+
+func (s *store) addMetric(m metric) metric {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    s.nextMetricID++
+    m.ID = s.nextMetricID
+    m.CreatedAt = time.Now().UTC()
+    s.metrics = append(s.metrics, m)
+    s.persistLocked()
+    return m
+}
+
+func (s *store) listMetrics() []metric {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    out := make([]metric, len(s.metrics))
+    copy(out, s.metrics)
+    return out
 }
 
 type notifier struct {
@@ -366,6 +398,26 @@ func main() {
         http.Error(w, "not found", http.StatusNotFound)
     })
 
+    http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+        switch r.Method {
+        case http.MethodGet:
+            list := st.listMetrics()
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(list)
+        case http.MethodPost:
+            var m metric
+            if err := json.NewDecoder(r.Body).Decode(&m); err != nil || m.Name == "" {
+                http.Error(w, "invalid payload", http.StatusBadRequest)
+                return
+            }
+            created := st.addMetric(m)
+            w.Header().Set("Content-Type", "application/json")
+            json.NewEncoder(w).Encode(created)
+        default:
+            w.WriteHeader(http.StatusMethodNotAllowed)
+        }
+    })
+
     addr := ":9090"
     logger.Printf("manager listening on %s", addr)
     if err := http.ListenAndServe(addr, nil); err != nil {
@@ -428,9 +480,11 @@ func (s *store) load(logger *log.Logger) {
         Tasks         []humanTask    `json:"tasks"`
         Feedbacks     []feedback     `json:"feedbacks"`
         Access        []accessRequest `json:"access_requests"`
+        Metrics       []metric       `json:"metrics"`
         NextTask      int            `json:"next_id"`
         NextFeedback  int            `json:"next_feedback_id"`
         NextAccess    int            `json:"next_access_id"`
+        NextMetric    int            `json:"next_metric_id"`
     }
     if err := json.Unmarshal(b, &payload); err != nil {
         logger.Printf("tasks decode error: %v", err)
@@ -439,9 +493,11 @@ func (s *store) load(logger *log.Logger) {
     s.tasks = payload.Tasks
     s.feedbacks = payload.Feedbacks
     s.access = payload.Access
+    s.metrics = payload.Metrics
     s.nextTaskID = payload.NextTask
     s.nextFeedbackID = payload.NextFeedback
     s.nextAccessID = payload.NextAccess
+    s.nextMetricID = payload.NextMetric
 }
 
 func (s *store) persistLocked() {
@@ -455,7 +511,9 @@ func (s *store) persistLocked() {
         NextFeedback int            `json:"next_feedback_id"`
         Access       []accessRequest `json:"access_requests,omitempty"`
         NextAccess   int             `json:"next_access_id,omitempty"`
-    }{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID}
+        Metrics      []metric       `json:"metrics,omitempty"`
+        NextMetric   int            `json:"next_metric_id,omitempty"`
+    }{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID, Metrics: s.metrics, NextMetric: s.nextMetricID}
     b, err := json.MarshalIndent(payload, "", "  ")
     if err != nil {
         return
