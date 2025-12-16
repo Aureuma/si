@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<USAGE
+usage: dyadctl.sh <command> [args]
+commands:
+  create <name> [role] [department]   Create dyad via spawn-dyad.sh
+  destroy <name> [reason]             Teardown dyad via teardown-dyad.sh
+  list                                List running dyads
+  status <name>                       Show actor/critic containers for dyad
+USAGE
+}
+
+if [[ $# -lt 1 ]]; then usage; exit 1; fi
+
+CMD="$1"; shift || true
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
+
+post_feedback() {
+  local severity="$1" message="$2" source="$3" context="$4"
+  if command -v "${ROOT_DIR}/bin/add-feedback.sh" >/dev/null 2>&1; then
+    TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-} MANAGER_URL="$MANAGER_URL" "${ROOT_DIR}/bin/add-feedback.sh" "$severity" "$message" "$source" "$context" >/dev/null || true
+  fi
+}
+
+case "$CMD" in
+  create)
+    NAME="${1:-}"; ROLE="${2:-generic}"; DEPT="${3:-$ROLE}"
+    if [[ -z "$NAME" ]]; then usage; exit 1; fi
+    sudo "${ROOT_DIR}/bin/spawn-dyad.sh" "$NAME" "$ROLE" "$DEPT"
+    post_feedback info "Dyad created: $NAME (role=$ROLE, dept=$DEPT)" "dyadctl" "spawn"
+    ;;
+  destroy)
+    NAME="${1:-}"; REASON="${2:-}" 
+    if [[ -z "$NAME" ]]; then usage; exit 1; fi
+    sudo "${ROOT_DIR}/bin/teardown-dyad.sh" "$NAME"
+    post_feedback warn "Dyad destroyed: $NAME" "dyadctl" "$REASON"
+    ;;
+  list)
+    sudo "${ROOT_DIR}/bin/list-dyads.sh"
+    ;;
+  status)
+    NAME="${1:-}"; if [[ -z "$NAME" ]]; then usage; exit 1; fi
+    sudo docker ps --filter "label=silexa.dyad=$NAME" --format 'table {{.Names}}\t{{.Status}}\t{{.Labels}}'
+    ;;
+  *) usage; exit 1;;
+esac
