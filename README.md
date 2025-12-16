@@ -7,10 +7,11 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 - `docker-compose.yml`: Services for agents (manager + dyads + coder agent).
 - `apps/`: Application repos built by agents (one repo per app).
 - `agents/`: Agent-specific code and tooling.
-  - `coder`: Go-based agent container exposing `:8080/healthz` with docker/socket mounts for nested builds.
-  - `actor`: Node 22 base image for interactive CLI agents (install LLM tools like codex-cli inside the running container as needed).
-  - `critic`: Go watcher that reads actor container logs via the Docker socket and sends heartbeats to the manager.
-  - `manager`: Go service collecting critic heartbeats for monitoring.
+- `coder`: Go-based agent container exposing `:8080/healthz` with docker/socket mounts for nested builds.
+- `actor`: Node 22 base image for interactive CLI agents (install LLM tools like codex-cli inside the running container as needed).
+- `critic`: Go watcher that reads actor container logs via the Docker socket and sends heartbeats to the manager.
+- `manager`: Go service collecting critic heartbeats for monitoring.
+- `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
 - `bin/`: Helper scripts (e.g., `bin/coder-up.sh`).
 
 ## Bootstrapping
@@ -63,6 +64,23 @@ bin/spawn-dyad.sh <name> [role]
 - Run commands in an actor: `bin/run-task.sh silexa-actor-<name> <command...>`.
 
 All dyads share `/opt/silexa/apps` and `/var/run/docker.sock`, so they can build new services or extend Silexa itself. Critics auto-heartbeat to the manager so the management layer can watch liveness and logs.
+
+## Human-in-the-loop notifications (Telegram)
+- Secrets: put the bot token into `secrets/telegram_bot_token` (file content is the raw token string). Do **not** commit secrets. Set `TELEGRAM_CHAT_ID` in `.env` (see `.env.example`).
+- Start/refresh services: `HOST_UID=$(id -u) HOST_GID=$(id -g) docker compose up -d telegram-bot manager ...`
+- Send a notification from host: `bin/notify-human.sh "Codex login needed: run ssh -N -L 127.0.0.1:47123:ACTOR_IP:PORT user@host; then open http://127.0.0.1:47123/..."`
+- Record the blocking step in `docs/human_queue.md` so humans have a durable checklist; critics/agents can also call `/notify` inside the cluster (URL `http://telegram-bot:8081/notify`).
+
+## Codex CLI login flow (pattern)
+1) Actor runs `npm i -g @openai/codex` then `codex login` (gets a local callback URL + port).
+2) Actor writes a Human Action Queue item with the exact SSH tunnel command and URL; optionally triggers `notify-human.sh` so Telegram pings the operator.
+3) Human runs the tunnel command on a browser-capable machine, opens the provided URL via the forwarded port, completes OAuth, and closes the tunnel.
+4) Actor resumes once callback is received; mark the queue item as done.
+
+## Secrets and RBAC notes
+- Use docker secrets for tokens (e.g., `secrets/telegram_bot_token` mounted only into `telegram-bot`). Avoid leaking tokens via env except short-lived dev.
+- Keep docker.sock access limited to containers that need it (actors, critics, coder-agent); notifier and manager do not mount it.
+- Add new secrets by defining them under `secrets:` in `docker-compose.yml` and wiring `*_FILE` env vars in the target service.
 
 ## Next steps
 - Install Codex CLI (or another LLM-driven CLI) inside actor containers per task.
