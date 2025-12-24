@@ -28,10 +28,14 @@ type button struct {
 }
 
 type notifyPayload struct {
-	Message string   `json:"message"`
-	ChatID  *int64   `json:"chat_id,omitempty"`
-	Emoji   string   `json:"emoji,omitempty"`
-	Buttons []button `json:"buttons,omitempty"`
+	Message               string   `json:"message"`
+	ChatID                *int64   `json:"chat_id,omitempty"`
+	MessageID             int      `json:"message_id,omitempty"` // if set, edits that message instead of sending a new one
+	Emoji                 string   `json:"emoji,omitempty"`
+	Buttons               []button `json:"buttons,omitempty"`
+	ParseMode             string   `json:"parse_mode,omitempty"` // "HTML" or "MarkdownV2" or "Markdown"
+	DisableWebPagePreview *bool    `json:"disable_web_page_preview,omitempty"`
+	DisableNotification   *bool    `json:"disable_notification,omitempty"`
 }
 
 type taskPayload struct {
@@ -56,6 +60,16 @@ type managerTask struct {
 	Title    string `json:"title"`
 	Commands string `json:"commands"`
 	Status   string `json:"status"`
+}
+
+type managerDyadTask struct {
+	ID        int    `json:"id"`
+	Title     string `json:"title"`
+	Kind      string `json:"kind"`
+	Status    string `json:"status"`
+	Priority  string `json:"priority"`
+	Dyad      string `json:"dyad"`
+	ClaimedBy string `json:"claimed_by"`
 }
 
 func main() {
@@ -114,7 +128,20 @@ func (n *notifier) pollUpdates() {
 		if update.Message == nil {
 			continue
 		}
+		from := "unknown"
+		if update.Message.From != nil {
+			if strings.TrimSpace(update.Message.From.UserName) != "" {
+				from = update.Message.From.UserName
+			} else if strings.TrimSpace(update.Message.From.FirstName) != "" {
+				from = update.Message.From.FirstName
+			}
+		}
 		chatID := update.Message.Chat.ID
+		text := strings.TrimSpace(update.Message.Text)
+		if len(text) > 200 {
+			text = text[:200] + "…"
+		}
+		n.logger.Printf("incoming chat_id=%d from=%s text=%q", chatID, from, text)
 		if update.Message.ReplyToMessage != nil {
 			n.handleReply(chatID, update.Message)
 			continue
@@ -161,7 +188,7 @@ func (n *notifier) handleHumanTask(w http.ResponseWriter, r *http.Request) {
 	if p.Notes != "" {
 		msgLines = append(msgLines, "🗒 "+p.Notes)
 	}
-	n.send(strings.Join(msgLines, "\n"), nil, "", nil)
+	n.send(strings.Join(msgLines, "\n"), nil, "", nil, "", nil, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -180,8 +207,29 @@ func (n *notifier) handleNotify(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid payload", http.StatusBadRequest)
 		return
 	}
-	n.send(payload.Message, payload.ChatID, payload.Emoji, payload.Buttons)
-	w.WriteHeader(http.StatusNoContent)
+	msg, edited, err := n.sendOrEdit(payload)
+	if err != nil {
+		preview := strings.TrimSpace(payload.Message)
+		if len(preview) > 200 {
+			preview = preview[:200] + "…"
+		}
+		chatID := int64(0)
+		if payload.ChatID != nil {
+			chatID = *payload.ChatID
+		} else if n.chatID != nil {
+			chatID = *n.chatID
+		}
+		n.logger.Printf("notify error chat_id=%d message_id=%d parse_mode=%q preview=%q err=%v",
+			chatID, payload.MessageID, payload.ParseMode, preview, err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok":         true,
+		"edited":     edited,
+		"message_id": msg.MessageID,
+	})
 }
 
 func (n *notifier) handleCommand(chatID int64, msg *tgbotapi.Message) {
@@ -189,19 +237,23 @@ func (n *notifier) handleCommand(chatID int64, msg *tgbotapi.Message) {
 	args := strings.TrimSpace(msg.CommandArguments())
 	switch cmd {
 	case "help":
-		n.send(helpMessage(), &chatID, "ℹ️", nil)
+		n.send(helpMessage(), &chatID, "ℹ️", nil, "", nil, nil)
 	case "status":
-		n.send(n.statusMessage(), &chatID, "📊", nil)
+		n.send(n.statusMessage(), &chatID, "📊", nil, "", nil, nil)
 	case "tasks":
-		n.send(n.tasksMessage(), &chatID, "🧭", nil)
+		n.send(n.tasksMessage(), &chatID, "🧭", nil, "", nil, nil)
+	case "board", "dyads":
+		n.send(n.dyadBoardMessage(), &chatID, "🧭", nil, "", nil, nil)
+	case "chatid", "whereami":
+		n.send(fmt.Sprintf("Chat ID: %d", chatID), &chatID, "🧷", nil, "", nil, nil)
 	case "task":
 		if args == "" {
-			n.send("Usage: /task Title | command to run | optional notes", &chatID, "✍️", nil)
+			n.send("Usage: /task Title | command to run | optional notes", &chatID, "✍️", nil, "", nil, nil)
 			return
 		}
 		parts := strings.SplitN(args, "|", 3)
 		if len(parts) < 2 {
-			n.send("Need at least title and command separated by '|'", &chatID, "⚠️", nil)
+			n.send("Need at least title and command separated by '|'", &chatID, "⚠️", nil, "", nil, nil)
 			return
 		}
 		payload := map[string]interface{}{
@@ -217,18 +269,18 @@ func (n *notifier) handleCommand(chatID int64, msg *tgbotapi.Message) {
 		body, _ := json.Marshal(payload)
 		resp, err := http.Post(n.managerURL+"/human-tasks", "application/json", bytes.NewReader(body))
 		if err != nil {
-			n.send("Failed to create task: "+err.Error(), &chatID, "⚠️", nil)
+			n.send("Failed to create task: "+err.Error(), &chatID, "⚠️", nil, "", nil, nil)
 			return
 		}
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 		if resp.StatusCode >= 300 {
-			n.send(fmt.Sprintf("Task not accepted (status %d)", resp.StatusCode), &chatID, "⚠️", nil)
+			n.send(fmt.Sprintf("Task not accepted (status %d)", resp.StatusCode), &chatID, "⚠️", nil, "", nil, nil)
 			return
 		}
-		n.send("Task recorded and queued for agents.", &chatID, "✅", nil)
+		n.send("Task recorded and queued for agents.", &chatID, "✅", nil, "", nil, nil)
 	default:
-		n.send("Unknown command. Try /help", &chatID, "ℹ️", nil)
+		n.send("Unknown command. Try /help", &chatID, "ℹ️", nil, "", nil, nil)
 	}
 }
 
@@ -249,7 +301,7 @@ func (n *notifier) handlePlain(chatID int64, text string) {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
 	}
-	n.send("Noted. For actionable work, use /task Title | command | notes", &chatID, "📥", nil)
+	n.send("Noted. For actionable work, use /task Title | command | notes", &chatID, "📥", nil, "", nil, nil)
 }
 
 func (n *notifier) handleReply(chatID int64, msg *tgbotapi.Message) {
@@ -277,36 +329,119 @@ func (n *notifier) handleReply(chatID int64, msg *tgbotapi.Message) {
 	if orig != "" {
 		ack += fmt.Sprintf(" (re: %s)", orig)
 	}
-	n.send(ack, &chatID, "📬", nil)
+	n.send(ack, &chatID, "📬", nil, "", nil, nil)
 }
 
-func (n *notifier) send(msg string, chatID *int64, emoji string, buttons []button) {
-	targetChat := chatID
+func (n *notifier) sendOrEdit(payload notifyPayload) (*tgbotapi.Message, bool, error) {
+	targetChat := payload.ChatID
 	if targetChat == nil {
 		targetChat = n.chatID
 	}
 	if targetChat == nil {
-		n.logger.Printf("skip notify: no chat id provided")
+		return nil, false, fmt.Errorf("skip notify: no chat id provided")
+	}
+
+	msgText := payload.Message
+	if payload.Emoji != "" {
+		msgText = payload.Emoji + " " + msgText
+	}
+
+	parseMode := strings.TrimSpace(payload.ParseMode)
+	if parseMode == "" {
+		parseMode = "Markdown"
+	}
+
+	disableWebPreview := false
+	if payload.DisableWebPagePreview != nil {
+		disableWebPreview = *payload.DisableWebPagePreview
+	}
+	disableNotification := false
+	if payload.DisableNotification != nil {
+		disableNotification = *payload.DisableNotification
+	}
+
+	replyMarkup := buttonsMarkup(payload.Buttons)
+
+	if payload.MessageID > 0 {
+		cfg := tgbotapi.NewEditMessageText(*targetChat, payload.MessageID, msgText)
+		cfg.ParseMode = parseMode
+		cfg.DisableWebPagePreview = disableWebPreview
+		if replyMarkup != nil {
+			cfg.ReplyMarkup = replyMarkup
+		}
+		m, err := n.bot.Send(cfg)
+		if err == nil {
+			return &m, true, nil
+		}
+
+		// If the message was deleted (e.g., user cleared chat history) or cannot be edited,
+		// fall back to sending a new message and return its message_id so callers can re-anchor.
+		// Typical Telegram errors:
+		// - "Bad Request: message to edit not found"
+		// - "Bad Request: message can't be edited"
+		// - "Bad Request: message is not modified: ..."
+		errText := strings.ToLower(err.Error())
+		if strings.Contains(errText, "message is not modified") {
+			// Treat as success to avoid spurious 500s when callers upsert the same content.
+			return &tgbotapi.Message{MessageID: payload.MessageID}, true, nil
+		}
+		if strings.Contains(errText, "message to edit not found") ||
+			strings.Contains(errText, "message can't be edited") {
+			n.logger.Printf("edit failed (will send new): %v", err)
+			// Continue below to send a new message.
+		} else {
+			return nil, false, err
+		}
+	}
+
+	cfg := tgbotapi.NewMessage(*targetChat, msgText)
+	cfg.ParseMode = parseMode
+	cfg.DisableWebPagePreview = disableWebPreview
+	cfg.DisableNotification = disableNotification
+	if replyMarkup != nil {
+		cfg.ReplyMarkup = replyMarkup
+	}
+	m, err := n.bot.Send(cfg)
+	if err != nil {
+		return nil, false, err
+	}
+	return &m, false, nil
+}
+
+func (n *notifier) send(msg string, chatID *int64, emoji string, buttons []button, parseMode string, disableWebPreview *bool, disableNotification *bool) {
+	p := notifyPayload{
+		Message:               msg,
+		ChatID:                chatID,
+		Emoji:                 emoji,
+		Buttons:               buttons,
+		ParseMode:             parseMode,
+		DisableWebPagePreview: disableWebPreview,
+		DisableNotification:   disableNotification,
+	}
+	if _, _, err := n.sendOrEdit(p); err != nil {
+		n.logger.Printf("send error: %v", err)
 		return
 	}
-	if emoji != "" {
-		msg = emoji + " " + msg
+	n.logger.Printf("sent notification")
+}
+
+func buttonsMarkup(buttons []button) *tgbotapi.InlineKeyboardMarkup {
+	if len(buttons) == 0 {
+		return nil
 	}
-	m := tgbotapi.NewMessage(*targetChat, msg)
-	m.ParseMode = "Markdown"
-	if len(buttons) > 0 {
-		rows := make([][]tgbotapi.InlineKeyboardButton, 0, len(buttons))
-		for _, b := range buttons {
-			btn := tgbotapi.NewInlineKeyboardButtonURL(b.Text, b.URL)
-			rows = append(rows, []tgbotapi.InlineKeyboardButton{btn})
+	rows := make([][]tgbotapi.InlineKeyboardButton, 0, len(buttons))
+	for _, b := range buttons {
+		if strings.TrimSpace(b.Text) == "" || strings.TrimSpace(b.URL) == "" {
+			continue
 		}
-		m.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(rows...)
+		btn := tgbotapi.NewInlineKeyboardButtonURL(b.Text, b.URL)
+		rows = append(rows, []tgbotapi.InlineKeyboardButton{btn})
 	}
-	if _, err := n.bot.Send(m); err != nil {
-		n.logger.Printf("send error: %v", err)
-	} else {
-		n.logger.Printf("sent notification")
+	if len(rows) == 0 {
+		return nil
 	}
+	m := tgbotapi.NewInlineKeyboardMarkup(rows...)
+	return &m
 }
 
 func (n *notifier) statusMessage() string {
@@ -340,6 +475,40 @@ func (n *notifier) tasksMessage() string {
 		b.WriteString(fmt.Sprintf("#%d %s\n↳ %s\n", t.ID, t.Title, t.Commands))
 	}
 	return b.String()
+}
+
+func (n *notifier) dyadBoardMessage() string {
+	tasks, err := n.fetchDyadTasks()
+	if err != nil {
+		return "Cannot load dyad tasks: " + err.Error()
+	}
+	open := make([]managerDyadTask, 0, len(tasks))
+	for _, t := range tasks {
+		if strings.TrimSpace(strings.ToLower(t.Status)) == "done" {
+			continue
+		}
+		open = append(open, t)
+	}
+	if len(open) == 0 {
+		return "✅ No open dyad tasks."
+	}
+	var b strings.Builder
+	b.WriteString("Dyad tasks (open):\n")
+	for i, t := range open {
+		if i >= 15 {
+			b.WriteString("…\n")
+			break
+		}
+		line := fmt.Sprintf("#%d [%s] %s", t.ID, t.Status, t.Title)
+		if strings.TrimSpace(t.Dyad) != "" {
+			line += fmt.Sprintf(" (%s)", t.Dyad)
+		}
+		if strings.TrimSpace(t.ClaimedBy) != "" {
+			line += fmt.Sprintf(" — %s", t.ClaimedBy)
+		}
+		b.WriteString(line + "\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func (n *notifier) fetchHealth() (*managerHealth, error) {
@@ -380,10 +549,28 @@ func (n *notifier) fetchTasks() ([]managerTask, error) {
 	return out, nil
 }
 
+func (n *notifier) fetchDyadTasks() ([]managerDyadTask, error) {
+	resp, err := http.Get(n.managerURL + "/dyad-tasks")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("manager returned %s", resp.Status)
+	}
+	var tasks []managerDyadTask
+	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
 func helpMessage() string {
 	return strings.TrimSpace(`
 /status - System health, counts, last beat
 /tasks - Open human tasks
+/board - Open dyad tasks
+/chatid - Show this chat id
 /task Title | command | notes - Log a human task for agents
 /help - This menu
 

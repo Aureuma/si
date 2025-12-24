@@ -3,10 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"html"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -71,6 +75,28 @@ type metric struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// Dyad-level work items (task board for actors/critics)
+type dyadTask struct {
+	ID          int       `json:"id"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Kind        string    `json:"kind"`   // free-form: e.g. codex_exec|beam.codex_login
+	Status      string    `json:"status"` // todo|in_progress|review|blocked|done
+	Priority    string    `json:"priority"`
+	Dyad        string    `json:"dyad"`
+	Actor       string    `json:"actor"`
+	Critic      string    `json:"critic"`
+	RequestedBy string    `json:"requested_by"`
+	Notes       string    `json:"notes"`
+	Link        string    `json:"link"`
+	TelegramMessageID int `json:"telegram_message_id,omitempty"`
+	ClaimedBy   string    `json:"claimed_by"`
+	ClaimedAt   time.Time `json:"claimed_at"`
+	HeartbeatAt time.Time `json:"heartbeat_at"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type store struct {
 	mu             sync.Mutex
 	beats          []heartbeat
@@ -82,7 +108,14 @@ type store struct {
 	nextAccessID   int
 	metrics        []metric
 	nextMetricID   int
+	dyadTasks      []dyadTask
+	nextDyadTaskID int
+	meta           storeMeta
 	dataPath       string
+}
+
+type storeMeta struct {
+	DyadDigestTelegramMessageID int `json:"dyad_digest_telegram_message_id,omitempty"`
 }
 
 func (s *store) add(h heartbeat) {
@@ -212,6 +245,173 @@ func (s *store) addMetric(m metric) metric {
 	return m
 }
 
+func (s *store) addDyadTask(t dyadTask) dyadTask {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.nextDyadTaskID++
+	t.ID = s.nextDyadTaskID
+	if t.Status == "" {
+		t.Status = "todo"
+	}
+	if t.Priority == "" {
+		t.Priority = "normal"
+	}
+	t.CreatedAt = time.Now().UTC()
+	t.UpdatedAt = t.CreatedAt
+	s.dyadTasks = append(s.dyadTasks, t)
+	s.persistLocked()
+	return t
+}
+
+func (s *store) listDyadTasks() []dyadTask {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]dyadTask, len(s.dyadTasks))
+	copy(out, s.dyadTasks)
+	return out
+}
+
+func (s *store) updateDyadTask(updated dyadTask) (dyadTask, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.dyadTasks {
+		if s.dyadTasks[i].ID == updated.ID {
+			// apply partial updates
+			if updated.Title != "" {
+				s.dyadTasks[i].Title = updated.Title
+			}
+			if updated.Description != "" {
+				s.dyadTasks[i].Description = updated.Description
+			}
+			if updated.Kind != "" {
+				s.dyadTasks[i].Kind = updated.Kind
+			}
+			if updated.Status != "" {
+				s.dyadTasks[i].Status = updated.Status
+			}
+			if updated.Priority != "" {
+				s.dyadTasks[i].Priority = updated.Priority
+			}
+			if updated.Dyad != "" {
+				s.dyadTasks[i].Dyad = updated.Dyad
+			}
+			if updated.Actor != "" {
+				s.dyadTasks[i].Actor = updated.Actor
+			}
+			if updated.Critic != "" {
+				s.dyadTasks[i].Critic = updated.Critic
+			}
+			if updated.RequestedBy != "" {
+				s.dyadTasks[i].RequestedBy = updated.RequestedBy
+			}
+			if updated.Notes != "" {
+				s.dyadTasks[i].Notes = updated.Notes
+			}
+			if updated.Link != "" {
+				s.dyadTasks[i].Link = updated.Link
+			}
+			if updated.TelegramMessageID != 0 {
+				s.dyadTasks[i].TelegramMessageID = updated.TelegramMessageID
+			}
+			if updated.ClaimedBy != "" {
+				s.dyadTasks[i].ClaimedBy = updated.ClaimedBy
+				if !updated.ClaimedAt.IsZero() {
+					s.dyadTasks[i].ClaimedAt = updated.ClaimedAt
+				} else if s.dyadTasks[i].ClaimedAt.IsZero() {
+					s.dyadTasks[i].ClaimedAt = time.Now().UTC()
+				}
+			}
+			if !updated.HeartbeatAt.IsZero() {
+				s.dyadTasks[i].HeartbeatAt = updated.HeartbeatAt
+			}
+			s.dyadTasks[i].UpdatedAt = time.Now().UTC()
+			s.persistLocked()
+			return s.dyadTasks[i], true
+		}
+	}
+	return dyadTask{}, false
+}
+
+func (s *store) setDyadTaskTelegramMessageID(id int, messageID int) (dyadTask, bool) {
+	if id <= 0 || messageID <= 0 {
+		return dyadTask{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.dyadTasks {
+		if s.dyadTasks[i].ID != id {
+			continue
+		}
+		if s.dyadTasks[i].TelegramMessageID == messageID {
+			return s.dyadTasks[i], true
+		}
+		s.dyadTasks[i].TelegramMessageID = messageID
+		s.dyadTasks[i].UpdatedAt = time.Now().UTC()
+		s.persistLocked()
+		return s.dyadTasks[i], true
+	}
+	return dyadTask{}, false
+}
+
+func (s *store) getDyadDigestTelegramMessageID() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.meta.DyadDigestTelegramMessageID
+}
+
+func (s *store) setDyadDigestTelegramMessageID(messageID int) {
+	if messageID <= 0 {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.meta.DyadDigestTelegramMessageID == messageID {
+		return
+	}
+	s.meta.DyadDigestTelegramMessageID = messageID
+	s.persistLocked()
+}
+
+func (s *store) claimDyadTask(id int, dyad, critic string) (dyadTask, int, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.dyadTasks {
+		if s.dyadTasks[i].ID != id {
+			continue
+		}
+		if s.dyadTasks[i].Status == "done" {
+			return dyadTask{}, http.StatusConflict, false
+		}
+		if dyad != "" && s.dyadTasks[i].Dyad != "" && s.dyadTasks[i].Dyad != dyad {
+			return dyadTask{}, http.StatusConflict, false
+		}
+		now := time.Now().UTC()
+		// Allow claim if unclaimed, self-claimed, or stale heartbeat (5m).
+		if s.dyadTasks[i].ClaimedBy != "" && s.dyadTasks[i].ClaimedBy != critic {
+			if !s.dyadTasks[i].HeartbeatAt.IsZero() && now.Sub(s.dyadTasks[i].HeartbeatAt) < 5*time.Minute {
+				return dyadTask{}, http.StatusConflict, false
+			}
+		}
+		if dyad != "" && s.dyadTasks[i].Dyad == "" {
+			s.dyadTasks[i].Dyad = dyad
+		}
+		if critic != "" {
+			if s.dyadTasks[i].ClaimedBy == "" || s.dyadTasks[i].ClaimedBy != critic {
+				s.dyadTasks[i].ClaimedBy = critic
+				s.dyadTasks[i].ClaimedAt = now
+			}
+			s.dyadTasks[i].HeartbeatAt = now
+		}
+		if s.dyadTasks[i].Status == "todo" {
+			s.dyadTasks[i].Status = "in_progress"
+		}
+		s.dyadTasks[i].UpdatedAt = now
+		s.persistLocked()
+		return s.dyadTasks[i], http.StatusOK, true
+	}
+	return dyadTask{}, http.StatusNotFound, false
+}
+
 func (s *store) listMetrics() []metric {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -248,6 +448,12 @@ type notifier struct {
 	logger *log.Logger
 }
 
+type notifyResult struct {
+	OK        bool `json:"ok"`
+	Edited    bool `json:"edited"`
+	MessageID int  `json:"message_id"`
+}
+
 func (n *notifier) maybeSend(msg string, chatID *int64) {
 	if n == nil || n.url == "" {
 		return
@@ -260,7 +466,11 @@ func (n *notifier) maybeSend(msg string, chatID *int64) {
 		n.logger.Printf("skip notify: no chat id provided")
 		return
 	}
-	payload := map[string]interface{}{"message": msg}
+	payload := map[string]interface{}{
+		"message":                 msg,
+		"parse_mode":              "HTML",
+		"disable_web_page_preview": true,
+	}
 	payload["chat_id"] = *targetChat
 	b, _ := json.Marshal(payload)
 	req, err := http.NewRequest(http.MethodPost, n.url, bytes.NewReader(b))
@@ -280,11 +490,97 @@ func (n *notifier) maybeSend(msg string, chatID *int64) {
 	}
 }
 
+func (n *notifier) upsertDyadTaskMessage(t dyadTask) (int, bool) {
+	if n == nil || n.url == "" {
+		return 0, false
+	}
+	if n.chatID == nil {
+		n.logger.Printf("skip notify: no chat id provided")
+		return 0, false
+	}
+	payload := map[string]interface{}{
+		"chat_id":                  *n.chatID,
+		"message":                  formatDyadTaskMessage(t),
+		"parse_mode":               "HTML",
+		"disable_web_page_preview": true,
+	}
+	if t.TelegramMessageID != 0 {
+		payload["message_id"] = t.TelegramMessageID
+	}
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequest(http.MethodPost, n.url, bytes.NewReader(b))
+	if err != nil {
+		n.logger.Printf("notify build error: %v", err)
+		return 0, false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		n.logger.Printf("notify send error: %v", err)
+		return 0, false
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode >= 300 {
+		n.logger.Printf("notify non-2xx: %s", resp.Status)
+		return 0, false
+	}
+	var out notifyResult
+	if err := json.Unmarshal(body, &out); err != nil {
+		// Still consider it successful even if we can't parse (back-compat).
+		return 0, false
+	}
+	return out.MessageID, out.Edited
+}
+
+func (n *notifier) upsertMessageHTML(message string, messageID int) (int, bool) {
+	if n == nil || n.url == "" {
+		return 0, false
+	}
+	if n.chatID == nil {
+		n.logger.Printf("skip notify: no chat id provided")
+		return 0, false
+	}
+	payload := map[string]interface{}{
+		"chat_id":                  *n.chatID,
+		"message":                  message,
+		"parse_mode":               "HTML",
+		"disable_web_page_preview": true,
+	}
+	if messageID > 0 {
+		payload["message_id"] = messageID
+	}
+	b, _ := json.Marshal(payload)
+	req, err := http.NewRequest(http.MethodPost, n.url, bytes.NewReader(b))
+	if err != nil {
+		n.logger.Printf("notify build error: %v", err)
+		return 0, false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		n.logger.Printf("notify send error: %v", err)
+		return 0, false
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode >= 300 {
+		n.logger.Printf("notify non-2xx: %s", resp.Status)
+		return 0, false
+	}
+	var out notifyResult
+	if err := json.Unmarshal(body, &out); err != nil {
+		return 0, false
+	}
+	return out.MessageID, out.Edited
+}
+
 func main() {
 	logger := log.New(os.Stdout, "manager ", log.LstdFlags|log.LUTC)
 	dataDir := envOr("DATA_DIR", "/data")
 	st := newStore(dataDir, logger)
 	notif := buildNotifier(logger)
+	startDyadDigest(st, notif, logger)
 
 	http.HandleFunc("/heartbeat", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -459,10 +755,200 @@ func main() {
 		json.NewEncoder(w).Encode(resp)
 	})
 
+	http.HandleFunc("/dyad-tasks", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			list := st.listDyadTasks()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(list)
+		case http.MethodPost:
+			var dt dyadTask
+			if err := json.NewDecoder(r.Body).Decode(&dt); err != nil || dt.Title == "" {
+				http.Error(w, "invalid payload", http.StatusBadRequest)
+				return
+			}
+			created := st.addDyadTask(dt)
+			if shouldNotifyDyadTask(created) {
+				if messageID, _ := notif.upsertDyadTaskMessage(created); messageID > 0 && messageID != created.TelegramMessageID {
+					st.setDyadTaskTelegramMessageID(created.ID, messageID)
+					created.TelegramMessageID = messageID
+				}
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(created)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	})
+
+	http.HandleFunc("/dyad-tasks/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var dt dyadTask
+		if err := json.NewDecoder(r.Body).Decode(&dt); err != nil || dt.ID == 0 {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		updated, ok := st.updateDyadTask(dt)
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if shouldNotifyDyadTask(updated) {
+			if messageID, _ := notif.upsertDyadTaskMessage(updated); messageID > 0 && messageID != updated.TelegramMessageID {
+				st.setDyadTaskTelegramMessageID(updated.ID, messageID)
+				updated.TelegramMessageID = messageID
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(updated)
+	})
+
+	http.HandleFunc("/dyad-tasks/claim", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		var payload struct {
+			ID     int    `json:"id"`
+			Dyad   string `json:"dyad"`
+			Critic string `json:"critic"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.ID <= 0 || payload.Critic == "" {
+			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		updated, code, ok := st.claimDyadTask(payload.ID, payload.Dyad, payload.Critic)
+		if !ok {
+			w.WriteHeader(code)
+			return
+		}
+		if shouldNotifyDyadTask(updated) {
+			if messageID, _ := notif.upsertDyadTaskMessage(updated); messageID > 0 && messageID != updated.TelegramMessageID {
+				st.setDyadTaskTelegramMessageID(updated.ID, messageID)
+				updated.TelegramMessageID = messageID
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(updated)
+	})
+
 	addr := ":9090"
 	logger.Printf("manager listening on %s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		logger.Fatalf("server error: %v", err)
+	}
+}
+
+func startDyadDigest(st *store, notif *notifier, logger *log.Logger) {
+	if notif == nil || notif.url == "" || notif.chatID == nil {
+		return
+	}
+	interval := envOr("DYAD_TASK_DIGEST_INTERVAL", "10m")
+	d, err := time.ParseDuration(interval)
+	if err != nil || d <= 0 {
+		d = 10 * time.Minute
+	}
+	go func() {
+		// Send one initial snapshot after startup.
+		time.Sleep(3 * time.Second)
+		for {
+			sendDyadDigestOnce(st, notif, logger)
+			time.Sleep(d)
+		}
+	}()
+}
+
+func sendDyadDigestOnce(st *store, notif *notifier, logger *log.Logger) {
+	tasks := st.listDyadTasks()
+	open := make([]dyadTask, 0, len(tasks))
+	for _, t := range tasks {
+		if strings.ToLower(strings.TrimSpace(t.Status)) == "done" {
+			continue
+		}
+		open = append(open, t)
+	}
+	sort.Slice(open, func(i, j int) bool {
+		pi := priorityRank(open[i].Priority)
+		pj := priorityRank(open[j].Priority)
+		if pi != pj {
+			return pi > pj
+		}
+		si := statusRank(open[i].Status)
+		sj := statusRank(open[j].Status)
+		if si != sj {
+			return si < sj
+		}
+		if open[i].Dyad != open[j].Dyad {
+			return open[i].Dyad < open[j].Dyad
+		}
+		return open[i].ID < open[j].ID
+	})
+
+	var b strings.Builder
+	b.WriteString("🧭 <b>Dyad Task Board</b>\n")
+	b.WriteString("<b>Open:</b> " + strconv.Itoa(len(open)) + "\n")
+	b.WriteString("<b>When (UTC):</b> " + formatUTCWhen(time.Now().UTC()) + "\n")
+	if len(open) == 0 {
+		b.WriteString("\n✅ <b>All clear</b>")
+	} else {
+		b.WriteString("\n")
+		for i, t := range open {
+			if i >= 20 {
+				b.WriteString("…\n")
+				break
+			}
+			line := fmt.Sprintf("%s %s <b>#%d</b> %s",
+				statusEmoji(t.Status),
+				kindEmoji(t.Kind),
+				t.ID,
+				html.EscapeString(strings.TrimSpace(t.Title)),
+			)
+			if strings.TrimSpace(t.Dyad) != "" {
+				line += " <i>(" + html.EscapeString(strings.TrimSpace(t.Dyad)) + ")</i>"
+			}
+			if strings.TrimSpace(t.ClaimedBy) != "" {
+				line += " — " + html.EscapeString(strings.TrimSpace(t.ClaimedBy))
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+
+	prevID := st.getDyadDigestTelegramMessageID()
+	newID, _ := notif.upsertMessageHTML(strings.TrimSpace(b.String()), prevID)
+	if newID > 0 && newID != prevID {
+		st.setDyadDigestTelegramMessageID(newID)
+		logger.Printf("dyad digest anchored message_id=%d", newID)
+	}
+}
+
+func statusRank(status string) int {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "blocked":
+		return 0
+	case "review":
+		return 1
+	case "in_progress":
+		return 2
+	case "todo":
+		return 3
+	default:
+		return 9
+	}
+}
+
+func priorityRank(priority string) int {
+	switch strings.ToLower(strings.TrimSpace(priority)) {
+	case "high", "p0", "urgent":
+		return 300
+	case "normal", "medium", "p1", "":
+		return 200
+	case "low", "p2":
+		return 100
+	default:
+		return 150
 	}
 }
 
@@ -490,15 +976,177 @@ func buildNotifier(logger *log.Logger) *notifier {
 }
 
 func formatTaskMessage(t humanTask) string {
-	return strings.TrimSpace(strings.Join([]string{
-		"Human Action Required",
-		"Task: " + t.Title,
-		"Commands: " + t.Commands,
-		"URL: " + t.URL,
-		"Timeout: " + t.Timeout,
-		"Requested by: " + t.RequestedBy,
-		"Notes: " + t.Notes,
-	}, "\n"))
+	title := strings.TrimSpace(t.Title)
+	if title == "" {
+		title = fmt.Sprintf("Task #%d", t.ID)
+	}
+
+	var b strings.Builder
+	b.WriteString("🧑‍💻 <b>Human Task</b>\n")
+	b.WriteString("<b>Title:</b> " + html.EscapeString(title) + "\n")
+	if strings.TrimSpace(t.Commands) != "" {
+		b.WriteString("<b>Command:</b>\n<pre><code>" + html.EscapeString(strings.TrimSpace(t.Commands)) + "</code></pre>\n")
+	}
+	if strings.TrimSpace(t.URL) != "" {
+		b.WriteString("<b>URL:</b> " + html.EscapeString(strings.TrimSpace(t.URL)) + "\n")
+	}
+	if strings.TrimSpace(t.Timeout) != "" {
+		b.WriteString("<b>Timeout:</b> " + html.EscapeString(strings.TrimSpace(t.Timeout)) + "\n")
+	}
+	if strings.TrimSpace(t.RequestedBy) != "" {
+		b.WriteString("<b>Requested By:</b> " + html.EscapeString(strings.TrimSpace(t.RequestedBy)) + "\n")
+	}
+	b.WriteString("<b>Status:</b> " + html.EscapeString(strings.TrimSpace(t.Status)) + "\n")
+	b.WriteString("<b>Created:</b> " + formatUTCWhen(t.CreatedAt) + "\n")
+	if strings.TrimSpace(t.Notes) != "" {
+		b.WriteString("<b>Notes:</b>\n<pre><code>" + html.EscapeString(truncate(t.Notes, 900)) + "</code></pre>\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func formatDyadTaskMessage(t dyadTask) string {
+	title := strings.TrimSpace(t.Title)
+	if title == "" {
+		title = fmt.Sprintf("Task #%d", t.ID)
+	}
+	status := strings.TrimSpace(t.Status)
+	priority := strings.TrimSpace(t.Priority)
+	kind := strings.TrimSpace(t.Kind)
+
+	var b strings.Builder
+	b.WriteString(statusEmoji(status) + " " + kindEmoji(kind) + " <b>Dyad Task</b>\n")
+	b.WriteString("<b>Title:</b> " + html.EscapeString(title) + "\n")
+	b.WriteString("<b>Status:</b> " + statusEmoji(status) + " " + html.EscapeString(status) + "\n")
+	if priority != "" {
+		b.WriteString("<b>Priority:</b> " + priorityEmoji(priority) + " " + html.EscapeString(priority) + "\n")
+	}
+	if kind != "" {
+		b.WriteString("<b>Kind:</b> " + kindEmoji(kind) + " " + html.EscapeString(kind) + "\n")
+	}
+	if strings.TrimSpace(t.Dyad) != "" {
+		b.WriteString("<b>Dyad:</b> " + html.EscapeString(strings.TrimSpace(t.Dyad)) + "\n")
+	}
+	if strings.TrimSpace(t.ClaimedBy) != "" {
+		b.WriteString("<b>Owner:</b> " + html.EscapeString(strings.TrimSpace(t.ClaimedBy)) + "\n")
+	}
+	if strings.TrimSpace(t.Link) != "" {
+		b.WriteString("<b>Link:</b> " + html.EscapeString(strings.TrimSpace(t.Link)) + "\n")
+	}
+	if strings.TrimSpace(t.Description) != "" {
+		b.WriteString("<b>Details:</b>\n<pre><code>" + html.EscapeString(truncate(t.Description, 900)) + "</code></pre>\n")
+	}
+	if strings.TrimSpace(t.Notes) != "" {
+		b.WriteString("<b>Notes:</b>\n<pre><code>" + html.EscapeString(truncate(t.Notes, 900)) + "</code></pre>\n")
+	}
+
+	when := t.UpdatedAt
+	if when.IsZero() {
+		when = t.CreatedAt
+	}
+	if !when.IsZero() {
+		b.WriteString("<b>When (UTC):</b> " + formatUTCWhen(when) + "\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func shouldNotifyDyadTask(t dyadTask) bool {
+	kind := strings.ToLower(strings.TrimSpace(t.Kind))
+	status := strings.ToLower(strings.TrimSpace(t.Status))
+	requestedBy := strings.ToLower(strings.TrimSpace(t.RequestedBy))
+	priority := strings.ToLower(strings.TrimSpace(t.Priority))
+
+	// Humans must see anything requiring attention or confirmation.
+	if strings.HasPrefix(requestedBy, "human") {
+		return true
+	}
+
+	// Beams are explicitly human-in-the-loop runbooks.
+	if strings.HasPrefix(kind, "beam.") {
+		return true
+	}
+
+	// Only notify on higher-signal task states.
+	switch status {
+	case "blocked", "review", "done":
+		return true
+	}
+
+	// High priority tasks are worth surfacing even while in progress.
+	switch priority {
+	case "high", "p0", "urgent":
+		return true
+	}
+
+	return false
+}
+
+func statusEmoji(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "todo", "open":
+		return "📝"
+	case "in_progress":
+		return "🚧"
+	case "review":
+		return "🔎"
+	case "blocked":
+		return "⛔"
+	case "done":
+		return "✅"
+	default:
+		return "📌"
+	}
+}
+
+func priorityEmoji(priority string) string {
+	switch strings.ToLower(strings.TrimSpace(priority)) {
+	case "high", "p0", "urgent":
+		return "🔥"
+	case "low", "p2":
+		return "🟩"
+	case "normal", "medium", "p1", "":
+		return "🟦"
+	default:
+		return "🟪"
+	}
+}
+
+func kindEmoji(kind string) string {
+	k := strings.ToLower(strings.TrimSpace(kind))
+	switch {
+	case strings.HasPrefix(k, "beam."):
+		return "⚡"
+	case strings.Contains(k, "stripe") || strings.Contains(k, "billing") || strings.Contains(k, "payments"):
+		return "💳"
+	case strings.Contains(k, "github"):
+		return "🐙"
+	case strings.Contains(k, "mcp"):
+		return "🔌"
+	case strings.Contains(k, "codex"):
+		return "🧠"
+	case strings.HasPrefix(k, "test."):
+		return "🧪"
+	case strings.Contains(k, "docs"):
+		return "📚"
+	case strings.Contains(k, "infra"):
+		return "🏗️"
+	default:
+		return "🧩"
+	}
+}
+
+func formatUTCWhen(t time.Time) string {
+	if t.IsZero() {
+		return "n/a"
+	}
+	return t.UTC().Format("Mon 2006-01-02 15:04 UTC")
+}
+
+func truncate(s string, max int) string {
+	trimmed := strings.TrimSpace(s)
+	if max <= 0 || len(trimmed) <= max {
+		return trimmed
+	}
+	return strings.TrimSpace(trimmed[:max]) + "…"
 }
 
 func newStore(dataDir string, logger *log.Logger) *store {
@@ -522,10 +1170,13 @@ func (s *store) load(logger *log.Logger) {
 		Feedbacks    []feedback      `json:"feedbacks"`
 		Access       []accessRequest `json:"access_requests"`
 		Metrics      []metric        `json:"metrics"`
+		DyadTasks    []dyadTask      `json:"dyad_tasks"`
+		Meta         storeMeta       `json:"meta"`
 		NextTask     int             `json:"next_id"`
 		NextFeedback int             `json:"next_feedback_id"`
 		NextAccess   int             `json:"next_access_id"`
 		NextMetric   int             `json:"next_metric_id"`
+		NextDyadTask int             `json:"next_dyad_task_id"`
 	}
 	if err := json.Unmarshal(b, &payload); err != nil {
 		logger.Printf("tasks decode error: %v", err)
@@ -535,10 +1186,13 @@ func (s *store) load(logger *log.Logger) {
 	s.feedbacks = payload.Feedbacks
 	s.access = payload.Access
 	s.metrics = payload.Metrics
+	s.dyadTasks = payload.DyadTasks
+	s.meta = payload.Meta
 	s.nextTaskID = payload.NextTask
 	s.nextFeedbackID = payload.NextFeedback
 	s.nextAccessID = payload.NextAccess
 	s.nextMetricID = payload.NextMetric
+	s.nextDyadTaskID = payload.NextDyadTask
 }
 
 func (s *store) persistLocked() {
@@ -554,7 +1208,10 @@ func (s *store) persistLocked() {
 		NextAccess   int             `json:"next_access_id,omitempty"`
 		Metrics      []metric        `json:"metrics,omitempty"`
 		NextMetric   int             `json:"next_metric_id,omitempty"`
-	}{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID, Metrics: s.metrics, NextMetric: s.nextMetricID}
+		DyadTasks    []dyadTask      `json:"dyad_tasks,omitempty"`
+		NextDyadTask int             `json:"next_dyad_task_id,omitempty"`
+		Meta         storeMeta       `json:"meta,omitempty"`
+	}{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID, Metrics: s.metrics, NextMetric: s.nextMetricID, DyadTasks: s.dyadTasks, NextDyadTask: s.nextDyadTaskID, Meta: s.meta}
 	b, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return
