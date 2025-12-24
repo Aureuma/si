@@ -62,6 +62,7 @@ type usageSnapshot struct {
 	RemainingPct     float64
 	RemainingMinutes int
 	UsedPct          float64
+	Email            string
 }
 
 type statusEntry struct {
@@ -71,6 +72,7 @@ type statusEntry struct {
 	RemainingPct     float64   `json:"remaining_pct"`
 	RemainingMinutes int       `json:"remaining_minutes"`
 	Cooldown         bool      `json:"cooldown"`
+	Email            string    `json:"email,omitempty"`
 	UpdatedAt        time.Time `json:"updated_at"`
 }
 
@@ -204,6 +206,9 @@ func formatStatusSummary(entries []statusEntry) string {
 		line := "- " + entry.Dyad
 		if entry.Name != "" && entry.Name != entry.Dyad {
 			line += " (" + entry.Name + ")"
+		}
+		if entry.Email != "" {
+			line += " <" + entry.Email + ">"
 		}
 		if entry.RemainingPct >= 0 {
 			line += fmt.Sprintf(": %.1f%% remaining", entry.RemainingPct)
@@ -619,6 +624,7 @@ func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, coo
 		RemainingPct:     usage.RemainingPct,
 		RemainingMinutes: usage.RemainingMinutes,
 		Cooldown:         cooldown,
+		Email:            strings.TrimSpace(usage.Email),
 		UpdatedAt:        time.Now().UTC(),
 	}
 	if entry.Name == "" {
@@ -759,6 +765,7 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 	remainingPct := -1.0
 	usedPct := -1.0
 	remainingMinutes := 0
+	email := parseEmail(raw)
 	percentRe := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*%`)
 	wordsRe := regexp.MustCompile(`(?i)(remaining|left|available)`) // remaining context
 	usedRe := regexp.MustCompile(`(?i)(used|consumed|spent|utilized)`) // used context
@@ -808,6 +815,7 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 		RemainingPct:     remainingPct,
 		RemainingMinutes: remainingMinutes,
 		UsedPct:          usedPct,
+		Email:            email,
 	}
 }
 
@@ -976,6 +984,14 @@ func parseMinutes(line string) int {
 		return 0
 	}
 	return h*60 + m
+}
+
+func parseEmail(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	emailRe := regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
+	return emailRe.FindString(raw)
 }
 
 func truncateLines(text string, maxLines int, maxBytes int) string {
