@@ -16,6 +16,8 @@ func main() {
 	actor := envOr("ACTOR_CONTAINER", "silexa-actor-web")
 	manager := envOr("MANAGER_URL", "http://manager:9090")
 	dyad := envOr("DYAD_NAME", "")
+	role := envOr("ROLE", "critic")
+	dept := envOr("DEPARTMENT", "unknown")
 	taskID := envOr("DYAD_TASK_ID", "")
 	telegramURL := envOr("TELEGRAM_NOTIFY_URL", "")
 	telegramChatID := envOr("TELEGRAM_CHAT_ID", "")
@@ -30,7 +32,7 @@ func main() {
 
 	ensureCodexBaseConfig(logger)
 
-	mon, err := internal.NewMonitor(actor, manager, logger)
+	mon, err := internal.NewMonitor(actor, manager, dyad, role, dept, logger)
 	if err != nil {
 		logger.Fatalf("init monitor: %v", err)
 	}
