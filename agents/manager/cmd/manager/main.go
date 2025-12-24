@@ -20,6 +20,9 @@ import (
 var startTime = time.Now().UTC()
 
 type heartbeat struct {
+	Dyad    string    `json:"dyad"`
+	Role    string    `json:"role"`
+	Department string `json:"department"`
 	Actor   string    `json:"actor"`
 	Critic  string    `json:"critic"`
 	Status  string    `json:"status"`
@@ -97,6 +100,45 @@ type dyadTask struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type dyadRecord struct {
+	Dyad          string    `json:"dyad"`
+	Department    string    `json:"department,omitempty"`
+	Role          string    `json:"role,omitempty"`
+	Actor         string    `json:"actor,omitempty"`
+	Critic        string    `json:"critic,omitempty"`
+	Status        string    `json:"status,omitempty"`
+	Message       string    `json:"message,omitempty"`
+	Available     bool      `json:"available"`
+	LastHeartbeat time.Time `json:"last_heartbeat,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at,omitempty"`
+}
+
+type dyadUpdate struct {
+	Dyad       string `json:"dyad"`
+	Department string `json:"department,omitempty"`
+	Role       string `json:"role,omitempty"`
+	Actor      string `json:"actor,omitempty"`
+	Critic     string `json:"critic,omitempty"`
+	Status     string `json:"status,omitempty"`
+	Message    string `json:"message,omitempty"`
+	Available  *bool  `json:"available,omitempty"`
+}
+
+type dyadSnapshot struct {
+	Dyad                  string    `json:"dyad"`
+	Department            string    `json:"department,omitempty"`
+	Role                  string    `json:"role,omitempty"`
+	Actor                 string    `json:"actor,omitempty"`
+	Critic                string    `json:"critic,omitempty"`
+	Status                string    `json:"status,omitempty"`
+	Message               string    `json:"message,omitempty"`
+	Available             bool      `json:"available"`
+	State                 string    `json:"state"`
+	LastHeartbeat         time.Time `json:"last_heartbeat,omitempty"`
+	LastHeartbeatAgeSec   int64     `json:"last_heartbeat_age_sec,omitempty"`
+	UpdatedAt             time.Time `json:"updated_at,omitempty"`
+}
+
 type store struct {
 	mu             sync.Mutex
 	beats          []heartbeat
@@ -110,6 +152,7 @@ type store struct {
 	nextMetricID   int
 	dyadTasks      []dyadTask
 	nextDyadTaskID int
+	dyads          []dyadRecord
 	meta           storeMeta
 	dataPath       string
 }
@@ -125,6 +168,7 @@ func (s *store) add(h heartbeat) {
 	if len(s.beats) > 1000 {
 		s.beats = s.beats[len(s.beats)-1000:]
 	}
+	s.updateDyadFromHeartbeatLocked(h)
 }
 
 func (s *store) latest() []heartbeat {
@@ -269,6 +313,122 @@ func (s *store) listDyadTasks() []dyadTask {
 	out := make([]dyadTask, len(s.dyadTasks))
 	copy(out, s.dyadTasks)
 	return out
+}
+
+func (s *store) listDyads() []dyadRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]dyadRecord, len(s.dyads))
+	copy(out, s.dyads)
+	return out
+}
+
+func (s *store) upsertDyad(update dyadUpdate) dyadRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	updatedAt := time.Now().UTC()
+	dyad := strings.TrimSpace(update.Dyad)
+	if dyad == "" {
+		return dyadRecord{}
+	}
+	for i := range s.dyads {
+		if s.dyads[i].Dyad != dyad {
+			continue
+		}
+		if update.Department != "" {
+			s.dyads[i].Department = update.Department
+		}
+		if update.Role != "" {
+			s.dyads[i].Role = update.Role
+		}
+		if update.Actor != "" {
+			s.dyads[i].Actor = update.Actor
+		}
+		if update.Critic != "" {
+			s.dyads[i].Critic = update.Critic
+		}
+		if update.Status != "" {
+			s.dyads[i].Status = update.Status
+		}
+		if update.Message != "" {
+			s.dyads[i].Message = update.Message
+		}
+		if update.Available != nil {
+			s.dyads[i].Available = *update.Available
+		}
+		s.dyads[i].UpdatedAt = updatedAt
+		s.persistLocked()
+		return s.dyads[i]
+	}
+	record := dyadRecord{
+		Dyad:       dyad,
+		Available:  true,
+		UpdatedAt:  updatedAt,
+		Department: update.Department,
+		Role:       update.Role,
+		Actor:      update.Actor,
+		Critic:     update.Critic,
+		Status:     update.Status,
+		Message:    update.Message,
+	}
+	if update.Available != nil {
+		record.Available = *update.Available
+	}
+	s.dyads = append(s.dyads, record)
+	s.persistLocked()
+	return record
+}
+
+func (s *store) updateDyadFromHeartbeatLocked(h heartbeat) {
+	dyad := strings.TrimSpace(h.Dyad)
+	if dyad == "" {
+		dyad = dyadFromContainer(h.Actor)
+	}
+	if dyad == "" {
+		dyad = dyadFromContainer(h.Critic)
+	}
+	if dyad == "" {
+		return
+	}
+	for i := range s.dyads {
+		if s.dyads[i].Dyad != dyad {
+			continue
+		}
+		if h.Department != "" {
+			s.dyads[i].Department = h.Department
+		}
+		if h.Role != "" {
+			s.dyads[i].Role = h.Role
+		}
+		if h.Actor != "" {
+			s.dyads[i].Actor = h.Actor
+		}
+		if h.Critic != "" {
+			s.dyads[i].Critic = h.Critic
+		}
+		if h.Status != "" {
+			s.dyads[i].Status = h.Status
+		}
+		if h.Message != "" {
+			s.dyads[i].Message = h.Message
+		}
+		s.dyads[i].LastHeartbeat = h.When
+		s.dyads[i].UpdatedAt = h.When
+		return
+	}
+	record := dyadRecord{
+		Dyad:          dyad,
+		Department:    h.Department,
+		Role:          h.Role,
+		Actor:         h.Actor,
+		Critic:        h.Critic,
+		Status:        h.Status,
+		Message:       h.Message,
+		Available:     true,
+		LastHeartbeat: h.When,
+		UpdatedAt:     h.When,
+	}
+	s.dyads = append(s.dyads, record)
 }
 
 func (s *store) updateDyadTask(updated dyadTask) (dyadTask, bool) {
@@ -603,6 +763,27 @@ func main() {
 		beats := st.latest()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(beats)
+	})
+
+	http.HandleFunc("/dyads", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			list := st.listDyads()
+			snapshots := buildDyadSnapshots(list)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(snapshots)
+		case http.MethodPost:
+			var update dyadUpdate
+			if err := json.NewDecoder(r.Body).Decode(&update); err != nil || strings.TrimSpace(update.Dyad) == "" {
+				http.Error(w, "invalid payload", http.StatusBadRequest)
+				return
+			}
+			updated := st.upsertDyad(update)
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(updated)
+		default:
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
 	})
 
 	http.HandleFunc("/human-tasks", func(w http.ResponseWriter, r *http.Request) {
@@ -952,6 +1133,64 @@ func priorityRank(priority string) int {
 	}
 }
 
+func dyadFromContainer(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+	prefixes := []string{"silexa-actor-", "silexa-critic-"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(name, prefix) {
+			return strings.TrimPrefix(name, prefix)
+		}
+	}
+	return ""
+}
+
+func buildDyadSnapshots(list []dyadRecord) []dyadSnapshot {
+	out := make([]dyadSnapshot, 0, len(list))
+	cutoff := 5 * time.Minute
+	now := time.Now().UTC()
+	for _, rec := range list {
+		state := "unknown"
+		ageSec := int64(0)
+		if !rec.LastHeartbeat.IsZero() {
+			age := now.Sub(rec.LastHeartbeat)
+			ageSec = int64(age.Seconds())
+			if age <= cutoff {
+				state = "online"
+			} else {
+				state = "stale"
+			}
+		}
+		available := rec.Available
+		if !available && rec.UpdatedAt.IsZero() {
+			available = true
+		}
+		out = append(out, dyadSnapshot{
+			Dyad:                rec.Dyad,
+			Department:          rec.Department,
+			Role:                rec.Role,
+			Actor:               rec.Actor,
+			Critic:              rec.Critic,
+			Status:              rec.Status,
+			Message:             rec.Message,
+			Available:           available,
+			State:               state,
+			LastHeartbeat:       rec.LastHeartbeat,
+			LastHeartbeatAgeSec: ageSec,
+			UpdatedAt:           rec.UpdatedAt,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Department != out[j].Department {
+			return out[i].Department < out[j].Department
+		}
+		return out[i].Dyad < out[j].Dyad
+	})
+	return out
+}
+
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -1171,6 +1410,7 @@ func (s *store) load(logger *log.Logger) {
 		Access       []accessRequest `json:"access_requests"`
 		Metrics      []metric        `json:"metrics"`
 		DyadTasks    []dyadTask      `json:"dyad_tasks"`
+		Dyads        []dyadRecord    `json:"dyads"`
 		Meta         storeMeta       `json:"meta"`
 		NextTask     int             `json:"next_id"`
 		NextFeedback int             `json:"next_feedback_id"`
@@ -1187,6 +1427,7 @@ func (s *store) load(logger *log.Logger) {
 	s.access = payload.Access
 	s.metrics = payload.Metrics
 	s.dyadTasks = payload.DyadTasks
+	s.dyads = payload.Dyads
 	s.meta = payload.Meta
 	s.nextTaskID = payload.NextTask
 	s.nextFeedbackID = payload.NextFeedback
@@ -1210,8 +1451,9 @@ func (s *store) persistLocked() {
 		NextMetric   int             `json:"next_metric_id,omitempty"`
 		DyadTasks    []dyadTask      `json:"dyad_tasks,omitempty"`
 		NextDyadTask int             `json:"next_dyad_task_id,omitempty"`
+		Dyads        []dyadRecord    `json:"dyads,omitempty"`
 		Meta         storeMeta       `json:"meta,omitempty"`
-	}{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID, Metrics: s.metrics, NextMetric: s.nextMetricID, DyadTasks: s.dyadTasks, NextDyadTask: s.nextDyadTaskID, Meta: s.meta}
+	}{Tasks: s.tasks, Feedbacks: s.feedbacks, NextTask: s.nextTaskID, NextFeedback: s.nextFeedbackID, Access: s.access, NextAccess: s.nextAccessID, Metrics: s.metrics, NextMetric: s.nextMetricID, DyadTasks: s.dyadTasks, NextDyadTask: s.nextDyadTaskID, Dyads: s.dyads, Meta: s.meta}
 	b, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return
