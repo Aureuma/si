@@ -1,0 +1,31 @@
+{
+  "cooldown_threshold_pct": 10,
+  "total_limit_minutes": 300,
+  "poll_interval": "2m",
+  "accounts": [
+    {
+      "name": "infra-primary",
+      "dyad": "infra",
+      "role": "infra",
+      "department": "infra",
+      "monitor_role": "critic",
+      "spawn": true
+    },
+    {
+      "name": "web-primary",
+      "dyad": "web",
+      "role": "webdev",
+      "department": "web",
+      "monitor_role": "critic",
+      "spawn": true
+    },
+    {
+      "name": "research-primary",
+      "dyad": "research",
+      "role": "research",
+      "department": "research",
+      "monitor_role": "critic",
+      "spawn": true
+    }
+  ]
+}
