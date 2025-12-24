@@ -1,0 +1,12 @@
+🔐 Codex login (critic infra):
+
+🛠 tunnel:
+```shell
+ssh -N -L 127.0.0.1:1455:172.18.0.20:1456 shawn@65.19.188.111
+```
+
+🌐 URL:
+```
+https://auth.openai.com/oauth/authorize?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid%20profile%20email%20offline_access&code_challenge=4ZJ6P5zYrsKeAGVyGOmD0hfMvI69l7u08goH6nUe7fs&code_challenge_method=S256&id_token_add_organizations=true&codex_cli_simplified_flow=true&state=yNAE1ZXY_BE1xplq60SCtMoJ1hDnBSwThDK9um8ahFY&originator=codex_cli_rs
+```
+
