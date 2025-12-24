@@ -5,6 +5,7 @@ usage() {
   cat <<USAGE
 usage: dyadctl.sh <command> [args]
 commands:
+  register <name> [role] [department] Register dyad in manager registry
   create <name> [role] [department]   Create dyad via spawn-dyad.sh
   destroy <name> [reason]             Teardown dyad via teardown-dyad.sh
   list                                List running dyads
@@ -31,6 +32,11 @@ case "$CMD" in
     if [[ -z "$NAME" ]]; then usage; exit 1; fi
     sudo "${ROOT_DIR}/bin/spawn-dyad.sh" "$NAME" "$ROLE" "$DEPT"
     post_feedback info "Dyad created: $NAME (role=$ROLE, dept=$DEPT)" "dyadctl" "spawn"
+    ;;
+  register)
+    NAME="${1:-}"; ROLE="${2:-generic}"; DEPT="${3:-$ROLE}"
+    if [[ -z "$NAME" ]]; then usage; exit 1; fi
+    MANAGER_URL="$MANAGER_URL" "${ROOT_DIR}/bin/register-dyad.sh" "$NAME" "$ROLE" "$DEPT"
     ;;
   destroy)
     NAME="${1:-}"; REASON="${2:-}" 
