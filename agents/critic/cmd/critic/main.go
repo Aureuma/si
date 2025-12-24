@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +33,7 @@ func main() {
 	logger := log.New(os.Stdout, "critic ", log.LstdFlags|log.LUTC)
 
 	ensureCodexBaseConfig(logger)
+	ensureDyadRegistered(manager, dyad, logger)
 
 	mon, err := internal.NewMonitor(actor, manager, dyad, role, dept, logger)
 	if err != nil {
@@ -72,6 +75,37 @@ func main() {
 			}
 		}
 	}
+}
+
+func ensureDyadRegistered(managerURL, dyad string, logger *log.Logger) {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return
+	}
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(managerURL, "/")+"/dyads", nil)
+	if err != nil {
+		logger.Fatalf("dyad registry check error: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.Fatalf("dyad registry check error: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		logger.Fatalf("dyad registry check failed: %s", resp.Status)
+	}
+	var list []struct {
+		Dyad string `json:"dyad"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		logger.Fatalf("dyad registry decode error: %v", err)
+	}
+	for _, entry := range list {
+		if strings.TrimSpace(entry.Dyad) == dyad {
+			return
+		}
+	}
+	logger.Fatalf("dyad %q not registered; run bin/register-dyad.sh %s", dyad, dyad)
 }
 
 func ensureCodexBaseConfig(logger *log.Logger) {
