@@ -24,6 +24,9 @@ type Monitor struct {
 	TelegramURL    string
 	TelegramChatID string
 	SSHTarget      string
+	DyadName       string
+	Role           string
+	Department     string
 	Logger         *log.Logger
 	lastTimestamp  time.Time
 	lastActorLogAt time.Time
@@ -31,7 +34,7 @@ type Monitor struct {
 	dockerClient   *http.Client
 }
 
-func NewMonitor(actor, manager string, logger *log.Logger) (*Monitor, error) {
+func NewMonitor(actor, manager, dyad, role, department string, logger *log.Logger) (*Monitor, error) {
 	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		return (&net.Dialer{}).DialContext(ctx, "unix", "/var/run/docker.sock")
 	}
@@ -41,6 +44,9 @@ func NewMonitor(actor, manager string, logger *log.Logger) (*Monitor, error) {
 	return &Monitor{
 		ActorContainer: actor,
 		ManagerURL:     manager,
+		DyadName:       dyad,
+		Role:           role,
+		Department:     department,
 		Logger:         logger,
 		lastTimestamp:  time.Now().Add(-30 * time.Second),
 		lastActorLogAt: time.Now().Add(-30 * time.Second),
@@ -72,10 +78,13 @@ func (m *Monitor) StreamOnce(ctx context.Context) error {
 
 func (m *Monitor) Heartbeat(ctx context.Context) error {
 	body, _ := json.Marshal(map[string]string{
-		"actor":   m.ActorContainer,
-		"critic":  criticID(),
-		"status":  "ok",
-		"message": "heartbeat",
+		"dyad":       m.DyadName,
+		"role":       m.Role,
+		"department": m.Department,
+		"actor":      m.ActorContainer,
+		"critic":     criticID(),
+		"status":     "ok",
+		"message":    "heartbeat",
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.ManagerURL+"/heartbeat", bytes.NewReader(body))
 	if err != nil {
