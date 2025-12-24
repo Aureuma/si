@@ -67,6 +67,29 @@ services:
     volumes:
       - ./data/manager:/data
 
+  codex-monitor:
+    build:
+      context: ./agents/codex-monitor
+    image: silexa/codex-monitor:local
+    container_name: silexa-codex-monitor
+    mem_limit: 256m
+    cpus: "0.25"
+    depends_on:
+      - manager
+    environment:
+      - MANAGER_URL=http://manager:9090
+      - CODEX_ACCOUNTS_FILE=/configs/codex_accounts.json
+      - CODEX_STATUS_POLL_INTERVAL=2m
+      - CODEX_COOLDOWN_THRESHOLD_PCT=10
+      - CODEX_PLAN_LIMIT_MINUTES=300
+      - CODEX_SPAWN_DYADS=1
+      - CODEX_SPAWN_SCRIPT=/workspace/silexa/bin/spawn-dyad.sh
+    volumes:
+      - ./:/workspace/silexa
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs:/configs:ro
+    restart: unless-stopped
+
   router:
     build:
       context: ./agents/router

@@ -12,6 +12,7 @@ Use these metrics to steer dyads and departments. All can be posted to the manag
 - **Security**: credentials rotations per week, pending secret requests (`creds_rotated`, `creds_requests_pending`).
 - **Autonomy**: fraction of tasks closed without human intervention (`autonomy_ratio`).
 - **Feedback quality**: count of actionable feedback items (`feedback_actionable`).
+- **Codex usage**: per-dyad remaining quota percent (`codex.remaining_pct`), remaining minutes (`codex.remaining_minutes`), and cooldown flag (`codex.cooldown`).
 
 Recommended aggregation:
 - Record raw events (task closed, deploy attempted, QA run) into `/metrics` with timestamp.
