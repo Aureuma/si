@@ -1,0 +1,4 @@
+# Used by Beams that need SSH tunnels (e.g., Codex OAuth callbacks).
+# Override at runtime with SSH_TARGET env.
+SSH_TARGET=shawn@65.19.188.111
+
