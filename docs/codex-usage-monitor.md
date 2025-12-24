@@ -59,5 +59,6 @@ If `CODEX_MONITOR_URL` is configured on the Telegram bot (default: `http://codex
 - `codex-monitor` runs `codex /status` in a local pseudo-terminal and reads each account's `.codex` state from mounted volumes.
 - For read-only `.codex` mounts, the monitor copies the state into a temporary HOME and answers initial prompts (approval + model selection) before issuing `/status`.
 - If an account has no `auth.json`, usage shows as `n/a` until the dyad logs in (`codex login`).
+- The usage summary includes the account email parsed from the `/status` output when available.
 - When a dyad falls below the cooldown threshold, new tasks should route to other dyads in the same pool.
 - If no alternative dyads exist, routing falls back to the original target.
