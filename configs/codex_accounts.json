@@ -8,6 +8,7 @@
       "dyad": "infra",
       "role": "infra",
       "department": "infra",
+      "codex_home": "/data/codex/infra/critic",
       "monitor_role": "critic",
       "spawn": true
     },
@@ -16,6 +17,7 @@
       "dyad": "web",
       "role": "webdev",
       "department": "web",
+      "codex_home": "/codex/web",
       "monitor_role": "critic",
       "spawn": true
     },
@@ -24,6 +26,7 @@
       "dyad": "research",
       "role": "research",
       "department": "research",
+      "codex_home": "/codex/research",
       "monitor_role": "critic",
       "spawn": true
     }

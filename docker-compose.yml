@@ -90,6 +90,10 @@ services:
       - ./:/workspace/silexa
       - /var/run/docker.sock:/var/run/docker.sock
       - ./configs:/configs:ro
+      - ./data/codex:/data/codex:ro
+      - codex_state_web:/codex/web/.codex:ro
+      - codex_state_research:/codex/research/.codex:ro
+      - codex_state_pm:/codex/pm/.codex:ro
     restart: unless-stopped
 
   router:
