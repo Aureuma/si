@@ -67,6 +67,79 @@ services:
     volumes:
       - ./data/manager:/data
 
+  router:
+    build:
+      context: ./agents/router
+    image: silexa/router:local
+    container_name: silexa-router
+    mem_limit: 128m
+    cpus: "0.25"
+    depends_on:
+      - manager
+    environment:
+      - MANAGER_URL=http://manager:9090
+      - ROUTER_RULES_FILE=/configs/router_rules.json
+      - ROUTER_POLL_INTERVAL=10s
+    volumes:
+      - ./configs:/configs:ro
+    restart: unless-stopped
+
+  actor-pm:
+    image: silexa/actor:local
+    container_name: silexa-actor-pm
+    mem_limit: 1g
+    cpus: "1.0"
+    working_dir: /workspace/apps
+    volumes:
+      - ./:/workspace/silexa
+      - ./apps:/workspace/apps
+      - codex_state_pm:/root/.codex
+    environment:
+      - ROLE=program_manager
+      - DYAD_NAME=pm
+      - DYAD_MEMBER=actor
+      - DEPARTMENT=ops
+      - CODEX_MODEL=gpt-5.1-codex-max
+      - CODEX_REASONING_EFFORT=low
+    tty: true
+    restart: unless-stopped
+    command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
+
+  critic-pm:
+    image: silexa/critic:local
+    container_name: silexa-critic-pm
+    mem_limit: 512m
+    cpus: "0.75"
+    depends_on:
+      - actor-pm
+      - manager
+    environment:
+      - CRITIC_ID=silexa-critic-pm
+      - ACTOR_CONTAINER=silexa-actor-pm
+      - MANAGER_URL=http://manager:9090
+      - DYAD_NAME=pm
+      - DYAD_MEMBER=critic
+      - ROLE=program_manager
+      - DEPARTMENT=ops
+      - PROGRAM_MANAGER=1
+      - PROGRAM_CONFIG_DIR=/configs/programs/releaseparty
+      - PM_MAX_NEW_PER_TICK=2
+      - PM_MAX_OPEN_PER_DYAD=5
+      - PM_MIN_OPEN_PER_DYAD=1
+      - PM_MAX_OPEN_GLOBAL=25
+      - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SSH_TARGET=${SSH_TARGET:-}
+      - SSH_TARGET_FILE=/configs/ssh_target
+      - CODEX_MODEL=gpt-5.1-codex-max
+      - CODEX_REASONING_EFFORT=xhigh
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_pm:/root/.codex
+      - ./configs:/configs:ro
+    user: "0:0"
+    restart: unless-stopped
+
   coder-agent:
     build:
       context: ./agents/coder
@@ -100,12 +173,20 @@ services:
     cpus: "1.0"
     working_dir: /workspace/apps
     volumes:
+      - ./:/workspace/silexa
       - ./apps:/workspace/apps
       - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_web:/root/.codex
     environment:
       - ROLE=webdev
+      - DYAD_NAME=web
+      - DYAD_MEMBER=actor
+      - DEPARTMENT=web
+      - CODEX_MODEL=gpt-5.1-codex-max
+      - CODEX_REASONING_EFFORT=high
     tty: true
     restart: unless-stopped
+    command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
 
   critic-web:
     build:
@@ -118,10 +199,23 @@ services:
       - actor-web
       - manager
     environment:
+      - CRITIC_ID=silexa-critic-web
       - ACTOR_CONTAINER=silexa-actor-web
       - MANAGER_URL=http://manager:9090
+      - DYAD_NAME=web
+      - DYAD_MEMBER=critic
+      - ROLE=critic
+      - DEPARTMENT=web
+      - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SSH_TARGET=${SSH_TARGET:-}
+      - SSH_TARGET_FILE=/configs/ssh_target
+      - CODEX_MODEL=gpt-5.1-codex-max
+      - CODEX_REASONING_EFFORT=high
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_web:/root/.codex
+      - ./configs:/configs:ro
     user: "0:0"
     restart: unless-stopped
 
@@ -132,12 +226,20 @@ services:
     cpus: "1.0"
     working_dir: /workspace/apps
     volumes:
+      - ./:/workspace/silexa
       - ./apps:/workspace/apps
       - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_research:/root/.codex
     environment:
       - ROLE=research
+      - DYAD_NAME=research
+      - DYAD_MEMBER=actor
+      - DEPARTMENT=research
+      - CODEX_MODEL=gpt-5.1-codex-max
+      - CODEX_REASONING_EFFORT=xhigh
     tty: true
     restart: unless-stopped
+    command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
 
   critic-research:
     image: silexa/critic:local
@@ -148,10 +250,23 @@ services:
       - actor-research
       - manager
     environment:
+      - CRITIC_ID=silexa-critic-research
       - ACTOR_CONTAINER=silexa-actor-research
       - MANAGER_URL=http://manager:9090
+      - DYAD_NAME=research
+      - DYAD_MEMBER=critic
+      - ROLE=critic
+      - DEPARTMENT=research
+      - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SSH_TARGET=${SSH_TARGET:-}
+      - SSH_TARGET_FILE=/configs/ssh_target
+      - CODEX_MODEL=gpt-5.1-codex-max
+      - CODEX_REASONING_EFFORT=high
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_research:/root/.codex
+      - ./configs:/configs:ro
     user: "0:0"
     restart: unless-stopped
 
@@ -162,6 +277,9 @@ services:
     container_name: silexa-mcp-gateway
     mem_limit: 512m
     cpus: "0.5"
+    environment:
+      - GH_TOKEN=${GH_TOKEN:-}
+      - STRIPE_API_KEY=${STRIPE_API_KEY:-}
     ports:
       - "8088:8088"
     volumes:
@@ -169,6 +287,30 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
+  dashboard:
+    build:
+      context: ./agents/dashboard
+    image: silexa/dashboard:local
+    container_name: silexa-dashboard
+    mem_limit: 256m
+    cpus: "0.5"
+    environment:
+      - MANAGER_URL=http://manager:9090
+      - BIN_DIR=/workspace/silexa/bin
+      - ADDR=:8087
+    working_dir: /workspace/silexa
+    volumes:
+      - ./:/workspace/silexa
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8087:8087"
+    restart: unless-stopped
+
 secrets:
   telegram_bot_token:
     file: ./secrets/telegram_bot_token
+
+volumes:
+  codex_state_web:
+  codex_state_research:
+  codex_state_pm:
