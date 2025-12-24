@@ -22,7 +22,7 @@
 - Telegram bot token rotation: `bin/rotate-telegram-token.sh <new_token>`.
 
 ## Dyad controls
-- Spawn/destroy/list/status: `bin/dyadctl.sh` (labels applied for filtering/cleanup).
+- Register/spawn/destroy/list/status: `bin/dyadctl.sh` (register before spawn; labels applied for filtering/cleanup).
 - Web team: `bin/spawn-web-team.sh` to provision planner/builder/QA dyads.
 
 ## Alerts and schedules (suggested)
