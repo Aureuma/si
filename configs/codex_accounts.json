@@ -29,6 +29,15 @@
       "codex_home": "/codex/research",
       "monitor_role": "critic",
       "spawn": true
+    },
+    {
+      "name": "pm-primary",
+      "dyad": "pm",
+      "role": "pm",
+      "department": "pm",
+      "codex_home": "/codex/pm",
+      "monitor_role": "critic",
+      "spawn": true
     }
   ]
 }
