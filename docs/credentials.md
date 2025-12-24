@@ -12,7 +12,19 @@
 - For new secrets, add under `secrets:` in `docker-compose.yml` and mount into the specific service.
 
 ## Actors/Critics
-- No secrets mounted by default. Provide task-specific credentials via env when exec’ing an actor (e.g., `OPENAI_API_KEY` during `codex login`).
+- No secrets mounted by default. Prefer OAuth-style flows where possible (e.g., `codex login` via browser).
+
+Codex CLI credentials persistence:
+- **Compose dyads** persist per-dyad docker named volumes mounted at `/root/.codex`:
+  - `codex_state_web` for `actor-web` + `critic-web`
+  - `codex_state_research` for `actor-research` + `critic-research`
+  OAuth does not need to be repeated after container recreation (within the same dyad volume).
+- **Spawned dyads** (`bin/spawn-dyad.sh <name> ...`) default to a **shared** host directory `data/codex/shared/{actor,critic}` mounted at `/root/.codex` (override with `CODEX_PER_DYAD=1` to isolate per-dyad as `data/codex/<dyad>/{actor,critic}`).
+
+## SSH target (tunnels)
+- Beams that require SSH tunnels (e.g., Codex OAuth callbacks) use `SSH_TARGET=<user>@<public_ip>`.
+- Default is recorded in `configs/ssh_target` and injected into dyad critics by `bin/spawn-dyad.sh`.
+- Do not store SSH passwords in git; use SSH keys on the operator machine.
 
 ## Manager
 - No secrets. Persists tasks/feedback in `data/manager` volume.

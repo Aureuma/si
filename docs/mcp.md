@@ -22,5 +22,6 @@ We bundle Docker's MCP Gateway so actors/critics can access MCP servers through 
 - Resource limits: 0.5 CPU / 512 MiB (see `docker-compose.yml`).
 
 ### Extending
-- Add custom catalogs by mounting a catalog file into the service (edit compose). Use `docker-mcp catalog bootstrap` or `catalog add` to bring in servers (GitHub/Stripe/etc.) with appropriate secrets mounted via docker secrets.
-- Keep credentials out of env; use secret files and minimal scopes per service.
+- Catalog now includes GitHub CLI and Stripe CLI POCI entries (`data/mcp-gateway/catalog.yaml`). Provide `GH_TOKEN` and `STRIPE_API_KEY` in the environment (see `docker-compose.yml` for pass-through) or mount secrets before use.
+- Add further catalogs by mounting a catalog file into the service (edit compose). Use `docker-mcp catalog bootstrap` or `catalog add` to bring in servers with appropriate secrets mounted via docker secrets.
+- Keep credentials out of env when possible; prefer secret files and minimal scopes per service.
