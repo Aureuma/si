@@ -10,6 +10,7 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token
       - MANAGER_URL=http://manager:9090
+      - CODEX_MONITOR_URL=http://codex-monitor:8086/status
     secrets:
       - telegram_bot_token
     restart: unless-stopped
@@ -84,6 +85,7 @@ services:
       - CODEX_PLAN_LIMIT_MINUTES=300
       - CODEX_SPAWN_DYADS=1
       - CODEX_SPAWN_SCRIPT=/workspace/silexa/bin/spawn-dyad.sh
+      - CODEX_MONITOR_ADDR=:8086
     volumes:
       - ./:/workspace/silexa
       - /var/run/docker.sock:/var/run/docker.sock

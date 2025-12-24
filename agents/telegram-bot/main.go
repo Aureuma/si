@@ -20,6 +20,7 @@ type notifier struct {
 	chatID     *int64
 	logger     *log.Logger
 	managerURL string
+	codexMonitorURL string
 }
 
 type button struct {
@@ -80,6 +81,10 @@ func main() {
 	if managerURL == "" {
 		managerURL = "http://manager:9090"
 	}
+	codexMonitorURL := os.Getenv("CODEX_MONITOR_URL")
+	if codexMonitorURL == "" {
+		codexMonitorURL = "http://codex-monitor:8086/status"
+	}
 
 	bot, err := tgbotapi.NewBotAPI(token)
 	if err != nil {
@@ -89,7 +94,13 @@ func main() {
 
 	setCommands(bot, logger)
 
-	n := &notifier{bot: bot, chatID: chatID, logger: logger, managerURL: managerURL}
+	n := &notifier{
+		bot:            bot,
+		chatID:         chatID,
+		logger:         logger,
+		managerURL:     managerURL,
+		codexMonitorURL: codexMonitorURL,
+	}
 	go n.pollUpdates()
 
 	mux := http.NewServeMux()
@@ -453,8 +464,12 @@ func (n *notifier) statusMessage() string {
 	if h.LastBeat != nil {
 		lastBeat = h.LastBeat.UTC().Format(time.RFC3339)
 	}
-	return fmt.Sprintf("Status: %s\nOpen tasks: %d\nAccess pending: %d\nRecent beats: %d\nMetrics: %d\nUptime: %ds\nLast beat: %s",
+	msg := fmt.Sprintf("Status: %s\nOpen tasks: %d\nAccess pending: %d\nRecent beats: %d\nMetrics: %d\nUptime: %ds\nLast beat: %s",
 		h.Status, h.TasksOpen, h.AccessPending, h.BeatsRecent, h.MetricsCount, h.UptimeSeconds, lastBeat)
+	if codex := n.fetchCodexStatus(); codex != "" {
+		msg += "\n\n" + codex
+	}
+	return msg
 }
 
 func (n *notifier) tasksMessage() string {
@@ -525,6 +540,25 @@ func (n *notifier) fetchHealth() (*managerHealth, error) {
 		return nil, err
 	}
 	return &h, nil
+}
+
+func (n *notifier) fetchCodexStatus() string {
+	if strings.TrimSpace(n.codexMonitorURL) == "" {
+		return ""
+	}
+	resp, err := http.Get(n.codexMonitorURL)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return ""
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(body))
 }
 
 func (n *notifier) fetchTasks() ([]managerTask, error) {
