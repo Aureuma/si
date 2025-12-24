@@ -73,6 +73,7 @@ type pmCandidate struct {
 	Index       int
 	Task        programSpecTask
 	DyadKey     string
+	IsPool      bool
 	Need        int
 	OpenCount   int
 	Priority    int
@@ -201,6 +202,7 @@ func (m *Monitor) reconcileProgramSpec(ctx context.Context, prog *programSpec, t
 			Index:        idx,
 			Task:         pt,
 			DyadKey:      dyadKey,
+			IsPool:       isPool,
 			Need:         need,
 			OpenCount:    openCount,
 			Priority:     pmPriorityScore(pt.Priority),
@@ -257,7 +259,7 @@ func (m *Monitor) reconcileProgramSpec(ctx context.Context, prog *programSpec, t
 		dyad := strings.TrimSpace(c.Task.RouteHint)
 		actor := ""
 		critic := ""
-		if dyad != "" && !isPool {
+		if dyad != "" && !c.IsPool {
 			actor = "silexa-actor-" + dyad
 			critic = "silexa-critic-" + dyad
 		}
