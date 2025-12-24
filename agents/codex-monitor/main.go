@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -20,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/creack/pty"
 )
 
 type accountConfig struct {
@@ -30,6 +33,7 @@ type accountConfig struct {
 	Actor        string `json:"actor"`
 	Critic       string `json:"critic"`
 	MonitorRole  string `json:"monitor_role"` // actor|critic (default critic)
+	CodexHome    string `json:"codex_home"`   // optional HOME dir for codex status
 	Enabled      *bool  `json:"enabled"`
 	Spawn        *bool  `json:"spawn"`
 }
@@ -203,12 +207,14 @@ func formatStatusSummary(entries []statusEntry) string {
 		}
 		if entry.RemainingPct >= 0 {
 			line += fmt.Sprintf(": %.1f%% remaining", entry.RemainingPct)
-		}
-		if entry.RemainingMinutes > 0 {
-			line += fmt.Sprintf(" (%dm)", entry.RemainingMinutes)
-		}
-		if entry.Cooldown {
-			line += " [cooldown]"
+			if entry.RemainingMinutes > 0 {
+				line += fmt.Sprintf(" (%dm)", entry.RemainingMinutes)
+			}
+			if entry.Cooldown {
+				line += " [cooldown]"
+			}
+		} else {
+			line += ": n/a"
 		}
 		b.WriteString(line + "\n")
 	}
@@ -301,25 +307,19 @@ func (m *monitor) spawnDyad(acct accountConfig) error {
 }
 
 func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
-	container := monitorContainer(acct)
-	if container == "" {
-		m.logger.Printf("skip account %q: missing monitor container", acct.Name)
-		return
-	}
-
-	status, err := m.execCodexStatus(ctx, container)
+	status, err := m.fetchCodexStatus(ctx, acct)
 	if err != nil {
-		m.logger.Printf("codex status %s error: %v", container, err)
+		m.logger.Printf("codex status %s error: %v", acct.Dyad, err)
+		m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1}, false)
 		return
 	}
 	usage := parseUsage(status, m.totalLimitMin)
+	cooldown := usage.RemainingPct >= 0 && usage.RemainingPct <= m.thresholdPct
+	m.updateStatusCache(acct, usage, cooldown)
 	if usage.RemainingPct < 0 {
-		m.logger.Printf("codex status parse failed for %s", container)
+		m.logger.Printf("codex status parse failed for %s: %s", acct.Dyad, truncateLines(status, 6, 800))
 		return
 	}
-
-	cooldown := usage.RemainingPct <= m.thresholdPct
-	m.updateStatusCache(acct, usage, cooldown)
 	dpt := strings.TrimSpace(acct.Department)
 	if dpt == "" {
 		dpt = strings.TrimSpace(acct.Role)
@@ -403,6 +403,214 @@ func (m *monitor) postMetric(ctx context.Context, metric metricPayload) {
 	io.Copy(io.Discard, resp.Body)
 }
 
+func (m *monitor) fetchCodexStatus(ctx context.Context, acct accountConfig) (string, error) {
+	if home, ok := m.resolveCodexHome(acct); ok {
+		return m.execCodexStatusLocal(ctx, home)
+	}
+	container := monitorContainer(acct)
+	if container == "" {
+		return "", errors.New("missing monitor container")
+	}
+	return m.execCodexStatus(ctx, container)
+}
+
+func (m *monitor) resolveCodexHome(acct accountConfig) (string, bool) {
+	if home, ok := resolveHomeFromPath(acct.CodexHome, acct.Dyad); ok {
+		return home, true
+	}
+	if acct.Dyad == "" {
+		return "", false
+	}
+	base := "/data/codex/" + strings.TrimSpace(acct.Dyad)
+	if home, ok := resolveHomeFromPath(filepath.Join(base, "critic"), acct.Dyad); ok {
+		return home, true
+	}
+	if home, ok := resolveHomeFromPath(filepath.Join(base, "actor"), acct.Dyad); ok {
+		return home, true
+	}
+	return "", false
+}
+
+func resolveHomeFromPath(path string, dyad string) (string, bool) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", false
+	}
+	if stat, err := os.Stat(path); err != nil || !stat.IsDir() {
+		return "", false
+	}
+	if stat, err := os.Stat(filepath.Join(path, ".codex")); err == nil && stat.IsDir() && isCodexDir(filepath.Join(path, ".codex")) {
+		if isWritableDir(filepath.Join(path, ".codex")) {
+			return path, true
+		}
+		return tempHomeWithCodex(filepath.Join(path, ".codex"), dyad)
+	}
+	if isCodexDir(path) {
+		if isWritableDir(path) {
+			return tempHomeWithSymlink(path, dyad)
+		}
+		return tempHomeWithCodex(path, dyad)
+	}
+	return "", false
+}
+
+func safeName(v string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return "unknown"
+	}
+	out := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r
+		}
+		if r >= 'A' && r <= 'Z' {
+			return r
+		}
+		if r >= '0' && r <= '9' {
+			return r
+		}
+		if r == '-' || r == '_' {
+			return r
+		}
+		return '-'
+	}, v)
+	return out
+}
+
+func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string, error) {
+	if _, err := exec.LookPath("codex"); err != nil {
+		return "", err
+	}
+	statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(statusCtx, "codex")
+	cmd.Env = append(os.Environ(), "HOME="+home, "TERM=xterm-256color", "CODEX_HOME="+filepath.Join(home, ".codex"))
+	ptmx, err := pty.Start(cmd)
+	if err != nil {
+		return "", err
+	}
+	defer ptmx.Close()
+	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 40, Cols: 120})
+	readyCh := make(chan struct{})
+	var readyOnce sync.Once
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		_, _ = ptmx.Write([]byte("\x1b[1;1R"))
+	}()
+	go func() {
+		select {
+		case <-time.After(500 * time.Millisecond):
+			readyOnce.Do(func() { close(readyCh) })
+		case <-statusCtx.Done():
+		}
+	}()
+	go func() {
+		select {
+		case <-readyCh:
+			_, _ = ptmx.Write([]byte("/status\n"))
+			time.Sleep(200 * time.Millisecond)
+			_, _ = ptmx.Write([]byte("/exit\n"))
+		case <-statusCtx.Done():
+		}
+	}()
+
+	var bufMu sync.Mutex
+	var buf bytes.Buffer
+
+	outCh := make(chan []byte, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		var tail []byte
+		var promptTail []byte
+		tmp := make([]byte, 2048)
+		cursorRequests := [][]byte{
+			[]byte("\x1b[6n"),
+			[]byte("\x1b[?6n"),
+		}
+		promptHandlers := []struct {
+			needle    []byte
+			reply     string
+			markReady bool
+			handled   bool
+		}{
+			{needle: []byte("allow Codex to work in this folder"), reply: "2\n", markReady: true},
+			{needle: []byte("Try new model"), reply: "2\n", markReady: false},
+		}
+		maxPromptLen := 0
+		for _, handler := range promptHandlers {
+			if len(handler.needle) > maxPromptLen {
+				maxPromptLen = len(handler.needle)
+			}
+		}
+		for {
+			n, readErr := ptmx.Read(tmp)
+			if n > 0 {
+				chunk := tmp[:n]
+				bufMu.Lock()
+				buf.Write(chunk)
+				bufMu.Unlock()
+				for _, seq := range cursorRequests {
+					if containsSequence(tail, chunk, seq) {
+						_, _ = ptmx.Write([]byte("\x1b[1;1R"))
+					}
+				}
+				for i := range promptHandlers {
+					if promptHandlers[i].handled {
+						continue
+					}
+					if containsSequence(promptTail, chunk, promptHandlers[i].needle) {
+						promptHandlers[i].handled = true
+						_, _ = ptmx.Write([]byte(promptHandlers[i].reply))
+						if promptHandlers[i].markReady {
+							readyOnce.Do(func() { close(readyCh) })
+						}
+					}
+				}
+				maxSeq := 0
+				for _, seq := range cursorRequests {
+					if len(seq) > maxSeq {
+						maxSeq = len(seq)
+					}
+				}
+				tail = append(tail[:0], tailBytes(tail, chunk, maxSeq)...)
+				promptTail = append(promptTail[:0], tailBytes(promptTail, chunk, maxPromptLen)...)
+			}
+			if readErr != nil {
+				if !errors.Is(readErr, io.EOF) {
+					errCh <- readErr
+					return
+				}
+				break
+			}
+		}
+		bufMu.Lock()
+		outCh <- append([]byte(nil), buf.Bytes()...)
+		bufMu.Unlock()
+	}()
+
+	select {
+	case <-statusCtx.Done():
+		_ = cmd.Process.Kill()
+		bufMu.Lock()
+		out := strings.TrimSpace(buf.String())
+		bufMu.Unlock()
+		if out != "" {
+			return out, nil
+		}
+		return "", statusCtx.Err()
+	case readErr := <-errCh:
+		_ = cmd.Wait()
+		return "", readErr
+	case out := <-outCh:
+		waitErr := cmd.Wait()
+		if waitErr != nil && len(out) == 0 {
+			return "", waitErr
+		}
+		return string(out), nil
+	}
+}
+
 func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, cooldown bool) {
 	entry := statusEntry{
 		Name:             strings.TrimSpace(acct.Name),
@@ -441,10 +649,11 @@ func (m *monitor) execCodexStatus(ctx context.Context, container string) (string
 
 func (m *monitor) execInContainer(ctx context.Context, container string, cmd []string) (string, error) {
 	createPayload := map[string]interface{}{
+		"AttachStdin":  true,
 		"AttachStdout": true,
 		"AttachStderr": true,
 		"Cmd":          cmd,
-		"Tty":          false,
+		"Tty":          true,
 	}
 	buf, _ := json.Marshal(createPayload)
 	createURL := fmt.Sprintf("http://unix/containers/%s/exec", container)
@@ -472,7 +681,7 @@ func (m *monitor) execInContainer(ctx context.Context, container string, cmd []s
 
 	startPayload := map[string]interface{}{
 		"Detach": false,
-		"Tty":    false,
+		"Tty":    true,
 	}
 	buf2, _ := json.Marshal(startPayload)
 	startURL := fmt.Sprintf("http://unix/exec/%s/start", id)
@@ -546,6 +755,7 @@ func newDockerClient() *http.Client {
 }
 
 func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
+	raw = stripANSI(raw)
 	remainingPct := -1.0
 	usedPct := -1.0
 	remainingMinutes := 0
@@ -599,6 +809,143 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 		RemainingMinutes: remainingMinutes,
 		UsedPct:          usedPct,
 	}
+}
+
+func stripANSI(s string) string {
+	if s == "" {
+		return s
+	}
+	// Strip common ANSI escape sequences.
+	re := regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	return re.ReplaceAllString(s, "")
+}
+
+func isCodexDir(path string) bool {
+	if stat, err := os.Stat(filepath.Join(path, "auth.json")); err == nil && !stat.IsDir() {
+		return true
+	}
+	return false
+}
+
+func isWritableDir(path string) bool {
+	test := filepath.Join(path, ".codex-monitor-write")
+	f, err := os.OpenFile(test, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return false
+	}
+	_ = f.Close()
+	_ = os.Remove(test)
+	return true
+}
+
+func tempHomeWithCodex(src string, dyad string) (string, bool) {
+	home := filepath.Join(os.TempDir(), "codex-home-"+safeName(dyad))
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return "", false
+	}
+	dst := filepath.Join(home, ".codex")
+	if err := refreshDir(src, dst); err != nil {
+		return "", false
+	}
+	return home, true
+}
+
+func tempHomeWithSymlink(src string, dyad string) (string, bool) {
+	home := filepath.Join(os.TempDir(), "codex-home-"+safeName(dyad))
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return "", false
+	}
+	target := filepath.Join(home, ".codex")
+	if fi, err := os.Lstat(target); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 || fi.IsDir() {
+			_ = os.RemoveAll(target)
+		}
+	}
+	if err := os.Symlink(src, target); err != nil && !os.IsExist(err) {
+		return "", false
+	}
+	return home, true
+}
+
+func refreshDir(src string, dst string) error {
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0o700); err != nil {
+		return err
+	}
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == src {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		destPath := filepath.Join(dst, rel)
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		mode := info.Mode()
+		switch {
+		case mode&os.ModeSymlink != 0:
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(target, destPath)
+		case mode.IsDir():
+			return os.MkdirAll(destPath, mode.Perm())
+		default:
+			if err := os.MkdirAll(filepath.Dir(destPath), 0o700); err != nil {
+				return err
+			}
+			return copyFile(path, destPath, mode.Perm())
+		}
+	})
+}
+
+func copyFile(src string, dst string, perm fs.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, perm)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(out, in)
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+func containsSequence(tail []byte, chunk []byte, seq []byte) bool {
+	if len(seq) == 0 {
+		return false
+	}
+	if bytes.Contains(chunk, seq) {
+		return true
+	}
+	if len(tail) == 0 {
+		return false
+	}
+	combined := append(tail, chunk...)
+	return bytes.Contains(combined, seq)
+}
+
+func tailBytes(prev []byte, chunk []byte, size int) []byte {
+	combined := append(prev, chunk...)
+	if len(combined) <= size {
+		return combined
+	}
+	return combined[len(combined)-size:]
 }
 
 func parseMinutes(line string) int {
