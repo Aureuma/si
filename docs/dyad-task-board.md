@@ -28,6 +28,7 @@ Purpose: structured task intake and allocation to dyads, with notifications and 
 - Keep descriptions short; include a `link` to the spec/issue for details.
 - Use `notes` on updates to surface blockers or review instructions.
 - Always update status transitions: `todo → in_progress → review/done` (use `blocked` with a short reason).
+- For usage-aware routing, set `dyad` to `pool:<department>` (e.g., `pool:infra`), or use router rules that return a `pool:` target so the router can pick a healthy dyad.
 - For login/OAuth or other human-in-loop steps, pair a dyad task with a Beam entry (see `docs/beams.md`) and link it in the task `notes` or `link`.
 - For Critic-driven multi-turn Codex execution, use the Codex Loop mechanism (see `docs/dyad-codex-loop.md`).
 - Keep `docs/beam_messages/` updated when sending human-facing commands/URLs.

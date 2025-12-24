@@ -9,7 +9,7 @@
       "description": "Ensure `silexa-actor-web` is authenticated so the web dyad can execute program tasks. This beam is idempotent: it will immediately complete if already logged in.",
       "kind": "beam.codex_login",
       "priority": "high",
-      "route_hint": "web"
+      "route_hint": "pool:web"
     },
     {
       "key": "web_hosting.preflight.login_infra",
@@ -17,7 +17,7 @@
       "description": "Ensure `silexa-actor-infra` is authenticated so infra tasks can run. This beam is idempotent: it will immediately complete if already logged in.",
       "kind": "beam.codex_login",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.inventory_apps",
@@ -25,7 +25,7 @@
       "description": "List target repos/apps, expected ports, build commands, runtime requirements, and needed secrets.",
       "kind": "web.inventory",
       "priority": "high",
-      "route_hint": "web"
+      "route_hint": "pool:web"
     },
     {
       "key": "web_hosting.runtime_contract",
@@ -33,7 +33,7 @@
       "description": "Standardize per-app manifest (name, build, start, healthcheck, env/secrets, domain). Decide where it lives and how dyads update it.",
       "kind": "web.arch",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.compose_scaffold",
@@ -41,7 +41,7 @@
       "description": "Add/extend docker-compose patterns to run multiple web apps with stable naming, ports, and per-app volumes.",
       "kind": "infra.compose",
       "priority": "normal",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.reverse_proxy",
@@ -49,7 +49,7 @@
       "description": "Pick and wire a reverse proxy (Caddy/Traefik/Nginx) that routes hostnames to app containers and supports local dev + prod.",
       "kind": "infra.reverse_proxy",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.tls",
@@ -57,7 +57,7 @@
       "description": "Decide how domains are managed (DNS provider), how certs are issued/renewed (ACME), and how to store cert state.",
       "kind": "infra.tls",
       "priority": "normal",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.healthchecks",
@@ -65,7 +65,7 @@
       "description": "Define health endpoints, compose healthcheck configuration, and basic uptime monitoring hooks.",
       "kind": "infra.health",
       "priority": "normal",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.deployment_flow",
@@ -73,7 +73,7 @@
       "description": "Implement practical deploy scripts: build images, tag, deploy compose, rollback. Decide CI trigger and minimal logs.",
       "kind": "infra.deploy",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.secrets",
@@ -81,7 +81,7 @@
       "description": "Define how app secrets are provided (docker secrets files, env *_FILE), how to rotate, and which dyad owns it.",
       "kind": "infra.secrets",
       "priority": "normal",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "web_hosting.example_app",
@@ -89,7 +89,7 @@
       "description": "Pick one app and wire it fully through the new hosting scaffold + reverse proxy + healthcheck.",
       "kind": "web.hosting_poc",
       "priority": "high",
-      "route_hint": "web"
+      "route_hint": "pool:web"
     }
   ]
 }

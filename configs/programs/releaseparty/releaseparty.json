@@ -9,7 +9,7 @@
       "description": "Ensure `silexa-actor-infra` is authenticated so infra/backend tasks can run.",
       "kind": "beam.codex_login",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.preflight.login_web",
@@ -17,7 +17,7 @@
       "description": "Ensure `silexa-actor-web` is authenticated so frontend tasks can run.",
       "kind": "beam.codex_login",
       "priority": "high",
-      "route_hint": "web"
+      "route_hint": "pool:web"
     },
     {
       "key": "releaseparty.repo.scaffold",
@@ -25,7 +25,7 @@
       "description": "Create a standalone git repo `ReleaseParty` with Go backend + SvelteKit frontend skeleton, CI placeholders, and docs. Location: /opt/silexa/apps/ReleaseParty.",
       "kind": "releaseparty.repo",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.backend.github_app",
@@ -33,7 +33,7 @@
       "description": "Implement Go webhook receiver for installation + release events. Verify signatures. Persist installations. Provide install URL endpoint. Use installation tokens to call GitHub API.",
       "kind": "releaseparty.backend.github_app",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.backend.release_post_pipeline",
@@ -41,7 +41,7 @@
       "description": "On release/tag, gather context (release, commits between tags, changelog/diff if possible), generate markdown (template first; LLM pluggable), then open PR with file path template and branch naming.",
       "kind": "releaseparty.backend.pipeline",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.frontend.dashboard",
@@ -49,7 +49,7 @@
       "description": "Create UI for install link, project configuration (source repo -> blog repo/path template), and viewing generated posts/PR links.",
       "kind": "releaseparty.frontend.dashboard",
       "priority": "high",
-      "route_hint": "web"
+      "route_hint": "pool:web"
     },
     {
       "key": "releaseparty.ops.compose_dev",
@@ -57,7 +57,7 @@
       "description": "Add a dev compose file inside ReleaseParty repo to run backend+frontend with env vars (GitHub app id/secret/key path).",
       "kind": "releaseparty.ops.compose",
       "priority": "normal",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.backend.idempotency",
@@ -65,7 +65,7 @@
       "description": "Prevent duplicate PRs for the same repo+tag. Store a stable key (repo+tag) and either reuse/update an existing branch/PR or mark as already processed.",
       "kind": "releaseparty.backend.idempotency",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.backend.repo_config_file",
@@ -73,7 +73,7 @@
       "description": "Allow repo owners to commit `.releaseparty.yaml` in the source repo to configure blog repo/path template/sections. Backend should read it at release time and merge with DB defaults.",
       "kind": "releaseparty.backend.configfile",
       "priority": "normal",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     },
     {
       "key": "releaseparty.frontend.project_config",
@@ -81,7 +81,7 @@
       "description": "SvelteKit pages to list installations/repos and configure destination blog repo + path template + base branch. POST to backend APIs.",
       "kind": "releaseparty.frontend.config",
       "priority": "high",
-      "route_hint": "web"
+      "route_hint": "pool:web"
     },
     {
       "key": "releaseparty.ops.public_webhook",
@@ -89,7 +89,7 @@
       "description": "Decide deployment (Caddy/Traefik) and ensure `RP_BASE_URL` is https, route `/api/github/webhooks` publicly, and confirm GitHub App webhook delivery succeeds.",
       "kind": "releaseparty.ops.webhook",
       "priority": "high",
-      "route_hint": "infra"
+      "route_hint": "pool:infra"
     }
   ]
 }
