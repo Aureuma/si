@@ -1,0 +1,95 @@
+{
+  "program": "web_hosting",
+  "title": "Host web app repos + serve them",
+  "description": "Roadmap tasks to ingest web app repos, build them, run them, and serve publicly with health checks, TLS, and deployment workflow.",
+  "tasks": [
+    {
+      "key": "web_hosting.preflight.login_web",
+      "title": "Preflight: Codex login for web dyad",
+      "description": "Ensure `silexa-actor-web` is authenticated so the web dyad can execute program tasks. This beam is idempotent: it will immediately complete if already logged in.",
+      "kind": "beam.codex_login",
+      "priority": "high",
+      "route_hint": "web"
+    },
+    {
+      "key": "web_hosting.preflight.login_infra",
+      "title": "Preflight: Codex login for infra dyad",
+      "description": "Ensure `silexa-actor-infra` is authenticated so infra tasks can run. This beam is idempotent: it will immediately complete if already logged in.",
+      "kind": "beam.codex_login",
+      "priority": "high",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.inventory_apps",
+      "title": "Inventory: identify web apps to host",
+      "description": "List target repos/apps, expected ports, build commands, runtime requirements, and needed secrets.",
+      "kind": "web.inventory",
+      "priority": "high",
+      "route_hint": "web"
+    },
+    {
+      "key": "web_hosting.runtime_contract",
+      "title": "Define hosting contract for apps",
+      "description": "Standardize per-app manifest (name, build, start, healthcheck, env/secrets, domain). Decide where it lives and how dyads update it.",
+      "kind": "web.arch",
+      "priority": "high",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.compose_scaffold",
+      "title": "Create compose scaffold for hosting apps",
+      "description": "Add/extend docker-compose patterns to run multiple web apps with stable naming, ports, and per-app volumes.",
+      "kind": "infra.compose",
+      "priority": "normal",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.reverse_proxy",
+      "title": "Add reverse proxy (single entry) for apps",
+      "description": "Pick and wire a reverse proxy (Caddy/Traefik/Nginx) that routes hostnames to app containers and supports local dev + prod.",
+      "kind": "infra.reverse_proxy",
+      "priority": "high",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.tls",
+      "title": "TLS + domains plan",
+      "description": "Decide how domains are managed (DNS provider), how certs are issued/renewed (ACME), and how to store cert state.",
+      "kind": "infra.tls",
+      "priority": "normal",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.healthchecks",
+      "title": "Health checks and monitoring baseline",
+      "description": "Define health endpoints, compose healthcheck configuration, and basic uptime monitoring hooks.",
+      "kind": "infra.health",
+      "priority": "normal",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.deployment_flow",
+      "title": "Deployment workflow (build/release/rollback)",
+      "description": "Implement practical deploy scripts: build images, tag, deploy compose, rollback. Decide CI trigger and minimal logs.",
+      "kind": "infra.deploy",
+      "priority": "high",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.secrets",
+      "title": "Secrets strategy for hosted apps",
+      "description": "Define how app secrets are provided (docker secrets files, env *_FILE), how to rotate, and which dyad owns it.",
+      "kind": "infra.secrets",
+      "priority": "normal",
+      "route_hint": "infra"
+    },
+    {
+      "key": "web_hosting.example_app",
+      "title": "Host one example app end-to-end",
+      "description": "Pick one app and wire it fully through the new hosting scaffold + reverse proxy + healthcheck.",
+      "kind": "web.hosting_poc",
+      "priority": "high",
+      "route_hint": "web"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "defaultDyad": "infra",
+  "rules": [
+    { "match": "beam", "routeTo": "infra" },
+    { "match": "codex", "routeTo": "infra" },
+    { "match": "mcp", "routeTo": "infra" },
+    { "match": "stripe", "routeTo": "infra" },
+    { "match": "github", "routeTo": "infra" },
+    { "match": "ui", "routeTo": "web" },
+    { "match": "frontend", "routeTo": "web" },
+    { "match": "landing", "routeTo": "marketing" }
+  ]
+}
+
