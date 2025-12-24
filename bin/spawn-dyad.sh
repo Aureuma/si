@@ -18,6 +18,31 @@ CODEX_SHARED_ROOT="${CODEX_SHARED_ROOT:-$CODEX_ROOT/shared}"
 CODEX_PER_DYAD="${CODEX_PER_DYAD:-1}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.1-codex-max}"
 
+if ! [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]]; then
+  echo "invalid dyad name: $NAME (allowed: letters, numbers, _ and -)" >&2
+  exit 1
+fi
+
+require_registered_dyad() {
+  if [[ -z "$MANAGER_URL" ]]; then
+    echo "MANAGER_URL is required to verify dyad registration" >&2
+    exit 1
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    echo "curl is required to verify dyad registration" >&2
+    exit 1
+  fi
+  local list
+  if ! list="$(curl -fsS "${MANAGER_URL%/}/dyads")"; then
+    echo "unable to reach manager at ${MANAGER_URL}; set MANAGER_URL to a reachable URL" >&2
+    exit 1
+  fi
+  if ! echo "$list" | grep -q "\"dyad\"[[:space:]]*:[[:space:]]*\"$NAME\""; then
+    echo "dyad '$NAME' is not registered; run bin/register-dyad.sh $NAME $ROLE $DEPT" >&2
+    exit 1
+  fi
+}
+
 ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-}"
 CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-}"
 if [[ -z "$ACTOR_EFFORT" || -z "$CRITIC_EFFORT" ]]; then
@@ -53,6 +78,8 @@ if [[ -z "${SSH_TARGET:-}" && -f "$ROOT_DIR/configs/ssh_target" ]]; then
   # shellcheck disable=SC1090
   source "$ROOT_DIR/configs/ssh_target"
 fi
+
+require_registered_dyad
 
 # Ensure shared network exists
 if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
