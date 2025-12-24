@@ -33,6 +33,7 @@ Fields:
 - `dyad` must match the dyad name used in `bin/spawn-dyad.sh`.
 - `monitor_role` defaults to `critic`.
 - `spawn=true` tells `codex-monitor` to create the dyad if missing.
+- `codex_home` (optional) points to the HOME directory that contains `.codex/` for that account (preferred for reliable `/status` output).
 - `cooldown_threshold_pct` defaults to 10.
 
 ## Routing pools
@@ -55,6 +56,8 @@ If `CODEX_MONITOR_URL` is configured on the Telegram bot (default: `http://codex
 
 ## Operational notes
 
-- `codex-monitor` runs with Docker socket access to exec `codex /status` in dyad containers.
+- `codex-monitor` runs `codex /status` in a local pseudo-terminal and reads each account's `.codex` state from mounted volumes.
+- For read-only `.codex` mounts, the monitor copies the state into a temporary HOME and answers initial prompts (approval + model selection) before issuing `/status`.
+- If an account has no `auth.json`, usage shows as `n/a` until the dyad logs in (`codex login`).
 - When a dyad falls below the cooldown threshold, new tasks should route to other dyads in the same pool.
 - If no alternative dyads exist, routing falls back to the original target.
