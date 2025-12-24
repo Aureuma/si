@@ -15,8 +15,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -48,12 +50,24 @@ type monitor struct {
 	thresholdPct     float64
 	totalLimitMin    int
 	lastCooldown     map[string]bool
+	statusMu         sync.Mutex
+	statusCache      map[string]statusEntry
 }
 
 type usageSnapshot struct {
 	RemainingPct     float64
 	RemainingMinutes int
 	UsedPct          float64
+}
+
+type statusEntry struct {
+	Name             string    `json:"name"`
+	Dyad             string    `json:"dyad"`
+	Department       string    `json:"department"`
+	RemainingPct     float64   `json:"remaining_pct"`
+	RemainingMinutes int       `json:"remaining_minutes"`
+	Cooldown         bool      `json:"cooldown"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type metricPayload struct {
@@ -81,6 +95,7 @@ func main() {
 	}
 	spawnEnabled := boolEnv("CODEX_SPAWN_DYADS", true)
 	spawnScript := envOr("CODEX_SPAWN_SCRIPT", "/workspace/silexa/bin/spawn-dyad.sh")
+	addr := envOr("CODEX_MONITOR_ADDR", ":8086")
 
 	dockerClient := newDockerClient()
 	m := &monitor{
@@ -92,7 +107,10 @@ func main() {
 		thresholdPct:  thresholdPct,
 		totalLimitMin: totalLimit,
 		lastCooldown:  map[string]bool{},
+		statusCache:   map[string]statusEntry{},
 	}
+
+	go m.serveStatus(addr)
 
 	logger.Printf("starting (manager=%s accounts=%s interval=%s)", managerURL, cfgPath, pollInterval)
 	for {
@@ -118,6 +136,83 @@ func (m *monitor) applyConfigOverrides(cfg accountsFile, pollInterval *time.Dura
 			*pollInterval = d
 		}
 	}
+}
+
+func (m *monitor) serveStatus(addr string) {
+	if strings.TrimSpace(addr) == "" {
+		return
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
+		m.handleStatus(w, r, false)
+	})
+	mux.HandleFunc("/status.json", func(w http.ResponseWriter, r *http.Request) {
+		m.handleStatus(w, r, true)
+	})
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+	}
+	m.logger.Printf("status server listening on %s", addr)
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		m.logger.Printf("status server error: %v", err)
+	}
+}
+
+func (m *monitor) handleStatus(w http.ResponseWriter, r *http.Request, forceJSON bool) {
+	entries := m.statusEntries()
+	if forceJSON || strings.EqualFold(r.URL.Query().Get("format"), "json") {
+		payload := map[string]interface{}{
+			"updated_at": time.Now().UTC(),
+			"accounts":   entries,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(payload)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	_, _ = io.WriteString(w, formatStatusSummary(entries))
+}
+
+func (m *monitor) statusEntries() []statusEntry {
+	m.statusMu.Lock()
+	defer m.statusMu.Unlock()
+	entries := make([]statusEntry, 0, len(m.statusCache))
+	for _, entry := range m.statusCache {
+		entries = append(entries, entry)
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		if entries[i].RemainingPct != entries[j].RemainingPct {
+			return entries[i].RemainingPct < entries[j].RemainingPct
+		}
+		return entries[i].Dyad < entries[j].Dyad
+	})
+	return entries
+}
+
+func formatStatusSummary(entries []statusEntry) string {
+	if len(entries) == 0 {
+		return "Codex usage: no data"
+	}
+	var b strings.Builder
+	b.WriteString("Codex usage:\n")
+	for _, entry := range entries {
+		line := "- " + entry.Dyad
+		if entry.Name != "" && entry.Name != entry.Dyad {
+			line += " (" + entry.Name + ")"
+		}
+		if entry.RemainingPct >= 0 {
+			line += fmt.Sprintf(": %.1f%% remaining", entry.RemainingPct)
+		}
+		if entry.RemainingMinutes > 0 {
+			line += fmt.Sprintf(" (%dm)", entry.RemainingMinutes)
+		}
+		if entry.Cooldown {
+			line += " [cooldown]"
+		}
+		b.WriteString(line + "\n")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func (m *monitor) pollOnce(cfg accountsFile) {
@@ -224,6 +319,7 @@ func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
 	}
 
 	cooldown := usage.RemainingPct <= m.thresholdPct
+	m.updateStatusCache(acct, usage, cooldown)
 	dpt := strings.TrimSpace(acct.Department)
 	if dpt == "" {
 		dpt = strings.TrimSpace(acct.Role)
@@ -305,6 +401,24 @@ func (m *monitor) postMetric(ctx context.Context, metric metricPayload) {
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
+}
+
+func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, cooldown bool) {
+	entry := statusEntry{
+		Name:             strings.TrimSpace(acct.Name),
+		Dyad:             strings.TrimSpace(acct.Dyad),
+		Department:       strings.TrimSpace(acct.Department),
+		RemainingPct:     usage.RemainingPct,
+		RemainingMinutes: usage.RemainingMinutes,
+		Cooldown:         cooldown,
+		UpdatedAt:        time.Now().UTC(),
+	}
+	if entry.Name == "" {
+		entry.Name = entry.Dyad
+	}
+	m.statusMu.Lock()
+	m.statusCache[entry.Dyad] = entry
+	m.statusMu.Unlock()
 }
 
 func (m *monitor) execCodexStatus(ctx context.Context, container string) (string, error) {

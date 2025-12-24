@@ -49,6 +49,10 @@ Examples:
 - `codex.remaining_minutes` (minutes)
 - `codex.cooldown` (bool)
 
+## Telegram status integration
+
+If `CODEX_MONITOR_URL` is configured on the Telegram bot (default: `http://codex-monitor:8086/status`), the `/status` command will append the Codex usage summary from this service.
+
 ## Operational notes
 
 - `codex-monitor` runs with Docker socket access to exec `codex /status` in dyad containers.

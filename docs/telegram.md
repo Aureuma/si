@@ -2,7 +2,7 @@
 
 The Telegram bot provides a light-weight control plane for humans:
 
-- `/status` — show manager health (tasks, access queue, beats, uptime).
+- `/status` — show manager health (tasks, access queue, beats, uptime) plus Codex usage summary if `codex-monitor` is running.
 - `/tasks` — list the first few open human tasks.
 - `/board` — list open dyad tasks (task board snapshot).
 - `/task Title | command | notes` — create a human task stored in the manager and linked to the current chat. Use this for anything that needs manual action (e.g., Codex login tunnel).
