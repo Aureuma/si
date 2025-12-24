@@ -416,19 +416,6 @@ func (s *store) updateDyadFromHeartbeatLocked(h heartbeat) {
 		s.dyads[i].UpdatedAt = h.When
 		return
 	}
-	record := dyadRecord{
-		Dyad:          dyad,
-		Department:    h.Department,
-		Role:          h.Role,
-		Actor:         h.Actor,
-		Critic:        h.Critic,
-		Status:        h.Status,
-		Message:       h.Message,
-		Available:     true,
-		LastHeartbeat: h.When,
-		UpdatedAt:     h.When,
-	}
-	s.dyads = append(s.dyads, record)
 }
 
 func (s *store) updateDyadTask(updated dyadTask) (dyadTask, bool) {
