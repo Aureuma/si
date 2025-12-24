@@ -119,7 +119,11 @@ func (n *notifier) send(msg string) {
 	if n == nil || n.url == "" {
 		return
 	}
-	payload := map[string]interface{}{"message": msg}
+	payload := map[string]interface{}{
+		"message":                  msg,
+		"parse_mode":               "HTML",
+		"disable_web_page_preview": true,
+	}
 	if n.chatID != nil {
 		payload["chat_id"] = *n.chatID
 	}
