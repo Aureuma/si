@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8089:8080"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+      - backend_data:/app/data
+      - ./secrets:/app/secrets:ro
+
+  frontend:
+    image: node:22-bookworm
+    working_dir: /app
+    command: ["bash","-lc","npm ci && npm run dev -- --host 0.0.0.0 --port 5173"]
+    environment:
+      - PUBLIC_API_BASE=http://localhost:8089
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5179:5173"
+
+volumes:
+  backend_data: {}
+
