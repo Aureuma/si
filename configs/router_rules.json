@@ -1,14 +1,13 @@
 {
-  "defaultDyad": "infra",
+  "defaultDyad": "pool:infra",
   "rules": [
-    { "match": "beam", "routeTo": "infra" },
-    { "match": "codex", "routeTo": "infra" },
-    { "match": "mcp", "routeTo": "infra" },
-    { "match": "stripe", "routeTo": "infra" },
-    { "match": "github", "routeTo": "infra" },
-    { "match": "ui", "routeTo": "web" },
-    { "match": "frontend", "routeTo": "web" },
-    { "match": "landing", "routeTo": "marketing" }
+    { "match": "beam", "routeTo": "pool:infra" },
+    { "match": "codex", "routeTo": "pool:infra" },
+    { "match": "mcp", "routeTo": "pool:infra" },
+    { "match": "stripe", "routeTo": "pool:infra" },
+    { "match": "github", "routeTo": "pool:infra" },
+    { "match": "ui", "routeTo": "pool:web" },
+    { "match": "frontend", "routeTo": "pool:web" },
+    { "match": "landing", "routeTo": "pool:marketing" }
   ]
 }
-

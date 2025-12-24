@@ -110,7 +110,7 @@ func (r *reconciler) reconcileOnce(ctx context.Context, cfgFile, cfgURL string) 
 				_ = r.updateDyadTask(ctx, map[string]interface{}{"id": t.ID, "kind": pt.Kind})
 			}
 			// If the program-manager created the task, keep it "fully assigned" for dyads.
-			if strings.TrimSpace(t.RequestedBy) == "program-manager" && strings.TrimSpace(t.Dyad) != "" {
+			if strings.TrimSpace(t.RequestedBy) == "program-manager" && strings.TrimSpace(t.Dyad) != "" && !isPoolTarget(t.Dyad) {
 				wantActor := "silexa-actor-" + strings.TrimSpace(t.Dyad)
 				wantCritic := "silexa-critic-" + strings.TrimSpace(t.Dyad)
 				payload := map[string]interface{}{"id": t.ID}
@@ -136,14 +136,12 @@ func (r *reconciler) reconcileOnce(ctx context.Context, cfgFile, cfgURL string) 
 			fmt.Sprintf("[pm.title]=%s", prog.Title),
 		}, "\n"))
 
-		dyad := ""
-		if strings.TrimSpace(pt.RouteHint) != "" {
-			dyad = strings.TrimSpace(pt.RouteHint)
-		}
+		dyad := strings.TrimSpace(pt.RouteHint)
+		isPool := isPoolTarget(dyad)
 
 		actor := ""
 		critic := ""
-		if dyad != "" {
+		if dyad != "" && !isPool {
 			actor = "silexa-actor-" + dyad
 			critic = "silexa-critic-" + dyad
 		}
@@ -308,4 +306,8 @@ func durationEnv(key string, def time.Duration) time.Duration {
 		}
 	}
 	return def
+}
+
+func isPoolTarget(dyad string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(dyad)), "pool:")
 }

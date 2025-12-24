@@ -64,4 +64,5 @@ Environment variables:
 ## Notes
 
 - Program tasks can set `dyad` explicitly, or leave it empty and let the router assign based on `kind/title/description` matching.
+- To route through usage-aware pools, set `route_hint` to `pool:<department>` (e.g., `pool:infra`). The router will pick a healthy dyad from that pool.
 - To avoid noisy Telegram, keep most tasks `priority=normal`; reserve `high` for items where humans should pay attention.
