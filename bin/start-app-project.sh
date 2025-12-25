@@ -106,6 +106,33 @@ EOF
   echo "Initialized ${TARGETS_FILE}"
 fi
 
+# App metadata
+APP_META="${APP_DIR}/app.json"
+if [[ ! -f "$APP_META" ]]; then
+  cat >"$APP_META" <<EOF
+{
+  "name": "${APP}",
+  "kind": "saas",
+  "stack": {
+    "frontend": "nextjs",
+    "backend": "nextjs"
+  },
+  "modules": [],
+  "owners": {
+    "department": "",
+    "dyad": ""
+  },
+  "data": {
+    "db": "postgres",
+    "cache": ""
+  },
+  "integrations": [],
+  "status": "idea"
+}
+EOF
+  echo "Initialized ${APP_META}"
+fi
+
 # DB provisioning
 if [[ "$CREATE_DB" == "true" ]]; then
   DB_CMD=("bin/app-db.sh" "create" "$APP")
