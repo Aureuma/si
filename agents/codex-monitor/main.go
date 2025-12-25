@@ -486,36 +486,44 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 	if _, err := exec.LookPath("codex"); err != nil {
 		return "", err
 	}
-	statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	statusCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(statusCtx, "codex")
 	cmd.Env = append(os.Environ(), "HOME="+home, "TERM=xterm-256color", "CODEX_HOME="+filepath.Join(home, ".codex"))
+	cmd.Dir = home
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
 		return "", err
 	}
 	defer ptmx.Close()
 	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 40, Cols: 120})
+	_, _ = ptmx.Write([]byte("\x1b[1;1R"))
 	readyCh := make(chan struct{})
 	var readyOnce sync.Once
 	go func() {
-		time.Sleep(200 * time.Millisecond)
-		_, _ = ptmx.Write([]byte("\x1b[1;1R"))
-	}()
-	go func() {
-		select {
-		case <-time.After(500 * time.Millisecond):
-			readyOnce.Do(func() { close(readyCh) })
-		case <-statusCtx.Done():
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
+		timeout := time.NewTimer(2 * time.Second)
+		defer timeout.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_, _ = ptmx.Write([]byte("\x1b[1;1R"))
+			case <-timeout.C:
+				return
+			case <-statusCtx.Done():
+				return
+			}
 		}
 	}()
+	statusSent := make(chan struct{})
+	var statusOnce sync.Once
 	go func() {
 		select {
 		case <-readyCh:
-			_, _ = ptmx.Write([]byte("/status\n"))
-			time.Sleep(200 * time.Millisecond)
-			_, _ = ptmx.Write([]byte("/exit\n"))
+			_, _ = ptmx.Write([]byte("/status\r"))
+			statusOnce.Do(func() { close(statusSent) })
 		case <-statusCtx.Done():
 		}
 	}()
@@ -525,22 +533,51 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 
 	outCh := make(chan []byte, 1)
 	errCh := make(chan error, 1)
+	activityCh := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-activityCh:
+		case <-statusCtx.Done():
+			return
+		}
+		timer := time.NewTimer(10 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			readyOnce.Do(func() { close(readyCh) })
+		case <-statusCtx.Done():
+		}
+	}()
 	go func() {
 		var tail []byte
 		var promptTail []byte
+		var promptTailClean []byte
+		var promptTailCleanLower []byte
 		tmp := make([]byte, 2048)
 		cursorRequests := [][]byte{
 			[]byte("\x1b[6n"),
 			[]byte("\x1b[?6n"),
 		}
-		promptHandlers := []struct {
-			needle    []byte
-			reply     string
-			markReady bool
-			handled   bool
-		}{
-			{needle: []byte("allow Codex to work in this folder"), reply: "2\n", markReady: true},
-			{needle: []byte("Try new model"), reply: "2\n", markReady: false},
+		type promptHandler struct {
+			needle   []byte
+			reply    string
+			once     bool
+			cooldown time.Duration
+			lastSent time.Time
+		}
+		promptHandlers := []promptHandler{
+			{needle: []byte("allow codex to work in this folder"), reply: "2\r", once: true},
+			{needle: []byte("allow codex to work in this folder without asking for approval"), reply: "2\r", once: true},
+			{needle: []byte("ask me to approve edits and commands"), reply: "2\r", once: true},
+			{needle: []byte("require approval of edits and commands"), reply: "2\r", once: true},
+			{needle: []byte("press enter to continue"), reply: "\r", cooldown: 500 * time.Millisecond},
+			{needle: []byte("press enter to confirm"), reply: "\r", cooldown: 500 * time.Millisecond},
+			{needle: []byte("try new model"), reply: "\r", cooldown: 500 * time.Millisecond},
+		}
+		readyNeedles := [][]byte{
+			[]byte("openai codex"),
+			[]byte("to get started"),
+			[]byte("/status"),
 		}
 		maxPromptLen := 0
 		for _, handler := range promptHandlers {
@@ -552,24 +589,36 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 			n, readErr := ptmx.Read(tmp)
 			if n > 0 {
 				chunk := tmp[:n]
+				cleanChunk := stripANSI(string(chunk))
+				cleanChunkLower := strings.ToLower(cleanChunk)
 				bufMu.Lock()
 				buf.Write(chunk)
 				bufMu.Unlock()
+				select {
+				case activityCh <- struct{}{}:
+				default:
+				}
 				for _, seq := range cursorRequests {
 					if containsSequence(tail, chunk, seq) {
 						_, _ = ptmx.Write([]byte("\x1b[1;1R"))
 					}
 				}
-				for i := range promptHandlers {
-					if promptHandlers[i].handled {
-						continue
+				for _, needle := range readyNeedles {
+					if containsSequence(promptTailCleanLower, []byte(cleanChunkLower), needle) {
+						readyOnce.Do(func() { close(readyCh) })
 					}
-					if containsSequence(promptTail, chunk, promptHandlers[i].needle) {
-						promptHandlers[i].handled = true
-						_, _ = ptmx.Write([]byte(promptHandlers[i].reply))
-						if promptHandlers[i].markReady {
-							readyOnce.Do(func() { close(readyCh) })
+				}
+				for i := range promptHandlers {
+					if containsSequence(promptTailCleanLower, []byte(cleanChunkLower), promptHandlers[i].needle) {
+						now := time.Now()
+						if promptHandlers[i].once && !promptHandlers[i].lastSent.IsZero() {
+							continue
 						}
+						if promptHandlers[i].cooldown > 0 && now.Sub(promptHandlers[i].lastSent) < promptHandlers[i].cooldown {
+							continue
+						}
+						promptHandlers[i].lastSent = now
+						_, _ = ptmx.Write([]byte(promptHandlers[i].reply))
 					}
 				}
 				maxSeq := 0
@@ -580,6 +629,8 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 				}
 				tail = append(tail[:0], tailBytes(tail, chunk, maxSeq)...)
 				promptTail = append(promptTail[:0], tailBytes(promptTail, chunk, maxPromptLen)...)
+				promptTailClean = append(promptTailClean[:0], tailBytes(promptTailClean, []byte(cleanChunk), maxPromptLen)...)
+				promptTailCleanLower = append(promptTailCleanLower[:0], tailBytes(promptTailCleanLower, []byte(cleanChunkLower), maxPromptLen)...)
 			}
 			if readErr != nil {
 				if !errors.Is(readErr, io.EOF) {
@@ -592,6 +643,38 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 		bufMu.Lock()
 		outCh <- append([]byte(nil), buf.Bytes()...)
 		bufMu.Unlock()
+	}()
+
+	go func() {
+		select {
+		case <-statusSent:
+		case <-statusCtx.Done():
+			return
+		}
+		idleTimer := time.NewTimer(1200 * time.Millisecond)
+		hardTimer := time.NewTimer(8 * time.Second)
+		defer idleTimer.Stop()
+		defer hardTimer.Stop()
+		for {
+			select {
+			case <-activityCh:
+				if !idleTimer.Stop() {
+					select {
+					case <-idleTimer.C:
+					default:
+					}
+				}
+				idleTimer.Reset(1200 * time.Millisecond)
+			case <-idleTimer.C:
+				_, _ = ptmx.Write([]byte("/exit\r"))
+				return
+			case <-hardTimer.C:
+				_, _ = ptmx.Write([]byte("/exit\r"))
+				return
+			case <-statusCtx.Done():
+				return
+			}
+		}
 	}()
 
 	select {
@@ -830,6 +913,9 @@ func stripANSI(s string) string {
 
 func isCodexDir(path string) bool {
 	if stat, err := os.Stat(filepath.Join(path, "auth.json")); err == nil && !stat.IsDir() {
+		return true
+	}
+	if stat, err := os.Stat(filepath.Join(path, "config.toml")); err == nil && !stat.IsDir() {
 		return true
 	}
 	return false
