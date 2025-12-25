@@ -358,9 +358,6 @@ func (n *notifier) sendOrEdit(payload notifyPayload) (*tgbotapi.Message, bool, e
 	}
 
 	parseMode := strings.TrimSpace(payload.ParseMode)
-	if parseMode == "" {
-		parseMode = "Markdown"
-	}
 
 	disableWebPreview := false
 	if payload.DisableWebPagePreview != nil {
@@ -375,7 +372,9 @@ func (n *notifier) sendOrEdit(payload notifyPayload) (*tgbotapi.Message, bool, e
 
 	if payload.MessageID > 0 {
 		cfg := tgbotapi.NewEditMessageText(*targetChat, payload.MessageID, msgText)
-		cfg.ParseMode = parseMode
+		if parseMode != "" {
+			cfg.ParseMode = parseMode
+		}
 		cfg.DisableWebPagePreview = disableWebPreview
 		if replyMarkup != nil {
 			cfg.ReplyMarkup = replyMarkup
@@ -406,7 +405,9 @@ func (n *notifier) sendOrEdit(payload notifyPayload) (*tgbotapi.Message, bool, e
 	}
 
 	cfg := tgbotapi.NewMessage(*targetChat, msgText)
-	cfg.ParseMode = parseMode
+	if parseMode != "" {
+		cfg.ParseMode = parseMode
+	}
 	cfg.DisableWebPagePreview = disableWebPreview
 	cfg.DisableNotification = disableNotification
 	if replyMarkup != nil {
