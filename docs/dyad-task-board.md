@@ -24,6 +24,16 @@ Purpose: structured task intake and allocation to dyads, with notifications and 
 4) Anyone can list tasks: `curl -fsSL http://localhost:9090/dyad-tasks` (or via Manager service name inside the Swarm network).
 5) Periodic reporting: run `bin/dyad-report.sh <dyad> [chat_id]` to log status to Manager feedback (can be scheduled).
 
+## Assignment enforcement
+Manager enforces dyad assignment rules on create/update/claim.
+Defaults (see `docker-stack.yml`):
+- `DYAD_REQUIRE_ASSIGNMENT=true`: non-`todo` statuses require a dyad.
+- `DYAD_ALLOW_UNASSIGNED=true`: `todo` can be unassigned.
+- `DYAD_ALLOW_POOL=true`: `pool:<department>` is allowed for `todo` routing.
+- `DYAD_REQUIRE_REGISTERED=true`: dyads must be registered (via roster or `bin/register-dyad.sh`).
+- `DYAD_ENFORCE_AVAILABLE=true`: dyads must be marked available.
+- `DYAD_MAX_OPEN_PER_DYAD=10`: cap open tasks per dyad.
+
 ## Best practices
 - Keep descriptions short; include a `link` to the spec/issue for details.
 - Use `notes` on updates to surface blockers or review instructions.
