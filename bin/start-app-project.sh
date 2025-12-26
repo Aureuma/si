@@ -223,6 +223,71 @@ EOF
   echo "Initialized ${APP_META}"
 fi
 
+# App stack template
+if [[ -n "$INFRA_PATH" ]]; then
+  STACK_FILE="${APP_DIR}/${INFRA_PATH}/stack.yml"
+  if [[ ! -f "$STACK_FILE" ]]; then
+    cat >"$STACK_FILE" <<EOF
+version: "3.9"
+
+services:
+  web:
+    image: silexa/app-${APP}-web:local
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "\${APP_WEB_PORT:-3000}:3000"
+    secrets:
+      - source: app_env
+        target: app_env
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+EOF
+    if [[ -n "$BACKEND_PATH" ]]; then
+      cat >>"$STACK_FILE" <<EOF
+
+  backend:
+    image: silexa/app-${APP}-backend:local
+    environment:
+      NODE_ENV: production
+      PORT: 8080
+    ports:
+      - "\${APP_BACKEND_PORT:-8080}:8080"
+    secrets:
+      - source: app_env
+        target: app_env
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+EOF
+    fi
+    cat >>"$STACK_FILE" <<EOF
+
+secrets:
+  app_env:
+    external: true
+    name: app-${APP}-env
+
+networks:
+  default:
+    external: true
+    name: \${SILEXA_NETWORK:-silexa_net}
+EOF
+    echo "Initialized ${STACK_FILE}"
+  fi
+fi
+
 # DB provisioning
 if [[ "$CREATE_DB" == "true" && "$DB_KIND" == "postgres" ]]; then
   DB_CMD=("bin/app-db.sh" "create" "$APP")
@@ -247,3 +312,4 @@ echo "- Run bin/qa-visual.sh ${APP} to capture baseline once UI is available."
 if [[ "$DB_KIND" == "postgres" ]]; then
   echo "- Use db creds in secrets/db-${APP}.env"
 fi
+echo "- Create secrets/app-${APP}.env and run bin/app-secrets.sh ${APP} before deploy."
