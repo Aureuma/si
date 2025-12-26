@@ -198,7 +198,7 @@ func truncateOneLine(s string, max int) string {
 }
 
 // DriveCodexLoopTest proves the critic can:
-// - read actor stdout (via docker logs) and captured output,
+// - read actor stdout (via pod logs) and captured output,
 // - decide next prompt based on previous output,
 // - send next prompt via stdin piping,
 // - repeat multiple turns and finalize.

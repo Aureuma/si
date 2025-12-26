@@ -3,16 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,8 +46,7 @@ type accountsFile struct {
 type monitor struct {
 	logger           *log.Logger
 	managerURL       string
-	dockerClient     *http.Client
-	spawnScript      string
+	kubeClient       *kubeClient
 	spawnEnabled     bool
 	thresholdPct     float64
 	totalLimitMin    int
@@ -101,15 +97,16 @@ func main() {
 		totalLimit = 300
 	}
 	spawnEnabled := boolEnv("CODEX_SPAWN_DYADS", true)
-	spawnScript := envOr("CODEX_SPAWN_SCRIPT", "/workspace/silexa/bin/spawn-dyad.sh")
 	addr := envOr("CODEX_MONITOR_ADDR", ":8086")
 
-	dockerClient := newDockerClient()
+	kubeClient, err := newKubeClient()
+	if err != nil {
+		logger.Fatalf("kubernetes client init: %v", err)
+	}
 	m := &monitor{
 		logger:        logger,
 		managerURL:    managerURL,
-		dockerClient:  dockerClient,
-		spawnScript:   spawnScript,
+		kubeClient:    kubeClient,
 		spawnEnabled:  spawnEnabled,
 		thresholdPct:  thresholdPct,
 		totalLimitMin: totalLimit,
@@ -247,49 +244,44 @@ func (m *monitor) ensureDyad(ctx context.Context, acct accountConfig) {
 	if !m.spawnEnabled || !accountSpawnEnabled(acct, m.spawnEnabled) {
 		return
 	}
-	actor := actorContainer(acct)
-	critic := criticContainer(acct)
-	if actor == "" || critic == "" {
+	if strings.TrimSpace(acct.Dyad) == "" {
 		return
 	}
 
-	actorExists, actorRunning, err := m.inspectContainer(ctx, actor)
+	exists, ready, err := m.inspectDyad(ctx, acct.Dyad)
 	if err != nil {
-		m.logger.Printf("inspect actor %s error: %v", actor, err)
-		return
-	}
-	criticExists, criticRunning, err := m.inspectContainer(ctx, critic)
-	if err != nil {
-		m.logger.Printf("inspect critic %s error: %v", critic, err)
+		m.logger.Printf("inspect dyad %s error: %v", acct.Dyad, err)
 		return
 	}
 
-	if !actorExists || !criticExists {
-		if err := m.spawnDyad(acct); err != nil {
+	if !exists {
+		if err := m.spawnDyad(ctx, acct); err != nil {
 			m.logger.Printf("spawn dyad %s error: %v", acct.Dyad, err)
 			return
 		}
 		return
 	}
-	if !actorRunning {
-		if err := m.startContainer(ctx, actor); err != nil {
-			m.logger.Printf("start actor %s error: %v", actor, err)
-		}
-	}
-	if !criticRunning {
-		if err := m.startContainer(ctx, critic); err != nil {
-			m.logger.Printf("start critic %s error: %v", critic, err)
+	if !ready {
+		if err := m.restartDyad(ctx, acct.Dyad); err != nil {
+			m.logger.Printf("restart dyad %s error: %v", acct.Dyad, err)
 		}
 	}
 }
 
-func (m *monitor) spawnDyad(acct accountConfig) error {
-	if strings.TrimSpace(m.spawnScript) == "" {
-		return errors.New("spawn script not configured")
+func (m *monitor) inspectDyad(ctx context.Context, dyad string) (bool, bool, error) {
+	name := dyadDeploymentName(dyad)
+	return m.kubeClient.deploymentReady(ctx, name)
+}
+
+func (m *monitor) restartDyad(ctx context.Context, dyad string) error {
+	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
+	if err != nil {
+		return err
 	}
-	if _, err := os.Stat(m.spawnScript); err != nil {
-		return fmt.Errorf("spawn script missing: %w", err)
-	}
+	return m.kubeClient.deletePod(ctx, podName)
+}
+
+func (m *monitor) spawnDyad(ctx context.Context, acct accountConfig) error {
 	role := strings.TrimSpace(acct.Role)
 	if role == "" {
 		role = strings.TrimSpace(acct.Department)
@@ -301,14 +293,14 @@ func (m *monitor) spawnDyad(acct accountConfig) error {
 	if dept == "" {
 		dept = role
 	}
-	cmd := exec.Command(m.spawnScript, acct.Dyad, role, dept)
-	cmd.Env = append(os.Environ(), "CODEX_PER_DYAD=1")
-	cmd.Dir = filepath.Dir(m.spawnScript)
-	out, err := cmd.CombinedOutput()
+	pvc, deploy, err := m.buildDyadResources(acct.Dyad, role, dept)
 	if err != nil {
-		return fmt.Errorf("spawn dyad failed: %w (%s)", err, strings.TrimSpace(string(out)))
+		return err
 	}
-	m.logger.Printf("spawned dyad %s: %s", acct.Dyad, strings.TrimSpace(string(out)))
+	if err := m.kubeClient.applyDyad(ctx, deploy, pvc); err != nil {
+		return err
+	}
+	m.logger.Printf("spawned dyad %s via k8s apply", acct.Dyad)
 	return nil
 }
 
@@ -417,7 +409,7 @@ func (m *monitor) fetchCodexStatus(ctx context.Context, acct accountConfig) (str
 	if container == "" {
 		return "", errors.New("missing monitor container")
 	}
-	return m.execCodexStatus(ctx, container)
+	return m.execCodexStatus(ctx, acct.Dyad, container)
 }
 
 func (m *monitor) resolveCodexHome(acct accountConfig) (string, bool) {
@@ -719,11 +711,11 @@ func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, coo
 	m.statusMu.Unlock()
 }
 
-func (m *monitor) execCodexStatus(ctx context.Context, container string) (string, error) {
+func (m *monitor) execCodexStatus(ctx context.Context, dyad, container string) (string, error) {
 	commands := [][]string{{"codex", "/status"}, {"codex", "status"}, {"codex", "usage"}}
 	var lastErr error
 	for _, cmd := range commands {
-		out, err := m.execInContainer(ctx, container, cmd)
+		out, err := m.execInDyad(ctx, dyad, container, cmd)
 		if err == nil && strings.TrimSpace(out) != "" {
 			return out, nil
 		}
@@ -737,257 +729,19 @@ func (m *monitor) execCodexStatus(ctx context.Context, container string) (string
 	return "", lastErr
 }
 
-func (m *monitor) execInContainer(ctx context.Context, container string, cmd []string) (string, error) {
-	containerID, err := m.resolveContainerID(ctx, container)
+func (m *monitor) execInDyad(ctx context.Context, dyad, container string, cmd []string) (string, error) {
+	if strings.TrimSpace(dyad) == "" {
+		return "", fmt.Errorf("dyad required for exec")
+	}
+	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
 	if err != nil {
 		return "", err
 	}
-	createPayload := map[string]interface{}{
-		"AttachStdin":  true,
-		"AttachStdout": true,
-		"AttachStderr": true,
-		"Cmd":          cmd,
-		"Tty":          true,
+	containerName := normalizeContainerName(container)
+	if containerName == "" {
+		return "", fmt.Errorf("container name required")
 	}
-	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(containerID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("docker exec create %s: %s", resp.Status, strings.TrimSpace(string(body)))
-	}
-	body, _ := io.ReadAll(resp.Body)
-	var out map[string]interface{}
-	_ = json.Unmarshal(body, &out)
-	id, _ := out["Id"].(string)
-	if id == "" {
-		return "", errors.New("no exec id from docker")
-	}
-
-	startPayload := map[string]interface{}{
-		"Detach": false,
-		"Tty":    true,
-	}
-	buf2, _ := json.Marshal(startPayload)
-	startURL := fmt.Sprintf("http://unix/exec/%s/start", id)
-	req2, err := http.NewRequestWithContext(ctx, http.MethodPost, startURL, bytes.NewReader(buf2))
-	if err != nil {
-		return "", err
-	}
-	req2.Header.Set("Content-Type", "application/json")
-	resp2, err := m.dockerClient.Do(req2)
-	if err != nil {
-		return "", err
-	}
-	defer resp2.Body.Close()
-	outBytes, _ := io.ReadAll(io.LimitReader(resp2.Body, 64*1024))
-	return string(dockerDemux(outBytes)), nil
-}
-
-func (m *monitor) inspectContainer(ctx context.Context, name string) (bool, bool, error) {
-	id, running, err := m.inspectContainerByName(ctx, name)
-	if err != nil {
-		return false, false, err
-	}
-	if id != "" {
-		return true, running, nil
-	}
-	for _, svc := range serviceCandidates(name) {
-		exists, svcRunning, err := m.inspectService(ctx, svc)
-		if err != nil {
-			return false, false, err
-		}
-		if exists {
-			return true, svcRunning, nil
-		}
-	}
-	return false, false, nil
-}
-
-func (m *monitor) startContainer(ctx context.Context, name string) error {
-	id, _, err := m.inspectContainerByName(ctx, name)
-	if err != nil {
-		return err
-	}
-	if id != "" {
-		url := fmt.Sprintf("http://unix/containers/%s/start", url.PathEscape(id))
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
-		if err != nil {
-			return err
-		}
-		resp, err := m.dockerClient.Do(req)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode >= 300 {
-			body, _ := io.ReadAll(resp.Body)
-			return fmt.Errorf("start container %s: %s", name, strings.TrimSpace(string(body)))
-		}
-		return nil
-	}
-	for _, svc := range serviceCandidates(name) {
-		exists, err := m.serviceExists(ctx, svc)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			continue
-		}
-		return m.forceServiceUpdate(ctx, svc)
-	}
-	return fmt.Errorf("container or service %s not found", name)
-}
-
-func (m *monitor) inspectContainerByName(ctx context.Context, name string) (string, bool, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return "", false, nil
-	}
-	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(name))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", false, err
-	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return "", false, nil
-	}
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", false, fmt.Errorf("inspect container %s: %s", name, strings.TrimSpace(string(body)))
-	}
-	var payload struct {
-		ID    string `json:"Id"`
-		State struct {
-			Running bool `json:"Running"`
-		} `json:"State"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", false, err
-	}
-	return payload.ID, payload.State.Running, nil
-}
-
-func (m *monitor) serviceExists(ctx context.Context, name string) (bool, error) {
-	endpoint := fmt.Sprintf("http://unix/services/%s", url.PathEscape(name))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return false, err
-	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
-	}
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return false, fmt.Errorf("inspect service %s: %s", name, strings.TrimSpace(string(body)))
-	}
-	return true, nil
-}
-
-func (m *monitor) inspectService(ctx context.Context, name string) (bool, bool, error) {
-	exists, err := m.serviceExists(ctx, name)
-	if err != nil || !exists {
-		return exists, false, err
-	}
-	id, err := m.serviceTaskContainerID(ctx, name)
-	if err != nil {
-		return true, false, err
-	}
-	return true, id != "", nil
-}
-
-func (m *monitor) resolveContainerID(ctx context.Context, name string) (string, error) {
-	id, _, err := m.inspectContainerByName(ctx, name)
-	if err != nil {
-		return "", err
-	}
-	if id != "" {
-		return id, nil
-	}
-	for _, svc := range serviceCandidates(name) {
-		id, err := m.serviceTaskContainerID(ctx, svc)
-		if err != nil {
-			return "", err
-		}
-		if id != "" {
-			return id, nil
-		}
-	}
-	return "", fmt.Errorf("container or service %s not found", name)
-}
-
-func (m *monitor) serviceTaskContainerID(ctx context.Context, service string) (string, error) {
-	filters := fmt.Sprintf(`{\"service\":{\"%s\":true},\"desired-state\":{\"running\":true}}`, service)
-	endpoint := fmt.Sprintf("http://unix/tasks?filters=%s", url.QueryEscape(filters))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("list service tasks %s: %s", service, strings.TrimSpace(string(body)))
-	}
-	var tasks []struct {
-		Status struct {
-			State           string `json:"State"`
-			ContainerStatus struct {
-				ContainerID string `json:"ContainerID"`
-			} `json:"ContainerStatus"`
-		} `json:"Status"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
-		return "", err
-	}
-	for _, task := range tasks {
-		if strings.TrimSpace(task.Status.State) != "running" {
-			continue
-		}
-		if id := strings.TrimSpace(task.Status.ContainerStatus.ContainerID); id != "" {
-			return id, nil
-		}
-	}
-	return "", nil
-}
-
-func (m *monitor) forceServiceUpdate(ctx context.Context, service string) error {
-	cmd := exec.CommandContext(ctx, "docker", "service", "update", "--force", service)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("service update %s: %w (%s)", service, err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-func newDockerClient() *http.Client {
-	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "unix", "/var/run/docker.sock")
-	}
-	transport := &http.Transport{DialContext: dial}
-	return &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	return execOutput(ctx, m.kubeClient, podName, containerName, cmd)
 }
 
 func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
@@ -1242,29 +996,6 @@ func truncateLines(text string, maxLines int, maxBytes int) string {
 	return out
 }
 
-func dockerDemux(in []byte) []byte {
-	if len(in) < 8 {
-		return in
-	}
-	if in[1] != 0 || in[2] != 0 || in[3] != 0 {
-		return in
-	}
-	var out bytes.Buffer
-	for len(in) >= 8 {
-		frameLen := int(binary.BigEndian.Uint32(in[4:8]))
-		in = in[8:]
-		if frameLen <= 0 || frameLen > len(in) {
-			break
-		}
-		out.Write(in[:frameLen])
-		in = in[frameLen:]
-	}
-	if out.Len() == 0 {
-		return in
-	}
-	return out.Bytes()
-}
-
 func loadAccounts(path string, logger *log.Logger) accountsFile {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -1312,53 +1043,39 @@ func monitorContainer(acct accountConfig) string {
 
 func actorContainer(acct accountConfig) string {
 	if strings.TrimSpace(acct.Actor) != "" {
-		return strings.TrimSpace(acct.Actor)
+		return normalizeContainerName(strings.TrimSpace(acct.Actor))
 	}
 	if strings.TrimSpace(acct.Dyad) == "" {
 		return ""
 	}
-	return "actor-" + strings.TrimSpace(acct.Dyad)
+	return "actor"
 }
 
 func criticContainer(acct accountConfig) string {
 	if strings.TrimSpace(acct.Critic) != "" {
-		return strings.TrimSpace(acct.Critic)
+		return normalizeContainerName(strings.TrimSpace(acct.Critic))
 	}
 	if strings.TrimSpace(acct.Dyad) == "" {
 		return ""
 	}
-	return "critic-" + strings.TrimSpace(acct.Dyad)
+	return "critic"
 }
 
-func stackName() string {
-	if v := strings.TrimSpace(os.Getenv("SILEXA_STACK")); v != "" {
-		return v
-	}
-	return "silexa"
-}
-
-func normalizeTarget(name string) string {
+func normalizeContainerName(name string) string {
 	name = strings.TrimSpace(name)
-	if strings.HasPrefix(name, "silexa-actor-") {
-		return "actor-" + strings.TrimPrefix(name, "silexa-actor-")
+	if name == "" {
+		return ""
 	}
-	if strings.HasPrefix(name, "silexa-critic-") {
-		return "critic-" + strings.TrimPrefix(name, "silexa-critic-")
+	if name == "actor" || name == "critic" {
+		return name
+	}
+	if strings.HasPrefix(name, "actor-") || strings.HasPrefix(name, "silexa-actor-") {
+		return "actor"
+	}
+	if strings.HasPrefix(name, "critic-") || strings.HasPrefix(name, "silexa-critic-") {
+		return "critic"
 	}
 	return name
-}
-
-func serviceCandidates(name string) []string {
-	name = normalizeTarget(name)
-	if name == "" {
-		return nil
-	}
-	stack := stackName()
-	prefixed := stack + "_" + name
-	if strings.HasPrefix(name, stack+"_") {
-		return []string{name}
-	}
-	return []string{name, prefixed}
 }
 
 func envOr(key, def string) string {
