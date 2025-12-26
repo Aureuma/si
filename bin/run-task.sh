@@ -14,4 +14,10 @@ TARGET="$1"
 shift
 
 CONTAINER_ID=$("${ROOT_DIR}/bin/docker-target.sh" "$TARGET")
-docker exec -it "$CONTAINER_ID" "$@"
+
+TTY_FLAG="-i"
+if [[ -t 0 ]]; then
+  TTY_FLAG="-it"
+fi
+
+docker exec $TTY_FLAG "$CONTAINER_ID" "$@"
