@@ -67,7 +67,9 @@ services:
     environment:
       TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      DATA_DIR: /data
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-silexa-state}
       DYAD_REQUIRE_ASSIGNMENT: "true"
       DYAD_ALLOW_UNASSIGNED: "true"
       DYAD_REQUIRE_REGISTERED: "true"
@@ -76,8 +78,24 @@ services:
       DYAD_ALLOW_POOL: "true"
     ports:
       - "9090:9090"
-    volumes:
-      - ./data/manager:/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  manager-worker:
+    image: silexa/manager:local
+    command: ["manager-worker"]
+    environment:
+      TEMPORAL_ADDRESS: ${TEMPORAL_ADDRESS:-temporal:7233}
+      TEMPORAL_NAMESPACE: ${TEMPORAL_NAMESPACE:-default}
+      TEMPORAL_TASK_QUEUE: ${TEMPORAL_TASK_QUEUE:-silexa-state}
     deploy:
       placement:
         constraints:
