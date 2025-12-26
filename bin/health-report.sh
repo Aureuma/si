@@ -7,6 +7,7 @@ NOTIFY_URL=${NOTIFY_URL:-http://localhost:8081/notify}
 cpu=$(uptime | awk -F'load average:' '{print $2}' | tr -d ' ')
 mem=$(free -m | awk '/Mem:/ {print $3"/"$2" MB"}')
 disk=$(df -h /opt | awk 'NR==2 {print $5" used of "$2}' )
+services=$(docker service ls --format '{{.Name}}' | wc -l)
 containers=$(docker ps --format '{{.Names}}' | wc -l)
 
 msg=$(cat <<MSG
@@ -14,6 +15,7 @@ msg=$(cat <<MSG
 CPU load: $cpu
 Memory: $mem
 Disk (/opt): $disk
+Services: $services
 Running containers: $containers
 MSG
 )

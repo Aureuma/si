@@ -4,7 +4,7 @@ set -euo pipefail
 # Beam helper: run `codex login` inside a container, capture the callback port + full OAuth URL,
 # and send a ready-to-run SSH tunnel command to Telegram.
 #
-# Usage: beam-codex-login.sh <container-name> [callback_port] [ssh_target]
+# Usage: beam-codex-login.sh <container-or-service> [callback_port] [ssh_target]
 # Env:
 #   NOTIFY_URL (default http://localhost:8081/notify)
 #   TELEGRAM_CHAT_ID (optional override, default from .env)
@@ -22,10 +22,11 @@ set -euo pipefail
 # container's network namespace so the SSH tunnel can reach it via the container IP.
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: beam-codex-login.sh <container-name> [callback_port] [ssh_target]" >&2
+  echo "usage: beam-codex-login.sh <container-or-service> [callback_port] [ssh_target]" >&2
   exit 1
 fi
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTAINER="$1"
 PORT="${2:-}" # optional; some codex versions don't support --port
 FORWARD_PORT="${FORWARD_PORT:-}" # optional; defaults to PORT+1 when PORT is known
@@ -36,7 +37,8 @@ REQUESTED_BY="${REQUESTED_BY:-$CONTAINER}"
 WAIT_FOR_LOGIN="${WAIT_FOR_LOGIN:-1}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-20m}"
 
-CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER" 2>/dev/null || true)
+CONTAINER_ID=$("${ROOT_DIR}/bin/docker-target.sh" "$CONTAINER")
+CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER_ID" 2>/dev/null || true)
 if [[ -z "$CONTAINER_IP" ]]; then
   echo "container $CONTAINER not found or has no IP" >&2
   exit 1
@@ -59,24 +61,24 @@ DEFAULT_TARGET="${USER_NAME}@${PUBLIC_IP:-host}"
 SSH_TARGET="${SSH_TARGET:-${3:-$DEFAULT_TARGET}}"
 
 OUT="/tmp/codex_login.log"
-docker exec -u 0 "$CONTAINER" bash -lc "rm -f '$OUT' && touch '$OUT'" >/dev/null 2>&1 || true
+docker exec -u 0 "$CONTAINER_ID" bash -lc "rm -f '$OUT' && touch '$OUT'" >/dev/null 2>&1 || true
 
 # Start codex login; prefer fixed port when supported, fall back to auto-port.
 if [[ -n "$PORT" ]]; then
-  docker exec -u 0 "$CONTAINER" bash -lc "nohup bash -lc 'codex login --port ${PORT} >\"$OUT\" 2>&1' >/dev/null 2>&1 & disown || true" >/dev/null || true
+  docker exec -u 0 "$CONTAINER_ID" bash -lc "nohup bash -lc 'codex login --port ${PORT} >\"$OUT\" 2>&1' >/dev/null 2>&1 & disown || true" >/dev/null || true
   sleep 1
-  if docker exec -u 0 "$CONTAINER" bash -lc "grep -q \"unexpected argument '--port'\" \"$OUT\" 2>/dev/null"; then
-    docker exec -u 0 "$CONTAINER" bash -lc "rm -f '$OUT' && touch '$OUT' && nohup bash -lc 'codex login >\"$OUT\" 2>&1' >/dev/null 2>&1 & disown || true" >/dev/null || true
+  if docker exec -u 0 "$CONTAINER_ID" bash -lc "grep -q \"unexpected argument '--port'\" \"$OUT\" 2>/dev/null"; then
+    docker exec -u 0 "$CONTAINER_ID" bash -lc "rm -f '$OUT' && touch '$OUT' && nohup bash -lc 'codex login >\"$OUT\" 2>&1' >/dev/null 2>&1 & disown || true" >/dev/null || true
     PORT=""
   fi
 else
-  docker exec -u 0 "$CONTAINER" bash -lc "nohup bash -lc 'codex login >\"$OUT\" 2>&1' >/dev/null 2>&1 & disown || true" >/dev/null 2>&1 || true
+  docker exec -u 0 "$CONTAINER_ID" bash -lc "nohup bash -lc 'codex login >\"$OUT\" 2>&1' >/dev/null 2>&1 & disown || true" >/dev/null 2>&1 || true
 fi
 
 AUTH_URL=""
 DETECTED_PORT=""
 for _ in $(seq 1 90); do
-  RAW=$(docker exec -u 0 "$CONTAINER" bash -lc "cat '$OUT' 2>/dev/null || true" || true)
+  RAW=$(docker exec -u 0 "$CONTAINER_ID" bash -lc "cat '$OUT' 2>/dev/null || true" || true)
   AUTH_URL=$(printf '%s\n' "$RAW" | grep -Eo 'https://[^[:space:]]+' | head -n1 || true)
   if [[ -z "$DETECTED_PORT" ]]; then
     DETECTED_PORT=$(printf '%s\n' "$RAW" | grep -Eo 'localhost:[0-9]+' | head -n1 | cut -d: -f2 || true)
@@ -88,11 +90,11 @@ for _ in $(seq 1 90); do
     break
   fi
   sleep 1
-done
+ done
 
 if [[ -z "$AUTH_URL" ]]; then
   echo "failed to capture auth URL from ${CONTAINER}:${OUT} within 60s" >&2
-  echo "debug: docker exec -u 0 ${CONTAINER} bash -lc \"cat '${OUT}'\"" >&2
+  echo "debug: docker exec -u 0 ${CONTAINER_ID} bash -lc \"cat '${OUT}'\"" >&2
   exit 1
 fi
 
@@ -101,7 +103,7 @@ if [[ -n "$PORT" ]]; then
 fi
 if [[ -z "$DETECTED_PORT" ]]; then
   echo "failed to capture callback port (localhost:<port>) from ${CONTAINER}:${OUT}" >&2
-  echo "debug: docker exec -u 0 ${CONTAINER} bash -lc \"cat '${OUT}'\"" >&2
+  echo "debug: docker exec -u 0 ${CONTAINER_ID} bash -lc \"cat '${OUT}'\"" >&2
   exit 1
 fi
 PORT="$DETECTED_PORT"
@@ -111,7 +113,7 @@ fi
 
 FORWARD_NAME="${CONTAINER}-codex-forward-${PORT}"
 docker rm -f "$FORWARD_NAME" >/dev/null 2>&1 || true
-docker run -d --name "$FORWARD_NAME" --network "container:${CONTAINER}" alpine/socat \
+docker run -d --name "$FORWARD_NAME" --network "container:${CONTAINER_ID}" alpine/socat \
   "tcp-listen:${FORWARD_PORT},reuseaddr,fork" "tcp:127.0.0.1:${PORT}" >/dev/null
 
 TUNNEL_CMD="ssh -N -L 127.0.0.1:${PORT}:${CONTAINER_IP}:${FORWARD_PORT} ${SSH_TARGET}"
@@ -172,14 +174,14 @@ PY
 )"
 
 for i in $(seq 1 "$DEADLINE_SECS"); do
-  STATUS=$(docker exec -i "$CONTAINER" bash -lc 'codex login status 2>/dev/null || true' | tr -d '\r' || true)
+  STATUS=$(docker exec -i "$CONTAINER_ID" bash -lc 'codex login status 2>/dev/null || true' | tr -d '\r' || true)
   if printf '%s' "$STATUS" | grep -q "Logged in"; then
     echo "codex login confirmed in ${CONTAINER}"
     docker rm -f "$FORWARD_NAME" >/dev/null 2>&1 || true
     exit 0
   fi
   sleep 1
-done
+ done
 
 echo "timed out waiting for codex login in ${CONTAINER} (WAIT_TIMEOUT=${WAIT_TIMEOUT})" >&2
 exit 1

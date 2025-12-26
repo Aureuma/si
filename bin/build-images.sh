@@ -1,9 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-export HOST_UID=${HOST_UID:-$(id -u)}
-export HOST_GID=${HOST_GID:-$(id -g)}
+images=(
+  "silexa/telegram-bot:local|agents/telegram-bot"
+  "silexa/resource-broker:local|agents/resource-broker"
+  "silexa/infra-broker:local|agents/infra-broker"
+  "silexa/manager:local|agents/manager"
+  "silexa/codex-monitor:local|agents/codex-monitor"
+  "silexa/router:local|agents/router"
+  "silexa/actor:local|agents/actor"
+  "silexa/critic:local|agents/critic"
+  "silexa/coder-agent:local|agents/coder"
+  "silexa/mcp-gateway:local|tools/mcp-gateway"
+  "silexa/dashboard:local|agents/dashboard"
+)
 
-docker compose build manager actor-web critic-web coder-agent
+for entry in "${images[@]}"; do
+  IFS='|' read -r tag path <<<"$entry"
+  echo "Building $tag from $path"
+  docker build -t "$tag" "$ROOT_DIR/$path"
+done

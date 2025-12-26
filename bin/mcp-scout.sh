@@ -1,18 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Quick MCP catalog explorer via the mcp-gateway service.
-# Usage: mcp-scout.sh
-
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=bin/swarm-lib.sh
+source "${ROOT}/bin/swarm-lib.sh"
 
-echo "Catalogs available:"
-(cd "$ROOT" && docker compose run --rm mcp-gateway catalog ls)
+NETWORK="$(swarm_network_name)"
 
-echo "Top of default docker-mcp catalog (yaml excerpt):"
-set +e
-(cd "$ROOT" && docker compose run --rm mcp-gateway catalog show docker-mcp --format yaml) | head -n 40
-set -e
+GH_TOKEN=""
+if [[ -f "$ROOT/secrets/gh_token" ]]; then
+  GH_TOKEN=$(cat "$ROOT/secrets/gh_token")
+fi
 
-echo
-echo "Recommendation: review entries above for relevance, note required credentials, and record picks in manager /feedback."
+STRIPE_API_KEY=""
+if [[ -f "$ROOT/secrets/stripe_api_key" ]]; then
+  STRIPE_API_KEY=$(cat "$ROOT/secrets/stripe_api_key")
+fi
+
+(cd "$ROOT" && docker run --rm \
+  --network "$NETWORK" \
+  -v "$ROOT/data/mcp-gateway:/catalog" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e GH_TOKEN="$GH_TOKEN" \
+  -e STRIPE_API_KEY="$STRIPE_API_KEY" \
+  silexa/mcp-gateway:local catalog ls)
+
+(cd "$ROOT" && docker run --rm \
+  --network "$NETWORK" \
+  -v "$ROOT/data/mcp-gateway:/catalog" \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e GH_TOKEN="$GH_TOKEN" \
+  -e STRIPE_API_KEY="$STRIPE_API_KEY" \
+  silexa/mcp-gateway:local catalog show docker-mcp --format yaml) | head -n 40
