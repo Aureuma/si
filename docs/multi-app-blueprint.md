@@ -9,11 +9,11 @@ monitoring consistent.
 - Make capabilities explicit (auth, billing, CMS, analytics).
 - Keep infra and maintenance consistent so agents can operate safely.
 
-### Canonical app layout
+### Canonical app layout (SvelteKit-first)
 ```
 apps/<app>/
-  app/                 # frontend (Next.js/Svelte/etc.)
-  api/                 # optional backend service (Go/TS)
+  web/                 # SvelteKit (TypeScript) app
+  backend/             # optional Go service
   infra/               # Pulumi (or other IaC)
   content/             # optional blog/marketing content
   docs/
@@ -21,21 +21,33 @@ apps/<app>/
   migrations/          # per-app DB migrations
   ui-tests/
     targets.json       # visual test targets
-  app.json             # app metadata (capabilities, owners)
+  app.json             # app metadata (capabilities, owners, paths)
 ```
+
+If an existing app uses a different layout, capture it in `app.json` under `paths`
+instead of moving folders.
 
 ### App metadata (apps/<app>/app.json)
 This file is the source of truth for capabilities, owners, and stack choices.
 Agents should read it before starting work.
 
-Example:
+Example (SvelteKit + Go backend):
 ```json
 {
   "name": "acme-billing",
   "kind": "saas",
   "stack": {
-    "frontend": "nextjs",
-    "backend": "nextjs"
+    "web": "sveltekit",
+    "backend": "go",
+    "language": "typescript",
+    "ui": "shadcn-svelte",
+    "runtime": "node"
+  },
+  "paths": {
+    "web": "web",
+    "backend": "backend",
+    "infra": "infra",
+    "content": ""
   },
   "modules": ["auth", "billing", "analytics"],
   "owners": {
@@ -44,6 +56,7 @@ Example:
   },
   "data": {
     "db": "postgres",
+    "orm": "drizzle",
     "cache": ""
   },
   "integrations": ["stripe", "postmark"],
@@ -56,18 +69,31 @@ Keep reusable capability modules in one place so apps can opt in quickly.
 
 Suggested structure:
 ```
-packages/modules/<module>/
+packages/<module>/
   README.md            # install steps + required env vars
-  migrations/          # optional DB changes
-  scripts/             # optional provisioning helpers
+  src/                 # shared implementation (if applicable)
 ```
 
 Common modules: auth, billing, CMS, analytics, email, search, notifications.
+
+Current shared packages:
+- `@silexa/ui` (shadcn-svelte components)
+- `@silexa/db` (Drizzle + Postgres helper)
+- `@silexa/auth` (@auth/sveltekit adapters)
+
+### Standard web stack
+- SvelteKit (TypeScript) full-stack app per project.
+- UI: shadcn-svelte + Tailwind.
+- Auth: `@auth/sveltekit` (+ Drizzle adapter).
+- DB/ORM: Postgres + Drizzle.
+- Validation: Zod; forms via `sveltekit-superforms` when needed.
+See `docs/web-stack.md` for the default library list.
 
 ### Silexa integration (per app)
 1) Bootstrap the app:
    - `bin/start-app-project.sh <app>`
    - Fill `apps/<app>/app.json` and `apps/<app>/docs/plan.md`.
+   - Existing apps: `bin/adopt-app.sh <app> --web-path <path> [--backend-path <path>]`.
 2) Register dyads:
    - `bin/dyadctl.sh register <app> <role> <department>`
 3) Route tasks:
@@ -75,6 +101,10 @@ Common modules: auth, billing, CMS, analytics, email, search, notifications.
 4) Provision DB:
    - `bin/app-db.sh create <app>` and use `secrets/db-<app>.env`.
 5) Document CI/deploy in `apps/<app>/infra/` and update plan.
+
+### Monorepo management
+- JS workspace via `pnpm-workspace.yaml` (apps, packages, tools).
+- Shared packages live under `packages/`; avoid copy/paste across apps.
 
 ### Lifecycle references
 - `docs/app-lifecycle.md` for intake → build → operate.

@@ -21,7 +21,8 @@ A disciplined, budget-aware pipeline for taking an idea to production with dyads
 - Approvals recorded as manager feedback or tasks.
 
 ### 4) Build
-- Builder dyad codes in `apps/<app>`, using per-app DB DSN from `secrets/db-<app>.env`.
+- Builder dyad codes in `apps/<app>/web` (SvelteKit/TypeScript) and `apps/<app>/backend` for Go services.
+- Prefer shared packages (`packages/ui`, `packages/db`, `packages/auth`) over duplicating core logic.
 - Unit/integ tests per app; add migrations under `apps/<app>/migrations`.
 - Visual QA: `bin/qa-visual.sh <app>` to generate baseline and check diffs.
 - Report progress via `/metrics` (throughput, lead time) and Telegram summaries.
