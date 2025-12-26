@@ -364,6 +364,10 @@ func (m *Monitor) ExecInActorCapture(ctx context.Context, cmd []string) (string,
 }
 
 func (m *Monitor) ExecInContainerCapture(ctx context.Context, container string, cmd []string) (string, error) {
+	containerID, err := m.resolveContainerID(ctx, container)
+	if err != nil {
+		return "", err
+	}
 	createPayload := map[string]interface{}{
 		"AttachStdout": true,
 		"AttachStderr": true,
@@ -371,7 +375,7 @@ func (m *Monitor) ExecInContainerCapture(ctx context.Context, container string, 
 		"Tty":          false,
 	}
 	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(container))
+	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(containerID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
 	if err != nil {
 		return "", err
@@ -416,6 +420,10 @@ func (m *Monitor) NudgeActor(ctx context.Context, cmd []string) error {
 }
 
 func (m *Monitor) NudgeContainer(ctx context.Context, container string, cmd []string) error {
+	containerID, err := m.resolveContainerID(ctx, container)
+	if err != nil {
+		return err
+	}
 	createPayload := map[string]interface{}{
 		"AttachStdout": false,
 		"AttachStderr": false,
@@ -423,7 +431,7 @@ func (m *Monitor) NudgeContainer(ctx context.Context, container string, cmd []st
 		"Tty":          false,
 	}
 	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(container))
+	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(containerID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
 	if err != nil {
 		return err
@@ -476,6 +484,129 @@ func criticID() string {
 	return hostname()
 }
 
+func stackName() string {
+	if v := strings.TrimSpace(os.Getenv("SILEXA_STACK")); v != "" {
+		return v
+	}
+	return "silexa"
+}
+
+func normalizeTarget(name string) string {
+	name = strings.TrimSpace(name)
+	if strings.HasPrefix(name, "silexa-actor-") {
+		return "actor-" + strings.TrimPrefix(name, "silexa-actor-")
+	}
+	if strings.HasPrefix(name, "silexa-critic-") {
+		return "critic-" + strings.TrimPrefix(name, "silexa-critic-")
+	}
+	return name
+}
+
+func serviceCandidates(name string) []string {
+	name = normalizeTarget(name)
+	if name == "" {
+		return nil
+	}
+	stack := stackName()
+	prefixed := stack + "_" + name
+	if strings.HasPrefix(name, stack+"_") {
+		return []string{name}
+	}
+	return []string{name, prefixed}
+}
+
+func (m *Monitor) resolveContainerID(ctx context.Context, name string) (string, error) {
+	id, _, err := m.inspectContainerByName(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	if id != "" {
+		return id, nil
+	}
+	for _, svc := range serviceCandidates(name) {
+		id, err := m.serviceTaskContainerID(ctx, svc)
+		if err != nil {
+			return "", err
+		}
+		if id != "" {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("container or service %s not found", name)
+}
+
+func (m *Monitor) inspectContainerByName(ctx context.Context, name string) (string, bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", false, nil
+	}
+	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(name))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", false, err
+	}
+	resp, err := m.dockerClient.Do(req)
+	if err != nil {
+		return "", false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return "", false, nil
+	}
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", false, fmt.Errorf("inspect container %s: %s", name, strings.TrimSpace(string(body)))
+	}
+	var payload struct {
+		ID    string `json:"Id"`
+		State struct {
+			Running bool `json:"Running"`
+		} `json:"State"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return "", false, err
+	}
+	return payload.ID, payload.State.Running, nil
+}
+
+func (m *Monitor) serviceTaskContainerID(ctx context.Context, service string) (string, error) {
+	filters := fmt.Sprintf(`{\"service\":{\"%s\":true},\"desired-state\":{\"running\":true}}`, service)
+	endpoint := fmt.Sprintf("http://unix/tasks?filters=%s", url.QueryEscape(filters))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := m.dockerClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("list service tasks %s: %s", service, strings.TrimSpace(string(body)))
+	}
+	var tasks []struct {
+		Status struct {
+			State           string `json:"State"`
+			ContainerStatus struct {
+				ContainerID string `json:"ContainerID"`
+			} `json:"ContainerStatus"`
+		} `json:"Status"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+		return "", err
+	}
+	for _, task := range tasks {
+		if strings.TrimSpace(task.Status.State) != "running" {
+			continue
+		}
+		if id := strings.TrimSpace(task.Status.ContainerStatus.ContainerID); id != "" {
+			return id, nil
+		}
+	}
+	return "", nil
+}
+
 func (m *Monitor) EnsureImage(ctx context.Context, image string) error {
 	// Pull image (no-op if already present, depending on daemon cache).
 	endpoint := fmt.Sprintf("http://unix/images/create?fromImage=%s", url.QueryEscape(image))
@@ -521,6 +652,10 @@ func (m *Monitor) RunSocatForwarder(ctx context.Context, name, networkContainer 
 	if listenPort <= 0 || targetPort <= 0 {
 		return fmt.Errorf("invalid forward ports: listen=%d target=%d", listenPort, targetPort)
 	}
+	containerID, err := m.resolveContainerID(ctx, networkContainer)
+	if err != nil {
+		return err
+	}
 	image := "alpine/socat"
 	if err := m.EnsureImage(ctx, image); err != nil {
 		return err
@@ -534,7 +669,7 @@ func (m *Monitor) RunSocatForwarder(ctx context.Context, name, networkContainer 
 			fmt.Sprintf("tcp:127.0.0.1:%d", targetPort),
 		},
 		"HostConfig": map[string]interface{}{
-			"NetworkMode": "container:" + networkContainer,
+			"NetworkMode": "container:" + containerID,
 			"RestartPolicy": map[string]interface{}{
 				"Name": "unless-stopped",
 			},
@@ -581,9 +716,13 @@ func (m *Monitor) RunSocatForwarder(ctx context.Context, name, networkContainer 
 }
 
 func (m *Monitor) fetchActorLogs(ctx context.Context, since time.Time, tail int, timestamps bool) (string, time.Time, error) {
+	containerID, err := m.resolveContainerID(ctx, m.ActorContainer)
+	if err != nil {
+		return "", time.Time{}, err
+	}
 	endpoint := fmt.Sprintf(
 		"http://unix/containers/%s/logs?stdout=1&stderr=1&since=%d&tail=%d&timestamps=%d",
-		url.PathEscape(m.ActorContainer),
+		url.PathEscape(containerID),
 		since.Unix(),
 		tail,
 		boolToInt(timestamps),

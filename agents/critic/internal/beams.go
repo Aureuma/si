@@ -335,7 +335,11 @@ func (m *Monitor) updateDyadTask(ctx context.Context, payload map[string]interfa
 }
 
 func (m *Monitor) containerIPv4(ctx context.Context, container string) (string, error) {
-	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(container))
+	containerID, err := m.resolveContainerID(ctx, container)
+	if err != nil {
+		return "", err
+	}
+	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(containerID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return "", err

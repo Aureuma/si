@@ -168,8 +168,8 @@ func (m *Monitor) reconcileProgramSpec(ctx context.Context, prog *programSpec, t
 		if t, ok := existing[key]; ok {
 			// Ensure program-managed tasks remain fully assigned (dyad + actor/critic fields).
 			if strings.TrimSpace(t.RequestedBy) == "program-manager" && strings.TrimSpace(t.Dyad) != "" && !isPoolTarget(t.Dyad) {
-				wantActor := "silexa-actor-" + strings.TrimSpace(t.Dyad)
-				wantCritic := "silexa-critic-" + strings.TrimSpace(t.Dyad)
+				wantActor := dyadActorName(t.Dyad)
+				wantCritic := dyadCriticName(t.Dyad)
 				payload := map[string]interface{}{"id": t.ID}
 				changed := false
 				if strings.TrimSpace(t.Actor) == "" {
@@ -260,8 +260,8 @@ func (m *Monitor) reconcileProgramSpec(ctx context.Context, prog *programSpec, t
 		actor := ""
 		critic := ""
 		if dyad != "" && !c.IsPool {
-			actor = "silexa-actor-" + dyad
-			critic = "silexa-critic-" + dyad
+			actor = dyadActorName(dyad)
+			critic = dyadCriticName(dyad)
 		}
 		notes := strings.TrimSpace(strings.Join([]string{
 			fmt.Sprintf("[pm.program]=%s", c.ProgramName),
@@ -522,6 +522,22 @@ func pmGCOrphanDupesEnabled() bool {
 
 func isPoolTarget(dyad string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(dyad)), "pool:")
+}
+
+func dyadActorName(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return ""
+	}
+	return "actor-" + dyad
+}
+
+func dyadCriticName(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return ""
+	}
+	return "critic-" + dyad
 }
 
 func envIntAllowZero(key string, def int) int {

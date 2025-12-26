@@ -111,8 +111,8 @@ func (r *reconciler) reconcileOnce(ctx context.Context, cfgFile, cfgURL string) 
 			}
 			// If the program-manager created the task, keep it "fully assigned" for dyads.
 			if strings.TrimSpace(t.RequestedBy) == "program-manager" && strings.TrimSpace(t.Dyad) != "" && !isPoolTarget(t.Dyad) {
-				wantActor := "silexa-actor-" + strings.TrimSpace(t.Dyad)
-				wantCritic := "silexa-critic-" + strings.TrimSpace(t.Dyad)
+				wantActor := dyadActorName(t.Dyad)
+				wantCritic := dyadCriticName(t.Dyad)
 				payload := map[string]interface{}{"id": t.ID}
 				changed := false
 				if strings.TrimSpace(t.Actor) == "" && wantActor != "" {
@@ -142,8 +142,8 @@ func (r *reconciler) reconcileOnce(ctx context.Context, cfgFile, cfgURL string) 
 		actor := ""
 		critic := ""
 		if dyad != "" && !isPool {
-			actor = "silexa-actor-" + dyad
-			critic = "silexa-critic-" + dyad
+			actor = dyadActorName(dyad)
+			critic = dyadCriticName(dyad)
 		}
 		create := map[string]interface{}{
 			"title":        pt.Title,
@@ -310,4 +310,20 @@ func durationEnv(key string, def time.Duration) time.Duration {
 
 func isPoolTarget(dyad string) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(dyad)), "pool:")
+}
+
+func dyadActorName(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return ""
+	}
+	return "actor-" + dyad
+}
+
+func dyadCriticName(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return ""
+	}
+	return "critic-" + dyad
 }

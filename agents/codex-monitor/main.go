@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -737,6 +738,10 @@ func (m *monitor) execCodexStatus(ctx context.Context, container string) (string
 }
 
 func (m *monitor) execInContainer(ctx context.Context, container string, cmd []string) (string, error) {
+	containerID, err := m.resolveContainerID(ctx, container)
+	if err != nil {
+		return "", err
+	}
 	createPayload := map[string]interface{}{
 		"AttachStdin":  true,
 		"AttachStdout": true,
@@ -745,7 +750,7 @@ func (m *monitor) execInContainer(ctx context.Context, container string, cmd []s
 		"Tty":          true,
 	}
 	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/%s/exec", container)
+	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(containerID))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
 	if err != nil {
 		return "", err
@@ -789,48 +794,190 @@ func (m *monitor) execInContainer(ctx context.Context, container string, cmd []s
 }
 
 func (m *monitor) inspectContainer(ctx context.Context, name string) (bool, bool, error) {
-	url := fmt.Sprintf("http://unix/containers/%s/json", name)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	id, running, err := m.inspectContainerByName(ctx, name)
 	if err != nil {
 		return false, false, err
+	}
+	if id != "" {
+		return true, running, nil
+	}
+	for _, svc := range serviceCandidates(name) {
+		exists, svcRunning, err := m.inspectService(ctx, svc)
+		if err != nil {
+			return false, false, err
+		}
+		if exists {
+			return true, svcRunning, nil
+		}
+	}
+	return false, false, nil
+}
+
+func (m *monitor) startContainer(ctx context.Context, name string) error {
+	id, _, err := m.inspectContainerByName(ctx, name)
+	if err != nil {
+		return err
+	}
+	if id != "" {
+		url := fmt.Sprintf("http://unix/containers/%s/start", url.PathEscape(id))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+		if err != nil {
+			return err
+		}
+		resp, err := m.dockerClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			body, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("start container %s: %s", name, strings.TrimSpace(string(body)))
+		}
+		return nil
+	}
+	for _, svc := range serviceCandidates(name) {
+		exists, err := m.serviceExists(ctx, svc)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			continue
+		}
+		return m.forceServiceUpdate(ctx, svc)
+	}
+	return fmt.Errorf("container or service %s not found", name)
+}
+
+func (m *monitor) inspectContainerByName(ctx context.Context, name string) (string, bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", false, nil
+	}
+	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(name))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", false, err
 	}
 	resp, err := m.dockerClient.Do(req)
 	if err != nil {
-		return false, false, err
+		return "", false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == http.StatusNotFound {
-		return false, false, nil
+		return "", false, nil
 	}
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return false, false, fmt.Errorf("inspect container %s: %s", name, strings.TrimSpace(string(body)))
+		return "", false, fmt.Errorf("inspect container %s: %s", name, strings.TrimSpace(string(body)))
 	}
 	var payload struct {
+		ID    string `json:"Id"`
 		State struct {
 			Running bool `json:"Running"`
 		} `json:"State"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return true, false, err
+		return "", false, err
 	}
-	return true, payload.State.Running, nil
+	return payload.ID, payload.State.Running, nil
 }
 
-func (m *monitor) startContainer(ctx context.Context, name string) error {
-	url := fmt.Sprintf("http://unix/containers/%s/start", name)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+func (m *monitor) serviceExists(ctx context.Context, name string) (bool, error) {
+	endpoint := fmt.Sprintf("http://unix/services/%s", url.PathEscape(name))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	resp, err := m.dockerClient.Do(req)
 	if err != nil {
-		return err
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return false, nil
+	}
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return false, fmt.Errorf("inspect service %s: %s", name, strings.TrimSpace(string(body)))
+	}
+	return true, nil
+}
+
+func (m *monitor) inspectService(ctx context.Context, name string) (bool, bool, error) {
+	exists, err := m.serviceExists(ctx, name)
+	if err != nil || !exists {
+		return exists, false, err
+	}
+	id, err := m.serviceTaskContainerID(ctx, name)
+	if err != nil {
+		return true, false, err
+	}
+	return true, id != "", nil
+}
+
+func (m *monitor) resolveContainerID(ctx context.Context, name string) (string, error) {
+	id, _, err := m.inspectContainerByName(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	if id != "" {
+		return id, nil
+	}
+	for _, svc := range serviceCandidates(name) {
+		id, err := m.serviceTaskContainerID(ctx, svc)
+		if err != nil {
+			return "", err
+		}
+		if id != "" {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("container or service %s not found", name)
+}
+
+func (m *monitor) serviceTaskContainerID(ctx context.Context, service string) (string, error) {
+	filters := fmt.Sprintf(`{\"service\":{\"%s\":true},\"desired-state\":{\"running\":true}}`, service)
+	endpoint := fmt.Sprintf("http://unix/tasks?filters=%s", url.QueryEscape(filters))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := m.dockerClient.Do(req)
+	if err != nil {
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("start container %s: %s", name, strings.TrimSpace(string(body)))
+		return "", fmt.Errorf("list service tasks %s: %s", service, strings.TrimSpace(string(body)))
+	}
+	var tasks []struct {
+		Status struct {
+			State           string `json:"State"`
+			ContainerStatus struct {
+				ContainerID string `json:"ContainerID"`
+			} `json:"ContainerStatus"`
+		} `json:"Status"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+		return "", err
+	}
+	for _, task := range tasks {
+		if strings.TrimSpace(task.Status.State) != "running" {
+			continue
+		}
+		if id := strings.TrimSpace(task.Status.ContainerStatus.ContainerID); id != "" {
+			return id, nil
+		}
+	}
+	return "", nil
+}
+
+func (m *monitor) forceServiceUpdate(ctx context.Context, service string) error {
+	cmd := exec.CommandContext(ctx, "docker", "service", "update", "--force", service)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("service update %s: %w (%s)", service, err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
@@ -1170,7 +1317,7 @@ func actorContainer(acct accountConfig) string {
 	if strings.TrimSpace(acct.Dyad) == "" {
 		return ""
 	}
-	return "silexa-actor-" + strings.TrimSpace(acct.Dyad)
+	return "actor-" + strings.TrimSpace(acct.Dyad)
 }
 
 func criticContainer(acct accountConfig) string {
@@ -1180,7 +1327,38 @@ func criticContainer(acct accountConfig) string {
 	if strings.TrimSpace(acct.Dyad) == "" {
 		return ""
 	}
-	return "silexa-critic-" + strings.TrimSpace(acct.Dyad)
+	return "critic-" + strings.TrimSpace(acct.Dyad)
+}
+
+func stackName() string {
+	if v := strings.TrimSpace(os.Getenv("SILEXA_STACK")); v != "" {
+		return v
+	}
+	return "silexa"
+}
+
+func normalizeTarget(name string) string {
+	name = strings.TrimSpace(name)
+	if strings.HasPrefix(name, "silexa-actor-") {
+		return "actor-" + strings.TrimPrefix(name, "silexa-actor-")
+	}
+	if strings.HasPrefix(name, "silexa-critic-") {
+		return "critic-" + strings.TrimPrefix(name, "silexa-critic-")
+	}
+	return name
+}
+
+func serviceCandidates(name string) []string {
+	name = normalizeTarget(name)
+	if name == "" {
+		return nil
+	}
+	stack := stackName()
+	prefixed := stack + "_" + name
+	if strings.HasPrefix(name, stack+"_") {
+		return []string{name}
+	}
+	return []string{name, prefixed}
 }
 
 func envOr(key, def string) string {
