@@ -61,6 +61,7 @@ for scope in "${scopes[@]}"; do
     integration)
       run_script "${ROOT_DIR}/tests/integration/app-management.sh"
       run_script "${ROOT_DIR}/tests/integration/dyad-roster.sh"
+      run_script "${ROOT_DIR}/tests/integration/dyad-assignment.sh"
       run_script "${ROOT_DIR}/tests/integration/dyad-communications.sh"
       ;;
     visual)
