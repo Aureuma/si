@@ -42,7 +42,7 @@ If you clear chat history (or delete the bot’s messages), Telegram can no long
 Manager periodically publishes a single “Dyad Task Board” digest message to Telegram and edits it in place, so you always have a current snapshot without spam.
 
 - Config: `DYAD_TASK_DIGEST_INTERVAL` (default `10m`)
-- Persisted anchor: `meta.dyad_digest_telegram_message_id` in Manager’s data file (`/data/tasks.json`)
+- Persisted anchor: `dyad-digest-message-id` stored in the Temporal state workflow
 
 ### Telegram message template (system notifications)
 

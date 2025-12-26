@@ -1,7 +1,7 @@
 # Maintenance & Vital Signs
 
 ## Health checks
-- Manager: add /healthz if needed (not present yet)
+- Manager: `curl -fsSL http://localhost:9090/healthz`
 - Telegram bot: `curl -fsSL http://localhost:8081/healthz`
 - Resource brokers: `http://localhost:9091/healthz`, `http://localhost:9092/healthz`
 - Critic heartbeats: `curl -fsSL http://localhost:9090/beats` (ensure recent timestamps)
@@ -14,7 +14,7 @@
   - Safe to run periodically via cron/systemd.
 
 ## Persistence
-- Manager tasks/feedback/access/metrics persisted in `data/manager/tasks.json`.
+- Manager tasks/feedback/access/metrics persisted in Temporal.
 - Brokers persisted in `data/resource-broker/requests.json` and `data/infra-broker/infra_requests.json`.
 
 ## Access and secrets

@@ -1,18 +1,19 @@
 # Silexa Substrate
 
-Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads) on a single host. It lives at `/opt/silexa` on the host and uses Docker for isolation between app builds while allowing the core agent to run directly on the host.
+Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads). The primary control plane is Temporal on Kubernetes; Swarm files remain for local and legacy deployments.
 
 ## Layout
 - `bootstrap.sh`: Host bootstrap for Ubuntu LTS (Docker, systemd, Node.js, git config).
-- `docker-stack.yml`: Swarm stack for core services (manager + dyads + coder agent).
+- `infra/k8s/`: Kubernetes manifests for Temporal and core Silexa services.
+- `docker-stack.yml`: Legacy Swarm stack for core services (manager + dyads + coder agent).
 - `apps/`: Application repos built by agents (one repo per app).
 - `agents/`: Agent-specific code and tooling.
 - `coder`: Go-based agent container exposing `:8080/healthz` with docker/socket mounts for nested builds.
 - `actor`: Node 22 base image for interactive CLI agents (install LLM tools like codex-cli inside the running container as needed).
 - `critic`: Go watcher that reads actor container logs via the Docker socket and sends heartbeats to the manager.
-- `manager`: Go service collecting critic heartbeats for monitoring.
+- `manager`: Go service collecting critic heartbeats and storing state in Temporal.
+- `manager-worker`: Temporal worker running the state workflow.
 - `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
-- `data/manager`: Persistent storage for manager human tasks (`tasks.json`); mounted via Swarm.
 - `bin/`: Helper scripts (e.g., `bin/coder-up.sh`).
 - `bin/swarm-init.sh` / `bin/swarm-deploy.sh`: Initialize Swarm, build images, create secrets, and deploy the stack.
 - `bin/swarm-secrets.sh`: Manage Docker secrets for Swarm services.
@@ -27,7 +28,7 @@ sudo /opt/silexa/bootstrap.sh
 
 The script installs Docker CE (with buildx/compose plugins and Swarm), enables systemd services, sets git config to `SHi-ON <shawn@azdam.com>`, installs Node.js (Nodesource LTS, default 22.x), and initializes the git repo in `/opt/silexa`. After it completes, re-login so docker group membership takes effect.
 
-Deploy the Swarm stack (builds images, creates secrets, and deploys services):
+Swarm deploy (legacy; for local use only):
 
 ```bash
 cd /opt/silexa
@@ -101,6 +102,9 @@ All dyads share `/opt/silexa/apps` and `/var/run/docker.sock`, so they can build
 - Use docker secrets for tokens (e.g., `secrets/telegram_bot_token` mounted only into `telegram-bot`). Avoid leaking tokens via env except short-lived dev.
 - Keep docker.sock access limited to containers that need it (actors, critics, coder-agent); notifier and manager do not mount it.
 - Add new secrets by defining them under `secrets:` in `docker-stack.yml`, adding files under `secrets/`, and running `bin/swarm-secrets.sh`.
+
+## Temporal and Kubernetes
+See `docs/temporal-migration-plan.md` and `infra/k8s/` for the Kubernetes-first deployment path.
 
 ## Next steps
 - Install Codex CLI (or another LLM-driven CLI) inside actor containers per task.
