@@ -27,7 +27,7 @@ Codex CLI credentials persistence:
 - Do not store SSH passwords in git; use SSH keys on the operator machine.
 
 ## Manager
-- No secrets. Persists tasks/feedback in `data/manager` volume.
+- No secrets. State is stored in Temporal (no local data volume).
 
 ## Rotation playbook
 1) Update secret file (e.g., `bin/rotate-telegram-token.sh <new_token>`).

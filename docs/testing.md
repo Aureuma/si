@@ -42,5 +42,5 @@ This keeps tooling minimal while still using standard ecosystem tools; add heavi
 
 ## Recommended env knobs
 - Critics: `CRITIC_LOG_INTERVAL`, `CRITIC_BEAT_INTERVAL` to tune chatter.
-- Manager: `DATA_DIR=/data` mounted to persist tasks.
+- Manager: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` to connect to Temporal.
 - Telegram: `TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify`, `TELEGRAM_CHAT_ID=<id>` for human alerts.

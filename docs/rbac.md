@@ -14,11 +14,11 @@
 ## Access policy (logical)
 - Actors: read/write `apps/`, run docker builds; no access to secrets or manager data volume.
 - Critics: read-only to docker logs; post to Manager APIs; no secrets.
-- Manager: read/write `data/manager`; no docker.sock; may send notifications via `TELEGRAM_NOTIFY_URL`.
+- Manager: state stored in Temporal; no docker.sock; may send notifications via `TELEGRAM_NOTIFY_URL`.
 - Telegram-bot: read telegram token secret; no docker.sock; read-only chat ID env.
 
 ## Implementation notes
 - Compose mounts: only actors/critics/coder-agent get `/var/run/docker.sock`. Manager/telegram-bot do not.
 - Secrets: `secrets/telegram_bot_token` mounted only into `telegram-bot`.
-- Volumes: `./data/manager:/data` only for Manager.
+- Volumes: no local data volume for Manager (Temporal is the system of record).
 - Labels/env: dyads carry `silexa.dyad`, `silexa.department`, `silexa.role` for identification.

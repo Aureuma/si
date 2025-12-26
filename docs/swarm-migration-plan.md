@@ -1,5 +1,7 @@
 ## Swarm retool plan (Silexa)
 
+Legacy: this plan is superseded by `docs/temporal-migration-plan.md` (Temporal on Kubernetes).
+
 This document assesses the current system and lays out a Swarm-first migration
 plan that keeps complexity low, while preparing for a multi-node future.
 
