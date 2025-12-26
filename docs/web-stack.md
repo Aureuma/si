@@ -6,6 +6,7 @@ This is the default stack for new web apps in Silexa.
 - **Framework**: SvelteKit (TypeScript, full-stack)
 - **UI**: shadcn-svelte + Tailwind CSS
 - **Routing/SSR**: SvelteKit built-ins
+- **Adapter**: adapter-node for container deploys (required by `bin/app-build.sh`)
 
 ## Data + Auth
 - **DB**: Postgres (or SQLite for local-only)

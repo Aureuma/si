@@ -34,6 +34,7 @@ A disciplined, budget-aware pipeline for taking an idea to production with dyads
 
 ### 6) Deploy
 - Pre-deploy cost/safety: `bin/pre-deploy-check.sh` (💸 gate) and `pulumi-preview.sh` (prefer Pulumi for cloud).
+- Build and deploy app stack: `bin/app-build.sh <app>` then `bin/app-deploy.sh <app>`.
 - Infra dyad applies changes; report to Telegram with ✅/⚠️ and metrics `deploy_fail_rate`, `deploy_cost_delta`.
 - Post-deploy smoke using existing QA scripts.
 
