@@ -59,6 +59,7 @@ for scope in "${scopes[@]}"; do
       run_script "${ROOT_DIR}/tests/go/run-go-tests.sh"
       ;;
     integration)
+      run_script "${ROOT_DIR}/tests/integration/app-management.sh"
       run_script "${ROOT_DIR}/tests/integration/dyad-communications.sh"
       ;;
     visual)
