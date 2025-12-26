@@ -61,6 +61,7 @@ plan that keeps complexity low, while preparing for a multi-node future.
 - **Dyad naming**: actor/critic identifiers standardized to `actor-<dyad>` / `critic-<dyad>` with service resolution via Swarm tasks.
 - **Secrets**: Telegram/GH/Stripe handled via Docker secrets (`bin/swarm-secrets.sh`).
 - **Scripts/docs**: updated to Swarm deploy and service naming.
+- **Compose legacy**: old compose file archived at `docker-compose.legacy.yml`.
 
 ### Future (multi-node readiness)
 - Move repo mounts to a shared volume (NFS, Ceph, or a CSI plugin).
