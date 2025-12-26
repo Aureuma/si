@@ -21,5 +21,5 @@ images=(
 for entry in "${images[@]}"; do
   IFS='|' read -r tag path <<<"$entry"
   echo "Building $tag from $path"
-  docker build -t "$tag" "$ROOT_DIR/$path"
+  "$ROOT_DIR/bin/image-build.sh" -t "$tag" "$ROOT_DIR/$path"
 done

@@ -7,20 +7,20 @@ Host-level (Ubuntu LTS):
 - **Fail2ban**: enable SSH jail; tune ban times; monitor logs.
 - **Audit/Logs**: install `auditd`; ship logs to remote (optional); monitor auth.log/syslog.
 - **Users**: least-privilege; review `sudo` group; remove unused accounts; use SSH keys only.
-- **Filesystem**: no secrets in world-readable paths; use docker secrets for tokens.
+- **Filesystem**: no secrets in world-readable paths; use Kubernetes secrets for tokens.
 
-Docker/agents:
-- Limit docker.sock access to actors/critics/coder only (already applied); keep mcp-gateway/dockerhub aware of PATs via secrets.
-- Resource caps: Swarm CPU/mem limits set for all services.
-- Secrets: mount from `secrets/` via docker secrets; avoid long-lived env vars.
+Kubernetes/agents:
+- Use namespace-scoped service accounts and least-privilege RBAC; no pods mount the Docker socket.
+- Resource caps: set CPU/memory requests and limits in `infra/k8s/` manifests.
+- Secrets: mount from Kubernetes secrets; avoid long-lived env vars for tokens.
 - Network: expose only required ports (manager 9090, brokers 9091/9092, Telegram 8081, MCP 8088). Consider firewall allowlist.
 
 MCP Gateway:
 - Runs on streaming transport at 8088; disable/trim catalog servers you don't need to reduce surface.
-- Provide PATs as docker secrets when enabling dockerhub; otherwise remove that server from the catalog.
+- Provide PATs as Kubernetes secrets when enabling dockerhub; otherwise remove that server from the catalog.
 
 Automation:
-- Run `bin/security-audit.sh` to check SSH/firewall/updates/fail2ban/auditd and docker.sock perms (non-invasive).
+- Run `bin/security-audit.sh` to check SSH/firewall/updates/fail2ban/auditd (non-invasive).
 - Optionally add cron to run audit weekly and post results via management-broadcast/Telegram.
 
 Recommended next actions:

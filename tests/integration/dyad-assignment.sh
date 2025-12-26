@@ -152,8 +152,8 @@ print(json.dumps({
     "id": task_id,
     "status": "in_progress",
     "dyad": dyad,
-    "actor": f"actor-{dyad}",
-    "critic": f"critic-{dyad}",
+    "actor": "actor",
+    "critic": "critic",
 }))
 PY
 )

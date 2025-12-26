@@ -5,20 +5,21 @@ set -euo pipefail
 # Usage: mcp-gateway-up.sh
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-# shellcheck source=bin/swarm-lib.sh
-source "${ROOT}/bin/swarm-lib.sh"
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT}/bin/k8s-lib.sh"
 
-STACK="$(swarm_stack_name)"
-SERVICE="${STACK}_mcp-gateway"
+DEPLOYMENT="silexa-mcp-gateway"
+IMAGE="${MCP_GATEWAY_IMAGE:-silexa/mcp-gateway:local}"
 
-echo "Building MCP Gateway image..."
-docker build -t silexa/mcp-gateway:local "$ROOT/tools/mcp-gateway"
+echo "Building MCP Gateway image: ${IMAGE}"
+"${ROOT}/bin/image-build.sh" -t "$IMAGE" "$ROOT/tools/mcp-gateway"
 
-if docker service inspect "$SERVICE" >/dev/null 2>&1; then
-  echo "Updating MCP Gateway service..."
-  docker service update --image silexa/mcp-gateway:local --force "$SERVICE" >/dev/null
+if kube get deployment "$DEPLOYMENT" >/dev/null 2>&1; then
+  echo "Updating MCP Gateway deployment..."
+  kube set image deployment "$DEPLOYMENT" mcp-gateway="$IMAGE" >/dev/null
+  kube rollout restart deployment "$DEPLOYMENT" >/dev/null
 else
-  echo "MCP Gateway service missing (${SERVICE}); deploy stack first." >&2
+  echo "MCP Gateway deployment missing (${DEPLOYMENT}); apply infra/k8s first." >&2
   exit 1
 fi
 

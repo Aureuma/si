@@ -25,31 +25,49 @@ fi
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 APP_DIR="${ROOT_DIR}/apps/${APP}"
 TARGETS="${APP_DIR}/ui-tests/targets.json"
-ARTIFACT_DIR="${APP_DIR}/.artifacts/visual"
+ARTIFACT_ROOT="${APP_DIR}/.artifacts"
+ARTIFACT_DIR="${ARTIFACT_ROOT}/visual"
 IMAGE="${VISUAL_IMAGE:-silexa/visual-runner:local}"
+
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
+
+SAFE_APP=$(echo "$APP" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')
+POD="visual-qa-${SAFE_APP}-$(date +%s)"
 
 if [[ ! -f "$TARGETS" ]]; then
   echo "Missing ${TARGETS}. Create it to describe routes/viewports." >&2
   exit 1
 fi
 
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-  echo "Building ${IMAGE}..."
-  docker build -t "$IMAGE" "${ROOT_DIR}/tools/visual-runner"
-fi
-
 mkdir -p "$ARTIFACT_DIR"
+
+cleanup() {
+  kube delete pod "$POD" --ignore-not-found >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+echo "Starting visual runner pod ${POD}..."
+kube run "$POD" --image="$IMAGE" --restart=Never --command -- sleep 3600 >/dev/null
+kube wait --for=condition=Ready "pod/${POD}" --timeout=120s >/dev/null
+kube exec "$POD" -- mkdir -p /app/ui-tests /app/.artifacts/visual >/dev/null
+kube cp "$TARGETS" "$POD:/app/ui-tests/targets.json" >/dev/null
+if [[ -d "$ARTIFACT_DIR" ]]; then
+  kube cp "$ARTIFACT_DIR" "$POD:/app/.artifacts" >/dev/null
+fi
 
 echo "Running visual tests for ${APP}..."
 set +e
-PIXEL_THRESHOLD=${PIXEL_THRESHOLD:-100} docker run --rm \
-  -e TARGETS_FILE=/app/ui-tests/targets.json \
-  -e ARTIFACT_DIR=/app/.artifacts/visual \
-  -e PIXEL_THRESHOLD="$PIXEL_THRESHOLD" \
-  -v "${APP_DIR}:/app" \
-  "$IMAGE"
+PIXEL_THRESHOLD=${PIXEL_THRESHOLD:-100}
+kube exec "$POD" -- env \
+  TARGETS_FILE=/app/ui-tests/targets.json \
+  ARTIFACT_DIR=/app/.artifacts/visual \
+  PIXEL_THRESHOLD="$PIXEL_THRESHOLD" \
+  npm test
 STATUS=$?
 set -e
+
+kube cp "$POD:/app/.artifacts/visual" "$ARTIFACT_ROOT" >/dev/null
 
 SUMMARY="Visual QA for ${APP}: "
 if [[ $STATUS -eq 0 ]]; then

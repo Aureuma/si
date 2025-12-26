@@ -37,9 +37,9 @@
     },
     {
       "key": "web_hosting.compose_scaffold",
-      "title": "Create compose scaffold for hosting apps",
-      "description": "Add/extend docker-compose patterns to run multiple web apps with stable naming, ports, and per-app volumes.",
-      "kind": "infra.compose",
+      "title": "Create k8s scaffold for hosting apps",
+      "description": "Add/extend kustomize or Helm patterns to run multiple web apps with stable naming, ports, and per-app PVCs.",
+      "kind": "infra.k8s",
       "priority": "normal",
       "route_hint": "pool:infra"
     },
@@ -62,7 +62,7 @@
     {
       "key": "web_hosting.healthchecks",
       "title": "Health checks and monitoring baseline",
-      "description": "Define health endpoints, compose healthcheck configuration, and basic uptime monitoring hooks.",
+      "description": "Define health endpoints, readiness/liveness probes, and basic uptime monitoring hooks.",
       "kind": "infra.health",
       "priority": "normal",
       "route_hint": "pool:infra"
@@ -70,7 +70,7 @@
     {
       "key": "web_hosting.deployment_flow",
       "title": "Deployment workflow (build/release/rollback)",
-      "description": "Implement practical deploy scripts: build images, tag, deploy compose, rollback. Decide CI trigger and minimal logs.",
+      "description": "Implement deploy scripts: build images, tag, apply kustomize, rollback with kubectl. Decide CI trigger and minimal logs.",
       "kind": "infra.deploy",
       "priority": "high",
       "route_hint": "pool:infra"
@@ -78,7 +78,7 @@
     {
       "key": "web_hosting.secrets",
       "title": "Secrets strategy for hosted apps",
-      "description": "Define how app secrets are provided (docker secrets files, env *_FILE), how to rotate, and which dyad owns it.",
+      "description": "Define how app secrets are provided (Kubernetes secrets, env *_FILE), how to rotate, and which dyad owns it.",
       "kind": "infra.secrets",
       "priority": "normal",
       "route_hint": "pool:infra"

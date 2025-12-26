@@ -18,9 +18,9 @@ Flow:
 4) Critic sends the human a ready-to-run Telegram message (using `parse_mode="HTML"`) in this exact shape:
    - Header: `🔐 <b>Codex login</b>`
    - Body:
-     - `<b>🛠 Tunnel:</b>` in a `<pre><code>…</code></pre>` block
+     - `<b>🛠 Port-forward:</b>` in a `<pre><code>…</code></pre>` block
      - `<b>🌐 URL:</b>` in a `<pre><code>…</code></pre>` block
-5) Human runs the tunnel command and opens the auth URL in the browser.
+5) Human runs the port-forward command and opens the auth URL in the browser.
 6) Critic verifies success via `codex login status` inside the actor and updates the Dyad Task to `done`.
 
 Expectations:
@@ -28,17 +28,17 @@ Expectations:
 - Use a short timeout window (e.g., 20m) to avoid stale tunnel requests.
 
 Forwarding nuance:
-- Codex binds to `127.0.0.1:<port>` inside the container, so tunneling directly to `<container_ip>:<port>` can fail with `connect failed: Connection refused`.
-- Fix: run a TCP forwarder in the same network namespace as the container:
-  - Forward: `docker run -d --name <container>-codex-forward-<port> --network container:<container> alpine/socat tcp-listen:<forward_port>,reuseaddr,fork tcp:127.0.0.1:<port>`
-  - Tunnel: local `<port>` → container `<forward_port>` → codex `<port>`
+- Codex binds to `127.0.0.1:<port>` inside the container, so port-forwarding directly to `<port>` can fail.
+- Fix: run a TCP forwarder inside the pod, then forward to that port:
+  - Forward inside pod: `socat tcp-listen:<forward_port>,reuseaddr,fork tcp:127.0.0.1:<port>`
+  - Port-forward: `kubectl -n silexa port-forward pod/<pod> <port>:<forward_port>`
 
 Compatibility note:
-- Some Codex CLI builds do not support `codex login --port`. In that case, run `codex login` and capture the printed `localhost:<port>` from the output; the Beam uses that port for the SSH tunnel.
+- Some Codex CLI builds do not support `codex login --port`. In that case, run `codex login` and capture the printed `localhost:<port>` from the output; the Beam uses that port for the port-forward.
 
 Ready-to-run defaults:
-- SSH target is stored in `configs/ssh_target` as `SSH_TARGET=<user>@<public_ip>` (override with env var `SSH_TARGET`).
-- Helper script to run this Beam manually: `bin/beam-codex-login.sh <container> [port] [ssh_target]`.
+- Namespace defaults to `silexa` unless `SILEXA_NAMESPACE` is set.
+- Helper script to run this Beam manually: `bin/beam-codex-login.sh <dyad> [port]`.
 
 Recorded Telegram message examples: see `docs/beam_messages/` for the latest sent commands and URLs (e.g., `codex_login_actor_infra.txt` captures the exact tunnel + auth URL shared).
 

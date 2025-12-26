@@ -5,19 +5,16 @@ Goal: Standardize Codex CLI logins for infra actor/critic using the Codex Login 
 
 Tasks
 1) Prep target
-   - Identify container: `actor-infra` or `critic-infra`.
-   - Ensure Docker socket access for socat sidecar (needed when codex binds 127.0.0.1).
+   - Identify dyad pod: `bin/k8s-dyad-pod.sh <dyad>` (e.g., `infra`).
+   - Ensure the actor image includes `socat` (required when codex binds 127.0.0.1).
 2) Run Beam helper
-   - `TELEGRAM_CHAT_ID=<id> bin/beam-codex-login.sh <actor-or-critic> [port] [ssh_target]`
-   - This creates a Manager task and Telegram ping with the tunnel command.
+   - `TELEGRAM_CHAT_ID=<id> bin/beam-codex-login.sh <dyad> [callback_port]`
+   - This posts the `kubectl port-forward` command + auth URL to Telegram.
 3) Start Codex login
    - In the container: `codex login > /tmp/codex-login.out 2>&1 & echo $! > /tmp/codex-login.pid`
    - Capture from `/tmp/codex-login.out`: callback port (usually 1455) and full auth URL.
-4) Handle localhost binding (if tunnel refuses)
-   - Create forwarder in container netns:  
-     `docker rm -f <name>-codex-forward 2>/dev/null || true`  
-     `docker run -d --name <name>-codex-forward --network container:$(bin/docker-target.sh <actor-or-critic>) alpine/socat tcp-listen:1456,reuseaddr,fork tcp:127.0.0.1:<callback_port>`
-   - Use forward port (1456) in the tunnel command: `ssh -N -L 127.0.0.1:<callback_port>:<container_ip>:1456 <ssh_target>`
+4) Handle localhost binding
+   - `bin/beam-codex-login.sh` starts a `socat` forwarder inside the actor pod so the `kubectl port-forward` works even when codex binds localhost.
 5) Human message (Telegram + Manager task)
    - Format:
      ```
@@ -35,7 +32,7 @@ Tasks
      ```
    - Log the exact message under `docs/beam_messages/`.
 6) Verify and close
-   - After human completes OAuth, in container: `bin/run-task.sh <actor-or-critic> codex login status` (or `codex whoami`).
+   - After human completes OAuth, in container: `bin/run-task.sh <dyad> codex login status` (or `codex whoami`).
    - Close the Manager task: `bin/complete-human-task.sh <id>`.
 7) Recordkeeping
    - Update `docs/human_queue.md` if still pending.

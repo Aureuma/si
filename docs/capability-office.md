@@ -20,7 +20,7 @@ Purpose: centralize decisions about model class, reasoning depth, and tool permi
 
 ### Tooling defaults
 - Web: git, node/pnpm, playwright visual QA, MCP gateway for catalogs.
-- Infra: Pulumi/Terraform, docker, kubectl/helm (if needed), MCP gateway for infra servers.
+- Infra: Pulumi/Terraform, kubectl/helm, image builder (buildctl), MCP gateway for infra servers.
 - Research: HTTP clients, notebooks/spikes, MCP registry for data sources.
 - QA: Playwright, curl, test runners; no prod secrets.
 
