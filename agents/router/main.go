@@ -125,8 +125,8 @@ func main() {
 			update := map[string]interface{}{
 				"id":     t.ID,
 				"dyad":   target,
-				"actor":  "silexa-actor-" + target,
-				"critic": "silexa-critic-" + target,
+				"actor":  dyadActorName(target),
+				"critic": dyadCriticName(target),
 				"notes":  strings.TrimSpace(t.Notes + "\n[routed] dyad=" + target),
 			}
 			if err := updateTask(managerURL, update); err != nil {
@@ -152,6 +152,22 @@ func routeTask(rules rulesFile, t dyadTask) string {
 		return rules.DefaultDyad
 	}
 	return ""
+}
+
+func dyadActorName(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return ""
+	}
+	return "actor-" + dyad
+}
+
+func dyadCriticName(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return ""
+	}
+	return "critic-" + dyad
 }
 
 func listTasks(managerURL string) ([]dyadTask, error) {

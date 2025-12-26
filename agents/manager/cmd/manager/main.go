@@ -1125,10 +1125,18 @@ func dyadFromContainer(name string) string {
 	if name == "" {
 		return ""
 	}
-	prefixes := []string{"silexa-actor-", "silexa-critic-"}
+	prefixes := []string{"actor-", "critic-", "silexa-actor-", "silexa-critic-"}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(name, prefix) {
 			return strings.TrimPrefix(name, prefix)
+		}
+	}
+	if idx := strings.Index(name, "_"); idx != -1 {
+		trimmed := name[idx+1:]
+		for _, prefix := range []string{"actor-", "critic-"} {
+			if strings.HasPrefix(trimmed, prefix) {
+				return strings.TrimPrefix(trimmed, prefix)
+			}
 		}
 	}
 	return ""
