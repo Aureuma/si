@@ -2,4 +2,4 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-exec "${ROOT_DIR}/tests/visual/qa-visual.sh" "$@"
+exec "${ROOT_DIR}/tests/run.sh" "$@"
