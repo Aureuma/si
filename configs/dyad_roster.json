@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "defaults": {
+    "available": true
+  },
+  "dyads": [
+    {
+      "name": "pm",
+      "role": "program_manager",
+      "department": "ops",
+      "team": "platform",
+      "assignment": "core",
+      "tags": ["manager", "planning"],
+      "spawn": true
+    },
+    {
+      "name": "infra",
+      "role": "infra",
+      "department": "infra",
+      "team": "platform",
+      "assignment": "core",
+      "tags": ["infra", "ops"],
+      "spawn": true
+    },
+    {
+      "name": "research",
+      "role": "research",
+      "department": "research",
+      "team": "research",
+      "assignment": "core",
+      "tags": ["research"],
+      "spawn": true
+    },
+    {
+      "name": "web",
+      "role": "web",
+      "department": "engineering",
+      "team": "web",
+      "assignment": "apps",
+      "tags": ["sveltekit", "frontend"],
+      "spawn": false
+    },
+    {
+      "name": "web-planner",
+      "role": "planner",
+      "department": "planning",
+      "team": "web",
+      "assignment": "apps",
+      "tags": ["planning"],
+      "spawn": false
+    },
+    {
+      "name": "web-builder",
+      "role": "builder",
+      "department": "engineering",
+      "team": "web",
+      "assignment": "apps",
+      "tags": ["builder", "sveltekit"],
+      "spawn": false
+    },
+    {
+      "name": "web-qa",
+      "role": "qa",
+      "department": "qa",
+      "team": "web",
+      "assignment": "apps",
+      "tags": ["qa"],
+      "spawn": false
+    }
+  ]
+}
