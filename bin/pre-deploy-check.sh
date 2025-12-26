@@ -10,23 +10,34 @@ NOTIFY_URL=${NOTIFY_URL:-http://localhost:8081/notify}
 EMOJI=${COST_EMOJI:-💸}
 
 fetch() { curl -fsSL "$1"; }
-TASKS=$(fetch "$MANAGER_URL/human-tasks")
-ACCESS=$(fetch "$MANAGER_URL/access-requests")
-RES=$(fetch "$RES_BROKER_URL/requests")
-INFRA=$(fetch "$INFRA_BROKER_URL/infra")
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
-export TASKS ACCESS RES INFRA
-msg=$(python3 - <<'PY'
-import json, os
+TASKS_FILE="${TMP_DIR}/tasks.json"
+ACCESS_FILE="${TMP_DIR}/access.json"
+RES_FILE="${TMP_DIR}/resource.json"
+INFRA_FILE="${TMP_DIR}/infra.json"
 
-def load(x):
-    try: return json.loads(x)
-    except Exception: return []
+fetch "$MANAGER_URL/human-tasks" > "$TASKS_FILE"
+fetch "$MANAGER_URL/access-requests" > "$ACCESS_FILE"
+fetch "$RES_BROKER_URL/requests" > "$RES_FILE"
+fetch "$INFRA_BROKER_URL/infra" > "$INFRA_FILE"
 
-tasks = load(os.environ.get("TASKS","[]"))
-access = load(os.environ.get("ACCESS","[]"))
-res = load(os.environ.get("RES","[]"))
-infra = load(os.environ.get("INFRA","[]"))
+msg=$(python3 - <<'PY' "$TASKS_FILE" "$ACCESS_FILE" "$RES_FILE" "$INFRA_FILE"
+import json
+import sys
+
+def load(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+tasks = load(sys.argv[1])
+access = load(sys.argv[2])
+res = load(sys.argv[3])
+infra = load(sys.argv[4])
 open_tasks = [t for t in tasks if t.get("status") != "done"]
 pending_access = [a for a in access if a.get("status") == "pending"]
 pending_res = [r for r in res if r.get("status") == "pending"]
