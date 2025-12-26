@@ -18,10 +18,10 @@ Purpose: structured task intake and allocation to dyads, with notifications and 
 
 ## Flow (router → dyad)
 1) Router logs a task via `bin/add-task.sh` (or directly with dyad via `bin/add-dyad-task.sh`). Manager notifies Telegram.
-2) Router assigns `dyad`/`actor`/`critic` (service: `silexa-router`), or tasks can be created already assigned.
+2) Router assigns `dyad`/`actor`/`critic` (service: `router`), or tasks can be created already assigned.
 3) Critic claims work via `POST /dyad-tasks/claim` and maintains a heartbeat by re-claiming periodically.
 4) Critic drives prompts; Actor executes. Critic updates status to `review` or `blocked` with notes. When done, set `done` (and include notes/link to deliverable).
-4) Anyone can list tasks: `curl -fsSL http://localhost:9090/dyad-tasks` (or via Manager service name inside compose).
+4) Anyone can list tasks: `curl -fsSL http://localhost:9090/dyad-tasks` (or via Manager service name inside the Swarm network).
 5) Periodic reporting: run `bin/dyad-report.sh <dyad> [chat_id]` to log status to Manager feedback (can be scheduled).
 
 ## Best practices

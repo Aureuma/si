@@ -11,7 +11,7 @@ Weekly checklist:
 Monthly checklist:
 - Patch/updates: `apt-get update && apt-get upgrade`, verify unattended-upgrades active.
 - Review SSH config (root login off, password auth off), fail2ban status, auditd status.
-- Docker: confirm sock access limited to intended containers; review compose resource caps.
+- Docker: confirm sock access limited to intended containers; review Swarm resource caps.
 - Secrets: rotate critical tokens (Telegram, Docker Hub PAT, API keys); validate docker secrets mounts.
 - Backups (if any) and log retention.
 
