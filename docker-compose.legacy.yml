@@ -61,12 +61,24 @@ services:
     environment:
       - TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - DATA_DIR=/data
+      - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+      - TEMPORAL_TASK_QUEUE=${TEMPORAL_TASK_QUEUE:-silexa-state}
     ports:
       - "9090:9090"
     restart: unless-stopped
-    volumes:
-      - ./data/manager:/data
+
+  manager-worker:
+    image: silexa/manager:local
+    container_name: silexa-manager-worker
+    mem_limit: 256m
+    cpus: "0.5"
+    command: ["manager-worker"]
+    environment:
+      - TEMPORAL_ADDRESS=${TEMPORAL_ADDRESS:-temporal:7233}
+      - TEMPORAL_NAMESPACE=${TEMPORAL_NAMESPACE:-default}
+      - TEMPORAL_TASK_QUEUE=${TEMPORAL_TASK_QUEUE:-silexa-state}
+    restart: unless-stopped
 
   codex-monitor:
     build:
