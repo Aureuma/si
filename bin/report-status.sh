@@ -6,23 +6,31 @@ CHAT_ID=${TELEGRAM_CHAT_ID:-}
 NOTIFY_URL=${NOTIFY_URL:-http://localhost:8081/notify}
 
 fetch() { curl -fsSL "$1"; }
-TASKS=$(fetch "$MANAGER_URL/human-tasks")
-ACCESS=$(fetch "$MANAGER_URL/access-requests")
-FEEDBACK=$(fetch "$MANAGER_URL/feedback")
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
-export TASKS ACCESS FEEDBACK
-summary=$(python3 - <<'PY'
-import json, os
+TASKS_FILE="${TMP_DIR}/tasks.json"
+ACCESS_FILE="${TMP_DIR}/access.json"
+FEEDBACK_FILE="${TMP_DIR}/feedback.json"
 
-def load(text):
+fetch "$MANAGER_URL/human-tasks" > "$TASKS_FILE"
+fetch "$MANAGER_URL/access-requests" > "$ACCESS_FILE"
+fetch "$MANAGER_URL/feedback" > "$FEEDBACK_FILE"
+
+summary=$(python3 - <<'PY' "$TASKS_FILE" "$ACCESS_FILE" "$FEEDBACK_FILE"
+import json
+import sys
+
+def load(path):
     try:
-        return json.loads(text)
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
     except Exception:
         return []
 
-tasks = load(os.environ.get("TASKS", "[]"))
-access = load(os.environ.get("ACCESS", "[]"))
-feedback = load(os.environ.get("FEEDBACK", "[]"))
+tasks = load(sys.argv[1])
+access = load(sys.argv[2])
+feedback = load(sys.argv[3])
 open_tasks = [t for t in tasks if t.get("status") != "done"]
 done_tasks = [t for t in tasks if t.get("status") == "done"]
 pending_access = [a for a in access if a.get("status") == "pending"]
