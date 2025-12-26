@@ -9,7 +9,6 @@ import (
 	"html"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"regexp"
 	"sort"
@@ -199,11 +198,11 @@ func (m *Monitor) runBeamCodexLogin(ctx context.Context, dyad string, task DyadT
 		return
 	}
 
-	if m.TelegramURL == "" || m.TelegramChatID == "" || m.SSHTarget == "" {
+	if m.TelegramURL == "" || m.TelegramChatID == "" {
 		_ = m.updateDyadTask(ctx, map[string]interface{}{
 			"id":     task.ID,
 			"status": "blocked",
-			"notes":  strings.TrimSpace(task.Notes + "\n[beam.codex_login] missing TELEGRAM_NOTIFY_URL / TELEGRAM_CHAT_ID / SSH_TARGET in critic env"),
+			"notes":  strings.TrimSpace(task.Notes + "\n[beam.codex_login] missing TELEGRAM_NOTIFY_URL / TELEGRAM_CHAT_ID in critic env"),
 		})
 		return
 	}
@@ -211,9 +210,9 @@ func (m *Monitor) runBeamCodexLogin(ctx context.Context, dyad string, task DyadT
 	port := envInt("CODEX_LOGIN_PORT", 1455)
 	forwardPort := envInt("CODEX_LOGIN_FORWARD_PORT", port+1)
 
-	containerIP, err := m.containerIPv4(ctx, actor)
-	if err != nil || containerIP == "" {
-		m.Logger.Printf("beam.codex_login: inspect actor ip error: %v", err)
+	podName, _, err := m.resolveTarget(ctx, actor)
+	if err != nil || podName == "" {
+		m.Logger.Printf("beam.codex_login: resolve pod error: %v", err)
 		return
 	}
 
@@ -264,10 +263,10 @@ func (m *Monitor) runBeamCodexLogin(ctx context.Context, dyad string, task DyadT
 		return
 	}
 
-	tunnel := fmt.Sprintf("ssh -N -L 127.0.0.1:%d:%s:%d %s", port, containerIP, forwardPort, m.SSHTarget)
+	kubeCmd := fmt.Sprintf("%s port-forward pod/%s %d:%d", kubectlPrefix(m.kubeClient), podName, port, forwardPort)
 	msg := strings.TrimSpace(fmt.Sprintf(
-		"🔐 <b>Codex login</b>\n\n<b>🛠 Tunnel:</b>\n<pre><code>%s</code></pre>\n\n<b>🌐 URL:</b>\n<pre><code>%s</code></pre>",
-		html.EscapeString(tunnel),
+		"🔐 <b>Codex login</b>\n\n<b>🛠 Port-forward:</b>\n<pre><code>%s</code></pre>\n\n<b>🌐 URL:</b>\n<pre><code>%s</code></pre>",
+		html.EscapeString(kubeCmd),
 		html.EscapeString(authURL),
 	))
 
@@ -279,7 +278,7 @@ func (m *Monitor) runBeamCodexLogin(ctx context.Context, dyad string, task DyadT
 	_ = m.updateDyadTask(ctx, map[string]interface{}{
 		"id":     task.ID,
 		"status": "blocked",
-		"notes":  strings.TrimSpace(task.Notes + fmt.Sprintf("\n[beam.codex_login] sent tunnel+URL to telegram (dyad=%s); waiting for browser callback", dyad)),
+		"notes":  strings.TrimSpace(task.Notes + fmt.Sprintf("\n[beam.codex_login] sent port-forward+URL to telegram (dyad=%s); waiting for browser callback", dyad)),
 	})
 }
 
@@ -334,37 +333,25 @@ func (m *Monitor) updateDyadTask(ctx context.Context, payload map[string]interfa
 	return nil
 }
 
-func (m *Monitor) containerIPv4(ctx context.Context, container string) (string, error) {
-	containerID, err := m.resolveContainerID(ctx, container)
-	if err != nil {
-		return "", err
+func kubectlPrefix(kube *kubeClient) string {
+	args := []string{"kubectl"}
+	if ctx := strings.TrimSpace(os.Getenv("KUBECTL_CONTEXT")); ctx != "" {
+		args = append(args, "--context", ctx)
 	}
-	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(containerID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", err
+	namespace := ""
+	if kube != nil {
+		namespace = strings.TrimSpace(kube.namespace)
 	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", err
+	if namespace == "" {
+		namespace = strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
 	}
-	defer resp.Body.Close()
-	var obj struct {
-		NetworkSettings struct {
-			Networks map[string]struct {
-				IPAddress string `json:"IPAddress"`
-			} `json:"Networks"`
-		} `json:"NetworkSettings"`
+	if namespace == "" {
+		namespace = strings.TrimSpace(os.Getenv("SILEXA_NAMESPACE"))
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&obj); err != nil {
-		return "", err
+	if namespace != "" {
+		args = append(args, "-n", namespace)
 	}
-	for _, n := range obj.NetworkSettings.Networks {
-		if n.IPAddress != "" {
-			return n.IPAddress, nil
-		}
-	}
-	return "", nil
+	return strings.Join(args, " ")
 }
 
 var urlRe = regexp.MustCompile(`https://[^\s]+`)

@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	actor := envOr("ACTOR_CONTAINER", "actor-web")
+	actor := envOr("ACTOR_CONTAINER", "actor")
 	manager := envOr("MANAGER_URL", "http://manager:9090")
 	dyad := envOr("DYAD_NAME", "")
 	role := envOr("ROLE", "critic")

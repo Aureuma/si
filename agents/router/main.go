@@ -186,7 +186,7 @@ func dyadActorName(dyad string) string {
 	if dyad == "" {
 		return ""
 	}
-	return "actor-" + dyad
+	return "actor"
 }
 
 func dyadCriticName(dyad string) string {
@@ -194,7 +194,7 @@ func dyadCriticName(dyad string) string {
 	if dyad == "" {
 		return ""
 	}
-	return "critic-" + dyad
+	return "critic"
 }
 
 func listTasks(managerURL string) ([]dyadTask, error) {

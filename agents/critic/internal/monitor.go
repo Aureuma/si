@@ -3,14 +3,11 @@ package internal
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -30,16 +27,13 @@ type Monitor struct {
 	Logger         *log.Logger
 	lastTimestamp  time.Time
 	lastActorLogAt time.Time
-	httpClient     *http.Client
-	dockerClient   *http.Client
+	kubeClient     *kubeClient
 }
 
 func NewMonitor(actor, manager, dyad, role, department string, logger *log.Logger) (*Monitor, error) {
-	dial := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return (&net.Dialer{}).DialContext(ctx, "unix", "/var/run/docker.sock")
-	}
-	transport := &http.Transport{
-		DialContext: dial,
+	kubeClient, err := newKubeClient()
+	if err != nil {
+		return nil, err
 	}
 	return &Monitor{
 		ActorContainer: actor,
@@ -50,8 +44,7 @@ func NewMonitor(actor, manager, dyad, role, department string, logger *log.Logge
 		Logger:         logger,
 		lastTimestamp:  time.Now().Add(-30 * time.Second),
 		lastActorLogAt: time.Now().Add(-30 * time.Second),
-		httpClient:     &http.Client{Transport: transport, Timeout: 10 * time.Second},
-		dockerClient:   &http.Client{Transport: transport, Timeout: 10 * time.Second},
+		kubeClient:     kubeClient,
 	}, nil
 }
 
@@ -67,7 +60,7 @@ func (m *Monitor) StreamOnce(ctx context.Context) error {
 	}
 	m.Logger.Printf("[%s logs]\n%s", m.ActorContainer, text)
 	if !last.IsZero() {
-		// Docker's `since` filter is second-resolution; advance by >=1s to avoid re-reading.
+		// Log timestamps are second-resolution; advance by >=1s to avoid re-reading.
 		m.lastTimestamp = last.Truncate(time.Second).Add(1 * time.Second)
 	} else {
 		m.lastTimestamp = time.Now().UTC()
@@ -364,54 +357,27 @@ func (m *Monitor) ExecInActorCapture(ctx context.Context, cmd []string) (string,
 }
 
 func (m *Monitor) ExecInContainerCapture(ctx context.Context, container string, cmd []string) (string, error) {
-	containerID, err := m.resolveContainerID(ctx, container)
+	podName, containerName, err := m.resolveTarget(ctx, container)
 	if err != nil {
 		return "", err
 	}
-	createPayload := map[string]interface{}{
-		"AttachStdout": true,
-		"AttachStderr": true,
-		"Cmd":          cmd,
-		"Tty":          false,
-	}
-	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(containerID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
-	if err != nil {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if err := m.kubeClient.exec(ctx, podName, containerName, cmd, nil, &stdout, &stderr, false); err != nil {
+		if stderr.Len() > 0 {
+			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		}
 		return "", err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", err
+	out := strings.TrimSpace(stdout.String())
+	errOut := strings.TrimSpace(stderr.String())
+	if out == "" {
+		return errOut, nil
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var out map[string]interface{}
-	_ = json.Unmarshal(body, &out)
-	id, _ := out["Id"].(string)
-	if id == "" {
-		return "", fmt.Errorf("no exec id from docker")
+	if errOut != "" {
+		return out + "\n" + errOut, nil
 	}
-
-	startPayload := map[string]interface{}{
-		"Detach": false,
-		"Tty":    false,
-	}
-	buf2, _ := json.Marshal(startPayload)
-	startURL := fmt.Sprintf("http://unix/exec/%s/start", url.PathEscape(id))
-	req2, err := http.NewRequestWithContext(ctx, http.MethodPost, startURL, bytes.NewReader(buf2))
-	if err != nil {
-		return "", err
-	}
-	req2.Header.Set("Content-Type", "application/json")
-	resp2, err := m.dockerClient.Do(req2)
-	if err != nil {
-		return "", err
-	}
-	defer resp2.Body.Close()
-	outBytes, _ := io.ReadAll(io.LimitReader(resp2.Body, 4096))
-	return string(dockerDemux(outBytes)), nil
+	return out, nil
 }
 
 // NudgeActor runs a lightweight command inside the actor to ensure exec path is healthy.
@@ -420,53 +386,11 @@ func (m *Monitor) NudgeActor(ctx context.Context, cmd []string) error {
 }
 
 func (m *Monitor) NudgeContainer(ctx context.Context, container string, cmd []string) error {
-	containerID, err := m.resolveContainerID(ctx, container)
+	podName, containerName, err := m.resolveTarget(ctx, container)
 	if err != nil {
 		return err
 	}
-	createPayload := map[string]interface{}{
-		"AttachStdout": false,
-		"AttachStderr": false,
-		"Cmd":          cmd,
-		"Tty":          false,
-	}
-	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/%s/exec", url.PathEscape(containerID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	var out map[string]interface{}
-	_ = json.Unmarshal(body, &out)
-	id, _ := out["Id"].(string)
-	if id == "" {
-		return fmt.Errorf("no exec id from docker")
-	}
-	startPayload := map[string]interface{}{
-		"Detach": true,
-		"Tty":    false,
-	}
-	buf2, _ := json.Marshal(startPayload)
-	startURL := fmt.Sprintf("http://unix/exec/%s/start", url.PathEscape(id))
-	req2, err := http.NewRequestWithContext(ctx, http.MethodPost, startURL, bytes.NewReader(buf2))
-	if err != nil {
-		return err
-	}
-	req2.Header.Set("Content-Type", "application/json")
-	resp2, err := m.dockerClient.Do(req2)
-	if err != nil {
-		return err
-	}
-	defer resp2.Body.Close()
-	io.Copy(io.Discard, resp2.Body)
-	return nil
+	return m.kubeClient.exec(ctx, podName, containerName, cmd, nil, nil, nil, false)
 }
 
 func hostname() string {
@@ -484,278 +408,102 @@ func criticID() string {
 	return hostname()
 }
 
-func stackName() string {
-	if v := strings.TrimSpace(os.Getenv("SILEXA_STACK")); v != "" {
-		return v
-	}
-	return "silexa"
-}
-
-func normalizeTarget(name string) string {
+func normalizeContainerName(name string) string {
 	name = strings.TrimSpace(name)
-	if strings.HasPrefix(name, "silexa-actor-") {
-		return "actor-" + strings.TrimPrefix(name, "silexa-actor-")
+	if name == "" {
+		return ""
 	}
-	if strings.HasPrefix(name, "silexa-critic-") {
-		return "critic-" + strings.TrimPrefix(name, "silexa-critic-")
+	if name == "actor" || name == "critic" {
+		return name
+	}
+	if strings.HasPrefix(name, "actor-") || strings.HasPrefix(name, "silexa-actor-") {
+		return "actor"
+	}
+	if strings.HasPrefix(name, "critic-") || strings.HasPrefix(name, "silexa-critic-") {
+		return "critic"
 	}
 	return name
 }
 
-func serviceCandidates(name string) []string {
-	name = normalizeTarget(name)
-	if name == "" {
-		return nil
-	}
-	stack := stackName()
-	prefixed := stack + "_" + name
-	if strings.HasPrefix(name, stack+"_") {
-		return []string{name}
-	}
-	return []string{name, prefixed}
-}
-
-func (m *Monitor) resolveContainerID(ctx context.Context, name string) (string, error) {
-	id, _, err := m.inspectContainerByName(ctx, name)
-	if err != nil {
-		return "", err
-	}
-	if id != "" {
-		return id, nil
-	}
-	for _, svc := range serviceCandidates(name) {
-		id, err := m.serviceTaskContainerID(ctx, svc)
-		if err != nil {
-			return "", err
-		}
-		if id != "" {
-			return id, nil
-		}
-	}
-	return "", fmt.Errorf("container or service %s not found", name)
-}
-
-func (m *Monitor) inspectContainerByName(ctx context.Context, name string) (string, bool, error) {
+func dyadFromContainerName(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return "", false, nil
+		return ""
 	}
-	endpoint := fmt.Sprintf("http://unix/containers/%s/json", url.PathEscape(name))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return "", false, err
+	if strings.HasPrefix(name, "silexa-actor-") {
+		return strings.TrimPrefix(name, "silexa-actor-")
 	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", false, err
+	if strings.HasPrefix(name, "silexa-critic-") {
+		return strings.TrimPrefix(name, "silexa-critic-")
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return "", false, nil
+	if strings.HasPrefix(name, "actor-") {
+		return strings.TrimPrefix(name, "actor-")
 	}
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", false, fmt.Errorf("inspect container %s: %s", name, strings.TrimSpace(string(body)))
+	if strings.HasPrefix(name, "critic-") {
+		return strings.TrimPrefix(name, "critic-")
 	}
-	var payload struct {
-		ID    string `json:"Id"`
-		State struct {
-			Running bool `json:"Running"`
-		} `json:"State"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return "", false, err
-	}
-	return payload.ID, payload.State.Running, nil
+	return ""
 }
 
-func (m *Monitor) serviceTaskContainerID(ctx context.Context, service string) (string, error) {
-	filters := fmt.Sprintf(`{\"service\":{\"%s\":true},\"desired-state\":{\"running\":true}}`, service)
-	endpoint := fmt.Sprintf("http://unix/tasks?filters=%s", url.QueryEscape(filters))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+func (m *Monitor) resolveTarget(ctx context.Context, container string) (string, string, error) {
+	if m.kubeClient == nil {
+		return "", "", fmt.Errorf("kubernetes client unavailable")
+	}
+	containerName := normalizeContainerName(container)
+	if containerName == "" {
+		return "", "", fmt.Errorf("container name required")
+	}
+	if m.kubeClient.podName != "" {
+		return m.kubeClient.podName, containerName, nil
+	}
+	dyad := strings.TrimSpace(m.DyadName)
+	if dyad == "" {
+		dyad = dyadFromContainerName(container)
+	}
+	if dyad == "" {
+		return "", "", fmt.Errorf("dyad required to resolve pod for %s", container)
+	}
+	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("list service tasks %s: %s", service, strings.TrimSpace(string(body)))
-	}
-	var tasks []struct {
-		Status struct {
-			State           string `json:"State"`
-			ContainerStatus struct {
-				ContainerID string `json:"ContainerID"`
-			} `json:"ContainerStatus"`
-		} `json:"Status"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
-		return "", err
-	}
-	for _, task := range tasks {
-		if strings.TrimSpace(task.Status.State) != "running" {
-			continue
-		}
-		if id := strings.TrimSpace(task.Status.ContainerStatus.ContainerID); id != "" {
-			return id, nil
-		}
-	}
-	return "", nil
+	return podName, containerName, nil
 }
 
-func (m *Monitor) EnsureImage(ctx context.Context, image string) error {
-	// Pull image (no-op if already present, depending on daemon cache).
-	endpoint := fmt.Sprintf("http://unix/images/create?fromImage=%s", url.QueryEscape(image))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("pull image %s: %s", image, resp.Status)
-	}
-	return nil
-}
-
-func (m *Monitor) RemoveContainerIfExists(ctx context.Context, name string) error {
-	endpoint := fmt.Sprintf("http://unix/containers/%s?force=1", url.PathEscape(name))
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-	// 204/200 ok, 404 ok
-	if resp.StatusCode == http.StatusNotFound {
-		return nil
-	}
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("remove container %s: %s", name, resp.Status)
-	}
-	return nil
-}
-
-func (m *Monitor) RunSocatForwarder(ctx context.Context, name, networkContainer string, listenPort, targetPort int) error {
+func (m *Monitor) RunSocatForwarder(ctx context.Context, name, targetContainer string, listenPort, targetPort int) error {
 	if listenPort <= 0 || targetPort <= 0 {
 		return fmt.Errorf("invalid forward ports: listen=%d target=%d", listenPort, targetPort)
 	}
-	containerID, err := m.resolveContainerID(ctx, networkContainer)
+	podName, containerName, err := m.resolveTarget(ctx, targetContainer)
 	if err != nil {
 		return err
 	}
-	image := "alpine/socat"
-	if err := m.EnsureImage(ctx, image); err != nil {
-		return err
-	}
-	_ = m.RemoveContainerIfExists(ctx, name)
-
-	createPayload := map[string]interface{}{
-		"Image": image,
-		"Cmd": []string{
-			fmt.Sprintf("tcp-listen:%d,reuseaddr,fork", listenPort),
-			fmt.Sprintf("tcp:127.0.0.1:%d", targetPort),
-		},
-		"HostConfig": map[string]interface{}{
-			"NetworkMode": "container:" + containerID,
-			"RestartPolicy": map[string]interface{}{
-				"Name": "unless-stopped",
-			},
-		},
-	}
-	buf, _ := json.Marshal(createPayload)
-	createURL := fmt.Sprintf("http://unix/containers/create?name=%s", url.QueryEscape(name))
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, createURL, bytes.NewReader(buf))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.dockerClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("create forwarder %s: %s: %s", name, resp.Status, string(body))
-	}
-	var out map[string]interface{}
-	_ = json.Unmarshal(body, &out)
-	id, _ := out["Id"].(string)
-	if id == "" {
-		return fmt.Errorf("create forwarder %s: missing id", name)
-	}
-
-	startURL := fmt.Sprintf("http://unix/containers/%s/start", url.PathEscape(id))
-	req2, err := http.NewRequestWithContext(ctx, http.MethodPost, startURL, nil)
-	if err != nil {
-		return err
-	}
-	resp2, err := m.dockerClient.Do(req2)
-	if err != nil {
-		return err
-	}
-	defer resp2.Body.Close()
-	io.Copy(io.Discard, resp2.Body)
-	if resp2.StatusCode >= 300 {
-		return fmt.Errorf("start forwarder %s: %s", name, resp2.Status)
-	}
-	return nil
+	cmd := fmt.Sprintf(
+		"nohup socat tcp-listen:%d,reuseaddr,fork tcp:127.0.0.1:%d >/tmp/%s.log 2>&1 & disown || true",
+		listenPort,
+		targetPort,
+		name,
+	)
+	return m.kubeClient.exec(ctx, podName, containerName, []string{"bash", "-lc", cmd}, nil, nil, nil, false)
 }
 
 func (m *Monitor) fetchActorLogs(ctx context.Context, since time.Time, tail int, timestamps bool) (string, time.Time, error) {
-	containerID, err := m.resolveContainerID(ctx, m.ActorContainer)
+	podName, containerName, err := m.resolveTarget(ctx, m.ActorContainer)
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	endpoint := fmt.Sprintf(
-		"http://unix/containers/%s/logs?stdout=1&stderr=1&since=%d&tail=%d&timestamps=%d",
-		url.PathEscape(containerID),
-		since.Unix(),
-		tail,
-		boolToInt(timestamps),
-	)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	text, err := m.kubeClient.logs(ctx, podName, containerName, since, tail, timestamps)
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	resp, err := m.httpClient.Do(req)
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	text := string(dockerDemux(data))
 	var last time.Time
 	if timestamps {
-		last = lastDockerLogTimestamp(text)
+		last = lastLogTimestamp(text)
 	}
 	return text, last, nil
 }
 
-func boolToInt(v bool) int {
-	if v {
-		return 1
-	}
-	return 0
-}
-
-func lastDockerLogTimestamp(text string) time.Time {
+func lastLogTimestamp(text string) time.Time {
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	for i := len(lines) - 1; i >= 0; i-- {
 		line := strings.TrimSpace(lines[i])
@@ -771,33 +519,6 @@ func lastDockerLogTimestamp(text string) time.Time {
 		}
 	}
 	return time.Time{}
-}
-
-// dockerDemux strips the Docker log multiplexing header (when container TTY=false).
-// If the byte stream isn't in multiplexed format, it returns the input unchanged.
-func dockerDemux(in []byte) []byte {
-	if len(in) < 8 {
-		return in
-	}
-	// Heuristic: docker multiplex header has 1-byte stream type then 3x 0x00 bytes.
-	if in[1] != 0 || in[2] != 0 || in[3] != 0 {
-		return in
-	}
-
-	var out bytes.Buffer
-	for len(in) >= 8 {
-		frameLen := int(binary.BigEndian.Uint32(in[4:8]))
-		in = in[8:]
-		if frameLen <= 0 || frameLen > len(in) {
-			break
-		}
-		out.Write(in[:frameLen])
-		in = in[frameLen:]
-	}
-	if out.Len() == 0 {
-		return in
-	}
-	return out.Bytes()
 }
 
 func truncateLines(text string, maxLines int, maxBytes int) string {
