@@ -1,0 +1,438 @@
+version: "3.9"
+
+services:
+  telegram-bot:
+    image: silexa/telegram-bot:local
+    environment:
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_BOT_TOKEN_FILE: /run/secrets/telegram_bot_token
+      MANAGER_URL: http://manager:9090
+      CODEX_MONITOR_URL: http://codex-monitor:8086/status
+    secrets:
+      - telegram_bot_token
+    ports:
+      - "8081:8081"
+    deploy:
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  resource-broker:
+    image: silexa/resource-broker:local
+    environment:
+      TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DATA_DIR: /data
+    volumes:
+      - ./data/resource-broker:/data
+    ports:
+      - "9091:9091"
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  infra-broker:
+    image: silexa/infra-broker:local
+    environment:
+      TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DATA_DIR: /data
+    volumes:
+      - ./data/infra-broker:/data
+    ports:
+      - "9092:9092"
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  manager:
+    image: silexa/manager:local
+    environment:
+      TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DATA_DIR: /data
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./data/manager:/data
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  codex-monitor:
+    image: silexa/codex-monitor:local
+    environment:
+      MANAGER_URL: http://manager:9090
+      CODEX_ACCOUNTS_FILE: /configs/codex_accounts.json
+      CODEX_STATUS_POLL_INTERVAL: 2m
+      CODEX_COOLDOWN_THRESHOLD_PCT: 10
+      CODEX_PLAN_LIMIT_MINUTES: 300
+      CODEX_SPAWN_DYADS: 1
+      CODEX_SPAWN_SCRIPT: /workspace/silexa/bin/spawn-dyad.sh
+      CODEX_MONITOR_ADDR: :8086
+      SILEXA_STACK: ${SILEXA_STACK:-silexa}
+      SILEXA_NETWORK: ${SILEXA_NETWORK:-silexa_net}
+    volumes:
+      - ./:/workspace/silexa
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./configs:/configs:ro
+      - ./data/codex:/data/codex:ro
+      - codex_state_web:/codex/web/.codex:ro
+      - codex_state_research:/codex/research/.codex:ro
+      - codex_state_pm:/codex/pm/.codex:ro
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
+  router:
+    image: silexa/router:local
+    environment:
+      MANAGER_URL: http://manager:9090
+      ROUTER_RULES_FILE: /configs/router_rules.json
+      ROUTER_POLL_INTERVAL: 10s
+    volumes:
+      - ./configs:/configs:ro
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
+  actor-pm:
+    image: silexa/actor:local
+    working_dir: /workspace/apps
+    volumes:
+      - ./:/workspace/silexa
+      - ./apps:/workspace/apps
+      - codex_state_pm:/root/.codex
+    environment:
+      ROLE: program_manager
+      DYAD_NAME: pm
+      DYAD_MEMBER: actor
+      DEPARTMENT: ops
+      CODEX_MODEL: gpt-5.1-codex-max
+      CODEX_REASONING_EFFORT: low
+    command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
+    labels:
+      silexa.dyad: pm
+      silexa.department: ops
+      silexa.role: program_manager
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  critic-pm:
+    image: silexa/critic:local
+    environment:
+      CRITIC_ID: critic-pm
+      ACTOR_CONTAINER: actor-pm
+      MANAGER_URL: http://manager:9090
+      DYAD_NAME: pm
+      DYAD_MEMBER: critic
+      ROLE: program_manager
+      DEPARTMENT: ops
+      PROGRAM_MANAGER: "1"
+      PROGRAM_CONFIG_DIR: /configs/programs/releaseparty
+      PM_MAX_NEW_PER_TICK: "2"
+      PM_MAX_OPEN_PER_DYAD: "5"
+      PM_MIN_OPEN_PER_DYAD: "1"
+      PM_MAX_OPEN_GLOBAL: "25"
+      TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SSH_TARGET: ${SSH_TARGET:-}
+      SSH_TARGET_FILE: /configs/ssh_target
+      CODEX_MODEL: gpt-5.1-codex-max
+      CODEX_REASONING_EFFORT: xhigh
+      SILEXA_STACK: ${SILEXA_STACK:-silexa}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_pm:/root/.codex
+      - ./configs:/configs:ro
+    user: "0:0"
+    labels:
+      silexa.dyad: pm
+      silexa.department: ops
+      silexa.role: program_manager
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+
+  coder-agent:
+    image: silexa/coder-agent:local
+    working_dir: /workspace/apps
+    volumes:
+      - ./apps:/workspace/apps
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      HOST_UID: ${HOST_UID:-1000}
+      HOST_GID: ${HOST_GID:-1000}
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsSL", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 2G
+
+  actor-web:
+    image: silexa/actor:local
+    working_dir: /workspace/apps
+    volumes:
+      - ./:/workspace/silexa
+      - ./apps:/workspace/apps
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_web:/root/.codex
+    environment:
+      ROLE: webdev
+      DYAD_NAME: web
+      DYAD_MEMBER: actor
+      DEPARTMENT: web
+      CODEX_MODEL: gpt-5.1-codex-max
+      CODEX_REASONING_EFFORT: high
+    command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
+    labels:
+      silexa.dyad: web
+      silexa.department: web
+      silexa.role: webdev
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  critic-web:
+    image: silexa/critic:local
+    environment:
+      CRITIC_ID: critic-web
+      ACTOR_CONTAINER: actor-web
+      MANAGER_URL: http://manager:9090
+      DYAD_NAME: web
+      DYAD_MEMBER: critic
+      ROLE: critic
+      DEPARTMENT: web
+      TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SSH_TARGET: ${SSH_TARGET:-}
+      SSH_TARGET_FILE: /configs/ssh_target
+      CODEX_MODEL: gpt-5.1-codex-max
+      CODEX_REASONING_EFFORT: high
+      SILEXA_STACK: ${SILEXA_STACK:-silexa}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_web:/root/.codex
+      - ./configs:/configs:ro
+    user: "0:0"
+    labels:
+      silexa.dyad: web
+      silexa.department: web
+      silexa.role: webdev
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+
+  actor-research:
+    image: silexa/actor:local
+    working_dir: /workspace/apps
+    volumes:
+      - ./:/workspace/silexa
+      - ./apps:/workspace/apps
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_research:/root/.codex
+    environment:
+      ROLE: research
+      DYAD_NAME: research
+      DYAD_MEMBER: actor
+      DEPARTMENT: research
+      CODEX_MODEL: gpt-5.1-codex-max
+      CODEX_REASONING_EFFORT: xhigh
+    command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
+    labels:
+      silexa.dyad: research
+      silexa.department: research
+      silexa.role: research
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+
+  critic-research:
+    image: silexa/critic:local
+    environment:
+      CRITIC_ID: critic-research
+      ACTOR_CONTAINER: actor-research
+      MANAGER_URL: http://manager:9090
+      DYAD_NAME: research
+      DYAD_MEMBER: critic
+      ROLE: critic
+      DEPARTMENT: research
+      TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      SSH_TARGET: ${SSH_TARGET:-}
+      SSH_TARGET_FILE: /configs/ssh_target
+      CODEX_MODEL: gpt-5.1-codex-max
+      CODEX_REASONING_EFFORT: high
+      SILEXA_STACK: ${SILEXA_STACK:-silexa}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - codex_state_research:/root/.codex
+      - ./configs:/configs:ro
+    user: "0:0"
+    labels:
+      silexa.dyad: research
+      silexa.department: research
+      silexa.role: research
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.75"
+          memory: 512M
+
+  mcp-gateway:
+    image: silexa/mcp-gateway:local
+    environment:
+      GH_TOKEN_FILE: /run/secrets/gh_token
+      STRIPE_API_KEY_FILE: /run/secrets/stripe_api_key
+    ports:
+      - "8088:8088"
+    volumes:
+      - ./data/mcp-gateway:/catalog
+      - /var/run/docker.sock:/var/run/docker.sock
+    secrets:
+      - gh_token
+      - stripe_api_key
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  dashboard:
+    image: silexa/dashboard:local
+    environment:
+      MANAGER_URL: http://manager:9090
+      BIN_DIR: /workspace/silexa/bin
+      ADDR: :8087
+      SILEXA_STACK: ${SILEXA_STACK:-silexa}
+      SILEXA_NETWORK: ${SILEXA_NETWORK:-silexa_net}
+    working_dir: /workspace/silexa
+    volumes:
+      - ./:/workspace/silexa
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8087:8087"
+    deploy:
+      placement:
+        constraints:
+          - node.labels.silexa.storage == local
+      restart_policy:
+        condition: any
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+secrets:
+  telegram_bot_token:
+    external: true
+  gh_token:
+    external: true
+  stripe_api_key:
+    external: true
+
+volumes:
+  codex_state_web:
+  codex_state_research:
+  codex_state_pm:
+
+networks:
+  default:
+    external: true
+    name: ${SILEXA_NETWORK:-silexa_net}
