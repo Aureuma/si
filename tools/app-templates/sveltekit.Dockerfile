@@ -6,8 +6,18 @@ ARG APP_PATH
 
 COPY . .
 RUN corepack enable
-RUN pnpm install --frozen-lockfile=false
-RUN pnpm -C "${APP_PATH}" run build
+RUN if [ -f "${APP_PATH}/package-lock.json" ]; then \
+      cd "${APP_PATH}" && npm ci; \
+    elif [ -f "/repo/pnpm-lock.yaml" ]; then \
+      pnpm install --frozen-lockfile; \
+    else \
+      pnpm install --frozen-lockfile=false; \
+    fi
+RUN if [ -f "${APP_PATH}/package-lock.json" ]; then \
+      cd "${APP_PATH}" && npm run build; \
+    else \
+      pnpm -C "${APP_PATH}" run build; \
+    fi
 
 FROM node:22-bookworm AS runner
 WORKDIR /app
