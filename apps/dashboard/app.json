@@ -1,0 +1,29 @@
+{
+  "name": "dashboard",
+  "kind": "internal",
+  "stack": {
+    "web": "sveltekit",
+    "backend": "",
+    "language": "typescript",
+    "ui": "shadcn-svelte",
+    "runtime": "node"
+  },
+  "paths": {
+    "web": ".",
+    "backend": "",
+    "infra": "infra",
+    "content": ""
+  },
+  "modules": [],
+  "owners": {
+    "department": "",
+    "dyad": ""
+  },
+  "data": {
+    "db": "none",
+    "orm": "none",
+    "cache": ""
+  },
+  "integrations": [],
+  "status": "active"
+}
