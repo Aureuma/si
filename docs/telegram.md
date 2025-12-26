@@ -75,5 +75,5 @@ curl -X POST http://localhost:9090/human-tasks \
 - Telegram bot health endpoint: `http://localhost:8081/healthz`.
 
 ### Rotation & RBAC
-- Rotate the token with `bin/rotate-telegram-token.sh <new_token>`; restart only the bot service (`docker compose up -d telegram-bot`).
+- Rotate the token with `bin/rotate-telegram-token.sh <new_token>`; the script updates the Swarm secret and restarts the bot service.
 - Only the Telegram bot mounts the token secret. No containers other than actors/critics/coder-agent receive the docker socket.

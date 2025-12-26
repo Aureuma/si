@@ -1,12 +1,12 @@
 ## Per-app Postgres pattern
 
-Each web app gets its own Postgres container and data dir. Containers are isolated but share the `silexa_default` network so dyads can talk to them directly without host exposure.
+Each web app gets its own Postgres service and data dir. Services are isolated but share the `silexa_net` network so dyads can talk to them directly without host exposure.
 
 ### Quickstart
 Create a database for app `foo`:
 
 ```bash
-bin/app-db.sh create foo           # creates container silexa-db-foo + data dir data/db-foo
+bin/app-db.sh create foo           # creates service silexa_db-foo + data dir data/db-foo
 bin/app-db.sh creds foo            # show connection info
 ```
 
@@ -19,15 +19,15 @@ bin/app-db.sh create foo 55432     # binds localhost:55432 -> container 5432
 List or drop:
 
 ```bash
-bin/app-db.sh list                 # show running db containers
-bin/app-db.sh drop foo             # stop container and remove data dir
-bin/app-db.sh drop foo --keep-data # stop container but keep data
+bin/app-db.sh list                 # show running db services
+bin/app-db.sh drop foo             # stop service and remove data dir
+bin/app-db.sh drop foo --keep-data # stop service but keep data
 ```
 
 ### Credentials and RBAC
 - Credentials are written to `secrets/db-<app>.env` (git-ignored). Contents include `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_HOST`, `DB_PORT`, and `DATABASE_URL`.
-- Containers are named `silexa-db-<app>` on network `silexa_default`; connect from dyads using `DB_HOST=silexa-db-<app>`.
-- No docker.sock or bot tokens are exposed to these DB containers.
+- Services are named `silexa_db-<app>` on network `silexa_net`; connect from dyads using `DB_HOST=silexa_db-<app>`.
+- No docker.sock or bot tokens are exposed to these DB services.
 
 ### Best practices
 - One database per app keeps blast radius small and enables per-app lifecycle (backup/restore/rotate).

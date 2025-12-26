@@ -42,11 +42,11 @@ This program is the roadmap for “host web app repos and serve them”, includi
 - deployment flow + secrets strategy
 - one end-to-end hosted app
 
-## Service (docker-compose)
+## Service (Swarm)
 
 Service names:
-- `actor-pm` (`silexa-actor-pm`)
-- `critic-pm` (`silexa-critic-pm`)
+- `actor-pm` (Swarm service: `silexa_actor-pm`)
+- `critic-pm` (Swarm service: `silexa_critic-pm`)
 
 Environment variables:
 - `PROGRAM_MANAGER=1` enables program reconciliation mode.

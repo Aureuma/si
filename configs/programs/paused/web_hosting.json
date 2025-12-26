@@ -6,7 +6,7 @@
     {
       "key": "web_hosting.preflight.login_web",
       "title": "Preflight: Codex login for web dyad",
-      "description": "Ensure `silexa-actor-web` is authenticated so the web dyad can execute program tasks. This beam is idempotent: it will immediately complete if already logged in.",
+      "description": "Ensure `actor-web` is authenticated so the web dyad can execute program tasks. This beam is idempotent: it will immediately complete if already logged in.",
       "kind": "beam.codex_login",
       "priority": "high",
       "route_hint": "pool:web"
@@ -14,7 +14,7 @@
     {
       "key": "web_hosting.preflight.login_infra",
       "title": "Preflight: Codex login for infra dyad",
-      "description": "Ensure `silexa-actor-infra` is authenticated so infra tasks can run. This beam is idempotent: it will immediately complete if already logged in.",
+      "description": "Ensure `actor-infra` is authenticated so infra tasks can run. This beam is idempotent: it will immediately complete if already logged in.",
       "kind": "beam.codex_login",
       "priority": "high",
       "route_hint": "pool:infra"

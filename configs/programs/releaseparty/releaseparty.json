@@ -6,7 +6,7 @@
     {
       "key": "releaseparty.preflight.login_infra",
       "title": "Preflight: Codex login for infra dyad",
-      "description": "Ensure `silexa-actor-infra` is authenticated so infra/backend tasks can run.",
+      "description": "Ensure `actor-infra` is authenticated so infra/backend tasks can run.",
       "kind": "beam.codex_login",
       "priority": "high",
       "route_hint": "pool:infra"
@@ -14,7 +14,7 @@
     {
       "key": "releaseparty.preflight.login_web",
       "title": "Preflight: Codex login for web dyad",
-      "description": "Ensure `silexa-actor-web` is authenticated so frontend tasks can run.",
+      "description": "Ensure `actor-web` is authenticated so frontend tasks can run.",
       "kind": "beam.codex_login",
       "priority": "high",
       "route_hint": "pool:web"

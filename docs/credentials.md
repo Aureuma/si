@@ -2,20 +2,20 @@
 
 ## Telegram bot token
 - Stored in docker secret file: `secrets/telegram_bot_token` (raw token, no quotes). Ignored by git.
-- Rotation: `bin/rotate-telegram-token.sh <new_token>` (updates the secret file and restarts `telegram-bot` via compose).
+- Rotation: `bin/rotate-telegram-token.sh <new_token>` (updates the secret file and restarts `telegram-bot` via Swarm).
 - Chat ID is set via `.env` or env var `TELEGRAM_CHAT_ID`; rotate by editing `.env` and restarting services.
 
 ## General guidance
 - Keep secrets in `secrets/` files, not in git or images.
 - Use `*_FILE` env vars when possible (e.g., `TELEGRAM_BOT_TOKEN_FILE`).
 - Limit secret mounts to the services that need them (currently only `telegram-bot`).
-- For new secrets, add under `secrets:` in `docker-compose.yml` and mount into the specific service.
+- For new secrets, add under `secrets:` in `docker-stack.yml` and mount into the specific service.
 
 ## Actors/Critics
 - No secrets mounted by default. Prefer OAuth-style flows where possible (e.g., `codex login` via browser).
 
 Codex CLI credentials persistence:
-- **Compose dyads** persist per-dyad docker named volumes mounted at `/root/.codex`:
+- **Swarm dyads** persist per-dyad docker named volumes mounted at `/root/.codex`:
   - `codex_state_web` for `actor-web` + `critic-web`
   - `codex_state_research` for `actor-research` + `critic-research`
   OAuth does not need to be repeated after container recreation (within the same dyad volume).
@@ -31,5 +31,5 @@ Codex CLI credentials persistence:
 
 ## Rotation playbook
 1) Update secret file (e.g., `bin/rotate-telegram-token.sh <new_token>`).
-2) Restart affected service(s) with compose (e.g., `docker compose up -d telegram-bot`).
+2) Restart affected service(s) in Swarm (e.g., `docker service update --force silexa_telegram-bot`).
 3) Verify logs and, if applicable, send a test notification.

@@ -11,7 +11,7 @@ Host-level (Ubuntu LTS):
 
 Docker/agents:
 - Limit docker.sock access to actors/critics/coder only (already applied); keep mcp-gateway/dockerhub aware of PATs via secrets.
-- Resource caps: compose CPU/mem limits set for all services.
+- Resource caps: Swarm CPU/mem limits set for all services.
 - Secrets: mount from `secrets/` via docker secrets; avoid long-lived env vars.
 - Network: expose only required ports (manager 9090, brokers 9091/9092, Telegram 8081, MCP 8088). Consider firewall allowlist.
 

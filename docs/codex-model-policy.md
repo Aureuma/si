@@ -38,6 +38,6 @@ Overrides:
 - `CODEX_ACTOR_EFFORT=...`
 - `CODEX_CRITIC_EFFORT=...`
 
-## Compose dyads
+## Swarm dyads
 
-`docker-compose.yml` sets `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per service (actor/critic).
+`docker-stack.yml` sets `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per service (actor/critic).

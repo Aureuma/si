@@ -1,4 +1,4 @@
-Telegram message sent for Codex login (silexa-actor-infra):
+Telegram message sent for Codex login (actor-infra):
 
 Codex login:
 
