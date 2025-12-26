@@ -104,6 +104,9 @@ type dyadRecord struct {
 	Dyad          string    `json:"dyad"`
 	Department    string    `json:"department,omitempty"`
 	Role          string    `json:"role,omitempty"`
+	Team          string    `json:"team,omitempty"`
+	Assignment    string    `json:"assignment,omitempty"`
+	Tags          []string  `json:"tags,omitempty"`
 	Actor         string    `json:"actor,omitempty"`
 	Critic        string    `json:"critic,omitempty"`
 	Status        string    `json:"status,omitempty"`
@@ -117,6 +120,9 @@ type dyadUpdate struct {
 	Dyad       string `json:"dyad"`
 	Department string `json:"department,omitempty"`
 	Role       string `json:"role,omitempty"`
+	Team       string `json:"team,omitempty"`
+	Assignment string `json:"assignment,omitempty"`
+	Tags       []string `json:"tags,omitempty"`
 	Actor      string `json:"actor,omitempty"`
 	Critic     string `json:"critic,omitempty"`
 	Status     string `json:"status,omitempty"`
@@ -128,6 +134,9 @@ type dyadSnapshot struct {
 	Dyad                  string    `json:"dyad"`
 	Department            string    `json:"department,omitempty"`
 	Role                  string    `json:"role,omitempty"`
+	Team                  string    `json:"team,omitempty"`
+	Assignment            string    `json:"assignment,omitempty"`
+	Tags                  []string  `json:"tags,omitempty"`
 	Actor                 string    `json:"actor,omitempty"`
 	Critic                string    `json:"critic,omitempty"`
 	Status                string    `json:"status,omitempty"`
@@ -341,6 +350,15 @@ func (s *store) upsertDyad(update dyadUpdate) dyadRecord {
 		if update.Role != "" {
 			s.dyads[i].Role = update.Role
 		}
+		if update.Team != "" {
+			s.dyads[i].Team = update.Team
+		}
+		if update.Assignment != "" {
+			s.dyads[i].Assignment = update.Assignment
+		}
+		if update.Tags != nil {
+			s.dyads[i].Tags = update.Tags
+		}
 		if update.Actor != "" {
 			s.dyads[i].Actor = update.Actor
 		}
@@ -366,6 +384,9 @@ func (s *store) upsertDyad(update dyadUpdate) dyadRecord {
 		UpdatedAt:  updatedAt,
 		Department: update.Department,
 		Role:       update.Role,
+		Team:       update.Team,
+		Assignment: update.Assignment,
+		Tags:       update.Tags,
 		Actor:      update.Actor,
 		Critic:     update.Critic,
 		Status:     update.Status,
@@ -1166,6 +1187,9 @@ func buildDyadSnapshots(list []dyadRecord) []dyadSnapshot {
 			Dyad:                rec.Dyad,
 			Department:          rec.Department,
 			Role:                rec.Role,
+			Team:                rec.Team,
+			Assignment:          rec.Assignment,
+			Tags:                rec.Tags,
 			Actor:               rec.Actor,
 			Critic:              rec.Critic,
 			Status:              rec.Status,
