@@ -10,13 +10,22 @@ NAME="$1"
 ROLE="${2:-generic}"
 DEPT="${3:-$ROLE}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NETWORK="silexa_default"
 MANAGER_URL="${MANAGER_URL:-http://manager:9090}"
 CODEX_ROOT="$ROOT_DIR/data/codex"
 TELEGRAM_NOTIFY_URL="${TELEGRAM_NOTIFY_URL:-http://telegram-bot:8081/notify}"
 CODEX_SHARED_ROOT="${CODEX_SHARED_ROOT:-$CODEX_ROOT/shared}"
 CODEX_PER_DYAD="${CODEX_PER_DYAD:-1}"
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.1-codex-max}"
+
+# shellcheck source=bin/swarm-lib.sh
+source "${ROOT_DIR}/bin/swarm-lib.sh"
+
+STACK="$(swarm_stack_name)"
+NETWORK="$(swarm_network_name)"
+ACTOR_NAME="actor-${NAME}"
+CRITIC_NAME="critic-${NAME}"
+ACTOR_SERVICE="${STACK}_${ACTOR_NAME}"
+CRITIC_SERVICE="${STACK}_${CRITIC_NAME}"
 
 if ! [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "invalid dyad name: $NAME (allowed: letters, numbers, _ and -)" >&2
@@ -81,14 +90,15 @@ fi
 
 require_registered_dyad
 
-# Ensure shared network exists
 if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
-  docker network create "$NETWORK" >/dev/null
+  echo "missing swarm network: $NETWORK (run bin/swarm-init.sh && bin/swarm-deploy.sh)" >&2
+  exit 1
 fi
 
-# Start actor
-if docker ps -a --format '{{.Names}}' | grep -q "^silexa-actor-${NAME}$"; then
-  echo "actor silexa-actor-${NAME} already exists"
+# Start actor service
+if docker service inspect "$ACTOR_SERVICE" >/dev/null 2>&1; then
+  echo "actor service ${ACTOR_SERVICE} already exists"
+  docker service update --replicas 1 "$ACTOR_SERVICE" >/dev/null 2>&1 || true
 else
   if [[ "$CODEX_PER_DYAD" == "1" ]]; then
     CODEX_ACTOR_DIR="$CODEX_ROOT/$NAME/actor"
@@ -96,30 +106,36 @@ else
     CODEX_ACTOR_DIR="$CODEX_SHARED_ROOT/actor"
   fi
   mkdir -p "$CODEX_ACTOR_DIR"
-  docker run -d --name "silexa-actor-${NAME}" \
+  docker service create \
+    --name "$ACTOR_SERVICE" \
     --network "$NETWORK" \
-    --restart unless-stopped \
-    --workdir /workspace/silexa \
-    -v "$ROOT_DIR:/workspace/silexa" \
-    -v "$ROOT_DIR/apps:/workspace/apps" \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$CODEX_ACTOR_DIR:/root/.codex" \
-    -e ROLE="$ROLE" \
-    -e DEPARTMENT="$DEPT" \
-    -e DYAD_NAME="$NAME" \
-    -e DYAD_MEMBER="actor" \
-    -e CODEX_INIT_FORCE="1" \
-    -e CODEX_MODEL="$CODEX_MODEL" \
-    -e CODEX_REASONING_EFFORT="$ACTOR_EFFORT" \
-    --label "silexa.dyad=${NAME}" \
-    --label "silexa.department=${DEPT}" \
-    --label "silexa.role=${ROLE}" \
-    silexa/actor:local tail -f /dev/null
+    --constraint node.labels.silexa.storage==local \
+    --limit-cpu "1.0" \
+    --limit-memory "1G" \
+    --label "com.docker.stack.namespace=${STACK}" \
+    --container-label "silexa.dyad=${NAME}" \
+    --container-label "silexa.department=${DEPT}" \
+    --container-label "silexa.role=${ROLE}" \
+    --workdir /workspace/apps \
+    --mount "type=bind,src=${ROOT_DIR},dst=/workspace/silexa" \
+    --mount "type=bind,src=${ROOT_DIR}/apps,dst=/workspace/apps" \
+    --mount "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock" \
+    --mount "type=bind,src=${CODEX_ACTOR_DIR},dst=/root/.codex" \
+    --env ROLE="$ROLE" \
+    --env DEPARTMENT="$DEPT" \
+    --env DYAD_NAME="$NAME" \
+    --env DYAD_MEMBER="actor" \
+    --env CODEX_INIT_FORCE="1" \
+    --env CODEX_MODEL="$CODEX_MODEL" \
+    --env CODEX_REASONING_EFFORT="$ACTOR_EFFORT" \
+    silexa/actor:local \
+    bash -lc "npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null" >/dev/null
 fi
 
-# Start critic
-if docker ps -a --format '{{.Names}}' | grep -q "^silexa-critic-${NAME}$"; then
-  echo "critic silexa-critic-${NAME} already exists"
+# Start critic service
+if docker service inspect "$CRITIC_SERVICE" >/dev/null 2>&1; then
+  echo "critic service ${CRITIC_SERVICE} already exists"
+  docker service update --replicas 1 "$CRITIC_SERVICE" >/dev/null 2>&1 || true
 else
   if [[ "$CODEX_PER_DYAD" == "1" ]]; then
     CODEX_CRITIC_DIR="$CODEX_ROOT/$NAME/critic"
@@ -127,34 +143,43 @@ else
     CODEX_CRITIC_DIR="$CODEX_SHARED_ROOT/critic"
   fi
   mkdir -p "$CODEX_CRITIC_DIR"
-  docker run -d --name "silexa-critic-${NAME}" \
+  docker service create \
+    --name "$CRITIC_SERVICE" \
     --network "$NETWORK" \
-    --restart unless-stopped \
+    --constraint node.labels.silexa.storage==local \
+    --limit-cpu "0.75" \
+    --limit-memory "512M" \
+    --label "com.docker.stack.namespace=${STACK}" \
+    --container-label "silexa.dyad=${NAME}" \
+    --container-label "silexa.department=${DEPT}" \
+    --container-label "silexa.role=${ROLE}" \
     --user 0:0 \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    -v "$CODEX_CRITIC_DIR:/root/.codex" \
-    -e CRITIC_ID="silexa-critic-${NAME}" \
-    -e ACTOR_CONTAINER="silexa-actor-${NAME}" \
-    -e MANAGER_URL="$MANAGER_URL" \
-    -e CODEX_WORKDIR="/workspace/silexa" \
-    -e TELEGRAM_NOTIFY_URL="$TELEGRAM_NOTIFY_URL" \
-    -e TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}" \
-    -e SSH_TARGET="${SSH_TARGET:-}" \
-    -e DEPARTMENT="$DEPT" \
-    -e ROLE="$ROLE" \
-    -e DYAD_NAME="$NAME" \
-    -e DYAD_MEMBER="critic" \
-    -e CODEX_INIT_FORCE="1" \
-    -e CODEX_MODEL="$CODEX_MODEL" \
-    -e CODEX_REASONING_EFFORT="$CRITIC_EFFORT" \
-    --label "silexa.dyad=${NAME}" \
-    --label "silexa.department=${DEPT}" \
-    --label "silexa.role=${ROLE}" \
-    silexa/critic:local
+    --mount "type=bind,src=/var/run/docker.sock,dst=/var/run/docker.sock" \
+    --mount "type=bind,src=${CODEX_CRITIC_DIR},dst=/root/.codex" \
+    --mount "type=bind,src=${ROOT_DIR}/configs,dst=/configs,readonly" \
+    --env CRITIC_ID="$CRITIC_NAME" \
+    --env ACTOR_CONTAINER="$ACTOR_NAME" \
+    --env MANAGER_URL="$MANAGER_URL" \
+    --env CODEX_WORKDIR="/workspace/silexa" \
+    --env TELEGRAM_NOTIFY_URL="$TELEGRAM_NOTIFY_URL" \
+    --env TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-}" \
+    --env SSH_TARGET="${SSH_TARGET:-}" \
+    --env DEPARTMENT="$DEPT" \
+    --env ROLE="$ROLE" \
+    --env DYAD_NAME="$NAME" \
+    --env DYAD_MEMBER="critic" \
+    --env CODEX_INIT_FORCE="1" \
+    --env CODEX_MODEL="$CODEX_MODEL" \
+    --env CODEX_REASONING_EFFORT="$CRITIC_EFFORT" \
+    --env SILEXA_STACK="$STACK" \
+    silexa/critic:local >/dev/null
 fi
 
-echo "dyad ${NAME} ready: actor=silexa-actor-${NAME}, critic=silexa-critic-${NAME}"
+echo "dyad ${NAME} ready: actor=${ACTOR_NAME}, critic=${CRITIC_NAME}"
 
 # Bootstrap codex presence.
-docker exec -u 0 "silexa-actor-${NAME}" bash -lc 'command -v codex >/dev/null 2>&1 || npm i -g @openai/codex >/dev/null 2>&1 || true' || true
-docker exec -u 0 "silexa-actor-${NAME}" bash -lc 'test -x /workspace/silexa/bin/codex-init.sh && /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true' || true
+ACTOR_ID=$("${ROOT_DIR}/bin/docker-target.sh" "$ACTOR_NAME" || true)
+if [[ -n "$ACTOR_ID" ]]; then
+  docker exec -u 0 "$ACTOR_ID" bash -lc 'command -v codex >/dev/null 2>&1 || npm i -g @openai/codex >/dev/null 2>&1 || true' || true
+  docker exec -u 0 "$ACTOR_ID" bash -lc 'test -x /workspace/silexa/bin/codex-init.sh && /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true' || true
+fi

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Create/drop/list per-app Postgres containers with isolated data directories.
-# Each app gets its own container + data dir under ./data/db-<app>.
+# Create/drop/list per-app Postgres services with isolated data directories.
+# Each app gets its own service + data dir under ./data/db-<app>.
 #
 # Usage:
 #   app-db.sh create <app> [host_port]
@@ -13,12 +13,16 @@ set -euo pipefail
 # Env:
 #   DOCKER_CMD (default: docker)
 #   POSTGRES_IMAGE (default: postgres:16-alpine)
-#   POSTGRES_NETWORK (default: silexa_default)
+#   POSTGRES_NETWORK (default: from SILEXA_NETWORK or silexa_net)
 
 DOCKER=${DOCKER_CMD:-docker}
 IMAGE=${POSTGRES_IMAGE:-postgres:16-alpine}
-NETWORK=${POSTGRES_NETWORK:-silexa_default}
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=bin/swarm-lib.sh
+source "${ROOT_DIR}/bin/swarm-lib.sh"
+
+NETWORK=${POSTGRES_NETWORK:-$(swarm_network_name)}
+STACK="$(swarm_stack_name)"
 
 usage() {
   echo "usage: app-db.sh <create|drop|list|creds> ..." >&2
@@ -45,7 +49,7 @@ case "${1:-}" in
     APP="${2:-}"
     HOST_PORT="${3:-}"
     require_arg "app" "$APP"
-    CONTAINER="silexa-db-${APP}"
+    SERVICE="${STACK}_db-${APP}"
     DATA_DIR="${ROOT_DIR}/data/db-${APP}"
     mkdir -p "$DATA_DIR"
     PASS_FILE="${ROOT_DIR}/secrets/db-${APP}.env"
@@ -57,26 +61,32 @@ case "${1:-}" in
       echo "DB_USER=${APP}" > "$PASS_FILE"
       echo "DB_PASSWORD=${DB_PASSWORD}" >> "$PASS_FILE"
       echo "DB_NAME=${APP}" >> "$PASS_FILE"
-      echo "DB_HOST=${CONTAINER}" >> "$PASS_FILE"
+      echo "DB_HOST=${SERVICE}" >> "$PASS_FILE"
       echo "DB_PORT=5432" >> "$PASS_FILE"
-      echo "DATABASE_URL=postgres://${APP}:${DB_PASSWORD}@${CONTAINER}:5432/${APP}?sslmode=disable" >> "$PASS_FILE"
+      echo "DATABASE_URL=postgres://${APP}:${DB_PASSWORD}@${SERVICE}:5432/${APP}?sslmode=disable" >> "$PASS_FILE"
       echo "wrote credentials to ${PASS_FILE}"
     fi
     PUBLISH_ARG=()
     if [[ -n "$HOST_PORT" ]]; then
-      PUBLISH_ARG=(-p "${HOST_PORT}:5432")
+      PUBLISH_ARG=(--publish "${HOST_PORT}:5432")
     fi
-    echo "Starting Postgres for app=${APP} container=${CONTAINER}"
-    $DOCKER run -d --restart unless-stopped \
-      --name "$CONTAINER" \
+    if $DOCKER service inspect "$SERVICE" >/dev/null 2>&1; then
+      echo "Service ${SERVICE} already exists"
+      exit 0
+    fi
+    echo "Starting Postgres for app=${APP} service=${SERVICE}"
+    $DOCKER service create \
+      --name "$SERVICE" \
       --network "$NETWORK" \
+      --constraint node.labels.silexa.storage==local \
+      --label "com.docker.stack.namespace=${STACK}" \
+      --mount "type=bind,src=${DATA_DIR},dst=/var/lib/postgresql/data" \
       -e POSTGRES_USER="${DB_USER:-$APP}" \
       -e POSTGRES_PASSWORD="${DB_PASSWORD}" \
       -e POSTGRES_DB="${DB_NAME:-$APP}" \
-      -v "${DATA_DIR}:/var/lib/postgresql/data" \
       "${PUBLISH_ARG[@]}" \
       "$IMAGE" >/dev/null
-    echo "Ready. Connect inside cluster: postgres://${DB_USER:-$APP}:${DB_PASSWORD}@${CONTAINER}:5432/${DB_NAME:-$APP}"
+    echo "Ready. Connect inside cluster: postgres://${DB_USER:-$APP}:${DB_PASSWORD}@${SERVICE}:5432/${DB_NAME:-$APP}"
     if [[ -n "$HOST_PORT" ]]; then
       echo "Host access: localhost:${HOST_PORT}"
     fi
@@ -88,12 +98,12 @@ case "${1:-}" in
     if [[ "${3:-}" == "--keep-data" ]]; then
       KEEP_DATA="true"
     fi
-    CONTAINER="silexa-db-${APP}"
-    if $DOCKER ps -a --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-      echo "Stopping ${CONTAINER}"
-      $DOCKER rm -f "$CONTAINER" >/dev/null
+    SERVICE="${STACK}_db-${APP}"
+    if $DOCKER service inspect "$SERVICE" >/dev/null 2>&1; then
+      echo "Stopping ${SERVICE}"
+      $DOCKER service rm "$SERVICE" >/dev/null
     else
-      echo "Container ${CONTAINER} not present"
+      echo "Service ${SERVICE} not present"
     fi
     DATA_DIR="${ROOT_DIR}/data/db-${APP}"
     if [[ "$KEEP_DATA" != "true" && -d "$DATA_DIR" ]]; then
@@ -104,7 +114,7 @@ case "${1:-}" in
     fi
     ;;
   list)
-    $DOCKER ps --filter "name=silexa-db-" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+    $DOCKER service ls --format 'table {{.Name}}\t{{.Replicas}}\t{{.Ports}}' | awk 'NR==1 || $1 ~ /_db-/'
     ;;
   creds)
     APP="${2:-}"

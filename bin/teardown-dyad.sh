@@ -7,9 +7,15 @@ if [[ $# -lt 1 ]]; then
 fi
 
 NAME="$1"
-ACTOR="silexa-actor-${NAME}"
-CRITIC="silexa-critic-${NAME}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=bin/swarm-lib.sh
+source "${ROOT_DIR}/bin/swarm-lib.sh"
 
-docker rm -f "$CRITIC" >/dev/null 2>&1 || true
-docker rm -f "$ACTOR" >/dev/null 2>&1 || true
-echo "dyad ${NAME} removed"
+STACK="$(swarm_stack_name)"
+ACTOR_SERVICE="${STACK}_actor-${NAME}"
+CRITIC_SERVICE="${STACK}_critic-${NAME}"
+
+for svc in "$CRITIC_SERVICE" "$ACTOR_SERVICE"; do
+  docker service rm "$svc" >/dev/null 2>&1 || true
+  echo "removed service ${svc}"
+done

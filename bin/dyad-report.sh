@@ -14,7 +14,8 @@ DYAD="$1"
 MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
 
 DATA=$(python3 - <<'PY' "$DYAD" "$MANAGER_URL"
-import json, sys, urllib.request, urllib.error, time
+import json, sys, urllib.request
+
 dyad = sys.argv[1]
 base = sys.argv[2].rstrip("/")
 
@@ -25,14 +26,16 @@ def fetch(path):
 beats = fetch("/beats")
 tasks = fetch("/dyad-tasks")
 
+actor_name = f"actor-{dyad}"
+critic_name = f"critic-{dyad}"
 last_actor = None
 last_critic = None
 critic_id = None
 for b in beats:
-    if b.get("actor") == f"silexa-actor-{dyad}":
+    if b.get("actor") == actor_name:
         last_actor = b.get("when")
         critic_id = b.get("critic")
-    if b.get("critic") == f"silexa-critic-{dyad}":
+    if b.get("critic") == critic_name:
         last_critic = b.get("when")
 
 dyad_tasks = [t for t in tasks if t.get("dyad") == dyad]
@@ -40,8 +43,8 @@ open_tasks = [t for t in dyad_tasks if t.get("status") != "done"]
 
 lines = []
 lines.append(f"Dyad report: {dyad}")
-lines.append(f"Actor: silexa-actor-{dyad}, last beat: {last_actor}")
-lines.append(f"Critic: silexa-critic-{dyad}, last beat: {last_critic}, id: {critic_id}")
+lines.append(f"Actor: {actor_name}, last beat: {last_actor}")
+lines.append(f"Critic: {critic_name}, last beat: {last_critic}, id: {critic_id}")
 if open_tasks:
     lines.append("Tasks:")
     for t in open_tasks:
