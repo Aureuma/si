@@ -68,6 +68,12 @@ services:
       TELEGRAM_NOTIFY_URL: http://telegram-bot:8081/notify
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       DATA_DIR: /data
+      DYAD_REQUIRE_ASSIGNMENT: "true"
+      DYAD_ALLOW_UNASSIGNED: "true"
+      DYAD_REQUIRE_REGISTERED: "true"
+      DYAD_ENFORCE_AVAILABLE: "true"
+      DYAD_MAX_OPEN_PER_DYAD: "10"
+      DYAD_ALLOW_POOL: "true"
     ports:
       - "9090:9090"
     volumes:
@@ -121,6 +127,10 @@ services:
       MANAGER_URL: http://manager:9090
       ROUTER_RULES_FILE: /configs/router_rules.json
       ROUTER_POLL_INTERVAL: 10s
+      DYAD_REQUIRE_REGISTERED: "true"
+      DYAD_ENFORCE_AVAILABLE: "true"
+      DYAD_REQUIRE_ONLINE: "true"
+      DYAD_MAX_OPEN_PER_DYAD: "10"
     volumes:
       - ./configs:/configs:ro
     deploy:

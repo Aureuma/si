@@ -62,6 +62,20 @@ type accountsFile struct {
 	CooldownThresholdPct float64        `json:"cooldown_threshold_pct"`
 }
 
+type dyadSnapshot struct {
+	Dyad       string `json:"dyad"`
+	Department string `json:"department,omitempty"`
+	Available  bool   `json:"available"`
+	State      string `json:"state"`
+}
+
+type dyadPolicy struct {
+	RequireRegistered bool
+	RequireAvailable  bool
+	RequireOnline     bool
+	MaxOpenPerDyad    int
+}
+
 type usageStatus struct {
 	RemainingPct float64
 	SeenAt       time.Time
@@ -78,6 +92,12 @@ func main() {
 		thresholdPct = 10
 	}
 	rules := loadRules(logger, rulesPath)
+	policy := dyadPolicy{
+		RequireRegistered: boolEnv("DYAD_REQUIRE_REGISTERED", true),
+		RequireAvailable:  boolEnv("DYAD_ENFORCE_AVAILABLE", true),
+		RequireOnline:     boolEnv("DYAD_REQUIRE_ONLINE", true),
+		MaxOpenPerDyad:    intEnv("DYAD_MAX_OPEN_PER_DYAD", 10),
+	}
 
 	logger.Printf("routing via %s (poll=%s rules=%s)", managerURL, pollEvery, rulesPath)
 	tick := time.NewTicker(pollEvery)
@@ -99,11 +119,18 @@ func main() {
 			}
 		}
 
+		dyads, err := listDyads(managerURL)
+		if err != nil {
+			logger.Printf("list dyads error: %v", err)
+		}
+		dyadIndex := indexDyads(dyads)
+
 		tasks, err := listTasks(managerURL)
 		if err != nil {
 			logger.Printf("list tasks error: %v", err)
 			continue
 		}
+		openCounts := countOpenTasks(tasks)
 		for _, t := range tasks {
 			if t.Status != "todo" {
 				continue
@@ -118,7 +145,7 @@ func main() {
 			if target == "" {
 				continue
 			}
-			target = resolveTarget(target, accounts, usage, thresholdPct)
+			target = resolveTarget(target, accounts, usage, thresholdPct, dyadIndex, openCounts, policy)
 			if target == "" {
 				continue
 			}
@@ -183,6 +210,19 @@ func listTasks(managerURL string) ([]dyadTask, error) {
 	return tasks, nil
 }
 
+func listDyads(managerURL string) ([]dyadSnapshot, error) {
+	resp, err := http.Get(managerURL + "/dyads")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var dyads []dyadSnapshot
+	if err := json.NewDecoder(resp.Body).Decode(&dyads); err != nil {
+		return nil, err
+	}
+	return dyads, nil
+}
+
 func listMetrics(managerURL string) ([]metric, error) {
 	resp, err := http.Get(managerURL + "/metrics")
 	if err != nil {
@@ -197,6 +237,32 @@ func listMetrics(managerURL string) ([]metric, error) {
 		return nil, err
 	}
 	return metrics, nil
+}
+
+func indexDyads(list []dyadSnapshot) map[string]dyadSnapshot {
+	out := map[string]dyadSnapshot{}
+	for _, d := range list {
+		if strings.TrimSpace(d.Dyad) == "" {
+			continue
+		}
+		out[d.Dyad] = d
+	}
+	return out
+}
+
+func countOpenTasks(tasks []dyadTask) map[string]int {
+	out := map[string]int{}
+	for _, t := range tasks {
+		dyad := strings.TrimSpace(t.Dyad)
+		if dyad == "" {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(t.Status)) == "done" {
+			continue
+		}
+		out[dyad]++
+	}
+	return out
 }
 
 func updateTask(managerURL string, payload map[string]interface{}) error {
@@ -223,6 +289,32 @@ func (e *httpStatusError) Error() string { return e.Status }
 
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func boolEnv(key string, def bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return def
+	}
+}
+
+func intEnv(key string, def int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	if v, err := strconv.Atoi(raw); err == nil {
 		return v
 	}
 	return def
@@ -311,26 +403,34 @@ func filterEnabled(accounts []codexAccount) []codexAccount {
 	return out
 }
 
-func resolveTarget(target string, accounts []codexAccount, usage map[string]usageStatus, thresholdPct float64) string {
+func resolveTarget(target string, accounts []codexAccount, usage map[string]usageStatus, thresholdPct float64, dyads map[string]dyadSnapshot, openCounts map[string]int, policy dyadPolicy) string {
 	target = strings.TrimSpace(target)
 	if target == "" {
 		return ""
 	}
 	if strings.HasPrefix(strings.ToLower(target), "pool:") {
 		dept := strings.TrimSpace(strings.TrimPrefix(target, "pool:"))
-		return pickDyadFromPool(dept, accounts, usage, thresholdPct)
+		return pickDyadFromPool(dept, accounts, usage, thresholdPct, dyads, openCounts, policy)
 	}
 	if acct, ok := findAccountByDyad(accounts, target); ok {
-		if isCooling(usage[target], thresholdPct) {
-			alt := pickDyadFromPool(acct.Department, accounts, usage, thresholdPct)
+		if !isDyadEligible(target, dyads, openCounts, policy) || isCooling(usage[target], thresholdPct) {
+			alt := pickDyadFromPool(acct.Department, accounts, usage, thresholdPct, dyads, openCounts, policy)
 			if alt != "" && alt != target {
 				return alt
 			}
+			return ""
 		}
 		return target
 	}
 	if deptMatch(target, accounts) {
-		return pickDyadFromPool(target, accounts, usage, thresholdPct)
+		return pickDyadFromPool(target, accounts, usage, thresholdPct, dyads, openCounts, policy)
+	}
+	if !isDyadEligible(target, dyads, openCounts, policy) {
+		dept := deptForDyad(target, dyads, accounts)
+		if dept != "" {
+			return pickDyadFromPool(dept, accounts, usage, thresholdPct, dyads, openCounts, policy)
+		}
+		return ""
 	}
 	return target
 }
@@ -344,6 +444,16 @@ func findAccountByDyad(accounts []codexAccount, dyad string) (codexAccount, bool
 	return codexAccount{}, false
 }
 
+func deptForDyad(dyad string, dyads map[string]dyadSnapshot, accounts []codexAccount) string {
+	if rec, ok := dyads[dyad]; ok && strings.TrimSpace(rec.Department) != "" {
+		return strings.TrimSpace(rec.Department)
+	}
+	if acct, ok := findAccountByDyad(accounts, dyad); ok {
+		return strings.TrimSpace(acct.Department)
+	}
+	return ""
+}
+
 func deptMatch(dept string, accounts []codexAccount) bool {
 	for _, acct := range accounts {
 		if strings.TrimSpace(acct.Department) == dept {
@@ -353,7 +463,31 @@ func deptMatch(dept string, accounts []codexAccount) bool {
 	return false
 }
 
-func pickDyadFromPool(dept string, accounts []codexAccount, usage map[string]usageStatus, thresholdPct float64) string {
+func isDyadEligible(dyad string, dyads map[string]dyadSnapshot, openCounts map[string]int, policy dyadPolicy) bool {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return false
+	}
+	rec, ok := dyads[dyad]
+	if !ok {
+		if policy.RequireRegistered || policy.RequireAvailable || policy.RequireOnline {
+			return false
+		}
+	} else {
+		if policy.RequireAvailable && !rec.Available {
+			return false
+		}
+		if policy.RequireOnline && rec.State != "" && rec.State != "online" {
+			return false
+		}
+	}
+	if policy.MaxOpenPerDyad > 0 && openCounts[dyad] >= policy.MaxOpenPerDyad {
+		return false
+	}
+	return true
+}
+
+func pickDyadFromPool(dept string, accounts []codexAccount, usage map[string]usageStatus, thresholdPct float64, dyads map[string]dyadSnapshot, openCounts map[string]int, policy dyadPolicy) string {
 	dept = strings.TrimSpace(dept)
 	if dept == "" {
 		return ""
@@ -363,10 +497,16 @@ func pickDyadFromPool(dept string, accounts []codexAccount, usage map[string]usa
 		if strings.TrimSpace(acct.Department) != dept {
 			continue
 		}
+		if !isDyadEligible(acct.Dyad, dyads, openCounts, policy) {
+			continue
+		}
 		candidates = append(candidates, acct)
 	}
 	if len(candidates) == 0 {
-		return dept
+		if isDyadEligible(dept, dyads, openCounts, policy) {
+			return dept
+		}
+		return ""
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		ai := usage[candidates[i].Dyad]
