@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # Copy the Codex MCP config into an actor/critic container's home.
-# Usage: apply-codex-mcp-config.sh <container-or-service>
+# Usage: apply-codex-mcp-config.sh <dyad> [member]
 # The config is taken from configs/codex-mcp-config.toml and copied to ~/.config/codex/config.toml
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: apply-codex-mcp-config.sh <container-or-service>" >&2
+  echo "usage: apply-codex-mcp-config.sh <dyad> [member]" >&2
   exit 1
 fi
 
@@ -17,13 +17,16 @@ if [[ ! -f "$CFG" ]]; then
   exit 1
 fi
 
-TARGET="$1"
+DYAD="$1"
+MEMBER="${2:-actor}"
 DEST_DIR="/root/.config/codex"
 DEST_FILE="${DEST_DIR}/config.toml"
 
-CONTAINER_ID=$("${ROOT}/bin/docker-target.sh" "$TARGET")
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT}/bin/k8s-lib.sh"
+POD=$("${ROOT}/bin/k8s-dyad-pod.sh" "$DYAD")
 
-docker exec "$CONTAINER_ID" mkdir -p "$DEST_DIR"
-docker cp "$CFG" "${CONTAINER_ID}:${DEST_FILE}"
+kube exec "$POD" -c "$MEMBER" -- mkdir -p "$DEST_DIR"
+kube cp "$CFG" "${POD}:${DEST_FILE}" -c "$MEMBER"
 
-echo "Applied Codex MCP config to ${TARGET}:${DEST_FILE}"
+echo "Applied Codex MCP config to ${DYAD}/${MEMBER}:${DEST_FILE}"

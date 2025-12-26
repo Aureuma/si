@@ -1,2 +1,28 @@
+namespace: silexa
+
 resources:
+  - namespace.yaml
+  - rbac.yaml
   - manager.yaml
+  - telegram-bot.yaml
+  - resource-broker.yaml
+  - infra-broker.yaml
+  - codex-monitor.yaml
+  - router.yaml
+  - program-manager.yaml
+  - mcp-gateway.yaml
+  - dashboard.yaml
+
+configMapGenerator:
+  - name: silexa-configs
+    files:
+      - codex_accounts.json=../../../configs/codex_accounts.json
+      - router_rules.json=../../../configs/router_rules.json
+      - codex-mcp-config.toml=../../../configs/codex-mcp-config.toml
+      - dyad_roster.json=../../../configs/dyad_roster.json
+      - ssh_target=../../../configs/ssh_target
+      - programs-web_hosting.json=../../../configs/programs/paused/web_hosting.json
+      - programs-releaseparty.json=../../../configs/programs/releaseparty/releaseparty.json
+
+generatorOptions:
+  disableNameSuffixHash: true

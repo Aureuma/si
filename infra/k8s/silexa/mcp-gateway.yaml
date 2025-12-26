@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mcp-gateway-catalog
+  labels:
+    app: silexa-mcp-gateway
+    silexa.component: mcp-gateway
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: silexa-mcp-gateway
+  labels:
+    app: silexa-mcp-gateway
+    silexa.component: mcp-gateway
+spec:
+  selector:
+    app: silexa-mcp-gateway
+  ports:
+    - name: http
+      port: 8088
+      targetPort: 8088
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: silexa-mcp-gateway
+  labels:
+    app: silexa-mcp-gateway
+    silexa.component: mcp-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: silexa-mcp-gateway
+  template:
+    metadata:
+      labels:
+        app: silexa-mcp-gateway
+        silexa.component: mcp-gateway
+    spec:
+      containers:
+        - name: mcp-gateway
+          image: silexa/mcp-gateway:local
+          ports:
+            - containerPort: 8088
+          env:
+            - name: GH_TOKEN_FILE
+              value: /run/secrets/gh_token
+            - name: STRIPE_API_KEY_FILE
+              value: /run/secrets/stripe_api_key
+          volumeMounts:
+            - name: catalog
+              mountPath: /catalog
+            - name: mcp-secrets
+              mountPath: /run/secrets
+              readOnly: true
+      volumes:
+        - name: catalog
+          persistentVolumeClaim:
+            claimName: mcp-gateway-catalog
+        - name: mcp-secrets
+          secret:
+            secretName: mcp-gateway-secrets
+            optional: true

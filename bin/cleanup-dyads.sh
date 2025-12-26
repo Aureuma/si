@@ -2,17 +2,13 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=bin/swarm-lib.sh
-source "${ROOT_DIR}/bin/swarm-lib.sh"
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
 
-STACK="$(swarm_stack_name)"
-
-# Remove dyad services stuck at 0/N replicas.
-stoplist=$(docker service ls --format '{{.Name}} {{.Replicas}}' | awk -v stack="$STACK" '$1 ~ "^" stack "_(actor|critic)-" && $2 ~ /^0\// {print $1}')
-if [[ -n "$stoplist" ]]; then
-  echo "$stoplist" | xargs docker service rm >/dev/null
-  echo "Removed stopped dyad services"
+failed=$(kube get pods -l app=silexa-dyad --field-selector=status.phase=Failed -o name || true)
+if [[ -n "$failed" ]]; then
+  echo "$failed" | xargs -n1 kube delete >/dev/null
+  echo "Removed failed dyad pods"
+else
+  echo "No failed dyad pods"
 fi
-
-# Prune dangling images (quietly)
-docker image prune -f >/dev/null && echo "Pruned dangling images"

@@ -2,6 +2,8 @@ apiVersion: v1
 kind: Service
 metadata:
   name: silexa-manager
+  labels:
+    silexa.component: manager
 spec:
   selector:
     app: silexa-manager
@@ -14,6 +16,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: silexa-manager
+  labels:
+    silexa.component: manager
 spec:
   replicas: 1
   selector:
@@ -23,6 +27,7 @@ spec:
     metadata:
       labels:
         app: silexa-manager
+        silexa.component: manager
     spec:
       containers:
         - name: manager
@@ -59,6 +64,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: silexa-manager-worker
+  labels:
+    silexa.component: manager-worker
 spec:
   replicas: 1
   selector:
@@ -68,6 +75,7 @@ spec:
     metadata:
       labels:
         app: silexa-manager-worker
+        silexa.component: manager-worker
     spec:
       containers:
         - name: manager-worker

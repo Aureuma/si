@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Lightweight, non-invasive security audit.
-# Reports SSH hardening, firewall, updates, docker socket perms, and key services.
+# Reports SSH hardening, firewall, updates, and key services.
 
 report() { echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $*"; }
 
@@ -58,14 +58,6 @@ check_fail2ban() {
   fi
 }
 
-check_docker_sock() {
-  if [[ -S /var/run/docker.sock ]]; then
-    perms=$(stat -c '%A %G' /var/run/docker.sock)
-    report "docker.sock: ${perms}"
-  else
-    report "docker.sock: not present"
-  fi
-}
 
 check_sudoers() {
   admins=$(getent group sudo 2>/dev/null | cut -d: -f4)
@@ -85,6 +77,5 @@ check_firewall
 check_updates
 check_unattended
 check_fail2ban
-check_docker_sock
 check_sudoers
 check_auditd

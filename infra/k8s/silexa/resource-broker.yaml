@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: resource-broker-data
+  labels:
+    app: silexa-resource-broker
+    silexa.component: resource-broker
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: silexa-resource-broker
+  labels:
+    app: silexa-resource-broker
+    silexa.component: resource-broker
+spec:
+  selector:
+    app: silexa-resource-broker
+  ports:
+    - name: http
+      port: 9091
+      targetPort: 9091
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: silexa-resource-broker
+  labels:
+    app: silexa-resource-broker
+    silexa.component: resource-broker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: silexa-resource-broker
+  template:
+    metadata:
+      labels:
+        app: silexa-resource-broker
+        silexa.component: resource-broker
+    spec:
+      containers:
+        - name: resource-broker
+          image: silexa/resource-broker:local
+          ports:
+            - containerPort: 9091
+          env:
+            - name: TELEGRAM_NOTIFY_URL
+              value: http://silexa-telegram-bot:8081/notify
+            - name: TELEGRAM_CHAT_ID
+              value: ""
+            - name: DATA_DIR
+              value: /data
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: resource-broker-data

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-go-service
+  labels:
+    app: sample-go-service
+    silexa.app: sample-go-service
+spec:
+  selector:
+    app: sample-go-service
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
