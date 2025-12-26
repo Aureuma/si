@@ -4,7 +4,7 @@ This folder houses the test harness for Silexa. Scripts are grouped by scope and
 
 ## Layout
 - smoke/: fast checks for stack health and core services
-- integration/: API-level checks for dyad workflows and app management
+- integration/: API-level checks for dyad workflows, roster parsing, and app management
 - go/: module unit tests
 - visual/: Playwright-based visual regression checks
 - run.sh: scope runner (smoke/go/integration/visual)

@@ -11,6 +11,7 @@ Spawn dyads with `bin/spawn-dyad.sh <name> [role] [department]`; labels/env set:
 - Env: `ROLE`, `DEPARTMENT`
 
 ## Control helpers
+- Dyad roster: `bin/dyad-roster-apply.sh` (sync roster to manager), `bin/dyad-roster-status.sh` (status table). See `docs/dyad-roster.md`.
 - `bin/dyadctl.sh create <name> [role] [dept]` — spawn and log feedback
 - `bin/dyadctl.sh destroy <name> [reason]` — teardown and log feedback
 - `bin/dyadctl.sh list` — list running dyads
