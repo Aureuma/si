@@ -170,6 +170,15 @@ type storeMeta struct {
 	DyadDigestTelegramMessageID int `json:"dyad_digest_telegram_message_id,omitempty"`
 }
 
+type dyadPolicy struct {
+	RequireAssignment bool
+	AllowUnassigned   bool
+	RequireRegistered bool
+	EnforceAvailable  bool
+	MaxOpenPerDyad    int
+	AllowPool         bool
+}
+
 func (s *store) add(h heartbeat) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -324,12 +333,53 @@ func (s *store) listDyadTasks() []dyadTask {
 	return out
 }
 
+func (s *store) getDyadTask(id int) (dyadTask, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range s.dyadTasks {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return dyadTask{}, false
+}
+
+func (s *store) countOpenDyadTasks(dyad string, excludeID int) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	count := 0
+	for _, t := range s.dyadTasks {
+		if excludeID > 0 && t.ID == excludeID {
+			continue
+		}
+		if t.Dyad != dyad {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(t.Status)) == "done" {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
 func (s *store) listDyads() []dyadRecord {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]dyadRecord, len(s.dyads))
 	copy(out, s.dyads)
 	return out
+}
+
+func (s *store) getDyad(name string) (dyadRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, d := range s.dyads {
+		if d.Dyad == name {
+			return d, true
+		}
+	}
+	return dyadRecord{}, false
 }
 
 func (s *store) upsertDyad(update dyadUpdate) dyadRecord {
@@ -746,6 +796,14 @@ func (n *notifier) upsertMessageHTML(message string, messageID int) (int, bool) 
 func main() {
 	logger := log.New(os.Stdout, "manager ", log.LstdFlags|log.LUTC)
 	dataDir := envOr("DATA_DIR", "/data")
+	policy := dyadPolicy{
+		RequireAssignment: boolEnv("DYAD_REQUIRE_ASSIGNMENT", true),
+		AllowUnassigned:   boolEnv("DYAD_ALLOW_UNASSIGNED", true),
+		RequireRegistered: boolEnv("DYAD_REQUIRE_REGISTERED", true),
+		EnforceAvailable:  boolEnv("DYAD_ENFORCE_AVAILABLE", true),
+		MaxOpenPerDyad:    intEnv("DYAD_MAX_OPEN_PER_DYAD", 10),
+		AllowPool:         boolEnv("DYAD_ALLOW_POOL", true),
+	}
 	st := newStore(dataDir, logger)
 	notif := buildNotifier(logger)
 	startDyadDigest(st, notif, logger)
@@ -956,6 +1014,15 @@ func main() {
 				http.Error(w, "invalid payload", http.StatusBadRequest)
 				return
 			}
+			dt.Dyad = strings.TrimSpace(dt.Dyad)
+			dt.Status = normalizeStatus(dt.Status)
+			if dt.Status == "" {
+				dt.Status = "todo"
+			}
+			if code, msg := validateDyadPolicy(policy, st, dt.Dyad, dt.Status, "", 0); code != 0 {
+				http.Error(w, msg, code)
+				return
+			}
 			created := st.addDyadTask(dt)
 			if shouldNotifyDyadTask(created) {
 				if messageID, _ := notif.upsertDyadTaskMessage(created); messageID > 0 && messageID != created.TelegramMessageID {
@@ -978,6 +1045,24 @@ func main() {
 		var dt dyadTask
 		if err := json.NewDecoder(r.Body).Decode(&dt); err != nil || dt.ID == 0 {
 			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		existing, ok := st.getDyadTask(dt.ID)
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		newDyad := strings.TrimSpace(existing.Dyad)
+		if strings.TrimSpace(dt.Dyad) != "" {
+			newDyad = strings.TrimSpace(dt.Dyad)
+		}
+		newStatus := normalizeStatus(existing.Status)
+		if strings.TrimSpace(dt.Status) != "" {
+			newStatus = normalizeStatus(dt.Status)
+			dt.Status = newStatus
+		}
+		if code, msg := validateDyadPolicy(policy, st, newDyad, newStatus, existing.Dyad, existing.ID); code != 0 {
+			http.Error(w, msg, code)
 			return
 		}
 		updated, ok := st.updateDyadTask(dt)
@@ -1007,6 +1092,20 @@ func main() {
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload.ID <= 0 || payload.Critic == "" {
 			http.Error(w, "invalid payload", http.StatusBadRequest)
+			return
+		}
+		payload.Dyad = strings.TrimSpace(payload.Dyad)
+		if payload.Dyad == "" || isPoolDyad(payload.Dyad) {
+			http.Error(w, "dyad required", http.StatusBadRequest)
+			return
+		}
+		existing, ok := st.getDyadTask(payload.ID)
+		if !ok {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		if code, msg := validateDyadPolicy(policy, st, payload.Dyad, "in_progress", existing.Dyad, existing.ID); code != 0 {
+			http.Error(w, msg, code)
 			return
 		}
 		updated, code, ok := st.claimDyadTask(payload.ID, payload.Dyad, payload.Critic)
@@ -1210,8 +1309,78 @@ func buildDyadSnapshots(list []dyadRecord) []dyadSnapshot {
 	return out
 }
 
+func normalizeStatus(status string) string {
+	return strings.ToLower(strings.TrimSpace(status))
+}
+
+func isPoolDyad(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	return strings.HasPrefix(name, "pool:")
+}
+
+func validateDyadPolicy(policy dyadPolicy, st *store, dyad string, status string, existingDyad string, taskID int) (int, string) {
+	dyad = strings.TrimSpace(dyad)
+	existingDyad = strings.TrimSpace(existingDyad)
+	status = normalizeStatus(status)
+	if status == "" {
+		status = "todo"
+	}
+	if dyad == "" || isPoolDyad(dyad) {
+		if isPoolDyad(dyad) && !policy.AllowPool {
+			return http.StatusBadRequest, "pool dyads not allowed"
+		}
+		if policy.RequireAssignment && !policy.AllowUnassigned && dyad == "" {
+			return http.StatusConflict, "dyad assignment required"
+		}
+		if policy.RequireAssignment && status != "todo" {
+			return http.StatusConflict, "dyad assignment required for non-todo status"
+		}
+		return 0, ""
+	}
+
+	rec, ok := st.getDyad(dyad)
+	if (policy.RequireRegistered || policy.EnforceAvailable) && !ok {
+		return http.StatusConflict, "dyad not registered"
+	}
+	if policy.EnforceAvailable && ok && !rec.Available {
+		return http.StatusConflict, "dyad unavailable"
+	}
+	if policy.MaxOpenPerDyad > 0 && dyad != existingDyad {
+		if st.countOpenDyadTasks(dyad, taskID) >= policy.MaxOpenPerDyad {
+			return http.StatusConflict, "dyad at capacity"
+		}
+	}
+	return 0, ""
+}
+
 func envOr(key, def string) string {
 	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func boolEnv(key string, def bool) bool {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		return def
+	}
+}
+
+func intEnv(key string, def int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return def
+	}
+	if v, err := strconv.Atoi(raw); err == nil {
 		return v
 	}
 	return def
