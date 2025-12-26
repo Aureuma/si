@@ -33,4 +33,4 @@ fi
   -v /var/run/docker.sock:/var/run/docker.sock \
   -e GH_TOKEN="$GH_TOKEN" \
   -e STRIPE_API_KEY="$STRIPE_API_KEY" \
-  silexa/mcp-gateway:local catalog show docker-mcp --format yaml) | head -n 20 || true
+  silexa/mcp-gateway:local catalog show docker-mcp --format yaml 2>/dev/null) | head -n 20 || true
