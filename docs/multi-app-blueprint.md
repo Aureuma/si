@@ -106,6 +106,10 @@ See `docs/web-stack.md` for the default library list.
 - JS workspace via `pnpm-workspace.yaml` (apps, packages, tools).
 - Shared packages live under `packages/`; avoid copy/paste across apps.
 
+### Deployment
+- Each app deploys as its own Swarm stack: `bin/app-deploy.sh <app>`.
+- See `docs/app-deploy.md` for build/secrets/port overrides.
+
 ### Lifecycle references
 - `docs/app-lifecycle.md` for intake → build → operate.
 - `docs/web_app_flow.md` for dyad responsibilities and QA.

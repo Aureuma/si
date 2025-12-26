@@ -20,3 +20,4 @@ If a legacy app uses a different layout, capture it in `app.json` under `paths`.
 - Create a new app: `bin/start-app-project.sh <app>`
 - Adopt an existing app: `bin/adopt-app.sh <app> --web-path <path> [--backend-path <path>]`
 - List app metadata: `bin/list-apps.sh`
+- Build + deploy: `bin/app-build.sh <app>` then `bin/app-deploy.sh <app>`
