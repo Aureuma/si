@@ -2,13 +2,17 @@
 set -e
 
 if [ -f /run/secrets/gh_token ]; then
-  GH_TOKEN=$(cat /run/secrets/gh_token)
-  export GH_TOKEN
+  GH_TOKEN=$(cat /run/secrets/gh_token | tr -d '\r\n')
+  if [ -n "$GH_TOKEN" ] && [ "$GH_TOKEN" != "unset" ] && [ "$GH_TOKEN" != "UNSET" ]; then
+    export GH_TOKEN
+  fi
 fi
 
 if [ -f /run/secrets/stripe_api_key ]; then
-  STRIPE_API_KEY=$(cat /run/secrets/stripe_api_key)
-  export STRIPE_API_KEY
+  STRIPE_API_KEY=$(cat /run/secrets/stripe_api_key | tr -d '\r\n')
+  if [ -n "$STRIPE_API_KEY" ] && [ "$STRIPE_API_KEY" != "unset" ] && [ "$STRIPE_API_KEY" != "UNSET" ]; then
+    export STRIPE_API_KEY
+  fi
 fi
 
 mkdir -p /catalog

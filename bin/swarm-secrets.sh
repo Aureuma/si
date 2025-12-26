@@ -47,15 +47,21 @@ create_secret() {
     return 0
   fi
 
-  if [[ -f "$file" ]]; then
+  if [[ -s "$file" ]]; then
     docker secret create "$name" "$file" >/dev/null
     echo "created secret ${name}"
     return 0
   fi
 
-  echo "warning: ${file} missing; creating empty secret ${name}" >&2
-  printf '' | docker secret create "$name" - >/dev/null
-  echo "created secret ${name} (empty)"
+  if docker secret inspect "$name" >/dev/null 2>&1; then
+    echo "secret ${name} exists (no file; leaving as-is)"
+    return 0
+  fi
+
+  echo "warning: ${file} missing; creating placeholder secret ${name}" >&2
+  printf 'unset' | docker secret create "$name" - >/dev/null
+  echo "created secret ${name} (placeholder)"
+  return 0
 }
 
 for secret in "${secrets[@]}"; do
