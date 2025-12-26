@@ -1,0 +1,29 @@
+{
+  "name": "ReleaseParty",
+  "kind": "saas",
+  "stack": {
+    "web": "sveltekit",
+    "backend": "go",
+    "language": "typescript",
+    "ui": "shadcn-svelte",
+    "runtime": "node"
+  },
+  "paths": {
+    "web": "frontend",
+    "backend": "backend",
+    "infra": "infra",
+    "content": ""
+  },
+  "modules": [],
+  "owners": {
+    "department": "",
+    "dyad": ""
+  },
+  "data": {
+    "db": "sqlite",
+    "orm": "none",
+    "cache": ""
+  },
+  "integrations": [],
+  "status": "active"
+}
