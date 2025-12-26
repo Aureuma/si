@@ -20,8 +20,12 @@ Optional env overrides:
 ## Remove
 - `bin/app-remove.sh <app>`
 
+## Health
+- `bin/app-status.sh <app>` checks service replicas for the app stack.
+
 ## Notes
 - The SvelteKit template expects adapter-node output under `build/` and runs `node build`.
+- The default template prefers pnpm; it will fall back to npm if an app has `package-lock.json`.
 - For apps with custom Dockerfiles, place them at `apps/<app>/web/Dockerfile` or `apps/<app>/backend/Dockerfile` and `bin/app-build.sh` will use them.
 - App stacks use the shared network `${SILEXA_NETWORK:-silexa_net}`.
 

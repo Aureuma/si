@@ -109,6 +109,8 @@ See `docs/web-stack.md` for the default library list.
 ### Deployment
 - Each app deploys as its own Swarm stack: `bin/app-deploy.sh <app>`.
 - See `docs/app-deploy.md` for build/secrets/port overrides.
+ - Validate app structure: `bin/app-audit.sh` (use `--strict` to enforce warnings).
+ - Check live stack health: `bin/app-status.sh <app>`.
 
 ### Lifecycle references
 - `docs/app-lifecycle.md` for intake → build → operate.

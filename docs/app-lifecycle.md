@@ -29,6 +29,7 @@ A disciplined, budget-aware pipeline for taking an idea to production with dyads
 
 ### 5) Test & QA
 - Automated: unit/integration, visual (`qa-visual.sh`), accessibility (axe via Playwright), smoke (`bin/qa-smoke.sh` pattern).
+- Management: `bin/app-audit.sh` to validate app metadata/stack before deploy.
 - Manual: if needed, create `/task` for human UX pass.
 - Blockers: log via manager `/feedback` and `/human-tasks`; escalate with `bin/escalate-blockers.sh`.
 

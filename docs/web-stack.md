@@ -18,6 +18,7 @@ This is the default stack for new web apps in Silexa.
 - **Forms**: sveltekit-superforms (optional)
 - **Icons**: lucide-svelte
 - **HTTP**: fetch + SvelteKit endpoints
+ - **Package manager**: pnpm (workspace-friendly; required for shared packages)
 
 ## Shared packages
 - `@silexa/ui` for UI components
