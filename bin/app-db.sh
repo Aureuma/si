@@ -108,7 +108,9 @@ case "${1:-}" in
     DATA_DIR="${ROOT_DIR}/data/db-${APP}"
     if [[ "$KEEP_DATA" != "true" && -d "$DATA_DIR" ]]; then
       echo "Removing data dir ${DATA_DIR}"
-      rm -rf "$DATA_DIR"
+      if ! rm -rf "$DATA_DIR" 2>/dev/null; then
+        sudo rm -rf "$DATA_DIR"
+      fi
     else
       echo "Data kept at ${DATA_DIR}"
     fi
