@@ -2,72 +2,60 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: app-status.sh <app-name> [--stack-name <name>]" >&2
+  echo "usage: app-status.sh <app-name>" >&2
   exit 1
 fi
 
 APP="$1"
-shift
 
-STACK_NAME=""
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --stack-name)
-      shift
-      STACK_NAME="${1:-}"
-      ;;
-    *)
-      echo "unknown flag: $1" >&2
-      exit 1
-      ;;
-  esac
-  shift || true
-done
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
 
-if [[ -z "$STACK_NAME" ]]; then
-  STACK_NAME="silexa-app-${APP}"
-fi
-
-if ! docker stack services "$STACK_NAME" >/dev/null 2>&1; then
-  echo "stack ${STACK_NAME} not found" >&2
-  exit 1
-fi
+LABEL="silexa.app=${APP}"
 
 TMP_FILE=$(mktemp)
 cleanup() { rm -f "$TMP_FILE"; }
 trap cleanup EXIT
 
-docker stack services "$STACK_NAME" --format '{{.Name}} {{.Replicas}}' > "$TMP_FILE"
+if ! kube get deploy,statefulset -l "$LABEL" -o json >"$TMP_FILE" 2>/dev/null; then
+  echo "no k8s resources found for app=${APP} (label ${LABEL})" >&2
+  exit 1
+fi
 
-python3 - <<'PY' "$TMP_FILE" "$STACK_NAME"
+python3 - <<'PY' "$TMP_FILE" "$APP"
+import json
 import sys
 
 path = sys.argv[1]
-stack = sys.argv[2]
-lines = [line.strip() for line in open(path, "r", encoding="utf-8") if line.strip()]
-if not lines:
-    print(f"no services found in {stack}")
+app = sys.argv[2]
+
+data = json.load(open(path, "r", encoding="utf-8"))
+items = data.get("items", [])
+if not items:
+    print(f"no deployments/statefulsets found for app {app}")
     sys.exit(1)
 
 bad = []
-for line in lines:
-    parts = line.split(None, 1)
-    if len(parts) != 2:
-        bad.append((line, "unparsed"))
-        continue
-    name, replicas = parts
-    if "/" not in replicas:
-        bad.append((name, replicas))
-        continue
-    cur, desired = replicas.split("/", 1)
-    if cur != desired:
-        bad.append((name, replicas))
+for item in items:
+    kind = item.get("kind", "")
+    name = item.get("metadata", {}).get("name", "")
+    spec = item.get("spec", {})
+    status = item.get("status", {})
+    desired = spec.get("replicas", 1)
+    ready = status.get("readyReplicas", 0)
+    if desired is None:
+        desired = 1
+    if ready is None:
+        ready = 0
+    if ready != desired:
+        bad.append((kind, name, ready, desired))
 
 if bad:
-    print(f"{stack} replicas not ready:")
-    for name, replicas in bad:
-        print(f"- {name}: {replicas}")
+    print(f"app {app} replicas not ready:")
+    for kind, name, ready, desired in bad:
+        print(f"- {kind} {name}: {ready}/{desired}")
     sys.exit(1)
 
-print(f"{stack} replicas healthy")
+print(f"app {app} replicas healthy")
 PY

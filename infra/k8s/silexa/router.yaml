@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: silexa-router
+  labels:
+    app: silexa-router
+    silexa.component: router
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: silexa-router
+  template:
+    metadata:
+      labels:
+        app: silexa-router
+        silexa.component: router
+    spec:
+      containers:
+        - name: router
+          image: silexa/router:local
+          env:
+            - name: MANAGER_URL
+              value: http://silexa-manager:9090
+            - name: ROUTER_RULES_FILE
+              value: /configs/router_rules.json
+            - name: ROUTER_POLL_INTERVAL
+              value: 10s
+            - name: DYAD_REQUIRE_REGISTERED
+              value: "true"
+            - name: DYAD_ENFORCE_AVAILABLE
+              value: "true"
+            - name: DYAD_REQUIRE_ONLINE
+              value: "true"
+            - name: DYAD_MAX_OPEN_PER_DYAD
+              value: "10"
+          volumeMounts:
+            - name: configs
+              mountPath: /configs
+              readOnly: true
+      volumes:
+        - name: configs
+          configMap:
+            name: silexa-configs
+            items:
+              - key: router_rules.json
+                path: router_rules.json

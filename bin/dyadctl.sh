@@ -18,10 +18,8 @@ if [[ $# -lt 1 ]]; then usage; exit 1; fi
 CMD="$1"; shift || true
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
-# shellcheck source=bin/swarm-lib.sh
-source "${ROOT_DIR}/bin/swarm-lib.sh"
-
-STACK="$(swarm_stack_name)"
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
 
 post_feedback() {
   local severity="$1" message="$2" source="$3" context="$4"
@@ -53,8 +51,7 @@ case "$CMD" in
     ;;
   status)
     NAME="${1:-}"; if [[ -z "$NAME" ]]; then usage; exit 1; fi
-    docker service ps "${STACK}_actor-${NAME}" --format 'table {{.Name}}\t{{.Node}}\t{{.CurrentState}}' || true
-    docker service ps "${STACK}_critic-${NAME}" --format 'table {{.Name}}\t{{.Node}}\t{{.CurrentState}}' || true
+    kube get pods -l "silexa.dyad=${NAME}" -o wide || true
     ;;
   *) usage; exit 1;;
 esac

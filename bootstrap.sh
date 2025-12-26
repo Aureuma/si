@@ -5,6 +5,7 @@ SILEXA_ROOT="/opt/silexa"
 GIT_NAME="SHi-ON"
 GIT_EMAIL="shawn@azdam.com"
 NODE_MAJOR=22
+K8S_MINOR=${K8S_MINOR:-1.30}
 APT_UPDATED=0
 
 require_root() {
@@ -26,32 +27,37 @@ install_prereqs() {
   apt-get install -y ca-certificates curl gnupg lsb-release git software-properties-common
 }
 
-setup_docker_repo() {
+setup_k8s_repo() {
   install -m 0755 -d /etc/apt/keyrings
-  if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
+  if [[ ! -f /etc/apt/keyrings/kubernetes-apt-keyring.gpg ]]; then
+    curl -fsSL "https://pkgs.k8s.io/core:/stable:/v${K8S_MINOR}/deb/Release.key" | gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
   fi
-  local codename
-  codename=$(lsb_release -cs)
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${codename} stable" > /etc/apt/sources.list.d/docker.list
+  echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v${K8S_MINOR}/deb/ /" > /etc/apt/sources.list.d/kubernetes.list
 }
 
-install_docker() {
-  setup_docker_repo
+setup_helm_repo() {
+  install -m 0755 -d /etc/apt/keyrings
+  if [[ ! -f /etc/apt/keyrings/helm.gpg ]]; then
+    curl -fsSL https://baltocdn.com/helm/signing.asc | gpg --dearmor -o /etc/apt/keyrings/helm.gpg
+  fi
+  echo "deb [signed-by=/etc/apt/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" > /etc/apt/sources.list.d/helm-stable-debian.list
+}
+
+install_k8s_tools() {
+  setup_k8s_repo
   APT_UPDATED=0
   apt_update_once
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  systemctl enable docker containerd
-  systemctl restart docker || systemctl start docker
-  local target_user
-  target_user=${SUDO_USER:-$(logname)}
-  if id "${target_user}" &>/dev/null; then
-    if ! id -nG "${target_user}" | grep -q "docker"; then
-      usermod -aG docker "${target_user}"
-      echo "Added ${target_user} to docker group (log out/in to take effect)."
-    fi
+  apt-get install -y kubectl
+  if [[ "${INSTALL_KUBEADM:-0}" == "1" ]]; then
+    apt-get install -y kubelet kubeadm
   fi
+}
+
+install_helm() {
+  setup_helm_repo
+  APT_UPDATED=0
+  apt_update_once
+  apt-get install -y helm
 }
 
 setup_node() {
@@ -84,12 +90,13 @@ init_repo() {
 main() {
   require_root
   install_prereqs
-  install_docker
+  install_k8s_tools
+  install_helm
   setup_node
   setup_git_config
   init_directories
   init_repo
-  echo "Silexa bootstrap complete. You may need to re-login for docker group membership."
+  echo "Silexa bootstrap complete. Kubernetes tooling installed."
 }
 
 main "$@"

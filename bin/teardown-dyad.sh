@@ -2,20 +2,24 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: teardown-dyad.sh <name>" >&2
+  echo "usage: teardown-dyad.sh <name> [--purge]" >&2
   exit 1
 fi
 
 NAME="$1"
+PURGE="false"
+if [[ "${2:-}" == "--purge" ]]; then
+  PURGE="true"
+fi
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# shellcheck source=bin/swarm-lib.sh
-source "${ROOT_DIR}/bin/swarm-lib.sh"
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
 
-STACK="$(swarm_stack_name)"
-ACTOR_SERVICE="${STACK}_actor-${NAME}"
-CRITIC_SERVICE="${STACK}_critic-${NAME}"
+kube delete deployment "silexa-dyad-${NAME}" >/dev/null 2>&1 || true
+echo "deleted deployment silexa-dyad-${NAME}"
 
-for svc in "$CRITIC_SERVICE" "$ACTOR_SERVICE"; do
-  docker service rm "$svc" >/dev/null 2>&1 || true
-  echo "removed service ${svc}"
-done
+if [[ "$PURGE" == "true" ]]; then
+  kube delete pvc "codex-${NAME}" >/dev/null 2>&1 || true
+  echo "deleted pvc codex-${NAME}"
+fi

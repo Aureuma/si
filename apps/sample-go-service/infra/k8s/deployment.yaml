@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-go-service
+  labels:
+    app: sample-go-service
+    silexa.app: sample-go-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sample-go-service
+  template:
+    metadata:
+      labels:
+        app: sample-go-service
+        silexa.app: sample-go-service
+    spec:
+      containers:
+        - name: app
+          image: silexa/sample-go-service:local
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 2
+            periodSeconds: 5

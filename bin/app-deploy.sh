@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "usage: app-deploy.sh <app-name> [--no-build] [--stack-name <name>]" >&2
+  echo "usage: app-deploy.sh <app-name> [--no-build] [--kustomize <path>]" >&2
   exit 1
 fi
 
@@ -10,13 +10,13 @@ APP="$1"
 shift
 
 NO_BUILD=false
-STACK_NAME=""
+KUSTOMIZE_DIR=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-build) NO_BUILD=true ;;
-    --stack-name)
+    --kustomize)
       shift
-      STACK_NAME="${1:-}"
+      KUSTOMIZE_DIR="${1:-}"
       ;;
     *)
       echo "unknown flag: $1" >&2
@@ -27,16 +27,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-APP_DIR="${ROOT_DIR}/apps/${APP}"
-STACK_FILE="${APP_DIR}/infra/stack.yml"
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
 
-if [[ ! -f "$STACK_FILE" ]]; then
-  echo "missing ${STACK_FILE}; generate with bin/start-app-project.sh or create manually" >&2
-  exit 1
+APP_DIR="${ROOT_DIR}/apps/${APP}"
+if [[ -z "$KUSTOMIZE_DIR" ]]; then
+  KUSTOMIZE_DIR="${APP_DIR}/infra/k8s"
 fi
 
-if [[ -z "$STACK_NAME" ]]; then
-  STACK_NAME="silexa-app-${APP}"
+if [[ ! -d "$KUSTOMIZE_DIR" ]]; then
+  echo "missing ${KUSTOMIZE_DIR}; create app k8s manifests first" >&2
+  exit 1
 fi
 
 if [[ "$NO_BUILD" != "true" ]]; then
@@ -47,15 +48,6 @@ if [[ -f "${ROOT_DIR}/secrets/app-${APP}.env" ]]; then
   "${ROOT_DIR}/bin/app-secrets.sh" "$APP" || true
 fi
 
-export SILEXA_NETWORK="${SILEXA_NETWORK:-silexa_net}"
+kube apply -k "$KUSTOMIZE_DIR"
 
-"${ROOT_DIR}/bin/swarm-init.sh"
-
-if ! docker network inspect "$SILEXA_NETWORK" >/dev/null 2>&1; then
-  echo "network ${SILEXA_NETWORK} not found; run bin/swarm-init.sh first" >&2
-  exit 1
-fi
-
-APP_NAME="$APP" docker stack deploy -c "$STACK_FILE" "$STACK_NAME"
-
-echo "App stack deployed: ${STACK_NAME}"
+echo "App deployed via kustomize: ${KUSTOMIZE_DIR}"
