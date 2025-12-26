@@ -1,35 +1,31 @@
 # Credentials Handling and Rotation
 
 ## Telegram bot token
-- Stored in docker secret file: `secrets/telegram_bot_token` (raw token, no quotes). Ignored by git.
-- Rotation: `bin/rotate-telegram-token.sh <new_token>` (updates the secret file and restarts `telegram-bot` via Swarm).
+- Stored in `secrets/telegram_bot_token` (raw token, no quotes). Ignored by git.
+- Rotation: `bin/rotate-telegram-token.sh <new_token>` (updates the file, syncs the Kubernetes secret, restarts `silexa-telegram-bot`).
 - Chat ID is set via `.env` or env var `TELEGRAM_CHAT_ID`; rotate by editing `.env` and restarting services.
 
 ## General guidance
 - Keep secrets in `secrets/` files, not in git or images.
 - Use `*_FILE` env vars when possible (e.g., `TELEGRAM_BOT_TOKEN_FILE`).
 - Limit secret mounts to the services that need them (currently only `telegram-bot`).
-- For new secrets, add under `secrets:` in `docker-stack.yml` and mount into the specific service.
+- For new secrets, create Kubernetes secrets and mount only into the services that need them.
 
 ## Actors/Critics
 - No secrets mounted by default. Prefer OAuth-style flows where possible (e.g., `codex login` via browser).
 
 Codex CLI credentials persistence:
-- **Swarm dyads** persist per-dyad docker named volumes mounted at `/root/.codex`:
-  - `codex_state_web` for `actor-web` + `critic-web`
-  - `codex_state_research` for `actor-research` + `critic-research`
-  OAuth does not need to be repeated after container recreation (within the same dyad volume).
-- **Spawned dyads** (`bin/spawn-dyad.sh <name> ...`) default to a **shared** host directory `data/codex/shared/{actor,critic}` mounted at `/root/.codex` (override with `CODEX_PER_DYAD=1` to isolate per-dyad as `data/codex/<dyad>/{actor,critic}`).
+- Each dyad has its own PVC (`codex-<dyad>`) mounted at `/root/.codex` for both actor and critic containers.
+- OAuth does not need to be repeated after pod recreation as long as the PVC remains.
 
-## SSH target (tunnels)
-- Beams that require SSH tunnels (e.g., Codex OAuth callbacks) use `SSH_TARGET=<user>@<public_ip>`.
-- Default is recorded in `configs/ssh_target` and injected into dyad critics by `bin/spawn-dyad.sh`.
-- Do not store SSH passwords in git; use SSH keys on the operator machine.
+## Port-forward (OAuth callbacks)
+- Codex login beams use `kubectl port-forward pod/<pod> <local>:<forward>` for OAuth callbacks.
+- Do not store credentials in git; use short-lived OAuth flows and keep the port-forward alive until callback succeeds.
 
 ## Manager
 - No secrets. State is stored in Temporal (no local data volume).
 
 ## Rotation playbook
 1) Update secret file (e.g., `bin/rotate-telegram-token.sh <new_token>`).
-2) Restart affected service(s) in Swarm (e.g., `docker service update --force silexa_telegram-bot`).
-3) Verify logs and, if applicable, send a test notification.
+2) Verify `kubectl rollout status deployment/silexa-telegram-bot -n silexa`.
+3) Send a test notification if needed.

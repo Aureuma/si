@@ -1,10 +1,10 @@
 # RBAC Outline (lightweight)
 
 ## Roles
-- `actor`: builds/tests code inside containers; needs access to `/opt/silexa/apps` and docker.sock. No access to secrets beyond task-specific envs.
-- `critic`: reads actor logs via docker.sock; no code changes; can post feedback/human tasks; no secret mounting.
-- `manager`: stores tasks/feedback; no docker.sock; no secret mounts.
-- `telegram-bot`: only needs telegram token secret and chat ID env; no docker.sock.
+- `actor`: builds/tests code inside the dyad pod; needs access to `/opt/silexa/apps` PVC. No access to secrets beyond task-specific envs.
+- `critic`: reads actor logs via the Kubernetes API; no code changes; can post feedback/human tasks; no secret mounting.
+- `manager`: stores tasks/feedback; no privileged mounts; no secret mounts by default.
+- `telegram-bot`: only needs the Telegram token secret and optional chat ID env.
 
 ## Departments
 - Engineering: web, backend, infra dyads.
@@ -12,13 +12,13 @@
 - Marketing: marketing dyad.
 
 ## Access policy (logical)
-- Actors: read/write `apps/`, run docker builds; no access to secrets or manager data volume.
-- Critics: read-only to docker logs; post to Manager APIs; no secrets.
-- Manager: state stored in Temporal; no docker.sock; may send notifications via `TELEGRAM_NOTIFY_URL`.
-- Telegram-bot: read telegram token secret; no docker.sock; read-only chat ID env.
+- Actors: read/write `apps/`, run image builds with an external builder; no access to secrets or manager state.
+- Critics: read-only to pod logs; post to Manager APIs; no secrets.
+- Manager: state stored in Temporal; may send notifications via `TELEGRAM_NOTIFY_URL`.
+- Telegram-bot: read Telegram token secret; read-only chat ID env.
 
 ## Implementation notes
-- Compose mounts: only actors/critics/coder-agent get `/var/run/docker.sock`. Manager/telegram-bot do not.
-- Secrets: `secrets/telegram_bot_token` mounted only into `telegram-bot`.
-- Volumes: no local data volume for Manager (Temporal is the system of record).
+- Kubernetes service accounts and namespace-scoped RBAC live in `infra/k8s/silexa/rbac.yaml`.
+- Secrets: `telegram-bot-token` mounted only into `telegram-bot`; other pods do not consume it.
+- Volumes: Manager uses Temporal as the system of record (no local stateful volume).
 - Labels/env: dyads carry `silexa.dyad`, `silexa.department`, `silexa.role` for identification.

@@ -15,6 +15,7 @@ MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
 
 DATA=$(python3 - <<'PY' "$DYAD" "$MANAGER_URL"
 import json, sys, urllib.request
+from datetime import datetime
 
 dyad = sys.argv[1]
 base = sys.argv[2].rstrip("/")
@@ -26,25 +27,41 @@ def fetch(path):
 beats = fetch("/beats")
 tasks = fetch("/dyad-tasks")
 
-actor_name = f"actor-{dyad}"
-critic_name = f"critic-{dyad}"
-last_actor = None
-last_critic = None
+actor_name = None
+critic_name = None
+last_beat = None
+last_beat_dt = None
 critic_id = None
+
+def parse_ts(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
 for b in beats:
-    if b.get("actor") == actor_name:
-        last_actor = b.get("when")
+    if b.get("dyad") != dyad:
+        continue
+    when = b.get("when")
+    when_dt = parse_ts(when)
+    if when_dt is None:
+        continue
+    if last_beat_dt is None or when_dt > last_beat_dt:
+        last_beat_dt = when_dt
+        last_beat = when
+        actor_name = b.get("actor")
         critic_id = b.get("critic")
-    if b.get("critic") == critic_name:
-        last_critic = b.get("when")
+        critic_name = b.get("critic")
 
 dyad_tasks = [t for t in tasks if t.get("dyad") == dyad]
 open_tasks = [t for t in dyad_tasks if t.get("status") != "done"]
 
 lines = []
 lines.append(f"Dyad report: {dyad}")
-lines.append(f"Actor: {actor_name}, last beat: {last_actor}")
-lines.append(f"Critic: {critic_name}, last beat: {last_critic}, id: {critic_id}")
+lines.append(f"Actor: {actor_name or 'n/a'}, last beat: {last_beat or 'n/a'}")
+lines.append(f"Critic: {critic_name or 'n/a'}, last beat: {last_beat or 'n/a'}, id: {critic_id or 'n/a'}")
 if open_tasks:
     lines.append("Tasks:")
     for t in open_tasks:

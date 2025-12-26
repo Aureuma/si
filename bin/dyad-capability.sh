@@ -17,7 +17,7 @@ case "$role" in
     cat <<'EOF'
 Role: actor-web
 Model tier: code-tier (strong JS/TS/React), medium reasoning
-Tools: git, node/pnpm, playwright, MCP gateway (catalog), docker (build), per-app DB DSN
+Tools: git, node/pnpm, playwright, MCP gateway (catalog), image builder (buildctl), per-app DB DSN
 Guardrails: no infra/secrets changes; request via manager if needed
 EOF
     ;;
@@ -25,7 +25,7 @@ EOF
     cat <<'EOF'
 Role: actor-infra
 Model tier: reasoning-tier (infra aware)
-Tools: Pulumi/Terraform, docker, kubectl/helm (if needed), MCP gateway for infra servers
+Tools: Pulumi/Terraform, kubectl/helm, image builder (buildctl), MCP gateway for infra servers
 Guardrails: cost/dry-run required; no applies without pre-deploy check
 EOF
     ;;

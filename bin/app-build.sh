@@ -50,15 +50,16 @@ if [[ -n "$WEB_PATH" ]]; then
 
   if [[ -f "$WEB_DOCKERFILE" ]]; then
     echo "Building web image (custom Dockerfile): ${WEB_IMAGE}"
-    docker build -t "$WEB_IMAGE" -f "$WEB_DOCKERFILE" "$WEB_DIR"
+    "$ROOT_DIR/bin/image-build.sh" -t "$WEB_IMAGE" -f "$WEB_DOCKERFILE" "$WEB_DIR"
   else
     if [[ "$WEB_STACK" != "" && "$WEB_STACK" != "sveltekit" ]]; then
       echo "warning: web stack is ${WEB_STACK}; default SvelteKit template may not apply" >&2
     fi
     echo "Building web image (template): ${WEB_IMAGE}"
-    docker build -t "$WEB_IMAGE" \
+    "$ROOT_DIR/bin/image-build.sh" \
+      -t "$WEB_IMAGE" \
       -f "${ROOT_DIR}/tools/app-templates/sveltekit.Dockerfile" \
-      --build-arg APP_PATH="$APP_PATH" \
+      --build-arg "APP_PATH=$APP_PATH" \
       "$ROOT_DIR"
   fi
 fi
@@ -70,7 +71,7 @@ if [[ -n "$BACKEND_PATH" ]]; then
 
   if [[ -f "$BACKEND_DOCKERFILE" ]]; then
     echo "Building backend image: ${BACKEND_IMAGE}"
-    docker build -t "$BACKEND_IMAGE" -f "$BACKEND_DOCKERFILE" "$BACKEND_DIR"
+    "$ROOT_DIR/bin/image-build.sh" -t "$BACKEND_IMAGE" -f "$BACKEND_DOCKERFILE" "$BACKEND_DIR"
   else
     echo "warning: no Dockerfile found for backend at ${BACKEND_DOCKERFILE}; skipping" >&2
   fi

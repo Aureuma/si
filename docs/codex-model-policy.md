@@ -38,6 +38,6 @@ Overrides:
 - `CODEX_ACTOR_EFFORT=...`
 - `CODEX_CRITIC_EFFORT=...`
 
-## Swarm dyads
+## Kubernetes defaults
 
-`docker-stack.yml` sets `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per service (actor/critic).
+`infra/k8s/silexa/*.yaml` and `bin/spawn-dyad.sh` set `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per deployment (actor/critic).

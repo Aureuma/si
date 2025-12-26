@@ -87,8 +87,8 @@ run_retry env MANAGER_URL="$MANAGER_URL" "${ROOT_DIR}/bin/register-dyad.sh" "$DY
 
 post_heartbeat() {
   local dyad="$1"
-  local actor="actor-${dyad}"
-  local critic="critic-${dyad}"
+  local actor="actor"
+  local critic="critic"
   local payload
   payload=$(python3 - <<'PY' "$dyad" "$ROLE" "$DEPT" "$actor" "$critic" "$RUN_ID"
 import json, sys
@@ -151,7 +151,7 @@ TASK_TITLE="Cross-dyad sync ${RUN_ID}"
 TASK_DESC="Test task from ${DYAD_B} to ${DYAD_A}"
 TASK_NOTES="run-id=${RUN_ID}"
 TASK_JSON=$(capture_retry env MANAGER_URL="$MANAGER_URL" DYAD_TASK_KIND="test.dyad-comm" REQUESTED_BY="$DYAD_B" \
-  "${ROOT_DIR}/bin/add-dyad-task.sh" "$TASK_TITLE" "$DYAD_A" "actor-${DYAD_A}" "critic-${DYAD_A}" "low" "$TASK_DESC" "" "$TASK_NOTES")
+  "${ROOT_DIR}/bin/add-dyad-task.sh" "$TASK_TITLE" "$DYAD_A" "actor" "critic" "low" "$TASK_DESC" "" "$TASK_NOTES")
 printf '%s' "$TASK_JSON" > "$TASK_FILE"
 
 TASK_ID=$(python3 - <<'PY' "$TASK_FILE" "$DYAD_B"
@@ -179,7 +179,7 @@ task_id, dyad = sys.argv[1:3]
 print(json.dumps({
     "id": int(task_id),
     "dyad": dyad,
-    "critic": f"critic-{dyad}",
+    "critic": "critic",
 }))
 PY
 )
@@ -197,13 +197,13 @@ with open(path, "r", encoding="utf-8") as fh:
 if data.get("status") != "in_progress":
     print("claim did not move task to in_progress")
     sys.exit(1)
-if data.get("claimed_by") != f"critic-{dyad}":
+if data.get("claimed_by") != "critic":
     print("claimed_by mismatch")
     sys.exit(1)
 PY
 
 UPDATE_JSON=$(capture_retry env MANAGER_URL="$MANAGER_URL" "${ROOT_DIR}/bin/update-dyad-task.sh" \
-  "$TASK_ID" "done" "completed by ${DYAD_A} for ${DYAD_B}" "actor-${DYAD_A}" "critic-${DYAD_A}")
+  "$TASK_ID" "done" "completed by ${DYAD_A} for ${DYAD_B}" "actor" "critic")
 printf '%s' "$UPDATE_JSON" > "$UPDATE_FILE"
 
 python3 - <<'PY' "$UPDATE_FILE"

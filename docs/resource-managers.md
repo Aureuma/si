@@ -3,12 +3,12 @@
 Goal: each external service gets a small, composable layer with credentials, API/CLI wiring, and queueing so dyads can operate semi-autonomously.
 
 ### Credentials
-- Store tokens/keys as docker secrets and mount only into the resource broker (or dedicated service). Environment variables are allowed for short-lived dev.
+- Store tokens/keys as Kubernetes secrets and mount only into the resource broker (or dedicated service). Environment variables are allowed for short-lived dev.
 - Supported keys (expected by resource-broker):
   - GitHub: `GITHUB_TOKEN_FILE` (fine-grained PAT) or `GITHUB_TOKEN`
   - Stripe: `STRIPE_API_KEY_FILE` or `STRIPE_API_KEY` (restricted key)
   - Telegram: `TELEGRAM_BOT_TOKEN_FILE` or `TELEGRAM_BOT_TOKEN`
-- Add secrets under `secrets/` and wire them into the broker service when ready.
+- Add secrets under `secrets/` and wire them into the broker service (or create a Kubernetes secret) when ready.
 
 ### Capabilities probe
 - `resource-broker` now exposes `/capabilities` showing which services are credential-ready:

@@ -13,11 +13,12 @@ Legacy entrypoints in `bin/` remain as thin wrappers for compatibility.
 
 ## Sample Go service
 - Location: `apps/sample-go-service`
-- Build image: `cd apps/sample-go-service && docker build -t silexa/sample-go-service:local .`
-- Run test container: `docker run -d --name test-sample --network silexa_net -p 18080:8080 silexa/sample-go-service:local`
+- Build image: `bin/app-build.sh sample-go-service` (push/load into your cluster as needed)
+- Deploy: `bin/app-deploy.sh sample-go-service`
+- Port-forward: `kubectl -n silexa port-forward svc/sample-go-service 18080:8080`
 - Health check: `curl -fsSL http://localhost:18080/healthz` (expect `ok`)
 - Main endpoint: `curl -fsSL http://localhost:18080/` (expect greeting)
-- Cleanup: `docker stop test-sample && docker rm test-sample`
+- Cleanup: `bin/app-remove.sh sample-go-service`
 
 ## Quick run
 - Default suite: `tests/run.sh` (or wrapper `bin/tests.sh`)
@@ -25,8 +26,8 @@ Legacy entrypoints in `bin/` remain as thin wrappers for compatibility.
 - Visual: `tests/run.sh --scope visual --visual-app <app>`
 
 ## QA smoke helper
-- `tests/smoke/qa-smoke.sh` (or wrapper `bin/qa-smoke.sh`) uses sample-go-service by default, spins up a container on `silexa_net`, hits `/healthz` and `/`, and reports ✅/❌. Optional Telegram notify via `TELEGRAM_CHAT_ID`/`NOTIFY_URL`.
-- Override app image via `APP_IMAGE`; port via `PORT`.
+- `tests/smoke/qa-smoke.sh` (or wrapper `bin/qa-smoke.sh`) uses sample-go-service by default, port-forwards the service, hits `/healthz` and `/`, and reports ✅/❌. Optional Telegram notify via `TELEGRAM_CHAT_ID`/`NOTIFY_URL`.
+- Override port via `PORT` or service via `SERVICE_NAME`.
 
 ## Frameworks and tools
 - Go services: `go test ./...` per module (`tests/go/run-go-tests.sh`).
@@ -36,7 +37,7 @@ Legacy entrypoints in `bin/` remain as thin wrappers for compatibility.
 This keeps tooling minimal while still using standard ecosystem tools; add heavier frameworks only when test volume demands it.
 
 ## Dyad usage pattern
-- Actor steps: build images, run containers in `silexa_net` network, run curl-driven smoke tests.
+- Actor steps: build images, deploy to Kubernetes, run curl-driven smoke tests.
 - Critic steps: tail actor logs and heartbeat to manager; optional alert via Telegram when tests fail or hang.
 - Human loop: if a test requires external input (e.g., OAuth), actor/critic files a human task via manager `/human-tasks` or `bin/add-human-task.sh`.
 
