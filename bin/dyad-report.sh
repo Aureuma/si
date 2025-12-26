@@ -56,10 +56,31 @@ print("\n".join(lines))
 PY
 )
 
+TMP_MESSAGE=$(mktemp)
+cleanup() {
+  rm -f "$TMP_MESSAGE"
+}
+trap cleanup EXIT
+
+printf '%s' "$DATA" >"$TMP_MESSAGE"
+
 # Post to feedback
-PAYLOAD=$(printf '{"source":"critic-router","severity":"info","message":"%s","context":"dyad-report:%s"}' \
-  "$(printf '%s' "$DATA" | sed 's/"/\\"/g')" \
-  "$DYAD")
+PAYLOAD=$(python3 - <<'PY' "$DYAD" "$TMP_MESSAGE"
+import json
+import sys
+
+dyad = sys.argv[1]
+with open(sys.argv[2], "r", encoding="utf-8") as fh:
+    message = fh.read()
+payload = {
+    "source": "critic-router",
+    "severity": "info",
+    "message": message,
+    "context": f"dyad-report:{dyad}",
+}
+print(json.dumps(payload))
+PY
+)
 
 curl -fsSL -X POST -H "Content-Type: application/json" -d "$PAYLOAD" \
   "$MANAGER_URL/feedback" >/dev/null
