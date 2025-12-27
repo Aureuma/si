@@ -10,6 +10,14 @@ These values are applied in two places:
 1) **Default Codex config**: `bin/codex-init.sh` writes `~/.config/codex/config.toml` with `model` and `model_reasoning_effort`.
 2) **Critic-driven execution**: when a critic runs `codex exec` inside an actor, it explicitly passes `-m $CODEX_MODEL` and `-c model_reasoning_effort=$CODEX_REASONING_EFFORT`.
 
+## Complexity-based overrides
+
+When a dyad task includes `complexity=low|medium|high`, critics map complexity to model/effort:
+- Model: `CODEX_MODEL_LOW|MEDIUM|HIGH` if set, otherwise `CODEX_MODEL`.
+- Reasoning: `CODEX_REASONING_EFFORT_LOW|MEDIUM|HIGH` if set, otherwise the complexity level itself (`low|medium|high`).
+
+If `complexity` is empty, critics fall back to `priority` and then to the base env defaults.
+
 ## Default policy
 
 Recommended defaults (can be overridden per container via env):
