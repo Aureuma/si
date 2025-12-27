@@ -2,7 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
+# shellcheck source=bin/k8s-lib.sh
+source "${ROOT_DIR}/bin/k8s-lib.sh"
+
+MANAGER_PORT=${MANAGER_PORT:-19090}
+MANAGER_URL=${MANAGER_URL:-http://localhost:${MANAGER_PORT}}
 MANAGER_URL=${MANAGER_URL%/}
 
 if ! command -v curl >/dev/null 2>&1; then
@@ -12,6 +16,22 @@ fi
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required" >&2
   exit 1
+fi
+
+pf_pid=""
+cleanup() {
+  if [[ -n "$pf_pid" ]]; then
+    kill "$pf_pid" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
+if [[ "$MANAGER_URL" == http://localhost:* || "$MANAGER_URL" == http://127.0.0.1:* ]]; then
+  if kube get svc silexa-manager >/dev/null 2>&1; then
+    kube port-forward svc/silexa-manager "${MANAGER_PORT}:9090" >/tmp/manager-portfwd.log 2>&1 &
+    pf_pid=$!
+    sleep 2
+  fi
 fi
 
 wait_for_manager() {
