@@ -32,6 +32,10 @@ for line in lines:
         bad.append((line, "unparsed"))
         continue
     name, ready, desired = parts[0], parts[1], parts[2]
+    if ready in ("<none>", ""):
+        ready = "0"
+    if desired in ("<none>", ""):
+        desired = "0"
     if ready != desired:
         bad.append((name, f"{ready}/{desired}"))
 

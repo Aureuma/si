@@ -11,5 +11,5 @@ if [[ -z "$POD" ]]; then
   exit 1
 fi
 
-kube exec "$POD" -c mcp-gateway -- catalog ls || true
-kube exec "$POD" -c mcp-gateway -- catalog show docker-mcp --format yaml 2>/dev/null | head -n 20 || true
+kube exec "$POD" -c mcp-gateway -- /usr/local/bin/docker-mcp catalog ls || true
+kube exec "$POD" -c mcp-gateway -- /usr/local/bin/docker-mcp catalog show docker-mcp --format yaml 2>/dev/null | head -n 20 || true

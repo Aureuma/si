@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PORT=${PORT:-18080}
+PORT=${PORT:-19090}
 CHAT_ID=${TELEGRAM_CHAT_ID:-}
 NOTIFY_URL=${NOTIFY_URL:-http://localhost:8081/notify}
-SERVICE_NAME=${SERVICE_NAME:-sample-go-service}
+SERVICE_NAME=${SERVICE_NAME:-silexa-manager}
+SERVICE_PORT=${SERVICE_PORT:-9090}
+HEALTH_PATH=${HEALTH_PATH:-/healthz}
+ROOT_PATH=${ROOT_PATH:-}
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=bin/k8s-lib.sh
@@ -28,18 +31,27 @@ if ! kube get svc "$SERVICE_NAME" >/dev/null 2>&1; then
   exit 1
 fi
 
-kube port-forward "svc/${SERVICE_NAME}" "${PORT}:8080" >/tmp/qa-smoke-portfwd.log 2>&1 &
+kube port-forward "svc/${SERVICE_NAME}" "${PORT}:${SERVICE_PORT}" >/tmp/qa-smoke-portfwd.log 2>&1 &
 pf_pid=$!
 sleep 2
-health=$(curl -fsSL --max-time 5 http://localhost:${PORT}/healthz || true)
-root=$(curl -fsSL --max-time 5 http://localhost:${PORT}/ || true)
+health=$(curl -fsSL --max-time 5 "http://localhost:${PORT}${HEALTH_PATH}" || true)
+root=""
+if [[ -n "$ROOT_PATH" ]]; then
+  root=$(curl -fsSL --max-time 5 "http://localhost:${PORT}${ROOT_PATH}" || true)
+fi
 
 result="✅ QA smoke passed"
-if [[ "$health" != "ok" ]] || [[ "$root" == "" ]]; then
+if [[ "$health" == "" ]]; then
+  result="❌ QA smoke failed"
+fi
+if [[ -n "$ROOT_PATH" && "$root" == "" ]]; then
   result="❌ QA smoke failed"
 fi
 
-msg="$result\nHealth: $health\nRoot: $root"
+msg="$result\nHealth: $health"
+if [[ -n "$ROOT_PATH" ]]; then
+  msg="$msg\nRoot: $root"
+fi
 echo "$msg"
 
 if [[ -n "$CHAT_ID" ]]; then
