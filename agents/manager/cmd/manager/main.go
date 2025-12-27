@@ -113,10 +113,19 @@ func (s *server) update(ctx context.Context, name string, out any, args ...any) 
 		WaitForStage: client.WorkflowUpdateStageCompleted,
 	}
 	handle, err := s.temporal.UpdateWorkflow(ctx, options)
-	if err != nil {
-		return err
+	if err == nil {
+		if err := handle.Get(ctx, out); err != nil {
+			if isUnknownUpdate(err) {
+				return s.signalUpdate(ctx, name, out, args...)
+			}
+			return err
+		}
+		return nil
 	}
-	return handle.Get(ctx, out)
+	if isUnknownUpdate(err) {
+		return s.signalUpdate(ctx, name, out, args...)
+	}
+	return err
 }
 
 func (s *server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {

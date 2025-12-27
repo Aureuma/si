@@ -162,3 +162,16 @@ type ResolveResult struct {
 	Request AccessRequest `json:"request"`
 	Found   bool          `json:"found"`
 }
+
+type DyadTaskClaim struct {
+	ID     int    `json:"id"`
+	Dyad   string `json:"dyad"`
+	Critic string `json:"critic"`
+}
+
+type AccessResolve struct {
+	ID     int    `json:"id"`
+	Status string `json:"status"`
+	By     string `json:"by"`
+	Notes  string `json:"notes"`
+}
