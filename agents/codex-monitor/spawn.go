@@ -32,6 +32,12 @@ func (m *monitor) buildDyadResources(dyad, role, dept string) (*corev1.Persisten
 	actorImage := envOr("ACTOR_IMAGE", "silexa/actor:local")
 	criticImage := envOr("CRITIC_IMAGE", "silexa/critic:local")
 	codexModel := envOr("CODEX_MODEL", "gpt-5.1-codex-max")
+	codexModelLow := strings.TrimSpace(os.Getenv("CODEX_MODEL_LOW"))
+	codexModelMedium := strings.TrimSpace(os.Getenv("CODEX_MODEL_MEDIUM"))
+	codexModelHigh := strings.TrimSpace(os.Getenv("CODEX_MODEL_HIGH"))
+	codexEffortLow := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_LOW"))
+	codexEffortMedium := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_MEDIUM"))
+	codexEffortHigh := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_HIGH"))
 	telegramURL := envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify")
 	telegramChatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID"))
 	managerURL := envOr("MANAGER_URL", "http://silexa-manager:9090")
@@ -142,7 +148,7 @@ fi`},
 							Name:       "actor",
 							Image:      actorImage,
 							WorkingDir: "/workspace/silexa/apps",
-							Env: []corev1.EnvVar{
+							Env: appendCodexTuningEnv([]corev1.EnvVar{
 								{Name: "ROLE", Value: role},
 								{Name: "DEPARTMENT", Value: dept},
 								{Name: "DYAD_NAME", Value: dyad},
@@ -150,7 +156,7 @@ fi`},
 								{Name: "CODEX_INIT_FORCE", Value: "1"},
 								{Name: "CODEX_MODEL", Value: codexModel},
 								{Name: "CODEX_REASONING_EFFORT", Value: actorEffort},
-							},
+							}, codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
 							Command: []string{"bash", "-lc", "npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "codex", MountPath: "/root/.codex"},
@@ -160,7 +166,7 @@ fi`},
 						{
 							Name:  "critic",
 							Image: criticImage,
-							Env: []corev1.EnvVar{
+							Env: appendCodexTuningEnv([]corev1.EnvVar{
 								{Name: "MANAGER_URL", Value: managerURL},
 								{Name: "TELEGRAM_NOTIFY_URL", Value: telegramURL},
 								{Name: "TELEGRAM_CHAT_ID", Value: telegramChatID},
@@ -183,7 +189,7 @@ fi`},
 										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
 									},
 								},
-							},
+							}, codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "configs", MountPath: "/configs"},
 								{Name: "codex", MountPath: "/root/.codex"},
@@ -210,6 +216,23 @@ func codexEffortForRole(role string) (string, string) {
 	default:
 		return "high", "medium"
 	}
+}
+
+func appendCodexTuningEnv(envs []corev1.EnvVar, modelLow, modelMedium, modelHigh, effortLow, effortMedium, effortHigh string) []corev1.EnvVar {
+	envs = appendEnvIfSet(envs, "CODEX_MODEL_LOW", modelLow)
+	envs = appendEnvIfSet(envs, "CODEX_MODEL_MEDIUM", modelMedium)
+	envs = appendEnvIfSet(envs, "CODEX_MODEL_HIGH", modelHigh)
+	envs = appendEnvIfSet(envs, "CODEX_REASONING_EFFORT_LOW", effortLow)
+	envs = appendEnvIfSet(envs, "CODEX_REASONING_EFFORT_MEDIUM", effortMedium)
+	envs = appendEnvIfSet(envs, "CODEX_REASONING_EFFORT_HIGH", effortHigh)
+	return envs
+}
+
+func appendEnvIfSet(envs []corev1.EnvVar, key, val string) []corev1.EnvVar {
+	if strings.TrimSpace(val) == "" {
+		return envs
+	}
+	return append(envs, corev1.EnvVar{Name: key, Value: val})
 }
 
 func int32Ptr(v int32) *int32 {

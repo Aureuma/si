@@ -16,8 +16,14 @@ ACTOR_IMAGE="${ACTOR_IMAGE:-silexa/actor:local}"
 CRITIC_IMAGE="${CRITIC_IMAGE:-silexa/critic:local}"
 
 CODEX_MODEL="${CODEX_MODEL:-gpt-5.1-codex-max}"
+CODEX_MODEL_LOW="${CODEX_MODEL_LOW:-}"
+CODEX_MODEL_MEDIUM="${CODEX_MODEL_MEDIUM:-}"
+CODEX_MODEL_HIGH="${CODEX_MODEL_HIGH:-}"
 CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-}"
 CODEX_CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-}"
+CODEX_REASONING_EFFORT_LOW="${CODEX_REASONING_EFFORT_LOW:-}"
+CODEX_REASONING_EFFORT_MEDIUM="${CODEX_REASONING_EFFORT_MEDIUM:-}"
+CODEX_REASONING_EFFORT_HIGH="${CODEX_REASONING_EFFORT_HIGH:-}"
 SILEXA_REPO_URL="${SILEXA_REPO_URL:-}"
 SILEXA_REPO_REF="${SILEXA_REPO_REF:-main}"
 
@@ -172,6 +178,18 @@ spec:
               value: "${CODEX_MODEL}"
             - name: CODEX_REASONING_EFFORT
               value: "${CODEX_ACTOR_EFFORT}"
+            - name: CODEX_MODEL_LOW
+              value: "${CODEX_MODEL_LOW}"
+            - name: CODEX_MODEL_MEDIUM
+              value: "${CODEX_MODEL_MEDIUM}"
+            - name: CODEX_MODEL_HIGH
+              value: "${CODEX_MODEL_HIGH}"
+            - name: CODEX_REASONING_EFFORT_LOW
+              value: "${CODEX_REASONING_EFFORT_LOW}"
+            - name: CODEX_REASONING_EFFORT_MEDIUM
+              value: "${CODEX_REASONING_EFFORT_MEDIUM}"
+            - name: CODEX_REASONING_EFFORT_HIGH
+              value: "${CODEX_REASONING_EFFORT_HIGH}"
           volumeMounts:
             - name: codex
               mountPath: /root/.codex
@@ -201,6 +219,18 @@ spec:
               value: "${CODEX_MODEL}"
             - name: CODEX_REASONING_EFFORT
               value: "${CODEX_CRITIC_EFFORT}"
+            - name: CODEX_MODEL_LOW
+              value: "${CODEX_MODEL_LOW}"
+            - name: CODEX_MODEL_MEDIUM
+              value: "${CODEX_MODEL_MEDIUM}"
+            - name: CODEX_MODEL_HIGH
+              value: "${CODEX_MODEL_HIGH}"
+            - name: CODEX_REASONING_EFFORT_LOW
+              value: "${CODEX_REASONING_EFFORT_LOW}"
+            - name: CODEX_REASONING_EFFORT_MEDIUM
+              value: "${CODEX_REASONING_EFFORT_MEDIUM}"
+            - name: CODEX_REASONING_EFFORT_HIGH
+              value: "${CODEX_REASONING_EFFORT_HIGH}"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
