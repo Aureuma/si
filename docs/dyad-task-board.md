@@ -11,7 +11,7 @@ Purpose: structured task intake and allocation to dyads, with notifications and 
 - Notifications: Manager posts a formatted message to Telegram on create/update (uses `TELEGRAM_NOTIFY_URL` and optional `TELEGRAM_CHAT_ID`).
 
 ## Scripts
-- Create (unassigned; router will pick): `bin/add-task.sh <title> [kind] [priority] [description] [link] [notes]`
+- Create (unassigned; router will pick): `bin/add-task.sh <title> [kind] [priority] [description] [link] [notes] [complexity]`
 - Create: `bin/add-dyad-task.sh <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]` (optional: set `DYAD_TASK_KIND=...`)
 - Update: `bin/update-dyad-task.sh <id> <status> [notes] [actor] [critic] [complexity]`
 - Report: `bin/dyad-report.sh <dyad> [chat_id]` (posts a feedback entry summarizing beats and open dyad tasks; use cron or critic hook)
