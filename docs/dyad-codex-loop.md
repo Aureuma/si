@@ -16,6 +16,8 @@ This is the core dyad mechanism that proves the Critic can:
   so Codex has stable role context even across multiple dyads and restarts.
 - Codex output is JSONL (`--json`) and is also written into Actor stdout (`tee /proc/1/fd/1`),
   so the Critic can reliably “see” what happened via Docker logs.
+- If a dyad task includes `complexity` (or sets `[task.complexity]=...` in notes),
+  the Critic will choose model + reasoning effort using the complexity mapping in `docs/codex-model-policy.md`.
 
 ## Task kinds
 - `test.codex_loop`: built-in 3-turn proof loop (`TURN1_OK → TURN2_OK → TURN3_OK`).
