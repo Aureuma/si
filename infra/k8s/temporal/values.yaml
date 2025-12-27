@@ -3,22 +3,46 @@ server:
   config:
     persistence:
       defaultStore: default
-      visibilityStore: visibility
       numHistoryShards: 512
-      datastores:
-        default:
-          sql:
-            pluginName: postgres12
-            driverName: postgres12
-            databaseName: temporal
-            connectAddr: temporal-postgresql:5432
-            user: temporal
-            password: temporal
-        visibility:
-          sql:
-            pluginName: postgres12
-            driverName: postgres12
-            databaseName: temporal_visibility
-            connectAddr: temporal-postgresql:5432
-            user: temporal
-            password: temporal
+      default:
+        driver: sql
+        sql:
+          driver: postgres12
+          host: temporal-postgresql
+          port: 5432
+          database: temporal
+          user: temporal
+          password: temporal
+      visibility:
+        driver: sql
+        sql:
+          driver: postgres12
+          host: temporal-postgresql
+          port: 5432
+          database: temporal_visibility
+          user: temporal
+          password: temporal
+  dynamicConfig:
+    frontend.enableUpdateWorkflowExecution:
+      - value: true
+    system.enableUpdateWorkflowExecution:
+      - value: true
+schema:
+  createDatabase:
+    enabled: false
+  setup:
+    enabled: true
+  update:
+    enabled: true
+elasticsearch:
+  enabled: false
+prometheus:
+  enabled: false
+grafana:
+  enabled: false
+cassandra:
+  enabled: false
+mysql:
+  enabled: false
+postgresql:
+  enabled: false
