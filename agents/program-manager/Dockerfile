@@ -1,7 +1,7 @@
 # Builder
 FROM golang:1.22-bookworm AS builder
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY . .
 RUN CGO_ENABLED=0 go build -o /out/program-manager ./main.go
 
@@ -13,4 +13,3 @@ WORKDIR /workspace
 COPY --from=builder /out/program-manager /usr/local/bin/program-manager
 USER pm
 ENTRYPOINT ["program-manager"]
-

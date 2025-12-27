@@ -1,7 +1,7 @@
 # Builder
 FROM golang:1.22-bookworm AS builder
 WORKDIR /src
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY cmd ./cmd
 COPY internal ./internal
 RUN CGO_ENABLED=0 go build -o /out/critic ./cmd/critic
