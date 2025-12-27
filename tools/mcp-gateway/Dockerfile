@@ -1,17 +1,24 @@
-FROM golang:1.22-bookworm
+FROM golang:1.22-bookworm AS builder
 
 RUN apt-get update -y && apt-get install -y --no-install-recommends git make ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 RUN git clone https://github.com/docker/mcp-gateway .
 
-# Build the docker-mcp binary (gateway + catalog commands)
+# Build the docker-mcp binary (gateway + catalog commands).
 ENV GOTOOLCHAIN=go1.24.6
-RUN go build -o /usr/local/bin/docker-mcp ./cmd/docker-mcp
+RUN CGO_ENABLED=0 go build -o /out/docker-mcp ./cmd/docker-mcp
+
+FROM docker:26-cli
+
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /workspace
 EXPOSE 8088
+
+COPY --from=builder /out/docker-mcp /usr/local/bin/docker-mcp
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway", "run", "--transport", "streaming", "--port", "8088", "--catalog", "/catalog/catalog.yaml"]
