@@ -48,6 +48,8 @@ Examples:
 
 - `codex.remaining_pct` (percent)
 - `codex.remaining_minutes` (minutes)
+- `codex.weekly_remaining_pct` (percent)
+- `codex.weekly_remaining_minutes` (minutes)
 - `codex.cooldown` (bool)
 
 ## Telegram status integration
@@ -60,5 +62,7 @@ If `CODEX_MONITOR_URL` is configured on the Telegram bot (default: `http://codex
 - For read-only `.codex` mounts, the monitor copies the state into a temporary HOME and answers initial prompts (approval + model selection) before issuing `/status`.
 - If an account has no `auth.json`, usage shows as `n/a` until the dyad logs in (`codex login`).
 - The usage summary includes the account email parsed from the `/status` output when available.
+- Weekly quota data is parsed from `/status` lines that mention weekly usage.
+- When `DYAD_REQUIRE_REGISTERED=true`, codex-monitor skips dyads that are not registered in the Manager registry.
 - When a dyad falls below the cooldown threshold, new tasks should route to other dyads in the same pool.
 - If no alternative dyads exist, routing falls back to the original target.
