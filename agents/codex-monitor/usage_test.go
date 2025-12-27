@@ -40,3 +40,25 @@ func TestParseUsageSpacedEmail(t *testing.T) {
 		t.Fatalf("expected spaced email parsed, got %q", usage.Email)
 	}
 }
+
+func TestParseUsageModelAndReasoning(t *testing.T) {
+	raw := "Model: gpt-5.1-codex-max\nReasoning effort: high\nRemaining: 10%\n"
+	usage := parseUsage(raw, 300)
+	if usage.Model != "gpt-5.1-codex-max" {
+		t.Fatalf("expected model parsed, got %q", usage.Model)
+	}
+	if usage.ReasoningEffort != "high" {
+		t.Fatalf("expected reasoning parsed, got %q", usage.ReasoningEffort)
+	}
+}
+
+func TestParseUsageModelAndReasoningSameLine(t *testing.T) {
+	raw := "Model: gpt-4.1 (Reasoning level: medium)\n"
+	usage := parseUsage(raw, 300)
+	if usage.Model != "gpt-4.1" {
+		t.Fatalf("expected model parsed, got %q", usage.Model)
+	}
+	if usage.ReasoningEffort != "medium" {
+		t.Fatalf("expected reasoning parsed, got %q", usage.ReasoningEffort)
+	}
+}

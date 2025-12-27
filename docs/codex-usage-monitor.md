@@ -63,6 +63,7 @@ If `CODEX_MONITOR_URL` is configured on the Telegram bot (default: `http://codex
 - If an account has no `auth.json`, usage shows as `n/a` until the dyad logs in (`codex login`).
 - The usage summary includes the account email parsed from the `/status` output when available.
 - Weekly quota data is parsed from `/status` lines that mention weekly usage.
+- Model name and reasoning effort are parsed from `/status` and shown in the status summary when present.
 - When `DYAD_REQUIRE_REGISTERED=true`, codex-monitor skips dyads that are not registered in the Manager registry.
 - When a dyad falls below the cooldown threshold, new tasks should route to other dyads in the same pool.
 - If no alternative dyads exist, routing falls back to the original target.

@@ -64,6 +64,8 @@ type usageSnapshot struct {
 	WeeklyRemainingMinutes int
 	WeeklyUsedPct          float64
 	Email                  string
+	Model                  string
+	ReasoningEffort        string
 }
 
 type statusEntry struct {
@@ -76,6 +78,8 @@ type statusEntry struct {
 	WeeklyRemainingMinutes int       `json:"weekly_remaining_minutes"`
 	Cooldown               bool      `json:"cooldown"`
 	Email                  string    `json:"email,omitempty"`
+	Model                  string    `json:"model,omitempty"`
+	ReasoningEffort        string    `json:"reasoning_effort,omitempty"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }
 
@@ -219,6 +223,16 @@ func formatStatusSummary(entries []statusEntry) string {
 		}
 		if entry.Email != "" {
 			line += " <" + entry.Email + ">"
+		}
+		if entry.Model != "" {
+			line += " model=" + entry.Model
+		} else {
+			line += " model=n/a"
+		}
+		if entry.ReasoningEffort != "" {
+			line += " reasoning=" + entry.ReasoningEffort
+		} else {
+			line += " reasoning=n/a"
 		}
 		if entry.RemainingPct >= 0 {
 			line += fmt.Sprintf(": 5h %.1f%% remaining", entry.RemainingPct)
@@ -796,6 +810,8 @@ func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, coo
 		WeeklyRemainingMinutes: usage.WeeklyRemainingMinutes,
 		Cooldown:               cooldown,
 		Email:                  strings.TrimSpace(usage.Email),
+		Model:                  strings.TrimSpace(usage.Model),
+		ReasoningEffort:        strings.TrimSpace(usage.ReasoningEffort),
 		UpdatedAt:              time.Now().UTC(),
 	}
 	if entry.Name == "" {
@@ -849,6 +865,7 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 	weeklyUsedPct := -1.0
 	weeklyRemainingMinutes := 0
 	email := parseEmail(raw)
+	model, reasoning := parseModelInfo(raw)
 	percentRe := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*%`)
 	wordsRe := regexp.MustCompile(`(?i)(remaining|left|available)`)         // remaining context
 	usedRe := regexp.MustCompile(`(?i)(used|consumed|spent|utilized)`)       // used context
@@ -940,6 +957,8 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 		WeeklyRemainingMinutes: weeklyRemainingMinutes,
 		WeeklyUsedPct:          weeklyUsedPct,
 		Email:                  email,
+		Model:                  model,
+		ReasoningEffort:        reasoning,
 	}
 }
 
@@ -1157,6 +1176,43 @@ func parseEmail(raw string) string {
 		}
 	}
 	return ""
+}
+
+func parseModelInfo(raw string) (string, string) {
+	if raw == "" {
+		return "", ""
+	}
+	model := ""
+	reasoning := ""
+	lines := strings.Split(raw, "\n")
+	modelRe := regexp.MustCompile(`(?i)\bmodel\b\s*[:=]\s*([A-Za-z0-9._:-]+)`)
+	modelAltRe := regexp.MustCompile(`(?i)using\s+model\s+([A-Za-z0-9._:-]+)`)
+	reasoningRe := regexp.MustCompile(`(?i)\breasoning(?:\s*(?:effort|level|mode))?\b\s*[:=]\s*([A-Za-z0-9._-]+)`)
+	effortRe := regexp.MustCompile(`(?i)\beffort\b\s*[:=]\s*([A-Za-z0-9._-]+)`)
+	for _, line := range lines {
+		trim := strings.TrimSpace(line)
+		if trim == "" {
+			continue
+		}
+		if model == "" {
+			if match := modelRe.FindStringSubmatch(trim); len(match) == 2 {
+				model = match[1]
+			} else if match := modelAltRe.FindStringSubmatch(trim); len(match) == 2 {
+				model = match[1]
+			}
+		}
+		if reasoning == "" {
+			if match := reasoningRe.FindStringSubmatch(trim); len(match) == 2 {
+				reasoning = match[1]
+			} else if match := effortRe.FindStringSubmatch(trim); len(match) == 2 && strings.Contains(strings.ToLower(trim), "reason") {
+				reasoning = match[1]
+			}
+		}
+		if model != "" && reasoning != "" {
+			break
+		}
+	}
+	return model, reasoning
 }
 
 func truncateLines(text string, maxLines int, maxBytes int) string {
