@@ -7,13 +7,13 @@ Purpose: structured task intake and allocation to dyads, with notifications and 
   - `GET/POST /dyad-tasks`
   - `POST /dyad-tasks/update`
   - `POST /dyad-tasks/claim` (atomic claim + heartbeat; prevents multi-critic contention)
-- Fields: `id`, `title`, `description`, `kind`, `status (todo|in_progress|review|blocked|done)`, `priority`, `dyad`, `actor`, `critic`, `requested_by`, `notes`, `link`, `claimed_by`, `claimed_at`, `heartbeat_at`, `created_at`, `updated_at`.
+- Fields: `id`, `title`, `description`, `kind`, `status (todo|in_progress|review|blocked|done)`, `priority`, `complexity`, `dyad`, `actor`, `critic`, `requested_by`, `notes`, `link`, `claimed_by`, `claimed_at`, `heartbeat_at`, `created_at`, `updated_at`.
 - Notifications: Manager posts a formatted message to Telegram on create/update (uses `TELEGRAM_NOTIFY_URL` and optional `TELEGRAM_CHAT_ID`).
 
 ## Scripts
 - Create (unassigned; router will pick): `bin/add-task.sh <title> [kind] [priority] [description] [link] [notes]`
-- Create: `bin/add-dyad-task.sh <title> <dyad> [actor] [critic] [priority] [description] [link] [notes]` (optional: set `DYAD_TASK_KIND=...`)
-- Update: `bin/update-dyad-task.sh <id> <status> [notes] [actor] [critic]`
+- Create: `bin/add-dyad-task.sh <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]` (optional: set `DYAD_TASK_KIND=...`)
+- Update: `bin/update-dyad-task.sh <id> <status> [notes] [actor] [critic] [complexity]`
 - Report: `bin/dyad-report.sh <dyad> [chat_id]` (posts a feedback entry summarizing beats and open dyad tasks; use cron or critic hook)
 
 ## Flow (router → dyad)
@@ -39,6 +39,7 @@ Defaults (see `infra/k8s/silexa/manager.yaml`):
 - Use `notes` on updates to surface blockers or review instructions.
 - Always update status transitions: `todo → in_progress → review/done` (use `blocked` with a short reason).
 - For usage-aware routing, set `dyad` to `pool:<department>` (e.g., `pool:infra`), or use router rules that return a `pool:` target so the router can pick a healthy dyad.
+- Set `complexity` (`low|medium|high`) to let critics choose model + reasoning effort per task.
 - For login/OAuth or other human-in-loop steps, pair a dyad task with a Beam entry (see `docs/beams.md`) and link it in the task `notes` or `link`.
 - For Critic-driven multi-turn Codex execution, use the Codex Loop mechanism (see `docs/dyad-codex-loop.md`).
 - Keep `docs/beam_messages/` updated when sending human-facing commands/URLs.

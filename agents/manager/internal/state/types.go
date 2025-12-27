@@ -68,6 +68,7 @@ type DyadTask struct {
 	Kind             string    `json:"kind"`
 	Status           string    `json:"status"`
 	Priority         string    `json:"priority"`
+	Complexity       string    `json:"complexity"`
 	Dyad             string    `json:"dyad"`
 	Actor            string    `json:"actor"`
 	Critic           string    `json:"critic"`

@@ -2,9 +2,9 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "usage: update-dyad-task.sh <id> <status> [notes] [actor] [critic]" >&2
+  echo "usage: update-dyad-task.sh <id> <status> [notes] [actor] [critic] [complexity]" >&2
   echo "status: todo|in_progress|review|blocked|done" >&2
-  echo "env: MANAGER_URL (default http://localhost:9090)" >&2
+  echo "env: DYAD_TASK_COMPLEXITY (optional), MANAGER_URL (default http://localhost:9090)" >&2
   exit 1
 fi
 
@@ -13,14 +13,16 @@ STATUS="$2"
 NOTES="${3:-}"
 ACTOR="${4:-}"
 CRITIC="${5:-}"
+COMPLEXITY="${6:-${DYAD_TASK_COMPLEXITY:-}}"
 MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
 
-PAYLOAD=$(printf '{ "id":%s,"status":"%s","notes":"%s","actor":"%s","critic":"%s" }' \
+PAYLOAD=$(printf '{ "id":%s,"status":"%s","notes":"%s","actor":"%s","critic":"%s","complexity":"%s" }' \
   "$ID" \
   "${STATUS//\"/\\\"}" \
   "${NOTES//\"/\\\"}" \
   "${ACTOR//\"/\\\"}" \
-  "${CRITIC//\"/\\\"}")
+  "${CRITIC//\"/\\\"}" \
+  "${COMPLEXITY//\"/\\\"}")
 
 curl -fsSL -X POST -H "Content-Type: application/json" -d "$PAYLOAD" \
   "$MANAGER_URL/dyad-tasks/update"
