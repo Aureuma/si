@@ -411,6 +411,9 @@ func updateDyadTask(st *State, updated DyadTask, now time.Time) (DyadTask, bool)
 		if updated.Priority != "" {
 			st.DyadTasks[i].Priority = updated.Priority
 		}
+		if updated.Complexity != "" {
+			st.DyadTasks[i].Complexity = updated.Complexity
+		}
 		if updated.Dyad != "" {
 			st.DyadTasks[i].Dyad = updated.Dyad
 		}

@@ -2,8 +2,8 @@
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
-  echo "usage: add-dyad-task.sh <title> <dyad> [actor] [critic] [priority] [description] [link] [notes]" >&2
-  echo "env: DYAD_TASK_KIND (optional), MANAGER_URL (default http://localhost:9090)" >&2
+  echo "usage: add-dyad-task.sh <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]" >&2
+  echo "env: DYAD_TASK_KIND (optional), DYAD_TASK_COMPLEXITY (optional), MANAGER_URL (default http://localhost:9090)" >&2
   exit 1
 fi
 
@@ -15,11 +15,12 @@ PRIORITY="${5:-normal}"
 DESC="${6:-}"
 LINK="${7:-}"
 NOTES="${8:-}"
+COMPLEXITY="${9:-${DYAD_TASK_COMPLEXITY:-}}"
 KIND="${DYAD_TASK_KIND:-}"
 REQUESTED_BY="${REQUESTED_BY:-router}"
 MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
 
-PAYLOAD=$(printf '{ "title":"%s","kind":"%s","description":"%s","dyad":"%s","actor":"%s","critic":"%s","priority":"%s","requested_by":"%s","notes":"%s","link":"%s" }' \
+PAYLOAD=$(printf '{ "title":"%s","kind":"%s","description":"%s","dyad":"%s","actor":"%s","critic":"%s","priority":"%s","complexity":"%s","requested_by":"%s","notes":"%s","link":"%s" }' \
   "${TITLE//\"/\\\"}" \
   "${KIND//\"/\\\"}" \
   "${DESC//\"/\\\"}" \
@@ -27,6 +28,7 @@ PAYLOAD=$(printf '{ "title":"%s","kind":"%s","description":"%s","dyad":"%s","act
   "${ACTOR//\"/\\\"}" \
   "${CRITIC//\"/\\\"}" \
   "${PRIORITY//\"/\\\"}" \
+  "${COMPLEXITY//\"/\\\"}" \
   "${REQUESTED_BY//\"/\\\"}" \
   "${NOTES//\"/\\\"}" \
   "${LINK//\"/\\\"}" )

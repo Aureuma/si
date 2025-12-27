@@ -27,6 +27,7 @@ type ProgramTask struct {
 	Description string `json:"description"`
 	Kind       string `json:"kind"`
 	Priority   string `json:"priority"`
+	Complexity string `json:"complexity"`
 	RouteHint  string `json:"route_hint"`
 }
 
@@ -37,6 +38,7 @@ type DyadTask struct {
 	Kind        string `json:"kind"`
 	Status      string `json:"status"`
 	Priority    string `json:"priority"`
+	Complexity  string `json:"complexity"`
 	Dyad        string `json:"dyad"`
 	Actor       string `json:"actor"`
 	Critic      string `json:"critic"`
@@ -155,6 +157,9 @@ func (r *reconciler) reconcileOnce(ctx context.Context, cfgFile, cfgURL string) 
 			"critic":       critic,
 			"requested_by": "program-manager",
 			"notes":        notes,
+		}
+		if complexity := strings.TrimSpace(pt.Complexity); complexity != "" {
+			create["complexity"] = complexity
 		}
 		if err := r.createDyadTask(ctx, create); err != nil {
 			r.logger.Printf("create task failed key=%s: %v", key, err)
