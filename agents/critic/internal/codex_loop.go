@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // RunCodexTurn runs a single Codex turn inside the target container using stdin piping.
 // It returns the thread/session id and the last agent_message text from the JSONL stream.
-func (m *Monitor) RunCodexTurn(ctx context.Context, container, threadID, prompt string) (string, string, error) {
+func (m *Monitor) RunCodexTurn(ctx context.Context, container, threadID, prompt, model, effort string) (string, string, error) {
 	prompt = codexDyadPreamble(container, prompt)
 	encoded := base64.StdEncoding.EncodeToString([]byte(prompt))
 
@@ -21,13 +22,11 @@ func (m *Monitor) RunCodexTurn(ctx context.Context, container, threadID, prompt 
 		workdir = "/workspace/apps"
 	}
 
-	model := strings.TrimSpace(os.Getenv("CODEX_MODEL"))
 	if model == "" {
-		model = "gpt-5.1-codex-max"
+		model = envOr("CODEX_MODEL", "gpt-5.1-codex-max")
 	}
-	effort := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT"))
 	if effort == "" {
-		effort = "high"
+		effort = envOr("CODEX_REASONING_EFFORT", "high")
 	}
 	codexPrefix := fmt.Sprintf(
 		"codex -m %s -c %s --dangerously-bypass-approvals-and-sandbox",
@@ -107,6 +106,74 @@ func emptyIf(v, def string) string {
 	return v
 }
 
+func codexConfigForTask(task DyadTask) (string, string) {
+	baseModel := envOr("CODEX_MODEL", "gpt-5.1-codex-max")
+	baseEffort := envOr("CODEX_REASONING_EFFORT", "high")
+
+	level := normalizeComplexity(task.Complexity)
+	if level == "" {
+		level = normalizeComplexity(task.Priority)
+	}
+
+	model := baseModel
+	effort := baseEffort
+	if level != "" {
+		modelEnv := strings.ToUpper("CODEX_MODEL_" + level)
+		if v := strings.TrimSpace(os.Getenv(modelEnv)); v != "" {
+			model = v
+		}
+		effortEnv := strings.ToUpper("CODEX_REASONING_EFFORT_" + level)
+		if v := strings.TrimSpace(os.Getenv(effortEnv)); v != "" {
+			effort = v
+		} else {
+			effort = level
+		}
+	}
+	return model, effort
+}
+
+func normalizeComplexity(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "":
+		return ""
+	case "low", "simple", "easy", "trivial", "minor", "small", "p3":
+		return "low"
+	case "medium", "normal", "standard", "moderate", "p2":
+		return "medium"
+	case "high", "hard", "complex", "critical", "urgent", "major", "blocker", "p0", "p1":
+		return "high"
+	}
+	if n, err := strconv.Atoi(v); err == nil {
+		switch {
+		case n <= 2:
+			return "low"
+		case n == 3:
+			return "medium"
+		default:
+			return "high"
+		}
+	}
+	if strings.HasPrefix(v, "p0") || strings.HasPrefix(v, "p1") {
+		return "high"
+	}
+	if strings.HasPrefix(v, "p2") {
+		return "medium"
+	}
+	if strings.HasPrefix(v, "p3") || strings.HasPrefix(v, "p4") {
+		return "low"
+	}
+	return ""
+}
+
+func envOr(key, def string) string {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return def
+	}
+	return val
+}
+
 func (m *Monitor) DriveCodexExecTask(ctx context.Context, dyad string, task DyadTask) {
 	actor := task.Actor
 	if actor == "" {
@@ -124,6 +191,12 @@ func (m *Monitor) DriveCodexExecTask(ctx context.Context, dyad string, task Dyad
 	if attempts == "" {
 		attempts = "0"
 	}
+	if v := strings.TrimSpace(state["task.complexity"]); v != "" {
+		task.Complexity = v
+	} else if v := strings.TrimSpace(state["codex.complexity"]); v != "" {
+		task.Complexity = v
+	}
+	model, effort := codexConfigForTask(task)
 
 	prompt := strings.TrimSpace(task.Description)
 	if prompt == "" {
@@ -149,7 +222,7 @@ Task:
 
 	turnCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	newThreadID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, threadID, fullPrompt)
+	newThreadID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, threadID, fullPrompt, model, effort)
 	if err != nil {
 		_ = m.updateDyadTask(ctx, map[string]interface{}{
 			"id":     task.ID,
@@ -217,6 +290,12 @@ func (m *Monitor) DriveCodexLoopTest(ctx context.Context, dyad string, task Dyad
 	if phase == "" {
 		phase = "1"
 	}
+	if v := strings.TrimSpace(state["task.complexity"]); v != "" {
+		task.Complexity = v
+	} else if v := strings.TrimSpace(state["codex.complexity"]); v != "" {
+		task.Complexity = v
+	}
+	model, effort := codexConfigForTask(task)
 
 	// Ensure we claim before doing work (prevents multi-critic contention).
 	_ = m.claimDyadTask(ctx, task.ID, dyad)
@@ -233,7 +312,7 @@ func (m *Monitor) DriveCodexLoopTest(ctx context.Context, dyad string, task Dyad
 
 	turnCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
-	newThreadID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, threadID, nextPrompt)
+	newThreadID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, threadID, nextPrompt, model, effort)
 	if err != nil {
 		_ = m.updateDyadTask(ctx, map[string]interface{}{
 			"id":     task.ID,
