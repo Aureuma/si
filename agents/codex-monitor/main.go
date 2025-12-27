@@ -44,33 +44,43 @@ type accountsFile struct {
 }
 
 type monitor struct {
-	logger           *log.Logger
-	managerURL       string
-	kubeClient       *kubeClient
-	spawnEnabled     bool
-	thresholdPct     float64
-	totalLimitMin    int
-	lastCooldown     map[string]bool
-	statusMu         sync.Mutex
-	statusCache      map[string]statusEntry
+	logger            *log.Logger
+	managerURL        string
+	kubeClient        *kubeClient
+	spawnEnabled      bool
+	requireRegistered bool
+	thresholdPct      float64
+	totalLimitMin     int
+	lastCooldown      map[string]bool
+	statusMu          sync.Mutex
+	statusCache       map[string]statusEntry
 }
 
 type usageSnapshot struct {
-	RemainingPct     float64
-	RemainingMinutes int
-	UsedPct          float64
-	Email            string
+	RemainingPct           float64
+	RemainingMinutes       int
+	UsedPct                float64
+	WeeklyRemainingPct     float64
+	WeeklyRemainingMinutes int
+	WeeklyUsedPct          float64
+	Email                  string
 }
 
 type statusEntry struct {
-	Name             string    `json:"name"`
-	Dyad             string    `json:"dyad"`
-	Department       string    `json:"department"`
-	RemainingPct     float64   `json:"remaining_pct"`
-	RemainingMinutes int       `json:"remaining_minutes"`
-	Cooldown         bool      `json:"cooldown"`
-	Email            string    `json:"email,omitempty"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	Name                   string    `json:"name"`
+	Dyad                   string    `json:"dyad"`
+	Department             string    `json:"department"`
+	RemainingPct           float64   `json:"remaining_pct"`
+	RemainingMinutes       int       `json:"remaining_minutes"`
+	WeeklyRemainingPct     float64   `json:"weekly_remaining_pct"`
+	WeeklyRemainingMinutes int       `json:"weekly_remaining_minutes"`
+	Cooldown               bool      `json:"cooldown"`
+	Email                  string    `json:"email,omitempty"`
+	UpdatedAt              time.Time `json:"updated_at"`
+}
+
+type dyadSnapshot struct {
+	Dyad string `json:"dyad"`
 }
 
 type metricPayload struct {
@@ -97,6 +107,7 @@ func main() {
 		totalLimit = 300
 	}
 	spawnEnabled := boolEnv("CODEX_SPAWN_DYADS", true)
+	requireRegistered := boolEnv("DYAD_REQUIRE_REGISTERED", true)
 	addr := envOr("CODEX_MONITOR_ADDR", ":8086")
 
 	kubeClient, err := newKubeClient()
@@ -104,14 +115,15 @@ func main() {
 		logger.Fatalf("kubernetes client init: %v", err)
 	}
 	m := &monitor{
-		logger:        logger,
-		managerURL:    managerURL,
-		kubeClient:    kubeClient,
-		spawnEnabled:  spawnEnabled,
-		thresholdPct:  thresholdPct,
-		totalLimitMin: totalLimit,
-		lastCooldown:  map[string]bool{},
-		statusCache:   map[string]statusEntry{},
+		logger:            logger,
+		managerURL:        managerURL,
+		kubeClient:        kubeClient,
+		spawnEnabled:      spawnEnabled,
+		requireRegistered: requireRegistered,
+		thresholdPct:      thresholdPct,
+		totalLimitMin:     totalLimit,
+		lastCooldown:      map[string]bool{},
+		statusCache:       map[string]statusEntry{},
 	}
 
 	go m.serveStatus(addr)
@@ -209,7 +221,7 @@ func formatStatusSummary(entries []statusEntry) string {
 			line += " <" + entry.Email + ">"
 		}
 		if entry.RemainingPct >= 0 {
-			line += fmt.Sprintf(": %.1f%% remaining", entry.RemainingPct)
+			line += fmt.Sprintf(": 5h %.1f%% remaining", entry.RemainingPct)
 			if entry.RemainingMinutes > 0 {
 				line += fmt.Sprintf(" (%dm)", entry.RemainingMinutes)
 			}
@@ -217,7 +229,15 @@ func formatStatusSummary(entries []statusEntry) string {
 				line += " [cooldown]"
 			}
 		} else {
-			line += ": n/a"
+			line += ": 5h n/a"
+		}
+		if entry.WeeklyRemainingPct >= 0 {
+			line += fmt.Sprintf("; weekly %.1f%% remaining", entry.WeeklyRemainingPct)
+			if entry.WeeklyRemainingMinutes > 0 {
+				line += fmt.Sprintf(" (%dm)", entry.WeeklyRemainingMinutes)
+			}
+		} else {
+			line += "; weekly n/a"
 		}
 		b.WriteString(line + "\n")
 	}
@@ -225,6 +245,17 @@ func formatStatusSummary(entries []statusEntry) string {
 }
 
 func (m *monitor) pollOnce(cfg accountsFile) {
+	var registered map[string]dyadSnapshot
+	if m.requireRegistered {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		list, err := m.listDyads(ctx)
+		cancel()
+		if err != nil {
+			m.logger.Printf("dyad registry load error: %v", err)
+		} else {
+			registered = list
+		}
+	}
 	for _, acct := range cfg.Accounts {
 		if !accountEnabled(acct) {
 			continue
@@ -232,6 +263,18 @@ func (m *monitor) pollOnce(cfg accountsFile) {
 		if strings.TrimSpace(acct.Dyad) == "" {
 			m.logger.Printf("skip account %q: missing dyad", acct.Name)
 			continue
+		}
+		if m.requireRegistered {
+			if registered == nil {
+				m.logger.Printf("skip account %q: dyad registry unavailable", acct.Name)
+				m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false)
+				continue
+			}
+			if _, ok := registered[strings.TrimSpace(acct.Dyad)]; !ok {
+				m.logger.Printf("skip account %q: dyad not registered", acct.Name)
+				m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false)
+				continue
+			}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		m.ensureDyad(ctx, acct)
@@ -308,7 +351,7 @@ func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
 	status, err := m.fetchCodexStatus(ctx, acct)
 	if err != nil {
 		m.logger.Printf("codex status %s error: %v", acct.Dyad, err)
-		m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1}, false)
+		m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false)
 		return
 	}
 	usage := parseUsage(status, m.totalLimitMin)
@@ -337,6 +380,26 @@ func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
 			Department: dpt,
 			Name:       "codex.remaining_minutes",
 			Value:      float64(usage.RemainingMinutes),
+			Unit:       "minutes",
+			RecordedBy: "codex-monitor",
+		})
+	}
+	if usage.WeeklyRemainingPct >= 0 {
+		m.postMetric(ctx, metricPayload{
+			Dyad:       acct.Dyad,
+			Department: dpt,
+			Name:       "codex.weekly_remaining_pct",
+			Value:      usage.WeeklyRemainingPct,
+			Unit:       "percent",
+			RecordedBy: "codex-monitor",
+		})
+	}
+	if usage.WeeklyRemainingMinutes > 0 {
+		m.postMetric(ctx, metricPayload{
+			Dyad:       acct.Dyad,
+			Department: dpt,
+			Name:       "codex.weekly_remaining_minutes",
+			Value:      float64(usage.WeeklyRemainingMinutes),
 			Unit:       "minutes",
 			RecordedBy: "codex-monitor",
 		})
@@ -399,6 +462,36 @@ func (m *monitor) postMetric(ctx context.Context, metric metricPayload) {
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
+}
+
+func (m *monitor) listDyads(ctx context.Context) (map[string]dyadSnapshot, error) {
+	if strings.TrimSpace(m.managerURL) == "" {
+		return nil, errors.New("manager url not configured")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.managerURL+"/dyads", nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("manager returned %s", resp.Status)
+	}
+	var list []dyadSnapshot
+	if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
+		return nil, err
+	}
+	out := map[string]dyadSnapshot{}
+	for _, rec := range list {
+		if strings.TrimSpace(rec.Dyad) == "" {
+			continue
+		}
+		out[rec.Dyad] = rec
+	}
+	return out, nil
 }
 
 func (m *monitor) fetchCodexStatus(ctx context.Context, acct accountConfig) (string, error) {
@@ -694,14 +787,16 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 
 func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, cooldown bool) {
 	entry := statusEntry{
-		Name:             strings.TrimSpace(acct.Name),
-		Dyad:             strings.TrimSpace(acct.Dyad),
-		Department:       strings.TrimSpace(acct.Department),
-		RemainingPct:     usage.RemainingPct,
-		RemainingMinutes: usage.RemainingMinutes,
-		Cooldown:         cooldown,
-		Email:            strings.TrimSpace(usage.Email),
-		UpdatedAt:        time.Now().UTC(),
+		Name:                   strings.TrimSpace(acct.Name),
+		Dyad:                   strings.TrimSpace(acct.Dyad),
+		Department:             strings.TrimSpace(acct.Department),
+		RemainingPct:           usage.RemainingPct,
+		RemainingMinutes:       usage.RemainingMinutes,
+		WeeklyRemainingPct:     usage.WeeklyRemainingPct,
+		WeeklyRemainingMinutes: usage.WeeklyRemainingMinutes,
+		Cooldown:               cooldown,
+		Email:                  strings.TrimSpace(usage.Email),
+		UpdatedAt:              time.Now().UTC(),
 	}
 	if entry.Name == "" {
 		entry.Name = entry.Dyad
@@ -746,34 +841,56 @@ func (m *monitor) execInDyad(ctx context.Context, dyad, container string, cmd []
 
 func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 	raw = stripANSI(raw)
+	raw = stripInvisibles(raw)
 	remainingPct := -1.0
 	usedPct := -1.0
 	remainingMinutes := 0
+	weeklyRemainingPct := -1.0
+	weeklyUsedPct := -1.0
+	weeklyRemainingMinutes := 0
 	email := parseEmail(raw)
 	percentRe := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*%`)
-	wordsRe := regexp.MustCompile(`(?i)(remaining|left|available)`) // remaining context
-	usedRe := regexp.MustCompile(`(?i)(used|consumed|spent|utilized)`) // used context
+	wordsRe := regexp.MustCompile(`(?i)(remaining|left|available)`)         // remaining context
+	usedRe := regexp.MustCompile(`(?i)(used|consumed|spent|utilized)`)       // used context
 
 	lines := strings.Split(raw, "\n")
 	fallbackPercents := []float64{}
+	weeklyFallbackPercents := []float64{}
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
 		if trim == "" {
 			continue
 		}
+		isWeekly := isWeeklyLine(trim)
 		percentMatches := percentRe.FindAllStringSubmatch(trim, -1)
 		for _, match := range percentMatches {
 			val, _ := strconv.ParseFloat(match[1], 64)
 			if wordsRe.MatchString(trim) {
-				remainingPct = val
+				if isWeekly {
+					weeklyRemainingPct = val
+				} else {
+					remainingPct = val
+				}
 			} else if usedRe.MatchString(trim) {
-				usedPct = val
+				if isWeekly {
+					weeklyUsedPct = val
+				} else {
+					usedPct = val
+				}
 			} else {
-				fallbackPercents = append(fallbackPercents, val)
+				if isWeekly {
+					weeklyFallbackPercents = append(weeklyFallbackPercents, val)
+				} else {
+					fallbackPercents = append(fallbackPercents, val)
+				}
 			}
 		}
-		if remainingMinutes == 0 && wordsRe.MatchString(trim) {
-			if mins := parseMinutes(trim); mins > 0 {
+		if mins := parseMinutes(trim); mins > 0 {
+			if isWeekly {
+				if weeklyRemainingMinutes == 0 && (wordsRe.MatchString(trim) || len(percentMatches) > 0) {
+					weeklyRemainingMinutes = mins
+				}
+			} else if remainingMinutes == 0 && (wordsRe.MatchString(trim) || len(percentMatches) > 0) {
 				remainingMinutes = mins
 			}
 		}
@@ -781,13 +898,33 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 	if remainingPct < 0 && usedPct >= 0 {
 		remainingPct = 100 - usedPct
 	}
+	if weeklyRemainingPct < 0 && weeklyUsedPct >= 0 {
+		weeklyRemainingPct = 100 - weeklyUsedPct
+	}
 	if remainingPct < 0 && len(fallbackPercents) == 1 {
 		remainingPct = fallbackPercents[0]
 	}
+	if weeklyRemainingPct < 0 && len(weeklyFallbackPercents) == 1 {
+		weeklyRemainingPct = weeklyFallbackPercents[0]
+	}
 	if remainingMinutes == 0 {
 		for _, line := range lines {
+			if isWeeklyLine(line) {
+				continue
+			}
 			if mins := parseMinutes(line); mins > 0 {
 				remainingMinutes = mins
+				break
+			}
+		}
+	}
+	if weeklyRemainingMinutes == 0 {
+		for _, line := range lines {
+			if !isWeeklyLine(line) {
+				continue
+			}
+			if mins := parseMinutes(line); mins > 0 {
+				weeklyRemainingMinutes = mins
 				break
 			}
 		}
@@ -796,10 +933,13 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 		remainingPct = float64(remainingMinutes) / float64(totalLimitMinutes) * 100
 	}
 	return usageSnapshot{
-		RemainingPct:     remainingPct,
-		RemainingMinutes: remainingMinutes,
-		UsedPct:          usedPct,
-		Email:            email,
+		RemainingPct:           remainingPct,
+		RemainingMinutes:       remainingMinutes,
+		UsedPct:                usedPct,
+		WeeklyRemainingPct:     weeklyRemainingPct,
+		WeeklyRemainingMinutes: weeklyRemainingMinutes,
+		WeeklyUsedPct:          weeklyUsedPct,
+		Email:                  email,
 	}
 }
 
@@ -808,8 +948,25 @@ func stripANSI(s string) string {
 		return s
 	}
 	// Strip common ANSI escape sequences.
-	re := regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
-	return re.ReplaceAllString(s, "")
+	reCSI := regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	reOSC := regexp.MustCompile(`\x1b\][^\x07]*(\x07|\x1b\\)`)
+	out := reCSI.ReplaceAllString(s, "")
+	out = reOSC.ReplaceAllString(out, "")
+	return out
+}
+
+func stripInvisibles(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case 0, '\u200b', '\u200c', '\u200d', '\ufeff':
+			return -1
+		default:
+			return r
+		}
+	}, s)
 }
 
 func isCodexDir(path string) bool {
@@ -973,12 +1130,33 @@ func parseMinutes(line string) int {
 	return h*60 + m
 }
 
+func isWeeklyLine(line string) bool {
+	lower := strings.ToLower(line)
+	if strings.Contains(lower, "weekly") || strings.Contains(lower, "week") {
+		return true
+	}
+	if strings.Contains(lower, "7-day") || strings.Contains(lower, "7 day") || strings.Contains(lower, "7day") {
+		return true
+	}
+	return false
+}
+
 func parseEmail(raw string) string {
 	if raw == "" {
 		return ""
 	}
 	emailRe := regexp.MustCompile(`[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}`)
-	return emailRe.FindString(raw)
+	if match := emailRe.FindString(raw); match != "" {
+		return match
+	}
+	spacedRe := regexp.MustCompile(`([A-Za-z0-9._%+\-]+)\s*@\s*([A-Za-z0-9.\-]+\s*(?:\.\s*[A-Za-z0-9.\-]+)+)`)
+	if match := spacedRe.FindString(raw); match != "" {
+		compact := strings.Join(strings.Fields(match), "")
+		if found := emailRe.FindString(compact); found != "" {
+			return found
+		}
+	}
+	return ""
 }
 
 func truncateLines(text string, maxLines int, maxBytes int) string {
