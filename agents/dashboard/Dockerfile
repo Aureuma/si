@@ -1,7 +1,7 @@
 FROM golang:1.22-bookworm AS builder
 
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /out/dashboard .
@@ -11,4 +11,3 @@ WORKDIR /workspace
 COPY --from=builder /out/dashboard /usr/local/bin/dashboard
 EXPOSE 8087
 ENTRYPOINT ["/usr/local/bin/dashboard"]
-
