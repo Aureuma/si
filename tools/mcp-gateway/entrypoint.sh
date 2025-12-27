@@ -15,6 +15,15 @@ if [ -f /run/secrets/stripe_api_key ]; then
   fi
 fi
 
+if [ -n "${DOCKER_HOST:-}" ]; then
+  for _ in $(seq 1 30); do
+    if docker version >/dev/null 2>&1; then
+      break
+    fi
+    sleep 1
+  done
+fi
+
 mkdir -p /catalog
 if [ ! -f /catalog/catalog.yaml ] && [ "$1" = "gateway" ]; then
   /usr/local/bin/docker-mcp catalog bootstrap /catalog/catalog.yaml || true

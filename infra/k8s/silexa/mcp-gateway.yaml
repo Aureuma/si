@@ -45,12 +45,19 @@ spec:
         app: silexa-mcp-gateway
         silexa.component: mcp-gateway
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: mcp-gateway
           image: silexa/mcp-gateway:local
           ports:
             - containerPort: 8088
           env:
+            - name: DOCKER_HOST
+              value: tcp://localhost:2375
+            - name: DOCKER_MCP_IN_CONTAINER
+              value: "1"
+            - name: DOCKER_MCP_IN_DIND
+              value: "1"
             - name: GH_TOKEN_FILE
               value: /run/secrets/gh_token
             - name: STRIPE_API_KEY_FILE
@@ -61,6 +68,19 @@ spec:
             - name: mcp-secrets
               mountPath: /run/secrets
               readOnly: true
+        - name: docker-daemon
+          image: docker:26-dind
+          args:
+            - --host=tcp://0.0.0.0:2375
+            - --host=unix:///var/run/docker.sock
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: ""
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: docker-data
+              mountPath: /var/lib/docker
       volumes:
         - name: catalog
           persistentVolumeClaim:
@@ -69,3 +89,5 @@ spec:
           secret:
             secretName: mcp-gateway-secrets
             optional: true
+        - name: docker-data
+          emptyDir: {}
