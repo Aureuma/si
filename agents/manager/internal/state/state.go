@@ -146,8 +146,97 @@ func StateWorkflow(ctx workflow.Context, input State) error {
 		return st.DyadDigestMessageID, nil
 	})
 
+	upsertDyadCh := workflow.GetSignalChannel(ctx, "upsert_dyad")
+	heartbeatCh := workflow.GetSignalChannel(ctx, "heartbeat")
+	addHumanTaskCh := workflow.GetSignalChannel(ctx, "add_human_task")
+	completeHumanTaskCh := workflow.GetSignalChannel(ctx, "complete_human_task")
+	addDyadTaskCh := workflow.GetSignalChannel(ctx, "add_dyad_task")
+	updateDyadTaskCh := workflow.GetSignalChannel(ctx, "update_dyad_task")
+	claimDyadTaskCh := workflow.GetSignalChannel(ctx, "claim_dyad_task")
+	addFeedbackCh := workflow.GetSignalChannel(ctx, "add_feedback")
+	addAccessRequestCh := workflow.GetSignalChannel(ctx, "add_access_request")
+	resolveAccessRequestCh := workflow.GetSignalChannel(ctx, "resolve_access_request")
+	addMetricCh := workflow.GetSignalChannel(ctx, "add_metric")
+	setDyadDigestMessageIDCh := workflow.GetSignalChannel(ctx, "set_dyad_digest_message_id")
+
 	for {
-		_ = workflow.Sleep(ctx, time.Hour)
+		selector := workflow.NewSelector(ctx)
+		selector.AddReceive(upsertDyadCh, func(c workflow.ReceiveChannel, _ bool) {
+			var update DyadUpdate
+			c.Receive(ctx, &update)
+			now := workflow.Now(ctx).UTC()
+			upsertDyad(&st, update, now)
+		})
+		selector.AddReceive(heartbeatCh, func(c workflow.ReceiveChannel, _ bool) {
+			var hb Heartbeat
+			c.Receive(ctx, &hb)
+			now := workflow.Now(ctx).UTC()
+			hb.When = now
+			addHeartbeat(&st, hb, now)
+		})
+		selector.AddReceive(addHumanTaskCh, func(c workflow.ReceiveChannel, _ bool) {
+			var task HumanTask
+			c.Receive(ctx, &task)
+			now := workflow.Now(ctx).UTC()
+			addHumanTask(&st, task, now)
+		})
+		selector.AddReceive(completeHumanTaskCh, func(c workflow.ReceiveChannel, _ bool) {
+			var id int
+			c.Receive(ctx, &id)
+			now := workflow.Now(ctx).UTC()
+			completeHumanTask(&st, id, now)
+		})
+		selector.AddReceive(addDyadTaskCh, func(c workflow.ReceiveChannel, _ bool) {
+			var task DyadTask
+			c.Receive(ctx, &task)
+			now := workflow.Now(ctx).UTC()
+			addDyadTask(&st, task, now)
+		})
+		selector.AddReceive(updateDyadTaskCh, func(c workflow.ReceiveChannel, _ bool) {
+			var task DyadTask
+			c.Receive(ctx, &task)
+			now := workflow.Now(ctx).UTC()
+			updateDyadTask(&st, task, now)
+		})
+		selector.AddReceive(claimDyadTaskCh, func(c workflow.ReceiveChannel, _ bool) {
+			var payload DyadTaskClaim
+			c.Receive(ctx, &payload)
+			now := workflow.Now(ctx).UTC()
+			claimDyadTask(&st, payload.ID, payload.Dyad, payload.Critic, now)
+		})
+		selector.AddReceive(addFeedbackCh, func(c workflow.ReceiveChannel, _ bool) {
+			var fb Feedback
+			c.Receive(ctx, &fb)
+			now := workflow.Now(ctx).UTC()
+			addFeedback(&st, fb, now)
+		})
+		selector.AddReceive(addAccessRequestCh, func(c workflow.ReceiveChannel, _ bool) {
+			var ar AccessRequest
+			c.Receive(ctx, &ar)
+			now := workflow.Now(ctx).UTC()
+			addAccessRequest(&st, ar, now)
+		})
+		selector.AddReceive(resolveAccessRequestCh, func(c workflow.ReceiveChannel, _ bool) {
+			var payload AccessResolve
+			c.Receive(ctx, &payload)
+			now := workflow.Now(ctx).UTC()
+			resolveAccessRequest(&st, payload.ID, payload.Status, payload.By, payload.Notes, now)
+		})
+		selector.AddReceive(addMetricCh, func(c workflow.ReceiveChannel, _ bool) {
+			var m Metric
+			c.Receive(ctx, &m)
+			now := workflow.Now(ctx).UTC()
+			addMetric(&st, m, now)
+		})
+		selector.AddReceive(setDyadDigestMessageIDCh, func(c workflow.ReceiveChannel, _ bool) {
+			var id int
+			c.Receive(ctx, &id)
+			st.DyadDigestMessageID = id
+		})
+		selector.AddFuture(workflow.NewTimer(ctx, time.Hour), func(f workflow.Future) {
+			_ = f.Get(ctx, nil)
+		})
+		selector.Select(ctx)
 	}
 }
 
