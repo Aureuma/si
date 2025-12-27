@@ -21,7 +21,7 @@ metadata:
     app: silexa-telegram-bot
     silexa.component: telegram-bot
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: silexa-telegram-bot
