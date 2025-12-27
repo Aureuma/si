@@ -38,7 +38,10 @@ spec:
             - containerPort: 8081
           env:
             - name: TELEGRAM_CHAT_ID
-              value: ""
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-bot-token
+                  key: telegram_chat_id
             - name: TELEGRAM_BOT_TOKEN_FILE
               value: /run/secrets/telegram_bot_token
             - name: MANAGER_URL
