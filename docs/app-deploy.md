@@ -6,10 +6,11 @@ Each app is deployed as its own kustomize bundle so it can be updated independen
 - Kubernetes cluster + namespace (default `silexa`).
 - App metadata present: `apps/<app>/app.json`
 - App k8s manifests: `apps/<app>/infra/k8s`
-- App env secret: `secrets/app-<app>.env` (e.g., DATABASE_URL, AUTH_SECRET)
+- App env secret: `secrets/app-<app>.env` (e.g., DATABASE_URL, AUTH_SECRET) or encrypted `secrets/app-<app>.env.sops` (see `docs/secrets.md`).
 
 ## Build + deploy
 - Build images: `bin/app-build.sh <app>` (requires buildctl/buildkitd; push/load into your registry as needed)
+- Local k3s import helper: `bin/image-build-import.sh -t <image:tag> -f <Dockerfile> <context>` (builds + imports into containerd)
 - Create/update secret: `bin/app-secrets.sh <app>`
 - Deploy: `bin/app-deploy.sh <app>`
 

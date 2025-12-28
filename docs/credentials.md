@@ -10,6 +10,7 @@
 - Use `*_FILE` env vars when possible (e.g., `TELEGRAM_BOT_TOKEN_FILE`).
 - Limit secret mounts to the services that need them (currently only `telegram-bot`).
 - For new secrets, create Kubernetes secrets and mount only into the services that need them.
+- Prefer SOPS + age for encrypted secrets in git (see `docs/secrets.md`).
 
 ## Actors/Critics
 - No secrets mounted by default. Prefer OAuth-style flows where possible (e.g., `codex login` via browser).

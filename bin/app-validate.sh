@@ -111,8 +111,14 @@ else:
     warnings.append("paths.infra is empty; no stack.yml expected")
 
 secret_file = os.path.join(root_dir, "secrets", f"app-{app_name}.env")
-if not os.path.isfile(secret_file):
-    warnings.append(f"missing secrets/app-{app_name}.env")
+secret_candidates = [
+    secret_file,
+    f"{secret_file}.sops",
+    f"{secret_file}.sops.env",
+    f"{secret_file}.env.sops",
+]
+if not any(os.path.isfile(path) for path in secret_candidates):
+    warnings.append(f"missing secrets/app-{app_name}.env (or encrypted .sops variant)")
 
 print(f"app {app_name} validation")
 for item in errors:
