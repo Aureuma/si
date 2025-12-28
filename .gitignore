@@ -10,6 +10,8 @@ node_modules/
 secrets/
 .env
 !secrets/README.md
+!secrets/*.sops.*
+!secrets/**/*.sops.*
 
 # Data persistence files
 data/
