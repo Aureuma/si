@@ -20,18 +20,27 @@ KIND="${DYAD_TASK_KIND:-}"
 REQUESTED_BY="${REQUESTED_BY:-router}"
 MANAGER_URL=${MANAGER_URL:-http://localhost:9090}
 
-PAYLOAD=$(printf '{ "title":"%s","kind":"%s","description":"%s","dyad":"%s","actor":"%s","critic":"%s","priority":"%s","complexity":"%s","requested_by":"%s","notes":"%s","link":"%s" }' \
-  "${TITLE//\"/\\\"}" \
-  "${KIND//\"/\\\"}" \
-  "${DESC//\"/\\\"}" \
-  "${DYAD//\"/\\\"}" \
-  "${ACTOR//\"/\\\"}" \
-  "${CRITIC//\"/\\\"}" \
-  "${PRIORITY//\"/\\\"}" \
-  "${COMPLEXITY//\"/\\\"}" \
-  "${REQUESTED_BY//\"/\\\"}" \
-  "${NOTES//\"/\\\"}" \
-  "${LINK//\"/\\\"}" )
+PAYLOAD=$(python3 - <<'PY' "$TITLE" "$KIND" "$DESC" "$DYAD" "$ACTOR" "$CRITIC" "$PRIORITY" "$COMPLEXITY" "$REQUESTED_BY" "$NOTES" "$LINK"
+import json
+import sys
+
+title, kind, desc, dyad, actor, critic, priority, complexity, requested_by, notes, link = sys.argv[1:]
+payload = {
+    "title": title,
+    "kind": kind,
+    "description": desc,
+    "dyad": dyad,
+    "actor": actor,
+    "critic": critic,
+    "priority": priority,
+    "complexity": complexity,
+    "requested_by": requested_by,
+    "notes": notes,
+    "link": link,
+}
+print(json.dumps(payload))
+PY
+)
 
 curl -fsSL -X POST -H "Content-Type: application/json" -d "$PAYLOAD" \
   "$MANAGER_URL/dyad-tasks"
