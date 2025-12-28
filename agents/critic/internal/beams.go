@@ -4,15 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"html"
 	"io"
 	"net/http"
-	"os"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -57,7 +52,10 @@ func (m *Monitor) TickDyadWork(ctx context.Context, dyad string) {
 			continue
 		}
 		kind := strings.ToLower(strings.TrimSpace(t.Kind))
-		if !actorLoggedIn && kind != "beam.codex_login" {
+		if strings.HasPrefix(kind, "beam.") {
+			continue
+		}
+		if !actorLoggedIn {
 			continue
 		}
 		if isExecutableKind(kind) {
@@ -87,8 +85,6 @@ func (m *Monitor) TickDyadWork(ctx context.Context, dyad string) {
 		m.Logger.Printf("dyad work: claim ok id=%d kind=%s", t.ID, t.Kind)
 		kind := strings.ToLower(strings.TrimSpace(t.Kind))
 		switch kind {
-		case "beam.codex_login":
-			m.runBeamCodexLogin(ctx, dyad, t)
 		case "test.codex_loop":
 			m.DriveCodexLoopTest(ctx, dyad, t)
 		case "codex.exec":
@@ -108,7 +104,7 @@ func (m *Monitor) TickDyadWork(ctx context.Context, dyad string) {
 func isExecutableKind(kind string) bool {
 	kind = strings.ToLower(strings.TrimSpace(kind))
 	switch kind {
-	case "beam.codex_login", "test.codex_loop", "codex.exec":
+	case "test.codex_loop", "codex.exec":
 		return true
 	}
 	return strings.HasPrefix(kind, "hardening.") ||
@@ -132,8 +128,6 @@ func priorityScore(p string) int {
 
 func kindScore(kind string) int {
 	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case "beam.codex_login":
-		return 1000
 	case "test.codex_loop":
 		return 500
 	case "codex.exec":
@@ -173,148 +167,6 @@ func (m *Monitor) listDyadTasks(ctx context.Context) ([]DyadTask, error) {
 	return tasks, nil
 }
 
-func (m *Monitor) runBeamCodexLogin(ctx context.Context, dyad string, task DyadTask) {
-	actor := task.Actor
-	if actor == "" {
-		actor = m.ActorContainer
-	}
-	if actor == "" {
-		m.Logger.Printf("beam.codex_login missing actor")
-		return
-	}
-
-	status, _ := m.ExecInContainerCapture(ctx, actor, []string{"codex", "login", "status"})
-	if strings.Contains(status, "Logged in") {
-		_ = m.updateDyadTask(ctx, map[string]interface{}{
-			"id":     task.ID,
-			"status": "done",
-			"notes":  strings.TrimSpace(task.Notes + "\n[beam.codex_login] already logged in"),
-		})
-		return
-	}
-
-	alreadySent := strings.Contains(task.Notes, "[beam.codex_login] sent")
-	if alreadySent {
-		// Human still needs to complete browser callback.
-		return
-	}
-
-	if m.TelegramURL == "" || m.TelegramChatID == "" {
-		_ = m.updateDyadTask(ctx, map[string]interface{}{
-			"id":     task.ID,
-			"status": "blocked",
-			"notes":  strings.TrimSpace(task.Notes + "\n[beam.codex_login] missing TELEGRAM_NOTIFY_URL / TELEGRAM_CHAT_ID in critic env"),
-		})
-		return
-	}
-
-	port := envInt("CODEX_LOGIN_PORT", 1455)
-	forwardPort := envInt("CODEX_LOGIN_FORWARD_PORT", port+1)
-
-	podName, _, err := m.resolveTarget(ctx, actor)
-	if err != nil || podName == "" {
-		m.Logger.Printf("beam.codex_login: resolve pod error: %v", err)
-		return
-	}
-
-	outFile := fmt.Sprintf("/tmp/codex_login_%d.log", port)
-	startCmd := fmt.Sprintf(
-		"rm -f %q && nohup bash -lc 'codex login --port %d >%q 2>&1' >/dev/null 2>&1 & disown || true",
-		outFile,
-		port,
-		outFile,
-	)
-	_ = m.NudgeContainer(ctx, actor, []string{"bash", "-lc", startCmd})
-
-	authURL := ""
-	detectedPort := 0
-	for i := 0; i < 60; i++ {
-		raw, _ := m.ExecInContainerCapture(ctx, actor, []string{"bash", "-lc", "cat " + shellQuote(outFile) + " 2>/dev/null || true"})
-		if strings.Contains(raw, "unexpected argument '--port'") {
-			// Retry without --port (some Codex CLI builds).
-			outFile = "/tmp/codex_login.log"
-			_ = m.NudgeContainer(ctx, actor, []string{"bash", "-lc", "rm -f " + shellQuote(outFile) + " && nohup bash -lc 'codex login >" + shellQuote(outFile) + " 2>&1' >/dev/null 2>&1 & disown || true"})
-			time.Sleep(1 * time.Second)
-			continue
-		}
-		if detectedPort == 0 {
-			detectedPort = parseCodexLoginPort(raw)
-		}
-		authURL = firstAuthURL(raw)
-		if authURL != "" && detectedPort != 0 {
-			break
-		}
-		time.Sleep(1 * time.Second)
-	}
-	if authURL == "" {
-		m.Logger.Printf("beam.codex_login: failed to capture auth URL from %s:%s", actor, outFile)
-		return
-	}
-	if detectedPort != 0 && detectedPort != port {
-		port = detectedPort
-		// recompute forwardPort if not explicitly set
-		if strings.TrimSpace(os.Getenv("CODEX_LOGIN_FORWARD_PORT")) == "" {
-			forwardPort = port + 1
-		}
-	}
-
-	forwardName := fmt.Sprintf("%s-codex-forward-%d", actor, port)
-	if err := m.RunSocatForwarder(ctx, forwardName, actor, forwardPort, port); err != nil {
-		m.Logger.Printf("beam.codex_login: socat forward error: %v", err)
-		return
-	}
-
-	kubeCmd := fmt.Sprintf("%s port-forward pod/%s %d:%d", kubectlPrefix(m.kubeClient), podName, port, forwardPort)
-	msg := strings.TrimSpace(fmt.Sprintf(
-		"🔐 <b>Codex login</b>\n\n<b>🛠 Port-forward:</b>\n<pre><code>%s</code></pre>\n\n<b>🌐 URL:</b>\n<pre><code>%s</code></pre>",
-		html.EscapeString(kubeCmd),
-		html.EscapeString(authURL),
-	))
-
-	if err := m.telegramNotify(ctx, msg); err != nil {
-		m.Logger.Printf("beam.codex_login: telegram notify error: %v", err)
-		return
-	}
-
-	_ = m.updateDyadTask(ctx, map[string]interface{}{
-		"id":     task.ID,
-		"status": "blocked",
-		"notes":  strings.TrimSpace(task.Notes + fmt.Sprintf("\n[beam.codex_login] sent port-forward+URL to telegram (dyad=%s); waiting for browser callback", dyad)),
-	})
-}
-
-func (m *Monitor) telegramNotify(ctx context.Context, message string) error {
-	if m.TelegramURL == "" {
-		return errors.New("missing telegram url")
-	}
-	chatID, err := strconv.ParseInt(strings.TrimSpace(m.TelegramChatID), 10, 64)
-	if err != nil {
-		return fmt.Errorf("invalid telegram chat id: %w", err)
-	}
-	payload := map[string]interface{}{
-		"chat_id": chatID,
-		"message": message,
-		"parse_mode": "HTML",
-		"disable_web_page_preview": true,
-	}
-	b, _ := json.Marshal(payload)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.TelegramURL, bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("telegram notify non-2xx: %s", resp.Status)
-	}
-	return nil
-}
-
 func (m *Monitor) updateDyadTask(ctx context.Context, payload map[string]interface{}) error {
 	b, _ := json.Marshal(payload)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.ManagerURL+"/dyad-tasks/update", bytes.NewReader(b))
@@ -332,56 +184,6 @@ func (m *Monitor) updateDyadTask(ctx context.Context, payload map[string]interfa
 		return fmt.Errorf("update task non-2xx: %s", resp.Status)
 	}
 	return nil
-}
-
-func kubectlPrefix(kube *kubeClient) string {
-	args := []string{"kubectl"}
-	if ctx := strings.TrimSpace(os.Getenv("KUBECTL_CONTEXT")); ctx != "" {
-		args = append(args, "--context", ctx)
-	}
-	namespace := ""
-	if kube != nil {
-		namespace = strings.TrimSpace(kube.namespace)
-	}
-	if namespace == "" {
-		namespace = strings.TrimSpace(os.Getenv("POD_NAMESPACE"))
-	}
-	if namespace == "" {
-		namespace = strings.TrimSpace(os.Getenv("SILEXA_NAMESPACE"))
-	}
-	if namespace != "" {
-		args = append(args, "-n", namespace)
-	}
-	return strings.Join(args, " ")
-}
-
-var urlRe = regexp.MustCompile(`https://[^\s]+`)
-var codexPortRe = regexp.MustCompile(`(?:localhost|127\.0\.0\.1):([0-9]+)`)
-
-func firstAuthURL(raw string) string {
-	m := urlRe.FindString(raw)
-	return strings.TrimSpace(m)
-}
-
-func parseCodexLoginPort(raw string) int {
-	m := codexPortRe.FindStringSubmatch(raw)
-	if len(m) != 2 {
-		return 0
-	}
-	n, err := strconv.Atoi(m[1])
-	if err != nil || n <= 0 {
-		return 0
-	}
-	return n
-}
-
-func envInt(key string, def int) int {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		if i, err := strconv.Atoi(v); err == nil && i > 0 {
-			return i
-		}
-	}
-	return def
 }
 
 func shellQuote(s string) string {

@@ -6,14 +6,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// RunCodexTurn runs a single Codex turn inside the target container using stdin piping.
-// It returns the thread/session id and the last agent_message text from the JSONL stream.
-func (m *Monitor) RunCodexTurn(ctx context.Context, container, threadID, prompt, model, effort string) (string, string, error) {
+var (
+	codexAnsiRe    = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
+	codexTokenRe   = regexp.MustCompile(`^[A-Z0-9_]{3,64}$`)
+	codexSessionRe = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
+)
+
+// RunCodexTurn runs a single Codex turn inside the target container using the interactive CLI.
+// It returns the session id (when available) and the last captured response line.
+func (m *Monitor) RunCodexTurn(ctx context.Context, container, sessionID, prompt, model, effort string) (string, string, error) {
 	prompt = codexDyadPreamble(container, prompt)
 	encoded := base64.StdEncoding.EncodeToString([]byte(prompt))
 
@@ -28,43 +35,70 @@ func (m *Monitor) RunCodexTurn(ctx context.Context, container, threadID, prompt,
 	if effort == "" {
 		effort = envOr("CODEX_REASONING_EFFORT", "high")
 	}
-	codexPrefix := fmt.Sprintf(
-		"codex -m %s -c %s --dangerously-bypass-approvals-and-sandbox",
+	codexArgs := fmt.Sprintf(
+		"-m %s -c %s --dangerously-bypass-approvals-and-sandbox -C %s",
 		shellQuote(model),
 		shellQuote(fmt.Sprintf("model_reasoning_effort=%s", effort)),
+		shellQuote(workdir),
 	)
 
-	var cmd string
-	if strings.TrimSpace(threadID) == "" {
-		cmd = fmt.Sprintf(
-			"cd %s && printf '%%s' %q | base64 -d | %s exec --skip-git-repo-check --json - | tee /proc/1/fd/1",
-			shellQuote(workdir),
-			encoded,
-			codexPrefix,
-		)
+	var codexCmd string
+	if strings.TrimSpace(sessionID) == "" {
+		codexCmd = fmt.Sprintf("codex %s", codexArgs)
 	} else {
-		cmd = fmt.Sprintf(
-			"cd %s && printf '%%s' %q | base64 -d | %s exec --skip-git-repo-check --json resume %s - | tee /proc/1/fd/1",
-			shellQuote(workdir),
-			encoded,
-			codexPrefix,
-			shellQuote(threadID),
-		)
+		codexCmd = fmt.Sprintf("codex resume %s %s", codexArgs, shellQuote(sessionID))
 	}
+
+	turnTimeout := 8 * time.Minute
+	if deadline, ok := ctx.Deadline(); ok {
+		remaining := time.Until(deadline) - 30*time.Second
+		if remaining > time.Minute {
+			turnTimeout = remaining
+		} else if remaining > 0 {
+			turnTimeout = remaining
+		}
+	}
+	idleTimeout := 4 * time.Second
+	logWait := 5 * time.Second
+
+	cmd := fmt.Sprintf(
+		"PROMPT=$(printf '%%s' %s | base64 -d); SESSION_LOG=$(mktemp /tmp/codex-session-XXXX.jsonl); "+
+			"codex-stdout-parser --command %s --prompt \"$PROMPT\" --session-log \"$SESSION_LOG\" "+
+			"--session-log-wait %s --bracketed-paste --submit-seq '\\r' --idle-timeout %s --turn-timeout %s "+
+			"--wait-ready=false --ready-regex '' --send-exit=false --flush-on-eof=false --max-turns 1 --exit-grace 2s",
+		shellQuote(encoded),
+		shellQuote(codexCmd),
+		shellQuote(logWait.String()),
+		shellQuote(idleTimeout.String()),
+		shellQuote(turnTimeout.String()),
+	)
 
 	raw, err := m.ExecInContainerCapture(ctx, container, []string{"bash", "-lc", cmd})
 	if err != nil {
-		return threadID, "", err
+		return sessionID, "", err
 	}
 
-	parsedThread, lastMsg := parseCodexJSONL(raw)
-	if parsedThread == "" {
-		parsedThread = threadID
+	lastMsg := parseCodexParserOutput(raw)
+	if lastMsg == "" {
+		lastMsg = parseCodexOutput(raw)
 	}
 	if lastMsg == "" {
-		return parsedThread, "", fmt.Errorf("no agent_message found in codex output")
+		return sessionID, "", fmt.Errorf("no codex output captured")
 	}
-	return parsedThread, lastMsg, nil
+
+	newSessionID := strings.TrimSpace(sessionID)
+	if newSessionID == "" {
+		newSessionID = parseCodexSessionID(raw)
+	}
+	if newSessionID == "" {
+		if sid, err := m.latestCodexSessionID(ctx, container); err == nil {
+			newSessionID = sid
+		}
+	}
+	if newSessionID == "" {
+		newSessionID = sessionID
+	}
+	return newSessionID, lastMsg, nil
 }
 
 func codexDyadPreamble(container, prompt string) string {
@@ -174,6 +208,72 @@ func envOr(key, def string) string {
 	return val
 }
 
+func parseStateTime(value string) time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}
+	}
+	if ts, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return ts
+	}
+	if ts, err := time.Parse(time.RFC3339, value); err == nil {
+		return ts
+	}
+	return time.Time{}
+}
+
+func stripLogTimestamps(text string) string {
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		if _, err := time.Parse(time.RFC3339Nano, fields[0]); err == nil {
+			lines[i] = strings.Join(fields[1:], " ")
+			continue
+		}
+		if _, err := time.Parse(time.RFC3339, fields[0]); err == nil {
+			lines[i] = strings.Join(fields[1:], " ")
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m *Monitor) actorLogContext(ctx context.Context, actor string, state map[string]string) (string, map[string]string) {
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		return "", nil
+	}
+	lines := envIntAllowZero("CODEX_ACTOR_LOG_LINES", 32)
+	if lines <= 0 {
+		return "", nil
+	}
+	maxBytes := envIntAllowZero("CODEX_ACTOR_LOG_BYTES", 2400)
+	if maxBytes <= 0 {
+		maxBytes = 2400
+	}
+	since := parseStateTime(state["actor.logs.since"])
+	text, last, err := m.fetchActorLogs(ctx, actor, since, lines, true)
+	if err != nil {
+		return "", nil
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", nil
+	}
+	text = stripLogTimestamps(text)
+	text = truncateLines(text, lines, maxBytes)
+	if text == "" {
+		return "", nil
+	}
+	update := map[string]string{}
+	if !last.IsZero() {
+		update["actor.logs.since"] = last.UTC().Format(time.RFC3339Nano)
+	}
+	return "Recent actor CLI output:\n" + text, update
+}
+
 func (m *Monitor) DriveCodexExecTask(ctx context.Context, dyad string, task DyadTask) {
 	actor := task.Actor
 	if actor == "" {
@@ -186,11 +286,15 @@ func (m *Monitor) DriveCodexExecTask(ctx context.Context, dyad string, task Dyad
 	_ = m.claimDyadTask(ctx, task.ID, dyad)
 
 	state := parseState(task.Notes)
-	threadID := state["codex.thread_id"]
+	sessionID := strings.TrimSpace(state["codex.session_id"])
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(state["codex.thread_id"])
+	}
 	attempts := state["codex.exec.attempts"]
 	if attempts == "" {
 		attempts = "0"
 	}
+	attemptCount := atoiDefault(attempts, 0)
 	if v := strings.TrimSpace(state["task.complexity"]); v != "" {
 		task.Complexity = v
 	} else if v := strings.TrimSpace(state["codex.complexity"]); v != "" {
@@ -211,6 +315,20 @@ func (m *Monitor) DriveCodexExecTask(ctx context.Context, dyad string, task Dyad
 		return
 	}
 
+	logContext, logState := m.actorLogContext(ctx, actor, state)
+	contextParts := []string{}
+	if attemptCount > 0 {
+		if prev := strings.TrimSpace(state["codex.exec.last"]); prev != "" {
+			contextParts = append(contextParts, "Previous Codex output:\n"+prev)
+		}
+	}
+	if logContext != "" && attemptCount > 0 {
+		contextParts = append(contextParts, logContext)
+	}
+	if len(contextParts) > 0 {
+		prompt = strings.TrimSpace(prompt + "\n\nAdditional context:\n" + strings.Join(contextParts, "\n\n"))
+	}
+
 	// Ensure Codex returns a stable completion token so the critic can decide when to stop.
 	fullPrompt := strings.TrimSpace(fmt.Sprintf(
 		`You are the infra actor working inside a repo. Complete the requested work and then output a final line exactly: DONE
@@ -222,12 +340,20 @@ Task:
 
 	turnCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	newThreadID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, threadID, fullPrompt, model, effort)
+	newSessionID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, sessionID, fullPrompt, model, effort)
 	if err != nil {
+		updates := map[string]string{"codex.exec.error": err.Error()}
+		if newSessionID != "" {
+			updates["codex.session_id"] = newSessionID
+			updates["codex.thread_id"] = newSessionID
+		}
+		for k, v := range logState {
+			updates[k] = v
+		}
 		_ = m.updateDyadTask(ctx, map[string]interface{}{
 			"id":     task.ID,
 			"status": "blocked",
-			"notes":  setState(task.Notes, map[string]string{"codex.thread_id": newThreadID, "codex.exec.error": err.Error()}),
+			"notes":  setState(task.Notes, updates),
 		})
 		return
 	}
@@ -238,11 +364,18 @@ Task:
 		nextStatus = "done"
 	}
 
-	notes := setState(task.Notes, map[string]string{
-		"codex.thread_id":     newThreadID,
+	updates := map[string]string{
 		"codex.exec.last":     truncateOneLine(result, 400),
-		"codex.exec.attempts": fmt.Sprintf("%d", atoiDefault(attempts, 0)+1),
-	})
+		"codex.exec.attempts": fmt.Sprintf("%d", attemptCount+1),
+	}
+	if newSessionID != "" {
+		updates["codex.session_id"] = newSessionID
+		updates["codex.thread_id"] = newSessionID
+	}
+	for k, v := range logState {
+		updates[k] = v
+	}
+	notes := setState(task.Notes, updates)
 
 	_ = m.updateDyadTask(ctx, map[string]interface{}{
 		"id":     task.ID,
@@ -273,7 +406,7 @@ func truncateOneLine(s string, max int) string {
 // DriveCodexLoopTest proves the critic can:
 // - read actor stdout (via pod logs) and captured output,
 // - decide next prompt based on previous output,
-// - send next prompt via stdin piping,
+// - send next prompt via an interactive Codex session,
 // - repeat multiple turns and finalize.
 func (m *Monitor) DriveCodexLoopTest(ctx context.Context, dyad string, task DyadTask) {
 	actor := task.Actor
@@ -285,7 +418,10 @@ func (m *Monitor) DriveCodexLoopTest(ctx context.Context, dyad string, task Dyad
 	}
 
 	state := parseState(task.Notes)
-	threadID := state["codex.thread_id"]
+	sessionID := strings.TrimSpace(state["codex.session_id"])
+	if sessionID == "" {
+		sessionID = strings.TrimSpace(state["codex.thread_id"])
+	}
 	phase := state["codex_test.phase"]
 	if phase == "" {
 		phase = "1"
@@ -312,12 +448,17 @@ func (m *Monitor) DriveCodexLoopTest(ctx context.Context, dyad string, task Dyad
 
 	turnCtx, cancel := context.WithTimeout(ctx, 6*time.Minute)
 	defer cancel()
-	newThreadID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, threadID, nextPrompt, model, effort)
+	newSessionID, lastMsg, err := m.RunCodexTurn(turnCtx, actor, sessionID, nextPrompt, model, effort)
 	if err != nil {
+		updates := map[string]string{"codex_test.error": err.Error()}
+		if newSessionID != "" {
+			updates["codex.session_id"] = newSessionID
+			updates["codex.thread_id"] = newSessionID
+		}
 		_ = m.updateDyadTask(ctx, map[string]interface{}{
 			"id":     task.ID,
 			"status": "blocked",
-			"notes":  setState(task.Notes, map[string]string{"codex.thread_id": newThreadID, "codex_test.error": err.Error()}),
+			"notes":  setState(task.Notes, updates),
 		})
 		return
 	}
@@ -337,12 +478,16 @@ func (m *Monitor) DriveCodexLoopTest(ctx context.Context, dyad string, task Dyad
 		nextPhase = "done"
 	}
 
-	notes := setState(task.Notes, map[string]string{
-		"codex.thread_id":   newThreadID,
+	updates := map[string]string{
 		"codex_test.phase":  nextPhase,
 		"codex_test.last":   strings.TrimSpace(lastMsg),
 		"codex_test.result": outcome,
-	})
+	}
+	if newSessionID != "" {
+		updates["codex.session_id"] = newSessionID
+		updates["codex.thread_id"] = newSessionID
+	}
+	notes := setState(task.Notes, updates)
 
 	status := "in_progress"
 	if nextPhase == "done" && outcome == "ok" {
@@ -367,53 +512,89 @@ func codexTestPrompt(phase, last string) (prompt string, expected string) {
 	}
 }
 
-func parseCodexJSONL(raw string) (threadID string, lastText string) {
+type codexParserOutput struct {
+	Status      string `json:"status"`
+	FinalReport string `json:"final_report"`
+}
+
+func parseCodexParserOutput(raw string) string {
+	last := ""
 	for _, line := range strings.Split(raw, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || !strings.HasPrefix(line, "{") {
 			continue
 		}
-		var evt map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+		var out codexParserOutput
+		if err := json.Unmarshal([]byte(line), &out); err != nil {
 			continue
 		}
-		if t, _ := evt["type"].(string); t == "thread.started" {
-			if id, _ := evt["thread_id"].(string); id != "" {
-				threadID = id
-			}
+		if strings.TrimSpace(out.FinalReport) == "" {
+			continue
 		}
-		if t, _ := evt["type"].(string); t == "item.completed" {
-			item, _ := evt["item"].(map[string]interface{})
-			if item == nil {
-				continue
-			}
-			// Different Codex CLI builds emit different "item" types. We treat any
-			// relevant text payload as a usable "last message" for task progression.
-			if txt, _ := item["text"].(string); strings.TrimSpace(txt) != "" {
-				it, _ := item["type"].(string)
-				switch strings.ToLower(strings.TrimSpace(it)) {
-				case "agent_message", "assistant_message", "final", "final_answer", "message", "reasoning":
-					lastText = txt
-				}
-			}
-			if out, _ := item["aggregated_output"].(string); strings.TrimSpace(out) != "" {
-				// Fallback when the run primarily executed commands and didn't emit an agent_message.
-				lastText = out
-			}
+		if strings.HasPrefix(out.Status, "turn_complete") || out.Status == "" {
+			last = strings.TrimSpace(out.FinalReport)
 		}
 	}
-	// Final fallback: if we saw JSONL but no structured text, return a raw tail.
-	if strings.TrimSpace(lastText) == "" {
-		lines := strings.Split(strings.TrimSpace(raw), "\n")
-		if len(lines) > 0 {
-			start := 0
-			if len(lines) > 25 {
-				start = len(lines) - 25
-			}
-			lastText = strings.Join(lines[start:], "\n")
+	return last
+}
+
+func parseCodexOutput(raw string) string {
+	clean := stripANSI(raw)
+	lines := strings.Split(clean, "\n")
+	lastNonEmpty := ""
+	lastToken := ""
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lastNonEmpty = line
+		if line == "DONE" {
+			lastToken = line
+			continue
+		}
+		if codexTokenRe.MatchString(line) {
+			lastToken = line
 		}
 	}
-	return threadID, lastText
+	if lastToken != "" {
+		return lastToken
+	}
+	return lastNonEmpty
+}
+
+func stripANSI(s string) string {
+	return codexAnsiRe.ReplaceAllString(s, "")
+}
+
+func parseCodexSessionID(raw string) string {
+	clean := stripANSI(raw)
+	lines := strings.Split(clean, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if !strings.Contains(lower, "session") && !strings.Contains(lower, "conversation") {
+			continue
+		}
+		if id := codexSessionRe.FindString(line); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+func (m *Monitor) latestCodexSessionID(ctx context.Context, container string) (string, error) {
+	cmd := `dir="${CODEX_HOME:-$HOME/.codex}/sessions"; ls -1t "$dir" 2>/dev/null | head -n 1`
+	out, err := m.ExecInContainerCapture(ctx, container, []string{"bash", "-lc", cmd})
+	if err != nil {
+		return "", err
+	}
+	id := strings.TrimSpace(out)
+	id = strings.TrimSuffix(id, ".json")
+	return strings.TrimSpace(id), nil
 }
 
 func parseState(notes string) map[string]string {

@@ -1,0 +1,20 @@
+# managed by silexa-codex-init
+#
+# Shared Codex defaults for Silexa dyads.
+# Seeded from /opt/silexa/data/codex/shared/actor/config.toml
+
+model = "__CODEX_MODEL__"
+model_reasoning_effort = "__CODEX_REASONING_EFFORT__"
+
+[features]
+web_search_request = true
+
+[sandbox_workspace_write]
+network_access = true
+
+[silexa]
+dyad = "__DYAD_NAME__"
+member = "__DYAD_MEMBER__"
+role = "__ROLE__"
+department = "__DEPARTMENT__"
+initialized_utc = "__INITIALIZED_UTC__"

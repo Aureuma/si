@@ -21,5 +21,9 @@ images=(
 for entry in "${images[@]}"; do
   IFS='|' read -r tag path <<<"$entry"
   echo "Building $tag from $path"
-  "$ROOT_DIR/bin/image-build.sh" -t "$tag" "$ROOT_DIR/$path"
+  if [[ "$tag" == "silexa/actor:local" ]]; then
+    "$ROOT_DIR/bin/image-build.sh" -t "$tag" -f "$ROOT_DIR/agents/actor/Dockerfile" "$ROOT_DIR"
+  else
+    "$ROOT_DIR/bin/image-build.sh" -t "$tag" "$ROOT_DIR/$path"
+  fi
 done

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Copy the Codex MCP config into an actor/critic container's home.
 # Usage: apply-codex-mcp-config.sh <dyad> [member]
-# The config is taken from configs/codex-mcp-config.toml and copied to ~/.config/codex/config.toml
+# The config is taken from configs/codex-mcp-config.toml and copied to ~/.codex/config.toml
 
 if [[ $# -lt 1 ]]; then
   echo "usage: apply-codex-mcp-config.sh <dyad> [member]" >&2
@@ -19,7 +19,7 @@ fi
 
 DYAD="$1"
 MEMBER="${2:-actor}"
-DEST_DIR="/root/.config/codex"
+DEST_DIR="${CODEX_CONFIG_DIR:-/root/.codex}"
 DEST_FILE="${DEST_DIR}/config.toml"
 
 # shellcheck source=bin/k8s-lib.sh
