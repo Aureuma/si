@@ -11,6 +11,7 @@ resources:
   - router.yaml
   - program-manager.yaml
   - mcp-gateway.yaml
+  - credentials-mcp.yaml
   - dashboard.yaml
 
 configMapGenerator:
@@ -23,6 +24,9 @@ configMapGenerator:
       - ssh_target=../../../configs/ssh_target
       - programs-web_hosting.json=../../../configs/programs/paused/web_hosting.json
       - programs-releaseparty.json=../../../configs/programs/releaseparty/releaseparty.json
+  - name: silexa-credentials-registry
+    files:
+      - credentials-registry.json=../../../configs/credentials-registry.json
 
 generatorOptions:
   disableNameSuffixHash: true
