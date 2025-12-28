@@ -16,6 +16,8 @@ images=(
   "silexa/coder-agent:local|agents/coder"
   "silexa/mcp-gateway:local|tools/mcp-gateway"
   "silexa/dashboard:local|agents/dashboard"
+  "silexa/credentials-mcp:local|tools/credentials-mcp"
+  "silexa/program-manager:local|agents/program-manager"
 )
 
 for entry in "${images[@]}"; do
