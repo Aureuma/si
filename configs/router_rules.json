@@ -6,6 +6,8 @@
     { "match": "mcp", "routeTo": "pool:infra" },
     { "match": "stripe", "routeTo": "pool:infra" },
     { "match": "github", "routeTo": "pool:infra" },
+    { "match": "secret", "routeTo": "silexa-credentials" },
+    { "match": "credential", "routeTo": "silexa-credentials" },
     { "match": "ui", "routeTo": "pool:web" },
     { "match": "frontend", "routeTo": "pool:web" },
     { "match": "landing", "routeTo": "pool:marketing" }

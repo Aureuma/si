@@ -32,6 +32,15 @@
       "spawn": true
     },
     {
+      "name": "silexa-credentials",
+      "role": "credentials",
+      "department": "security",
+      "team": "platform",
+      "assignment": "core",
+      "tags": ["secrets", "credentials", "security"],
+      "spawn": true
+    },
+    {
       "name": "web",
       "role": "web",
       "department": "engineering",

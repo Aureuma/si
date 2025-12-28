@@ -127,6 +127,7 @@ func buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim,
 	managerURL := envOr("MANAGER_SERVICE_URL", envOr("MANAGER_URL", "http://silexa-manager:9090"))
 	repoURL := strings.TrimSpace(os.Getenv("SILEXA_REPO_URL"))
 	repoRef := envOr("SILEXA_REPO_REF", "main")
+	approverEnv := credentialsApproverEnv(dyad)
 
 	labels := map[string]string{
 		"app":               "silexa-dyad",
@@ -178,7 +179,7 @@ func buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim,
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "silexa-dyad",
+					ServiceAccountName: serviceAccountForDyad(dyad),
 					Volumes: []corev1.Volume{
 						{
 							Name: "codex",
@@ -233,7 +234,7 @@ fi`},
 							Name:       "actor",
 							Image:      actorImage,
 							WorkingDir: "/workspace/silexa/apps",
-							Env: appendCodexTuningEnv([]corev1.EnvVar{
+							Env: appendCodexTuningEnv(append([]corev1.EnvVar{
 								{Name: "ROLE", Value: role},
 								{Name: "DEPARTMENT", Value: dept},
 								{Name: "DYAD_NAME", Value: dyad},
@@ -241,7 +242,7 @@ fi`},
 								{Name: "CODEX_INIT_FORCE", Value: "1"},
 								{Name: "CODEX_MODEL", Value: codexModel},
 								{Name: "CODEX_REASONING_EFFORT", Value: actorEffort},
-							}, codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
+							}, approverEnv...), codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
 							Command: []string{"tini", "-s", "--", "bash", "-lc", `npm i -g @openai/codex >/dev/null 2>&1 || true; if [ -x /workspace/silexa/bin/codex-init.sh ]; then /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; else echo "codex-init skipped: /workspace/silexa/bin/codex-init.sh not found"; fi; exec tail -f /dev/null`},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "codex", MountPath: "/root/.codex"},
@@ -251,7 +252,7 @@ fi`},
 						{
 							Name:  "critic",
 							Image: criticImage,
-							Env: appendCodexTuningEnv([]corev1.EnvVar{
+							Env: appendCodexTuningEnv(append([]corev1.EnvVar{
 								{Name: "MANAGER_URL", Value: managerURL},
 								{Name: "TELEGRAM_NOTIFY_URL", Value: telegramURL},
 								{Name: "TELEGRAM_CHAT_ID", Value: telegramChatID},
@@ -274,7 +275,7 @@ fi`},
 										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
 									},
 								},
-							}, codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
+							}, approverEnv...), codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "configs", MountPath: "/configs"},
 								{Name: "codex", MountPath: "/root/.codex"},
@@ -288,6 +289,32 @@ fi`},
 	}
 
 	return pvc, deploy, nil
+}
+
+func serviceAccountForDyad(dyad string) string {
+	name := strings.ToLower(strings.TrimSpace(dyad))
+	if name == "silexa-credentials" {
+		return "silexa-credentials"
+	}
+	return "silexa-dyad"
+}
+
+func credentialsApproverEnv(dyad string) []corev1.EnvVar {
+	name := strings.ToLower(strings.TrimSpace(dyad))
+	if name != "silexa-credentials" {
+		return nil
+	}
+	return []corev1.EnvVar{
+		{
+			Name: "CREDENTIALS_APPROVER_TOKEN",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "silexa-credentials-secrets"},
+					Key:                  "credentials_mcp_token",
+				},
+			},
+		},
+	}
 }
 
 func codexEffortForRole(role string) (string, string) {
