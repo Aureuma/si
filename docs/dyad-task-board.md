@@ -40,7 +40,7 @@ Defaults (see `infra/k8s/silexa/manager.yaml`):
 - Always update status transitions: `todo → in_progress → review/done` (use `blocked` with a short reason).
 - For usage-aware routing, set `dyad` to `pool:<department>` (e.g., `pool:infra`), or use router rules that return a `pool:` target so the router can pick a healthy dyad.
 - Set `complexity` (`low|medium|high`) to let critics choose model + reasoning effort per task.
-- For login/OAuth or other human-in-loop steps, pair a dyad task with a Beam entry (see `docs/beams.md`) and link it in the task `notes` or `link`.
+- For login/OAuth or other human-in-loop steps, pair a dyad task with a Beam entry (see `docs/beams.md`) and link it in the task `notes` or `link` (Temporal handles Beam execution by default).
 - For Critic-driven multi-turn Codex execution, use the Codex Loop mechanism (see `docs/dyad-codex-loop.md`).
 - Keep `docs/beam_messages/` updated when sending human-facing commands/URLs.
 - Set `CRITIC_ID` to a stable identifier (container name) so `claimed_by` stays consistent across container recreation (prevents temporary claim conflicts).

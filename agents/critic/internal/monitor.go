@@ -50,7 +50,7 @@ func NewMonitor(actor, manager, dyad, role, department string, logger *log.Logge
 
 // Poll actor logs and mirror them to stdout for visibility and potential future parsing.
 func (m *Monitor) StreamOnce(ctx context.Context) error {
-	text, last, err := m.fetchActorLogs(ctx, m.lastTimestamp, 200, true)
+	text, last, err := m.fetchActorLogs(ctx, m.ActorContainer, m.lastTimestamp, 200, true)
 	if err != nil {
 		return err
 	}
@@ -144,7 +144,7 @@ func (m *Monitor) ReportDyad(ctx context.Context, dyad, taskID string) error {
 	if taskNum > 0 {
 		taskStr = strconv.Itoa(taskNum)
 	}
-	actorTail, _, _ := m.fetchActorLogs(ctx, time.Unix(0, 0), 16, false)
+	actorTail, _, _ := m.fetchActorLogs(ctx, m.ActorContainer, time.Unix(0, 0), 16, false)
 	actorTail = truncateLines(strings.TrimSpace(actorTail), 16, 1600)
 	actorLogAt := ""
 	if !m.lastActorLogAt.IsZero() {
@@ -487,8 +487,8 @@ func (m *Monitor) RunSocatForwarder(ctx context.Context, name, targetContainer s
 	return m.kubeClient.exec(ctx, podName, containerName, []string{"bash", "-lc", cmd}, nil, nil, nil, false)
 }
 
-func (m *Monitor) fetchActorLogs(ctx context.Context, since time.Time, tail int, timestamps bool) (string, time.Time, error) {
-	podName, containerName, err := m.resolveTarget(ctx, m.ActorContainer)
+func (m *Monitor) fetchActorLogs(ctx context.Context, container string, since time.Time, tail int, timestamps bool) (string, time.Time, error) {
+	podName, containerName, err := m.resolveTarget(ctx, container)
 	if err != nil {
 		return "", time.Time{}, err
 	}

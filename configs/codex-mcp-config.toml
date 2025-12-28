@@ -1,5 +1,5 @@
 # Codex CLI MCP configuration
-# Place this file at ~/.config/codex/config.toml (or ~/.config/openai-codex/config.toml depending on CLI version).
+# Place this file at ~/.codex/config.toml (or ~/.config/openai-codex/config.toml depending on CLI version).
 # Point Codex CLI to the shared MCP Gateway so actors/critics can reach MCP servers via streaming transport.
 
 [mcp]
@@ -8,3 +8,9 @@ transport = "streaming"
 
 # Optional auth token printed by the gateway on startup (Authorization: Bearer <token>)
 # auth_token = "<paste_gateway_token_if_required>"
+
+[features]
+web_search_request = true
+
+[sandbox_workspace_write]
+network_access = true
