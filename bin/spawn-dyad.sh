@@ -35,6 +35,19 @@ SILEXA_REPO_URL="${SILEXA_REPO_URL:-}"
 SILEXA_REPO_REF="${SILEXA_REPO_REF:-main}"
 
 TELEGRAM_NOTIFY_URL="${TELEGRAM_NOTIFY_URL:-http://silexa-telegram-bot:8081/notify}"
+SERVICE_ACCOUNT="silexa-dyad"
+APPROVER_ENV=""
+if [[ "$NAME" == "silexa-credentials" ]]; then
+  SERVICE_ACCOUNT="silexa-credentials"
+  APPROVER_ENV=$(cat <<'EOF'
+            - name: CREDENTIALS_APPROVER_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: silexa-credentials-secrets
+                  key: credentials_mcp_token
+EOF
+)
+fi
 
 if ! [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "invalid dyad name: $NAME (allowed: letters, numbers, _ and -)" >&2
@@ -119,7 +132,7 @@ spec:
         silexa.role: "${ROLE}"
         silexa.department: "${DEPT}"
     spec:
-      serviceAccountName: silexa-dyad
+      serviceAccountName: ${SERVICE_ACCOUNT}
       volumes:
         - name: codex
           persistentVolumeClaim:
@@ -191,6 +204,7 @@ spec:
               value: "${CODEX_MODEL}"
             - name: CODEX_REASONING_EFFORT
               value: "${CODEX_ACTOR_EFFORT}"
+${APPROVER_ENV}
             - name: CODEX_MODEL_LOW
               value: "${CODEX_MODEL_LOW}"
             - name: CODEX_MODEL_MEDIUM
@@ -232,6 +246,7 @@ spec:
               value: "${CODEX_MODEL}"
             - name: CODEX_REASONING_EFFORT
               value: "${CODEX_CRITIC_EFFORT}"
+${APPROVER_ENV}
             - name: CODEX_MODEL_LOW
               value: "${CODEX_MODEL_LOW}"
             - name: CODEX_MODEL_MEDIUM
