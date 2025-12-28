@@ -39,10 +39,8 @@ func (a *Activities) ApplyDyadResources(ctx context.Context, req DyadBootstrapRe
 			return DyadBootstrapResult{}, err
 		}
 	} else {
-		pvc.ResourceVersion = currentPVC.ResourceVersion
-		if _, err := pvcClient.Update(ctx, pvc, metav1.UpdateOptions{}); err != nil {
-			return DyadBootstrapResult{}, err
-		}
+		// PVC specs are largely immutable after creation; keep the existing claim as-is.
+		_ = currentPVC
 	}
 
 	deployClient := a.kube.client.AppsV1().Deployments(ns)
