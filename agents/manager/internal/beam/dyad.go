@@ -1,12 +1,15 @@
-package main
+package beam
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -15,7 +18,90 @@ func dyadDeploymentName(dyad string) string {
 	return "silexa-dyad-" + strings.TrimSpace(dyad)
 }
 
-func (m *monitor) buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim, *appsv1.Deployment, error) {
+func (a *Activities) ApplyDyadResources(ctx context.Context, req DyadBootstrapRequest) (DyadBootstrapResult, error) {
+	if a.kube == nil || a.kube.client == nil {
+		return DyadBootstrapResult{}, fmt.Errorf("kube client unavailable")
+	}
+	pvc, deploy, err := buildDyadResources(req.Dyad, req.Role, req.Department)
+	if err != nil {
+		return DyadBootstrapResult{}, err
+	}
+	ns := a.kube.namespace
+
+	pvcClient := a.kube.client.CoreV1().PersistentVolumeClaims(ns)
+	currentPVC, err := pvcClient.Get(ctx, pvc.Name, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			if _, err := pvcClient.Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
+				return DyadBootstrapResult{}, err
+			}
+		} else {
+			return DyadBootstrapResult{}, err
+		}
+	} else {
+		pvc.ResourceVersion = currentPVC.ResourceVersion
+		if _, err := pvcClient.Update(ctx, pvc, metav1.UpdateOptions{}); err != nil {
+			return DyadBootstrapResult{}, err
+		}
+	}
+
+	deployClient := a.kube.client.AppsV1().Deployments(ns)
+	currentDeploy, err := deployClient.Get(ctx, deploy.Name, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			if _, err := deployClient.Create(ctx, deploy, metav1.CreateOptions{}); err != nil {
+				return DyadBootstrapResult{}, err
+			}
+		} else {
+			return DyadBootstrapResult{}, err
+		}
+	} else {
+		deploy.ResourceVersion = currentDeploy.ResourceVersion
+		if _, err := deployClient.Update(ctx, deploy, metav1.UpdateOptions{}); err != nil {
+			return DyadBootstrapResult{}, err
+		}
+	}
+
+	return DyadBootstrapResult{Deployment: deploy.Name}, nil
+}
+
+func (a *Activities) WaitDyadReady(ctx context.Context, req DyadBootstrapRequest) error {
+	if a.kube == nil || a.kube.client == nil {
+		return fmt.Errorf("kube client unavailable")
+	}
+	if strings.TrimSpace(req.Dyad) == "" {
+		return fmt.Errorf("dyad required")
+	}
+	name := dyadDeploymentName(req.Dyad)
+	timeout := 6 * time.Minute
+	deadline := time.Now().Add(timeout)
+	for {
+		deploy, err := a.kube.client.AppsV1().Deployments(a.kube.namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return fmt.Errorf("deployment %s not found", name)
+			}
+			return err
+		}
+		want := int32(1)
+		if deploy.Spec.Replicas != nil {
+			want = *deploy.Spec.Replicas
+		}
+		if deploy.Status.ReadyReplicas >= want {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("deployment %s not ready after %s", name, timeout)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(5 * time.Second):
+		}
+	}
+}
+
+func buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim, *appsv1.Deployment, error) {
 	dyad = strings.TrimSpace(dyad)
 	if dyad == "" {
 		return nil, nil, fmt.Errorf("dyad name required")
@@ -246,4 +332,12 @@ func resourceQty(value string) resource.Quantity {
 		return resource.MustParse("2Gi")
 	}
 	return q
+}
+
+func envOr(key, def string) string {
+	val := strings.TrimSpace(os.Getenv(key))
+	if val == "" {
+		return def
+	}
+	return val
 }

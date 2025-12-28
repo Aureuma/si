@@ -29,6 +29,7 @@ spec:
         app: silexa-manager
         silexa.component: manager
     spec:
+      serviceAccountName: silexa-core
       containers:
         - name: manager
           image: silexa/manager:local
@@ -59,6 +60,8 @@ spec:
               value: "true"
             - name: DYAD_TASK_DIGEST_INTERVAL
               value: 10m
+            - name: BEAM_RECONCILE_INTERVAL
+              value: 1m
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -77,6 +80,7 @@ spec:
         app: silexa-manager-worker
         silexa.component: manager-worker
     spec:
+      serviceAccountName: silexa-core
       containers:
         - name: manager-worker
           image: silexa/manager:local
@@ -88,3 +92,7 @@ spec:
               value: default
             - name: TEMPORAL_TASK_QUEUE
               value: silexa-state
+            - name: TELEGRAM_NOTIFY_URL
+              value: http://silexa-telegram-bot:8081/notify
+            - name: TELEGRAM_CHAT_ID
+              value: ""
