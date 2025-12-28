@@ -9,11 +9,12 @@
 - Temporal cluster with SQL persistence (Postgres).
 - Manager API as a thin gateway over Temporal state.
 - Manager worker runs the state workflow.
-- Future workers: router, program-manager, codex-monitor, dyad bootstrap, app deployer.
+- Future workers: router, program-manager, codex-monitor, app deployer.
 
 ## Current implementation (this repo)
 - Manager stores state in a Temporal workflow (`silexa-state`) and exposes the same HTTP endpoints.
 - A dedicated manager worker processes the state workflow (`silexa-state` task queue).
+- Beam workflows implemented for `beam.codex_login` and `beam.dyad_bootstrap`.
 - Dyad assignment policy enforcement remains in the API layer for now.
 - Telegram notifications and the dyad digest use Temporal state but are still driven by the API process.
 

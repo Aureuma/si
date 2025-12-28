@@ -68,6 +68,7 @@ func main() {
 	http.HandleFunc("/dyad-tasks/claim", srv.handleDyadTaskClaim)
 
 	srv.startDyadDigest()
+	srv.startBeamReconciler()
 
 	logger.Printf("listening on %s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
@@ -424,6 +425,7 @@ func (s *server) handleDyadTasks(w http.ResponseWriter, r *http.Request) {
 				out.TelegramMessageID = messageID
 			}
 		}
+		s.maybeStartBeamWorkflow(ctx, out)
 		writeJSON(w, http.StatusOK, out)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -484,6 +486,7 @@ func (s *server) handleDyadTaskUpdate(w http.ResponseWriter, r *http.Request) {
 			out.Task.TelegramMessageID = messageID
 		}
 	}
+	s.maybeStartBeamWorkflow(ctx, out.Task)
 	writeJSON(w, http.StatusOK, out.Task)
 }
 

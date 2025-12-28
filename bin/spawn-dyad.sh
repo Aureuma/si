@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+MODE="direct"
+if [[ "${1:-}" == "--temporal" ]]; then
+  MODE="temporal"
+  shift
+fi
+
 if [[ $# -lt 1 ]]; then
-  echo "usage: spawn-dyad.sh <name> [role] [department]" >&2
+  echo "usage: spawn-dyad.sh [--temporal] <name> [role] [department]" >&2
   exit 1
 fi
 
@@ -11,6 +17,7 @@ ROLE="${2:-generic}"
 DEPT="${3:-$ROLE}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANAGER_URL="${MANAGER_URL:-http://silexa-manager:9090}"
+MANAGER_SERVICE_URL="${MANAGER_SERVICE_URL:-http://silexa-manager:9090}"
 
 ACTOR_IMAGE="${ACTOR_IMAGE:-silexa/actor:local}"
 CRITIC_IMAGE="${CRITIC_IMAGE:-silexa/critic:local}"
@@ -32,6 +39,11 @@ TELEGRAM_NOTIFY_URL="${TELEGRAM_NOTIFY_URL:-http://silexa-telegram-bot:8081/noti
 if ! [[ "$NAME" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo "invalid dyad name: $NAME (allowed: letters, numbers, _ and -)" >&2
   exit 1
+fi
+
+if [[ "$MODE" == "temporal" ]]; then
+  MANAGER_URL="$MANAGER_URL" "${ROOT_DIR}/bin/beam-dyad-bootstrap.sh" "$NAME" "$ROLE" "$DEPT"
+  exit 0
 fi
 
 case "${ROLE}" in
@@ -144,6 +156,7 @@ spec:
             - sh
             - -lc
             - |
+              mkdir -p /workspace/silexa/apps
               if [ -z "\${SILEXA_REPO_URL}" ]; then
                 echo "SILEXA_REPO_URL not set; skipping repo sync"
                 exit 0
@@ -195,12 +208,12 @@ spec:
               mountPath: /root/.codex
             - name: workspace
               mountPath: /workspace
-          command: ["bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; exec tail -f /dev/null"]
+          command: ["tini","-s","--","bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; if [ -x /workspace/silexa/bin/codex-init.sh ]; then /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; else echo \"codex-init skipped: /workspace/silexa/bin/codex-init.sh not found\"; fi; exec tail -f /dev/null"]
         - name: critic
           image: ${CRITIC_IMAGE}
           env:
             - name: MANAGER_URL
-              value: "${MANAGER_URL}"
+              value: "${MANAGER_SERVICE_URL}"
             - name: TELEGRAM_NOTIFY_URL
               value: "${TELEGRAM_NOTIFY_URL}"
             - name: TELEGRAM_CHAT_ID

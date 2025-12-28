@@ -30,4 +30,5 @@ Example entry:
 
 ## Notes
 - `spawn-dyad.sh` requires dyads to be registered; roster apply handles that.
+- Use `spawn-dyad.sh --temporal` (or `bin/beam-dyad-bootstrap.sh`) to run provisioning as a Temporal Beam workflow.
 - Heartbeats never overwrite `team`, `assignment`, or `tags` (arrangement stays stable).
