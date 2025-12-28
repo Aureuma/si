@@ -12,6 +12,14 @@
 - For new secrets, create Kubernetes secrets and mount only into the services that need them.
 - Prefer SOPS + age for encrypted secrets in git (see `docs/secrets.md`).
 
+## Credentials dyad (silexa-credentials)
+- `silexa-credentials` is the only dyad authorized to decrypt/apply secrets.
+- Other dyads must request secrets via MCP (`credentials.request_secret`) with a clear justification.
+- The credentials dyad reviews and resolves access requests (`credentials.list_requests` / `credentials.resolve_request`), then decrypts and shares only the specific key (`credentials.reveal_secret`).
+- Registry: `configs/credentials-registry.json` (controls which secrets/keys are eligible).
+- Encrypted secret files live in `secrets/*.sops.*` and are synced to k8s with `bin/credentials-bootstrap.sh`.
+- The credentials dyad receives `CREDENTIALS_APPROVER_TOKEN` from the `silexa-credentials-secrets` secret so only it can approve/reveal secrets.
+
 ## Actors/Critics
 - No secrets mounted by default. Prefer OAuth-style flows where possible (e.g., `codex login` via browser).
 

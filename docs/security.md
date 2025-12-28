@@ -13,6 +13,7 @@ Kubernetes/agents:
 - Use namespace-scoped service accounts and least-privilege RBAC; no pods mount the Docker socket.
 - Resource caps: set CPU/memory requests and limits in `infra/k8s/` manifests.
 - Secrets: mount from Kubernetes secrets; avoid long-lived env vars for tokens.
+- Secrets access: only `silexa-credentials` service account can read/write secrets; other dyads must request via the credentials broker.
 - Network: expose only required ports (manager 9090, brokers 9091/9092, Telegram 8081, MCP 8088). Consider firewall allowlist.
 
 MCP Gateway:
