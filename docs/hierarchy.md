@@ -4,7 +4,7 @@
 - Engineering: web, backend, infra
 - Research: research
 - Marketing: marketing
-- Security: creds (credentials oversight)
+- Security: silexa-credentials (credentials oversight)
 
 Spawn dyads with `bin/spawn-dyad.sh [--temporal] <name> [role] [department]`; labels/env set:
 - Labels: `silexa.dyad=<name>`, `silexa.department=<department>`, `silexa.role=<role>`
@@ -32,7 +32,7 @@ Spawn dyads with `bin/spawn-dyad.sh [--temporal] <name> [role] [department]`; la
 - Telegram: bot at `:8081/notify` + `/human-task`; Manager uses `TELEGRAM_NOTIFY_URL`/`TELEGRAM_CHAT_ID` for alerts.
 
 ## Oversight expectations
-- Security/creds dyad reviews access requests and sensitive feedback; can resolve/deny via `bin/resolve-access.sh`.
+- `silexa-credentials` reviews access requests and sensitive feedback; resolves via `credentials.resolve_request` or `bin/resolve-access.sh`.
 - Department leads (human) review `/feedback` and `/human-tasks` and act on items relevant to their dyads.
 
 ## Usage quick refs

@@ -10,6 +10,7 @@ We bundle Docker's MCP Gateway so actors/critics can access MCP servers through 
 ### Catalog
 - Default catalog is bootstrapped during image build (Docker MCP catalog). Location: `/catalog/catalog.yaml` inside the container; mount/replace to add custom servers.
 - To inspect: `bin/mcp-scout.sh` (lists catalogs and shows the default catalog snippet).
+- Local catalog override lives at `data/mcp-gateway/catalog.yaml`; sync it into the gateway PVC when updated.
 
 ### Usage from actors/critics
 - Point MCP clients/SDKs to `http://silexa-mcp-gateway:8088` (inside the cluster) or port-forward from host.
@@ -25,3 +26,7 @@ We bundle Docker's MCP Gateway so actors/critics can access MCP servers through 
   `kubectl -n silexa create secret generic mcp-gateway-secrets --from-file=gh_token=secrets/gh_token --from-file=stripe_api_key=secrets/stripe_api_key`
 - Add further catalogs by mounting a catalog file into the service (edit `infra/k8s/silexa/mcp-gateway.yaml`).
 - Keep credentials out of env when possible; prefer secret files and minimal scopes per service.
+
+### Credentials broker
+- `silexa-credentials` MCP server is registered as a remote server in `data/mcp-gateway/catalog.yaml`.
+- Workflow: request access via `credentials.request_secret`, review/approve via `silexa-credentials`, then decrypt via `credentials.reveal_secret`.
