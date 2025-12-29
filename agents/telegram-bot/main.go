@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,17 +11,22 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type notifier struct {
-	bot        *tgbotapi.BotAPI
-	chatID     *int64
-	logger     *log.Logger
-	managerURL string
+	bot             *tgbotapi.BotAPI
+	chatID          *int64
+	logger          *log.Logger
+	managerURL      string
 	codexMonitorURL string
+	httpClient      *http.Client
+	statusMu        sync.Mutex
+	statusCache     string
+	statusCacheAt   time.Time
 }
 
 type button struct {
@@ -73,6 +79,12 @@ type managerDyadTask struct {
 	ClaimedBy string `json:"claimed_by"`
 }
 
+const (
+	managerTimeout = 4 * time.Second
+	codexTimeout   = 3 * time.Second
+	tasksTimeout   = 4 * time.Second
+)
+
 func main() {
 	logger := log.New(os.Stdout, "telegram-bot ", log.LstdFlags|log.LUTC)
 	token := readToken()
@@ -91,15 +103,17 @@ func main() {
 		logger.Fatalf("bot init: %v", err)
 	}
 	bot.Debug = false
+	bot.Client = &http.Client{Timeout: 70 * time.Second}
 
 	setCommands(bot, logger)
 
 	n := &notifier{
-		bot:            bot,
-		chatID:         chatID,
-		logger:         logger,
-		managerURL:     managerURL,
+		bot:             bot,
+		chatID:          chatID,
+		logger:          logger,
+		managerURL:      managerURL,
 		codexMonitorURL: codexMonitorURL,
+		httpClient:      &http.Client{Timeout: 6 * time.Second},
 	}
 	go n.pollUpdates()
 
@@ -187,7 +201,7 @@ func (n *notifier) handleHumanTask(w http.ResponseWriter, r *http.Request) {
 		"notes":        p.Notes,
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(n.managerURL+"/human-tasks", "application/json", bytes.NewReader(body))
+	resp, err := n.postJSON(tasksTimeout, n.managerURL+"/human-tasks", body)
 	if err == nil {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
@@ -278,7 +292,7 @@ func (n *notifier) handleCommand(chatID int64, msg *tgbotapi.Message) {
 			payload["notes"] = strings.TrimSpace(parts[2])
 		}
 		body, _ := json.Marshal(payload)
-		resp, err := http.Post(n.managerURL+"/human-tasks", "application/json", bytes.NewReader(body))
+		resp, err := n.postJSON(tasksTimeout, n.managerURL+"/human-tasks", body)
 		if err != nil {
 			n.send("Failed to create task: "+err.Error(), &chatID, "⚠️", nil, "", nil, nil)
 			return
@@ -307,7 +321,7 @@ func (n *notifier) handlePlain(chatID int64, text string) {
 		"context":  "telegram",
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(n.managerURL+"/feedback", "application/json", bytes.NewReader(body))
+	resp, err := n.postJSON(tasksTimeout, n.managerURL+"/feedback", body)
 	if err == nil {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
@@ -331,7 +345,7 @@ func (n *notifier) handleReply(chatID int64, msg *tgbotapi.Message) {
 		"context":  fmt.Sprintf("reply_to:%d %s", msg.ReplyToMessage.MessageID, orig),
 	}
 	body, _ := json.Marshal(payload)
-	resp, err := http.Post(n.managerURL+"/feedback", "application/json", bytes.NewReader(body))
+	resp, err := n.postJSON(tasksTimeout, n.managerURL+"/feedback", body)
 	if err == nil {
 		io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
@@ -457,9 +471,21 @@ func buttonsMarkup(buttons []button) *tgbotapi.InlineKeyboardMarkup {
 }
 
 func (n *notifier) statusMessage() string {
+	msg, err := n.buildStatusMessage()
+	if err == nil {
+		n.setStatusCache(msg)
+		return msg
+	}
+	if cached, age := n.getStatusCache(); cached != "" {
+		return fmt.Sprintf("Status (stale %s):\n%s\n\nLast error: %s", age, cached, err.Error())
+	}
+	return "Status unavailable: " + err.Error()
+}
+
+func (n *notifier) buildStatusMessage() (string, error) {
 	h, err := n.fetchHealth()
 	if err != nil {
-		return "Status unavailable: " + err.Error()
+		return "", err
 	}
 	lastBeat := "n/a"
 	if h.LastBeat != nil {
@@ -467,10 +493,14 @@ func (n *notifier) statusMessage() string {
 	}
 	msg := fmt.Sprintf("Status: %s\nOpen tasks: %d\nAccess pending: %d\nRecent beats: %d\nMetrics: %d\nUptime: %ds\nLast beat: %s",
 		h.Status, h.TasksOpen, h.AccessPending, h.BeatsRecent, h.MetricsCount, h.UptimeSeconds, lastBeat)
-	if codex := n.fetchCodexStatus(); codex != "" {
-		msg += "\n\n" + codex
+	if codex, err := n.fetchCodexStatus(); err == nil {
+		if codex != "" {
+			msg += "\n\n" + codex
+		}
+	} else {
+		msg += "\n\nCodex usage: unavailable"
 	}
-	return msg
+	return msg, nil
 }
 
 func (n *notifier) tasksMessage() string {
@@ -528,7 +558,7 @@ func (n *notifier) dyadBoardMessage() string {
 }
 
 func (n *notifier) fetchHealth() (*managerHealth, error) {
-	resp, err := http.Get(n.managerURL + "/healthz")
+	resp, err := n.get(managerTimeout, n.managerURL+"/healthz")
 	if err != nil {
 		return nil, err
 	}
@@ -543,27 +573,27 @@ func (n *notifier) fetchHealth() (*managerHealth, error) {
 	return &h, nil
 }
 
-func (n *notifier) fetchCodexStatus() string {
+func (n *notifier) fetchCodexStatus() (string, error) {
 	if strings.TrimSpace(n.codexMonitorURL) == "" {
-		return ""
+		return "", nil
 	}
-	resp, err := http.Get(n.codexMonitorURL)
+	resp, err := n.get(codexTimeout, n.codexMonitorURL)
 	if err != nil {
-		return ""
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return ""
+		return "", fmt.Errorf("codex status %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return strings.TrimSpace(string(body))
+	return strings.TrimSpace(string(body)), nil
 }
 
 func (n *notifier) fetchTasks() ([]managerTask, error) {
-	resp, err := http.Get(n.managerURL + "/human-tasks")
+	resp, err := n.get(tasksTimeout, n.managerURL+"/human-tasks")
 	if err != nil {
 		return nil, err
 	}
@@ -585,7 +615,7 @@ func (n *notifier) fetchTasks() ([]managerTask, error) {
 }
 
 func (n *notifier) fetchDyadTasks() ([]managerDyadTask, error) {
-	resp, err := http.Get(n.managerURL + "/dyad-tasks")
+	resp, err := n.get(tasksTimeout, n.managerURL+"/dyad-tasks")
 	if err != nil {
 		return nil, err
 	}
@@ -598,6 +628,55 @@ func (n *notifier) fetchDyadTasks() ([]managerDyadTask, error) {
 		return nil, err
 	}
 	return tasks, nil
+}
+
+func (n *notifier) get(timeout time.Duration, url string) (*http.Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	client := n.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	return client.Do(req)
+}
+
+func (n *notifier) postJSON(timeout time.Duration, url string, body []byte) (*http.Response, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := n.httpClient
+	if client == nil {
+		client = http.DefaultClient
+	}
+	return client.Do(req)
+}
+
+func (n *notifier) setStatusCache(msg string) {
+	n.statusMu.Lock()
+	n.statusCache = msg
+	n.statusCacheAt = time.Now().UTC()
+	n.statusMu.Unlock()
+}
+
+func (n *notifier) getStatusCache() (string, string) {
+	n.statusMu.Lock()
+	defer n.statusMu.Unlock()
+	if n.statusCache == "" || n.statusCacheAt.IsZero() {
+		return "", ""
+	}
+	age := time.Since(n.statusCacheAt).Truncate(time.Second)
+	if age < 0 {
+		age = 0
+	}
+	return n.statusCache, age.String()
 }
 
 func helpMessage() string {
