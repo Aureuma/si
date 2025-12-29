@@ -67,4 +67,4 @@ If `CODEX_MONITOR_URL` is configured on the Telegram bot (default: `http://codex
 - When `DYAD_REQUIRE_REGISTERED=true`, codex-monitor skips dyads that are not registered in the Manager registry.
 - When a dyad falls below the cooldown threshold, new tasks should route to other dyads in the same pool.
 - If no alternative dyads exist, routing falls back to the original target.
-- When cooldown is detected, `codex-monitor` can create a `beam.codex_account_reset` task to wipe Codex state and prepare for a new login. Disable with `CODEX_RESET_ON_COOLDOWN=0`.
+- When cooldown is detected, `codex-monitor` can create a `beam.codex_account_reset` task to wipe Codex state and prepare for a new login. The reset beam waits ~30s and auto-queues `beam.codex_login` unless one is already open. Disable with `CODEX_RESET_ON_COOLDOWN=0`.

@@ -323,6 +323,68 @@ func (a *Activities) ResetCodexState(ctx context.Context, req CodexResetRequest)
 	return CodexResetResult{Targets: targets, Paths: paths}, nil
 }
 
+func (a *Activities) HasOpenDyadTask(ctx context.Context, check DyadTaskCheck) (bool, error) {
+	if a.temporal == nil {
+		return false, errors.New("temporal client unavailable")
+	}
+	dyad := strings.TrimSpace(check.Dyad)
+	kind := strings.ToLower(strings.TrimSpace(check.Kind))
+	if dyad == "" || kind == "" {
+		return false, errors.New("dyad and kind required")
+	}
+	resp, err := a.temporal.QueryWorkflow(ctx, state.WorkflowID, "", "dyad-tasks")
+	if err != nil {
+		return false, err
+	}
+	var tasks []state.DyadTask
+	if err := resp.Get(&tasks); err != nil {
+		return false, err
+	}
+	for _, task := range tasks {
+		if strings.TrimSpace(task.Dyad) != dyad {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(task.Kind)) != kind {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(task.Status)) != "done" {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (a *Activities) CreateDyadTask(ctx context.Context, task state.DyadTask) (state.DyadTask, error) {
+	if a.temporal == nil {
+		return state.DyadTask{}, errors.New("temporal client unavailable")
+	}
+	task.Dyad = strings.TrimSpace(task.Dyad)
+	if task.Dyad == "" {
+		return state.DyadTask{}, errors.New("dyad required")
+	}
+	options := client.UpdateWorkflowOptions{
+		WorkflowID:   state.WorkflowID,
+		UpdateName:   "add_dyad_task",
+		Args:         []interface{}{task},
+		WaitForStage: client.WorkflowUpdateStageCompleted,
+	}
+	handle, err := a.temporal.UpdateWorkflow(ctx, options)
+	if err == nil {
+		var out state.DyadTask
+		if err := handle.Get(ctx, &out); err == nil {
+			return out, nil
+		} else if !isUnknownUpdate(err) {
+			return state.DyadTask{}, err
+		}
+	} else if !isUnknownUpdate(err) {
+		return state.DyadTask{}, err
+	}
+	if err := a.temporal.SignalWorkflow(ctx, state.WorkflowID, "", "add_dyad_task", task); err != nil {
+		return state.DyadTask{}, err
+	}
+	return task, nil
+}
+
 func buildTelegramMessage(cmd string, url string) string {
 	return strings.TrimSpace(fmt.Sprintf(
 		"🔐 <b>Codex login</b>\n\n<b>🛠 Port-forward:</b>\n<pre><code>%s</code></pre>\n\n<b>🌐 URL:</b>\n<pre><code>%s</code></pre>",
@@ -454,3 +516,7 @@ fi
 
 var urlRe = regexp.MustCompile(`https://[^\s]+`)
 var codexPortRe = regexp.MustCompile(`(?:localhost|127\.0\.0\.1):([0-9]+)`)
+
+func isUnknownUpdate(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "unknown update")
+}

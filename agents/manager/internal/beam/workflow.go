@@ -21,6 +21,8 @@ const (
 	activityApplyDyadResources = "ApplyDyadResources"
 	activityWaitDyadReady      = "WaitDyadReady"
 	activityResetCodexState    = "ResetCodexState"
+	activityHasOpenDyadTask    = "HasOpenDyadTask"
+	activityCreateDyadTask     = "CreateDyadTask"
 )
 
 func BeamWorkflow(ctx workflow.Context, req Request) error {
@@ -382,10 +384,42 @@ func codexAccountResetWorkflow(ctx workflow.Context, req Request) error {
 		return err
 	}
 
+	loginDelay := 30 * time.Second
+	workflow.Sleep(ctx, loginDelay)
+
+	loginNote := "[beam.codex_account_reset] login task already open"
+	open := false
+	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, activityOpts), activityHasOpenDyadTask, DyadTaskCheck{
+		Dyad: dyad,
+		Kind: KindCodexLogin,
+	}).Get(ctx, &open); err != nil {
+		logger.Warn("login task check failed", "error", err)
+		loginNote = "[beam.codex_account_reset] login task check failed"
+	} else if !open {
+		err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, activityOpts), activityCreateDyadTask, state.DyadTask{
+			Title:       fmt.Sprintf("Beam: Codex login for %s", dyad),
+			Description: "Authenticate Codex CLI after account reset.",
+			Kind:        KindCodexLogin,
+			Priority:    "high",
+			Dyad:        dyad,
+			Actor:       "actor",
+			Critic:      "critic",
+			RequestedBy: "beam.codex_account_reset",
+			Notes:       "[beam.codex_login.reason]=account_reset",
+		}).Get(ctx, nil)
+		if err != nil {
+			logger.Warn("login task create failed", "error", err)
+			loginNote = "[beam.codex_account_reset] failed to create login task"
+		} else {
+			loginNote = fmt.Sprintf("[beam.codex_account_reset] queued login task after %s", loginDelay)
+		}
+	}
+
 	note := fmt.Sprintf("[beam.codex_account_reset] cleared %s", strings.Join(result.Targets, ","))
 	if len(result.Paths) > 0 {
 		note = fmt.Sprintf("%s (paths=%s)", note, strings.Join(result.Paths, ","))
 	}
+	note = ensureNote(note, loginNote)
 	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, noRetryOpts), activityFetchDyadTask, req.TaskID).Get(ctx, &current); err != nil {
 		logger.Warn("refresh dyad task after reset", "error", err)
 	}

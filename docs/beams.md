@@ -55,7 +55,8 @@ Flow:
    - `[beam.codex_account_reset.paths]=/root/.codex,/root/.config/openai-codex,/root/.config/codex,/root/.cache/openai-codex,/root/.cache/codex`
    - `[beam.codex_account_reset.reason]=<why>`
 3) Temporal workflow deletes Codex state in each target container and re-runs `bin/codex-init.sh` to restore baseline config.
-4) Task marked `done`; follow with `beam.codex_login` if OAuth is required.
+4) Workflow waits ~30s, then auto-queues a `beam.codex_login` task (if one isn’t already open).
+5) Task marked `done`; follow the login beam if OAuth is required.
 
 Ready-to-run helper:
 - `bin/beam-codex-account-reset.sh <dyad> [targets] [paths] [reason]`

@@ -79,3 +79,8 @@ type CodexResetResult struct {
 	Targets []string `json:"targets"`
 	Paths   []string `json:"paths"`
 }
+
+type DyadTaskCheck struct {
+	Dyad string `json:"dyad"`
+	Kind string `json:"kind"`
+}
