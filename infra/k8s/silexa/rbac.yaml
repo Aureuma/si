@@ -13,6 +13,16 @@ kind: ServiceAccount
 metadata:
   name: silexa-credentials
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: silexa-telegram-bot
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: silexa-mcp-gateway
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:

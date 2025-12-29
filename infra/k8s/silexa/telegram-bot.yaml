@@ -31,6 +31,8 @@ spec:
         app: silexa-telegram-bot
         silexa.component: telegram-bot
     spec:
+      serviceAccountName: silexa-telegram-bot
+      automountServiceAccountToken: false
       containers:
         - name: telegram-bot
           image: silexa/telegram-bot:local
