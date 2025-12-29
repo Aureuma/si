@@ -19,6 +19,7 @@
 - Registry: `configs/credentials-registry.json` (controls which secrets/keys are eligible).
 - Encrypted secret files live in `secrets/*.sops.*` and are synced to k8s with `bin/credentials-bootstrap.sh`.
 - The credentials dyad receives `CREDENTIALS_APPROVER_TOKEN` from the `silexa-credentials-secrets` secret so only it can approve/reveal secrets.
+- Gatekeeper policy blocks dyad pods from referencing secrets unless they run as `silexa-credentials` (see `infra/k8s/gatekeeper/`).
 
 ## Actors/Critics
 - No secrets mounted by default. Prefer OAuth-style flows where possible (e.g., `codex login` via browser).
