@@ -19,6 +19,9 @@ kubectl -n gatekeeper-system rollout status deployment/gatekeeper-controller-man
 kubectl wait --for=condition=Established crd/constrainttemplates.templates.gatekeeper.sh --timeout=180s
 kubectl apply -f "$TEMPLATE_FILE"
 
+until kubectl get crd/k8srestrictsecretrefs.constraints.gatekeeper.sh >/dev/null 2>&1; do
+  sleep 2
+done
 kubectl wait --for=condition=Established crd/k8srestrictsecretrefs.constraints.gatekeeper.sh --timeout=180s
 kubectl apply -f "$CONSTRAINT_FILE"
 
