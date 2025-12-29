@@ -21,7 +21,7 @@ metadata:
     app: silexa-telegram-bot
     silexa.component: telegram-bot
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: silexa-telegram-bot
@@ -38,6 +38,22 @@ spec:
           image: silexa/telegram-bot:local
           ports:
             - containerPort: 8081
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
           env:
             - name: TELEGRAM_CHAT_ID
               valueFrom:
