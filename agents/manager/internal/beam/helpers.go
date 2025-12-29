@@ -50,3 +50,33 @@ func atoiDefault(s string, def int) int {
 	_, _ = fmt.Sscanf(s, "%d", &n)
 	return n
 }
+
+func parseCSVList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func defaultCodexResetPaths() []string {
+	return []string{
+		"/root/.codex",
+		"/root/.config/openai-codex",
+		"/root/.config/codex",
+		"/root/.cache/openai-codex",
+		"/root/.cache/codex",
+	}
+}

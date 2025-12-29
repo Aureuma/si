@@ -291,6 +291,38 @@ func (a *Activities) SendTelegram(ctx context.Context, msg TelegramMessage) erro
 	return nil
 }
 
+func (a *Activities) ResetCodexState(ctx context.Context, req CodexResetRequest) (CodexResetResult, error) {
+	if a.kube == nil {
+		return CodexResetResult{}, errors.New("kube client unavailable")
+	}
+	dyad := strings.TrimSpace(req.Dyad)
+	if dyad == "" {
+		return CodexResetResult{}, errors.New("dyad required")
+	}
+	targets := normalizeResetTargets(req.Targets)
+	paths := sanitizeResetPaths(req.Paths)
+	if len(paths) == 0 {
+		paths = defaultCodexResetPaths()
+	}
+	if len(targets) == 0 {
+		return CodexResetResult{}, errors.New("no valid reset targets")
+	}
+
+	podName, err := a.kube.resolveDyadPod(ctx, dyad)
+	if err != nil {
+		return CodexResetResult{}, err
+	}
+
+	script := buildCodexResetScript(paths)
+	for _, target := range targets {
+		if _, err := a.kube.execCapture(ctx, podName, target, []string{"bash", "-lc", script}); err != nil {
+			return CodexResetResult{}, fmt.Errorf("reset %s: %w", target, err)
+		}
+	}
+
+	return CodexResetResult{Targets: targets, Paths: paths}, nil
+}
+
 func buildTelegramMessage(cmd string, url string) string {
 	return strings.TrimSpace(fmt.Sprintf(
 		"🔐 <b>Codex login</b>\n\n<b>🛠 Port-forward:</b>\n<pre><code>%s</code></pre>\n\n<b>🌐 URL:</b>\n<pre><code>%s</code></pre>",
@@ -346,6 +378,78 @@ func envIntAllowZero(key string, def int) int {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+func normalizeResetTargets(targets []string) []string {
+	seen := map[string]bool{}
+	for _, target := range targets {
+		name := normalizeContainerName(target)
+		if name == "actor" || name == "critic" {
+			seen[name] = true
+		}
+	}
+	if len(seen) == 0 {
+		seen["actor"] = true
+		seen["critic"] = true
+	}
+	out := make([]string, 0, len(seen))
+	if seen["actor"] {
+		out = append(out, "actor")
+	}
+	if seen["critic"] {
+		out = append(out, "critic")
+	}
+	return out
+}
+
+func sanitizeResetPaths(paths []string) []string {
+	seen := map[string]bool{}
+	for _, raw := range paths {
+		p := strings.TrimSpace(raw)
+		if p == "" {
+			continue
+		}
+		if !strings.HasPrefix(p, "/root/") {
+			continue
+		}
+		if strings.Contains(p, "..") {
+			continue
+		}
+		seen[p] = true
+	}
+	out := make([]string, 0, len(seen))
+	for _, p := range defaultCodexResetPaths() {
+		if seen[p] {
+			out = append(out, p)
+			delete(seen, p)
+		}
+	}
+	for p := range seen {
+		out = append(out, p)
+	}
+	return out
+}
+
+func buildCodexResetScript(paths []string) string {
+	quoted := make([]string, 0, len(paths))
+	for _, path := range paths {
+		quoted = append(quoted, shellQuote(path))
+	}
+	list := strings.Join(quoted, " ")
+	return fmt.Sprintf(`set -euo pipefail
+for p in %s; do
+  if [ "$p" = "/root/.codex" ] && [ -d "$p" ]; then
+    find "$p" -mindepth 1 -maxdepth 1 -exec rm -rf {} + >/dev/null 2>&1 || true
+    continue
+  fi
+  if [ -e "$p" ]; then
+    rm -rf "$p" >/dev/null 2>&1 || true
+  fi
+done
+if [ -x /workspace/silexa/bin/codex-init.sh ]; then
+  /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true
+fi
+`, list)
 }
 
 var urlRe = regexp.MustCompile(`https://[^\s]+`)

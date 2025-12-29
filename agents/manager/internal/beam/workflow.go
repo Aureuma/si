@@ -20,6 +20,7 @@ const (
 	activitySendTelegram       = "SendTelegram"
 	activityApplyDyadResources = "ApplyDyadResources"
 	activityWaitDyadReady      = "WaitDyadReady"
+	activityResetCodexState    = "ResetCodexState"
 )
 
 func BeamWorkflow(ctx workflow.Context, req Request) error {
@@ -29,6 +30,8 @@ func BeamWorkflow(ctx workflow.Context, req Request) error {
 		return codexLoginWorkflow(ctx, req)
 	case KindDyadBootstrap:
 		return dyadBootstrapWorkflow(ctx, req)
+	case KindCodexAccountReset:
+		return codexAccountResetWorkflow(ctx, req)
 	default:
 		if req.TaskID <= 0 {
 			return nil
@@ -310,6 +313,88 @@ func codexLoginWorkflow(ctx workflow.Context, req Request) error {
 			return nil
 		}
 	}
+}
+
+func codexAccountResetWorkflow(ctx workflow.Context, req Request) error {
+	logger := workflow.GetLogger(ctx)
+	if req.TaskID <= 0 {
+		return fmt.Errorf("task id required")
+	}
+	dyad := strings.TrimSpace(req.Dyad)
+	if dyad == "" {
+		_ = signalUpdateTask(ctx, state.DyadTask{
+			ID:     req.TaskID,
+			Status: "blocked",
+			Notes:  appendNote("", "[beam.codex_account_reset] missing dyad assignment"),
+		})
+		return fmt.Errorf("dyad required")
+	}
+
+	_ = signalClaimTask(ctx, state.DyadTaskClaim{
+		ID:     req.TaskID,
+		Dyad:   dyad,
+		Critic: "temporal-beam",
+	})
+	_ = signalUpdateTask(ctx, state.DyadTask{
+		ID:     req.TaskID,
+		Status: "in_progress",
+	})
+
+	activityOpts := workflow.ActivityOptions{
+		StartToCloseTimeout: 3 * time.Minute,
+		RetryPolicy: &temporal.RetryPolicy{
+			InitialInterval:    2 * time.Second,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    20 * time.Second,
+			MaximumAttempts:    3,
+		},
+	}
+	noRetryOpts := workflow.ActivityOptions{
+		StartToCloseTimeout: 30 * time.Second,
+		RetryPolicy: &temporal.RetryPolicy{
+			MaximumAttempts: 1,
+		},
+	}
+
+	var current state.DyadTask
+	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, activityOpts), activityFetchDyadTask, req.TaskID).Get(ctx, &current); err != nil {
+		logger.Error("fetch dyad task", "error", err)
+		return err
+	}
+	stateLines := parseState(current.Notes)
+	targets := parseCSVList(stateLines["beam.codex_account_reset.targets"])
+	paths := parseCSVList(stateLines["beam.codex_account_reset.paths"])
+	if len(targets) == 0 {
+		targets = []string{"actor", "critic"}
+	}
+	if len(paths) == 0 {
+		paths = defaultCodexResetPaths()
+	}
+
+	var result CodexResetResult
+	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, activityOpts), activityResetCodexState, CodexResetRequest{
+		Dyad:    dyad,
+		Targets: targets,
+		Paths:   paths,
+	}).Get(ctx, &result); err != nil {
+		notes := ensureNote(current.Notes, "[beam.codex_account_reset] reset failed: "+err.Error())
+		_ = signalUpdateTask(ctx, state.DyadTask{ID: req.TaskID, Status: "blocked", Notes: notes})
+		return err
+	}
+
+	note := fmt.Sprintf("[beam.codex_account_reset] cleared %s", strings.Join(result.Targets, ","))
+	if len(result.Paths) > 0 {
+		note = fmt.Sprintf("%s (paths=%s)", note, strings.Join(result.Paths, ","))
+	}
+	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, noRetryOpts), activityFetchDyadTask, req.TaskID).Get(ctx, &current); err != nil {
+		logger.Warn("refresh dyad task after reset", "error", err)
+	}
+	_ = signalUpdateTask(ctx, state.DyadTask{
+		ID:     req.TaskID,
+		Status: "done",
+		Notes:  ensureNote(current.Notes, note),
+	})
+	return nil
 }
 
 func signalUpdateTask(ctx workflow.Context, task state.DyadTask) error {

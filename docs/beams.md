@@ -45,6 +45,21 @@ Ready-to-run defaults:
 
 Recorded Telegram message examples: see `docs/beam_messages/` for the latest sent commands and URLs (e.g., `codex_login_actor_infra.txt` captures the exact tunnel + auth URL shared).
 
+## `codex_account_reset` Beam (Account switch cleanup)
+Goal: clear Codex CLI state so the dyad can log in with a different account.
+
+Flow:
+1) Create a Dyad Task Board item with kind `beam.codex_account_reset`.
+2) Optional notes:
+   - `[beam.codex_account_reset.targets]=actor,critic`
+   - `[beam.codex_account_reset.paths]=/root/.codex,/root/.config/openai-codex,/root/.config/codex,/root/.cache/openai-codex,/root/.cache/codex`
+   - `[beam.codex_account_reset.reason]=<why>`
+3) Temporal workflow deletes Codex state in each target container and re-runs `bin/codex-init.sh` to restore baseline config.
+4) Task marked `done`; follow with `beam.codex_login` if OAuth is required.
+
+Ready-to-run helper:
+- `bin/beam-codex-account-reset.sh <dyad> [targets] [paths] [reason]`
+
 ## `dyad_bootstrap` Beam (Dyad provisioning)
 Goal: create the dyad PVC + Deployment in a deterministic sequence.
 
