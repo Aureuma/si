@@ -64,6 +64,18 @@ type DyadBootstrapResult struct {
 }
 
 const (
-	KindCodexLogin    = "beam.codex_login"
-	KindDyadBootstrap = "beam.dyad_bootstrap"
+	KindCodexLogin         = "beam.codex_login"
+	KindDyadBootstrap      = "beam.dyad_bootstrap"
+	KindCodexAccountReset  = "beam.codex_account_reset"
 )
+
+type CodexResetRequest struct {
+	Dyad    string   `json:"dyad"`
+	Targets []string `json:"targets,omitempty"`
+	Paths   []string `json:"paths,omitempty"`
+}
+
+type CodexResetResult struct {
+	Targets []string `json:"targets"`
+	Paths   []string `json:"paths"`
+}
