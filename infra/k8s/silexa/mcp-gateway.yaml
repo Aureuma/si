@@ -45,6 +45,7 @@ spec:
         app: silexa-mcp-gateway
         silexa.component: mcp-gateway
     spec:
+      serviceAccountName: silexa-mcp-gateway
       automountServiceAccountToken: false
       containers:
         - name: mcp-gateway
