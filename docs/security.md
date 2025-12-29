@@ -14,6 +14,7 @@ Kubernetes/agents:
 - Resource caps: set CPU/memory requests and limits in `infra/k8s/` manifests.
 - Secrets: mount from Kubernetes secrets; avoid long-lived env vars for tokens.
 - Secrets access: only `silexa-credentials` service account can read/write secrets; other dyads must request via the credentials broker.
+- Gatekeeper: enforce policy so dyad pods cannot reference secrets unless running as `silexa-credentials` (see `infra/k8s/gatekeeper/`).
 - Network: expose only required ports (manager 9090, brokers 9091/9092, Telegram 8081, MCP 8088). Consider firewall allowlist.
 
 MCP Gateway:

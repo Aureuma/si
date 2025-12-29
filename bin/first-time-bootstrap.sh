@@ -26,6 +26,10 @@ if ! command -v kubectl >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ "${ENABLE_GATEKEEPER:-1}" == "1" ]]; then
+  "${ROOT_DIR}/bin/gatekeeper-up.sh"
+fi
+
 kube apply -k "${ROOT_DIR}/infra/k8s/silexa"
 
 # Spawn infra dyad
