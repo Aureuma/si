@@ -36,6 +36,8 @@ type accountConfig struct {
 	Spawn        *bool  `json:"spawn"`
 }
 
+const codexAccountResetKind = "beam.codex_account_reset"
+
 type accountsFile struct {
 	Accounts               []accountConfig `json:"accounts"`
 	CooldownThresholdPct   float64         `json:"cooldown_threshold_pct"`
@@ -49,6 +51,7 @@ type monitor struct {
 	kubeClient        *kubeClient
 	spawnEnabled      bool
 	requireRegistered bool
+	resetOnCooldown   bool
 	thresholdPct      float64
 	totalLimitMin     int
 	lastCooldown      map[string]bool
@@ -87,6 +90,13 @@ type dyadSnapshot struct {
 	Dyad string `json:"dyad"`
 }
 
+type dyadTaskSnapshot struct {
+	ID     int    `json:"id"`
+	Dyad   string `json:"dyad"`
+	Kind   string `json:"kind"`
+	Status string `json:"status"`
+}
+
 type metricPayload struct {
 	Dyad       string  `json:"dyad"`
 	Department string  `json:"department"`
@@ -112,6 +122,7 @@ func main() {
 	}
 	spawnEnabled := boolEnv("CODEX_SPAWN_DYADS", true)
 	requireRegistered := boolEnv("DYAD_REQUIRE_REGISTERED", true)
+	resetOnCooldown := boolEnv("CODEX_RESET_ON_COOLDOWN", true)
 	addr := envOr("CODEX_MONITOR_ADDR", ":8086")
 
 	kubeClient, err := newKubeClient()
@@ -124,6 +135,7 @@ func main() {
 		kubeClient:        kubeClient,
 		spawnEnabled:      spawnEnabled,
 		requireRegistered: requireRegistered,
+		resetOnCooldown:   resetOnCooldown,
 		thresholdPct:      thresholdPct,
 		totalLimitMin:     totalLimit,
 		lastCooldown:      map[string]bool{},
@@ -432,6 +444,9 @@ func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
 	if !ok || prev != cooldown {
 		m.lastCooldown[key] = cooldown
 		m.postCooldownFeedback(ctx, acct, usage, cooldown, status)
+		if cooldown {
+			m.maybeTriggerAccountReset(ctx, acct, usage, status)
+		}
 	}
 }
 
@@ -459,6 +474,94 @@ func (m *monitor) postCooldownFeedback(ctx context.Context, acct accountConfig, 
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
+}
+
+func (m *monitor) maybeTriggerAccountReset(ctx context.Context, acct accountConfig, usage usageSnapshot, raw string) {
+	if !m.resetOnCooldown {
+		return
+	}
+	dyad := strings.TrimSpace(acct.Dyad)
+	if dyad == "" {
+		return
+	}
+	open, err := m.hasOpenResetTask(ctx, dyad)
+	if err != nil {
+		m.logger.Printf("reset task check error for %s: %v", dyad, err)
+	}
+	if open {
+		return
+	}
+	targets := "actor,critic"
+	paths := strings.Join(defaultCodexResetPaths(), ",")
+	notes := []string{
+		"[beam.codex_account_reset.targets]=" + targets,
+		"[beam.codex_account_reset.paths]=" + paths,
+		fmt.Sprintf("[beam.codex_account_reset.reason]=cooldown (remaining %.1f%%)", usage.RemainingPct),
+	}
+	title := fmt.Sprintf("Reset Codex account state for %s", dyad)
+	desc := "Clear Codex CLI state so the dyad can switch to a different account."
+	task := map[string]interface{}{
+		"title":        title,
+		"description":  desc,
+		"kind":         codexAccountResetKind,
+		"priority":     "high",
+		"dyad":         dyad,
+		"actor":        "actor",
+		"critic":       "critic",
+		"requested_by": "codex-monitor",
+		"notes":        strings.Join(notes, "\n"),
+	}
+	b, _ := json.Marshal(task)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, m.managerURL+"/dyad-tasks", bytes.NewReader(b))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		m.logger.Printf("reset task create error for %s: %v", dyad, err)
+		return
+	}
+	defer resp.Body.Close()
+	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode >= 300 {
+		m.logger.Printf("reset task create error for %s: %s", dyad, resp.Status)
+	}
+}
+
+func (m *monitor) hasOpenResetTask(ctx context.Context, dyad string) (bool, error) {
+	if strings.TrimSpace(m.managerURL) == "" {
+		return false, errors.New("manager url not configured")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.managerURL+"/dyad-tasks", nil)
+	if err != nil {
+		return false, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return false, fmt.Errorf("manager returned %s", resp.Status)
+	}
+	var tasks []dyadTaskSnapshot
+	if err := json.NewDecoder(resp.Body).Decode(&tasks); err != nil {
+		return false, err
+	}
+	for _, task := range tasks {
+		if strings.TrimSpace(task.Dyad) != dyad {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(task.Kind)) != codexAccountResetKind {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(task.Status))
+		if status != "done" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (m *monitor) postMetric(ctx context.Context, metric metricPayload) {
@@ -1329,6 +1432,16 @@ func boolEnv(key string, def bool) bool {
 		}
 	}
 	return def
+}
+
+func defaultCodexResetPaths() []string {
+	return []string{
+		"/root/.codex",
+		"/root/.config/openai-codex",
+		"/root/.config/codex",
+		"/root/.cache/openai-codex",
+		"/root/.cache/codex",
+	}
 }
 
 func durationEnv(key string, def time.Duration) time.Duration {
