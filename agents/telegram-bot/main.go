@@ -11,7 +11,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -24,9 +23,6 @@ type notifier struct {
 	managerURL      string
 	codexMonitorURL string
 	httpClient      *http.Client
-	statusMu        sync.Mutex
-	statusCache     string
-	statusCacheAt   time.Time
 }
 
 type button struct {
@@ -52,16 +48,6 @@ type taskPayload struct {
 	Notes       string `json:"notes"`
 }
 
-type managerHealth struct {
-	Status        string     `json:"status"`
-	TasksOpen     int        `json:"tasks_open"`
-	AccessPending int        `json:"access_pending"`
-	MetricsCount  int        `json:"metrics_count"`
-	BeatsRecent   int        `json:"beats_recent"`
-	UptimeSeconds int64      `json:"uptime_seconds"`
-	LastBeat      *time.Time `json:"last_beat,omitempty"`
-}
-
 type managerTask struct {
 	ID       int    `json:"id"`
 	Title    string `json:"title"`
@@ -80,7 +66,6 @@ type managerDyadTask struct {
 }
 
 const (
-	managerTimeout = 4 * time.Second
 	codexTimeout   = 3 * time.Second
 	tasksTimeout   = 4 * time.Second
 )
@@ -134,7 +119,7 @@ func main() {
 
 func setCommands(bot *tgbotapi.BotAPI, logger *log.Logger) {
 	cmds := []tgbotapi.BotCommand{
-		{Command: "status", Description: "System health and counts"},
+		{Command: "status", Description: "Codex status"},
 		{Command: "tasks", Description: "List open human tasks"},
 		{Command: "task", Description: "Create a human task: /task Title | command | notes"},
 		{Command: "help", Description: "Show available commands and format"},
@@ -472,33 +457,28 @@ func buttonsMarkup(buttons []button) *tgbotapi.InlineKeyboardMarkup {
 
 func (n *notifier) statusMessage() string {
 	msg, err := n.buildStatusMessage()
-	if err == nil {
-		n.setStatusCache(msg)
-		return msg
+	if err != nil {
+		return "Status unavailable: " + err.Error()
 	}
-	if cached, age := n.getStatusCache(); cached != "" {
-		return fmt.Sprintf("Status (stale %s):\n%s\n\nLast error: %s", age, cached, err.Error())
-	}
-	return "Status unavailable: " + err.Error()
+	return msg
 }
 
 func (n *notifier) buildStatusMessage() (string, error) {
-	h, err := n.fetchHealth()
-	if err != nil {
-		return "", err
-	}
-	lastBeat := "n/a"
-	if h.LastBeat != nil {
-		lastBeat = h.LastBeat.UTC().Format(time.RFC3339)
-	}
-	msg := fmt.Sprintf("Status: %s\nOpen tasks: %d\nAccess pending: %d\nRecent beats: %d\nMetrics: %d\nUptime: %ds\nLast beat: %s",
-		h.Status, h.TasksOpen, h.AccessPending, h.BeatsRecent, h.MetricsCount, h.UptimeSeconds, lastBeat)
-	if codex, err := n.fetchCodexStatus(); err == nil {
-		if codex != "" {
-			msg += "\n\n" + codex
-		}
+	sections := make([]string, 0, 1)
+
+	codex, codexErr := n.fetchCodexStatus()
+	codex = strings.TrimSpace(codex)
+	if codexErr != nil {
+		sections = append(sections, "Codex status unavailable: "+codexErr.Error())
+	} else if codex == "" {
+		sections = append(sections, "Codex status unavailable: empty response")
 	} else {
-		msg += "\n\nCodex usage: unavailable"
+		sections = append(sections, codex)
+	}
+
+	msg := strings.TrimSpace(strings.Join(sections, "\n\n"))
+	if msg == "" {
+		return "", fmt.Errorf("empty status message")
 	}
 	return msg, nil
 }
@@ -557,25 +537,9 @@ func (n *notifier) dyadBoardMessage() string {
 	return strings.TrimSpace(b.String())
 }
 
-func (n *notifier) fetchHealth() (*managerHealth, error) {
-	resp, err := n.get(managerTimeout, n.managerURL+"/healthz")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("status %d", resp.StatusCode)
-	}
-	var h managerHealth
-	if err := json.NewDecoder(resp.Body).Decode(&h); err != nil {
-		return nil, err
-	}
-	return &h, nil
-}
-
 func (n *notifier) fetchCodexStatus() (string, error) {
 	if strings.TrimSpace(n.codexMonitorURL) == "" {
-		return "", nil
+		return "", fmt.Errorf("codex monitor url not configured")
 	}
 	resp, err := n.get(codexTimeout, n.codexMonitorURL)
 	if err != nil {
@@ -659,29 +623,9 @@ func (n *notifier) postJSON(timeout time.Duration, url string, body []byte) (*ht
 	return client.Do(req)
 }
 
-func (n *notifier) setStatusCache(msg string) {
-	n.statusMu.Lock()
-	n.statusCache = msg
-	n.statusCacheAt = time.Now().UTC()
-	n.statusMu.Unlock()
-}
-
-func (n *notifier) getStatusCache() (string, string) {
-	n.statusMu.Lock()
-	defer n.statusMu.Unlock()
-	if n.statusCache == "" || n.statusCacheAt.IsZero() {
-		return "", ""
-	}
-	age := time.Since(n.statusCacheAt).Truncate(time.Second)
-	if age < 0 {
-		age = 0
-	}
-	return n.statusCache, age.String()
-}
-
 func helpMessage() string {
 	return strings.TrimSpace(`
-/status - System health, counts, last beat
+/status - Codex status
 /tasks - Open human tasks
 /board - Open dyad tasks
 /chatid - Show this chat id

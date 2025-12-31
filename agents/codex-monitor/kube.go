@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,23 @@ type kubeClient struct {
 	client    *kubernetes.Clientset
 	config    *rest.Config
 	namespace string
+}
+
+type staticTerminalSizeQueue struct {
+	size remotecommand.TerminalSize
+	sent uint32
+}
+
+func newStaticTerminalSizeQueue(rows, cols uint16) *staticTerminalSizeQueue {
+	return &staticTerminalSizeQueue{size: remotecommand.TerminalSize{Height: rows, Width: cols}}
+}
+
+func (q *staticTerminalSizeQueue) Next() *remotecommand.TerminalSize {
+	if atomic.CompareAndSwapUint32(&q.sent, 0, 1) {
+		size := q.size
+		return &size
+	}
+	return nil
 }
 
 func newKubeClient() (*kubeClient, error) {
@@ -106,6 +124,10 @@ func (k *kubeClient) deletePod(ctx context.Context, podName string) error {
 }
 
 func (k *kubeClient) exec(ctx context.Context, podName, container string, cmd []string, stdin io.Reader, stdout, stderr io.Writer, tty bool) error {
+	return k.execWithSize(ctx, podName, container, cmd, stdin, stdout, stderr, tty, nil)
+}
+
+func (k *kubeClient) execWithSize(ctx context.Context, podName, container string, cmd []string, stdin io.Reader, stdout, stderr io.Writer, tty bool, sizeQueue remotecommand.TerminalSizeQueue) error {
 	if k == nil || k.client == nil {
 		return fmt.Errorf("kube client not initialized")
 	}
@@ -132,10 +154,11 @@ func (k *kubeClient) exec(ctx context.Context, podName, container string, cmd []
 		return err
 	}
 	return exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
-		Tty:    tty,
+		Stdin:             stdin,
+		Stdout:            stdout,
+		Stderr:            stderr,
+		Tty:               tty,
+		TerminalSizeQueue: sizeQueue,
 	})
 }
 
