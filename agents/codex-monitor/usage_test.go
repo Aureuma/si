@@ -42,9 +42,9 @@ func TestParseUsageSpacedEmail(t *testing.T) {
 }
 
 func TestParseUsageModelAndReasoning(t *testing.T) {
-	raw := "Model: gpt-5.1-codex-max\nReasoning effort: high\nRemaining: 10%\n"
+	raw := "Model: gpt-5.2-codex\nReasoning effort: high\nRemaining: 10%\n"
 	usage := parseUsage(raw, 300)
-	if usage.Model != "gpt-5.1-codex-max" {
+	if usage.Model != "gpt-5.2-codex" {
 		t.Fatalf("expected model parsed, got %q", usage.Model)
 	}
 	if usage.ReasoningEffort != "high" {

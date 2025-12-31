@@ -115,7 +115,7 @@ func buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim,
 
 	actorImage := envOr("ACTOR_IMAGE", "silexa/actor:local")
 	criticImage := envOr("CRITIC_IMAGE", "silexa/critic:local")
-	codexModel := envOr("CODEX_MODEL", "gpt-5.1-codex-max")
+	codexModel := envOr("CODEX_MODEL", "gpt-5.2-codex")
 	codexModelLow := strings.TrimSpace(os.Getenv("CODEX_MODEL_LOW"))
 	codexModelMedium := strings.TrimSpace(os.Getenv("CODEX_MODEL_MEDIUM"))
 	codexModelHigh := strings.TrimSpace(os.Getenv("CODEX_MODEL_HIGH"))
@@ -252,6 +252,10 @@ fi`},
 						{
 							Name:  "critic",
 							Image: criticImage,
+							SecurityContext: &corev1.SecurityContext{
+								RunAsUser:  int64Ptr(0),
+								RunAsGroup: int64Ptr(0),
+							},
 							Env: appendCodexTuningEnv(append([]corev1.EnvVar{
 								{Name: "MANAGER_URL", Value: managerURL},
 								{Name: "TELEGRAM_NOTIFY_URL", Value: telegramURL},
@@ -261,6 +265,9 @@ fi`},
 								{Name: "DYAD_NAME", Value: dyad},
 								{Name: "DYAD_MEMBER", Value: "critic"},
 								{Name: "ACTOR_CONTAINER", Value: "actor"},
+								{Name: "CODEX_INIT_FORCE", Value: "1"},
+								{Name: "HOME", Value: "/root"},
+								{Name: "CODEX_HOME", Value: "/root/.codex"},
 								{Name: "CODEX_MODEL", Value: codexModel},
 								{Name: "CODEX_REASONING_EFFORT", Value: criticEffort},
 								{
@@ -319,14 +326,16 @@ func credentialsApproverEnv(dyad string) []corev1.EnvVar {
 
 func codexEffortForRole(role string) (string, string) {
 	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "infra", "research":
-		return "xhigh", "high"
-	case "program_manager", "pm":
-		return "low", "xhigh"
-	case "webdev", "web":
+	case "infra":
+		return "xhigh", "xhigh"
+	case "research":
 		return "high", "high"
+	case "program_manager", "pm":
+		return "high", "xhigh"
+	case "webdev", "web":
+		return "medium", "high"
 	default:
-		return "high", "medium"
+		return "medium", "medium"
 	}
 }
 
@@ -348,6 +357,10 @@ func appendEnvIfSet(envs []corev1.EnvVar, key, val string) []corev1.EnvVar {
 }
 
 func int32Ptr(v int32) *int32 {
+	return &v
+}
+
+func int64Ptr(v int64) *int64 {
 	return &v
 }
 

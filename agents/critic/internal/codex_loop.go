@@ -30,11 +30,12 @@ func (m *Monitor) RunCodexTurn(ctx context.Context, container, sessionID, prompt
 	}
 
 	if model == "" {
-		model = envOr("CODEX_MODEL", "gpt-5.1-codex-max")
+		model = envOr("CODEX_MODEL", "gpt-5.2-codex")
 	}
 	if effort == "" {
-		effort = envOr("CODEX_REASONING_EFFORT", "high")
+		effort = envOr("CODEX_REASONING_EFFORT", "medium")
 	}
+	effort = normalizeReasoningEffort(effort)
 	codexArgs := fmt.Sprintf(
 		"-m %s -c %s --dangerously-bypass-approvals-and-sandbox -C %s",
 		shellQuote(model),
@@ -141,8 +142,8 @@ func emptyIf(v, def string) string {
 }
 
 func codexConfigForTask(task DyadTask) (string, string) {
-	baseModel := envOr("CODEX_MODEL", "gpt-5.1-codex-max")
-	baseEffort := envOr("CODEX_REASONING_EFFORT", "high")
+	baseModel := envOr("CODEX_MODEL", "gpt-5.2-codex")
+	baseEffort := envOr("CODEX_REASONING_EFFORT", "medium")
 
 	level := normalizeComplexity(task.Complexity)
 	if level == "" {
@@ -163,7 +164,7 @@ func codexConfigForTask(task DyadTask) (string, string) {
 			effort = level
 		}
 	}
-	return model, effort
+	return model, normalizeReasoningEffort(effort)
 }
 
 func normalizeComplexity(value string) string {
@@ -198,6 +199,18 @@ func normalizeComplexity(value string) string {
 		return "low"
 	}
 	return ""
+}
+
+func normalizeReasoningEffort(value string) string {
+	v := strings.ToLower(strings.TrimSpace(value))
+	switch v {
+	case "low":
+		return "medium"
+	case "medium", "high", "xhigh":
+		return v
+	default:
+		return strings.TrimSpace(value)
+	}
 }
 
 func envOr(key, def string) string {

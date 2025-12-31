@@ -22,7 +22,7 @@ MANAGER_SERVICE_URL="${MANAGER_SERVICE_URL:-http://silexa-manager:9090}"
 ACTOR_IMAGE="${ACTOR_IMAGE:-silexa/actor:local}"
 CRITIC_IMAGE="${CRITIC_IMAGE:-silexa/critic:local}"
 
-CODEX_MODEL="${CODEX_MODEL:-gpt-5.1-codex-max}"
+CODEX_MODEL="${CODEX_MODEL:-gpt-5.2-codex}"
 CODEX_MODEL_LOW="${CODEX_MODEL_LOW:-}"
 CODEX_MODEL_MEDIUM="${CODEX_MODEL_MEDIUM:-}"
 CODEX_MODEL_HIGH="${CODEX_MODEL_HIGH:-}"
@@ -60,20 +60,24 @@ if [[ "$MODE" == "temporal" ]]; then
 fi
 
 case "${ROLE}" in
-  infra|research)
+  infra)
     CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-xhigh}"
+    CODEX_CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-xhigh}"
+    ;;
+  research)
+    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-high}"
     CODEX_CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-high}"
     ;;
   program_manager|pm)
-    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-low}"
+    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-high}"
     CODEX_CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-xhigh}"
     ;;
   webdev|web)
-    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-high}"
+    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-medium}"
     CODEX_CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-high}"
     ;;
   *)
-    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-high}"
+    CODEX_ACTOR_EFFORT="${CODEX_ACTOR_EFFORT:-medium}"
     CODEX_CRITIC_EFFORT="${CODEX_CRITIC_EFFORT:-medium}"
     ;;
 esac
@@ -225,6 +229,9 @@ ${APPROVER_ENV}
           command: ["tini","-s","--","bash","-lc","npm i -g @openai/codex >/dev/null 2>&1 || true; if [ -x /workspace/silexa/bin/codex-init.sh ]; then /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; else echo \"codex-init skipped: /workspace/silexa/bin/codex-init.sh not found\"; fi; exec tail -f /dev/null"]
         - name: critic
           image: ${CRITIC_IMAGE}
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           env:
             - name: MANAGER_URL
               value: "${MANAGER_SERVICE_URL}"
@@ -242,6 +249,12 @@ ${APPROVER_ENV}
               value: "critic"
             - name: ACTOR_CONTAINER
               value: "actor"
+            - name: CODEX_INIT_FORCE
+              value: "1"
+            - name: HOME
+              value: "/root"
+            - name: CODEX_HOME
+              value: "/root/.codex"
             - name: CODEX_MODEL
               value: "${CODEX_MODEL}"
             - name: CODEX_REASONING_EFFORT

@@ -121,8 +121,8 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 	member := envOr("DYAD_MEMBER", "critic")
 	role := envOr("ROLE", "critic")
 	dept := envOr("DEPARTMENT", "unknown")
-	model := envOr("CODEX_MODEL", "gpt-5.1-codex-max")
-	effort := envOr("CODEX_REASONING_EFFORT", "high")
+	model := envOr("CODEX_MODEL", "gpt-5.2-codex")
+	effort := envOr("CODEX_REASONING_EFFORT", "medium")
 
 	managed := false
 	if existing, err := os.ReadFile(cfg); err == nil {
