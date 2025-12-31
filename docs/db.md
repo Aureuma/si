@@ -1,36 +1,38 @@
-## Per-app Postgres pattern
+## Shared Postgres platform (recommended)
 
-Each web app gets its own Postgres Service + StatefulSet with a per-app PVC. Dyads reach databases via the in-cluster service (`db-<app>`) without host exposure.
+Silexa runs a shared Postgres cluster in the `silexa-data` namespace (managed by CloudNativePG). Each app gets its own database and role inside that cluster.
 
 ### Quickstart
-Create a database for app `foo`:
+Provision a database for app `foo`:
 
 ```bash
-bin/app-db.sh create foo           # creates service db-foo + PVC
-bin/app-db.sh creds foo            # show connection info
-```
-
-Optional host port exposure:
-
-```bash
-bin/app-db.sh create foo 55432     # prints kubectl port-forward command
+bin/app-db-shared.sh create foo
+bin/app-db-shared.sh creds foo
 ```
 
 List or drop:
 
 ```bash
-bin/app-db.sh list                 # show running db services
-bin/app-db.sh drop foo             # stop service and remove data dir
-bin/app-db.sh drop foo --keep-data # stop service but keep data
+bin/app-db-shared.sh list
+bin/app-db-shared.sh drop foo
 ```
 
-### Credentials and RBAC
-- Credentials are written to `secrets/db-<app>.env` (git-ignored). Contents include `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_HOST`, `DB_PORT`, and `DATABASE_URL`.
-- Services are named `db-<app>` inside the `silexa` namespace; connect from dyads using `DB_HOST=db-<app>`.
-- No privileged mounts or bot tokens are exposed to these DB services.
+### Credentials and access
+- Admin credentials live in `secrets/postgres-app-admin.env` (git-ignored). These are used to create DBs/roles.
+- App credentials are written to `secrets/db-<app>.env` (git-ignored) and also stored as a Kubernetes Secret named `db-<app>-credentials` in the app namespace.
+- Default host is `silexa-postgres-rw.silexa-data.svc` (change with `SILEXA_DB_CLUSTER`/`SILEXA_DB_NAMESPACE`).
+- NetworkPolicy only allows ingress from namespaces labeled `silexa.db-access=true`. Label app namespaces to opt in.
 
 ### Best practices
-- One database per app keeps blast radius small and enables per-app lifecycle (backup/restore/rotate).
-- Avoid port-forwarding unless you need local admin access; inside the cluster use the service hostname.
-- Rotate passwords by editing `secrets/db-<app>.env` and recreating the StatefulSet (`bin/app-db.sh drop <app>` then `create`).
-- Keep schema migrations in each app repo (e.g., `apps/<app>/migrations`); dyads can run migrations against the app-specific DSN.***
+- One shared cluster with per-app databases keeps ops centralized and cost predictable.
+- Keep migrations in each app repo (e.g., `apps/<app>/migrations`); dyads run migrations against the app DSN.
+- Rotate app passwords by deleting `secrets/db-<app>.env`, then re-run `bin/app-db-shared.sh create <app>`.
+
+## Legacy per-app Postgres (StatefulSet)
+
+Each app can also run a dedicated Postgres Service + StatefulSet via `bin/app-db.sh`. This is still supported but not the preferred path for production.
+
+```bash
+bin/app-db.sh create foo
+bin/app-db.sh creds foo
+```

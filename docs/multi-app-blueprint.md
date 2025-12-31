@@ -99,7 +99,7 @@ See `docs/web-stack.md` for the default library list.
 3) Route tasks:
    - Add app keywords to `configs/router_rules.json` as needed.
 4) Provision DB:
-   - `bin/app-db.sh create <app>` and use `secrets/db-<app>.env`.
+   - `bin/app-db-shared.sh create <app>` and use `secrets/db-<app>.env`.
 5) Document CI/deploy in `apps/<app>/infra/` and update plan.
 
 ### Monorepo management
