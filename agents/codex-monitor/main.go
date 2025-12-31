@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
@@ -69,12 +71,81 @@ type usageSnapshot struct {
 	Email                  string
 	Model                  string
 	ReasoningEffort        string
+	Session                string
 }
+
+type appServerRequest struct {
+	JSONRPC string      `json:"jsonrpc,omitempty"`
+	ID      int         `json:"id"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+}
+
+type appServerEnvelope struct {
+	ID     json.RawMessage `json:"id"`
+	Result json.RawMessage `json:"result"`
+	Error  *appServerError `json:"error"`
+}
+
+type appServerError struct {
+	Message string `json:"message"`
+}
+
+type appRateLimitsResponse struct {
+	RateLimits appRateLimitSnapshot `json:"rateLimits"`
+}
+
+type appRateLimitSnapshot struct {
+	Primary   *appRateLimitWindow `json:"primary"`
+	Secondary *appRateLimitWindow `json:"secondary"`
+	Credits   *appCreditsSnapshot `json:"credits"`
+	PlanType  string             `json:"planType"`
+}
+
+type appRateLimitWindow struct {
+	UsedPercent        int    `json:"usedPercent"`
+	WindowDurationMins *int64 `json:"windowDurationMins"`
+	ResetsAt           *int64 `json:"resetsAt"`
+}
+
+type appCreditsSnapshot struct {
+	HasCredits bool   `json:"hasCredits"`
+	Unlimited  bool   `json:"unlimited"`
+	Balance    string `json:"balance"`
+}
+
+type appAccountResponse struct {
+	Account            *appAccount `json:"account"`
+	RequiresOpenaiAuth bool        `json:"requiresOpenaiAuth"`
+}
+
+type appAccount struct {
+	Type     string `json:"type"`
+	Email    string `json:"email"`
+	PlanType string `json:"planType"`
+}
+
+type appConfigResponse struct {
+	Config appConfig `json:"config"`
+}
+
+type appConfig struct {
+	Model                *string `json:"model"`
+	ModelReasoningEffort *string `json:"model_reasoning_effort"`
+}
+
+const (
+	appServerInitID       = 1
+	appServerRateLimitsID = 2
+	appServerAccountID    = 3
+	appServerConfigID     = 4
+)
 
 type statusEntry struct {
 	Name                   string    `json:"name"`
 	Dyad                   string    `json:"dyad"`
 	Department             string    `json:"department"`
+	Member                 string    `json:"member,omitempty"`
 	RemainingPct           float64   `json:"remaining_pct"`
 	RemainingMinutes       int       `json:"remaining_minutes"`
 	WeeklyRemainingPct     float64   `json:"weekly_remaining_pct"`
@@ -83,6 +154,8 @@ type statusEntry struct {
 	Email                  string    `json:"email,omitempty"`
 	Model                  string    `json:"model,omitempty"`
 	ReasoningEffort        string    `json:"reasoning_effort,omitempty"`
+	Session                string    `json:"session,omitempty"`
+	Note                   string    `json:"note,omitempty"`
 	UpdatedAt              time.Time `json:"updated_at"`
 }
 
@@ -95,6 +168,13 @@ type dyadTaskSnapshot struct {
 	Dyad   string `json:"dyad"`
 	Kind   string `json:"kind"`
 	Status string `json:"status"`
+}
+
+type codexStatusInfo struct {
+	Model           string
+	ReasoningEffort string
+	Session         string
+	Email           string
 }
 
 type metricPayload struct {
@@ -214,60 +294,130 @@ func (m *monitor) statusEntries() []statusEntry {
 		entries = append(entries, entry)
 	}
 	sort.SliceStable(entries, func(i, j int) bool {
-		if entries[i].RemainingPct != entries[j].RemainingPct {
-			return entries[i].RemainingPct < entries[j].RemainingPct
+		a := strings.ToLower(strings.TrimSpace(entries[i].Dyad))
+		b := strings.ToLower(strings.TrimSpace(entries[j].Dyad))
+		if a != b {
+			return a < b
 		}
-		return entries[i].Dyad < entries[j].Dyad
+		return memberRank(entries[i].Member) < memberRank(entries[j].Member)
 	})
 	return entries
 }
 
 func formatStatusSummary(entries []statusEntry) string {
 	if len(entries) == 0 {
-		return "Codex usage: no data"
+		return "🤖 Codex usage: no data"
 	}
 	var b strings.Builder
-	b.WriteString("Codex usage:\n")
+	b.WriteString("🤖 Codex usage:\n")
+	seen := map[string]bool{}
+	order := make([]string, 0, len(entries))
+	grouped := map[string][]statusEntry{}
 	for _, entry := range entries {
-		line := "- " + entry.Dyad
-		if entry.Name != "" && entry.Name != entry.Dyad {
-			line += " (" + entry.Name + ")"
+		dyad := strings.TrimSpace(entry.Dyad)
+		if dyad == "" {
+			dyad = "unknown"
 		}
-		if entry.Email != "" {
-			line += " <" + entry.Email + ">"
+		if !seen[dyad] {
+			seen[dyad] = true
+			order = append(order, dyad)
 		}
-		if entry.Model != "" {
-			line += " model=" + entry.Model
-		} else {
-			line += " model=n/a"
+		grouped[dyad] = append(grouped[dyad], entry)
+	}
+
+	for i, dyad := range order {
+		if i > 0 {
+			b.WriteString("\n")
 		}
-		if entry.ReasoningEffort != "" {
-			line += " reasoning=" + entry.ReasoningEffort
-		} else {
-			line += " reasoning=n/a"
-		}
-		if entry.RemainingPct >= 0 {
-			line += fmt.Sprintf(": 5h %.1f%% remaining", entry.RemainingPct)
-			if entry.RemainingMinutes > 0 {
-				line += fmt.Sprintf(" (%dm)", entry.RemainingMinutes)
+		b.WriteString("🔹 " + dyad + "\n")
+		members := grouped[dyad]
+		sort.SliceStable(members, func(i, j int) bool {
+			return memberRank(members[i].Member) < memberRank(members[j].Member)
+		})
+		for _, entry := range members {
+			label := memberLabel(entry.Member)
+			line := fmt.Sprintf("  • %s %s %s", memberEmoji(entry.Member), label, usageStatusEmoji(entry))
+			if entry.Name != "" && entry.Name != entry.Dyad {
+				line += " (" + entry.Name + ")"
 			}
-			if entry.Cooldown {
-				line += " [cooldown]"
+			b.WriteString(line + "\n")
+			if entry.Email != "" {
+				b.WriteString("    - 📧 account: " + entry.Email + "\n")
 			}
-		} else {
-			line += ": 5h n/a"
-		}
-		if entry.WeeklyRemainingPct >= 0 {
-			line += fmt.Sprintf("; weekly %.1f%% remaining", entry.WeeklyRemainingPct)
-			if entry.WeeklyRemainingMinutes > 0 {
-				line += fmt.Sprintf(" (%dm)", entry.WeeklyRemainingMinutes)
+			b.WriteString("    - 🤖 model: " + valueOrNA(entry.Model) + "\n")
+			b.WriteString("    - 🧠 reasoning: " + valueOrNA(entry.ReasoningEffort) + "\n")
+			b.WriteString("    - 🆔 session: " + valueOrNA(entry.Session) + "\n")
+			if entry.RemainingPct >= 0 {
+				line := fmt.Sprintf("    - ⏱ 5h remaining: %.1f%%", entry.RemainingPct)
+				if bar := progressBar(entry.RemainingPct, 10); bar != "" {
+					line += " " + bar
+				}
+				if entry.RemainingMinutes > 0 {
+					line += fmt.Sprintf(" (%dm)", entry.RemainingMinutes)
+				}
+				if entry.Cooldown {
+					line += " ⚠️ cooldown"
+				}
+				b.WriteString(line + "\n")
+			} else {
+				b.WriteString("    - ⏱ 5h remaining: n/a\n")
 			}
-		} else {
-			line += "; weekly n/a"
+			if entry.WeeklyRemainingPct >= 0 {
+				line := fmt.Sprintf("    - 🗓 weekly remaining: %.1f%%", entry.WeeklyRemainingPct)
+				if bar := progressBar(entry.WeeklyRemainingPct, 10); bar != "" {
+					line += " " + bar
+				}
+				if entry.WeeklyRemainingMinutes > 0 {
+					line += fmt.Sprintf(" (%dm)", entry.WeeklyRemainingMinutes)
+				}
+				b.WriteString(line + "\n")
+			} else {
+				b.WriteString("    - 🗓 weekly remaining: n/a\n")
+			}
+			if entry.Note != "" {
+				b.WriteString("    - ℹ️ note: " + entry.Note + "\n")
+			}
 		}
-		b.WriteString(line + "\n")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func progressBar(pct float64, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if pct < 0 {
+		return ""
+	}
+	clamped := pct
+	if clamped < 0 {
+		clamped = 0
+	}
+	if clamped > 100 {
+		clamped = 100
+	}
+	filled := int(math.Round(clamped / 100 * float64(width)))
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > width {
+		filled = width
+	}
+	empty := width - filled
+	if empty < 0 {
+		empty = 0
+	}
+	if filled == 0 && empty == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i := 0; i < filled; i++ {
+		b.WriteString("🟩")
+	}
+	for i := 0; i < empty; i++ {
+		b.WriteString("⬜")
+	}
+	return b.String()
 }
 
 func (m *monitor) pollOnce(cfg accountsFile) {
@@ -290,15 +440,16 @@ func (m *monitor) pollOnce(cfg accountsFile) {
 			m.logger.Printf("skip account %q: missing dyad", acct.Name)
 			continue
 		}
+		members := membersForAccount(acct)
 		if m.requireRegistered {
 			if registered == nil {
 				m.logger.Printf("skip account %q: dyad registry unavailable", acct.Name)
-				m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false)
+				m.updateStatusForMembers(acct, members, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false, "dyad registry unavailable")
 				continue
 			}
 			if _, ok := registered[strings.TrimSpace(acct.Dyad)]; !ok {
 				m.logger.Printf("skip account %q: dyad not registered", acct.Name)
-				m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false)
+				m.updateStatusForMembers(acct, members, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false, "dyad not registered")
 				continue
 			}
 		}
@@ -374,17 +525,45 @@ func (m *monitor) spawnDyad(ctx context.Context, acct accountConfig) error {
 }
 
 func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
-	status, err := m.fetchCodexStatus(ctx, acct)
-	if err != nil {
-		m.logger.Printf("codex status %s error: %v", acct.Dyad, err)
-		m.updateStatusCache(acct, usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false)
+	members := membersForAccount(acct)
+	if len(members) == 0 {
+		m.updateStatusCache(acct, "", usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, false, "no members")
 		return
 	}
-	usage := parseUsage(status, m.totalLimitMin)
-	cooldown := usage.RemainingPct >= 0 && usage.RemainingPct <= m.thresholdPct
-	m.updateStatusCache(acct, usage, cooldown)
-	if usage.RemainingPct < 0 {
-		m.logger.Printf("codex status parse failed for %s: %s", acct.Dyad, truncateLines(status, 6, 800))
+	primaryMember := monitorMember(acct)
+	if !memberInList(primaryMember, members) {
+		primaryMember = members[0]
+	}
+
+	var primaryUsage usageSnapshot
+	var primaryErr error
+	var primaryRaw string
+	var primaryCooldown bool
+
+	for _, member := range members {
+		usage, raw, err := m.fetchCodexUsageForMember(ctx, acct, member)
+		note := ""
+		if err != nil {
+			m.logger.Printf("codex usage %s/%s error: %v", acct.Dyad, member, err)
+			note = shortStatusNote(err)
+		} else if usage.RemainingPct < 0 {
+			note = "usage missing"
+			m.logger.Printf("codex usage missing for %s/%s: %s", acct.Dyad, member, truncateLines(raw, 6, 800))
+		}
+		cooldown := usage.RemainingPct >= 0 && usage.RemainingPct <= m.thresholdPct
+		m.updateStatusCache(acct, member, usage, cooldown, note)
+		if member == primaryMember {
+			primaryUsage = usage
+			primaryErr = err
+			primaryRaw = raw
+			primaryCooldown = cooldown
+		}
+	}
+
+	if primaryErr != nil {
+		return
+	}
+	if primaryUsage.RemainingPct < 0 {
 		return
 	}
 	dpt := strings.TrimSpace(acct.Department)
@@ -396,36 +575,36 @@ func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
 		Dyad:       acct.Dyad,
 		Department: dpt,
 		Name:       "codex.remaining_pct",
-		Value:      usage.RemainingPct,
+		Value:      primaryUsage.RemainingPct,
 		Unit:       "percent",
 		RecordedBy: "codex-monitor",
 	})
-	if usage.RemainingMinutes > 0 {
+	if primaryUsage.RemainingMinutes > 0 {
 		m.postMetric(ctx, metricPayload{
 			Dyad:       acct.Dyad,
 			Department: dpt,
 			Name:       "codex.remaining_minutes",
-			Value:      float64(usage.RemainingMinutes),
+			Value:      float64(primaryUsage.RemainingMinutes),
 			Unit:       "minutes",
 			RecordedBy: "codex-monitor",
 		})
 	}
-	if usage.WeeklyRemainingPct >= 0 {
+	if primaryUsage.WeeklyRemainingPct >= 0 {
 		m.postMetric(ctx, metricPayload{
 			Dyad:       acct.Dyad,
 			Department: dpt,
 			Name:       "codex.weekly_remaining_pct",
-			Value:      usage.WeeklyRemainingPct,
+			Value:      primaryUsage.WeeklyRemainingPct,
 			Unit:       "percent",
 			RecordedBy: "codex-monitor",
 		})
 	}
-	if usage.WeeklyRemainingMinutes > 0 {
+	if primaryUsage.WeeklyRemainingMinutes > 0 {
 		m.postMetric(ctx, metricPayload{
 			Dyad:       acct.Dyad,
 			Department: dpt,
 			Name:       "codex.weekly_remaining_minutes",
-			Value:      float64(usage.WeeklyRemainingMinutes),
+			Value:      float64(primaryUsage.WeeklyRemainingMinutes),
 			Unit:       "minutes",
 			RecordedBy: "codex-monitor",
 		})
@@ -434,18 +613,18 @@ func (m *monitor) pollAccount(ctx context.Context, acct accountConfig) {
 		Dyad:       acct.Dyad,
 		Department: dpt,
 		Name:       "codex.cooldown",
-		Value:      boolToFloat(cooldown),
+		Value:      boolToFloat(primaryCooldown),
 		Unit:       "bool",
 		RecordedBy: "codex-monitor",
 	})
 
 	key := acct.Dyad
 	prev, ok := m.lastCooldown[key]
-	if !ok || prev != cooldown {
-		m.lastCooldown[key] = cooldown
-		m.postCooldownFeedback(ctx, acct, usage, cooldown, status)
-		if cooldown {
-			m.maybeTriggerAccountReset(ctx, acct, usage, status)
+	if !ok || prev != primaryCooldown {
+		m.lastCooldown[key] = primaryCooldown
+		m.postCooldownFeedback(ctx, acct, primaryUsage, primaryCooldown, primaryRaw)
+		if primaryCooldown {
+			m.maybeTriggerAccountReset(ctx, acct, primaryUsage, primaryRaw)
 		}
 	}
 }
@@ -611,6 +790,78 @@ func (m *monitor) listDyads(ctx context.Context) (map[string]dyadSnapshot, error
 	return out, nil
 }
 
+func (m *monitor) fetchCodexUsage(ctx context.Context, acct accountConfig) (usageSnapshot, string, error) {
+	member := monitorMember(acct)
+	return m.fetchCodexUsageForMember(ctx, acct, member)
+}
+
+func (m *monitor) fetchCodexUsageForMember(ctx context.Context, acct accountConfig, member string) (usageSnapshot, string, error) {
+	if home, ok := m.resolveCodexHomeForMember(acct, member); ok {
+		usage, raw, err := m.execCodexRateLimitsLocal(ctx, home)
+		if err == nil {
+			usage = m.enrichUsageWithStatus(ctx, acct, member, usage)
+			return usage, raw, nil
+		}
+		m.logger.Printf("codex app-server local error for %s/%s: %v", acct.Dyad, member, err)
+	}
+	container := memberContainer(acct, member)
+	if container == "" {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("missing %s container", member)
+	}
+	usage, raw, err := m.execCodexRateLimitsRemote(ctx, acct.Dyad, container)
+	if err != nil {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, raw, err
+	}
+	usage = m.enrichUsageWithStatus(ctx, acct, member, usage)
+	return usage, raw, nil
+}
+
+func (m *monitor) enrichUsageWithStatus(ctx context.Context, acct accountConfig, member string, usage usageSnapshot) usageSnapshot {
+	if !needsCodexStatusInfo(usage) {
+		return usage
+	}
+	raw, err := m.fetchCodexStatusForMember(ctx, acct, member)
+	if err != nil {
+		m.logger.Printf("codex status %s/%s error: %v", acct.Dyad, member, err)
+		return usage
+	}
+	info := parseCodexStatusInfo(raw)
+	if strings.TrimSpace(usage.Model) == "" && info.Model != "" {
+		usage.Model = info.Model
+	}
+	if strings.TrimSpace(usage.ReasoningEffort) == "" && info.ReasoningEffort != "" {
+		usage.ReasoningEffort = info.ReasoningEffort
+	}
+	if strings.TrimSpace(usage.Session) == "" && info.Session != "" {
+		usage.Session = info.Session
+	}
+	if strings.TrimSpace(usage.Email) == "" && info.Email != "" {
+		usage.Email = info.Email
+	}
+	return usage
+}
+
+func needsCodexStatusInfo(usage usageSnapshot) bool {
+	return strings.TrimSpace(usage.Model) == "" ||
+		strings.TrimSpace(usage.ReasoningEffort) == "" ||
+		strings.TrimSpace(usage.Session) == ""
+}
+
+func (m *monitor) fetchCodexStatusForMember(ctx context.Context, acct accountConfig, member string) (string, error) {
+	if home, ok := m.resolveCodexHomeForMember(acct, member); ok {
+		raw, err := m.execCodexStatusLocal(ctx, home)
+		if err == nil {
+			return raw, nil
+		}
+		m.logger.Printf("codex status local error for %s/%s: %v", acct.Dyad, member, err)
+	}
+	container := memberContainer(acct, member)
+	if container == "" {
+		return "", fmt.Errorf("missing %s container", member)
+	}
+	return m.execCodexStatus(ctx, acct.Dyad, container)
+}
+
 func (m *monitor) fetchCodexStatus(ctx context.Context, acct accountConfig) (string, error) {
 	if home, ok := m.resolveCodexHome(acct); ok {
 		return m.execCodexStatusLocal(ctx, home)
@@ -620,6 +871,241 @@ func (m *monitor) fetchCodexStatus(ctx context.Context, acct accountConfig) (str
 		return "", errors.New("missing monitor container")
 	}
 	return m.execCodexStatus(ctx, acct.Dyad, container)
+}
+
+func (m *monitor) execCodexRateLimitsLocal(ctx context.Context, home string) (usageSnapshot, string, error) {
+	if _, err := exec.LookPath("codex"); err != nil {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", err
+	}
+	statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	input := buildAppServerInput()
+	cmd := exec.CommandContext(statusCtx, "codex", "app-server")
+	cmd.Env = append(os.Environ(), "HOME="+home, "CODEX_HOME="+filepath.Join(home, ".codex"))
+	cmd.Dir = home
+	cmd.Stdin = bytes.NewReader(input)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	out := strings.TrimSpace(stdout.String())
+	raw := out
+	if stderr.Len() > 0 {
+		raw = strings.TrimSpace(raw + "\n" + strings.TrimSpace(stderr.String()))
+	}
+	if err != nil {
+		if raw != "" {
+			return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, raw, fmt.Errorf("%w: %s", err, raw)
+		}
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, raw, err
+	}
+	usage, parseErr := parseAppServerUsageOutput(out, m.totalLimitMin)
+	if parseErr != nil {
+		return usage, raw, parseErr
+	}
+	return usage, raw, nil
+}
+
+func (m *monitor) execCodexRateLimitsRemote(ctx context.Context, dyad, container string) (usageSnapshot, string, error) {
+	if strings.TrimSpace(dyad) == "" {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("dyad required for exec")
+	}
+	if m.kubeClient == nil {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("kube client not initialized")
+	}
+	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
+	if err != nil {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", err
+	}
+	containerName := normalizeContainerName(container)
+	if containerName == "" {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("container name required")
+	}
+
+	input := buildAppServerInput()
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	err = m.kubeClient.exec(ctx, podName, containerName, []string{"codex", "app-server"}, bytes.NewReader(input), &stdout, &stderr, false)
+	out := strings.TrimSpace(stdout.String())
+	raw := out
+	if stderr.Len() > 0 {
+		raw = strings.TrimSpace(raw + "\n" + strings.TrimSpace(stderr.String()))
+	}
+	if err != nil {
+		if raw != "" {
+			return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, raw, fmt.Errorf("%w: %s", err, raw)
+		}
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, raw, err
+	}
+	usage, parseErr := parseAppServerUsageOutput(out, m.totalLimitMin)
+	if parseErr != nil {
+		return usage, raw, parseErr
+	}
+	return usage, raw, nil
+}
+
+func buildAppServerInput() []byte {
+	reqs := []appServerRequest{
+		{
+			JSONRPC: "2.0",
+			ID:      appServerInitID,
+			Method:  "initialize",
+			Params: map[string]interface{}{
+				"clientInfo": map[string]string{
+					"name":    "codex-monitor",
+					"version": "0.0.0",
+				},
+			},
+		},
+		{
+			JSONRPC: "2.0",
+			ID:      appServerRateLimitsID,
+			Method:  "account/rateLimits/read",
+			Params:  nil,
+		},
+		{
+			JSONRPC: "2.0",
+			ID:      appServerAccountID,
+			Method:  "account/read",
+			Params:  map[string]interface{}{},
+		},
+		{
+			JSONRPC: "2.0",
+			ID:      appServerConfigID,
+			Method:  "config/read",
+			Params:  map[string]interface{}{},
+		},
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	for _, req := range reqs {
+		_ = enc.Encode(req)
+	}
+	return buf.Bytes()
+}
+
+func parseAppServerUsageOutput(raw string, totalLimitMin int) (usageSnapshot, error) {
+	usage := usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return usage, errors.New("empty app-server output")
+	}
+	var rateResp appRateLimitsResponse
+	var accountResp appAccountResponse
+	var configResp appConfigResponse
+	var rateSeen bool
+	var rateErr error
+
+	scanner := bufio.NewScanner(strings.NewReader(raw))
+	scanner.Buffer(make([]byte, 0, 4096), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var envelope appServerEnvelope
+		if err := json.Unmarshal([]byte(line), &envelope); err != nil {
+			continue
+		}
+		id, ok := parseAppServerID(envelope.ID)
+		if !ok {
+			continue
+		}
+		if envelope.Error != nil {
+			if id == appServerRateLimitsID {
+				msg := strings.TrimSpace(envelope.Error.Message)
+				if msg == "" {
+					msg = "rate limits request failed"
+				}
+				rateErr = errors.New(msg)
+			}
+			continue
+		}
+		switch id {
+		case appServerRateLimitsID:
+			if err := json.Unmarshal(envelope.Result, &rateResp); err == nil {
+				rateSeen = true
+			}
+		case appServerAccountID:
+			_ = json.Unmarshal(envelope.Result, &accountResp)
+		case appServerConfigID:
+			_ = json.Unmarshal(envelope.Result, &configResp)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return usage, err
+	}
+	if rateErr != nil {
+		return usage, rateErr
+	}
+	if !rateSeen {
+		return usage, errors.New("rate limits missing")
+	}
+
+	if rateResp.RateLimits.Primary != nil {
+		remainingPct, remainingMinutes, usedPct := windowUsage(rateResp.RateLimits.Primary, totalLimitMin)
+		usage.RemainingPct = remainingPct
+		usage.RemainingMinutes = remainingMinutes
+		usage.UsedPct = usedPct
+	}
+	if rateResp.RateLimits.Secondary != nil {
+		remainingPct, remainingMinutes, usedPct := windowUsage(rateResp.RateLimits.Secondary, 0)
+		usage.WeeklyRemainingPct = remainingPct
+		usage.WeeklyRemainingMinutes = remainingMinutes
+		usage.WeeklyUsedPct = usedPct
+	}
+	if accountResp.Account != nil && strings.EqualFold(strings.TrimSpace(accountResp.Account.Type), "chatgpt") {
+		usage.Email = strings.TrimSpace(accountResp.Account.Email)
+	}
+	if configResp.Config.Model != nil {
+		usage.Model = strings.TrimSpace(*configResp.Config.Model)
+	}
+	if configResp.Config.ModelReasoningEffort != nil {
+		usage.ReasoningEffort = strings.TrimSpace(*configResp.Config.ModelReasoningEffort)
+	}
+	return usage, nil
+}
+
+func parseAppServerID(raw json.RawMessage) (int, bool) {
+	if len(raw) == 0 {
+		return 0, false
+	}
+	var id int
+	if err := json.Unmarshal(raw, &id); err == nil {
+		return id, true
+	}
+	var idStr string
+	if err := json.Unmarshal(raw, &idStr); err == nil {
+		parsed, parseErr := strconv.Atoi(idStr)
+		if parseErr == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func windowUsage(window *appRateLimitWindow, fallbackMinutes int) (float64, int, float64) {
+	if window == nil {
+		return -1, 0, -1
+	}
+	used := float64(window.UsedPercent)
+	if used < 0 || used > 100 {
+		return -1, 0, used
+	}
+	remaining := 100 - used
+	windowMinutes := 0
+	if window.WindowDurationMins != nil {
+		windowMinutes = int(*window.WindowDurationMins)
+	} else if fallbackMinutes > 0 {
+		windowMinutes = fallbackMinutes
+	}
+	remainingMinutes := 0
+	if windowMinutes > 0 {
+		remainingMinutes = int(math.Round(float64(windowMinutes) * remaining / 100.0))
+	}
+	return remaining, remainingMinutes, used
 }
 
 func (m *monitor) resolveCodexHome(acct accountConfig) (string, bool) {
@@ -634,6 +1120,32 @@ func (m *monitor) resolveCodexHome(acct accountConfig) (string, bool) {
 		return home, true
 	}
 	if home, ok := resolveHomeFromPath(filepath.Join(base, "actor"), acct.Dyad); ok {
+		return home, true
+	}
+	return "", false
+}
+
+func (m *monitor) resolveCodexHomeForMember(acct accountConfig, member string) (string, bool) {
+	member = strings.ToLower(strings.TrimSpace(member))
+	if member == "" {
+		return m.resolveCodexHome(acct)
+	}
+	path := strings.TrimSpace(acct.CodexHome)
+	if path != "" {
+		if strings.ToLower(strings.TrimSpace(filepath.Base(path))) == member {
+			if home, ok := resolveHomeFromPath(path, acct.Dyad); ok {
+				return home, true
+			}
+		}
+		if home, ok := resolveHomeFromPath(filepath.Join(path, member), acct.Dyad); ok {
+			return home, true
+		}
+	}
+	if strings.TrimSpace(acct.Dyad) == "" {
+		return "", false
+	}
+	base := filepath.Join("/data/codex", strings.TrimSpace(acct.Dyad), member)
+	if home, ok := resolveHomeFromPath(base, acct.Dyad); ok {
 		return home, true
 	}
 	return "", false
@@ -902,11 +1414,276 @@ func (m *monitor) execCodexStatusLocal(ctx context.Context, home string) (string
 	}
 }
 
-func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, cooldown bool) {
+func (m *monitor) execCodexStatusRemote(ctx context.Context, dyad, container string) (string, error) {
+	if strings.TrimSpace(dyad) == "" {
+		return "", fmt.Errorf("dyad required for exec")
+	}
+	if m.kubeClient == nil {
+		return "", fmt.Errorf("kube client not initialized")
+	}
+	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
+	if err != nil {
+		return "", err
+	}
+	containerName := normalizeContainerName(container)
+	if containerName == "" {
+		return "", fmt.Errorf("container name required")
+	}
+
+	statusCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	defer cancel()
+
+	stdinR, stdinW := io.Pipe()
+	stdoutR, stdoutW := io.Pipe()
+	defer stdinW.Close()
+	defer stdoutR.Close()
+
+	var writeMu sync.Mutex
+	write := func(payload []byte) {
+		if len(payload) == 0 {
+			return
+		}
+		writeMu.Lock()
+		_, _ = stdinW.Write(payload)
+		writeMu.Unlock()
+	}
+
+	readyCh := make(chan struct{})
+	var readyOnce sync.Once
+	go func() {
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
+		timeout := time.NewTimer(2 * time.Second)
+		defer timeout.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				write([]byte("\x1b[1;1R"))
+			case <-timeout.C:
+				return
+			case <-statusCtx.Done():
+				return
+			}
+		}
+	}()
+	statusSent := make(chan struct{})
+	var statusOnce sync.Once
+	go func() {
+		select {
+		case <-readyCh:
+			write([]byte("/status\r"))
+			statusOnce.Do(func() { close(statusSent) })
+		case <-statusCtx.Done():
+		}
+	}()
+
+	var bufMu sync.Mutex
+	var buf bytes.Buffer
+
+	outCh := make(chan []byte, 1)
+	errCh := make(chan error, 1)
+	activityCh := make(chan struct{}, 1)
+	go func() {
+		select {
+		case <-activityCh:
+		case <-statusCtx.Done():
+			return
+		}
+		timer := time.NewTimer(10 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			readyOnce.Do(func() { close(readyCh) })
+		case <-statusCtx.Done():
+		}
+	}()
+	go func() {
+		var tail []byte
+		var promptTail []byte
+		var promptTailClean []byte
+		var promptTailCleanLower []byte
+		tmp := make([]byte, 2048)
+		cursorRequests := [][]byte{
+			[]byte("\x1b[6n"),
+			[]byte("\x1b[?6n"),
+		}
+		type promptHandler struct {
+			needle   []byte
+			reply    string
+			once     bool
+			cooldown time.Duration
+			lastSent time.Time
+		}
+		promptHandlers := []promptHandler{
+			{needle: []byte("allow codex to work in this folder"), reply: "2\r", once: true},
+			{needle: []byte("allow codex to work in this folder without asking for approval"), reply: "2\r", once: true},
+			{needle: []byte("ask me to approve edits and commands"), reply: "2\r", once: true},
+			{needle: []byte("require approval of edits and commands"), reply: "2\r", once: true},
+			{needle: []byte("press enter to continue"), reply: "\r", cooldown: 500 * time.Millisecond},
+			{needle: []byte("press enter to confirm"), reply: "\r", cooldown: 500 * time.Millisecond},
+			{needle: []byte("try new model"), reply: "\r", cooldown: 500 * time.Millisecond},
+		}
+		readyNeedles := [][]byte{
+			[]byte("openai codex"),
+			[]byte("to get started"),
+			[]byte("/status"),
+		}
+		maxPromptLen := 0
+		for _, handler := range promptHandlers {
+			if len(handler.needle) > maxPromptLen {
+				maxPromptLen = len(handler.needle)
+			}
+		}
+		maxSeq := 0
+		for _, seq := range cursorRequests {
+			if len(seq) > maxSeq {
+				maxSeq = len(seq)
+			}
+		}
+		for {
+			n, readErr := stdoutR.Read(tmp)
+			if n > 0 {
+				chunk := tmp[:n]
+				cleanChunk := stripANSI(string(chunk))
+				cleanChunkLower := strings.ToLower(cleanChunk)
+				bufMu.Lock()
+				buf.Write(chunk)
+				bufMu.Unlock()
+				select {
+				case activityCh <- struct{}{}:
+				default:
+				}
+				for _, seq := range cursorRequests {
+					if containsSequence(tail, chunk, seq) {
+						write([]byte("\x1b[1;1R"))
+					}
+				}
+				for _, needle := range readyNeedles {
+					if containsSequence(promptTailCleanLower, []byte(cleanChunkLower), needle) {
+						readyOnce.Do(func() { close(readyCh) })
+					}
+				}
+				for i := range promptHandlers {
+					if containsSequence(promptTailCleanLower, []byte(cleanChunkLower), promptHandlers[i].needle) {
+						now := time.Now()
+						if promptHandlers[i].once && !promptHandlers[i].lastSent.IsZero() {
+							continue
+						}
+						if promptHandlers[i].cooldown > 0 && now.Sub(promptHandlers[i].lastSent) < promptHandlers[i].cooldown {
+							continue
+						}
+						promptHandlers[i].lastSent = now
+						write([]byte(promptHandlers[i].reply))
+					}
+				}
+				tail = append(tail[:0], tailBytes(tail, chunk, maxSeq)...)
+				promptTail = append(promptTail[:0], tailBytes(promptTail, chunk, maxPromptLen)...)
+				promptTailClean = append(promptTailClean[:0], tailBytes(promptTailClean, []byte(cleanChunk), maxPromptLen)...)
+				promptTailCleanLower = append(promptTailCleanLower[:0], tailBytes(promptTailCleanLower, []byte(cleanChunkLower), maxPromptLen)...)
+			}
+			if readErr != nil {
+				if !errors.Is(readErr, io.EOF) {
+					errCh <- readErr
+					return
+				}
+				break
+			}
+		}
+		bufMu.Lock()
+		outCh <- append([]byte(nil), buf.Bytes()...)
+		bufMu.Unlock()
+	}()
+
+	go func() {
+		select {
+		case <-statusSent:
+		case <-statusCtx.Done():
+			return
+		}
+		idleTimer := time.NewTimer(1200 * time.Millisecond)
+		hardTimer := time.NewTimer(8 * time.Second)
+		defer idleTimer.Stop()
+		defer hardTimer.Stop()
+		for {
+			select {
+			case <-activityCh:
+				if !idleTimer.Stop() {
+					select {
+					case <-idleTimer.C:
+					default:
+					}
+				}
+				idleTimer.Reset(1200 * time.Millisecond)
+			case <-idleTimer.C:
+				write([]byte("/exit\r"))
+				return
+			case <-hardTimer.C:
+				write([]byte("/exit\r"))
+				return
+			case <-statusCtx.Done():
+				return
+			}
+		}
+	}()
+
+	execErrCh := make(chan error, 1)
+	go func() {
+		cmd := []string{"codex"}
+		sizeQueue := newStaticTerminalSizeQueue(40, 120)
+		err := m.kubeClient.execWithSize(statusCtx, podName, containerName, cmd, stdinR, stdoutW, nil, true, sizeQueue)
+		_ = stdoutW.Close()
+		execErrCh <- err
+	}()
+
+	var out []byte
+	var execErr error
+	for out == nil || execErrCh != nil {
+		select {
+		case <-statusCtx.Done():
+			bufMu.Lock()
+			snapshot := strings.TrimSpace(buf.String())
+			bufMu.Unlock()
+			if snapshot != "" {
+				return snapshot, nil
+			}
+			return "", statusCtx.Err()
+		case readErr := <-errCh:
+			return "", readErr
+		case out = <-outCh:
+			if execErrCh == nil {
+				break
+			}
+			execErr = <-execErrCh
+			execErrCh = nil
+		case execErr = <-execErrCh:
+			execErrCh = nil
+			if out == nil {
+				select {
+				case out = <-outCh:
+				case <-time.After(500 * time.Millisecond):
+				}
+			}
+		}
+		if execErrCh == nil && out != nil {
+			break
+		}
+	}
+	if execErr != nil {
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed != "" {
+			return "", fmt.Errorf("%w: %s", execErr, trimmed)
+		}
+		return "", execErr
+	}
+	return string(out), nil
+}
+
+func (m *monitor) updateStatusCache(acct accountConfig, member string, usage usageSnapshot, cooldown bool, note string) {
 	entry := statusEntry{
 		Name:                   strings.TrimSpace(acct.Name),
 		Dyad:                   strings.TrimSpace(acct.Dyad),
 		Department:             strings.TrimSpace(acct.Department),
+		Member:                 strings.ToLower(strings.TrimSpace(member)),
 		RemainingPct:           usage.RemainingPct,
 		RemainingMinutes:       usage.RemainingMinutes,
 		WeeklyRemainingPct:     usage.WeeklyRemainingPct,
@@ -915,32 +1692,34 @@ func (m *monitor) updateStatusCache(acct accountConfig, usage usageSnapshot, coo
 		Email:                  strings.TrimSpace(usage.Email),
 		Model:                  strings.TrimSpace(usage.Model),
 		ReasoningEffort:        strings.TrimSpace(usage.ReasoningEffort),
+		Session:                strings.TrimSpace(usage.Session),
+		Note:                   cleanStatusNote(note),
 		UpdatedAt:              time.Now().UTC(),
 	}
 	if entry.Name == "" {
 		entry.Name = entry.Dyad
 	}
 	m.statusMu.Lock()
-	m.statusCache[entry.Dyad] = entry
+	key := entry.Dyad
+	if entry.Member != "" {
+		key = entry.Dyad + ":" + entry.Member
+	}
+	m.statusCache[key] = entry
 	m.statusMu.Unlock()
 }
 
+func (m *monitor) updateStatusForMembers(acct accountConfig, members []string, usage usageSnapshot, cooldown bool, note string) {
+	if len(members) == 0 {
+		m.updateStatusCache(acct, "", usage, cooldown, note)
+		return
+	}
+	for _, member := range members {
+		m.updateStatusCache(acct, member, usage, cooldown, note)
+	}
+}
+
 func (m *monitor) execCodexStatus(ctx context.Context, dyad, container string) (string, error) {
-	commands := [][]string{{"codex", "/status"}, {"codex", "status"}, {"codex", "usage"}}
-	var lastErr error
-	for _, cmd := range commands {
-		out, err := m.execInDyad(ctx, dyad, container, cmd)
-		if err == nil && strings.TrimSpace(out) != "" {
-			return out, nil
-		}
-		if err != nil {
-			lastErr = err
-		}
-	}
-	if lastErr == nil {
-		lastErr = errors.New("empty status output")
-	}
-	return "", lastErr
+	return m.execCodexStatusRemote(ctx, dyad, container)
 }
 
 func (m *monitor) execInDyad(ctx context.Context, dyad, container string, cmd []string) (string, error) {
@@ -969,6 +1748,7 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 	weeklyRemainingMinutes := 0
 	email := parseEmail(raw)
 	model, reasoning := parseModelInfo(raw)
+	session := parseSessionID(raw)
 	percentRe := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*%`)
 	wordsRe := regexp.MustCompile(`(?i)(remaining|left|available)`)         // remaining context
 	usedRe := regexp.MustCompile(`(?i)(used|consumed|spent|utilized)`)       // used context
@@ -1062,6 +1842,7 @@ func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {
 		Email:                  email,
 		Model:                  model,
 		ReasoningEffort:        reasoning,
+		Session:                session,
 	}
 }
 
@@ -1291,6 +2072,7 @@ func parseModelInfo(raw string) (string, string) {
 	modelRe := regexp.MustCompile(`(?i)\bmodel\b\s*[:=]\s*([A-Za-z0-9._:-]+)`)
 	modelAltRe := regexp.MustCompile(`(?i)using\s+model\s+([A-Za-z0-9._:-]+)`)
 	reasoningRe := regexp.MustCompile(`(?i)\breasoning(?:\s*(?:effort|level|mode))?\b\s*[:=]\s*([A-Za-z0-9._-]+)`)
+	reasoningInlineRe := regexp.MustCompile(`(?i)\breasoning\s+([A-Za-z0-9._-]+)`)
 	effortRe := regexp.MustCompile(`(?i)\beffort\b\s*[:=]\s*([A-Za-z0-9._-]+)`)
 	for _, line := range lines {
 		trim := strings.TrimSpace(line)
@@ -1307,6 +2089,8 @@ func parseModelInfo(raw string) (string, string) {
 		if reasoning == "" {
 			if match := reasoningRe.FindStringSubmatch(trim); len(match) == 2 {
 				reasoning = match[1]
+			} else if match := reasoningInlineRe.FindStringSubmatch(trim); len(match) == 2 {
+				reasoning = match[1]
 			} else if match := effortRe.FindStringSubmatch(trim); len(match) == 2 && strings.Contains(strings.ToLower(trim), "reason") {
 				reasoning = match[1]
 			}
@@ -1316,6 +2100,29 @@ func parseModelInfo(raw string) (string, string) {
 		}
 	}
 	return model, reasoning
+}
+
+func parseCodexStatusInfo(raw string) codexStatusInfo {
+	clean := stripANSI(raw)
+	clean = stripInvisibles(clean)
+	model, reasoning := parseModelInfo(clean)
+	return codexStatusInfo{
+		Model:           model,
+		ReasoningEffort: reasoning,
+		Session:         parseSessionID(clean),
+		Email:           parseEmail(clean),
+	}
+}
+
+func parseSessionID(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	sessionRe := regexp.MustCompile(`(?i)\bsession\b\s*[:=]\s*([A-Za-z0-9._-]+)`)
+	if match := sessionRe.FindStringSubmatch(raw); len(match) == 2 {
+		return strings.TrimSpace(match[1])
+	}
+	return ""
 }
 
 func truncateLines(text string, maxLines int, maxBytes int) string {
@@ -1331,6 +2138,121 @@ func truncateLines(text string, maxLines int, maxBytes int) string {
 		out = out[len(out)-maxBytes:]
 	}
 	return out
+}
+
+func memberRank(member string) int {
+	switch strings.ToLower(strings.TrimSpace(member)) {
+	case "actor":
+		return 0
+	case "critic":
+		return 1
+	default:
+		return 2
+	}
+}
+
+func memberLabel(member string) string {
+	member = strings.ToLower(strings.TrimSpace(member))
+	if member == "" {
+		return "member"
+	}
+	return member
+}
+
+func memberEmoji(member string) string {
+	switch strings.ToLower(strings.TrimSpace(member)) {
+	case "actor":
+		return "🎭"
+	case "critic":
+		return "🛡"
+	default:
+		return "👤"
+	}
+}
+
+func usageStatusEmoji(entry statusEntry) string {
+	note := strings.ToLower(strings.TrimSpace(entry.Note))
+	if entry.RemainingPct < 0 {
+		switch {
+		case strings.Contains(note, "auth required"):
+			return "🔒"
+		case strings.Contains(note, "dyad not registered"):
+			return "🚫"
+		case strings.Contains(note, "registry unavailable"):
+			return "⚠️"
+		case strings.Contains(note, "missing monitor container"), strings.Contains(note, "missing actor container"), strings.Contains(note, "missing critic container"):
+			return "📦"
+		case strings.Contains(note, "timeout"):
+			return "⏱️"
+		case strings.Contains(note, "connection refused"), strings.Contains(note, "no such host"):
+			return "📡"
+		default:
+			return "❔"
+		}
+	}
+	if entry.Cooldown {
+		return "⚠️"
+	}
+	return "✅"
+}
+
+func valueOrNA(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "n/a"
+	}
+	return value
+}
+
+func shortStatusNote(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		return ""
+	}
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lower, "authentication required"):
+		return "auth required"
+	case strings.Contains(lower, "dyad not registered"):
+		return "dyad not registered"
+	case strings.Contains(lower, "dyad registry unavailable"):
+		return "dyad registry unavailable"
+	case strings.Contains(lower, "missing monitor container"):
+		return "missing monitor container"
+	case strings.Contains(lower, "missing actor container"):
+		return "missing actor container"
+	case strings.Contains(lower, "missing critic container"):
+		return "missing critic container"
+	case strings.Contains(lower, "rate limits missing"):
+		return "rate limits missing"
+	case strings.Contains(lower, "empty app-server output"):
+		return "empty app-server output"
+	case strings.Contains(lower, "context deadline exceeded"):
+		return "timeout"
+	case strings.Contains(lower, "connection refused"):
+		return "connection refused"
+	case strings.Contains(lower, "no such host"):
+		return "no such host"
+	default:
+		return cleanStatusNote(msg)
+	}
+}
+
+func cleanStatusNote(note string) string {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return ""
+	}
+	note = strings.ReplaceAll(note, "\n", " ")
+	note = strings.Join(strings.Fields(note), " ")
+	const maxLen = 80
+	if len(note) > maxLen {
+		note = note[:maxLen-3] + "..."
+	}
+	return note
 }
 
 func loadAccounts(path string, logger *log.Logger) accountsFile {
@@ -1361,6 +2283,49 @@ func accountSpawnEnabled(acct accountConfig, def bool) bool {
 	return *acct.Spawn
 }
 
+func membersForAccount(acct accountConfig) []string {
+	members := make([]string, 0, 2)
+	if actorContainer(acct) != "" {
+		members = append(members, "actor")
+	}
+	if criticContainer(acct) != "" {
+		members = append(members, "critic")
+	}
+	return members
+}
+
+func memberInList(member string, list []string) bool {
+	member = strings.ToLower(strings.TrimSpace(member))
+	for _, item := range list {
+		if strings.ToLower(strings.TrimSpace(item)) == member {
+			return true
+		}
+	}
+	return false
+}
+
+func monitorMember(acct accountConfig) string {
+	role := normalizeContainerName(strings.TrimSpace(acct.MonitorRole))
+	if role == "" {
+		return "critic"
+	}
+	if role == "actor" || role == "critic" {
+		return role
+	}
+	return "critic"
+}
+
+func memberContainer(acct accountConfig, member string) string {
+	switch strings.ToLower(strings.TrimSpace(member)) {
+	case "actor":
+		return actorContainer(acct)
+	case "critic":
+		return criticContainer(acct)
+	default:
+		return normalizeContainerName(member)
+	}
+}
+
 func monitorContainer(acct accountConfig) string {
 	role := strings.ToLower(strings.TrimSpace(acct.MonitorRole))
 	if role == "" || role == "critic" {
@@ -1376,6 +2341,25 @@ func monitorContainer(acct accountConfig) string {
 		return criticContainer(acct)
 	}
 	return criticContainer(acct)
+}
+
+func alternateContainer(acct accountConfig, current string) string {
+	current = normalizeContainerName(strings.TrimSpace(current))
+	if current == "" {
+		return actorContainer(acct)
+	}
+	actor := actorContainer(acct)
+	critic := criticContainer(acct)
+	if current == actor {
+		return critic
+	}
+	if current == critic {
+		return actor
+	}
+	if actor != "" {
+		return actor
+	}
+	return critic
 }
 
 func actorContainer(acct accountConfig) string {

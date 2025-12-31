@@ -9,7 +9,7 @@
       "role": "infra",
       "department": "infra",
       "codex_home": "/data/codex/infra/critic",
-      "monitor_role": "critic",
+      "monitor_role": "actor",
       "spawn": true
     },
     {
@@ -18,7 +18,7 @@
       "role": "webdev",
       "department": "web",
       "codex_home": "/codex/web",
-      "monitor_role": "critic",
+      "monitor_role": "actor",
       "spawn": true
     },
     {
@@ -27,7 +27,7 @@
       "role": "research",
       "department": "research",
       "codex_home": "/codex/research",
-      "monitor_role": "critic",
+      "monitor_role": "actor",
       "spawn": true
     },
     {
@@ -36,7 +36,7 @@
       "role": "pm",
       "department": "pm",
       "codex_home": "/codex/pm",
-      "monitor_role": "critic",
+      "monitor_role": "actor",
       "spawn": true
     }
   ]
