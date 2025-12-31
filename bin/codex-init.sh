@@ -35,8 +35,8 @@ fi
 if [[ ! -f "$CFG" || "$CODEX_INIT_FORCE" == "1" || "$managed" == "1" ]]; then
   tmp="$(mktemp)"
   now="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-  model="${CODEX_MODEL:-gpt-5.1-codex-max}"
-  effort="${CODEX_REASONING_EFFORT:-high}"
+  model="${CODEX_MODEL:-gpt-5.2-codex}"
+  effort="${CODEX_REASONING_EFFORT:-medium}"
   if [[ -f "$CODEX_CONFIG_TEMPLATE" ]]; then
     sed \
       -e "s|__CODEX_MODEL__|$(escape_replace "$model")|g" \
@@ -54,8 +54,8 @@ if [[ ! -f "$CFG" || "$CODEX_INIT_FORCE" == "1" || "$managed" == "1" ]]; then
 # Shared Codex defaults for Silexa dyads.
 
 # Codex defaults (set via env in dyad containers)
-model = "$(printf '%s' "${CODEX_MODEL:-gpt-5.1-codex-max}" | sed 's/\"/\\"/g')"
-model_reasoning_effort = "$(printf '%s' "${CODEX_REASONING_EFFORT:-high}" | sed 's/\"/\\"/g')"
+model = "$(printf '%s' "${CODEX_MODEL:-gpt-5.2-codex}" | sed 's/\"/\\"/g')"
+model_reasoning_effort = "$(printf '%s' "${CODEX_REASONING_EFFORT:-medium}" | sed 's/\"/\\"/g')"
 
 [features]
 web_search_request = true
