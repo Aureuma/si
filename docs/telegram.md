@@ -11,7 +11,7 @@ The Telegram bot provides a light-weight control plane for humans:
 - Replies to bot messages are also recorded as feedback with context about the original message, keeping discussion threads tied to the notification.
 
 ### Deployment
-- Token is supplied via Kubernetes secret `telegram-bot-token` (raw token text). Chat ID comes from `TELEGRAM_CHAT_ID` env or per-message payload.
+- Token is supplied via `secrets/telegram_bot_token` (raw token text). Chat ID comes from `TELEGRAM_CHAT_ID` env or per-message payload.
 - Service listens on `:8081`; internal notify endpoint is `http://silexa-telegram-bot:8081/notify`.
 - Manager pushes human task notifications by POSTing to `/notify` when `TELEGRAM_NOTIFY_URL` is set.
 
@@ -65,15 +65,13 @@ Template shape (HTML parse mode):
 ### Adding a human task from outside Telegram
 
 ```bash
-curl -X POST http://localhost:9090/human-tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Codex login","commands":"kubectl -n silexa port-forward pod/<pod> 47123:47124","requested_by":"infra","notes":"Open browser to http://127.0.0.1:47123 after port-forward","chat_id":-1003507771562}'
+silexa human add "Codex login" "Open http://127.0.0.1:<port> after actor starts login" "" "" "infra" "OAuth callback"
 ```
 
 ### Status checks
 - Manager health endpoint: `http://localhost:9090/healthz`.
 - Telegram bot health endpoint: `http://localhost:8081/healthz`.
 
-### Rotation & RBAC
-- Rotate the token with `bin/rotate-telegram-token.sh <new_token>`; the script updates the Kubernetes secret and restarts the bot deployment.
+### Rotation & access
+- Update `secrets/telegram_bot_token` and restart the bot (`docker restart silexa-telegram-bot`).
 - Only the Telegram bot mounts the token secret. No containers receive privileged mounts.

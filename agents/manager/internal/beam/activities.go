@@ -18,25 +18,24 @@ import (
 	"go.temporal.io/sdk/client"
 
 	"silexa/agents/manager/internal/state"
+	shared "silexa/agents/shared/docker"
 )
 
 type Activities struct {
-	kube          *kubeClient
+	docker        *dockerClient
 	temporal      client.Client
 	telegramURL   string
 	telegramChat  string
-	kubectlPrefix string
 }
 
 type ActivityConfig struct {
 	Temporal        client.Client
 	TelegramURL     string
 	TelegramChatID  string
-	KubectlPrefix   string
 }
 
 func NewActivities(cfg ActivityConfig) (*Activities, error) {
-	kube, err := newKubeClient()
+	docker, err := newDockerClient()
 	if err != nil {
 		return nil, err
 	}
@@ -48,16 +47,11 @@ func NewActivities(cfg ActivityConfig) (*Activities, error) {
 	if telegramChat == "" {
 		telegramChat = strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID"))
 	}
-	kubectlPrefix := strings.TrimSpace(cfg.KubectlPrefix)
-	if kubectlPrefix == "" {
-		kubectlPrefix = kubectlPrefixForNamespace(kube.namespace)
-	}
 	return &Activities{
-		kube:          kube,
+		docker:        docker,
 		temporal:      cfg.Temporal,
 		telegramURL:   telegramURL,
 		telegramChat:  telegramChat,
-		kubectlPrefix: kubectlPrefix,
 	}, nil
 }
 
@@ -85,8 +79,8 @@ func (a *Activities) FetchDyadTask(ctx context.Context, id int) (state.DyadTask,
 }
 
 func (a *Activities) CheckCodexLogin(ctx context.Context, req CodexLoginCheck) (CodexLoginStatus, error) {
-	if a.kube == nil {
-		return CodexLoginStatus{}, errors.New("kube client unavailable")
+	if a.docker == nil {
+		return CodexLoginStatus{}, errors.New("docker client unavailable")
 	}
 	dyad := strings.TrimSpace(req.Dyad)
 	if dyad == "" {
@@ -96,11 +90,11 @@ func (a *Activities) CheckCodexLogin(ctx context.Context, req CodexLoginCheck) (
 	if actor == "" {
 		actor = "actor"
 	}
-	podName, err := a.kube.resolveDyadPod(ctx, dyad)
+	containerID, err := a.docker.resolveDyadContainer(ctx, dyad, actor)
 	if err != nil {
 		return CodexLoginStatus{}, err
 	}
-	out, err := a.kube.execCapture(ctx, podName, actor, []string{"codex", "login", "status"})
+	out, err := a.docker.execCapture(ctx, containerID, []string{"codex", "login", "status"})
 	if err != nil {
 		return CodexLoginStatus{}, err
 	}
@@ -111,8 +105,8 @@ func (a *Activities) CheckCodexLogin(ctx context.Context, req CodexLoginCheck) (
 }
 
 func (a *Activities) StartCodexLogin(ctx context.Context, req CodexLoginRequest) (CodexLoginStart, error) {
-	if a.kube == nil {
-		return CodexLoginStart{}, errors.New("kube client unavailable")
+	if a.docker == nil {
+		return CodexLoginStart{}, errors.New("docker client unavailable")
 	}
 	dyad := strings.TrimSpace(req.Dyad)
 	if dyad == "" {
@@ -122,7 +116,7 @@ func (a *Activities) StartCodexLogin(ctx context.Context, req CodexLoginRequest)
 	if actor == "" {
 		actor = "actor"
 	}
-	podName, err := a.kube.resolveDyadPod(ctx, dyad)
+	containerID, err := a.docker.resolveDyadContainer(ctx, dyad, actor)
 	if err != nil {
 		return CodexLoginStart{}, err
 	}
@@ -144,12 +138,12 @@ func (a *Activities) StartCodexLogin(ctx context.Context, req CodexLoginRequest)
 		port,
 		outFile,
 	)
-	_, _ = a.kube.execCapture(ctx, podName, actor, []string{"bash", "-lc", startCmd})
+	_, _ = a.docker.execCapture(ctx, containerID, []string{"bash", "-lc", startCmd})
 
 	authURL := ""
 	detectedPort := 0
 	for i := 0; i < 60; i++ {
-		raw, _ := a.kube.execCapture(ctx, podName, actor, []string{"bash", "-lc", "cat " + shellQuote(outFile) + " 2>/dev/null || true"})
+		raw, _ := a.docker.execCapture(ctx, containerID, []string{"bash", "-lc", "cat " + shellQuote(outFile) + " 2>/dev/null || true"})
 		if strings.Contains(raw, "unexpected argument '--port'") {
 			outFile = "/tmp/codex_login.log"
 			startCmd = fmt.Sprintf(
@@ -157,7 +151,7 @@ func (a *Activities) StartCodexLogin(ctx context.Context, req CodexLoginRequest)
 				outFile,
 				outFile,
 			)
-			_, _ = a.kube.execCapture(ctx, podName, actor, []string{"bash", "-lc", startCmd})
+			_, _ = a.docker.execCapture(ctx, containerID, []string{"bash", "-lc", startCmd})
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -179,18 +173,22 @@ func (a *Activities) StartCodexLogin(ctx context.Context, req CodexLoginRequest)
 			forwardPort = port + 1
 		}
 	}
+	hostPort, err := a.docker.hostPortFor(ctx, containerID, forwardPort)
+	if err != nil {
+		return CodexLoginStart{}, err
+	}
 	return CodexLoginStart{
 		AuthURL:       strings.TrimSpace(authURL),
 		Port:          port,
 		ForwardPort:   forwardPort,
-		PodName:       podName,
-		KubectlPrefix: a.kubectlPrefix,
+		HostPort:      hostPort,
+		Container:     shared.DyadContainerName(dyad, actor),
 	}, nil
 }
 
 func (a *Activities) StartSocatForwarder(ctx context.Context, req SocatForwarderRequest) error {
-	if a.kube == nil {
-		return errors.New("kube client unavailable")
+	if a.docker == nil {
+		return errors.New("docker client unavailable")
 	}
 	dyad := strings.TrimSpace(req.Dyad)
 	if dyad == "" {
@@ -203,7 +201,7 @@ func (a *Activities) StartSocatForwarder(ctx context.Context, req SocatForwarder
 	if actor == "" {
 		actor = "actor"
 	}
-	podName, err := a.kube.resolveDyadPod(ctx, dyad)
+	containerID, err := a.docker.resolveDyadContainer(ctx, dyad, actor)
 	if err != nil {
 		return err
 	}
@@ -222,13 +220,13 @@ func (a *Activities) StartSocatForwarder(ctx context.Context, req SocatForwarder
 		logFile,
 		pidFile,
 	)
-	_, err = a.kube.execCapture(ctx, podName, actor, []string{"bash", "-lc", cmd})
+	_, err = a.docker.execCapture(ctx, containerID, []string{"bash", "-lc", cmd})
 	return err
 }
 
 func (a *Activities) StopSocatForwarder(ctx context.Context, req SocatForwarderStop) error {
-	if a.kube == nil {
-		return errors.New("kube client unavailable")
+	if a.docker == nil {
+		return errors.New("docker client unavailable")
 	}
 	dyad := strings.TrimSpace(req.Dyad)
 	if dyad == "" {
@@ -238,7 +236,7 @@ func (a *Activities) StopSocatForwarder(ctx context.Context, req SocatForwarderS
 	if actor == "" {
 		actor = "actor"
 	}
-	podName, err := a.kube.resolveDyadPod(ctx, dyad)
+	containerID, err := a.docker.resolveDyadContainer(ctx, dyad, actor)
 	if err != nil {
 		return err
 	}
@@ -255,7 +253,7 @@ func (a *Activities) StopSocatForwarder(ctx context.Context, req SocatForwarderS
 		pidFile,
 		logFile,
 	)
-	_, err = a.kube.execCapture(ctx, podName, actor, []string{"bash", "-lc", cmd})
+	_, err = a.docker.execCapture(ctx, containerID, []string{"bash", "-lc", cmd})
 	return err
 }
 
@@ -292,8 +290,8 @@ func (a *Activities) SendTelegram(ctx context.Context, msg TelegramMessage) erro
 }
 
 func (a *Activities) ResetCodexState(ctx context.Context, req CodexResetRequest) (CodexResetResult, error) {
-	if a.kube == nil {
-		return CodexResetResult{}, errors.New("kube client unavailable")
+	if a.docker == nil {
+		return CodexResetResult{}, errors.New("docker client unavailable")
 	}
 	dyad := strings.TrimSpace(req.Dyad)
 	if dyad == "" {
@@ -308,14 +306,13 @@ func (a *Activities) ResetCodexState(ctx context.Context, req CodexResetRequest)
 		return CodexResetResult{}, errors.New("no valid reset targets")
 	}
 
-	podName, err := a.kube.resolveDyadPod(ctx, dyad)
-	if err != nil {
-		return CodexResetResult{}, err
-	}
-
 	script := buildCodexResetScript(paths)
 	for _, target := range targets {
-		if _, err := a.kube.execCapture(ctx, podName, target, []string{"bash", "-lc", script}); err != nil {
+		containerID, err := a.docker.resolveDyadContainer(ctx, dyad, target)
+		if err != nil {
+			return CodexResetResult{}, err
+		}
+		if _, err := a.docker.execCapture(ctx, containerID, []string{"bash", "-lc", script}); err != nil {
 			return CodexResetResult{}, fmt.Errorf("reset %s: %w", target, err)
 		}
 	}
@@ -385,16 +382,18 @@ func (a *Activities) CreateDyadTask(ctx context.Context, task state.DyadTask) (s
 	return task, nil
 }
 
-func buildTelegramMessage(cmd string, url string) string {
-	return strings.TrimSpace(fmt.Sprintf(
-		"🔐 <b>Codex login</b>\n\n<b>🛠 Port-forward:</b>\n<pre><code>%s</code></pre>\n\n<b>🌐 URL:</b>\n<pre><code>%s</code></pre>",
-		html.EscapeString(cmd),
-		html.EscapeString(url),
-	))
-}
-
-func kubectlPrefixForNamespace(namespace string) string {
-	return kubectlPrefix(namespace)
+func buildTelegramMessage(hostPort string, url string) string {
+	hostPort = strings.TrimSpace(hostPort)
+	lines := []string{"🔐 <b>Codex login</b>"}
+	if hostPort != "" {
+		lines = append(lines, "", "<b>🔌 Host port:</b> <code>"+html.EscapeString(hostPort)+"</code>")
+		if target := sshTarget(); target != "" {
+			cmd := fmt.Sprintf("ssh -N -L 127.0.0.1:%s:127.0.0.1:%s %s", hostPort, hostPort, target)
+			lines = append(lines, "", "<b>🛠 SSH tunnel:</b>\n<pre><code>"+html.EscapeString(cmd)+"</code></pre>")
+		}
+	}
+	lines = append(lines, "", "<b>🌐 URL:</b>\n<pre><code>"+html.EscapeString(url)+"</code></pre>")
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func firstAuthURL(raw string) string {
@@ -440,6 +439,40 @@ func envIntAllowZero(key string, def int) int {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+func sshTarget() string {
+	if v := strings.TrimSpace(os.Getenv("SSH_TARGET")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("SSH_TARGET_FILE")); v != "" {
+		if target := readSSHTargetFile(v); target != "" {
+			return target
+		}
+	}
+	if target := readSSHTargetFile("/configs/ssh_target"); target != "" {
+		return target
+	}
+	return readSSHTargetFile("./configs/ssh_target")
+}
+
+func readSSHTargetFile(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(string(data), "\n")
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.HasPrefix(line, "SSH_TARGET=") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "SSH_TARGET="))
+		}
+		return line
+	}
+	return ""
 }
 
 func normalizeResetTargets(targets []string) []string {
@@ -508,8 +541,8 @@ for p in %s; do
     rm -rf "$p" >/dev/null 2>&1 || true
   fi
 done
-if [ -x /workspace/silexa/bin/codex-init.sh ]; then
-  /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true
+if [ -x /usr/local/bin/silexa-codex-init ]; then
+  /usr/local/bin/silexa-codex-init --quiet >/proc/1/fd/1 2>/proc/1/fd/2 || true
 fi
 `, list)
 }

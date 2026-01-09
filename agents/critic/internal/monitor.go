@@ -27,11 +27,11 @@ type Monitor struct {
 	Logger         *log.Logger
 	lastTimestamp  time.Time
 	lastActorLogAt time.Time
-	kubeClient     *kubeClient
+	dockerClient   *dockerClient
 }
 
 func NewMonitor(actor, manager, dyad, role, department string, logger *log.Logger) (*Monitor, error) {
-	kubeClient, err := newKubeClient()
+	dockerClient, err := newDockerClient()
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ func NewMonitor(actor, manager, dyad, role, department string, logger *log.Logge
 		Logger:         logger,
 		lastTimestamp:  time.Now().Add(-30 * time.Second),
 		lastActorLogAt: time.Now().Add(-30 * time.Second),
-		kubeClient:     kubeClient,
+		dockerClient:   dockerClient,
 	}, nil
 }
 
@@ -357,13 +357,14 @@ func (m *Monitor) ExecInActorCapture(ctx context.Context, cmd []string) (string,
 }
 
 func (m *Monitor) ExecInContainerCapture(ctx context.Context, container string, cmd []string) (string, error) {
-	podName, containerName, err := m.resolveTarget(ctx, container)
+	containerID, containerName, err := m.resolveTarget(ctx, container)
 	if err != nil {
 		return "", err
 	}
+	_ = containerName
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if err := m.kubeClient.exec(ctx, podName, containerName, cmd, nil, &stdout, &stderr, false); err != nil {
+	if err := m.dockerClient.exec(ctx, containerID, cmd, nil, &stdout, &stderr, false); err != nil {
 		if stderr.Len() > 0 {
 			return "", fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
 		}
@@ -386,11 +387,12 @@ func (m *Monitor) NudgeActor(ctx context.Context, cmd []string) error {
 }
 
 func (m *Monitor) NudgeContainer(ctx context.Context, container string, cmd []string) error {
-	podName, containerName, err := m.resolveTarget(ctx, container)
+	containerID, containerName, err := m.resolveTarget(ctx, container)
 	if err != nil {
 		return err
 	}
-	return m.kubeClient.exec(ctx, podName, containerName, cmd, nil, nil, nil, false)
+	_ = containerName
+	return m.dockerClient.exec(ctx, containerID, cmd, nil, nil, nil, false)
 }
 
 func hostname() string {
@@ -446,35 +448,32 @@ func dyadFromContainerName(name string) string {
 }
 
 func (m *Monitor) resolveTarget(ctx context.Context, container string) (string, string, error) {
-	if m.kubeClient == nil {
-		return "", "", fmt.Errorf("kubernetes client unavailable")
+	if m.dockerClient == nil {
+		return "", "", fmt.Errorf("docker client unavailable")
 	}
 	containerName := normalizeContainerName(container)
 	if containerName == "" {
 		return "", "", fmt.Errorf("container name required")
-	}
-	if m.kubeClient.podName != "" {
-		return m.kubeClient.podName, containerName, nil
 	}
 	dyad := strings.TrimSpace(m.DyadName)
 	if dyad == "" {
 		dyad = dyadFromContainerName(container)
 	}
 	if dyad == "" {
-		return "", "", fmt.Errorf("dyad required to resolve pod for %s", container)
+		return "", "", fmt.Errorf("dyad required to resolve container for %s", container)
 	}
-	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
+	containerID, err := m.dockerClient.resolveDyadContainer(ctx, dyad, containerName)
 	if err != nil {
 		return "", "", err
 	}
-	return podName, containerName, nil
+	return containerID, containerName, nil
 }
 
 func (m *Monitor) RunSocatForwarder(ctx context.Context, name, targetContainer string, listenPort, targetPort int) error {
 	if listenPort <= 0 || targetPort <= 0 {
 		return fmt.Errorf("invalid forward ports: listen=%d target=%d", listenPort, targetPort)
 	}
-	podName, containerName, err := m.resolveTarget(ctx, targetContainer)
+	containerID, containerName, err := m.resolveTarget(ctx, targetContainer)
 	if err != nil {
 		return err
 	}
@@ -484,15 +483,17 @@ func (m *Monitor) RunSocatForwarder(ctx context.Context, name, targetContainer s
 		targetPort,
 		name,
 	)
-	return m.kubeClient.exec(ctx, podName, containerName, []string{"bash", "-lc", cmd}, nil, nil, nil, false)
+	_ = containerName
+	return m.dockerClient.exec(ctx, containerID, []string{"bash", "-lc", cmd}, nil, nil, nil, false)
 }
 
 func (m *Monitor) fetchActorLogs(ctx context.Context, container string, since time.Time, tail int, timestamps bool) (string, time.Time, error) {
-	podName, containerName, err := m.resolveTarget(ctx, container)
+	containerID, containerName, err := m.resolveTarget(ctx, container)
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	text, err := m.kubeClient.logs(ctx, podName, containerName, since, tail, timestamps)
+	_ = containerName
+	text, err := m.dockerClient.logs(ctx, containerID, since, tail, timestamps)
 	if err != nil {
 		return "", time.Time{}, err
 	}

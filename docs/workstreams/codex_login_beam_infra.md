@@ -5,10 +5,10 @@ Goal: Standardize Codex CLI logins for infra actor/critic using the Codex Login 
 
 Tasks
 1) Prep target
-   - Identify dyad pod: `bin/k8s-dyad-pod.sh <dyad>` (e.g., `infra`).
+   - Identify dyad containers: `silexa dyad status <dyad>` (e.g., `infra`).
    - Ensure the actor image includes `socat` (required when codex binds 127.0.0.1).
 2) Run Beam helper
-   - `TELEGRAM_CHAT_ID=<id> bin/beam-codex-login.sh <dyad> [callback_port]`
+   - `TELEGRAM_CHAT_ID=<id> silexa beam codex-login <dyad> [callback_port]`
    - This creates the Beam task; the Temporal workflow handles Codex login, forwarder setup, and Telegram notification.
 3) Human action
    - Run the port-forward command from Telegram and open the auth URL.

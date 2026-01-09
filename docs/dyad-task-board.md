@@ -11,26 +11,26 @@ Purpose: structured task intake and allocation to dyads, with notifications and 
 - Notifications: Manager posts a formatted message to Telegram on create/update (uses `TELEGRAM_NOTIFY_URL` and optional `TELEGRAM_CHAT_ID`).
 
 ## Scripts
-- Create (unassigned; router will pick): `bin/add-task.sh <title> [kind] [priority] [description] [link] [notes] [complexity]`
-- Create: `bin/add-dyad-task.sh <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]` (optional: set `DYAD_TASK_KIND=...`)
-- Update: `bin/update-dyad-task.sh <id> <status> [notes] [actor] [critic] [complexity]`
-- Report: `bin/dyad-report.sh <dyad> [chat_id]` (posts a feedback entry summarizing beats and open dyad tasks; use cron or critic hook)
+- Create (unassigned; router will pick): `silexa task add <title> [kind] [priority] [description] [link] [notes] [complexity]`
+- Create: `silexa task add-dyad <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]` (optional: set `DYAD_TASK_KIND=...`)
+- Update: `silexa task update <id> <status> [notes] [actor] [critic] [complexity]`
+- Report: `silexa report dyad <dyad> [chat_id]` (posts a feedback entry summarizing beats and open dyad tasks; use cron or critic hook)
 
 ## Flow (router → dyad)
-1) Router logs a task via `bin/add-task.sh` (or directly with dyad via `bin/add-dyad-task.sh`). Manager notifies Telegram.
+1) Router logs a task via `silexa task add` (or directly with dyad via `silexa task add-dyad`). Manager notifies Telegram.
 2) Router assigns `dyad`/`actor`/`critic` (service: `router`), or tasks can be created already assigned.
 3) Critic claims work via `POST /dyad-tasks/claim` and maintains a heartbeat by re-claiming periodically.
 4) Critic drives prompts; Actor executes. Critic updates status to `review` or `blocked` with notes. When done, set `done` (and include notes/link to deliverable).
-4) Anyone can list tasks: `curl -fsSL http://localhost:9090/dyad-tasks` (or via Manager service name inside the cluster).
-5) Periodic reporting: run `bin/dyad-report.sh <dyad> [chat_id]` to log status to Manager feedback (can be scheduled).
+4) Anyone can list tasks: `curl -fsSL http://localhost:9090/dyad-tasks`.
+5) Periodic reporting: run `silexa report dyad <dyad> [chat_id]` to log status to Manager feedback (can be scheduled).
 
 ## Assignment enforcement
 Manager enforces dyad assignment rules on create/update/claim.
-Defaults (see `infra/k8s/silexa/manager.yaml`):
+Defaults (see manager env in `silexa stack up`):
 - `DYAD_REQUIRE_ASSIGNMENT=true`: non-`todo` statuses require a dyad.
 - `DYAD_ALLOW_UNASSIGNED=true`: `todo` can be unassigned.
 - `DYAD_ALLOW_POOL=true`: `pool:<department>` is allowed for `todo` routing.
-- `DYAD_REQUIRE_REGISTERED=true`: dyads must be registered (via roster or `bin/register-dyad.sh`).
+- `DYAD_REQUIRE_REGISTERED=true`: dyads must be registered (via roster or `silexa dyad register`).
 - `DYAD_ENFORCE_AVAILABLE=true`: dyads must be marked available.
 - `DYAD_MAX_OPEN_PER_DYAD=10`: cap open tasks per dyad.
 

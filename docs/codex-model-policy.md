@@ -7,7 +7,7 @@ Reasoning level is controlled via:
 - `CODEX_REASONING_EFFORT=medium|high|xhigh` (policy avoids `low`)
 
 These values are applied in two places:
-1) **Default Codex config**: `bin/codex-init.sh` writes `~/.codex/config.toml` with `model` and `model_reasoning_effort`.
+1) **Default Codex config**: `silexa-codex-init` writes `~/.codex/config.toml` with `model` and `model_reasoning_effort`.
 2) **Critic-driven execution**: when a critic runs interactive `codex`/`codex resume` inside an actor, it explicitly passes `-m $CODEX_MODEL` and `-c model_reasoning_effort=$CODEX_REASONING_EFFORT`.
 
 ## Complexity-based overrides
@@ -39,7 +39,7 @@ Recommended defaults (can be overridden per container via env):
 
 ## Spawned dyads
 
-`bin/spawn-dyad.sh` sets:
+`silexa dyad spawn` sets:
 - `CODEX_MODEL` (defaults to `gpt-5.2-codex`)
 - `CODEX_REASONING_EFFORT` for actor/critic based on `ROLE`
 - `CODEX_PER_DYAD=1` by default so Codex state (`~/.codex`) is not shared across dyads. Override to `0` only if you explicitly want a shared store.
@@ -49,6 +49,6 @@ Overrides:
 - `CODEX_ACTOR_EFFORT=...`
 - `CODEX_CRITIC_EFFORT=...`
 
-## Kubernetes defaults
+## Docker defaults
 
-`infra/k8s/silexa/*.yaml` and `bin/spawn-dyad.sh` set `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per deployment (actor/critic).
+`silexa dyad spawn` sets `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per container (actor/critic).

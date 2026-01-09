@@ -21,14 +21,14 @@ Example entry:
 ```
 
 ## Apply roster
-- Update registry and metadata: `bin/dyad-roster-apply.sh`
-- Spawn dyads marked `spawn: true`: `bin/dyad-roster-apply.sh --spawn`
-- Dry run: `bin/dyad-roster-apply.sh --dry-run`
+- Update registry and metadata: `silexa roster apply`
+- Spawn dyads marked `spawn: true`: `silexa roster apply --spawn`
+- Dry run: `silexa roster apply --dry-run`
 
 ## Status
-- `bin/dyad-roster-status.sh` prints dyads with team/assignment/availability.
+- `silexa roster status` prints dyads with team/assignment/availability.
 
 ## Notes
-- `spawn-dyad.sh` requires dyads to be registered; roster apply handles that.
-- Use `spawn-dyad.sh --temporal` (or `bin/beam-dyad-bootstrap.sh`) to run provisioning as a Temporal Beam workflow.
+- `silexa dyad spawn` requires dyads to be registered; roster apply handles that.
+- Use `silexa dyad spawn --temporal` (or `silexa beam dyad-bootstrap`) to run provisioning as a Temporal Beam workflow.
 - Heartbeats never overwrite `team`, `assignment`, or `tags` (arrangement stays stable).
