@@ -1,8 +1,0 @@
-namespace: silexa-data
-
-resources:
-  - namespace.yaml
-  - resourcequota.yaml
-  - limitrange.yaml
-  - networkpolicy.yaml
-  - cluster.yaml

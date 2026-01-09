@@ -53,8 +53,8 @@
     },
     {
       "key": "releaseparty.ops.compose_dev",
-      "title": "Ops: k8s dev run for ReleaseParty",
-      "description": "Add a dev kustomize/tilt scaffold inside ReleaseParty repo to run backend+frontend with env vars via Kubernetes secrets.",
+      "title": "Ops: docker compose dev run for ReleaseParty",
+      "description": "Add a dev docker compose scaffold inside ReleaseParty repo to run backend+frontend with env vars via Docker secrets or env files.",
       "kind": "releaseparty.ops.compose",
       "priority": "normal",
       "route_hint": "pool:infra"

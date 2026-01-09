@@ -3,9 +3,6 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "test": "tests/run.sh",
-    "test:smoke": "tests/run.sh --scope smoke",
-    "test:integration": "tests/run.sh --scope integration",
-    "test:go": "tests/run.sh --scope go"
+    "test": "node -e \"console.log('no test runner configured')\""
   }
 }

@@ -22,8 +22,8 @@ type CodexLoginStart struct {
 	AuthURL       string `json:"auth_url"`
 	Port          int    `json:"port"`
 	ForwardPort   int    `json:"forward_port"`
-	PodName       string `json:"pod_name"`
-	KubectlPrefix string `json:"kubectl_prefix"`
+	HostPort      string `json:"host_port"`
+	Container     string `json:"container"`
 }
 
 type CodexLoginRequest struct {
@@ -60,7 +60,8 @@ type DyadBootstrapRequest struct {
 }
 
 type DyadBootstrapResult struct {
-	Deployment string `json:"deployment"`
+	ActorContainer  string `json:"actor_container"`
+	CriticContainer string `json:"critic_container"`
 }
 
 const (

@@ -1,6 +1,6 @@
 ## Steering metrics
 
-Use these metrics to steer dyads and departments. All can be posted to the manager via `/metrics` (see `bin/post-metric.sh`).
+Use these metrics to steer dyads and departments. All can be posted to the manager via `/metrics` (see `silexa metric post`).
 
 - **Throughput**: completed tasks per department per day (e.g., `webdev.tasks_done`, `infra.changes_applied`).
 - **Lead time**: median time from task open to close per department (`lead_time_minutes` with unit `minutes`).

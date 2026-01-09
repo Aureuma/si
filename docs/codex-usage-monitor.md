@@ -30,7 +30,7 @@ Accounts list (`configs/codex_accounts.json`):
 ```
 
 Fields:
-- `dyad` must match the dyad name used in `bin/spawn-dyad.sh`.
+- `dyad` must match the dyad name used in `silexa dyad spawn`.
 - `monitor_role` defaults to `critic`.
 - `spawn=true` tells `codex-monitor` to create the dyad if missing.
 - `codex_home` (optional) points to the HOME directory that contains `.codex/` for that account (preferred for reliable `/status` output).

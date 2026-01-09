@@ -4,7 +4,7 @@ Use SOPS with age to store encrypted app secrets in git and decrypt them at depl
 
 ## One-time setup
 1) Install `sops` and `age` (or `age-keygen`) on your workstation/runner.
-2) Run `bin/sops-init.sh` to generate `secrets/age.key` and update `.sops.yaml` with the public key.
+2) Generate `secrets/age.key` and update `.sops.yaml` with the public key.
 3) Export the key when decrypting:
    - `export SOPS_AGE_KEY_FILE=/opt/silexa/secrets/age.key`
 
@@ -13,8 +13,8 @@ Use SOPS with age to store encrypted app secrets in git and decrypt them at depl
 - Create or edit:
   - `sops secrets/app-<app>.env.sops`
 
-## Apply to Kubernetes
-- `bin/app-secrets.sh <app>` detects the encrypted file and decrypts it before applying.
+## Apply to Docker
+- Decrypt to `secrets/app-<app>.env` before running `silexa app deploy`.
 
 ## Notes
 - Plaintext env files (`secrets/app-<app>.env`) still work for local dev.

@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  backend:
+    image: silexa/app-sample-go-service-backend:local
+    environment:
+      PORT: 8080
+    ports:
+      - "${APP_BACKEND_PORT:-18080}:8080"
+    env_file:
+      - ../../secrets/app-sample-go-service.env
+
+networks:
+  default:
+    name: ${SILEXA_NETWORK:-silexa}
+    external: true

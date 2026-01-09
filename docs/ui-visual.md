@@ -28,8 +28,11 @@ Notes:
 
 ```bash
 # From repo root
-bin/qa-visual.sh myapp           # generates baseline on first run
-bin/qa-visual.sh myapp --notify  # posts summary via TELEGRAM_NOTIFY_URL
+docker build -t silexa/visual-runner:local tools/visual-runner
+docker run --rm -v "$PWD/apps/myapp:/app" \
+  -e TARGETS_FILE=/app/ui-tests/targets.json \
+  -e ARTIFACT_DIR=/app/.artifacts/visual \
+  silexa/visual-runner:local
 ```
 
 Artifacts (per app):
@@ -46,7 +49,7 @@ Set `PIXEL_THRESHOLD=0` for stricter checks, or higher if intentional noise exis
 
 ### Approval & baseline updates
 - First run creates baselines.
-- Intentional UI changes: rerun `bin/qa-visual.sh myapp` and commit updated baselines (if the app repo tracks them). Otherwise store baselines in build artifacts.
+- Intentional UI changes: rerun the visual runner and commit updated baselines (if the app repo tracks them). Otherwise store baselines in build artifacts.
 - Keep the route list small and focused on high-value flows to stay fast and cheap.
 
 ### Discipline points
