@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: silexa-data
-  labels:
-    silexa.tier: data
-    silexa.component: postgres

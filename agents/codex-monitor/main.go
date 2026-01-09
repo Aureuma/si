@@ -50,7 +50,7 @@ type accountsFile struct {
 type monitor struct {
 	logger            *log.Logger
 	managerURL        string
-	kubeClient        *kubeClient
+	dockerClient      *dockerClient
 	spawnEnabled      bool
 	requireRegistered bool
 	resetOnCooldown   bool
@@ -205,14 +205,14 @@ func main() {
 	resetOnCooldown := boolEnv("CODEX_RESET_ON_COOLDOWN", true)
 	addr := envOr("CODEX_MONITOR_ADDR", ":8086")
 
-	kubeClient, err := newKubeClient()
+	dockerClient, err := newDockerClient()
 	if err != nil {
-		logger.Fatalf("kubernetes client init: %v", err)
+		logger.Fatalf("docker client init: %v", err)
 	}
 	m := &monitor{
 		logger:            logger,
 		managerURL:        managerURL,
-		kubeClient:        kubeClient,
+		dockerClient:      dockerClient,
 		spawnEnabled:      spawnEnabled,
 		requireRegistered: requireRegistered,
 		resetOnCooldown:   resetOnCooldown,
@@ -489,16 +489,11 @@ func (m *monitor) ensureDyad(ctx context.Context, acct accountConfig) {
 }
 
 func (m *monitor) inspectDyad(ctx context.Context, dyad string) (bool, bool, error) {
-	name := dyadDeploymentName(dyad)
-	return m.kubeClient.deploymentReady(ctx, name)
+	return m.dockerClient.dyadReady(ctx, dyad)
 }
 
 func (m *monitor) restartDyad(ctx context.Context, dyad string) error {
-	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
-	if err != nil {
-		return err
-	}
-	return m.kubeClient.deletePod(ctx, podName)
+	return m.dockerClient.restartDyad(ctx, dyad)
 }
 
 func (m *monitor) spawnDyad(ctx context.Context, acct accountConfig) error {
@@ -513,14 +508,14 @@ func (m *monitor) spawnDyad(ctx context.Context, acct accountConfig) error {
 	if dept == "" {
 		dept = role
 	}
-	pvc, deploy, err := m.buildDyadResources(acct.Dyad, role, dept)
+	opts, err := m.buildDyadOptions(acct.Dyad, role, dept)
 	if err != nil {
 		return err
 	}
-	if err := m.kubeClient.applyDyad(ctx, deploy, pvc); err != nil {
+	if err := m.dockerClient.ensureDyad(ctx, opts); err != nil {
 		return err
 	}
-	m.logger.Printf("spawned dyad %s via k8s apply", acct.Dyad)
+	m.logger.Printf("spawned dyad %s via docker", acct.Dyad)
 	return nil
 }
 
@@ -912,22 +907,22 @@ func (m *monitor) execCodexRateLimitsRemote(ctx context.Context, dyad, container
 	if strings.TrimSpace(dyad) == "" {
 		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("dyad required for exec")
 	}
-	if m.kubeClient == nil {
-		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("kube client not initialized")
-	}
-	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
-	if err != nil {
-		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", err
+	if m.dockerClient == nil {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("docker client not initialized")
 	}
 	containerName := normalizeContainerName(container)
 	if containerName == "" {
 		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", fmt.Errorf("container name required")
 	}
+	containerID, err := m.dockerClient.resolveDyadContainer(ctx, dyad, containerName)
+	if err != nil {
+		return usageSnapshot{RemainingPct: -1, WeeklyRemainingPct: -1}, "", err
+	}
 
 	input := buildAppServerInput()
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	err = m.kubeClient.exec(ctx, podName, containerName, []string{"codex", "app-server"}, bytes.NewReader(input), &stdout, &stderr, false)
+	err = m.dockerClient.exec(ctx, containerID, []string{"codex", "app-server"}, bytes.NewReader(input), &stdout, &stderr, false)
 	out := strings.TrimSpace(stdout.String())
 	raw := out
 	if stderr.Len() > 0 {
@@ -1418,16 +1413,16 @@ func (m *monitor) execCodexStatusRemote(ctx context.Context, dyad, container str
 	if strings.TrimSpace(dyad) == "" {
 		return "", fmt.Errorf("dyad required for exec")
 	}
-	if m.kubeClient == nil {
-		return "", fmt.Errorf("kube client not initialized")
-	}
-	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
-	if err != nil {
-		return "", err
+	if m.dockerClient == nil {
+		return "", fmt.Errorf("docker client not initialized")
 	}
 	containerName := normalizeContainerName(container)
 	if containerName == "" {
 		return "", fmt.Errorf("container name required")
+	}
+	containerID, err := m.dockerClient.resolveDyadContainer(ctx, dyad, containerName)
+	if err != nil {
+		return "", err
 	}
 
 	statusCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
@@ -1629,8 +1624,7 @@ func (m *monitor) execCodexStatusRemote(ctx context.Context, dyad, container str
 	execErrCh := make(chan error, 1)
 	go func() {
 		cmd := []string{"codex"}
-		sizeQueue := newStaticTerminalSizeQueue(40, 120)
-		err := m.kubeClient.execWithSize(statusCtx, podName, containerName, cmd, stdinR, stdoutW, nil, true, sizeQueue)
+		err := m.dockerClient.execWithSize(statusCtx, containerID, cmd, stdinR, stdoutW, 40, 120)
 		_ = stdoutW.Close()
 		execErrCh <- err
 	}()
@@ -1726,15 +1720,15 @@ func (m *monitor) execInDyad(ctx context.Context, dyad, container string, cmd []
 	if strings.TrimSpace(dyad) == "" {
 		return "", fmt.Errorf("dyad required for exec")
 	}
-	podName, err := m.kubeClient.resolveDyadPod(ctx, dyad)
-	if err != nil {
-		return "", err
-	}
 	containerName := normalizeContainerName(container)
 	if containerName == "" {
 		return "", fmt.Errorf("container name required")
 	}
-	return execOutput(ctx, m.kubeClient, podName, containerName, cmd)
+	containerID, err := m.dockerClient.resolveDyadContainer(ctx, dyad, containerName)
+	if err != nil {
+		return "", err
+	}
+	return execOutput(ctx, m.dockerClient, containerID, cmd)
 }
 
 func parseUsage(raw string, totalLimitMinutes int) usageSnapshot {

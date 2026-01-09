@@ -155,7 +155,7 @@ func dyadBootstrapWorkflow(ctx workflow.Context, req Request) error {
 		return err
 	}
 
-	readyNote := fmt.Sprintf("[beam.dyad_bootstrap] deployment %s ready", result.Deployment)
+	readyNote := fmt.Sprintf("[beam.dyad_bootstrap] containers ready (actor=%s critic=%s)", result.ActorContainer, result.CriticContainer)
 	_ = signalUpdateTask(ctx, state.DyadTask{ID: req.TaskID, Status: "done", Notes: ensureNote(current.Notes, readyNote)})
 	_ = signalUpsertDyad(ctx, state.DyadUpdate{
 		Dyad:   dyad,
@@ -260,8 +260,7 @@ func codexLoginWorkflow(ctx workflow.Context, req Request) error {
 		return err
 	}
 
-	kubeCmd := fmt.Sprintf("%s port-forward pod/%s %d:%d", startInfo.KubectlPrefix, startInfo.PodName, startInfo.Port, startInfo.ForwardPort)
-	message := buildTelegramMessage(kubeCmd, startInfo.AuthURL)
+	message := buildTelegramMessage(startInfo.HostPort, startInfo.AuthURL)
 	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, noRetryOpts), activitySendTelegram, TelegramMessage{
 		Message: message,
 	}).Get(ctx, nil); err != nil {
@@ -270,7 +269,7 @@ func codexLoginWorkflow(ctx workflow.Context, req Request) error {
 		return err
 	}
 
-	waitNote := fmt.Sprintf("[beam.codex_login] sent port-forward+URL to telegram (dyad=%s); waiting for browser callback", dyad)
+	waitNote := fmt.Sprintf("[beam.codex_login] sent host port + URL to telegram (dyad=%s); waiting for browser callback", dyad)
 	if err := workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, activityOpts), activityFetchDyadTask, req.TaskID).Get(ctx, &current); err != nil {
 		logger.Warn("refresh dyad task before wait", "error", err)
 	}

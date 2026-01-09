@@ -1,4 +1,10 @@
 # syntax=docker/dockerfile:1
+FROM golang:1.22-bookworm AS app-entrypoint-build
+WORKDIR /src/tools/app-entrypoint
+COPY tools/app-entrypoint/go.mod ./go.mod
+COPY tools/app-entrypoint/*.go ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/app-entrypoint .
+
 FROM node:22-bookworm AS build
 
 WORKDIR /repo
@@ -23,11 +29,10 @@ FROM node:22-bookworm AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-COPY --from=build /repo/tools/app-entrypoint.sh /entrypoint.sh
+COPY --from=app-entrypoint-build /out/app-entrypoint /usr/local/bin/app-entrypoint
 COPY --from=build /repo/${APP_PATH}/build ./build
 COPY --from=build /repo/${APP_PATH}/package.json ./package.json
 
-RUN chmod +x /entrypoint.sh
 EXPOSE 3000
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/app-entrypoint"]
 CMD ["node", "build"]

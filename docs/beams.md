@@ -21,9 +21,9 @@ Flow:
 4) Workflow sends the human a ready-to-run Telegram message (using `parse_mode="HTML"`) in this exact shape:
    - Header: `🔐 <b>Codex login</b>`
    - Body:
-     - `<b>🛠 Port-forward:</b>` in a `<pre><code>…</code></pre>` block
+     - `<b>🛠 Tunnel:</b>` in a `<pre><code>…</code></pre>` block (optional when running remotely)
      - `<b>🌐 URL:</b>` in a `<pre><code>…</code></pre>` block
-5) Human runs the port-forward command and opens the auth URL in the browser.
+5) Human opens the auth URL in the browser (and runs the tunnel command if provided).
 6) Workflow verifies success via `codex login status` inside the actor, stops the forwarder, and updates the Dyad Task to `done`.
 
 Expectations:
@@ -32,16 +32,15 @@ Expectations:
 
 Forwarding nuance:
 - Codex binds to `127.0.0.1:<port>` inside the container, so port-forwarding directly to `<port>` can fail.
-- Fix: run a TCP forwarder inside the pod, then forward to that port:
-  - Forward inside pod: `socat tcp-listen:<forward_port>,reuseaddr,fork tcp:127.0.0.1:<port>`
-  - Port-forward: `kubectl -n silexa port-forward pod/<pod> <port>:<forward_port>`
+- Fix: run a TCP forwarder inside the container, then forward to that port:
+  - Forward inside container: `socat tcp-listen:<forward_port>,reuseaddr,fork tcp:127.0.0.1:<port>`
+  - Expose via Docker host port; Beam includes the host port in the Telegram message.
 
 Compatibility note:
 - Some Codex CLI builds do not support `codex login --port`. In that case, run `codex login` and capture the printed `localhost:<port>` from the output; the Beam uses that port for the port-forward.
 
 Ready-to-run defaults:
-- Namespace defaults to `silexa` unless `SILEXA_NAMESPACE` is set.
-- Helper script to create the Beam task manually: `bin/beam-codex-login.sh <dyad> [port]` (Temporal workflow will pick it up).
+- Helper script to create the Beam task manually: `silexa beam codex-login <dyad> [port]` (Temporal workflow will pick it up).
 
 Recorded Telegram message examples: see `docs/beam_messages/` for the latest sent commands and URLs (e.g., `codex_login_actor_infra.txt` captures the exact tunnel + auth URL shared).
 
@@ -54,29 +53,29 @@ Flow:
    - `[beam.codex_account_reset.targets]=actor,critic`
    - `[beam.codex_account_reset.paths]=/root/.codex,/root/.config/openai-codex,/root/.config/codex,/root/.cache/openai-codex,/root/.cache/codex`
    - `[beam.codex_account_reset.reason]=<why>`
-3) Temporal workflow deletes Codex state in each target container and re-runs `bin/codex-init.sh` to restore baseline config.
+3) Temporal workflow deletes Codex state in each target container and re-runs `silexa-codex-init` to restore baseline config.
 4) Workflow waits ~30s, then auto-queues a `beam.codex_login` task (if one isn’t already open).
 5) Task marked `done`; follow the login beam if OAuth is required.
 
 Ready-to-run helper:
-- `bin/beam-codex-account-reset.sh <dyad> [targets] [paths] [reason]`
+- `silexa beam codex-reset <dyad> [targets] [paths] [reason]`
 
 ## `dyad_bootstrap` Beam (Dyad provisioning)
-Goal: create the dyad PVC + Deployment in a deterministic sequence.
+Goal: create the dyad containers and volumes in a deterministic sequence.
 
 Flow:
 1) Create a Dyad Task Board item with kind `beam.dyad_bootstrap` and set `dyad`, `actor`, `critic`.
 2) Include notes:
    - `[beam.dyad_bootstrap.role]=<role>`
    - `[beam.dyad_bootstrap.department]=<department>`
-3) Temporal workflow applies the dyad resources (PVC + Deployment) and waits for readiness.
+3) Temporal workflow applies the dyad resources (containers + volumes) and waits for readiness.
 4) Workflow updates the dyad task to `done` and marks the dyad as active in the registry.
 
 Ready-to-run helper:
-- `bin/beam-dyad-bootstrap.sh <dyad> [role] [department]`
+- `silexa beam dyad-bootstrap <dyad> [role] [department]`
 
 ## Creating new Beams
 1) Define the automation + human action split.
-2) Add a helper script under `bin/beam-*.sh` that creates a Manager task (Temporal Beam workflow sends the Telegram message).
+2) Add a helper CLI command (under `silexa beam`) that creates a Manager task (Temporal Beam workflow sends the Telegram message).
 3) Record the Beam in this file with trigger, automation, human command, and exit criteria.
 4) Prefer minimal human-facing text—just the command to run and a short note.

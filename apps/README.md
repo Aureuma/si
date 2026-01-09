@@ -17,9 +17,8 @@ apps/<app>/
 If a legacy app uses a different layout, capture it in `app.json` under `paths`.
 
 ## Common commands
-- Create a new app: `bin/start-app-project.sh <app>`
-- Adopt an existing app: `bin/adopt-app.sh <app> --web-path <path> [--backend-path <path>]`
-- List app metadata: `bin/list-apps.sh`
-- Build + deploy: `bin/app-build.sh <app>` then `bin/app-deploy.sh <app>`
-- Validate app structure: `bin/app-audit.sh`
-- Check stack health: `bin/app-status.sh <app>`
+- Create a new app: `silexa app init <app>`
+- Adopt an existing app: `silexa app adopt <app> --web-path <path> [--backend-path <path>]`
+- List app metadata: `silexa app list`
+- Build + deploy: `silexa app build <app>` then `silexa app deploy <app>`
+- Check stack health: `silexa app status <app>`

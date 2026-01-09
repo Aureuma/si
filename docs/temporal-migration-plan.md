@@ -2,11 +2,11 @@
 
 ## Goals
 - Make Temporal the system of record and orchestration layer for Silexa.
-- Run Temporal self-hosted on Kubernetes to enable horizontal scaling.
+- Run Temporal self-hosted via Docker to keep local deployments simple.
 - Preserve existing HTTP APIs while workflows replace hand-rolled loops.
 
-## Target architecture (Kubernetes)
-- Temporal cluster with SQL persistence (Postgres).
+## Target architecture (Docker)
+- Temporal auto-setup + Postgres in Docker.
 - Manager API as a thin gateway over Temporal state.
 - Manager worker runs the state workflow.
 - Future workers: router, program-manager, codex-monitor, app deployer.
@@ -20,8 +20,7 @@
 
 ## Migration phases
 1) Temporal baseline
-   - Deploy Temporal on Kubernetes (see `infra/k8s/temporal`).
-   - Deploy manager API + manager worker (see `infra/k8s/silexa`).
+   - Start Temporal and core services with `silexa stack up`.
    - Validate `/healthz`, `/dyads`, `/dyad-tasks`, and Telegram notifications.
 2) Router workflow
    - Convert router polling loop into a Temporal workflow + activities.
@@ -35,12 +34,10 @@
 5) Notifications and digest
    - Move the dyad digest to a Temporal schedule.
    - Convert per-task notifications to activities with retry policies.
-6) Deprecate legacy Swarm docs
-   - Mark Swarm files as legacy.
-   - Consolidate documentation around Kubernetes and Temporal.
+6) Consolidate docs around Docker + Temporal
+   - Keep Docker-based workflows as the default.
 
 ## Operational checklist
 - Temporal namespace exists (default or `SILEXA_NAMESPACE`).
 - Manager API and worker point to the same Temporal task queue.
 - Postgres backups and retention configured for Temporal visibility and default stores.
-- Apply k8s resource requests/limits for manager + workers.

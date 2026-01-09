@@ -104,7 +104,7 @@ func ensureDyadRegistered(managerURL, dyad string, logger *log.Logger) {
 			return
 		}
 	}
-	logger.Fatalf("dyad %q not registered; run bin/register-dyad.sh %s", dyad, dyad)
+	logger.Fatalf("dyad %q not registered; run silexa dyad register %s", dyad, dyad)
 }
 
 func ensureCodexBaseConfig(logger *log.Logger) {

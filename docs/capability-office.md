@@ -9,7 +9,7 @@ Purpose: centralize decisions about model class, reasoning depth, and tool permi
 - Maintain profiles in `profiles/` and keep them aligned with current tasks.
 
 ### How to use
-- Get recommendations: `bin/dyad-capability.sh <role>` (roles: actor-web, actor-infra, actor-research, critic-web, critic-infra, critic-qa, critic-research).
+- Get recommendations: `silexa capability <role>` (roles: actor-web, actor-infra, actor-research, critic-web, critic-infra, critic-qa, critic-research).
 - For unusual tasks, log a feedback note with constraints (budget, latency, safety) and let the capability office update mappings.
 - Record deviations in manager `/feedback` with reason and duration (e.g., “use high-depth model for incident for 1h”).
 
@@ -20,7 +20,7 @@ Purpose: centralize decisions about model class, reasoning depth, and tool permi
 
 ### Tooling defaults
 - Web: git, node/pnpm, playwright visual QA, MCP gateway for catalogs.
-- Infra: Pulumi/Terraform, kubectl/helm, image builder (buildctl), MCP gateway for infra servers.
+- Infra: Pulumi/Terraform, docker, MCP gateway for infra servers.
 - Research: HTTP clients, notebooks/spikes, MCP registry for data sources.
 - QA: Playwright, curl, test runners; no prod secrets.
 

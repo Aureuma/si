@@ -2,94 +2,55 @@ package beam
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	shared "silexa/agents/shared/docker"
 )
 
-func dyadDeploymentName(dyad string) string {
-	return "silexa-dyad-" + strings.TrimSpace(dyad)
-}
-
 func (a *Activities) ApplyDyadResources(ctx context.Context, req DyadBootstrapRequest) (DyadBootstrapResult, error) {
-	if a.kube == nil || a.kube.client == nil {
-		return DyadBootstrapResult{}, fmt.Errorf("kube client unavailable")
+	if a.docker == nil {
+		return DyadBootstrapResult{}, fmt.Errorf("docker client unavailable")
 	}
-	pvc, deploy, err := buildDyadResources(req.Dyad, req.Role, req.Department)
+	opts, err := buildDyadOptions(req.Dyad, req.Role, req.Department)
 	if err != nil {
 		return DyadBootstrapResult{}, err
 	}
-	ns := a.kube.namespace
-
-	pvcClient := a.kube.client.CoreV1().PersistentVolumeClaims(ns)
-	currentPVC, err := pvcClient.Get(ctx, pvc.Name, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if _, err := pvcClient.Create(ctx, pvc, metav1.CreateOptions{}); err != nil {
-				return DyadBootstrapResult{}, err
-			}
-		} else {
-			return DyadBootstrapResult{}, err
-		}
-	} else {
-		// PVC specs are largely immutable after creation; keep the existing claim as-is.
-		_ = currentPVC
+	if _, _, err := a.docker.client.EnsureDyad(ctx, opts); err != nil {
+		return DyadBootstrapResult{}, err
 	}
-
-	deployClient := a.kube.client.AppsV1().Deployments(ns)
-	currentDeploy, err := deployClient.Get(ctx, deploy.Name, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			if _, err := deployClient.Create(ctx, deploy, metav1.CreateOptions{}); err != nil {
-				return DyadBootstrapResult{}, err
-			}
-		} else {
-			return DyadBootstrapResult{}, err
-		}
-	} else {
-		deploy.ResourceVersion = currentDeploy.ResourceVersion
-		if _, err := deployClient.Update(ctx, deploy, metav1.UpdateOptions{}); err != nil {
-			return DyadBootstrapResult{}, err
-		}
-	}
-
-	return DyadBootstrapResult{Deployment: deploy.Name}, nil
+	return DyadBootstrapResult{
+		ActorContainer:  shared.DyadContainerName(req.Dyad, "actor"),
+		CriticContainer: shared.DyadContainerName(req.Dyad, "critic"),
+	}, nil
 }
 
 func (a *Activities) WaitDyadReady(ctx context.Context, req DyadBootstrapRequest) error {
-	if a.kube == nil || a.kube.client == nil {
-		return fmt.Errorf("kube client unavailable")
+	if a.docker == nil {
+		return fmt.Errorf("docker client unavailable")
 	}
 	if strings.TrimSpace(req.Dyad) == "" {
 		return fmt.Errorf("dyad required")
 	}
-	name := dyadDeploymentName(req.Dyad)
 	timeout := 6 * time.Minute
 	deadline := time.Now().Add(timeout)
 	for {
-		deploy, err := a.kube.client.AppsV1().Deployments(a.kube.namespace).Get(ctx, name, metav1.GetOptions{})
+		exists, ready, err := a.docker.client.DyadStatus(ctx, req.Dyad)
 		if err != nil {
-			if errors.IsNotFound(err) {
-				return fmt.Errorf("deployment %s not found", name)
-			}
 			return err
 		}
-		want := int32(1)
-		if deploy.Spec.Replicas != nil {
-			want = *deploy.Spec.Replicas
+		if !exists {
+			return fmt.Errorf("dyad %s not found", req.Dyad)
 		}
-		if deploy.Status.ReadyReplicas >= want {
+		if ready {
 			return nil
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("deployment %s not ready after %s", name, timeout)
+			return fmt.Errorf("dyad %s not ready after %s", req.Dyad, timeout)
 		}
 		select {
 		case <-ctx.Done():
@@ -99,10 +60,10 @@ func (a *Activities) WaitDyadReady(ctx context.Context, req DyadBootstrapRequest
 	}
 }
 
-func buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim, *appsv1.Deployment, error) {
+func buildDyadOptions(dyad, role, dept string) (shared.DyadOptions, error) {
 	dyad = strings.TrimSpace(dyad)
 	if dyad == "" {
-		return nil, nil, fmt.Errorf("dyad name required")
+		return shared.DyadOptions{}, fmt.Errorf("dyad name required")
 	}
 	if role == "" {
 		role = "generic"
@@ -112,216 +73,63 @@ func buildDyadResources(dyad, role, dept string) (*corev1.PersistentVolumeClaim,
 	}
 
 	actorEffort, criticEffort := codexEffortForRole(role)
-
-	actorImage := envOr("ACTOR_IMAGE", "silexa/actor:local")
-	criticImage := envOr("CRITIC_IMAGE", "silexa/critic:local")
-	codexModel := envOr("CODEX_MODEL", "gpt-5.2-codex")
-	codexModelLow := strings.TrimSpace(os.Getenv("CODEX_MODEL_LOW"))
-	codexModelMedium := strings.TrimSpace(os.Getenv("CODEX_MODEL_MEDIUM"))
-	codexModelHigh := strings.TrimSpace(os.Getenv("CODEX_MODEL_HIGH"))
-	codexEffortLow := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_LOW"))
-	codexEffortMedium := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_MEDIUM"))
-	codexEffortHigh := strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_HIGH"))
-	telegramURL := envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify")
-	telegramChatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID"))
-	managerURL := envOr("MANAGER_SERVICE_URL", envOr("MANAGER_URL", "http://silexa-manager:9090"))
-	repoURL := strings.TrimSpace(os.Getenv("SILEXA_REPO_URL"))
-	repoRef := envOr("SILEXA_REPO_REF", "main")
-	approverEnv := credentialsApproverEnv(dyad)
-
-	labels := map[string]string{
-		"app":               "silexa-dyad",
-		"silexa.dyad":       dyad,
-		"silexa.role":       role,
-		"silexa.department": dept,
+	if v := strings.TrimSpace(os.Getenv("CODEX_ACTOR_EFFORT")); v != "" {
+		actorEffort = v
+	}
+	if v := strings.TrimSpace(os.Getenv("CODEX_CRITIC_EFFORT")); v != "" {
+		criticEffort = v
 	}
 
-	pvc := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   "codex-" + dyad,
-			Labels: labels,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resourceQty("2Gi"),
-				},
-			},
-		},
+	workspaceHost, err := workspaceHostPath()
+	if err != nil {
+		return shared.DyadOptions{}, err
+	}
+	configsHost := strings.TrimSpace(os.Getenv("SILEXA_CONFIGS_HOST"))
+	if configsHost == "" {
+		configsHost = filepath.Join(workspaceHost, "configs")
+	}
+	if _, err := os.Stat(configsHost); err != nil {
+		return shared.DyadOptions{}, fmt.Errorf("configs path not found: %s", configsHost)
 	}
 
-	configItems := []corev1.KeyToPath{
-		{Key: "codex-mcp-config.toml", Path: "codex-mcp-config.toml"},
-		{Key: "codex_accounts.json", Path: "codex_accounts.json"},
-		{Key: "router_rules.json", Path: "router_rules.json"},
-		{Key: "dyad_roster.json", Path: "dyad_roster.json"},
-		{Key: "ssh_target", Path: "ssh_target"},
-		{Key: "programs-web_hosting.json", Path: "programs/web_hosting.json"},
-		{Key: "programs-releaseparty.json", Path: "programs/releaseparty/releaseparty.json"},
+	approverToken := strings.TrimSpace(os.Getenv("CREDENTIALS_APPROVER_TOKEN"))
+	if approverToken == "" {
+		if tokenFile := strings.TrimSpace(os.Getenv("CREDENTIALS_APPROVER_TOKEN_FILE")); tokenFile != "" {
+			if data, err := os.ReadFile(tokenFile); err == nil {
+				approverToken = strings.TrimSpace(string(data))
+			}
+		} else {
+			tokenFile = filepath.Join(workspaceHost, "secrets", "credentials_mcp_token")
+			if data, err := os.ReadFile(tokenFile); err == nil {
+				approverToken = strings.TrimSpace(string(data))
+			}
+		}
 	}
 
-	deploy := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   dyadDeploymentName(dyad),
-			Labels: labels,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: int32Ptr(1),
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app":         "silexa-dyad",
-					"silexa.dyad": dyad,
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: serviceAccountForDyad(dyad),
-					Volumes: []corev1.Volume{
-						{
-							Name: "codex",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: "codex-" + dyad,
-								},
-							},
-						},
-						{
-							Name: "workspace",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-						{
-							Name: "configs",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: "silexa-configs"},
-									Items:                configItems,
-								},
-							},
-						},
-					},
-					InitContainers: []corev1.Container{
-						{
-							Name:  "repo-sync",
-							Image: "alpine/git:2.45.2",
-							Env: []corev1.EnvVar{
-								{Name: "SILEXA_REPO_URL", Value: repoURL},
-								{Name: "SILEXA_REPO_REF", Value: repoRef},
-							},
-							Command: []string{"sh", "-lc"},
-							Args: []string{`mkdir -p /workspace/silexa/apps
-if [ -z "${SILEXA_REPO_URL}" ]; then echo "SILEXA_REPO_URL not set; skipping repo sync"; exit 0; fi
-if [ ! -d /workspace/silexa/.git ]; then
-  git clone --branch "${SILEXA_REPO_REF}" "${SILEXA_REPO_URL}" /workspace/silexa
-else
-  cd /workspace/silexa
-  git fetch origin "${SILEXA_REPO_REF}" || true
-  git checkout "${SILEXA_REPO_REF}" || true
-  git pull --ff-only origin "${SILEXA_REPO_REF}" || true
-fi`},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "workspace", MountPath: "/workspace"},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:       "actor",
-							Image:      actorImage,
-							WorkingDir: "/workspace/silexa/apps",
-							Env: appendCodexTuningEnv(append([]corev1.EnvVar{
-								{Name: "ROLE", Value: role},
-								{Name: "DEPARTMENT", Value: dept},
-								{Name: "DYAD_NAME", Value: dyad},
-								{Name: "DYAD_MEMBER", Value: "actor"},
-								{Name: "CODEX_INIT_FORCE", Value: "1"},
-								{Name: "CODEX_MODEL", Value: codexModel},
-								{Name: "CODEX_REASONING_EFFORT", Value: actorEffort},
-							}, approverEnv...), codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
-							Command: []string{"tini", "-s", "--", "bash", "-lc", `npm i -g @openai/codex >/dev/null 2>&1 || true; if [ -x /workspace/silexa/bin/codex-init.sh ]; then /workspace/silexa/bin/codex-init.sh >/proc/1/fd/1 2>/proc/1/fd/2 || true; else echo "codex-init skipped: /workspace/silexa/bin/codex-init.sh not found"; fi; exec tail -f /dev/null`},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "codex", MountPath: "/root/.codex"},
-								{Name: "workspace", MountPath: "/workspace"},
-							},
-						},
-						{
-							Name:  "critic",
-							Image: criticImage,
-							SecurityContext: &corev1.SecurityContext{
-								RunAsUser:  int64Ptr(0),
-								RunAsGroup: int64Ptr(0),
-							},
-							Env: appendCodexTuningEnv(append([]corev1.EnvVar{
-								{Name: "MANAGER_URL", Value: managerURL},
-								{Name: "TELEGRAM_NOTIFY_URL", Value: telegramURL},
-								{Name: "TELEGRAM_CHAT_ID", Value: telegramChatID},
-								{Name: "DEPARTMENT", Value: dept},
-								{Name: "ROLE", Value: role},
-								{Name: "DYAD_NAME", Value: dyad},
-								{Name: "DYAD_MEMBER", Value: "critic"},
-								{Name: "ACTOR_CONTAINER", Value: "actor"},
-								{Name: "CODEX_INIT_FORCE", Value: "1"},
-								{Name: "HOME", Value: "/root"},
-								{Name: "CODEX_HOME", Value: "/root/.codex"},
-								{Name: "CODEX_MODEL", Value: codexModel},
-								{Name: "CODEX_REASONING_EFFORT", Value: criticEffort},
-								{
-									Name: "POD_NAME",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"},
-									},
-								},
-								{
-									Name: "POD_NAMESPACE",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"},
-									},
-								},
-							}, approverEnv...), codexModelLow, codexModelMedium, codexModelHigh, codexEffortLow, codexEffortMedium, codexEffortHigh),
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "configs", MountPath: "/configs"},
-								{Name: "codex", MountPath: "/root/.codex"},
-								{Name: "workspace", MountPath: "/workspace"},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	return pvc, deploy, nil
-}
-
-func serviceAccountForDyad(dyad string) string {
-	name := strings.ToLower(strings.TrimSpace(dyad))
-	if name == "silexa-credentials" {
-		return "silexa-credentials"
-	}
-	return "silexa-dyad"
-}
-
-func credentialsApproverEnv(dyad string) []corev1.EnvVar {
-	name := strings.ToLower(strings.TrimSpace(dyad))
-	if name != "silexa-credentials" {
-		return nil
-	}
-	return []corev1.EnvVar{
-		{
-			Name: "CREDENTIALS_APPROVER_TOKEN",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "silexa-credentials-secrets"},
-					Key:                  "credentials_mcp_token",
-				},
-			},
-		},
-	}
+	return shared.DyadOptions{
+		Dyad:              dyad,
+		Role:              role,
+		Department:        dept,
+		ActorImage:        envOr("ACTOR_IMAGE", "silexa/actor:local"),
+		CriticImage:       envOr("CRITIC_IMAGE", "silexa/critic:local"),
+		ManagerURL:        envOr("MANAGER_SERVICE_URL", envOr("MANAGER_URL", "http://silexa-manager:9090")),
+		TelegramURL:       envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify"),
+		TelegramChatID:    strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID")),
+		CodexModel:        envOr("CODEX_MODEL", "gpt-5.2-codex"),
+		CodexEffortActor:  actorEffort,
+		CodexEffortCritic: criticEffort,
+		CodexModelLow:     strings.TrimSpace(os.Getenv("CODEX_MODEL_LOW")),
+		CodexModelMedium:  strings.TrimSpace(os.Getenv("CODEX_MODEL_MEDIUM")),
+		CodexModelHigh:    strings.TrimSpace(os.Getenv("CODEX_MODEL_HIGH")),
+		CodexEffortLow:    strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_LOW")),
+		CodexEffortMedium: strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_MEDIUM")),
+		CodexEffortHigh:   strings.TrimSpace(os.Getenv("CODEX_REASONING_EFFORT_HIGH")),
+		WorkspaceHost:     workspaceHost,
+		ConfigsHost:       configsHost,
+		Network:           envOr("SILEXA_DOCKER_NETWORK", shared.DefaultNetwork),
+		ForwardPorts:      strings.TrimSpace(os.Getenv("CODEX_FORWARD_PORTS")),
+		ApproverToken:     approverToken,
+	}, nil
 }
 
 func codexEffortForRole(role string) (string, string) {
@@ -339,37 +147,33 @@ func codexEffortForRole(role string) (string, string) {
 	}
 }
 
-func appendCodexTuningEnv(envs []corev1.EnvVar, modelLow, modelMedium, modelHigh, effortLow, effortMedium, effortHigh string) []corev1.EnvVar {
-	envs = appendEnvIfSet(envs, "CODEX_MODEL_LOW", modelLow)
-	envs = appendEnvIfSet(envs, "CODEX_MODEL_MEDIUM", modelMedium)
-	envs = appendEnvIfSet(envs, "CODEX_MODEL_HIGH", modelHigh)
-	envs = appendEnvIfSet(envs, "CODEX_REASONING_EFFORT_LOW", effortLow)
-	envs = appendEnvIfSet(envs, "CODEX_REASONING_EFFORT_MEDIUM", effortMedium)
-	envs = appendEnvIfSet(envs, "CODEX_REASONING_EFFORT_HIGH", effortHigh)
-	return envs
-}
-
-func appendEnvIfSet(envs []corev1.EnvVar, key, val string) []corev1.EnvVar {
-	if strings.TrimSpace(val) == "" {
-		return envs
+func workspaceHostPath() (string, error) {
+	if raw := strings.TrimSpace(os.Getenv("SILEXA_WORKSPACE_HOST")); raw != "" {
+		return filepath.Abs(raw)
 	}
-	return append(envs, corev1.EnvVar{Name: key, Value: val})
-}
-
-func int32Ptr(v int32) *int32 {
-	return &v
-}
-
-func int64Ptr(v int64) *int64 {
-	return &v
-}
-
-func resourceQty(value string) resource.Quantity {
-	q, err := resource.ParseQuantity(value)
+	if raw := strings.TrimSpace(os.Getenv("SILEXA_WORKSPACE")); raw != "" {
+		return filepath.Abs(raw)
+	}
+	if runningInDocker() {
+		return "", errors.New("SILEXA_WORKSPACE_HOST required when running inside a container")
+	}
+	cwd, err := os.Getwd()
 	if err != nil {
-		return resource.MustParse("2Gi")
+		return "", err
 	}
-	return q
+	return filepath.Abs(cwd)
+}
+
+func runningInDocker() bool {
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		return true
+	}
+	data, err := os.ReadFile("/proc/1/cgroup")
+	if err != nil {
+		return false
+	}
+	text := string(data)
+	return strings.Contains(text, "docker") || strings.Contains(text, "containerd")
 }
 
 func envOr(key, def string) string {
