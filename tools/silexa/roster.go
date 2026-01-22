@@ -13,7 +13,7 @@ import (
 
 func cmdRoster(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa roster <apply|status>")
+		fmt.Println("usage: si roster <apply|status>")
 		return
 	}
 	switch args[0] {
