@@ -23,7 +23,6 @@ Core:
   silexa notify <message>
   silexa report status|escalate|review|dyad
   silexa roster apply|status
-  silexa beam codex-login|codex-reset|dyad-bootstrap
   silexa mcp scout|sync|apply-config
 
 Build/app:

@@ -28,11 +28,11 @@ Codex CLI credentials persistence:
 - OAuth does not need to be repeated after container recreation as long as the volume remains.
 
 ## OAuth callbacks
-- Codex login beams provide a host port for OAuth callbacks.
+- Codex login tasks provide a host port for OAuth callbacks.
 - Do not store credentials in git; use short-lived OAuth flows and keep the tunnel alive until callback succeeds.
 
 ## Manager
-- No secrets. State is stored in Temporal (no local data volume).
+- No secrets. State is stored on disk (volume mounted at `/data`).
 
 ## Rotation playbook
 1) Update secret file (e.g., `secrets/telegram_bot_token`).

@@ -26,7 +26,7 @@ Supported fields:
 - `disable_notification` (optional): boolean.
 - `buttons` (optional): inline URL buttons.
 
-Recommended default for system notifications (dyad tasks, beams): `parse_mode="HTML"` and `disable_web_page_preview=true`.
+Recommended default for system notifications (dyad tasks): `parse_mode="HTML"` and `disable_web_page_preview=true`.
 
 Response (JSON):
 - `{ "ok": true, "edited": <bool>, "message_id": <int> }`
@@ -42,7 +42,7 @@ If you clear chat history (or delete the bot’s messages), Telegram can no long
 Manager periodically publishes a single “Dyad Task Board” digest message to Telegram and edits it in place, so you always have a current snapshot without spam.
 
 - Config: `DYAD_TASK_DIGEST_INTERVAL` (default `10m`)
-- Persisted anchor: `dyad-digest-message-id` stored in the Temporal state workflow
+- Persisted anchor: `dyad-digest-message-id` stored in the manager state file
 
 ### Telegram message template (system notifications)
 

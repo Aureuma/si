@@ -6,7 +6,7 @@
 - Marketing: marketing
 - Security: silexa-credentials (credentials oversight)
 
-Spawn dyads with `silexa dyad spawn [--temporal] <name> [role] [department]`; labels/env set:
+Spawn dyads with `silexa dyad spawn <name> [role] [department]`; labels/env set:
 - Labels: `silexa.dyad=<name>`, `silexa.department=<department>`, `silexa.role=<role>`
 - Env: `ROLE`, `DEPARTMENT`
 

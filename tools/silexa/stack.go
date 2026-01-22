@@ -46,7 +46,7 @@ func cmdStackUp(args []string) {
 
 	_, _ = client.EnsureNetwork(ctx, shared.DefaultNetwork, map[string]string{stackLabelKey: stackLabelVal})
 
-	_, _ = client.EnsureVolume(ctx, "silexa-temporal-db", map[string]string{stackLabelKey: stackLabelVal})
+	_, _ = client.EnsureVolume(ctx, "silexa-manager-data", map[string]string{stackLabelKey: stackLabelVal})
 	_, _ = client.EnsureVolume(ctx, "silexa-resource-broker-data", map[string]string{stackLabelKey: stackLabelVal})
 	_, _ = client.EnsureVolume(ctx, "silexa-infra-broker-data", map[string]string{stackLabelKey: stackLabelVal})
 	_, _ = client.EnsureVolume(ctx, "silexa-mcp-catalog", map[string]string{stackLabelKey: stackLabelVal})
@@ -155,21 +155,10 @@ func stackServices(ctx stackContext) []stackService {
 		return mount.Mount{Type: mount.TypeBind, Source: ctx.SecretsDir, Target: target, ReadOnly: true}
 	}
 
-	temporalEnv := []string{
-		"DB=" + envOr("TEMPORAL_DB", "postgresql"),
-		"POSTGRES_SEEDS=" + envOr("TEMPORAL_POSTGRES_HOST", "silexa-postgres"),
-		"POSTGRES_USER=" + envOr("TEMPORAL_POSTGRES_USER", "temporal"),
-		"POSTGRES_PWD=" + envOr("TEMPORAL_POSTGRES_PASSWORD", "temporal"),
-		"POSTGRES_DB=" + envOr("TEMPORAL_POSTGRES_DB", "temporal"),
-		"VISIBILITY_DBNAME=" + envOr("TEMPORAL_VISIBILITY_DB", "temporal_visibility"),
-	}
-
 	managerEnv := []string{
-		"TEMPORAL_ADDRESS=" + envOr("TEMPORAL_ADDRESS", "temporal-frontend:7233"),
-		"TEMPORAL_NAMESPACE=" + envOr("TEMPORAL_NAMESPACE", "default"),
-		"TEMPORAL_TASK_QUEUE=" + envOr("TEMPORAL_TASK_QUEUE", "silexa-state"),
 		"TELEGRAM_NOTIFY_URL=" + envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify"),
 		"TELEGRAM_CHAT_ID=" + envOr("TELEGRAM_CHAT_ID", ""),
+		"DATA_DIR=/data",
 		"DYAD_REQUIRE_ASSIGNMENT=" + envOr("DYAD_REQUIRE_ASSIGNMENT", "true"),
 		"DYAD_ALLOW_UNASSIGNED=" + envOr("DYAD_ALLOW_UNASSIGNED", "true"),
 		"DYAD_REQUIRE_REGISTERED=" + envOr("DYAD_REQUIRE_REGISTERED", "true"),
@@ -180,46 +169,15 @@ func stackServices(ctx stackContext) []stackService {
 		"BEAM_RECONCILE_INTERVAL=" + envOr("BEAM_RECONCILE_INTERVAL", "1m"),
 	}
 
-	workerEnv := append([]string{}, managerEnv...)
-
 	services := []stackService{
-		{
-			Name:   "silexa-postgres",
-			Image:  envOr("TEMPORAL_POSTGRES_IMAGE", "postgres:15"),
-			Env: []string{
-				"POSTGRES_USER=" + envOr("TEMPORAL_POSTGRES_USER", "temporal"),
-				"POSTGRES_PASSWORD=" + envOr("TEMPORAL_POSTGRES_PASSWORD", "temporal"),
-				"POSTGRES_DB=" + envOr("TEMPORAL_POSTGRES_DB", "temporal"),
-			},
-			Mounts: []mount.Mount{
-				{Name: "silexa-temporal-db", Type: mount.TypeVolume, Target: "/var/lib/postgresql/data"},
-			},
-			Labels:  stackLabels("postgres"),
-			Aliases: []string{"silexa-postgres"},
-		},
-		{
-			Name:   "silexa-temporal",
-			Image:  envOr("TEMPORAL_IMAGE", "temporalio/auto-setup:1.24.4"),
-			Env:    temporalEnv,
-			Ports:  map[int]int{7233: 7233},
-			Labels: stackLabels("temporal"),
-			Aliases: []string{"temporal-frontend"},
-		},
 		{
 			Name:   "silexa-manager",
 			Image:  envOr("SILEXA_MANAGER_IMAGE", "silexa/manager:local"),
 			Env:    managerEnv,
 			Ports:  map[int]int{9090: 9090},
+			Mounts: []mount.Mount{{Name: "silexa-manager-data", Type: mount.TypeVolume, Target: "/data"}},
 			Labels: stackLabels("manager"),
 			Aliases: []string{"silexa-manager"},
-		},
-		{
-			Name:   "silexa-manager-worker",
-			Image:  envOr("SILEXA_MANAGER_IMAGE", "silexa/manager:local"),
-			Env:    workerEnv,
-			Cmd:    []string{"manager-worker"},
-			Labels: stackLabels("manager-worker"),
-			Aliases: []string{"silexa-manager-worker"},
 		},
 		{
 			Name:   "silexa-router",
@@ -348,24 +306,12 @@ func stackServices(ctx stackContext) []stackService {
 			Labels: stackLabels("telegram-bot"),
 			Aliases: []string{"silexa-telegram-bot"},
 		},
-		{
-			Name:   "silexa-dashboard",
-			Image:  envOr("SILEXA_DASHBOARD_IMAGE", "silexa/dashboard:local"),
-			Env: []string{
-				"MANAGER_URL=" + envOr("MANAGER_URL", "http://silexa-manager:9090"),
-				"ADDR=:8087",
-			},
-			Ports:  map[int]int{8087: 8087},
-			Labels: stackLabels("dashboard"),
-			Aliases: []string{"silexa-dashboard"},
-		},
 	}
 	return services
 }
 
 func stackContainerNames() []string {
 	return []string{
-		"silexa-dashboard",
 		"silexa-telegram-bot",
 		"silexa-mcp-gateway",
 		"silexa-mcp-dind",
@@ -375,10 +321,7 @@ func stackContainerNames() []string {
 		"silexa-resource-broker",
 		"silexa-codex-monitor",
 		"silexa-router",
-		"silexa-manager-worker",
 		"silexa-manager",
-		"silexa-temporal",
-		"silexa-postgres",
 	}
 }
 

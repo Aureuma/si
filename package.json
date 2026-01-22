@@ -1,8 +1,0 @@
-{
-  "name": "silexa-monorepo",
-  "private": true,
-  "packageManager": "pnpm@9.15.0",
-  "scripts": {
-    "test": "node -e \"console.log('no test runner configured')\""
-  }
-}

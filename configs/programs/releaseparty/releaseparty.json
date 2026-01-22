@@ -1,28 +1,20 @@
 {
   "program": "releaseparty",
   "title": "ReleaseParty: GitHub App for automated release posts",
-  "description": "Rebuild the Release Party prototype (Aureuma/app/rp) as a standalone Go + SvelteKit repo that generates Markdown release posts and opens PRs via the ReleaseParty Acolyte GitHub App.",
+  "description": "Rebuild the Release Party prototype (Aureuma/app/rp) as a standalone Go repo that generates Markdown release posts and opens PRs via the ReleaseParty Acolyte GitHub App.",
   "tasks": [
     {
       "key": "releaseparty.preflight.login_infra",
       "title": "Preflight: Codex login for infra dyad",
       "description": "Ensure `actor-infra` is authenticated so infra/backend tasks can run.",
-      "kind": "beam.codex_login",
+      "kind": "codex.login",
       "priority": "high",
       "route_hint": "pool:infra"
     },
     {
-      "key": "releaseparty.preflight.login_web",
-      "title": "Preflight: Codex login for web dyad",
-      "description": "Ensure `actor-web` is authenticated so frontend tasks can run.",
-      "kind": "beam.codex_login",
-      "priority": "high",
-      "route_hint": "pool:web"
-    },
-    {
       "key": "releaseparty.repo.scaffold",
-      "title": "Repo scaffold: ReleaseParty (Go + SvelteKit)",
-      "description": "Create a standalone git repo `ReleaseParty` with Go backend + SvelteKit frontend skeleton, CI placeholders, and docs. Location: /opt/silexa/apps/ReleaseParty.",
+      "title": "Repo scaffold: ReleaseParty (Go)",
+      "description": "Create a standalone git repo `ReleaseParty` with Go backend scaffold, CI placeholders, and docs. Location: /opt/silexa/apps/ReleaseParty.",
       "kind": "releaseparty.repo",
       "priority": "high",
       "route_hint": "pool:infra"
@@ -44,17 +36,9 @@
       "route_hint": "pool:infra"
     },
     {
-      "key": "releaseparty.frontend.dashboard",
-      "title": "Frontend: SvelteKit dashboard MVP",
-      "description": "Create UI for install link, project configuration (source repo -> blog repo/path template), and viewing generated posts/PR links.",
-      "kind": "releaseparty.frontend.dashboard",
-      "priority": "high",
-      "route_hint": "pool:web"
-    },
-    {
       "key": "releaseparty.ops.compose_dev",
       "title": "Ops: docker compose dev run for ReleaseParty",
-      "description": "Add a dev docker compose scaffold inside ReleaseParty repo to run backend+frontend with env vars via Docker secrets or env files.",
+      "description": "Add a dev docker compose scaffold inside ReleaseParty repo to run backend with env vars via Docker secrets or env files.",
       "kind": "releaseparty.ops.compose",
       "priority": "normal",
       "route_hint": "pool:infra"
@@ -74,14 +58,6 @@
       "kind": "releaseparty.backend.configfile",
       "priority": "normal",
       "route_hint": "pool:infra"
-    },
-    {
-      "key": "releaseparty.frontend.project_config",
-      "title": "Frontend: project configuration UI",
-      "description": "SvelteKit pages to list installations/repos and configure destination blog repo + path template + base branch. POST to backend APIs.",
-      "kind": "releaseparty.frontend.config",
-      "priority": "high",
-      "route_hint": "pool:web"
     },
     {
       "key": "releaseparty.ops.public_webhook",
