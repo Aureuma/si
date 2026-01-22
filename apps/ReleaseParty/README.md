@@ -13,7 +13,6 @@ This repository is a **fresh reimplementation** of the earlier Python prototype 
 ## Repo layout (planned)
 
 - `backend/` — Go API + GitHub App webhook receiver + workers.
-- `frontend/` — SvelteKit UI for configuration and previews.
 - `docs/` — product spec, webhook/event contracts, operational runbooks.
 
 ## MVP scope
@@ -22,4 +21,3 @@ This repository is a **fresh reimplementation** of the earlier Python prototype 
 - Store installations + project configs in SQLite.
 - Generate a Markdown post from GitHub context (template-based; LLM provider pluggable).
 - Create/update file + open PR in target repo.
-

@@ -2,14 +2,14 @@
   "name": "ReleaseParty",
   "kind": "saas",
   "stack": {
-    "web": "sveltekit",
+    "web": "",
     "backend": "go",
-    "language": "typescript",
-    "ui": "shadcn-svelte",
-    "runtime": "node"
+    "language": "go",
+    "ui": "none",
+    "runtime": "docker"
   },
   "paths": {
-    "web": "frontend",
+    "web": "",
     "backend": "backend",
     "infra": "infra",
     "content": ""

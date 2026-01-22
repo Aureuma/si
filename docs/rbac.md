@@ -14,10 +14,10 @@
 ## Access policy (logical)
 - Actors: read/write `apps/`, run image builds with an external builder; no access to secrets or manager state.
 - Critics: read-only to container logs; post to Manager APIs; no secrets.
-- Manager: state stored in Temporal; may send notifications via `TELEGRAM_NOTIFY_URL`.
+- Manager: state stored on disk; may send notifications via `TELEGRAM_NOTIFY_URL`.
 - Telegram-bot: read Telegram token secret; read-only chat ID env.
 
 ## Implementation notes
 - Secrets: `telegram_bot_token` mounted only into `telegram-bot`; other containers do not consume it.
-- Volumes: Manager uses Temporal as the system of record (no local stateful volume).
+- Volumes: Manager persists state on a local volume mounted at `/data`.
 - Labels/env: dyads carry `silexa.dyad`, `silexa.department`, `silexa.role` for identification.

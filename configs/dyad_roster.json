@@ -46,7 +46,7 @@
       "department": "engineering",
       "team": "web",
       "assignment": "apps",
-      "tags": ["sveltekit", "frontend"],
+      "tags": ["frontend"],
       "spawn": false
     },
     {
@@ -64,7 +64,7 @@
       "department": "engineering",
       "team": "web",
       "assignment": "apps",
-      "tags": ["builder", "sveltekit"],
+      "tags": ["builder"],
       "spawn": false
     },
     {

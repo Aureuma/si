@@ -14,7 +14,7 @@ Example entry:
   "department": "engineering",
   "team": "web",
   "assignment": "apps",
-  "tags": ["builder", "sveltekit"],
+  "tags": ["builder", "frontend"],
   "available": true,
   "spawn": false
 }
@@ -30,5 +30,4 @@ Example entry:
 
 ## Notes
 - `silexa dyad spawn` requires dyads to be registered; roster apply handles that.
-- Use `silexa dyad spawn --temporal` (or `silexa beam dyad-bootstrap`) to run provisioning as a Temporal Beam workflow.
 - Heartbeats never overwrite `team`, `assignment`, or `tags` (arrangement stays stable).

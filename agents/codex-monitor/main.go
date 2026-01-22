@@ -38,7 +38,7 @@ type accountConfig struct {
 	Spawn        *bool  `json:"spawn"`
 }
 
-const codexAccountResetKind = "beam.codex_account_reset"
+const codexAccountResetKind = "codex.account_reset"
 
 type accountsFile struct {
 	Accounts               []accountConfig `json:"accounts"`
@@ -668,9 +668,9 @@ func (m *monitor) maybeTriggerAccountReset(ctx context.Context, acct accountConf
 	targets := "actor,critic"
 	paths := strings.Join(defaultCodexResetPaths(), ",")
 	notes := []string{
-		"[beam.codex_account_reset.targets]=" + targets,
-		"[beam.codex_account_reset.paths]=" + paths,
-		fmt.Sprintf("[beam.codex_account_reset.reason]=cooldown (remaining %.1f%%)", usage.RemainingPct),
+		"[codex.account_reset.targets]=" + targets,
+		"[codex.account_reset.paths]=" + paths,
+		fmt.Sprintf("[codex.account_reset.reason]=cooldown (remaining %.1f%%)", usage.RemainingPct),
 	}
 	title := fmt.Sprintf("Reset Codex account state for %s", dyad)
 	desc := "Clear Codex CLI state so the dyad can switch to a different account."

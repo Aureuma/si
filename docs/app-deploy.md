@@ -20,8 +20,6 @@ Each app is deployed as its own Compose stack so it can be updated independently
 - `silexa app status <app>` shows container status for the app stack.
 
 ## Notes
-- The SvelteKit template expects adapter-node output under `build/` and runs `node build`.
-- The default template prefers pnpm; it will fall back to npm if an app has `package-lock.json`.
 - For apps with custom Dockerfiles, place them at `apps/<app>/web/Dockerfile` or `apps/<app>/backend/Dockerfile` and `silexa app build` will use them.
 
 Example `secrets/app-<app>.env`:

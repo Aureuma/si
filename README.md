@@ -1,6 +1,6 @@
 # Silexa Substrate
 
-Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads). The control plane is Temporal, and the default runtime is vanilla Docker.
+Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads). The control plane is the Go manager with a local persisted state file, and the default runtime is vanilla Docker.
 
 ## Layout
 - `apps/`: Application repos built by agents (one repo per app).
@@ -8,8 +8,7 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 - `tools/silexa`: Go-based CLI for Docker + manager workflows.
 - `actor`: Node base image for interactive CLI agents (install LLM tools inside the running container as needed).
 - `critic`: Go watcher that reads actor logs via Docker and sends heartbeats to the manager.
-- `manager`: Go service collecting critic heartbeats and storing state in Temporal.
-- `manager-worker`: Temporal worker running the state workflow.
+- `manager`: Go service collecting critic heartbeats and storing state on disk.
 - `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
 
 ## Quickstart (Docker)

@@ -3,54 +3,41 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	"go.temporal.io/api/serviceerror"
-	"go.temporal.io/sdk/client"
 
 	"silexa/agents/manager/internal/state"
 )
 
 type server struct {
-	logger     *log.Logger
-	temporal   client.Client
-	workflowID string
-	taskQueue  string
-	policy     dyadPolicy
-	notifier   *notifier
+	logger   *log.Logger
+	store    *state.Store
+	policy   dyadPolicy
+	notifier *notifier
 }
 
 func main() {
 	logger := log.New(os.Stdout, "manager ", log.LstdFlags|log.LUTC)
 	addr := env("ADDR", ":9090")
-	temporalAddr := env("TEMPORAL_ADDRESS", "localhost:7233")
-	temporalNamespace := env("TEMPORAL_NAMESPACE", "default")
-	taskQueue := env("TEMPORAL_TASK_QUEUE", state.TaskQueue)
 	policy := loadDyadPolicy()
 	notif := buildNotifier(logger)
 
-	c, err := client.Dial(client.Options{
-		HostPort:  temporalAddr,
-		Namespace: temporalNamespace,
-	})
+	statePath := resolveStatePath()
+	store, err := state.NewStore(statePath)
 	if err != nil {
-		logger.Fatalf("temporal client: %v", err)
+		logger.Fatalf("state store: %v", err)
 	}
-	defer c.Close()
 
 	srv := &server{
-		logger:     logger,
-		temporal:   c,
-		workflowID: state.WorkflowID,
-		taskQueue:  taskQueue,
-		policy:     policy,
-		notifier:   notif,
+		logger:   logger,
+		store:    store,
+		policy:   policy,
+		notifier: notif,
 	}
 
 	http.HandleFunc("/heartbeat", srv.handleHeartbeat)
@@ -68,7 +55,6 @@ func main() {
 	http.HandleFunc("/dyad-tasks/claim", srv.handleDyadTaskClaim)
 
 	srv.startDyadDigest()
-	srv.startBeamReconciler()
 
 	logger.Printf("listening on %s", addr)
 	if err := http.ListenAndServe(addr, nil); err != nil {
@@ -76,57 +62,14 @@ func main() {
 	}
 }
 
-func (s *server) ensureWorkflow(ctx context.Context) error {
-	options := client.StartWorkflowOptions{
-		ID:        s.workflowID,
-		TaskQueue: s.taskQueue,
-	}
-	_, err := s.temporal.ExecuteWorkflow(ctx, options, state.StateWorkflow, state.State{})
-	if err == nil {
-		return nil
-	}
-	var already *serviceerror.WorkflowExecutionAlreadyStarted
-	if errors.As(err, &already) {
-		return nil
-	}
-	return err
-}
-
 func (s *server) query(ctx context.Context, name string, out any) error {
-	if err := s.ensureWorkflow(ctx); err != nil {
-		return err
-	}
-	resp, err := s.temporal.QueryWorkflow(ctx, s.workflowID, "", name)
-	if err != nil {
-		return err
-	}
-	return resp.Get(out)
+	_ = ctx
+	return s.store.Query(name, out)
 }
 
 func (s *server) update(ctx context.Context, name string, out any, args ...any) error {
-	if err := s.ensureWorkflow(ctx); err != nil {
-		return err
-	}
-	options := client.UpdateWorkflowOptions{
-		WorkflowID:   s.workflowID,
-		UpdateName:   name,
-		Args:         args,
-		WaitForStage: client.WorkflowUpdateStageCompleted,
-	}
-	handle, err := s.temporal.UpdateWorkflow(ctx, options)
-	if err == nil {
-		if err := handle.Get(ctx, out); err != nil {
-			if isUnknownUpdate(err) {
-				return s.signalUpdate(ctx, name, out, args...)
-			}
-			return err
-		}
-		return nil
-	}
-	if isUnknownUpdate(err) {
-		return s.signalUpdate(ctx, name, out, args...)
-	}
-	return err
+	_ = ctx
+	return s.store.Update(name, out, args...)
 }
 
 func (s *server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
@@ -418,15 +361,14 @@ func (s *server) handleDyadTasks(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
 		}
-		if s.notifier != nil && shouldNotifyDyadTask(out) {
-			if messageID, _ := s.notifier.upsertDyadTaskMessage(out); messageID > 0 && messageID != out.TelegramMessageID {
-				var updated state.UpdateResult
-				_ = s.update(ctx, "update_dyad_task", &updated, state.DyadTask{ID: out.ID, TelegramMessageID: messageID})
-				out.TelegramMessageID = messageID
-			}
+	if s.notifier != nil && shouldNotifyDyadTask(out) {
+		if messageID, _ := s.notifier.upsertDyadTaskMessage(out); messageID > 0 && messageID != out.TelegramMessageID {
+			var updated state.UpdateResult
+			_ = s.update(ctx, "update_dyad_task", &updated, state.DyadTask{ID: out.ID, TelegramMessageID: messageID})
+			out.TelegramMessageID = messageID
 		}
-		s.maybeStartBeamWorkflow(ctx, out)
-		writeJSON(w, http.StatusOK, out)
+	}
+	writeJSON(w, http.StatusOK, out)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -486,7 +428,6 @@ func (s *server) handleDyadTaskUpdate(w http.ResponseWriter, r *http.Request) {
 			out.Task.TelegramMessageID = messageID
 		}
 	}
-	s.maybeStartBeamWorkflow(ctx, out.Task)
 	writeJSON(w, http.StatusOK, out.Task)
 }
 
@@ -558,4 +499,16 @@ func env(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func resolveStatePath() string {
+	statePath := strings.TrimSpace(os.Getenv("STATE_PATH"))
+	dataDir := strings.TrimSpace(os.Getenv("DATA_DIR"))
+	if statePath == "" && dataDir != "" {
+		statePath = filepath.Join(dataDir, "manager_state.json")
+	}
+	if statePath == "" {
+		statePath = "manager_state.json"
+	}
+	return statePath
 }

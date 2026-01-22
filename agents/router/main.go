@@ -362,7 +362,6 @@ func defaultRules() rulesFile {
 	return rulesFile{
 		DefaultDyad: "pool:infra",
 		Rules: []rule{
-			{Match: "beam", RouteTo: "pool:infra"},
 			{Match: "codex", RouteTo: "pool:infra"},
 			{Match: "mcp", RouteTo: "pool:infra"},
 			{Match: "stripe", RouteTo: "pool:infra"},

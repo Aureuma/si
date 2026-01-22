@@ -14,7 +14,7 @@
   - Safe to run periodically via cron/systemd.
 
 ## Persistence
-- Manager tasks/feedback/access/metrics persisted in Temporal.
+- Manager tasks/feedback/access/metrics persisted on disk (volume mounted at `/data`).
 - Brokers persisted in Docker volumes (`silexa-resource-broker-data`, `silexa-infra-broker-data`).
 
 ## Access and secrets

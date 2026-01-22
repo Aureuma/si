@@ -49,7 +49,6 @@ func cmdDyadSpawn(args []string) {
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
 	deptFlag := fs.String("department", "", "dyad department")
-	temporal := fs.Bool("temporal", false, "create beam task instead of direct spawn")
 	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "silexa/actor:local"), "actor image")
 	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "silexa/critic:local"), "critic image")
 	managerURL := fs.String("manager-url", envOr("MANAGER_URL", "http://localhost:9090"), "manager URL for registration")
@@ -72,7 +71,7 @@ func cmdDyadSpawn(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: silexa dyad spawn [--temporal] <name> [role] [department]")
+		fmt.Println("usage: silexa dyad spawn <name> [role] [department]")
 		return
 	}
 	name := fs.Arg(0)
@@ -93,14 +92,6 @@ func cmdDyadSpawn(args []string) {
 	}
 	if dept == "" {
 		dept = role
-	}
-
-	if *temporal {
-		if err := beamDyadBootstrap(*managerURL, name, role, dept); err != nil {
-			fatal(err)
-		}
-		fmt.Printf("beam.dyad_bootstrap task created for dyad %s\n", name)
-		return
 	}
 
 	roleLower := strings.ToLower(role)

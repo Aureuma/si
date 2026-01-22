@@ -2,11 +2,11 @@
 
 Each app lives under `apps/<app>/` with metadata in `app.json`.
 
-## Preferred layout (SvelteKit-first)
+## Preferred layout (Go-first)
 ```
 apps/<app>/
-  web/        # SvelteKit (TypeScript)
-  backend/    # optional Go service
+  web/        # optional web service (Dockerfile required)
+  backend/    # Go service
   infra/      # IaC (Pulumi or similar)
   docs/       # plan.md, runbooks
   migrations/ # per-app DB migrations
