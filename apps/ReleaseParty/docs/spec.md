@@ -63,5 +63,4 @@ The Python prototype (`/home/shawn/Development/Aureuma/app/rp`) included:
 - Release context builder + post processing
 - Manual generate + publish flows
 
-This repo reimplements the essential pipeline in Go + SvelteKit.
-
+This repo reimplements the essential pipeline in Go.

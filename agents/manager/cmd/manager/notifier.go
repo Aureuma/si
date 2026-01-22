@@ -247,9 +247,6 @@ func shouldNotifyDyadTask(t state.DyadTask) bool {
 	if strings.HasPrefix(requestedBy, "human") {
 		return true
 	}
-	if strings.HasPrefix(kind, "beam.") {
-		return true
-	}
 	switch status {
 	case "blocked", "review", "done":
 		return true
@@ -294,8 +291,6 @@ func priorityEmoji(priority string) string {
 func kindEmoji(kind string) string {
 	k := strings.ToLower(strings.TrimSpace(kind))
 	switch {
-	case strings.HasPrefix(k, "beam."):
-		return "\u26A1"
 	case strings.Contains(k, "stripe") || strings.Contains(k, "billing") || strings.Contains(k, "payments"):
 		return "\U0001F4B3"
 	case strings.Contains(k, "github"):

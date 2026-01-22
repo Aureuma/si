@@ -55,7 +55,6 @@ func cmdImagesBuild(args []string) {
 		{tag: "silexa/critic:local", contextDir: filepath.Join(root, "agents/critic")},
 		{tag: "silexa/coder-agent:local", contextDir: filepath.Join(root, "agents/coder")},
 		{tag: "silexa/mcp-gateway:local", contextDir: filepath.Join(root, "tools/mcp-gateway")},
-		{tag: "silexa/dashboard:local", contextDir: filepath.Join(root, "agents/dashboard")},
 		{tag: "silexa/credentials-mcp:local", contextDir: filepath.Join(root, "tools/credentials-mcp")},
 		{tag: "silexa/program-manager:local", contextDir: filepath.Join(root, "agents/program-manager")},
 	}
@@ -128,4 +127,3 @@ func runDockerBuild(spec imageBuildSpec) error {
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
 }
-

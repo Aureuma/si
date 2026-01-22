@@ -4,7 +4,6 @@ This doc outlines how a dyad (Actor+Critic) can exercise services and infrastruc
 
 ## Test layout
 - Go unit tests live inside each module.
-- UI/visual checks use Playwright via `tools/visual-runner`.
 
 ## Sample Go service
 - Location: `apps/sample-go-service`
@@ -15,12 +14,11 @@ This doc outlines how a dyad (Actor+Critic) can exercise services and infrastruc
 - Cleanup: `silexa app remove sample-go-service`
 
 ## Quick run
-- Run `go test` per module and use Playwright for visual checks.
+- Run `go test` per module and use curl-driven smoke checks.
 
 ## Frameworks and tools
 - Go services: `go test ./...` per module.
 - Integration tests: curl + JSON asserts (no extra framework).
-- UI/visual checks: Playwright in `tools/visual-runner`.
 
 This keeps tooling minimal while still using standard ecosystem tools; add heavier frameworks only when test volume demands it.
 
@@ -31,5 +29,5 @@ This keeps tooling minimal while still using standard ecosystem tools; add heavi
 
 ## Recommended env knobs
 - Critics: `CRITIC_LOG_INTERVAL`, `CRITIC_BEAT_INTERVAL` to tune chatter.
-- Manager: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` to connect to Temporal.
+- Manager: `STATE_PATH` or `DATA_DIR` to control the on-disk state location.
 - Telegram: `TELEGRAM_NOTIFY_URL=http://telegram-bot:8081/notify`, `TELEGRAM_CHAT_ID=<id>` for human alerts.

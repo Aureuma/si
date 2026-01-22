@@ -21,14 +21,12 @@ A disciplined, budget-aware pipeline for taking an idea to production with dyads
 - Approvals recorded as manager feedback or tasks.
 
 ### 4) Build
-- Builder dyad codes in `apps/<app>/web` (SvelteKit/TypeScript) and `apps/<app>/backend` for Go services.
-- Prefer shared packages (`packages/ui`, `packages/db`, `packages/auth`) over duplicating core logic.
+- Builder dyad codes in `apps/<app>/web` (if present) and `apps/<app>/backend` for Go services.
 - Unit/integ tests per app; add migrations under `apps/<app>/migrations`.
-- Visual QA: see `docs/ui-visual.md` for running the visual runner container.
 - Report progress via `/metrics` (throughput, lead time) and Telegram summaries.
 
 ### 5) Test & QA
-- Automated: unit/integration, visual (visual runner), accessibility (axe via Playwright), smoke (curl/Playwright).
+- Automated: unit/integration, smoke (curl).
 - Management: validate `app.json` and `infra/compose.yml` before deploy.
 - Manual: if needed, create `/task` for human UX pass.
 - Blockers: log via manager `/feedback` and `/human-tasks`; escalate with `silexa report escalate`.
@@ -41,8 +39,7 @@ A disciplined, budget-aware pipeline for taking an idea to production with dyads
 
 ### 7) Operate & monitor
 - Health: manager `/healthz`, service-level probes, periodic status reports.
-- Visual drift: scheduled visual runner checks as needed.
-- Metrics: autonomy ratio, blocker pressure, visual regressions, throughput; reported to manager `/metrics` and surfaced in Telegram status.
+- Metrics: autonomy ratio, blocker pressure, throughput; reported to manager `/metrics` and surfaced in Telegram status.
 - Secrets: update `secrets/app-<app>.env` and rotate credentials as needed.
 
 ### Communication & oversight
@@ -62,8 +59,7 @@ A disciplined, budget-aware pipeline for taking an idea to production with dyads
 - [ ] Repo + CI created (or queued)
 - [ ] Per-app DB provisioned; creds stored in `secrets/app-<app>.env`
 - [ ] Plan.md filled (requirements, success metrics, rollout)
-- [ ] Visual targets defined; baseline captured
-- [ ] Tests: unit/integration/visual/accessibility/smoke
+- [ ] Tests: unit/integration/smoke
 - [ ] Deployment preview checked; cost gate passed
 - [ ] Post-deploy smoke + metrics reported
 - [ ] Monitoring hooks and rotations scheduled

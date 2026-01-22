@@ -52,9 +52,6 @@ func (m *Monitor) TickDyadWork(ctx context.Context, dyad string) {
 			continue
 		}
 		kind := strings.ToLower(strings.TrimSpace(t.Kind))
-		if strings.HasPrefix(kind, "beam.") {
-			continue
-		}
 		if !actorLoggedIn {
 			continue
 		}

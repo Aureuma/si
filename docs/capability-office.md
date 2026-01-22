@@ -19,10 +19,10 @@ Purpose: centralize decisions about model class, reasoning depth, and tool permi
 - **Light-tier**: cost-sensitive, use for routine status/triage.
 
 ### Tooling defaults
-- Web: git, node/pnpm, playwright visual QA, MCP gateway for catalogs.
+- Web: git, docker, curl-based smoke checks, MCP gateway for catalogs.
 - Infra: Pulumi/Terraform, docker, MCP gateway for infra servers.
 - Research: HTTP clients, notebooks/spikes, MCP registry for data sources.
-- QA: Playwright, curl, test runners; no prod secrets.
+- QA: curl, Go test runners; no prod secrets.
 
 ### Escalation
 - If a dyad needs a higher-tier model or extra tools, open an access request via manager `/access-requests` and notify security/creds. Document scope and sunset date.

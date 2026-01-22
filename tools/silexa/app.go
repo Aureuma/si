@@ -47,11 +47,11 @@ func cmdAppInit(args []string) {
 	contentPath := fs.String("content-path", "", "content path")
 	kind := fs.String("kind", "saas", "app kind")
 	status := fs.String("status", "idea", "status")
-	webStack := fs.String("web-stack", "sveltekit", "web stack")
+	webStack := fs.String("web-stack", "go", "web stack")
 	backendStack := fs.String("backend-stack", "", "backend stack")
-	lang := fs.String("language", "typescript", "language")
-	ui := fs.String("ui", "shadcn-svelte", "ui")
-	runtime := fs.String("runtime", "node", "runtime")
+	lang := fs.String("language", "go", "language")
+	ui := fs.String("ui", "none", "ui")
+	runtime := fs.String("runtime", "docker", "runtime")
 	dbKind := fs.String("db", "postgres", "db kind")
 	orm := fs.String("orm", "drizzle", "orm")
 	fs.Parse(args)
@@ -322,10 +322,8 @@ func cmdAppBuild(args []string) {
 	if meta.Paths.Web != "" {
 		webPath := meta.Paths.Web
 		webDir := appDir
-		appPath := filepath.Join("apps", app)
 		if webPath != "." {
 			webDir = filepath.Join(appDir, webPath)
-			appPath = filepath.Join("apps", app, webPath)
 		}
 		webImage := fmt.Sprintf("silexa/app-%s-web:local", app)
 		webDockerfile := filepath.Join(webDir, "Dockerfile")
@@ -338,18 +336,7 @@ func cmdAppBuild(args []string) {
 				fatal(err)
 			}
 		} else {
-			if meta.Stack.Web != "" && meta.Stack.Web != "sveltekit" {
-				fmt.Fprintln(os.Stderr, "warning: web stack is", meta.Stack.Web, "; using sveltekit template")
-			}
-			templateFile := filepath.Join(root, "tools", "app-templates", "sveltekit.Dockerfile")
-			if err := runDockerBuild(imageBuildSpec{
-				tag:        webImage,
-				contextDir: root,
-				dockerfile: templateFile,
-				buildArgs:  []string{"APP_PATH=" + appPath},
-			}); err != nil {
-				fatal(err)
-			}
+			fmt.Fprintln(os.Stderr, "warning: no Dockerfile for web:", webDockerfile)
 		}
 	}
 

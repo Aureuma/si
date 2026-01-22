@@ -1,7 +1,6 @@
 {
   "defaultDyad": "pool:infra",
   "rules": [
-    { "match": "beam", "routeTo": "pool:infra" },
     { "match": "codex", "routeTo": "pool:infra" },
     { "match": "mcp", "routeTo": "pool:infra" },
     { "match": "stripe", "routeTo": "pool:infra" },

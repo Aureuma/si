@@ -35,8 +35,6 @@ func main() {
 		cmdReport(args)
 	case "roster":
 		cmdRoster(args)
-	case "beam":
-		cmdBeam(args)
 	case "images":
 		cmdImages(args)
 	case "image":

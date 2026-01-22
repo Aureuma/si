@@ -30,6 +30,5 @@ This is the core dyad mechanism that proves the Critic can:
 
 ## Implementation
 - Codex turn runner: `agents/critic/internal/codex_loop.go`
-- Task dispatcher (non-beam): `agents/critic/internal/beams.go`
-- Beam workflows: `agents/manager/internal/beam/workflow.go`
+- Task dispatcher: `agents/critic/internal/dyad_tasks.go`
 - Log + status reporter (preserves state lines in notes): `agents/critic/internal/monitor.go`
