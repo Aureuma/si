@@ -29,7 +29,11 @@ if [[ -n "${SI_REPO:-}" ]]; then
 fi
 
 if [[ "$(id -u)" -eq 0 ]]; then
-  exec su -s /bin/bash si -c "$*"
+  cmd=()
+  for arg in "$@"; do
+    cmd+=("$(printf '%q' "$arg")")
+  done
+  exec su -s /bin/bash si -c "${cmd[*]}"
 fi
 
 exec "$@"
