@@ -68,9 +68,8 @@ func cmdCodexStatus(args []string) {
 	fs := flag.NewFlagSet("codex status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	showRaw := fs.Bool("raw", false, "include raw status output")
-	forceApp := fs.Bool("app-server", false, "use codex app-server (skip /status)")
 	timeout := fs.Duration("timeout", 25*time.Second, "status timeout")
-	tmuxCapture := fs.String("tmux-capture", "auto", "tmux capture mode: auto|alt|main")
+	tmuxCapture := fs.String("tmux-capture", "main", "tmux capture mode: alt|main")
 	tmuxKeep := fs.Bool("tmux-keep", false, "keep tmux session after run")
 	statusOnly := fs.Bool("status-only", false, "return only the /status box output")
 	debug := fs.Bool("debug", false, "debug tmux status capture")
@@ -134,7 +133,7 @@ func cmdCodexStatus(args []string) {
 		opts.LockStaleAfter = 5 * time.Minute
 	}
 	switch opts.CaptureMode {
-	case "auto", "alt", "main":
+	case "alt", "main":
 	default:
 		fatal(fmt.Errorf("invalid tmux capture mode: %s", opts.CaptureMode))
 	}
@@ -166,36 +165,22 @@ func cmdCodexStatus(args []string) {
 	}
 
 	parsed := codexStatus{}
-	raw := ""
-	if !*forceApp {
-		raw, err = fetchCodexStatus(ctx, client, id, opts)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "codex /status tmux error: %v\n", err)
-		}
-		if strings.TrimSpace(raw) != "" {
-			parseInput := raw
-			if block := extractStatusBlock(raw); block != "" {
-				parseInput = block
-				if opts.StatusOnly {
-					raw = block
-				}
-			} else if opts.StatusOnly {
-				raw = strings.TrimSpace(raw)
-			}
-			parsed = parseCodexStatus(parseInput)
-			parsed.Source = "status"
-		}
+	raw, err := fetchCodexStatus(ctx, client, id, opts)
+	if err != nil {
+		fail(err)
 	}
-	if *forceApp || looksLikePanic(raw) || (parsed.Model == "" && parsed.AccountEmail == "" && parsed.ContextLeftPct <= 0) {
-		fallbackCtx, fbCancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer fbCancel()
-		fallback, fbErr := fetchCodexAppServerStatus(fallbackCtx, client, id)
-		if fbErr == nil {
-			parsed = fallback
-			parsed.Source = "app-server"
-		} else if !*forceApp {
-			fmt.Fprintf(os.Stderr, "codex /status failed; app-server fallback error: %v\n", fbErr)
+	if strings.TrimSpace(raw) != "" {
+		parseInput := raw
+		if block := extractStatusBlock(raw); block != "" {
+			parseInput = block
+			if opts.StatusOnly {
+				raw = block
+			}
+		} else if opts.StatusOnly {
+			raw = strings.TrimSpace(raw)
 		}
+		parsed = parseCodexStatus(parseInput)
+		parsed.Source = "status"
 	}
 	if *showRaw {
 		parsed.Raw = raw
@@ -401,20 +386,8 @@ func tmuxCapture(ctx context.Context, target string, opts statusOptions) (string
 		return out, err
 	case "main":
 		return tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
-	default:
-		out, err := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-", "-a", "-q")
-		if strings.TrimSpace(out) != "" {
-			return out, nil
-		}
-		outFallback, fallbackErr := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
-		if strings.TrimSpace(outFallback) != "" {
-			return outFallback, nil
-		}
-		if err != nil {
-			return outFallback, err
-		}
-		return outFallback, fallbackErr
 	}
+	return "", fmt.Errorf("unsupported tmux capture mode: %s", opts.CaptureMode)
 }
 
 func waitForStatusSnapshot(ctx context.Context, target string, opts statusOptions) (string, bool) {
