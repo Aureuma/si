@@ -17,6 +17,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
+	"golang.org/x/term"
 )
 
 const (
@@ -26,7 +27,7 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si codex <spawn|list|exec|logs|tail|clone|remove|stop|start>")
+		fmt.Println("usage: si codex <spawn|list|status|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
@@ -34,6 +35,8 @@ func cmdCodex(args []string) {
 		cmdCodexSpawn(args[1:])
 	case "list", "ps":
 		cmdCodexList(args[1:])
+	case "status":
+		cmdCodexStatus(args[1:])
 	case "exec":
 		cmdCodexExec(args[1:])
 	case "logs":
@@ -248,19 +251,31 @@ func cmdCodexList(args []string) {
 
 func cmdCodexExec(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si codex exec <name> -- <command>")
+		fmt.Println("usage: si codex exec <name> [--] <command>")
 		return
 	}
 	name := args[0]
 	containerName := codexContainerName(name)
 	cmd := args[1:]
+	if len(cmd) > 0 && cmd[0] == "--" {
+		cmd = cmd[1:]
+	}
 	if len(cmd) == 0 {
 		cmd = []string{"bash"}
 	}
-	if err := execDockerCLI(append([]string{"exec", "-it", containerName}, cmd...)...); err != nil {
+	execArgs := []string{"exec"}
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		execArgs = append(execArgs, "-it")
+	} else {
+		execArgs = append(execArgs, "-i")
+	}
+	execArgs = append(execArgs, containerName)
+	execArgs = append(execArgs, cmd...)
+	if err := execDockerCLI(execArgs...); err != nil {
 		fatal(err)
 	}
 }
+
 
 func cmdCodexLogs(args []string) {
 	if len(args) < 1 {
