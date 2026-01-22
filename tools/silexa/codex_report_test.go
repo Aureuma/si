@@ -70,3 +70,16 @@ func TestExtractReportSkipsWorking(t *testing.T) {
 		t.Fatalf("unexpected report: %q", report)
 	}
 }
+
+func TestExtractReportIncludesWorkedLine(t *testing.T) {
+	raw := "› Prompt\n\n• Done.\n\nWorked for 0m 2s\n\n› Next"
+	segments := parsePromptSegments(raw)
+	if len(segments) != 2 {
+		t.Fatalf("expected 2 segments, got %d", len(segments))
+	}
+	report := extractReportLines(segments[0].Lines)
+	expected := "• Done.\nWorked for 0m 2s"
+	if report != expected {
+		t.Fatalf("unexpected report: %q", report)
+	}
+}
