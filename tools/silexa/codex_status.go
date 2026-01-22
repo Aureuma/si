@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -43,23 +44,114 @@ type codexStatus struct {
 	WeeklyRemaining   int     `json:"weekly_remaining_minutes,omitempty"`
 }
 
+type statusOptions struct {
+	Debug               bool
+	KeepTmux            bool
+	CaptureMode         string
+	StatusOnly          bool
+	StatusAttempts      int
+	StatusWindow        time.Duration
+	StatusDeadline      time.Duration
+	RetryDelay          time.Duration
+	PromptLines         int
+	RequireContextHint  bool
+	AllowMcpStartup     bool
+	LockTimeout         time.Duration
+	LockStaleAfter      time.Duration
+	CleanupStaleSession bool
+	TmuxPrefix          string
+}
+
+const tmuxStatusPrefix = "si-codex-status-"
+
 func cmdCodexStatus(args []string) {
 	fs := flag.NewFlagSet("codex status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	showRaw := fs.Bool("raw", false, "include raw status output")
 	forceApp := fs.Bool("app-server", false, "use codex app-server (skip /status)")
 	timeout := fs.Duration("timeout", 25*time.Second, "status timeout")
+	tmuxCapture := fs.String("tmux-capture", "auto", "tmux capture mode: auto|alt|main")
+	tmuxKeep := fs.Bool("tmux-keep", false, "keep tmux session after run")
+	statusOnly := fs.Bool("status-only", false, "return only the /status box output")
+	debug := fs.Bool("debug", false, "debug tmux status capture")
+	statusAttempts := fs.Int("status-attempts", 4, "max /status attempts")
+	statusWindow := fs.Duration("status-window", 3*time.Second, "window to wait after sending /status")
+	statusDeadline := fs.Duration("status-deadline", 30*time.Second, "max time to wait for /status output")
+	retryDelay := fs.Duration("retry-delay", 6*time.Second, "delay between /status retries")
+	promptLines := fs.Int("prompt-lines", 12, "lines to scan for prompt readiness")
+	requireContext := fs.Bool("require-context", true, "require context hint before sending /status")
+	allowMcp := fs.Bool("allow-mcp-startup", false, "allow sending /status during MCP startup")
+	lockTimeout := fs.Duration("lock-timeout", 2*time.Second, "lock wait time")
+	lockStale := fs.Duration("lock-stale", 5*time.Minute, "lock staleness before removal")
+	cleanupSessions := fs.Bool("cleanup-stale-sessions", true, "cleanup stale tmux sessions")
 	_ = fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si codex status <name> [--json] [--raw]")
+		fmt.Println("usage: si codex status <name> [--json] [--raw] [--status-only]")
 		return
 	}
 	name := fs.Arg(0)
 	containerName := codexContainerName(name)
 
+	opts := statusOptions{
+		Debug:               *debug,
+		KeepTmux:            *tmuxKeep,
+		CaptureMode:         strings.ToLower(strings.TrimSpace(*tmuxCapture)),
+		StatusOnly:          *statusOnly,
+		StatusAttempts:      *statusAttempts,
+		StatusWindow:        *statusWindow,
+		StatusDeadline:      *statusDeadline,
+		RetryDelay:          *retryDelay,
+		PromptLines:         *promptLines,
+		RequireContextHint:  *requireContext,
+		AllowMcpStartup:     *allowMcp,
+		LockTimeout:         *lockTimeout,
+		LockStaleAfter:      *lockStale,
+		CleanupStaleSession: *cleanupSessions,
+		TmuxPrefix:          tmuxStatusPrefix,
+	}
+	if opts.CaptureMode == "" {
+		opts.CaptureMode = "auto"
+	}
+	if opts.StatusAttempts < 1 {
+		opts.StatusAttempts = 1
+	}
+	if opts.PromptLines < 4 {
+		opts.PromptLines = 4
+	}
+	if opts.StatusWindow <= 0 {
+		opts.StatusWindow = 3 * time.Second
+	}
+	if opts.StatusDeadline <= 0 {
+		opts.StatusDeadline = 30 * time.Second
+	}
+	if opts.RetryDelay <= 0 {
+		opts.RetryDelay = 6 * time.Second
+	}
+	if opts.LockTimeout <= 0 {
+		opts.LockTimeout = 2 * time.Second
+	}
+	if opts.LockStaleAfter <= 0 {
+		opts.LockStaleAfter = 5 * time.Minute
+	}
+	switch opts.CaptureMode {
+	case "auto", "alt", "main":
+	default:
+		fatal(fmt.Errorf("invalid tmux capture mode: %s", opts.CaptureMode))
+	}
+
+	unlock, lockErr := acquireStatusLock(name, opts)
+	if lockErr != nil {
+		fatal(lockErr)
+	}
+	defer unlock()
+	fail := func(err error) {
+		unlock()
+		fatal(err)
+	}
+
 	client, err := shared.NewClient()
 	if err != nil {
-		fatal(err)
+		fail(err)
 	}
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
@@ -67,21 +159,30 @@ func cmdCodexStatus(args []string) {
 
 	id, _, err := client.ContainerByName(ctx, containerName)
 	if err != nil {
-		fatal(err)
+		fail(err)
 	}
 	if id == "" {
-		fatal(fmt.Errorf("codex container %s not found", containerName))
+		fail(fmt.Errorf("codex container %s not found", containerName))
 	}
 
 	parsed := codexStatus{}
 	raw := ""
 	if !*forceApp {
-		raw, err = fetchCodexStatus(ctx, client, id)
+		raw, err = fetchCodexStatus(ctx, client, id, opts)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "codex /status tmux error: %v\n", err)
 		}
 		if strings.TrimSpace(raw) != "" {
-			parsed = parseCodexStatus(raw)
+			parseInput := raw
+			if block := extractStatusBlock(raw); block != "" {
+				parseInput = block
+				if opts.StatusOnly {
+					raw = block
+				}
+			} else if opts.StatusOnly {
+				raw = strings.TrimSpace(raw)
+			}
+			parsed = parseCodexStatus(parseInput)
 			parsed.Source = "status"
 		}
 	}
@@ -104,7 +205,7 @@ func cmdCodexStatus(args []string) {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(parsed); err != nil {
-			fatal(err)
+			fail(err)
 		}
 		return
 	}
@@ -112,24 +213,36 @@ func cmdCodexStatus(args []string) {
 	printCodexStatus(parsed)
 }
 
-func fetchCodexStatus(ctx context.Context, client *shared.Client, containerID string) (string, error) {
+func fetchCodexStatus(ctx context.Context, client *shared.Client, containerID string, opts statusOptions) (string, error) {
 	if err := ensureTmuxAvailable(); err != nil {
 		return "", err
 	}
+	if opts.CleanupStaleSession {
+		cleanupStaleTmuxSessions(ctx, opts.TmuxPrefix, 30*time.Minute, opts)
+	}
 	tmuxCtx, tmuxCancel := context.WithTimeout(ctx, 45*time.Second)
 	defer tmuxCancel()
-	return fetchCodexStatusViaTmux(tmuxCtx, containerID)
+	return fetchCodexStatusViaTmux(tmuxCtx, containerID, opts)
 }
 
-func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, error) {
-	session := fmt.Sprintf("si-codex-status-%d", time.Now().UnixNano())
+func fetchCodexStatusViaTmux(ctx context.Context, containerID string, opts statusOptions) (string, error) {
+	session := fmt.Sprintf("%s%s-%d", opts.TmuxPrefix, containerID, time.Now().UnixNano())
 	paneTarget := session + ":0.0"
 	cmd := buildTmuxCodexCommand(containerID)
+	if opts.KeepTmux {
+		cmd = cmd + "; exec bash"
+	}
 	_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
 	if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 		return "", err
 	}
+	if opts.Debug {
+		debugf(opts, "tmux session: %s", session)
+	}
 	defer func() {
+		if opts.KeepTmux {
+			return
+		}
 		_, _ = tmuxOutput(context.Background(), "kill-session", "-t", session)
 	}()
 
@@ -146,9 +259,11 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 		if ctx.Err() != nil {
 			break
 		}
-		output, err := tmuxCapture(ctx, paneTarget)
+		output, err := tmuxCapture(ctx, paneTarget, opts)
 		if err == nil && strings.TrimSpace(output) != "" {
 			lastOutput = output
+		} else if err != nil && opts.Debug {
+			debugf(opts, "tmux capture error: %v", err)
 		}
 		lower := strings.ToLower(output)
 
@@ -164,15 +279,16 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 			_ = tmuxSendKeys(ctx, paneTarget, "Enter")
 		}
 
-		if !statusSent && shouldSendStatus(output) {
+		if !statusSent && shouldSendStatus(output, opts) {
+			debugf(opts, "sending /status")
 			_ = tmuxSendKeys(ctx, paneTarget, "C-u")
 			_ = tmuxSendLiteral(ctx, paneTarget, "/status")
 			_ = tmuxSendKeys(ctx, paneTarget, "Enter")
 			statusSent = true
 			lastStatusSend = time.Now()
 			statusAttempts = 1
-			statusDeadline = time.Now().Add(30 * time.Second)
-			if snapshot, ok := waitForStatusSnapshot(ctx, paneTarget, 3*time.Second); ok {
+			statusDeadline = time.Now().Add(opts.StatusDeadline)
+			if snapshot, ok := waitForStatusSnapshot(ctx, paneTarget, opts); ok {
 				lastOutput = snapshot
 				_ = tmuxSendLiteral(ctx, paneTarget, "/exit")
 				_ = tmuxSendKeys(ctx, paneTarget, "Enter")
@@ -187,13 +303,14 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 			exitSent = true
 			break
 		}
-		if statusSent && !statusDeadline.IsZero() && time.Since(lastStatusSend) > 6*time.Second && isPromptReady(output) && statusAttempts < 4 {
+		if statusSent && !statusDeadline.IsZero() && time.Since(lastStatusSend) > opts.RetryDelay && isPromptReady(output, opts) && statusAttempts < opts.StatusAttempts {
+			debugf(opts, "retrying /status attempt %d", statusAttempts+1)
 			_ = tmuxSendKeys(ctx, paneTarget, "C-u")
 			_ = tmuxSendLiteral(ctx, paneTarget, "/status")
 			_ = tmuxSendKeys(ctx, paneTarget, "Enter")
 			lastStatusSend = time.Now()
 			statusAttempts++
-			if snapshot, ok := waitForStatusSnapshot(ctx, paneTarget, 3*time.Second); ok {
+			if snapshot, ok := waitForStatusSnapshot(ctx, paneTarget, opts); ok {
 				lastOutput = snapshot
 				_ = tmuxSendLiteral(ctx, paneTarget, "/exit")
 				_ = tmuxSendKeys(ctx, paneTarget, "Enter")
@@ -212,9 +329,11 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 		_ = tmuxSendKeys(ctx, paneTarget, "Enter")
 	}
 	time.Sleep(1 * time.Second)
-	output, err := tmuxCapture(ctx, paneTarget)
+	output, err := tmuxCapture(ctx, paneTarget, opts)
 	if err == nil && strings.TrimSpace(output) != "" {
 		lastOutput = output
+	} else if err != nil && opts.Debug {
+		debugf(opts, "final tmux capture error: %v", err)
 	}
 	if strings.TrimSpace(lastOutput) == "" {
 		return "", errors.New("tmux capture empty")
@@ -228,28 +347,28 @@ func buildTmuxCodexCommand(containerID string) string {
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
 
-func shouldSendStatus(output string) bool {
+func shouldSendStatus(output string, opts statusOptions) bool {
 	lower := strings.ToLower(output)
 	if !strings.Contains(lower, "openai codex") {
 		return false
 	}
-	if strings.Contains(lower, "context left") {
-		return isPromptReady(output)
+	if opts.RequireContextHint && !strings.Contains(lower, "context left") {
+		return false
 	}
-	return isPromptReady(output)
+	return isPromptReady(output, opts)
 }
 
-func isPromptReady(output string) bool {
+func isPromptReady(output string, opts statusOptions) bool {
 	lines := strings.Split(output, "\n")
 	seen := 0
-	for i := len(lines) - 1; i >= 0 && seen < 12; i-- {
+	for i := len(lines) - 1; i >= 0 && seen < opts.PromptLines; i-- {
 		line := strings.TrimSpace(lines[i])
 		if line == "" {
 			continue
 		}
 		seen++
 		lower := strings.ToLower(line)
-		if strings.Contains(lower, "starting mcp") || strings.Contains(lower, "mcp startup") {
+		if !opts.AllowMcpStartup && (strings.Contains(lower, "starting mcp") || strings.Contains(lower, "mcp startup")) {
 			return false
 		}
 		if strings.HasPrefix(line, "›") {
@@ -275,26 +394,34 @@ func tmuxSendLiteral(ctx context.Context, target string, text string) error {
 	return err
 }
 
-func tmuxCapture(ctx context.Context, target string) (string, error) {
-	out, err := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-", "-a", "-q")
-	if strings.TrimSpace(out) != "" {
-		return out, nil
+func tmuxCapture(ctx context.Context, target string, opts statusOptions) (string, error) {
+	switch opts.CaptureMode {
+	case "alt":
+		out, err := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-", "-a", "-q")
+		return out, err
+	case "main":
+		return tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
+	default:
+		out, err := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-", "-a", "-q")
+		if strings.TrimSpace(out) != "" {
+			return out, nil
+		}
+		outFallback, fallbackErr := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
+		if strings.TrimSpace(outFallback) != "" {
+			return outFallback, nil
+		}
+		if err != nil {
+			return outFallback, err
+		}
+		return outFallback, fallbackErr
 	}
-	outFallback, fallbackErr := tmuxOutput(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
-	if strings.TrimSpace(outFallback) != "" {
-		return outFallback, nil
-	}
-	if err != nil {
-		return outFallback, err
-	}
-	return outFallback, fallbackErr
 }
 
-func waitForStatusSnapshot(ctx context.Context, target string, window time.Duration) (string, bool) {
-	deadline := time.Now().Add(window)
+func waitForStatusSnapshot(ctx context.Context, target string, opts statusOptions) (string, bool) {
+	deadline := time.Now().Add(opts.StatusWindow)
 	var lastOutput string
 	for time.Now().Before(deadline) {
-		output, err := tmuxCapture(ctx, target)
+		output, err := tmuxCapture(ctx, target, opts)
 		if err == nil && strings.TrimSpace(output) != "" {
 			lastOutput = output
 		}
@@ -334,6 +461,99 @@ func ensureTmuxAvailable() error {
 		return fmt.Errorf("tmux not found in PATH: %w", err)
 	}
 	return nil
+}
+
+func debugf(opts statusOptions, format string, args ...interface{}) {
+	if !opts.Debug {
+		return
+	}
+	msg := fmt.Sprintf(format, args...)
+	_, _ = fmt.Fprintf(os.Stderr, "[codex-status] %s\n", msg)
+}
+
+func acquireStatusLock(name string, opts statusOptions) (func(), error) {
+	lockPath := filepath.Join(os.TempDir(), fmt.Sprintf("si-codex-status-%s.lock", name))
+	deadline := time.Now().Add(opts.LockTimeout)
+	for {
+		f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		if err == nil {
+			_, _ = fmt.Fprintf(f, "pid=%d time=%s\n", os.Getpid(), time.Now().Format(time.RFC3339))
+			_ = f.Close()
+			return func() { _ = os.Remove(lockPath) }, nil
+		}
+		if !errors.Is(err, os.ErrExist) {
+			return nil, err
+		}
+		info, statErr := os.Stat(lockPath)
+		if statErr == nil && time.Since(info.ModTime()) > opts.LockStaleAfter {
+			_ = os.Remove(lockPath)
+			continue
+		}
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("another status capture is running (lock: %s)", lockPath)
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+func cleanupStaleTmuxSessions(ctx context.Context, prefix string, maxAge time.Duration, opts statusOptions) {
+	if strings.TrimSpace(prefix) == "" {
+		return
+	}
+	out, err := tmuxOutput(ctx, "list-sessions", "-F", "#{session_name} #{session_created}")
+	if err != nil {
+		return
+	}
+	now := time.Now()
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		name := parts[0]
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		created, parseErr := strconv.ParseInt(parts[1], 10, 64)
+		if parseErr != nil {
+			continue
+		}
+		if now.Sub(time.Unix(created, 0)) > maxAge {
+			_, _ = tmuxOutput(ctx, "kill-session", "-t", name)
+		}
+	}
+}
+
+func extractStatusBlock(raw string) string {
+	lines := strings.Split(raw, "\n")
+	anchor := -1
+	for i, line := range lines {
+		if strings.Contains(line, "Visit https://chatgpt.com/codex/settings/usage") {
+			anchor = i
+			break
+		}
+	}
+	if anchor == -1 {
+		return ""
+	}
+	start := anchor
+	for start >= 0 {
+		if strings.Contains(lines[start], "╭") || strings.Contains(lines[start], "┌") {
+			break
+		}
+		start--
+	}
+	end := anchor
+	for end < len(lines) {
+		if strings.Contains(lines[end], "╰") || strings.Contains(lines[end], "└") {
+			break
+		}
+		end++
+	}
+	if start < 0 || end >= len(lines) || start > end {
+		return ""
+	}
+	return strings.Join(lines[start:end+1], "\n")
 }
 
 func parseCodexStatus(raw string) codexStatus {
