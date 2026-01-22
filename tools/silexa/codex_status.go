@@ -113,6 +113,9 @@ func cmdCodexStatus(args []string) {
 }
 
 func fetchCodexStatus(ctx context.Context, client *shared.Client, containerID string) (string, error) {
+	if err := ensureTmuxAvailable(); err != nil {
+		return "", err
+	}
 	tmuxCtx, tmuxCancel := context.WithTimeout(ctx, 45*time.Second)
 	defer tmuxCancel()
 	return fetchCodexStatusViaTmux(tmuxCtx, containerID)
@@ -122,6 +125,7 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 	session := fmt.Sprintf("si-codex-status-%d", time.Now().UnixNano())
 	paneTarget := session + ":0.0"
 	cmd := buildTmuxCodexCommand(containerID)
+	_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
 	if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 		return "", err
 	}
@@ -168,7 +172,7 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 			lastStatusSend = time.Now()
 			statusAttempts = 1
 			statusDeadline = time.Now().Add(30 * time.Second)
-			if snapshot, ok := captureStatusSnapshot(ctx, paneTarget); ok {
+			if snapshot, ok := waitForStatusSnapshot(ctx, paneTarget, 3*time.Second); ok {
 				lastOutput = snapshot
 				_ = tmuxSendLiteral(ctx, paneTarget, "/exit")
 				_ = tmuxSendKeys(ctx, paneTarget, "Enter")
@@ -189,7 +193,7 @@ func fetchCodexStatusViaTmux(ctx context.Context, containerID string) (string, e
 			_ = tmuxSendKeys(ctx, paneTarget, "Enter")
 			lastStatusSend = time.Now()
 			statusAttempts++
-			if snapshot, ok := captureStatusSnapshot(ctx, paneTarget); ok {
+			if snapshot, ok := waitForStatusSnapshot(ctx, paneTarget, 3*time.Second); ok {
 				lastOutput = snapshot
 				_ = tmuxSendLiteral(ctx, paneTarget, "/exit")
 				_ = tmuxSendKeys(ctx, paneTarget, "Enter")
@@ -229,8 +233,8 @@ func shouldSendStatus(output string) bool {
 	if !strings.Contains(lower, "openai codex") {
 		return false
 	}
-	if !strings.Contains(lower, "context left") {
-		return false
+	if strings.Contains(lower, "context left") {
+		return isPromptReady(output)
 	}
 	return isPromptReady(output)
 }
@@ -286,17 +290,24 @@ func tmuxCapture(ctx context.Context, target string) (string, error) {
 	return outFallback, fallbackErr
 }
 
-func captureStatusSnapshot(ctx context.Context, target string) (string, bool) {
-	time.Sleep(250 * time.Millisecond)
-	output, err := tmuxCapture(ctx, target)
-	if err != nil {
+func waitForStatusSnapshot(ctx context.Context, target string, window time.Duration) (string, bool) {
+	deadline := time.Now().Add(window)
+	var lastOutput string
+	for time.Now().Before(deadline) {
+		output, err := tmuxCapture(ctx, target)
+		if err == nil && strings.TrimSpace(output) != "" {
+			lastOutput = output
+		}
+		lower := strings.ToLower(output)
+		if strings.Contains(lower, "5h limit") || strings.Contains(lower, "weekly limit") || strings.Contains(lower, "context window") || strings.Contains(lower, "account:") {
+			return output, true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	if strings.TrimSpace(lastOutput) == "" {
 		return "", false
 	}
-	lower := strings.ToLower(output)
-	if strings.Contains(lower, "5h limit") || strings.Contains(lower, "weekly limit") || strings.Contains(lower, "context window") || strings.Contains(lower, "account:") {
-		return output, true
-	}
-	return output, false
+	return lastOutput, false
 }
 
 func tmuxOutput(ctx context.Context, args ...string) (string, error) {
@@ -316,6 +327,13 @@ func tmuxOutput(ctx context.Context, args ...string) (string, error) {
 		return stdout.String(), err
 	}
 	return stdout.String(), nil
+}
+
+func ensureTmuxAvailable() error {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		return fmt.Errorf("tmux not found in PATH: %w", err)
+	}
+	return nil
 }
 
 func parseCodexStatus(raw string) codexStatus {
@@ -431,11 +449,11 @@ func parseModelLine(line string) (string, string, string) {
 	if match := modelRe.FindStringSubmatch(line); len(match) == 2 {
 		model = match[1]
 	}
-	reasonRe := regexp.MustCompile(`(?i)\breasoning\s+([A-Za-z0-9._-]+)`)
+	reasonRe := regexp.MustCompile(`(?i)\breasoning\b[^A-Za-z0-9]+([A-Za-z0-9._-]+)`)
 	if match := reasonRe.FindStringSubmatch(line); len(match) == 2 {
 		reasoning = match[1]
 	}
-	sumRe := regexp.MustCompile(`(?i)\bsummaries?\s+([A-Za-z0-9._-]+)`)
+	sumRe := regexp.MustCompile(`(?i)\bsummaries?\b[^A-Za-z0-9]+([A-Za-z0-9._-]+)`)
 	if match := sumRe.FindStringSubmatch(line); len(match) == 2 {
 		summaries = match[1]
 	}
