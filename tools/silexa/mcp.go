@@ -14,7 +14,7 @@ import (
 
 func cmdMCP(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa mcp <scout|sync|apply-config>")
+		fmt.Println("usage: si mcp <scout|sync|apply-config>")
 		return
 	}
 	switch args[0] {
@@ -101,7 +101,7 @@ func cmdMCPApplyConfig(args []string) {
 	destDir := fs.String("dest-dir", "/root/.codex", "destination dir")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: silexa mcp apply-config <dyad> [--member actor|critic]")
+		fmt.Println("usage: si mcp apply-config <dyad> [--member actor|critic]")
 		return
 	}
 	dyad := fs.Arg(0)

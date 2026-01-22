@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
@@ -269,7 +268,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	actorHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		Mounts: []mount.Mount{
-			{Name: opts.CodexVolume, Type: mount.TypeVolume, Target: "/root/.codex"},
+			{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
 			{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 		},
 		PortBindings: actorBindings,
@@ -292,7 +291,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	criticHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		Mounts: []mount.Mount{
-			{Name: opts.CodexVolume, Type: mount.TypeVolume, Target: "/root/.codex"},
+			{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
 			{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 			{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
 		},

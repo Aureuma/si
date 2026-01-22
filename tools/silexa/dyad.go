@@ -16,7 +16,7 @@ import (
 
 func cmdDyad(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup>")
+		fmt.Println("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup>")
 		return
 	}
 	switch args[0] {
@@ -71,7 +71,7 @@ func cmdDyadSpawn(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: silexa dyad spawn <name> [role] [department]")
+		fmt.Println("usage: si dyad spawn <name> [role] [department]")
 		return
 	}
 	name := fs.Arg(0)
@@ -265,7 +265,7 @@ func cmdDyadList(args []string) {
 
 func cmdDyadRemove(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa dyad remove <name>")
+		fmt.Println("usage: si dyad remove <name>")
 		return
 	}
 	name := args[0]
@@ -282,7 +282,7 @@ func cmdDyadRemove(args []string) {
 
 func cmdDyadRecreate(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa dyad recreate <name> [role] [department]")
+		fmt.Println("usage: si dyad recreate <name> [role] [department]")
 		return
 	}
 	name := args[0]
@@ -297,7 +297,7 @@ func cmdDyadRecreate(args []string) {
 
 func cmdDyadStatus(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa dyad status <name>")
+		fmt.Println("usage: si dyad status <name>")
 		return
 	}
 	name := args[0]
@@ -340,7 +340,7 @@ func cmdDyadExec(args []string) {
 	tty := fs.Bool("tty", false, "allocate TTY")
 	fs.Parse(args)
 	if fs.NArg() < 2 {
-		fmt.Println("usage: silexa dyad exec <dyad> [--member actor|critic] -- <cmd...>")
+		fmt.Println("usage: si dyad exec <dyad> [--member actor|critic] -- <cmd...>")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -377,7 +377,7 @@ func cmdDyadLogs(args []string) {
 	tail := fs.Int("tail", 200, "lines to tail")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: silexa dyad logs <dyad> [--member actor|critic] [--tail N]")
+		fmt.Println("usage: si dyad logs <dyad> [--member actor|critic] [--tail N]")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -403,7 +403,7 @@ func cmdDyadLogs(args []string) {
 
 func cmdDyadRestart(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa dyad restart <name>")
+		fmt.Println("usage: si dyad restart <name>")
 		return
 	}
 	name := args[0]
@@ -420,7 +420,7 @@ func cmdDyadRestart(args []string) {
 
 func cmdDyadRegister(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa dyad register <name> [role] [department]")
+		fmt.Println("usage: si dyad register <name> [role] [department]")
 		return
 	}
 	name := args[0]

@@ -11,7 +11,7 @@ import (
 
 func cmdReport(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa report <status|escalate|review|dyad>")
+		fmt.Println("usage: si report <status|escalate|review|dyad>")
 		return
 	}
 	switch args[0] {
@@ -276,7 +276,7 @@ type dyadTask struct {
 
 func cmdReportDyad(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa report dyad <name>")
+		fmt.Println("usage: si report dyad <name>")
 		return
 	}
 	dyad := args[0]

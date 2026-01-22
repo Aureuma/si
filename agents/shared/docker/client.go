@@ -113,7 +113,7 @@ func (c *Client) ContainerByLabels(ctx context.Context, labels map[string]string
 		}
 		args.Add("label", key+"="+val)
 	}
-	list, err := c.api.ContainerList(ctx, types.ContainerListOptions{
+	list, err := c.api.ContainerList(ctx, container.ListOptions{
 		All:     true,
 		Filters: args,
 	})
@@ -146,7 +146,7 @@ func (c *Client) ListContainers(ctx context.Context, all bool, labels map[string
 		}
 		args.Add("label", key+"="+val)
 	}
-	return c.api.ContainerList(ctx, types.ContainerListOptions{
+	return c.api.ContainerList(ctx, container.ListOptions{
 		All:     all,
 		Filters: args,
 	})
@@ -242,7 +242,7 @@ func (c *Client) ExecWithTTY(ctx context.Context, containerID string, cmd []stri
 		return err
 	}
 	if rows > 0 && cols > 0 {
-		_ = c.api.ContainerExecResize(ctx, execResp.ID, types.ResizeOptions{Height: rows, Width: cols})
+		_ = c.api.ContainerExecResize(ctx, execResp.ID, container.ResizeOptions{Height: rows, Width: cols})
 	}
 	attach, err := c.api.ContainerExecAttach(ctx, execResp.ID, types.ExecStartCheck{Tty: true})
 	if err != nil {
@@ -337,7 +337,7 @@ func (c *Client) Logs(ctx context.Context, containerID string, opts LogsOptions)
 	if !opts.Since.IsZero() {
 		since = opts.Since.UTC().Format(time.RFC3339Nano)
 	}
-	reader, err := c.api.ContainerLogs(ctx, containerID, types.ContainerLogsOptions{
+	reader, err := c.api.ContainerLogs(ctx, containerID, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       tail,
@@ -360,15 +360,18 @@ func (c *Client) RestartContainer(ctx context.Context, containerID string, timeo
 	if strings.TrimSpace(containerID) == "" {
 		return errors.New("container id required")
 	}
-	t := timeout
-	return c.api.ContainerRestart(ctx, containerID, &t)
+	if timeout <= 0 {
+		return c.api.ContainerRestart(ctx, containerID, container.StopOptions{})
+	}
+	seconds := int(timeout.Seconds())
+	return c.api.ContainerRestart(ctx, containerID, container.StopOptions{Timeout: &seconds})
 }
 
 func (c *Client) RemoveContainer(ctx context.Context, containerID string, force bool) error {
 	if strings.TrimSpace(containerID) == "" {
 		return errors.New("container id required")
 	}
-	return c.api.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{
+	return c.api.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force:         force,
 		RemoveVolumes: true,
 	})
@@ -386,7 +389,7 @@ func (c *Client) StartContainer(ctx context.Context, containerID string) error {
 	if strings.TrimSpace(containerID) == "" {
 		return errors.New("container id required")
 	}
-	return c.api.ContainerStart(ctx, containerID, types.ContainerStartOptions{})
+	return c.api.ContainerStart(ctx, containerID, container.StartOptions{})
 }
 
 func (c *Client) HostPortFor(ctx context.Context, containerID string, containerPort int, protocol string) (string, error) {

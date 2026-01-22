@@ -11,7 +11,7 @@ import (
 
 func cmdImages(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa images <build>")
+		fmt.Println("usage: si images <build>")
 		return
 	}
 	switch args[0] {
@@ -24,7 +24,7 @@ func cmdImages(args []string) {
 
 func cmdImage(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa image <build>")
+		fmt.Println("usage: si image <build>")
 		return
 	}
 	switch args[0] {
@@ -45,6 +45,7 @@ type imageBuildSpec struct {
 func cmdImagesBuild(args []string) {
 	root := mustRepoRoot()
 	specs := []imageBuildSpec{
+		{tag: "silexa/si-codex:local", contextDir: filepath.Join(root, "tools/si-codex-image")},
 		{tag: "silexa/telegram-bot:local", contextDir: filepath.Join(root, "agents/telegram-bot")},
 		{tag: "silexa/resource-broker:local", contextDir: filepath.Join(root, "agents/resource-broker")},
 		{tag: "silexa/infra-broker:local", contextDir: filepath.Join(root, "agents/infra-broker")},
@@ -82,7 +83,7 @@ func cmdImageBuild(args []string) {
 		*dockerfile = *dockerfileLong
 	}
 	if fs.NArg() < 1 || *tag == "" {
-		fmt.Println("usage: silexa image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>")
+		fmt.Println("usage: si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>")
 		return
 	}
 	contextDir := fs.Arg(0)

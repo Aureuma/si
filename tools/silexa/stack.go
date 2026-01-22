@@ -20,7 +20,7 @@ const stackLabelVal = "core"
 
 func cmdStack(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa stack <up|down|status>")
+		fmt.Println("usage: si stack <up|down|status>")
 		return
 	}
 	switch args[0] {
@@ -175,7 +175,7 @@ func stackServices(ctx stackContext) []stackService {
 			Image:  envOr("SILEXA_MANAGER_IMAGE", "silexa/manager:local"),
 			Env:    managerEnv,
 			Ports:  map[int]int{9090: 9090},
-			Mounts: []mount.Mount{{Name: "silexa-manager-data", Type: mount.TypeVolume, Target: "/data"}},
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-manager-data", Target: "/data"}},
 			Labels: stackLabels("manager"),
 			Aliases: []string{"silexa-manager"},
 		},
@@ -221,7 +221,7 @@ func stackServices(ctx stackContext) []stackService {
 				"DATA_DIR=/data",
 			},
 			Ports:  map[int]int{9091: 9091},
-			Mounts: []mount.Mount{{Name: "silexa-resource-broker-data", Type: mount.TypeVolume, Target: "/data"}},
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-resource-broker-data", Target: "/data"}},
 			Labels: stackLabels("resource-broker"),
 			Aliases: []string{"silexa-resource-broker"},
 		},
@@ -234,7 +234,7 @@ func stackServices(ctx stackContext) []stackService {
 				"DATA_DIR=/data",
 			},
 			Ports:  map[int]int{9092: 9092},
-			Mounts: []mount.Mount{{Name: "silexa-infra-broker-data", Type: mount.TypeVolume, Target: "/data"}},
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-infra-broker-data", Target: "/data"}},
 			Labels: stackLabels("infra-broker"),
 			Aliases: []string{"silexa-infra-broker"},
 		},
@@ -272,7 +272,7 @@ func stackServices(ctx stackContext) []stackService {
 			Image:  envOr("SILEXA_MCP_DIND_IMAGE", "docker:26-dind"),
 			Env:    []string{"DOCKER_TLS_CERTDIR="},
 			Cmd:    []string{"--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock"},
-			Mounts: []mount.Mount{{Name: "silexa-mcp-dind", Type: mount.TypeVolume, Target: "/var/lib/docker"}},
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-mcp-dind", Target: "/var/lib/docker"}},
 			Privileged: true,
 			Labels: stackLabels("mcp-dind"),
 			Aliases: []string{"silexa-mcp-dind"},
@@ -288,7 +288,7 @@ func stackServices(ctx stackContext) []stackService {
 				"STRIPE_API_KEY_FILE=/run/secrets/stripe_api_key",
 			},
 			Ports:  map[int]int{8088: 8088},
-			Mounts: []mount.Mount{{Name: "silexa-mcp-catalog", Type: mount.TypeVolume, Target: "/catalog"}, secretsMount("/run/secrets")},
+			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-mcp-catalog", Target: "/catalog"}, secretsMount("/run/secrets")},
 			Labels: stackLabels("mcp-gateway"),
 			Aliases: []string{"silexa-mcp-gateway"},
 		},

@@ -13,6 +13,10 @@ func main() {
 	cmd := os.Args[1]
 	args := os.Args[2:]
 	switch cmd {
+	case "codex":
+		cmdCodex(args)
+	case "docker":
+		cmdDocker(args)
 	case "stack":
 		cmdStack(args)
 	case "dyad":

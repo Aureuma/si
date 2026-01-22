@@ -12,7 +12,7 @@ import (
 
 func cmdApp(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa app <init|adopt|list|build|deploy|remove|status|secrets>")
+		fmt.Println("usage: si app <init|adopt|list|build|deploy|remove|status|secrets>")
 		return
 	}
 	switch args[0] {
@@ -56,7 +56,7 @@ func cmdAppInit(args []string) {
 	orm := fs.String("orm", "drizzle", "orm")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: silexa app init <app-name> [options]")
+		fmt.Println("usage: si app init <app-name> [options]")
 		return
 	}
 	app := fs.Arg(0)
@@ -224,7 +224,7 @@ func cmdAppAdopt(args []string) {
 		clean = append(clean, arg)
 	}
 	if len(clean) < 1 {
-		fmt.Println("usage: silexa app adopt <app-name> [options]")
+		fmt.Println("usage: si app adopt <app-name> [options]")
 		return
 	}
 	if !withDB {
@@ -300,7 +300,7 @@ type appMeta struct {
 
 func cmdAppBuild(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa app build <app-name>")
+		fmt.Println("usage: si app build <app-name>")
 		return
 	}
 	app := args[0]
@@ -364,7 +364,7 @@ func cmdAppDeploy(args []string) {
 	fileFlag := fs.String("file", "", "compose file")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: silexa app deploy <app-name> [--no-build] [--file path]")
+		fmt.Println("usage: si app deploy <app-name> [--no-build] [--file path]")
 		return
 	}
 	app := fs.Arg(0)
@@ -384,7 +384,7 @@ func cmdAppDeploy(args []string) {
 
 func cmdAppRemove(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa app remove <app-name> [--file path]")
+		fmt.Println("usage: si app remove <app-name> [--file path]")
 		return
 	}
 	app := args[0]
@@ -401,7 +401,7 @@ func cmdAppRemove(args []string) {
 
 func cmdAppStatus(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa app status <app-name> [--file path]")
+		fmt.Println("usage: si app status <app-name> [--file path]")
 		return
 	}
 	app := args[0]
@@ -418,7 +418,7 @@ func cmdAppStatus(args []string) {
 
 func cmdAppSecrets(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa app secrets <app-name>")
+		fmt.Println("usage: si app secrets <app-name>")
 		return
 	}
 	app := args[0]
