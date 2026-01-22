@@ -233,7 +233,7 @@ func (c *Client) Exec(ctx context.Context, containerID string, cmd []string, opt
 func (c *Client) ExecWithTTY(ctx context.Context, containerID string, cmd []string, stdin io.Reader, stdout io.Writer, rows, cols uint) error {
 	execResp, err := c.api.ContainerExecCreate(ctx, containerID, types.ExecConfig{
 		AttachStdout: true,
-		AttachStderr: false,
+		AttachStderr: true,
 		AttachStdin:  stdin != nil,
 		Cmd:          cmd,
 		Tty:          true,
