@@ -445,8 +445,12 @@ func debugf(opts statusOptions, format string, args ...interface{}) {
 }
 
 func acquireStatusLock(name string, opts statusOptions) (func(), error) {
-	lockPath := filepath.Join(os.TempDir(), fmt.Sprintf("si-codex-status-%s.lock", name))
-	deadline := time.Now().Add(opts.LockTimeout)
+	return acquireCodexLock("status", name, opts.LockTimeout, opts.LockStaleAfter)
+}
+
+func acquireCodexLock(kind, name string, timeout, staleAfter time.Duration) (func(), error) {
+	lockPath := filepath.Join(os.TempDir(), fmt.Sprintf("si-codex-%s-%s.lock", kind, name))
+	deadline := time.Now().Add(timeout)
 	for {
 		f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 		if err == nil {
@@ -458,12 +462,12 @@ func acquireStatusLock(name string, opts statusOptions) (func(), error) {
 			return nil, err
 		}
 		info, statErr := os.Stat(lockPath)
-		if statErr == nil && time.Since(info.ModTime()) > opts.LockStaleAfter {
+		if statErr == nil && time.Since(info.ModTime()) > staleAfter {
 			_ = os.Remove(lockPath)
 			continue
 		}
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("another status capture is running (lock: %s)", lockPath)
+			return nil, fmt.Errorf("another %s capture is running (lock: %s)", kind, lockPath)
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
