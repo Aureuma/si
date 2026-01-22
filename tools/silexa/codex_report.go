@@ -28,6 +28,7 @@ type reportOptions struct {
 	LockTimeout     time.Duration
 	LockStaleAfter  time.Duration
 	TmuxPrefix      string
+	Ansi            bool
 }
 
 type codexTurnReport struct {
@@ -39,6 +40,7 @@ type codexTurnReport struct {
 type promptSegment struct {
 	Prompt string
 	Lines  []string
+	Raw    []string
 }
 
 const tmuxReportPrefix = "si-codex-report-"
@@ -47,6 +49,7 @@ func cmdCodexReport(args []string) {
 	fs := flag.NewFlagSet("codex report", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output JSON")
 	rawOut := fs.Bool("raw", false, "include raw segment output")
+	ansiOut := fs.Bool("ansi", false, "preserve ANSI colors in report output")
 	turnTimeout := fs.Duration("turn-timeout", 60*time.Second, "timeout per prompt")
 	readyTimeout := fs.Duration("ready-timeout", 30*time.Second, "timeout waiting for prompt")
 	pollInterval := fs.Duration("poll-interval", 300*time.Millisecond, "poll interval for capture")
@@ -100,6 +103,7 @@ func cmdCodexReport(args []string) {
 		LockTimeout:     *lockTimeout,
 		LockStaleAfter:  *lockStale,
 		TmuxPrefix:      tmuxReportPrefix,
+		Ansi:            *ansiOut,
 	}
 	if opts.PromptLines <= 0 {
 		opts.PromptLines = 3
@@ -245,7 +249,8 @@ func fetchCodexReportsViaTmux(ctx context.Context, containerID string, prompts [
 	if err != nil {
 		return "", nil, err
 	}
-	segments := parsePromptSegments(stripANSI(output))
+	cleanOutput := stripANSI(output)
+	segments := parsePromptSegmentsDual(cleanOutput, output)
 	promptIndex := len(segments) - 1
 	if promptIndex < 0 {
 		promptIndex = 0
@@ -263,14 +268,16 @@ func fetchCodexReportsViaTmux(ctx context.Context, containerID string, prompts [
 		}
 		segmentRaw := ""
 		if report != "" {
-			segments = parsePromptSegments(stripANSI(tmpOutput))
+			cleanOutput = stripANSI(tmpOutput)
+			segments = parsePromptSegmentsDual(cleanOutput, tmpOutput)
 			if promptIndex < len(segments) {
-				segmentRaw = strings.Join(segments[promptIndex].Lines, "\n")
+				segmentRaw = strings.Join(segments[promptIndex].Raw, "\n")
 			}
 		}
 		reports = append(reports, codexTurnReport{Prompt: prompt, Report: report, Raw: strings.TrimSpace(segmentRaw)})
 		output = tmpOutput
-		segments = parsePromptSegments(stripANSI(output))
+		cleanOutput = stripANSI(output)
+		segments = parsePromptSegmentsDual(cleanOutput, output)
 		promptIndex = len(segments) - 1
 		if promptIndex < 0 {
 			promptIndex = 0
@@ -320,7 +327,7 @@ func waitForTurnReport(ctx context.Context, target string, opts reportOptions, p
 			time.Sleep(opts.PollInterval)
 			continue
 		}
-		report := extractReportLines(segments[promptIndex].Lines)
+		report := extractReportLinesFromLines(segments[promptIndex].Raw, segments[promptIndex].Lines, opts.Ansi)
 		if len(segments) > promptIndex+1 && report != "" {
 			return output, report, nil
 		}
@@ -340,10 +347,24 @@ func waitForTurnReport(ctx context.Context, target string, opts reportOptions, p
 }
 
 func parsePromptSegments(raw string) []promptSegment {
-	lines := strings.Split(raw, "\n")
+	return parsePromptSegmentsDual(raw, raw)
+}
+
+func parsePromptSegmentsDual(clean, raw string) []promptSegment {
+	cleanLines := strings.Split(clean, "\n")
+	rawLines := strings.Split(raw, "\n")
+	if len(rawLines) < len(cleanLines) {
+		pad := make([]string, len(cleanLines)-len(rawLines))
+		rawLines = append(rawLines, pad...)
+	}
+	if len(cleanLines) < len(rawLines) {
+		pad := make([]string, len(rawLines)-len(cleanLines))
+		cleanLines = append(cleanLines, pad...)
+	}
 	segments := make([]promptSegment, 0, 8)
 	var current *promptSegment
-	for _, line := range lines {
+	for i, line := range cleanLines {
+		rawLine := rawLines[i]
 		trimmed := strings.TrimLeft(line, " ")
 		if strings.HasPrefix(trimmed, "›") {
 			if current != nil {
@@ -355,6 +376,7 @@ func parsePromptSegments(raw string) []promptSegment {
 		}
 		if current != nil {
 			current.Lines = append(current.Lines, line)
+			current.Raw = append(current.Raw, rawLine)
 		}
 	}
 	if current != nil {
@@ -364,64 +386,95 @@ func parsePromptSegments(raw string) []promptSegment {
 }
 
 func extractReportLines(lines []string) string {
-	var blocks [][]string
-	var current []string
+	return extractReportLinesFromLines(lines, lines, false)
+}
+
+func extractReportLinesFromLines(rawLines, cleanLines []string, ansi bool) string {
+	max := len(cleanLines)
+	if len(rawLines) < max {
+		max = len(rawLines)
+	}
+	type block struct {
+		raw   []string
+		clean []string
+	}
+	var blocks []block
+	var current block
 	inReport := false
-	for _, line := range lines {
-		trimmed := strings.TrimRight(line, " \t")
-		lineCore := strings.TrimLeft(trimmed, " ")
-		if strings.HasPrefix(lineCore, "• ") {
+	workedLineRaw := ""
+	workedLineClean := ""
+	for i := 0; i < max; i++ {
+		raw := strings.TrimRight(rawLines[i], " \t")
+		clean := strings.TrimRight(cleanLines[i], " \t")
+		cleanCore := strings.TrimLeft(clean, " ")
+		if strings.Contains(strings.ToLower(cleanCore), "worked for") {
+			workedLineRaw = raw
+			workedLineClean = clean
+		}
+		if strings.HasPrefix(cleanCore, "• ") {
 			inReport = true
-			current = append(current, trimmed)
+			current.raw = append(current.raw, raw)
+			current.clean = append(current.clean, clean)
 			continue
 		}
 		if !inReport {
 			continue
 		}
-		if strings.TrimSpace(trimmed) == "" {
-			if len(current) > 0 {
+		if strings.TrimSpace(clean) == "" {
+			if len(current.raw) > 0 {
 				blocks = append(blocks, current)
-				current = nil
+				current = block{}
 			}
 			inReport = false
 			continue
 		}
-		if strings.HasPrefix(trimmed, "  ") {
-			current = append(current, trimmed)
+		if strings.HasPrefix(clean, "  ") {
+			current.raw = append(current.raw, raw)
+			current.clean = append(current.clean, clean)
 			continue
 		}
-		core := strings.TrimSpace(trimmed)
+		core := strings.TrimSpace(clean)
 		if strings.HasPrefix(core, "⚠") || strings.HasPrefix(core, "Tip:") || strings.HasPrefix(core, "›") {
-			if len(current) > 0 {
+			if len(current.raw) > 0 {
 				blocks = append(blocks, current)
 			}
-			current = nil
+			current = block{}
 			break
 		}
 		if strings.HasPrefix(core, "• Starting MCP") || strings.HasPrefix(core, "• Starting") {
-			if len(current) > 0 {
+			if len(current.raw) > 0 {
 				blocks = append(blocks, current)
 			}
-			current = nil
+			current = block{}
 			break
 		}
-		current = append(current, trimmed)
+		current.raw = append(current.raw, raw)
+		current.clean = append(current.clean, clean)
 	}
-	if len(current) > 0 {
+	if len(current.raw) > 0 {
 		blocks = append(blocks, current)
 	}
 	for i := len(blocks) - 1; i >= 0; i-- {
 		block := blocks[i]
-		if len(block) == 0 {
+		if len(block.raw) == 0 {
 			continue
 		}
-		if isTransientReport(block) {
+		if isTransientReport(block.clean) {
 			continue
 		}
-		for len(block) > 0 && strings.TrimSpace(block[len(block)-1]) == "" {
-			block = block[:len(block)-1]
+		out := block.clean
+		workedLine := workedLineClean
+		if ansi {
+			out = block.raw
+			workedLine = workedLineRaw
 		}
-		return strings.Join(block, "\n")
+		for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+			out = out[:len(out)-1]
+		}
+		if workedLine != "" && !containsLine(out, workedLine) {
+			out = append(out, workedLine)
+		}
+		return strings.Join(out, "\n")
 	}
 	return ""
 }
@@ -436,6 +489,15 @@ func isTransientReport(lines []string) bool {
 	}
 	if strings.HasPrefix(head, "• Starting MCP") {
 		return true
+	}
+	return false
+}
+
+func containsLine(lines []string, needle string) bool {
+	for _, line := range lines {
+		if line == needle {
+			return true
+		}
 	}
 	return false
 }
