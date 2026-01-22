@@ -15,8 +15,9 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 Build the CLI and images, then start the stack:
 
 ```bash
-go run ./tools/silexa images build
-go run ./tools/silexa stack up
+go build -o si ./tools/silexa
+./si images build
+./si stack up
 ```
 
 Check health and beats:
@@ -30,39 +31,54 @@ curl -fsSL http://localhost:9090/beats
 - Spawn a dyad (actor+critic):
 
 ```bash
-go run ./tools/silexa dyad spawn <name> [role] [department]
+./si dyad spawn <name> [role] [department]
 ```
 
 - Teardown a dyad:
 
 ```bash
-go run ./tools/silexa dyad remove <name>
+./si dyad remove <name>
 ```
 
 - Run commands in an actor:
 
 ```bash
-go run ./tools/silexa dyad exec <dyad> --member actor -- bash
+./si dyad exec <dyad> --member actor -- bash
 ```
 
 - List running dyads:
 
 ```bash
-go run ./tools/silexa dyad list
+./si dyad list
 ```
 
 All dyads share the repo workspace; critics auto-heartbeat to the manager so the management layer can watch liveness and logs.
 
+## Codex containers (on-demand)
+Spawn standalone Codex containers with isolated auth:
+
+```bash
+./si images build
+./si codex spawn <name> --repo Org/Repo --gh-pat <token>
+```
+
+Clone later into an existing container:
+```bash
+./si codex clone <name> Org/Repo --gh-pat <token>
+```
+
+Each container uses its own persistent `~/.codex` volume so multiple Codex accounts can coexist on the same host.
+
 ## Human-in-the-loop notifications (Telegram)
 - Secrets: put the bot token into `secrets/telegram_bot_token` (file content is the raw token string). Do **not** commit secrets. Optionally set `TELEGRAM_CHAT_ID` in `.env` (see `.env.example`), or supply `chat_id` per message.
-- Start/refresh services: `go run ./tools/silexa stack up` (manager is pre-wired with `TELEGRAM_NOTIFY_URL=http://silexa-telegram-bot:8081/notify`).
+- Start/refresh services: `./si stack up` (manager is pre-wired with `TELEGRAM_NOTIFY_URL=http://silexa-telegram-bot:8081/notify`).
 - Command menu: `/status`, `/tasks`, `/task Title | command | notes`, `/help`. Any plain text message is logged as feedback; prefer `/task` for actionable asks.
 - Send a notification from host:  
-  `TELEGRAM_CHAT_ID=<id> go run ./tools/silexa notify "Codex login needed: open http://127.0.0.1:<port>/..."`  
+  `TELEGRAM_CHAT_ID=<id> ./si notify "Codex login needed: open http://127.0.0.1:<port>/..."`  
 - Create a structured human task (stored in manager and optionally forwarded to Telegram):  
-  `TELEGRAM_CHAT_ID=<id> go run ./tools/silexa human add "Codex login for dyad web" "open http://127.0.0.1:<port>/" "http://127.0.0.1:<port>/" "15m" "web" "keep port open until callback"`  
+  `TELEGRAM_CHAT_ID=<id> ./si human add "Codex login for dyad web" "open http://127.0.0.1:<port>/" "http://127.0.0.1:<port>/" "15m" "web" "keep port open until callback"`  
   Then check `curl -fsSL http://localhost:9090/human-tasks`.
-- Mark a task complete: `go run ./tools/silexa human complete <id>`.
+- Mark a task complete: `./si human complete <id>`.
 
 ## Codex CLI login flow (pattern)
 1) Actor runs `npm i -g @openai/codex` then `codex login` (gets a local callback URL + port).
@@ -76,5 +92,5 @@ All dyads share the repo workspace; critics auto-heartbeat to the manager so the
 
 ## Next steps
 - Install Codex CLI (or another LLM-driven CLI) inside actor containers per task.
-- Add more dyads via `silexa dyad spawn`.
+- Add more dyads via `si dyad spawn`.
 - Wire higher-level task queues to feed work into actors and surface signals from manager to department heads.

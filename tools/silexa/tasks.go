@@ -13,7 +13,7 @@ import (
 
 func cmdTask(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa task <add|add-dyad|update>")
+		fmt.Println("usage: si task <add|add-dyad|update>")
 		return
 	}
 	switch args[0] {
@@ -30,7 +30,7 @@ func cmdTask(args []string) {
 
 func cmdTaskAdd(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa task add <title> [kind] [priority] [description] [link] [notes] [complexity]")
+		fmt.Println("usage: si task add <title> [kind] [priority] [description] [link] [notes] [complexity]")
 		return
 	}
 	title := args[0]
@@ -61,7 +61,7 @@ func cmdTaskAdd(args []string) {
 
 func cmdTaskAddDyad(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: silexa task add-dyad <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]")
+		fmt.Println("usage: si task add-dyad <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]")
 		return
 	}
 	title := args[0]
@@ -98,7 +98,7 @@ func cmdTaskAddDyad(args []string) {
 
 func cmdTaskUpdate(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: silexa task update <id> <status> [notes] [actor] [critic] [complexity]")
+		fmt.Println("usage: si task update <id> <status> [notes] [actor] [critic] [complexity]")
 		return
 	}
 	id, err := strconv.Atoi(args[0])
@@ -156,7 +156,7 @@ func postDyadTaskUpdate(managerURL string, payload dyadTaskPayload) error {
 
 func cmdHuman(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa human <add|complete>")
+		fmt.Println("usage: si human <add|complete>")
 		return
 	}
 	switch args[0] {
@@ -171,7 +171,7 @@ func cmdHuman(args []string) {
 
 func cmdHumanAdd(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: silexa human add <title> <commands> [url] [timeout] [requested_by] [notes]")
+		fmt.Println("usage: si human add <title> <commands> [url] [timeout] [requested_by] [notes]")
 		return
 	}
 	title := args[0]
@@ -208,7 +208,7 @@ func cmdHumanAdd(args []string) {
 
 func cmdHumanComplete(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa human complete <id>")
+		fmt.Println("usage: si human complete <id>")
 		return
 	}
 	id := args[0]
@@ -224,7 +224,7 @@ func cmdHumanComplete(args []string) {
 
 func cmdFeedback(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa feedback <add|broadcast>")
+		fmt.Println("usage: si feedback <add|broadcast>")
 		return
 	}
 	switch args[0] {
@@ -239,7 +239,7 @@ func cmdFeedback(args []string) {
 
 func cmdFeedbackAdd(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: silexa feedback add <severity> <message> [source] [context]")
+		fmt.Println("usage: si feedback add <severity> <message> [source] [context]")
 		return
 	}
 	sev := args[0]
@@ -263,7 +263,7 @@ func cmdFeedbackAdd(args []string) {
 
 func cmdFeedbackBroadcast(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa feedback broadcast <message> [severity]")
+		fmt.Println("usage: si feedback broadcast <message> [severity]")
 		return
 	}
 	message := args[0]
@@ -292,7 +292,7 @@ func cmdFeedbackBroadcast(args []string) {
 
 func cmdAccess(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa access <request|resolve>")
+		fmt.Println("usage: si access <request|resolve>")
 		return
 	}
 	switch args[0] {
@@ -307,7 +307,7 @@ func cmdAccess(args []string) {
 
 func cmdAccessRequest(args []string) {
 	if len(args) < 3 {
-		fmt.Println("usage: silexa access request <requester> <resource> <action> [reason] [department]")
+		fmt.Println("usage: si access request <requester> <resource> <action> [reason] [department]")
 		return
 	}
 	managerURL := envOr("MANAGER_URL", "http://localhost:9090")
@@ -328,7 +328,7 @@ func cmdAccessRequest(args []string) {
 
 func cmdAccessResolve(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: silexa access resolve <id> <approved|denied> [resolved_by] [notes]")
+		fmt.Println("usage: si access resolve <id> <approved|denied> [resolved_by] [notes]")
 		return
 	}
 	managerURL := envOr("MANAGER_URL", "http://localhost:9090")
@@ -353,7 +353,7 @@ func cmdAccessResolve(args []string) {
 
 func cmdResource(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa resource <request>")
+		fmt.Println("usage: si resource <request>")
 		return
 	}
 	switch args[0] {
@@ -366,7 +366,7 @@ func cmdResource(args []string) {
 
 func cmdResourceRequest(args []string) {
 	if len(args) < 3 {
-		fmt.Println("usage: silexa resource request <resource> <action> <payload> [requested_by] [notes]")
+		fmt.Println("usage: si resource request <resource> <action> <payload> [requested_by] [notes]")
 		return
 	}
 	brokerURL := envOr("BROKER_URL", "http://localhost:9091")
@@ -387,7 +387,7 @@ func cmdResourceRequest(args []string) {
 
 func cmdMetric(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: silexa metric <post>")
+		fmt.Println("usage: si metric <post>")
 		return
 	}
 	switch args[0] {
@@ -400,7 +400,7 @@ func cmdMetric(args []string) {
 
 func cmdMetricPost(args []string) {
 	if len(args) < 4 {
-		fmt.Println("usage: silexa metric post <dyad> <department> <name> <value> [unit] [recorded_by]")
+		fmt.Println("usage: si metric post <dyad> <department> <name> <value> [unit] [recorded_by]")
 		return
 	}
 	value, err := strconv.ParseFloat(args[3], 64)
@@ -426,7 +426,7 @@ func cmdMetricPost(args []string) {
 
 func cmdNotify(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa notify <message>")
+		fmt.Println("usage: si notify <message>")
 		return
 	}
 	msg := strings.Join(args, " ")
@@ -460,7 +460,7 @@ func argOr(args []string, idx int, def string) string {
 
 func cmdProfile(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa profile <name>")
+		fmt.Println("usage: si profile <name>")
 		return
 	}
 	root := mustRepoRoot()
@@ -477,7 +477,7 @@ func cmdProfile(args []string) {
 
 func cmdCapability(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: silexa capability <role>")
+		fmt.Println("usage: si capability <role>")
 		return
 	}
 	role := args[0]

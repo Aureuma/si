@@ -9,30 +9,32 @@ import (
 )
 
 func usage() {
-	fmt.Println(`silexa <command> [args]
+	fmt.Print(`si <command> [args]
 
 Core:
-  silexa stack up|down|status
-  silexa dyad spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup
-  silexa task add|add-dyad|update
-  silexa human add|complete
-  silexa feedback add|broadcast
-  silexa access request|resolve
-  silexa resource request
-  silexa metric post
-  silexa notify <message>
-  silexa report status|escalate|review|dyad
-  silexa roster apply|status
-  silexa mcp scout|sync|apply-config
+  si stack up|down|status
+  si dyad spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup
+  si codex spawn|list|ps|exec|logs|tail|clone|remove|stop|start
+  si task add|add-dyad|update
+  si human add|complete
+  si feedback add|broadcast
+  si access request|resolve
+  si resource request
+  si metric post
+  si notify <message>
+  si report status|escalate|review|dyad
+  si roster apply|status
+  si mcp scout|sync|apply-config
+  si docker <args...>
 
 Build/app:
-  silexa images build
-  silexa image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
-  silexa app init|adopt|list|build|deploy|remove|status|secrets
+  si images build
+  si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
+  si app init|adopt|list|build|deploy|remove|status|secrets
 
 Profiles:
-  silexa profile <profile-name>
-  silexa capability <role>
+  si profile <profile-name>
+  si capability <role>
 `)
 }
 
