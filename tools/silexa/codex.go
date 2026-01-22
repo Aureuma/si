@@ -27,7 +27,7 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si codex <spawn|list|status|login|exec|logs|tail|clone|remove|stop|start>")
+		fmt.Println("usage: si codex <spawn|list|status|report|login|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
@@ -37,6 +37,8 @@ func cmdCodex(args []string) {
 		cmdCodexList(args[1:])
 	case "status":
 		cmdCodexStatus(args[1:])
+	case "report":
+		cmdCodexReport(args[1:])
 	case "login":
 		cmdCodexLogin(args[1:])
 	case "exec":
