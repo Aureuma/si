@@ -27,7 +27,7 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si codex <spawn|list|status|exec|logs|tail|clone|remove|stop|start>")
+		fmt.Println("usage: si codex <spawn|list|status|login|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
@@ -37,6 +37,8 @@ func cmdCodex(args []string) {
 		cmdCodexList(args[1:])
 	case "status":
 		cmdCodexStatus(args[1:])
+	case "login":
+		cmdCodexLogin(args[1:])
 	case "exec":
 		cmdCodexExec(args[1:])
 	case "logs":
@@ -276,6 +278,53 @@ func cmdCodexExec(args []string) {
 	}
 }
 
+func cmdCodexLogin(args []string) {
+	fs := flag.NewFlagSet("codex login", flag.ExitOnError)
+	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
+	_ = fs.Parse(args)
+	if fs.NArg() < 1 {
+		fmt.Println("usage: si codex login <name>")
+		return
+	}
+	name := fs.Arg(0)
+	containerName := codexContainerName(name)
+
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+	id, _, err := client.ContainerByName(ctx, containerName)
+	if err != nil {
+		fatal(err)
+	}
+	if id == "" {
+		fatal(fmt.Errorf("codex container %s not found", containerName))
+	}
+
+	execArgs := []string{"exec"}
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		execArgs = append(execArgs, "-it")
+	} else {
+		execArgs = append(execArgs, "-i")
+	}
+	execArgs = append(execArgs,
+		"-e", "HOME=/home/si",
+		"-e", "CODEX_HOME=/home/si/.codex",
+		"-e", "TERM=xterm-256color",
+		"-e", "COLORTERM=truecolor",
+		"-e", "CLICOLOR_FORCE=1",
+		"-e", "FORCE_COLOR=1",
+	)
+	execArgs = append(execArgs, containerName, "codex", "login")
+	if *deviceAuth {
+		execArgs = append(execArgs, "--device-auth")
+	}
+	if err := execDockerCLI(execArgs...); err != nil {
+		fatal(err)
+	}
+}
 
 func cmdCodexLogs(args []string) {
 	if len(args) < 1 {
