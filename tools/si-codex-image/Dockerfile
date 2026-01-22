@@ -6,7 +6,7 @@ RUN apt-get update -y \
 
 RUN npm i -g @openai/codex
 
-RUN useradd -m -u 1000 si
+RUN id -u si >/dev/null 2>&1 || useradd -m -s /bin/bash si
 ENV HOME=/home/si
 ENV CODEX_HOME=/home/si/.codex
 WORKDIR /workspace
