@@ -14,8 +14,9 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/silexa-codex-init 
 FROM node:22-bookworm
 WORKDIR /workspace/apps
 RUN apt-get update -y && apt-get install -y --no-install-recommends socat tini && rm -rf /var/lib/apt/lists/*
+RUN npm i -g @openai/codex >/dev/null 2>&1 || true
 COPY --from=parser-build /out/codex-stdout-parser /usr/local/bin/codex-stdout-parser
 COPY --from=codex-init-build /out/silexa-codex-init /usr/local/bin/silexa-codex-init
-# Placeholder for interactive LLM tooling; install inside container as needed (e.g., npm i -g @openai/codex-cli once available).
+# Codex CLI is installed for dyad-driven execution.
 ENTRYPOINT ["tini", "-s", "--"]
 CMD ["tail", "-f", "/dev/null"]
