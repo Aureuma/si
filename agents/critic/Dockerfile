@@ -1,12 +1,15 @@
 # Builder
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.24-bookworm AS builder
 WORKDIR /src
-COPY go.mod go.sum ./
-COPY cmd ./cmd
-COPY internal ./internal
+COPY agents/critic/go.mod agents/critic/go.sum ./
+COPY agents/shared /shared
+COPY agents/critic/cmd ./cmd
+COPY agents/critic/internal ./internal
+RUN go mod download
+RUN go mod tidy
 RUN CGO_ENABLED=0 go build -o /out/critic ./cmd/critic
 
-FROM golang:1.22-bookworm AS codex-init-build
+FROM golang:1.24-bookworm AS codex-init-build
 WORKDIR /src/tools/codex-init
 COPY tools/codex-init/go.mod ./go.mod
 COPY tools/codex-init/*.go ./
