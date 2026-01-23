@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path"
 	"strings"
 	"time"
@@ -30,7 +31,31 @@ func NewClient() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Client{api: cli}, nil
+	if err := pingClient(cli); err == nil {
+		return &Client{api: cli}, nil
+	} else if os.Getenv("DOCKER_HOST") != "" {
+		_ = cli.Close()
+		return nil, err
+	}
+	_ = cli.Close()
+	if host, ok := AutoDockerHost(); ok {
+		alt, altErr := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
+		if altErr != nil {
+			return nil, err
+		}
+		if pingErr := pingClient(alt); pingErr == nil {
+			return &Client{api: alt}, nil
+		}
+		_ = alt.Close()
+	}
+	return nil, err
+}
+
+func pingClient(cli *client.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := cli.Ping(ctx)
+	return err
 }
 
 func (c *Client) Close() error {
