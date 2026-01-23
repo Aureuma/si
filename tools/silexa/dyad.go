@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -16,7 +17,7 @@ import (
 
 func cmdDyad(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup>")
+		fmt.Println("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test>")
 		return
 	}
 	switch args[0] {
@@ -40,6 +41,12 @@ func cmdDyad(args []string) {
 		cmdDyadRegister(args[1:])
 	case "cleanup":
 		cmdDyadCleanup(args[1:])
+	case "copy-login", "codex-login-copy":
+		cmdDyadCopyLogin(args[1:])
+	case "clear-blocked":
+		cmdDyadClearBlocked(args[1:])
+	case "codex-loop-test", "codex-loop":
+		cmdDyadCodexLoopTest(args[1:])
 	default:
 		fmt.Println("unknown dyad command:", args[0])
 	}
@@ -466,6 +473,129 @@ func cmdDyadCleanup(args []string) {
 	_ = args
 }
 
+func cmdDyadCopyLogin(args []string) {
+	fs := flag.NewFlagSet("dyad copy-login", flag.ExitOnError)
+	source := fs.String("source", envOr("SI_CODEX_SOURCE", "codex-status"), "si-codex container name or suffix")
+	member := fs.String("member", "actor", "target member (actor or critic)")
+	sourceHome := fs.String("source-home", "/home/si", "home dir in source container")
+	targetHome := fs.String("target-home", "/root", "home dir in target container")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		fmt.Println("usage: si dyad copy-login <dyad> [--member actor|critic] [--source codex-status]")
+		return
+	}
+	dyad := fs.Arg(0)
+	if err := validateSlug(dyad); err != nil {
+		fatal(err)
+	}
+	memberVal := strings.ToLower(strings.TrimSpace(*member))
+	if memberVal == "" {
+		memberVal = "actor"
+	}
+	if memberVal != "actor" && memberVal != "critic" {
+		fatal(fmt.Errorf("invalid member %q (expected actor or critic)", memberVal))
+	}
+	sourceName := codexContainerName(strings.TrimSpace(*source))
+	if sourceName == "" {
+		fatal(errors.New("source container required"))
+	}
+	targetName := shared.DyadContainerName(dyad, memberVal)
+	if targetName == "" {
+		fatal(errors.New("target container required"))
+	}
+
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+	if id, _, err := client.ContainerByName(ctx, sourceName); err != nil || id == "" {
+		if err != nil {
+			fatal(err)
+		}
+		fatal(fmt.Errorf("source container not found: %s", sourceName))
+	}
+	if id, _, err := client.ContainerByName(ctx, targetName); err != nil || id == "" {
+		if err != nil {
+			fatal(err)
+		}
+		fatal(fmt.Errorf("target container not found: %s", targetName))
+	}
+
+	pipeline := fmt.Sprintf(
+		"docker exec %s tar -C %s -cf - .codex | docker exec -i %s tar -C %s -xf -",
+		shellQuote(sourceName),
+		shellQuote(*sourceHome),
+		shellQuote(targetName),
+		shellQuote(*targetHome),
+	)
+	cmd := exec.Command("bash", "-lc", pipeline)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		fatal(err)
+	}
+	fmt.Printf("copied codex login from %s to %s (%s)\n", sourceName, targetName, memberVal)
+}
+
+func cmdDyadClearBlocked(args []string) {
+	fs := flag.NewFlagSet("dyad clear-blocked", flag.ExitOnError)
+	managerURL := fs.String("manager-url", envOr("MANAGER_URL", "http://localhost:9090"), "manager URL")
+	status := fs.String("status", "done", "new status for blocked tasks")
+	dryRun := fs.Bool("dry-run", false, "print tasks without updating")
+	fs.Parse(args)
+
+	if fs.NArg() < 1 {
+		fmt.Println("usage: si dyad clear-blocked <dyad> [--status done] [--dry-run]")
+		return
+	}
+	dyad := fs.Arg(0)
+	if err := validateSlug(dyad); err != nil {
+		fatal(err)
+	}
+
+	ctx := context.Background()
+	tasks := []dyadTaskSnapshot{}
+	if err := getJSON(ctx, strings.TrimRight(*managerURL, "/")+"/dyad-tasks", &tasks); err != nil {
+		fatal(err)
+	}
+
+	updated := 0
+	for _, task := range tasks {
+		if task.Dyad != dyad {
+			continue
+		}
+		if strings.ToLower(strings.TrimSpace(task.Status)) != "blocked" {
+			continue
+		}
+		updated++
+		if *dryRun {
+			fmt.Printf("blocked task #%d (%s)\n", task.ID, task.Kind)
+			continue
+		}
+		notes := setTaskNotes(task.Notes, map[string]string{
+			"task.cleared":    time.Now().UTC().Format(time.RFC3339),
+			"task.cleared_by": envOr("REQUESTED_BY", "si"),
+		})
+		payload := map[string]interface{}{
+			"id":     task.ID,
+			"status": strings.TrimSpace(*status),
+			"notes":  notes,
+		}
+		if err := postJSON(ctx, strings.TrimRight(*managerURL, "/")+"/dyad-tasks/update", payload, nil); err != nil {
+			fatal(err)
+		}
+	}
+	if *dryRun {
+		fmt.Printf("blocked tasks found: %d\n", updated)
+		return
+	}
+	fmt.Printf("updated %d blocked tasks\n", updated)
+}
+
 func registerDyad(managerURL, name, role, dept string) error {
 	if err := validateSlug(name); err != nil {
 		return err
@@ -495,6 +625,37 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func setTaskNotes(notes string, kv map[string]string) string {
+	lines := []string{}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(notes, "\n") {
+		trim := strings.TrimSpace(line)
+		if strings.HasPrefix(trim, "[") && strings.Contains(trim, "]=") {
+			end := strings.Index(trim, "]=")
+			key := strings.TrimSpace(trim[1:end])
+			if v, ok := kv[key]; ok {
+				lines = append(lines, fmt.Sprintf("[%s]=%s", key, v))
+				seen[key] = true
+				continue
+			}
+		}
+		if trim != "" {
+			lines = append(lines, line)
+		}
+	}
+	for k, v := range kv {
+		if seen[k] {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("[%s]=%s", k, v))
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }
 
 func spawnDyadFromEnv(name, role, dept string) error {

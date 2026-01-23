@@ -13,7 +13,7 @@ func usage() {
 
 Core:
   si stack up|down|status
-  si dyad spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup
+  si dyad spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test
   si codex spawn|list|status|report|login|ps|exec|logs|tail|clone|remove|stop|start
   si task add|add-dyad|update
   si human add|complete
