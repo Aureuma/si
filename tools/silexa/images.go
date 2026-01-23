@@ -11,27 +11,27 @@ import (
 
 func cmdImages(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si images <build>")
+		printUsage("usage: si images <build>")
 		return
 	}
 	switch args[0] {
 	case "build":
 		cmdImagesBuild(args[1:])
 	default:
-		fmt.Println("unknown images command:", args[0])
+		printUnknown("images", args[0])
 	}
 }
 
 func cmdImage(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si image <build>")
+		printUsage("usage: si image <build>")
 		return
 	}
 	switch args[0] {
 	case "build":
 		cmdImageBuild(args[1:])
 	default:
-		fmt.Println("unknown image command:", args[0])
+		printUnknown("image", args[0])
 	}
 }
 
@@ -83,7 +83,7 @@ func cmdImageBuild(args []string) {
 		*dockerfile = *dockerfileLong
 	}
 	if fs.NArg() < 1 || *tag == "" {
-		fmt.Println("usage: si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>")
+		printUsage("usage: si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>")
 		return
 	}
 	contextDir := fs.Arg(0)
@@ -121,7 +121,7 @@ func runDockerBuild(spec imageBuildSpec) error {
 		args = append(args, "--build-arg", arg)
 	}
 	args = append(args, spec.contextDir)
-	fmt.Printf("docker %s\n", strings.Join(args, " "))
+	infof("docker %s", strings.Join(args, " "))
 	cmd := exec.Command("docker", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

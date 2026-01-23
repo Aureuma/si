@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 )
 
@@ -54,7 +53,7 @@ func main() {
 	case "help", "-h", "--help":
 		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command: %s\n", cmd)
+		printUnknown("", cmd)
 		usage()
 		os.Exit(1)
 	}

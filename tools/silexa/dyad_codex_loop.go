@@ -42,7 +42,7 @@ func cmdDyadCodexLoopTest(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si dyad codex-loop-test <dyad> [--wait] [--spawn]")
+		printUsage("usage: si dyad codex-loop-test <dyad> [--wait] [--spawn]")
 		return
 	}
 
@@ -97,8 +97,8 @@ func cmdDyadCodexLoopTest(args []string) {
 			fatal(err)
 		}
 		if !ok {
-			fmt.Fprintf(os.Stderr, "actor codex login required (status: %s)\n", status)
-			fmt.Fprintf(os.Stderr, "run: si dyad exec %s --member actor -- codex login\n", dyad)
+			_, _ = fmt.Fprintf(os.Stderr, "%s (status: %s)\n", styleWarn("actor codex login required"), styleArg(status))
+			_, _ = fmt.Fprintf(os.Stderr, "%s %s\n", styleDim("run:"), styleCmd(fmt.Sprintf("si dyad exec %s --member actor -- codex login", dyad)))
 			os.Exit(1)
 		}
 	}
@@ -118,7 +118,7 @@ func cmdDyadCodexLoopTest(args []string) {
 		fatal(err)
 	}
 	cancel()
-	fmt.Printf("dyad task #%d created (status=%s)\n", task.ID, task.Status)
+	successf("dyad task #%d created (status=%s)", task.ID, task.Status)
 
 	if !*wait {
 		return
@@ -177,7 +177,7 @@ func waitForDyadTask(ctx context.Context, managerURL string, id int, timeout tim
 			phase := state["codex_test.phase"]
 			last := state["codex_test.last"]
 			if status != lastStatus || phase != lastPhase || last != lastLast {
-				fmt.Printf("status=%s phase=%s last=%s\n", task.Status, phase, last)
+				infof("status=%s phase=%s last=%s", styleStatus(task.Status), phase, last)
 				lastStatus = status
 				lastPhase = phase
 				lastLast = last
@@ -213,22 +213,22 @@ func fetchDyadTask(ctx context.Context, managerURL string, id int) (dyadTaskSnap
 }
 
 func printCodexLoopSummary(task dyadTaskSnapshot) {
-	fmt.Printf("final status: %s\n", task.Status)
+	fmt.Printf("%s %s\n", styleSection("final status:"), styleStatus(task.Status))
 	state := parseTaskNotes(task.Notes)
 	if v := state["codex_test.result"]; v != "" {
-		fmt.Printf("result: %s\n", v)
+		fmt.Printf("%s %s\n", styleSection("result:"), styleStatus(v))
 	}
 	if v := state["codex_test.last"]; v != "" {
-		fmt.Printf("last output: %s\n", v)
+		fmt.Printf("%s %s\n", styleSection("last output:"), v)
 	}
 	if v := state["codex_test.error"]; v != "" {
-		fmt.Printf("error: %s\n", v)
+		fmt.Printf("%s %s\n", styleSection("error:"), styleError(v))
 	}
 	if v := state["codex.session_id"]; v != "" {
-		fmt.Printf("session: %s\n", v)
+		fmt.Printf("%s %s\n", styleSection("session:"), styleArg(v))
 	}
 	if v := state["codex.exec.last"]; v != "" {
-		fmt.Printf("exec last: %s\n", v)
+		fmt.Printf("%s %s\n", styleSection("exec last:"), v)
 	}
 }
 

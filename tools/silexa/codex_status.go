@@ -85,7 +85,7 @@ func cmdCodexStatus(args []string) {
 	cleanupSessions := fs.Bool("cleanup-stale-sessions", true, "cleanup stale tmux sessions")
 	_ = fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si codex status <name> [--json] [--raw] [--status-only]")
+		printUsage("usage: si codex status <name> [--json] [--raw] [--status-only]")
 		return
 	}
 	name := fs.Arg(0)
@@ -441,7 +441,7 @@ func debugf(opts statusOptions, format string, args ...interface{}) {
 		return
 	}
 	msg := fmt.Sprintf(format, args...)
-	_, _ = fmt.Fprintf(os.Stderr, "[codex-status] %s\n", msg)
+	_, _ = fmt.Fprintf(os.Stderr, "%s %s\n", styleDim("[codex-status]"), msg)
 }
 
 func acquireStatusLock(name string, opts statusOptions) (func(), error) {
@@ -594,46 +594,46 @@ func parseCodexStatus(raw string) codexStatus {
 }
 
 func printCodexStatus(s codexStatus) {
-	fmt.Println("Codex status:")
+	fmt.Println(styleHeading("Codex status:"))
 	if s.Source != "" {
-		fmt.Printf("  Source: %s\n", s.Source)
+		fmt.Printf("  %s %s\n", styleSection("Source:"), styleArg(s.Source))
 	}
 	if s.AccountEmail != "" {
 		if s.AccountPlan != "" {
-			fmt.Printf("  Account: %s (%s)\n", s.AccountEmail, s.AccountPlan)
+			fmt.Printf("  %s %s (%s)\n", styleSection("Account:"), styleArg(s.AccountEmail), styleArg(s.AccountPlan))
 		} else {
-			fmt.Printf("  Account: %s\n", s.AccountEmail)
+			fmt.Printf("  %s %s\n", styleSection("Account:"), styleArg(s.AccountEmail))
 		}
 	}
 	if s.Model != "" {
 		if s.ReasoningEffort != "" {
-			fmt.Printf("  Model: %s (reasoning %s)\n", s.Model, s.ReasoningEffort)
+			fmt.Printf("  %s %s (reasoning %s)\n", styleSection("Model:"), styleArg(s.Model), styleArg(s.ReasoningEffort))
 		} else {
-			fmt.Printf("  Model: %s\n", s.Model)
+			fmt.Printf("  %s %s\n", styleSection("Model:"), styleArg(s.Model))
 		}
 	}
 	if s.Session != "" {
-		fmt.Printf("  Session: %s\n", s.Session)
+		fmt.Printf("  %s %s\n", styleSection("Session:"), styleArg(s.Session))
 	}
 	if s.ContextLeftPct >= 0 {
 		if s.ContextUsed != "" && s.ContextTotal != "" {
-			fmt.Printf("  Context: %.0f%% left (%s / %s)\n", s.ContextLeftPct, s.ContextUsed, s.ContextTotal)
+			fmt.Printf("  %s %.0f%% left (%s / %s)\n", styleSection("Context:"), s.ContextLeftPct, s.ContextUsed, s.ContextTotal)
 		} else {
-			fmt.Printf("  Context: %.0f%% left\n", s.ContextLeftPct)
+			fmt.Printf("  %s %.0f%% left\n", styleSection("Context:"), s.ContextLeftPct)
 		}
 	}
 	if s.FiveHourLeftPct >= 0 {
 		if s.FiveHourReset != "" {
-			fmt.Printf("  5h limit: %.0f%% left (resets %s)\n", s.FiveHourLeftPct, s.FiveHourReset)
+			fmt.Printf("  %s %.0f%% left (resets %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, s.FiveHourReset)
 		} else {
-			fmt.Printf("  5h limit: %.0f%% left\n", s.FiveHourLeftPct)
+			fmt.Printf("  %s %.0f%% left\n", styleSection("5h limit:"), s.FiveHourLeftPct)
 		}
 	}
 	if s.WeeklyLeftPct >= 0 {
 		if s.WeeklyReset != "" {
-			fmt.Printf("  Weekly limit: %.0f%% left (resets %s)\n", s.WeeklyLeftPct, s.WeeklyReset)
+			fmt.Printf("  %s %.0f%% left (resets %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, s.WeeklyReset)
 		} else {
-			fmt.Printf("  Weekly limit: %.0f%% left\n", s.WeeklyLeftPct)
+			fmt.Printf("  %s %.0f%% left\n", styleSection("Weekly limit:"), s.WeeklyLeftPct)
 		}
 	}
 }

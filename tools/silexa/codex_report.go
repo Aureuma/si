@@ -74,7 +74,7 @@ func cmdCodexReport(args []string) {
 
 	if name == "" {
 		if fs.NArg() < 1 {
-			fmt.Println("usage: si codex report <name> --prompt '...'")
+			printUsage("usage: si codex report <name> --prompt '...'")
 			return
 		}
 		name = fs.Arg(0)
@@ -180,12 +180,12 @@ func cmdCodexReport(args []string) {
 	}
 
 	for i, rep := range reports {
-		fmt.Printf("Turn %d: %s\n", i+1, rep.Prompt)
+		fmt.Printf("%s %d: %s\n", styleSection("Turn"), i+1, rep.Prompt)
 		if rep.Report != "" {
 			fmt.Println(rep.Report)
 		}
 		if *rawOut {
-			fmt.Println("-- raw --")
+			fmt.Println(styleDim("-- raw --"))
 			fmt.Println(rep.Raw)
 		}
 		if i < len(reports)-1 {

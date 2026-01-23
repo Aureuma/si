@@ -17,7 +17,7 @@ import (
 
 func cmdDyad(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test>")
+		printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test>")
 		return
 	}
 	switch args[0] {
@@ -48,7 +48,7 @@ func cmdDyad(args []string) {
 	case "codex-loop-test", "codex-loop":
 		cmdDyadCodexLoopTest(args[1:])
 	default:
-		fmt.Println("unknown dyad command:", args[0])
+		printUnknown("dyad", args[0])
 	}
 }
 
@@ -78,7 +78,7 @@ func cmdDyadSpawn(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si dyad spawn <name> [role] [department]")
+		printUsage("usage: si dyad spawn <name> [role] [department]")
 		return
 	}
 	name := fs.Arg(0)
@@ -172,7 +172,7 @@ func cmdDyadSpawn(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	fmt.Printf("dyad %s ready (role=%s dept=%s)\n", name, role, dept)
+	successf("dyad %s ready (role=%s dept=%s)", name, role, dept)
 }
 
 func defaultEffort(role string) (string, string) {
@@ -238,7 +238,7 @@ func cmdDyadList(args []string) {
 	}
 	sort.Strings(keys)
 	if len(keys) == 0 {
-		fmt.Println("no dyads found")
+		infof("no dyads found")
 		return
 	}
 	widths := map[string]int{"dyad": 4, "role": 4, "dept": 4, "actor": 5, "critic": 6}
@@ -250,21 +250,21 @@ func cmdDyadList(args []string) {
 		widths["actor"] = max(widths["actor"], len(r.Actor))
 		widths["critic"] = max(widths["critic"], len(r.Critic))
 	}
-	fmt.Printf("%-*s  %-*s  %-*s  %-*s  %-*s\n",
-		widths["dyad"], "DYAD",
-		widths["role"], "ROLE",
-		widths["dept"], "DEPT",
-		widths["actor"], "ACTOR",
-		widths["critic"], "CRITIC",
+	fmt.Printf("%s  %s  %s  %s  %s\n",
+		padRightANSI(styleHeading("DYAD"), widths["dyad"]),
+		padRightANSI(styleHeading("ROLE"), widths["role"]),
+		padRightANSI(styleHeading("DEPT"), widths["dept"]),
+		padRightANSI(styleHeading("ACTOR"), widths["actor"]),
+		padRightANSI(styleHeading("CRITIC"), widths["critic"]),
 	)
 	for _, k := range keys {
 		r := rows[k]
-		fmt.Printf("%-*s  %-*s  %-*s  %-*s  %-*s\n",
-			widths["dyad"], r.Dyad,
-			widths["role"], r.Role,
-			widths["dept"], r.Dept,
-			widths["actor"], r.Actor,
-			widths["critic"], r.Critic,
+		fmt.Printf("%s  %s  %s  %s  %s\n",
+			padRightANSI(r.Dyad, widths["dyad"]),
+			padRightANSI(r.Role, widths["role"]),
+			padRightANSI(r.Dept, widths["dept"]),
+			padRightANSI(styleStatus(r.Actor), widths["actor"]),
+			padRightANSI(styleStatus(r.Critic), widths["critic"]),
 		)
 	}
 	_ = args
@@ -272,7 +272,7 @@ func cmdDyadList(args []string) {
 
 func cmdDyadRemove(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si dyad remove <name>")
+		printUsage("usage: si dyad remove <name>")
 		return
 	}
 	name := args[0]
@@ -284,12 +284,12 @@ func cmdDyadRemove(args []string) {
 	if err := client.RemoveDyad(context.Background(), name, true); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("dyad %s removed\n", name)
+	successf("dyad %s removed", name)
 }
 
 func cmdDyadRecreate(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si dyad recreate <name> [role] [department]")
+		printUsage("usage: si dyad recreate <name> [role] [department]")
 		return
 	}
 	name := args[0]
@@ -304,7 +304,7 @@ func cmdDyadRecreate(args []string) {
 
 func cmdDyadStatus(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si dyad status <name>")
+		printUsage("usage: si dyad status <name>")
 		return
 	}
 	name := args[0]
@@ -325,19 +325,19 @@ func cmdDyadStatus(args []string) {
 		fatal(err)
 	}
 	if actorID == "" && criticID == "" {
-		fmt.Printf("dyad %s not found\n", name)
+		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
 		return
 	}
-	fmt.Printf("dyad %s\n", name)
+	fmt.Printf("%s %s\n", styleHeading("dyad"), styleCmd(name))
 	if actorInfo != nil {
-		fmt.Printf(" actor: %s (%s)\n", actorID[:12], actorInfo.State.Status)
+		fmt.Printf(" %s %s (%s)\n", styleSection("actor:"), actorID[:12], styleStatus(actorInfo.State.Status))
 	} else {
-		fmt.Printf(" actor: missing\n")
+		fmt.Printf(" %s %s\n", styleSection("actor:"), styleError("missing"))
 	}
 	if criticInfo != nil {
-		fmt.Printf(" critic: %s (%s)\n", criticID[:12], criticInfo.State.Status)
+		fmt.Printf(" %s %s (%s)\n", styleSection("critic:"), criticID[:12], styleStatus(criticInfo.State.Status))
 	} else {
-		fmt.Printf(" critic: missing\n")
+		fmt.Printf(" %s %s\n", styleSection("critic:"), styleError("missing"))
 	}
 }
 
@@ -347,7 +347,7 @@ func cmdDyadExec(args []string) {
 	tty := fs.Bool("tty", false, "allocate TTY")
 	fs.Parse(args)
 	if fs.NArg() < 2 {
-		fmt.Println("usage: si dyad exec <dyad> [--member actor|critic] -- <cmd...>")
+		printUsage("usage: si dyad exec <dyad> [--member actor|critic] -- <cmd...>")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -384,7 +384,7 @@ func cmdDyadLogs(args []string) {
 	tail := fs.Int("tail", 200, "lines to tail")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si dyad logs <dyad> [--member actor|critic] [--tail N]")
+		printUsage("usage: si dyad logs <dyad> [--member actor|critic] [--tail N]")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -410,7 +410,7 @@ func cmdDyadLogs(args []string) {
 
 func cmdDyadRestart(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si dyad restart <name>")
+		printUsage("usage: si dyad restart <name>")
 		return
 	}
 	name := args[0]
@@ -422,12 +422,12 @@ func cmdDyadRestart(args []string) {
 	if err := client.RestartDyad(context.Background(), name); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("dyad %s restarted\n", name)
+	successf("dyad %s restarted", name)
 }
 
 func cmdDyadRegister(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si dyad register <name> [role] [department]")
+		printUsage("usage: si dyad register <name> [role] [department]")
 		return
 	}
 	name := args[0]
@@ -446,7 +446,7 @@ func cmdDyadRegister(args []string) {
 	if err := registerDyad(managerURL, name, role, dept); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("registered dyad %s (role=%s dept=%s)\n", name, role, dept)
+	successf("registered dyad %s (role=%s dept=%s)", name, role, dept)
 }
 
 func cmdDyadCleanup(args []string) {
@@ -469,7 +469,7 @@ func cmdDyadCleanup(args []string) {
 			removed++
 		}
 	}
-	fmt.Printf("removed %d stopped dyad containers\n", removed)
+	successf("removed %d stopped dyad containers", removed)
 	_ = args
 }
 
@@ -482,7 +482,7 @@ func cmdDyadCopyLogin(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si dyad copy-login <dyad> [--member actor|critic] [--source codex-status]")
+		printUsage("usage: si dyad copy-login <dyad> [--member actor|critic] [--source codex-status]")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -538,7 +538,7 @@ func cmdDyadCopyLogin(args []string) {
 	if err := cmd.Run(); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("copied codex login from %s to %s (%s)\n", sourceName, targetName, memberVal)
+	successf("copied codex login from %s to %s (%s)", sourceName, targetName, memberVal)
 }
 
 func cmdDyadClearBlocked(args []string) {
@@ -549,7 +549,7 @@ func cmdDyadClearBlocked(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si dyad clear-blocked <dyad> [--status done] [--dry-run]")
+		printUsage("usage: si dyad clear-blocked <dyad> [--status done] [--dry-run]")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -573,7 +573,7 @@ func cmdDyadClearBlocked(args []string) {
 		}
 		updated++
 		if *dryRun {
-			fmt.Printf("blocked task #%d (%s)\n", task.ID, task.Kind)
+			infof("blocked task #%d (%s)", task.ID, task.Kind)
 			continue
 		}
 		notes := setTaskNotes(task.Notes, map[string]string{
@@ -590,10 +590,10 @@ func cmdDyadClearBlocked(args []string) {
 		}
 	}
 	if *dryRun {
-		fmt.Printf("blocked tasks found: %d\n", updated)
+		infof("blocked tasks found: %d", updated)
 		return
 	}
-	fmt.Printf("updated %d blocked tasks\n", updated)
+	successf("updated %d blocked tasks", updated)
 }
 
 func registerDyad(managerURL, name, role, dept string) error {

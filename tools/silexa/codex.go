@@ -27,7 +27,7 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si codex <spawn|list|status|report|login|exec|logs|tail|clone|remove|stop|start>")
+		printUsage("usage: si codex <spawn|list|status|report|login|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
@@ -56,7 +56,7 @@ func cmdCodex(args []string) {
 	case "start":
 		cmdCodexStart(args[1:])
 	default:
-		fmt.Println("unknown codex command:", args[0])
+		printUnknown("codex", args[0])
 	}
 }
 
@@ -79,7 +79,7 @@ func cmdCodexSpawn(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si codex spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
+		printUsage("usage: si codex spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
 		return
 	}
 	name := fs.Arg(0)
@@ -178,7 +178,7 @@ func cmdCodexSpawn(args []string) {
 				fatal(err)
 			}
 		}
-		fmt.Printf("codex container %s already exists\n", containerName)
+		infof("codex container %s already exists", containerName)
 		return
 	}
 
@@ -189,7 +189,7 @@ func cmdCodexSpawn(args []string) {
 	if err := client.StartContainer(ctx, id); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("codex container %s started\n", containerName)
+	successf("codex container %s started", containerName)
 	if !*detach {
 		_ = execDockerCLI("attach", containerName)
 	}
@@ -211,7 +211,7 @@ func cmdCodexList(args []string) {
 		fatal(err)
 	}
 	if len(containers) == 0 {
-		fmt.Println("no codex containers found")
+		infof("no codex containers found")
 		return
 	}
 	sort.Slice(containers, func(i, j int) bool {
@@ -246,10 +246,18 @@ func cmdCodexList(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%-28s %-10s %-20s\n", "CONTAINER", "STATE", "IMAGE")
+	fmt.Printf("%s %s %s\n",
+		padRightANSI(styleHeading("CONTAINER"), 28),
+		padRightANSI(styleHeading("STATE"), 10),
+		padRightANSI(styleHeading("IMAGE"), 20),
+	)
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
-		fmt.Printf("%-28s %-10s %-20s\n", name, c.State, c.Image)
+		fmt.Printf("%s %s %s\n",
+			padRightANSI(name, 28),
+			padRightANSI(styleStatus(c.State), 10),
+			padRightANSI(c.Image, 20),
+		)
 	}
 }
 
@@ -284,8 +292,8 @@ func cmdCodexExec(args []string) {
 			prompt = strings.Join(rest, " ")
 		}
 		if strings.TrimSpace(prompt) == "" {
-			fmt.Println("usage: si codex exec --prompt \"...\" [--output-only] [--no-mcp]")
-			fmt.Println("   or: si codex exec \"...\" [--output-only] [--no-mcp]")
+			printUsage("usage: si codex exec --prompt \"...\" [--output-only] [--no-mcp]")
+			fmt.Println(styleDim("   or: si codex exec \"...\" [--output-only] [--no-mcp]"))
 			return
 		}
 		opts := codexExecOneOffOptions{
@@ -310,8 +318,8 @@ func cmdCodexExec(args []string) {
 	}
 
 	if len(rest) < 1 {
-		fmt.Println("usage: si codex exec <name> [--] <command>")
-		fmt.Println("   or: si codex exec --prompt \"...\" [--output-only] [--no-mcp]")
+		printUsage("usage: si codex exec <name> [--] <command>")
+		fmt.Println(styleDim("   or: si codex exec --prompt \"...\" [--output-only] [--no-mcp]"))
 		return
 	}
 	name := rest[0]
@@ -338,7 +346,7 @@ func cmdCodexLogin(args []string) {
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
 	_ = fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si codex login <name>")
+		printUsage("usage: si codex login <name>")
 		return
 	}
 	name := fs.Arg(0)
@@ -383,7 +391,7 @@ func cmdCodexLogin(args []string) {
 
 func cmdCodexLogs(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si codex logs <name> [--tail N]")
+		printUsage("usage: si codex logs <name> [--tail N]")
 		return
 	}
 	name := args[0]
@@ -396,7 +404,7 @@ func cmdCodexLogs(args []string) {
 
 func cmdCodexTail(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si codex tail <name> [--tail N]")
+		printUsage("usage: si codex tail <name> [--tail N]")
 		return
 	}
 	name := args[0]
@@ -409,7 +417,7 @@ func cmdCodexTail(args []string) {
 
 func cmdCodexClone(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: si codex clone <name> <Org/Repo> [--gh-pat TOKEN]")
+		printUsage("usage: si codex clone <name> <Org/Repo> [--gh-pat TOKEN]")
 		return
 	}
 	name := args[0]
@@ -447,12 +455,12 @@ func cmdCodexClone(args []string) {
 	if err := execDockerCLI(execArgs...); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("repo %s cloned in %s\n", repo, containerName)
+	successf("repo %s cloned in %s", repo, containerName)
 }
 
 func cmdCodexRemove(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si codex remove <name>")
+		printUsage("usage: si codex remove <name>")
 		return
 	}
 	name := args[0]
@@ -468,18 +476,18 @@ func cmdCodexRemove(args []string) {
 		fatal(err)
 	}
 	if id == "" {
-		fmt.Printf("codex container %s not found\n", containerName)
+		fmt.Printf("%s %s\n", styleError("codex container not found:"), containerName)
 		return
 	}
 	if err := client.RemoveContainer(ctx, id, true); err != nil {
 		fatal(err)
 	}
-	fmt.Printf("codex container %s removed\n", containerName)
+	successf("codex container %s removed", containerName)
 }
 
 func cmdCodexStop(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si codex stop <name>")
+		printUsage("usage: si codex stop <name>")
 		return
 	}
 	name := args[0]
@@ -491,7 +499,7 @@ func cmdCodexStop(args []string) {
 
 func cmdCodexStart(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si codex start <name>")
+		printUsage("usage: si codex start <name>")
 		return
 	}
 	name := args[0]

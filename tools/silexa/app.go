@@ -12,7 +12,7 @@ import (
 
 func cmdApp(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si app <init|adopt|list|build|deploy|remove|status|secrets>")
+		printUsage("usage: si app <init|adopt|list|build|deploy|remove|status|secrets>")
 		return
 	}
 	switch args[0] {
@@ -33,7 +33,7 @@ func cmdApp(args []string) {
 	case "secrets":
 		cmdAppSecrets(args[1:])
 	default:
-		fmt.Println("unknown app command:", args[0])
+		printUnknown("app", args[0])
 	}
 }
 
@@ -56,7 +56,7 @@ func cmdAppInit(args []string) {
 	orm := fs.String("orm", "drizzle", "orm")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si app init <app-name> [options]")
+		printUsage("usage: si app init <app-name> [options]")
 		return
 	}
 	app := fs.Arg(0)
@@ -208,9 +208,9 @@ func cmdAppInit(args []string) {
 		if *dbPort != "" {
 			_ = dbPort
 		}
-		fmt.Println("db provisioning is not automated; create a database and update secrets/app-" + app + ".env")
+		infof("db provisioning is not automated; create a database and update secrets/app-%s.env", app)
 	}
-	fmt.Println("app init complete")
+	successf("app init complete")
 }
 
 func cmdAppAdopt(args []string) {
@@ -224,7 +224,7 @@ func cmdAppAdopt(args []string) {
 		clean = append(clean, arg)
 	}
 	if len(clean) < 1 {
-		fmt.Println("usage: si app adopt <app-name> [options]")
+		printUsage("usage: si app adopt <app-name> [options]")
 		return
 	}
 	if !withDB {
@@ -269,7 +269,7 @@ func cmdAppList(args []string) {
 		rows = append(rows, row{Name: meta.Name, Kind: meta.Kind, Status: meta.Status, Path: appPath})
 	}
 	if len(rows) == 0 {
-		fmt.Println("no apps found")
+		infof("no apps found")
 		return
 	}
 	widths := map[string]int{"name": 4, "kind": 4, "status": 6, "path": 4}
@@ -279,9 +279,19 @@ func cmdAppList(args []string) {
 		widths["status"] = max(widths["status"], len(r.Status))
 		widths["path"] = max(widths["path"], len(r.Path))
 	}
-	fmt.Printf("%-*s  %-*s  %-*s  %s\n", widths["name"], "name", widths["kind"], "kind", widths["status"], "status", "path")
+	fmt.Printf("%s  %s  %s  %s\n",
+		padRightANSI(styleHeading("name"), widths["name"]),
+		padRightANSI(styleHeading("kind"), widths["kind"]),
+		padRightANSI(styleHeading("status"), widths["status"]),
+		styleHeading("path"),
+	)
 	for _, r := range rows {
-		fmt.Printf("%-*s  %-*s  %-*s  %s\n", widths["name"], r.Name, widths["kind"], r.Kind, widths["status"], r.Status, r.Path)
+		fmt.Printf("%s  %s  %s  %s\n",
+			padRightANSI(r.Name, widths["name"]),
+			padRightANSI(r.Kind, widths["kind"]),
+			padRightANSI(styleStatus(r.Status), widths["status"]),
+			r.Path,
+		)
 	}
 	_ = args
 }
@@ -300,7 +310,7 @@ type appMeta struct {
 
 func cmdAppBuild(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si app build <app-name>")
+		printUsage("usage: si app build <app-name>")
 		return
 	}
 	app := args[0]
@@ -336,7 +346,7 @@ func cmdAppBuild(args []string) {
 				fatal(err)
 			}
 		} else {
-			fmt.Fprintln(os.Stderr, "warning: no Dockerfile for web:", webDockerfile)
+			warnf("no Dockerfile for web: %s", webDockerfile)
 		}
 	}
 
@@ -344,7 +354,7 @@ func cmdAppBuild(args []string) {
 		backendDir := filepath.Join(appDir, meta.Paths.Backend)
 		backendDockerfile := filepath.Join(backendDir, "Dockerfile")
 		if !exists(backendDockerfile) {
-			fmt.Fprintln(os.Stderr, "warning: no Dockerfile for backend:", backendDockerfile)
+			warnf("no Dockerfile for backend: %s", backendDockerfile)
 		} else {
 			backendImage := fmt.Sprintf("silexa/app-%s-backend:local", app)
 			if err := runDockerBuild(imageBuildSpec{
@@ -364,7 +374,7 @@ func cmdAppDeploy(args []string) {
 	fileFlag := fs.String("file", "", "compose file")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si app deploy <app-name> [--no-build] [--file path]")
+		printUsage("usage: si app deploy <app-name> [--no-build] [--file path]")
 		return
 	}
 	app := fs.Arg(0)
@@ -384,7 +394,7 @@ func cmdAppDeploy(args []string) {
 
 func cmdAppRemove(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si app remove <app-name> [--file path]")
+		printUsage("usage: si app remove <app-name> [--file path]")
 		return
 	}
 	app := args[0]
@@ -401,7 +411,7 @@ func cmdAppRemove(args []string) {
 
 func cmdAppStatus(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si app status <app-name> [--file path]")
+		printUsage("usage: si app status <app-name> [--file path]")
 		return
 	}
 	app := args[0]
@@ -418,7 +428,7 @@ func cmdAppStatus(args []string) {
 
 func cmdAppSecrets(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si app secrets <app-name>")
+		printUsage("usage: si app secrets <app-name>")
 		return
 	}
 	app := args[0]
@@ -429,10 +439,10 @@ func cmdAppSecrets(args []string) {
 		if err := os.WriteFile(secretPath, []byte(template), 0o600); err != nil {
 			fatal(err)
 		}
-		fmt.Println("created secrets file:", secretPath)
+		successf("created secrets file: %s", secretPath)
 		return
 	}
-	fmt.Println("secrets file:", secretPath)
+	infof("secrets file: %s", secretPath)
 }
 
 func resolveComposeFile(app, override string) string {
