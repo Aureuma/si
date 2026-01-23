@@ -254,16 +254,69 @@ func cmdCodexList(args []string) {
 }
 
 func cmdCodexExec(args []string) {
-	if len(args) < 1 {
-		fmt.Println("usage: si codex exec <name> [--] <command>")
+	fs := flag.NewFlagSet("codex exec", flag.ExitOnError)
+	oneOff := fs.Bool("one-off", false, "run a one-off codex exec in an isolated container")
+	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
+	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
+	noMcp := fs.Bool("no-mcp", false, "disable MCP servers (one-off mode)")
+	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
+	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
+	workdir := fs.String("workdir", "/workspace", "container working directory")
+	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
+	codexVolume := fs.String("codex-volume", envOr("SI_CODEX_EXEC_VOLUME", ""), "codex volume name")
+	ghVolume := fs.String("gh-volume", "", "gh config volume name")
+	model := fs.String("model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
+	effort := fs.String("effort", envOr("CODEX_REASONING_EFFORT", "medium"), "codex reasoning effort")
+	keep := fs.Bool("keep", false, "keep the one-off container after execution")
+	envs := multiFlag{}
+	fs.Var(&envs, "env", "env var (repeatable KEY=VALUE)")
+	_ = fs.Parse(args)
+
+	prompt := strings.TrimSpace(*promptFlag)
+	rest := fs.Args()
+	if prompt == "" && len(rest) == 1 && !isValidSlug(rest[0]) {
+		prompt = rest[0]
+		rest = nil
+	}
+
+	if *oneOff || prompt != "" || *outputOnly || *noMcp {
+		if prompt == "" && len(rest) > 0 {
+			prompt = strings.Join(rest, " ")
+		}
+		if strings.TrimSpace(prompt) == "" {
+			fmt.Println("usage: si codex exec --prompt \"...\" [--output-only] [--no-mcp]")
+			fmt.Println("   or: si codex exec \"...\" [--output-only] [--no-mcp]")
+			return
+		}
+		opts := codexExecOneOffOptions{
+			Prompt:        prompt,
+			Image:         strings.TrimSpace(*image),
+			WorkspaceHost: strings.TrimSpace(*workspaceHost),
+			Workdir:       strings.TrimSpace(*workdir),
+			Network:       strings.TrimSpace(*networkName),
+			CodexVolume:   strings.TrimSpace(*codexVolume),
+			GHVolume:      strings.TrimSpace(*ghVolume),
+			Env:           envs,
+			Model:         strings.TrimSpace(*model),
+			Effort:        strings.TrimSpace(*effort),
+			DisableMCP:    *noMcp,
+			OutputOnly:    *outputOnly,
+			KeepContainer: *keep,
+		}
+		if err := runCodexExecOneOff(opts); err != nil {
+			fatal(err)
+		}
 		return
 	}
-	name := args[0]
-	containerName := codexContainerName(name)
-	cmd := args[1:]
-	if len(cmd) > 0 && cmd[0] == "--" {
-		cmd = cmd[1:]
+
+	if len(rest) < 1 {
+		fmt.Println("usage: si codex exec <name> [--] <command>")
+		fmt.Println("   or: si codex exec --prompt \"...\" [--output-only] [--no-mcp]")
+		return
 	}
+	name := rest[0]
+	containerName := codexContainerName(name)
+	cmd := rest[1:]
 	if len(cmd) == 0 {
 		cmd = []string{"bash"}
 	}
