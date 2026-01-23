@@ -2,14 +2,13 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 )
 
 func cmdDocker(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si docker <args...>")
+		printUsage("usage: si docker <args...>")
 		return
 	}
 	if err := execDockerCLI(args...); err != nil {

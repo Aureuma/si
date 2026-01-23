@@ -14,7 +14,7 @@ import (
 
 func cmdMCP(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si mcp <scout|sync|apply-config>")
+		printUsage("usage: si mcp <scout|sync|apply-config>")
 		return
 	}
 	switch args[0] {
@@ -25,7 +25,7 @@ func cmdMCP(args []string) {
 	case "apply-config":
 		cmdMCPApplyConfig(args[1:])
 	default:
-		fmt.Println("unknown mcp command:", args[0])
+		printUnknown("mcp", args[0])
 	}
 }
 
@@ -92,7 +92,7 @@ func cmdMCPSync(args []string) {
 	if err := client.RestartContainer(ctx, containerID, 10*time.Second); err != nil {
 		fatal(err)
 	}
-	fmt.Println("catalog synced and gateway restarted")
+	successf("catalog synced and gateway restarted")
 }
 
 func cmdMCPApplyConfig(args []string) {
@@ -101,7 +101,7 @@ func cmdMCPApplyConfig(args []string) {
 	destDir := fs.String("dest-dir", "/root/.codex", "destination dir")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		fmt.Println("usage: si mcp apply-config <dyad> [--member actor|critic]")
+		printUsage("usage: si mcp apply-config <dyad> [--member actor|critic]")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -136,7 +136,7 @@ func cmdMCPApplyConfig(args []string) {
 	if err := client.CopyFileToContainer(ctx, containerID, destPath, raw, 0o644); err != nil {
 		fatal(err)
 	}
-	fmt.Println("codex mcp config applied to", container)
+	infof("codex mcp config applied to %s", container)
 }
 
 func sharedContainerName(dyad, member string) string {

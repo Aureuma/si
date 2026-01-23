@@ -20,7 +20,7 @@ const stackLabelVal = "core"
 
 func cmdStack(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si stack <up|down|status>")
+		printUsage("usage: si stack <up|down|status>")
 		return
 	}
 	switch args[0] {
@@ -31,7 +31,7 @@ func cmdStack(args []string) {
 	case "status":
 		cmdStackStatus(args[1:])
 	default:
-		fmt.Println("unknown stack command:", args[0])
+		printUnknown("stack", args[0])
 	}
 }
 
@@ -72,7 +72,7 @@ func cmdStackUp(args []string) {
 			fatal(err)
 		}
 	}
-	fmt.Println("stack up: ok")
+	successf("stack up: ok")
 	_ = args
 }
 
@@ -89,7 +89,7 @@ func cmdStackDown(args []string) {
 			_ = client.RemoveContainer(ctx, id, true)
 		}
 	}
-	fmt.Println("stack down: containers removed")
+	successf("stack down: containers removed")
 	_ = args
 }
 
@@ -106,16 +106,24 @@ func cmdStackStatus(args []string) {
 		fatal(err)
 	}
 	if len(containers) == 0 {
-		fmt.Println("no stack containers found")
+		infof("no stack containers found")
 		return
 	}
 	sort.Slice(containers, func(i, j int) bool {
 		return containers[i].Names[0] < containers[j].Names[0]
 	})
-	fmt.Printf("%-28s %-10s %-20s\n", "CONTAINER", "STATE", "IMAGE")
+	fmt.Printf("%s %s %s\n",
+		padRightANSI(styleHeading("CONTAINER"), 28),
+		padRightANSI(styleHeading("STATE"), 10),
+		padRightANSI(styleHeading("IMAGE"), 20),
+	)
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
-		fmt.Printf("%-28s %-10s %-20s\n", name, c.State, c.Image)
+		fmt.Printf("%s %s %s\n",
+			padRightANSI(name, 28),
+			padRightANSI(styleStatus(c.State), 10),
+			padRightANSI(c.Image, 20),
+		)
 	}
 	_ = args
 }
@@ -144,8 +152,8 @@ type stackService struct {
 func stackServices(ctx stackContext) []stackService {
 	stackLabels := func(component string) map[string]string {
 		return map[string]string{
-			stackLabelKey:        stackLabelVal,
-			"silexa.component":   component,
+			stackLabelKey:      stackLabelVal,
+			"silexa.component": component,
 		}
 	}
 	configMount := func(target string) mount.Mount {
@@ -171,17 +179,17 @@ func stackServices(ctx stackContext) []stackService {
 
 	services := []stackService{
 		{
-			Name:   "silexa-manager",
-			Image:  envOr("SILEXA_MANAGER_IMAGE", "silexa/manager:local"),
-			Env:    managerEnv,
-			Ports:  map[int]int{9090: 9090},
-			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-manager-data", Target: "/data"}},
-			Labels: stackLabels("manager"),
+			Name:    "silexa-manager",
+			Image:   envOr("SILEXA_MANAGER_IMAGE", "silexa/manager:local"),
+			Env:     managerEnv,
+			Ports:   map[int]int{9090: 9090},
+			Mounts:  []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-manager-data", Target: "/data"}},
+			Labels:  stackLabels("manager"),
 			Aliases: []string{"silexa-manager"},
 		},
 		{
-			Name:   "silexa-router",
-			Image:  envOr("SILEXA_ROUTER_IMAGE", "silexa/router:local"),
+			Name:  "silexa-router",
+			Image: envOr("SILEXA_ROUTER_IMAGE", "silexa/router:local"),
 			Env: []string{
 				"MANAGER_URL=" + envOr("MANAGER_URL", "http://silexa-manager:9090"),
 				"ROUTER_RULES_FILE=/configs/router_rules.json",
@@ -191,13 +199,13 @@ func stackServices(ctx stackContext) []stackService {
 				"DYAD_REQUIRE_ONLINE=" + envOr("DYAD_REQUIRE_ONLINE", "true"),
 				"DYAD_MAX_OPEN_PER_DYAD=" + envOr("DYAD_MAX_OPEN_PER_DYAD", "10"),
 			},
-			Mounts: []mount.Mount{configMount("/configs")},
-			Labels: stackLabels("router"),
+			Mounts:  []mount.Mount{configMount("/configs")},
+			Labels:  stackLabels("router"),
 			Aliases: []string{"silexa-router"},
 		},
 		{
-			Name:   "silexa-codex-monitor",
-			Image:  envOr("SILEXA_CODEX_MONITOR_IMAGE", "silexa/codex-monitor:local"),
+			Name:  "silexa-codex-monitor",
+			Image: envOr("SILEXA_CODEX_MONITOR_IMAGE", "silexa/codex-monitor:local"),
 			Env: []string{
 				"MANAGER_URL=" + envOr("MANAGER_URL", "http://silexa-manager:9090"),
 				"CODEX_ACCOUNTS_FILE=/configs/codex_accounts.json",
@@ -207,52 +215,52 @@ func stackServices(ctx stackContext) []stackService {
 				"CODEX_SPAWN_DYADS=" + envOr("CODEX_SPAWN_DYADS", "1"),
 				"CODEX_MONITOR_ADDR=" + envOr("CODEX_MONITOR_ADDR", ":8086"),
 			},
-			Ports:  map[int]int{8086: 8086},
-			Mounts: []mount.Mount{configMount("/configs")},
-			Labels: stackLabels("codex-monitor"),
+			Ports:   map[int]int{8086: 8086},
+			Mounts:  []mount.Mount{configMount("/configs")},
+			Labels:  stackLabels("codex-monitor"),
 			Aliases: []string{"silexa-codex-monitor"},
 		},
 		{
-			Name:   "silexa-resource-broker",
-			Image:  envOr("SILEXA_RESOURCE_BROKER_IMAGE", "silexa/resource-broker:local"),
+			Name:  "silexa-resource-broker",
+			Image: envOr("SILEXA_RESOURCE_BROKER_IMAGE", "silexa/resource-broker:local"),
 			Env: []string{
 				"TELEGRAM_NOTIFY_URL=" + envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify"),
 				"TELEGRAM_CHAT_ID=" + envOr("TELEGRAM_CHAT_ID", ""),
 				"DATA_DIR=/data",
 			},
-			Ports:  map[int]int{9091: 9091},
-			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-resource-broker-data", Target: "/data"}},
-			Labels: stackLabels("resource-broker"),
+			Ports:   map[int]int{9091: 9091},
+			Mounts:  []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-resource-broker-data", Target: "/data"}},
+			Labels:  stackLabels("resource-broker"),
 			Aliases: []string{"silexa-resource-broker"},
 		},
 		{
-			Name:   "silexa-infra-broker",
-			Image:  envOr("SILEXA_INFRA_BROKER_IMAGE", "silexa/infra-broker:local"),
+			Name:  "silexa-infra-broker",
+			Image: envOr("SILEXA_INFRA_BROKER_IMAGE", "silexa/infra-broker:local"),
 			Env: []string{
 				"TELEGRAM_NOTIFY_URL=" + envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify"),
 				"TELEGRAM_CHAT_ID=" + envOr("TELEGRAM_CHAT_ID", ""),
 				"DATA_DIR=/data",
 			},
-			Ports:  map[int]int{9092: 9092},
-			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-infra-broker-data", Target: "/data"}},
-			Labels: stackLabels("infra-broker"),
+			Ports:   map[int]int{9092: 9092},
+			Mounts:  []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-infra-broker-data", Target: "/data"}},
+			Labels:  stackLabels("infra-broker"),
 			Aliases: []string{"silexa-infra-broker"},
 		},
 		{
-			Name:   "silexa-program-manager",
-			Image:  envOr("SILEXA_PROGRAM_MANAGER_IMAGE", "silexa/program-manager:local"),
+			Name:  "silexa-program-manager",
+			Image: envOr("SILEXA_PROGRAM_MANAGER_IMAGE", "silexa/program-manager:local"),
 			Env: []string{
 				"MANAGER_URL=" + envOr("MANAGER_URL", "http://silexa-manager:9090"),
 				"PROGRAM_CONFIG_FILE=/configs/programs/web_hosting.json",
 				"PROGRAM_RECONCILE_INTERVAL=" + envOr("PROGRAM_RECONCILE_INTERVAL", "30s"),
 			},
-			Mounts: []mount.Mount{configMount("/configs")},
-			Labels: stackLabels("program-manager"),
+			Mounts:  []mount.Mount{configMount("/configs")},
+			Labels:  stackLabels("program-manager"),
 			Aliases: []string{"silexa-program-manager"},
 		},
 		{
-			Name:   "silexa-credentials-mcp",
-			Image:  envOr("SILEXA_CREDENTIALS_MCP_IMAGE", "silexa/credentials-mcp:local"),
+			Name:  "silexa-credentials-mcp",
+			Image: envOr("SILEXA_CREDENTIALS_MCP_IMAGE", "silexa/credentials-mcp:local"),
 			Env: []string{
 				"ADDR=:8091",
 				"MANAGER_URL=" + envOr("MANAGER_URL", "http://silexa-manager:9090"),
@@ -262,24 +270,24 @@ func stackServices(ctx stackContext) []stackService {
 				"REQUEST_TIMEOUT=" + envOr("CREDENTIALS_REQUEST_TIMEOUT", "15s"),
 				"CREDENTIALS_APPROVER_TOKEN=" + ctx.ApproverToken,
 			},
-			Ports:  map[int]int{8091: 8091},
-			Mounts: []mount.Mount{configMount("/configs"), secretsMount("/credentials/secrets"), secretsMount("/run/secrets")},
-			Labels: stackLabels("credentials-mcp"),
+			Ports:   map[int]int{8091: 8091},
+			Mounts:  []mount.Mount{configMount("/configs"), secretsMount("/credentials/secrets"), secretsMount("/run/secrets")},
+			Labels:  stackLabels("credentials-mcp"),
 			Aliases: []string{"silexa-credentials-mcp"},
 		},
 		{
-			Name:   "silexa-mcp-dind",
-			Image:  envOr("SILEXA_MCP_DIND_IMAGE", "docker:26-dind"),
-			Env:    []string{"DOCKER_TLS_CERTDIR="},
-			Cmd:    []string{"--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock"},
-			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-mcp-dind", Target: "/var/lib/docker"}},
+			Name:       "silexa-mcp-dind",
+			Image:      envOr("SILEXA_MCP_DIND_IMAGE", "docker:26-dind"),
+			Env:        []string{"DOCKER_TLS_CERTDIR="},
+			Cmd:        []string{"--host=tcp://0.0.0.0:2375", "--host=unix:///var/run/docker.sock"},
+			Mounts:     []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-mcp-dind", Target: "/var/lib/docker"}},
 			Privileged: true,
-			Labels: stackLabels("mcp-dind"),
-			Aliases: []string{"silexa-mcp-dind"},
+			Labels:     stackLabels("mcp-dind"),
+			Aliases:    []string{"silexa-mcp-dind"},
 		},
 		{
-			Name:   "silexa-mcp-gateway",
-			Image:  envOr("SILEXA_MCP_GATEWAY_IMAGE", "silexa/mcp-gateway:local"),
+			Name:  "silexa-mcp-gateway",
+			Image: envOr("SILEXA_MCP_GATEWAY_IMAGE", "silexa/mcp-gateway:local"),
 			Env: []string{
 				"DOCKER_HOST=tcp://silexa-mcp-dind:2375",
 				"DOCKER_MCP_IN_CONTAINER=1",
@@ -287,23 +295,23 @@ func stackServices(ctx stackContext) []stackService {
 				"GH_TOKEN_FILE=/run/secrets/gh_token",
 				"STRIPE_API_KEY_FILE=/run/secrets/stripe_api_key",
 			},
-			Ports:  map[int]int{8088: 8088},
-			Mounts: []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-mcp-catalog", Target: "/catalog"}, secretsMount("/run/secrets")},
-			Labels: stackLabels("mcp-gateway"),
+			Ports:   map[int]int{8088: 8088},
+			Mounts:  []mount.Mount{{Type: mount.TypeVolume, Source: "silexa-mcp-catalog", Target: "/catalog"}, secretsMount("/run/secrets")},
+			Labels:  stackLabels("mcp-gateway"),
 			Aliases: []string{"silexa-mcp-gateway"},
 		},
 		{
-			Name:   "silexa-telegram-bot",
-			Image:  envOr("SILEXA_TELEGRAM_BOT_IMAGE", "silexa/telegram-bot:local"),
+			Name:  "silexa-telegram-bot",
+			Image: envOr("SILEXA_TELEGRAM_BOT_IMAGE", "silexa/telegram-bot:local"),
 			Env: []string{
 				"TELEGRAM_CHAT_ID=" + envOr("TELEGRAM_CHAT_ID", ""),
 				"TELEGRAM_BOT_TOKEN_FILE=/run/secrets/telegram_bot_token",
 				"MANAGER_URL=" + envOr("MANAGER_URL", "http://silexa-manager:9090"),
 				"CODEX_MONITOR_URL=" + envOr("CODEX_MONITOR_URL", "http://silexa-codex-monitor:8086/status"),
 			},
-			Ports:  map[int]int{8081: 8081},
-			Mounts: []mount.Mount{secretsMount("/run/secrets")},
-			Labels: stackLabels("telegram-bot"),
+			Ports:   map[int]int{8081: 8081},
+			Mounts:  []mount.Mount{secretsMount("/run/secrets")},
+			Labels:  stackLabels("telegram-bot"),
 			Aliases: []string{"silexa-telegram-bot"},
 		},
 	}

@@ -11,7 +11,7 @@ import (
 
 func cmdReport(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si report <status|escalate|review|dyad>")
+		printUsage("usage: si report <status|escalate|review|dyad>")
 		return
 	}
 	switch args[0] {
@@ -24,7 +24,7 @@ func cmdReport(args []string) {
 	case "dyad":
 		cmdReportDyad(args[1:])
 	default:
-		fmt.Println("unknown report command:", args[0])
+		printUnknown("report", args[0])
 	}
 }
 
@@ -36,11 +36,11 @@ type humanTask struct {
 }
 
 type accessRequest struct {
-	ID       int    `json:"id"`
+	ID        int    `json:"id"`
 	Requester string `json:"requester"`
-	Resource string `json:"resource"`
-	Action   string `json:"action"`
-	Status   string `json:"status"`
+	Resource  string `json:"resource"`
+	Action    string `json:"action"`
+	Status    string `json:"status"`
 }
 
 type feedback struct {
@@ -87,31 +87,31 @@ func cmdReportStatus(args []string) {
 	}
 
 	lines := []string{
-		"Silexa Status",
-		fmt.Sprintf("Tasks: %d/%d %s", doneTasks, len(tasks), bar(doneTasks, len(tasks), 10)),
+		styleHeading("Silexa Status"),
+		fmt.Sprintf("%s %d/%d %s", styleSection("Tasks:"), doneTasks, len(tasks), bar(doneTasks, len(tasks), 10)),
 	}
 	if len(openTasks) > 0 {
-		lines = append(lines, "Open tasks (top 5):")
+		lines = append(lines, styleSection("Open tasks (top 5):"))
 		for i, t := range openTasks {
 			if i >= 5 {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("  - #%d %s (%s)", t.ID, t.Title, t.RequestedBy))
+			lines = append(lines, fmt.Sprintf("  - #%d %s (%s)", t.ID, t.Title, styleDim(t.RequestedBy)))
 		}
 	}
 	if len(pendingAccess) > 0 {
-		lines = append(lines, fmt.Sprintf("Pending access: %d", len(pendingAccess)))
+		lines = append(lines, fmt.Sprintf("%s %d", styleSection("Pending access:"), len(pendingAccess)))
 		for i, a := range pendingAccess {
 			if i >= 5 {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("  - #%d %s -> %s (%s)", a.ID, a.Requester, a.Resource, a.Action))
+			lines = append(lines, fmt.Sprintf("  - #%d %s -> %s (%s)", a.ID, a.Requester, a.Resource, styleDim(a.Action)))
 		}
 	}
 	if len(recentFeedback) > 0 {
-		lines = append(lines, "Recent feedback:")
+		lines = append(lines, styleSection("Recent feedback:"))
 		for _, f := range recentFeedback {
-			lines = append(lines, fmt.Sprintf("  - [%s] %s: %s", f.Severity, f.Source, f.Message))
+			lines = append(lines, fmt.Sprintf("  - [%s] %s: %s", styleStatus(f.Severity), f.Source, f.Message))
 		}
 	}
 	report := strings.Join(lines, "\n")
@@ -120,7 +120,7 @@ func cmdReportStatus(args []string) {
 	if chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID")); chatID != "" {
 		notifyURL := envOr("NOTIFY_URL", "http://localhost:8081/notify")
 		if err := sendNotify(notifyURL, report, chatID); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "notify failed:", err)
+			warnf("notify failed: %v", err)
 		}
 	}
 	_ = args
@@ -150,23 +150,23 @@ func cmdReportEscalate(args []string) {
 			pendingAccess = append(pendingAccess, a)
 		}
 	}
-	lines := []string{"Escalation"}
+	lines := []string{styleHeading("Escalation")}
 	if len(openTasks) > 0 {
-		lines = append(lines, "Open tasks:")
+		lines = append(lines, styleSection("Open tasks:"))
 		for i, t := range openTasks {
 			if i >= 10 {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("- #%d %s (by %s)", t.ID, t.Title, t.RequestedBy))
+			lines = append(lines, fmt.Sprintf("- #%d %s (by %s)", t.ID, t.Title, styleDim(t.RequestedBy)))
 		}
 	}
 	if len(pendingAccess) > 0 {
-		lines = append(lines, "Pending access:")
+		lines = append(lines, styleSection("Pending access:"))
 		for i, a := range pendingAccess {
 			if i >= 10 {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("- #%d %s -> %s (%s)", a.ID, a.Requester, a.Resource, a.Action))
+			lines = append(lines, fmt.Sprintf("- #%d %s -> %s (%s)", a.ID, a.Requester, a.Resource, styleDim(a.Action)))
 		}
 	}
 	report := strings.Join(lines, "\n")
@@ -182,7 +182,7 @@ func cmdReportEscalate(args []string) {
 	if chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID")); chatID != "" {
 		notifyURL := envOr("NOTIFY_URL", "http://localhost:8081/notify")
 		if err := sendNotify(notifyURL, report, chatID); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "notify failed:", err)
+			warnf("notify failed: %v", err)
 		}
 	}
 	_ = args
@@ -220,29 +220,29 @@ func cmdReportReview(args []string) {
 	if len(recentFeedback) > 5 {
 		recentFeedback = recentFeedback[len(recentFeedback)-5:]
 	}
-	lines := []string{"High-stakes review"}
+	lines := []string{styleHeading("High-stakes review")}
 	if len(openTasks) > 0 {
-		lines = append(lines, "Open tasks:")
+		lines = append(lines, styleSection("Open tasks:"))
 		for i, t := range openTasks {
 			if i >= 5 {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("- #%d %s (%s)", t.ID, t.Title, t.RequestedBy))
+			lines = append(lines, fmt.Sprintf("- #%d %s (%s)", t.ID, t.Title, styleDim(t.RequestedBy)))
 		}
 	}
 	if len(pendingAccess) > 0 {
-		lines = append(lines, "Pending access:")
+		lines = append(lines, styleSection("Pending access:"))
 		for i, a := range pendingAccess {
 			if i >= 5 {
 				break
 			}
-			lines = append(lines, fmt.Sprintf("- #%d %s -> %s (%s)", a.ID, a.Requester, a.Resource, a.Action))
+			lines = append(lines, fmt.Sprintf("- #%d %s -> %s (%s)", a.ID, a.Requester, a.Resource, styleDim(a.Action)))
 		}
 	}
 	if len(recentFeedback) > 0 {
-		lines = append(lines, "Feedback:")
+		lines = append(lines, styleSection("Feedback:"))
 		for _, f := range recentFeedback {
-			lines = append(lines, fmt.Sprintf("- [%s] %s: %s", f.Severity, f.Source, f.Message))
+			lines = append(lines, fmt.Sprintf("- [%s] %s: %s", styleStatus(f.Severity), f.Source, f.Message))
 		}
 	}
 	report := strings.Join(lines, "\n")
@@ -251,7 +251,7 @@ func cmdReportReview(args []string) {
 	if chatID := strings.TrimSpace(os.Getenv("TELEGRAM_CHAT_ID")); chatID != "" {
 		notifyURL := envOr("NOTIFY_URL", "http://localhost:8081/notify")
 		if err := sendNotify(notifyURL, report, chatID); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "notify failed:", err)
+			warnf("notify failed: %v", err)
 		}
 	}
 	_ = args
@@ -276,7 +276,7 @@ type dyadTask struct {
 
 func cmdReportDyad(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si report dyad <name>")
+		printUsage("usage: si report dyad <name>")
 		return
 	}
 	dyad := args[0]
@@ -312,21 +312,21 @@ func cmdReportDyad(args []string) {
 		return openTasks[i].ID < openTasks[j].ID
 	})
 	lines := []string{
-		fmt.Sprintf("Dyad report: %s", dyad),
+		fmt.Sprintf("%s %s", styleHeading("Dyad report:"), styleCmd(dyad)),
 	}
 	if found {
-		lines = append(lines, fmt.Sprintf("Actor: %s, last beat: %s", valueOr(last.Actor, "n/a"), last.When.Format(time.RFC3339)))
-		lines = append(lines, fmt.Sprintf("Critic: %s, last beat: %s", valueOr(last.Critic, "n/a"), last.When.Format(time.RFC3339)))
+		lines = append(lines, fmt.Sprintf("%s %s, last beat: %s", styleSection("Actor:"), valueOr(last.Actor, "n/a"), last.When.Format(time.RFC3339)))
+		lines = append(lines, fmt.Sprintf("%s %s, last beat: %s", styleSection("Critic:"), valueOr(last.Critic, "n/a"), last.When.Format(time.RFC3339)))
 	} else {
-		lines = append(lines, "No beats recorded.")
+		lines = append(lines, styleWarn("No beats recorded."))
 	}
 	if len(openTasks) > 0 {
-		lines = append(lines, "Tasks:")
+		lines = append(lines, styleSection("Tasks:"))
 		for _, t := range openTasks {
-			lines = append(lines, fmt.Sprintf("- #%d %s [%s] prio=%s actor=%s critic=%s", t.ID, t.Title, t.Status, t.Priority, t.Actor, t.Critic))
+			lines = append(lines, fmt.Sprintf("- #%d %s [%s] prio=%s actor=%s critic=%s", t.ID, t.Title, styleStatus(t.Status), t.Priority, t.Actor, t.Critic))
 		}
 	} else {
-		lines = append(lines, "Tasks: none open")
+		lines = append(lines, fmt.Sprintf("%s %s", styleSection("Tasks:"), styleDim("none open")))
 	}
 	report := strings.Join(lines, "\n")
 	fmt.Println(report)
@@ -359,4 +359,3 @@ func valueOr(val, def string) string {
 	}
 	return val
 }
-
