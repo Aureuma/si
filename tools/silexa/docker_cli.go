@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+
+	shared "silexa/agents/shared/docker"
 )
 
 func cmdDocker(args []string) {
@@ -24,5 +26,10 @@ func execDockerCLI(args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	if os.Getenv("DOCKER_HOST") == "" {
+		if host, ok := shared.AutoDockerHost(); ok {
+			cmd.Env = append(os.Environ(), "DOCKER_HOST="+host)
+		}
+	}
 	return cmd.Run()
 }
