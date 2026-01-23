@@ -45,10 +45,40 @@ func (m *Monitor) TickDyadWork(ctx context.Context, dyad string) {
 			actorLoggedIn = strings.Contains(out, "Logged in")
 		}
 	}
+	if !actorLoggedIn {
+		for _, t := range tasks {
+			if t.Dyad != dyad || t.Status == "done" {
+				continue
+			}
+			kind := strings.ToLower(strings.TrimSpace(t.Kind))
+			if !isExecutableKind(kind) {
+				continue
+			}
+			if strings.EqualFold(strings.TrimSpace(t.Status), "blocked") {
+				continue
+			}
+			updates := map[string]string{
+				"codex.actor_login": "required",
+			}
+			switch kind {
+			case "test.codex_loop":
+				updates["codex_test.error"] = "actor not logged in"
+			default:
+				updates["codex.exec.error"] = "actor not logged in"
+			}
+			notes := setState(t.Notes, updates)
+			_ = m.updateDyadTask(ctx, map[string]interface{}{
+				"id":     t.ID,
+				"status": "blocked",
+				"notes":  notes,
+			})
+		}
+		return
+	}
 
 	candidates := make([]DyadTask, 0, len(tasks))
 	for _, t := range tasks {
-		if t.Dyad != dyad || t.Status == "done" {
+		if t.Dyad != dyad || t.Status == "done" || strings.EqualFold(strings.TrimSpace(t.Status), "blocked") {
 			continue
 		}
 		kind := strings.ToLower(strings.TrimSpace(t.Kind))
