@@ -6,7 +6,7 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 - `apps/`: Application repos built by agents (one repo per app).
 - `agents/`: Agent-specific code and tooling.
 - `tools/silexa`: Go-based CLI for Docker + manager workflows.
-- `actor`: Node base image for interactive CLI agents (install LLM tools inside the running container as needed).
+- `actor`: Node base image for interactive CLI agents (Codex CLI preinstalled; update inside container as needed).
 - `critic`: Go watcher that reads actor logs via Docker and sends heartbeats to the manager.
 - `manager`: Go service collecting critic heartbeats and storing state on disk.
 - `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
@@ -81,7 +81,7 @@ Each container uses its own persistent `~/.codex` volume so multiple Codex accou
 - Mark a task complete: `./si human complete <id>`.
 
 ## Codex CLI login flow (pattern)
-1) Actor runs `npm i -g @openai/codex` then `codex login` (gets a local callback URL + port).
+1) Actor runs `codex login` (gets a local callback URL + port).
 2) Actor writes a Human Action Queue item with the URL and/or port; optionally triggers `silexa notify` so Telegram pings the operator.
 3) Human opens the URL on a browser-capable machine and completes OAuth.
 4) Actor resumes once callback is received; mark the queue item as done.
@@ -91,6 +91,6 @@ Each container uses its own persistent `~/.codex` volume so multiple Codex accou
 - Keep container privileges minimal; actors/critics do not need a container runtime socket.
 
 ## Next steps
-- Install Codex CLI (or another LLM-driven CLI) inside actor containers per task.
+- Update Codex CLI (or another LLM-driven CLI) inside actor containers as needed.
 - Add more dyads via `si dyad spawn`.
 - Wire higher-level task queues to feed work into actors and surface signals from manager to department heads.

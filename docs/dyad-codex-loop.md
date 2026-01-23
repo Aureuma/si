@@ -28,6 +28,21 @@ This is the core dyad mechanism that proves the Critic can:
     - `[codex_test.last]=...`
     - `[codex_test.result]=ok`
 
+## Quick CLI test
+Run a full critic → actor loop test from the host:
+
+```bash
+./si dyad codex-loop-test <dyad> --spawn
+```
+
+If the actor is not logged into Codex, run:
+
+```bash
+./si dyad exec <dyad> --member actor -- codex login
+```
+
+The test command will print the captured `codex_test.last` output and final result as it waits.
+
 ## Implementation
 - Codex turn runner: `agents/critic/internal/codex_loop.go`
 - Task dispatcher: `agents/critic/internal/dyad_tasks.go`
