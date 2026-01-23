@@ -239,7 +239,6 @@ func formatDyadTaskMessage(t state.DyadTask) string {
 }
 
 func shouldNotifyDyadTask(t state.DyadTask) bool {
-	kind := strings.ToLower(strings.TrimSpace(t.Kind))
 	status := strings.ToLower(strings.TrimSpace(t.Status))
 	requestedBy := strings.ToLower(strings.TrimSpace(t.RequestedBy))
 	priority := strings.ToLower(strings.TrimSpace(t.Priority))
