@@ -1,8 +1,10 @@
-FROM golang:1.22 AS builder
+FROM golang:1.24-bookworm AS builder
 WORKDIR /src
-COPY go.mod go.sum ./
+COPY agents/codex-monitor/go.mod agents/codex-monitor/go.sum ./
+COPY agents/shared /shared
 RUN go mod download
-COPY . .
+COPY agents/codex-monitor/ ./
+RUN go mod tidy
 RUN CGO_ENABLED=0 go build -o /out/codex-monitor .
 
 FROM debian:bookworm-slim
