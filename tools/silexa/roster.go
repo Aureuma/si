@@ -13,7 +13,7 @@ import (
 
 func cmdRoster(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si roster <apply|status>")
+		printUsage("usage: si roster <apply|status>")
 		return
 	}
 	switch args[0] {
@@ -22,7 +22,7 @@ func cmdRoster(args []string) {
 	case "status":
 		cmdRosterStatus(args[1:])
 	default:
-		fmt.Println("unknown roster command:", args[0])
+		printUnknown("roster", args[0])
 	}
 }
 
@@ -103,7 +103,7 @@ func cmdRosterApply(args []string) {
 		}
 
 		if *dryRun {
-			fmt.Printf("would update dyad: %s\n", name)
+			infof("would update dyad: %s", name)
 		} else {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			if err := postJSON(ctx, strings.TrimRight(managerURL, "/")+"/dyads", update, nil); err != nil {
@@ -111,12 +111,12 @@ func cmdRosterApply(args []string) {
 				fatal(err)
 			}
 			cancel()
-			fmt.Printf("updated dyad: %s\n", name)
+			successf("updated dyad: %s", name)
 		}
 
 		if *spawn && boolOr(entry.Spawn, roster.Defaults.Spawn, false) {
 			if *dryRun {
-				fmt.Printf("would spawn dyad: %s\n", name)
+				infof("would spawn dyad: %s", name)
 			} else {
 				if err := spawnDyadFromEnv(name, role, dept); err != nil {
 					fatal(err)
@@ -136,7 +136,7 @@ func cmdRosterStatus(args []string) {
 		fatal(err)
 	}
 	if len(rows) == 0 {
-		fmt.Println("no dyads registered")
+		infof("no dyads registered")
 		return
 	}
 	type row struct {
@@ -170,25 +170,25 @@ func cmdRosterStatus(args []string) {
 		widths["avail"] = max(widths["avail"], len(r.Available))
 		widths["state"] = max(widths["state"], len(r.State))
 	}
-	fmt.Printf("%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s\n",
-		widths["dyad"], "dyad",
-		widths["team"], "team",
-		widths["assignment"], "assignment",
-		widths["role"], "role",
-		widths["dept"], "dept",
-		widths["avail"], "avail",
-		widths["state"], "state",
+	fmt.Printf("%s  %s  %s  %s  %s  %s  %s\n",
+		padRightANSI(styleHeading("dyad"), widths["dyad"]),
+		padRightANSI(styleHeading("team"), widths["team"]),
+		padRightANSI(styleHeading("assignment"), widths["assignment"]),
+		padRightANSI(styleHeading("role"), widths["role"]),
+		padRightANSI(styleHeading("dept"), widths["dept"]),
+		padRightANSI(styleHeading("avail"), widths["avail"]),
+		padRightANSI(styleHeading("state"), widths["state"]),
 	)
 	fmt.Println(strings.Repeat("-", widths["dyad"]+widths["team"]+widths["assignment"]+widths["role"]+widths["dept"]+widths["avail"]+widths["state"]+12))
 	for _, r := range out {
-		fmt.Printf("%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s\n",
-			widths["dyad"], r.Dyad,
-			widths["team"], r.Team,
-			widths["assignment"], r.Assignment,
-			widths["role"], r.Role,
-			widths["dept"], r.Dept,
-			widths["avail"], r.Available,
-			widths["state"], r.State,
+		fmt.Printf("%s  %s  %s  %s  %s  %s  %s\n",
+			padRightANSI(r.Dyad, widths["dyad"]),
+			padRightANSI(r.Team, widths["team"]),
+			padRightANSI(r.Assignment, widths["assignment"]),
+			padRightANSI(r.Role, widths["role"]),
+			padRightANSI(r.Dept, widths["dept"]),
+			padRightANSI(styleStatus(r.Available), widths["avail"]),
+			padRightANSI(styleStatus(r.State), widths["state"]),
 		)
 	}
 	_ = args
@@ -279,4 +279,3 @@ func boolLabel(raw interface{}) string {
 		return ""
 	}
 }
-

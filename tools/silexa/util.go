@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func usage() {
-	fmt.Print(`si [command] [args]
+	fmt.Print(colorizeHelp(`si [command] [args]
 
 Holistic CLI for the Silexa stack. This help includes all commands, flags, and core features.
 
@@ -297,7 +300,7 @@ Environment defaults (selected)
   MCP_GATEWAY_CONTAINER, DYAD_ROSTER_FILE
   BROKER_URL, NOTIFY_URL, DYAD_TASK_COMPLEXITY, DYAD_TASK_KIND, REQUESTED_BY
   CREDENTIALS_APPROVER_TOKEN
-`)
+`))
 }
 
 func envOr(key, def string) string {
@@ -351,7 +354,7 @@ func exists(path string) bool {
 }
 
 func fatal(err error) {
-	_, _ = fmt.Fprintln(os.Stderr, err.Error())
+	_, _ = fmt.Fprintln(os.Stderr, styleError(err.Error()))
 	os.Exit(1)
 }
 
@@ -379,4 +382,178 @@ func isValidSlug(name string) bool {
 		return false
 	}
 	return true
+}
+
+var ansiEnabled = initAnsiEnabled()
+
+func initAnsiEnabled() bool {
+	if strings.TrimSpace(os.Getenv("NO_COLOR")) != "" || strings.TrimSpace(os.Getenv("SI_NO_COLOR")) != "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("TERM")), "dumb") {
+		return false
+	}
+	if force := strings.TrimSpace(os.Getenv("SI_COLOR")); force != "" {
+		return force == "1" || strings.EqualFold(force, "true")
+	}
+	if force := strings.TrimSpace(os.Getenv("CLICOLOR_FORCE")); force != "" && force != "0" {
+		return true
+	}
+	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+func ansi(codes ...string) string {
+	return "\x1b[" + strings.Join(codes, ";") + "m"
+}
+
+func colorize(s string, codes ...string) string {
+	if !ansiEnabled || s == "" {
+		return s
+	}
+	return ansi(codes...) + s + ansi("0")
+}
+
+func styleHeading(s string) string { return colorize(s, "1", "36") }
+func styleSection(s string) string { return colorize(s, "1", "34") }
+func styleCmd(s string) string     { return colorize(s, "1", "32") }
+func styleFlag(s string) string    { return colorize(s, "33") }
+func styleArg(s string) string     { return colorize(s, "35") }
+func styleDim(s string) string     { return colorize(s, "90") }
+func styleInfo(s string) string    { return colorize(s, "36") }
+func styleSuccess(s string) string { return colorize(s, "32") }
+func styleWarn(s string) string    { return colorize(s, "33") }
+func styleError(s string) string   { return colorize(s, "31") }
+func styleUsage(s string) string   { return colorize(s, "1", "33") }
+
+func styleStatus(s string) string {
+	val := strings.ToLower(strings.TrimSpace(s))
+	switch val {
+	case "running", "ok", "ready", "done", "success", "yes", "true", "available", "up":
+		return styleSuccess(s)
+	case "blocked", "warning", "warn", "pending":
+		return styleWarn(s)
+	case "failed", "error", "missing", "stopped", "exited", "not found", "no", "false", "down":
+		return styleError(s)
+	default:
+		return styleInfo(s)
+	}
+}
+
+func printUsage(line string) {
+	raw := strings.TrimSpace(line)
+	if strings.HasPrefix(raw, "usage:") {
+		rest := strings.TrimSpace(strings.TrimPrefix(raw, "usage:"))
+		fmt.Printf("%s %s\n", styleUsage("usage:"), rest)
+		return
+	}
+	fmt.Println(styleUsage(raw))
+}
+
+func printUnknown(kind, cmd string) {
+	kind = strings.TrimSpace(kind)
+	if kind != "" {
+		kind = kind + " "
+	}
+	fmt.Fprintf(os.Stderr, "%s %s%s\n", styleError("unknown"), kind+"command:", styleCmd(cmd))
+}
+
+func warnf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	if containsANSI(msg) {
+		fmt.Fprintln(os.Stderr, styleWarn("warning:")+" "+msg)
+		return
+	}
+	fmt.Fprintln(os.Stderr, styleWarn("warning:")+" "+msg)
+}
+
+func infof(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	if containsANSI(msg) {
+		fmt.Println(msg)
+		return
+	}
+	fmt.Println(styleInfo(msg))
+}
+
+func successf(format string, args ...interface{}) {
+	msg := fmt.Sprintf(format, args...)
+	if containsANSI(msg) {
+		fmt.Println(msg)
+		return
+	}
+	fmt.Println(styleSuccess(msg))
+}
+
+func colorizeHelp(text string) string {
+	if !ansiEnabled {
+		return text
+	}
+	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
+	cmdRe := regexp.MustCompile(`\\b(si|stack|dyad|codex|task|human|feedback|access|resource|metric|notify|report|roster|mcp|docker|app|images|image|profile|capability)\\b`)
+	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
+	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
+	argRe := regexp.MustCompile(`<[^>]+>`)
+	dividerRe := regexp.MustCompile(`^-{3,}$`)
+
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if dividerRe.MatchString(trimmed) {
+			lines[i] = indentLine(line, styleDim(trimmed))
+			continue
+		}
+		if sectionRe.MatchString(trimmed) {
+			lines[i] = indentLine(line, styleHeading(trimmed))
+			continue
+		}
+		if strings.HasPrefix(trimmed, "Usage:") || strings.HasPrefix(trimmed, "Features:") || strings.HasPrefix(trimmed, "Core:") || strings.HasPrefix(trimmed, "Build/app:") || strings.HasPrefix(trimmed, "Profiles:") || strings.HasPrefix(trimmed, "Command details") || strings.HasPrefix(trimmed, "Environment defaults") {
+			lines[i] = indentLine(line, styleHeading(trimmed))
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(trimmed), "usage:") {
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
+				lines[i] = indentLine(line, styleUsage(parts[0]+":")+" "+strings.TrimSpace(parts[1]))
+				continue
+			}
+		}
+		line = flagRe.ReplaceAllStringFunc(line, styleFlag)
+		line = shortFlagRe.ReplaceAllStringFunc(line, func(m string) string {
+			trim := strings.TrimSpace(m)
+			if trim == "" {
+				return m
+			}
+			return strings.Replace(m, trim, styleFlag(trim), 1)
+		})
+		line = argRe.ReplaceAllStringFunc(line, styleArg)
+		line = cmdRe.ReplaceAllStringFunc(line, styleCmd)
+		lines[i] = line
+	}
+	return strings.Join(lines, "\n")
+}
+
+func indentLine(line, replacement string) string {
+	prefix := line[:len(line)-len(strings.TrimLeft(line, " "))]
+	return prefix + replacement
+}
+
+var ansiStripRe = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func stripANSIForPad(s string) string {
+	return ansiStripRe.ReplaceAllString(s, "")
+}
+
+func padRightANSI(s string, width int) string {
+	visible := len(stripANSIForPad(s))
+	if visible >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-visible)
+}
+
+func containsANSI(s string) bool {
+	return ansiStripRe.MatchString(s)
 }

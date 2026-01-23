@@ -13,7 +13,7 @@ import (
 
 func cmdTask(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si task <add|add-dyad|update>")
+		printUsage("usage: si task <add|add-dyad|update>")
 		return
 	}
 	switch args[0] {
@@ -24,13 +24,13 @@ func cmdTask(args []string) {
 	case "update":
 		cmdTaskUpdate(args[1:])
 	default:
-		fmt.Println("unknown task command:", args[0])
+		printUnknown("task", args[0])
 	}
 }
 
 func cmdTaskAdd(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si task add <title> [kind] [priority] [description] [link] [notes] [complexity]")
+		printUsage("usage: si task add <title> [kind] [priority] [description] [link] [notes] [complexity]")
 		return
 	}
 	title := args[0]
@@ -56,12 +56,12 @@ func cmdTaskAdd(args []string) {
 	if err := postDyadTask(managerURL, payload); err != nil {
 		fatal(err)
 	}
-	fmt.Println("task created")
+	successf("task created")
 }
 
 func cmdTaskAddDyad(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: si task add-dyad <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]")
+		printUsage("usage: si task add-dyad <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]")
 		return
 	}
 	title := args[0]
@@ -93,12 +93,12 @@ func cmdTaskAddDyad(args []string) {
 	if err := postDyadTask(managerURL, payload); err != nil {
 		fatal(err)
 	}
-	fmt.Println("dyad task created")
+	successf("dyad task created")
 }
 
 func cmdTaskUpdate(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: si task update <id> <status> [notes] [actor] [critic] [complexity]")
+		printUsage("usage: si task update <id> <status> [notes] [actor] [critic] [complexity]")
 		return
 	}
 	id, err := strconv.Atoi(args[0])
@@ -123,7 +123,7 @@ func cmdTaskUpdate(args []string) {
 	if err := postDyadTaskUpdate(managerURL, payload); err != nil {
 		fatal(err)
 	}
-	fmt.Println("dyad task updated")
+	successf("dyad task updated")
 }
 
 type dyadTaskPayload struct {
@@ -156,7 +156,7 @@ func postDyadTaskUpdate(managerURL string, payload dyadTaskPayload) error {
 
 func cmdHuman(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si human <add|complete>")
+		printUsage("usage: si human <add|complete>")
 		return
 	}
 	switch args[0] {
@@ -165,13 +165,13 @@ func cmdHuman(args []string) {
 	case "complete":
 		cmdHumanComplete(args[1:])
 	default:
-		fmt.Println("unknown human command:", args[0])
+		printUnknown("human", args[0])
 	}
 }
 
 func cmdHumanAdd(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: si human add <title> <commands> [url] [timeout] [requested_by] [notes]")
+		printUsage("usage: si human add <title> <commands> [url] [timeout] [requested_by] [notes]")
 		return
 	}
 	title := args[0]
@@ -203,12 +203,12 @@ func cmdHumanAdd(args []string) {
 	if err := postJSON(ctx, strings.TrimRight(managerURL, "/")+"/human-tasks", payload, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("human task created")
+	successf("human task created")
 }
 
 func cmdHumanComplete(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si human complete <id>")
+		printUsage("usage: si human complete <id>")
 		return
 	}
 	id := args[0]
@@ -219,12 +219,12 @@ func cmdHumanComplete(args []string) {
 	if err := postJSON(ctx, u, nil, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("human task completed")
+	successf("human task completed")
 }
 
 func cmdFeedback(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si feedback <add|broadcast>")
+		printUsage("usage: si feedback <add|broadcast>")
 		return
 	}
 	switch args[0] {
@@ -233,13 +233,13 @@ func cmdFeedback(args []string) {
 	case "broadcast":
 		cmdFeedbackBroadcast(args[1:])
 	default:
-		fmt.Println("unknown feedback command:", args[0])
+		printUnknown("feedback", args[0])
 	}
 }
 
 func cmdFeedbackAdd(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: si feedback add <severity> <message> [source] [context]")
+		printUsage("usage: si feedback add <severity> <message> [source] [context]")
 		return
 	}
 	sev := args[0]
@@ -258,12 +258,12 @@ func cmdFeedbackAdd(args []string) {
 	if err := postJSON(ctx, strings.TrimRight(managerURL, "/")+"/feedback", payload, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("feedback posted")
+	successf("feedback posted")
 }
 
 func cmdFeedbackBroadcast(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si feedback broadcast <message> [severity]")
+		printUsage("usage: si feedback broadcast <message> [severity]")
 		return
 	}
 	message := args[0]
@@ -284,15 +284,15 @@ func cmdFeedbackBroadcast(args []string) {
 
 	if notifyURL := envOr("TELEGRAM_NOTIFY_URL", ""); notifyURL != "" {
 		if err := sendNotify(notifyURL, message, os.Getenv("TELEGRAM_CHAT_ID")); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "notify failed:", err)
+			warnf("notify failed: %v", err)
 		}
 	}
-	fmt.Println("broadcast sent")
+	successf("broadcast sent")
 }
 
 func cmdAccess(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si access <request|resolve>")
+		printUsage("usage: si access <request|resolve>")
 		return
 	}
 	switch args[0] {
@@ -301,13 +301,13 @@ func cmdAccess(args []string) {
 	case "resolve":
 		cmdAccessResolve(args[1:])
 	default:
-		fmt.Println("unknown access command:", args[0])
+		printUnknown("access", args[0])
 	}
 }
 
 func cmdAccessRequest(args []string) {
 	if len(args) < 3 {
-		fmt.Println("usage: si access request <requester> <resource> <action> [reason] [department]")
+		printUsage("usage: si access request <requester> <resource> <action> [reason] [department]")
 		return
 	}
 	managerURL := envOr("MANAGER_URL", "http://localhost:9090")
@@ -323,12 +323,12 @@ func cmdAccessRequest(args []string) {
 	if err := postJSON(ctx, strings.TrimRight(managerURL, "/")+"/access-requests", payload, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("access request created")
+	successf("access request created")
 }
 
 func cmdAccessResolve(args []string) {
 	if len(args) < 2 {
-		fmt.Println("usage: si access resolve <id> <approved|denied> [resolved_by] [notes]")
+		printUsage("usage: si access resolve <id> <approved|denied> [resolved_by] [notes]")
 		return
 	}
 	managerURL := envOr("MANAGER_URL", "http://localhost:9090")
@@ -348,25 +348,25 @@ func cmdAccessResolve(args []string) {
 	if err := postJSON(ctx, u, nil, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("access request resolved")
+	successf("access request resolved")
 }
 
 func cmdResource(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si resource <request>")
+		printUsage("usage: si resource <request>")
 		return
 	}
 	switch args[0] {
 	case "request":
 		cmdResourceRequest(args[1:])
 	default:
-		fmt.Println("unknown resource command:", args[0])
+		printUnknown("resource", args[0])
 	}
 }
 
 func cmdResourceRequest(args []string) {
 	if len(args) < 3 {
-		fmt.Println("usage: si resource request <resource> <action> <payload> [requested_by] [notes]")
+		printUsage("usage: si resource request <resource> <action> <payload> [requested_by] [notes]")
 		return
 	}
 	brokerURL := envOr("BROKER_URL", "http://localhost:9091")
@@ -382,25 +382,25 @@ func cmdResourceRequest(args []string) {
 	if err := postJSON(ctx, strings.TrimRight(brokerURL, "/")+"/requests", payload, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("resource request created")
+	successf("resource request created")
 }
 
 func cmdMetric(args []string) {
 	if len(args) == 0 {
-		fmt.Println("usage: si metric <post>")
+		printUsage("usage: si metric <post>")
 		return
 	}
 	switch args[0] {
 	case "post":
 		cmdMetricPost(args[1:])
 	default:
-		fmt.Println("unknown metric command:", args[0])
+		printUnknown("metric", args[0])
 	}
 }
 
 func cmdMetricPost(args []string) {
 	if len(args) < 4 {
-		fmt.Println("usage: si metric post <dyad> <department> <name> <value> [unit] [recorded_by]")
+		printUsage("usage: si metric post <dyad> <department> <name> <value> [unit] [recorded_by]")
 		return
 	}
 	value, err := strconv.ParseFloat(args[3], 64)
@@ -421,12 +421,12 @@ func cmdMetricPost(args []string) {
 	if err := postJSON(ctx, strings.TrimRight(managerURL, "/")+"/metrics", payload, nil); err != nil {
 		fatal(err)
 	}
-	fmt.Println("metric posted")
+	successf("metric posted")
 }
 
 func cmdNotify(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si notify <message>")
+		printUsage("usage: si notify <message>")
 		return
 	}
 	msg := strings.Join(args, " ")
@@ -434,7 +434,7 @@ func cmdNotify(args []string) {
 	if err := sendNotify(notifyURL, msg, os.Getenv("TELEGRAM_CHAT_ID")); err != nil {
 		fatal(err)
 	}
-	fmt.Println("notification sent")
+	successf("notification sent")
 }
 
 func sendNotify(url, message, chatID string) error {
@@ -460,7 +460,7 @@ func argOr(args []string, idx int, def string) string {
 
 func cmdProfile(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si profile <name>")
+		printUsage("usage: si profile <name>")
 		return
 	}
 	root := mustRepoRoot()
@@ -472,17 +472,17 @@ func cmdProfile(args []string) {
 	if !ok {
 		fatal(fmt.Errorf("profile not found: %s", path))
 	}
-	fmt.Println(data)
+	fmt.Println(styleInfo(data))
 }
 
 func cmdCapability(args []string) {
 	if len(args) < 1 {
-		fmt.Println("usage: si capability <role>")
+		printUsage("usage: si capability <role>")
 		return
 	}
 	role := args[0]
 	if text, ok := capabilityText(role); ok {
-		fmt.Println(text)
+		fmt.Println(styleInfo(text))
 		return
 	}
 	fatal(fmt.Errorf("unknown role: %s", role))
