@@ -287,6 +287,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		Image:  opts.CriticImage,
 		Env:    criticEnv,
 		Labels: criticLabels,
+		User:   "root",
 	}
 	criticHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -294,6 +295,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 			{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
 			{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 			{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
+			{Type: mount.TypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
 		},
 	}
 
