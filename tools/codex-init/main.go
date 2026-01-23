@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -48,6 +49,13 @@ func main() {
 	}
 
 	if len(execArgs) > 0 {
+		if !strings.Contains(execArgs[0], "/") {
+			resolved, err := exec.LookPath(execArgs[0])
+			if err != nil {
+				fatal(err, quiet)
+			}
+			execArgs[0] = resolved
+		}
 		if err := syscall.Exec(execArgs[0], execArgs, os.Environ()); err != nil {
 			fatal(err, quiet)
 		}
