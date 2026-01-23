@@ -18,6 +18,8 @@ var (
 	codexSessionRe = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 )
 
+const codexIgnoreRegex = `^(\s*(?:[\x{2500}\x{2502}\x{255E}\x{2561}\x{2564}\x{2567}\x{256A}\x{256D}\x{256E}\x{256F}\x{2570}]+)\s*$|\s*>_.*|\s*OpenAI Codex.*|\s*model:.*|\s*directory:.*|\s*Tip:.*|\s*›.*|\s*↳.*|\s*•\s*(Working|Preparing).*|\s*\d+%\s+context\s+left.*)$`
+
 // RunCodexTurn runs a single Codex turn inside the target container using the interactive CLI.
 // It returns the session id (when available) and the last captured response line.
 func (m *Monitor) RunCodexTurn(ctx context.Context, container, sessionID, prompt, model, effort string) (string, string, error) {
@@ -59,16 +61,17 @@ func (m *Monitor) RunCodexTurn(ctx context.Context, container, sessionID, prompt
 			turnTimeout = remaining
 		}
 	}
-	idleTimeout := 4 * time.Second
-	logWait := 5 * time.Second
+	idleTimeout := 20 * time.Second
+	logWait := 10 * time.Second
 
 	cmd := fmt.Sprintf(
 		"PROMPT=$(printf '%%s' %s | base64 -d); SESSION_LOG=$(mktemp /tmp/codex-session-XXXX.jsonl); "+
-			"codex-stdout-parser --command %s --prompt \"$PROMPT\" --session-log \"$SESSION_LOG\" "+
+			"codex-stdout-parser --command %s --prompt \"$PROMPT\" --session-log \"$SESSION_LOG\" --ignore-regex %s "+
 			"--session-log-wait %s --bracketed-paste --submit-seq '\\r' --idle-timeout %s --turn-timeout %s "+
 			"--wait-ready=false --ready-regex '' --send-exit=false --flush-on-eof=false --max-turns 1 --exit-grace 2s",
 		shellQuote(encoded),
 		shellQuote(codexCmd),
+		shellQuote(codexIgnoreRegex),
 		shellQuote(logWait.String()),
 		shellQuote(idleTimeout.String()),
 		shellQuote(turnTimeout.String()),
@@ -83,6 +86,11 @@ func (m *Monitor) RunCodexTurn(ctx context.Context, container, sessionID, prompt
 	if lastMsg == "" {
 		lastMsg = parseCodexOutput(raw)
 	}
+	if lastMsg == "" {
+		return sessionID, "", fmt.Errorf("no codex output captured")
+	}
+
+	lastMsg = normalizeCodexMessage(lastMsg)
 	if lastMsg == "" {
 		return sessionID, "", fmt.Errorf("no codex output captured")
 	}
@@ -580,6 +588,88 @@ func stripANSI(s string) string {
 	return codexAnsiRe.ReplaceAllString(s, "")
 }
 
+func normalizeCodexMessage(msg string) string {
+	lines := []string{}
+	for _, line := range strings.Split(msg, "\n") {
+		clean := strings.TrimSpace(line)
+		if clean == "" {
+			continue
+		}
+		if isNoiseLine(clean) {
+			continue
+		}
+		if isBoxOnlyLine(clean) {
+			continue
+		}
+		clean = trimBoxEdges(clean)
+		if clean == "" || isBoxOnlyLine(clean) {
+			continue
+		}
+		if isNoiseLine(clean) {
+			continue
+		}
+		lines = append(lines, clean)
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
+}
+
+func isNoiseLine(line string) bool {
+	lower := strings.ToLower(strings.TrimSpace(line))
+	switch {
+	case strings.HasPrefix(lower, "directory:"):
+		return true
+	case strings.HasPrefix(lower, "model:"):
+		return true
+	case strings.HasPrefix(lower, "openai codex"):
+		return true
+	case strings.HasPrefix(lower, "tip:"):
+		return true
+	case strings.HasPrefix(lower, "›"):
+		return true
+	case strings.HasPrefix(lower, "↳"):
+		return true
+	case strings.HasPrefix(lower, "• working"):
+		return true
+	case strings.HasPrefix(lower, "• preparing"):
+		return true
+	case strings.Contains(lower, "context left"):
+		return true
+	}
+	return false
+}
+
+func trimBoxEdges(s string) string {
+	return strings.TrimFunc(s, func(r rune) bool {
+		if r == '|' {
+			return true
+		}
+		return isBoxRune(r)
+	})
+}
+
+func isBoxOnlyLine(s string) bool {
+	if strings.TrimSpace(s) == "" {
+		return true
+	}
+	trimmed := strings.TrimSpace(s)
+	for _, r := range trimmed {
+		if r == '|' || isBoxRune(r) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isBoxRune(r rune) bool {
+	switch r {
+	case '\u2500', '\u2502', '\u255e', '\u2561', '\u2564', '\u2567', '\u256a', '\u256d', '\u256e', '\u256f', '\u2570':
+		return true
+	default:
+		return false
+	}
+}
+
 func parseCodexSessionID(raw string) string {
 	clean := stripANSI(raw)
 	lines := strings.Split(clean, "\n")
@@ -600,14 +690,21 @@ func parseCodexSessionID(raw string) string {
 }
 
 func (m *Monitor) latestCodexSessionID(ctx context.Context, container string) (string, error) {
-	cmd := `dir="${CODEX_HOME:-$HOME/.codex}/sessions"; ls -1t "$dir" 2>/dev/null | head -n 1`
+	cmd := `dir="${CODEX_HOME:-$HOME/.codex}/sessions"; ` +
+		`find "$dir" -type f -name 'rollout-*.jsonl' -printf '%T@ %p\n' 2>/dev/null | ` +
+		`sort -n | tail -n 1 | cut -d' ' -f2-`
 	out, err := m.ExecInContainerCapture(ctx, container, []string{"bash", "-lc", cmd})
 	if err != nil {
 		return "", err
 	}
-	id := strings.TrimSpace(out)
-	id = strings.TrimSuffix(id, ".json")
-	return strings.TrimSpace(id), nil
+	path := strings.TrimSpace(out)
+	if path == "" {
+		return "", fmt.Errorf("no codex session log found")
+	}
+	if id := codexSessionRe.FindString(path); id != "" {
+		return id, nil
+	}
+	return "", fmt.Errorf("no session id in %s", path)
 }
 
 func parseState(notes string) map[string]string {
