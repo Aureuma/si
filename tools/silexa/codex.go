@@ -552,37 +552,11 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 		return
 	}
 	const destPath = "/home/si/.codex/config.toml"
-	exists, err := fileExistsInContainer(ctx, client, containerID, destPath)
-	if err != nil {
-		warnf("codex config copy check failed: %v", err)
-		return
-	}
-	if exists {
-		return
-	}
 	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
 		warnf("codex config copy failed: %v", err)
 		return
 	}
 	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
-}
-
-func fileExistsInContainer(ctx context.Context, client *shared.Client, containerID, path string) (bool, error) {
-	err := client.Exec(ctx, containerID, []string{"bash", "-lc", "test -f " + shellQuoteValue(path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
-	if err == nil {
-		return true, nil
-	}
-	if strings.Contains(err.Error(), "exec exit code") {
-		return false, nil
-	}
-	return false, err
-}
-
-func shellQuoteValue(s string) string {
-	if s == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func flagProvided(args []string, name string) bool {
