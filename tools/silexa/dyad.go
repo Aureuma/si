@@ -17,7 +17,7 @@ import (
 
 func cmdDyad(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test>")
+		printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login>")
 		return
 	}
 	switch args[0] {
@@ -37,16 +37,10 @@ func cmdDyad(args []string) {
 		cmdDyadLogs(args[1:])
 	case "restart":
 		cmdDyadRestart(args[1:])
-	case "register":
-		cmdDyadRegister(args[1:])
 	case "cleanup":
 		cmdDyadCleanup(args[1:])
 	case "copy-login", "codex-login-copy":
 		cmdDyadCopyLogin(args[1:])
-	case "clear-blocked":
-		cmdDyadClearBlocked(args[1:])
-	case "codex-loop-test", "codex-loop":
-		cmdDyadCodexLoopTest(args[1:])
 	default:
 		printUnknown("dyad", args[0])
 	}
@@ -58,10 +52,6 @@ func cmdDyadSpawn(args []string) {
 	deptFlag := fs.String("department", "", "dyad department")
 	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "silexa/actor:local"), "actor image")
 	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "silexa/critic:local"), "critic image")
-	managerURL := fs.String("manager-url", envOr("MANAGER_URL", "http://localhost:9090"), "manager URL for registration")
-	managerServiceURL := fs.String("manager-service-url", envOr("MANAGER_SERVICE_URL", "http://silexa-manager:9090"), "manager URL for containers")
-	telegramURL := fs.String("telegram-url", envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify"), "telegram notify URL for containers")
-	telegramChat := fs.String("telegram-chat-id", envOr("TELEGRAM_CHAT_ID", ""), "telegram chat id for containers")
 	codexModel := fs.String("codex-model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
 	codexEffortActor := fs.String("codex-effort-actor", envOr("CODEX_ACTOR_EFFORT", ""), "codex effort for actor")
 	codexEffortCritic := fs.String("codex-effort-critic", envOr("CODEX_CRITIC_EFFORT", ""), "codex effort for critic")
@@ -74,7 +64,6 @@ func cmdDyadSpawn(args []string) {
 	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace (repo root)")
 	configsHost := fs.String("configs", envOr("SILEXA_CONFIGS_HOST", ""), "host path to configs")
 	forwardPorts := fs.String("forward-ports", envOr("SILEXA_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
-	approverToken := fs.String("approver-token", envOr("CREDENTIALS_APPROVER_TOKEN", ""), "credentials approver token (silexa-credentials)")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -126,16 +115,6 @@ func cmdDyadSpawn(args []string) {
 		*forwardPorts = "1455-1465"
 	}
 
-	if strings.TrimSpace(*approverToken) == "" && name == "silexa-credentials" {
-		if token, ok, err := readFileTrim(root + string(os.PathSeparator) + "secrets" + string(os.PathSeparator) + "credentials_mcp_token"); err == nil && ok {
-			*approverToken = token
-		}
-	}
-
-	if err := registerDyad(*managerURL, name, role, dept); err != nil {
-		fatal(err)
-	}
-
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -149,9 +128,6 @@ func cmdDyadSpawn(args []string) {
 		Department:        dept,
 		ActorImage:        *actorImage,
 		CriticImage:       *criticImage,
-		ManagerURL:        *managerServiceURL,
-		TelegramURL:       *telegramURL,
-		TelegramChatID:    *telegramChat,
 		CodexModel:        *codexModel,
 		CodexEffortActor:  *codexEffortActor,
 		CodexEffortCritic: *codexEffortCritic,
@@ -164,13 +140,16 @@ func cmdDyadSpawn(args []string) {
 		WorkspaceHost:     *workspaceHost,
 		ConfigsHost:       *configsHost,
 		ForwardPorts:      *forwardPorts,
-		ApproverToken:     *approverToken,
 		Network:           shared.DefaultNetwork,
 	}
 
-	_, _, err = client.EnsureDyad(ctx, opts)
+	actorID, criticID, err := client.EnsureDyad(ctx, opts)
 	if err != nil {
 		fatal(err)
+	}
+	if identity, ok := hostGitIdentity(); ok {
+		seedGitIdentity(ctx, client, actorID, "root", "/root", identity)
+		seedGitIdentity(ctx, client, criticID, "root", "/root", identity)
 	}
 	successf("dyad %s ready (role=%s dept=%s)", name, role, dept)
 }
@@ -181,8 +160,6 @@ func defaultEffort(role string) (string, string) {
 		return "xhigh", "xhigh"
 	case "research":
 		return "high", "high"
-	case "program_manager", "pm":
-		return "high", "xhigh"
 	case "webdev", "web":
 		return "medium", "high"
 	default:
@@ -425,30 +402,6 @@ func cmdDyadRestart(args []string) {
 	successf("dyad %s restarted", name)
 }
 
-func cmdDyadRegister(args []string) {
-	if len(args) < 1 {
-		printUsage("usage: si dyad register <name> [role] [department]")
-		return
-	}
-	name := args[0]
-	role := "generic"
-	dept := ""
-	if len(args) > 1 {
-		role = args[1]
-	}
-	if len(args) > 2 {
-		dept = args[2]
-	}
-	if dept == "" {
-		dept = role
-	}
-	managerURL := envOr("MANAGER_URL", "http://localhost:9090")
-	if err := registerDyad(managerURL, name, role, dept); err != nil {
-		fatal(err)
-	}
-	successf("registered dyad %s (role=%s dept=%s)", name, role, dept)
-}
-
 func cmdDyadCleanup(args []string) {
 	client, err := shared.NewClient()
 	if err != nil {
@@ -541,85 +494,6 @@ func cmdDyadCopyLogin(args []string) {
 	successf("copied codex login from %s to %s (%s)", sourceName, targetName, memberVal)
 }
 
-func cmdDyadClearBlocked(args []string) {
-	fs := flag.NewFlagSet("dyad clear-blocked", flag.ExitOnError)
-	managerURL := fs.String("manager-url", envOr("MANAGER_URL", "http://localhost:9090"), "manager URL")
-	status := fs.String("status", "done", "new status for blocked tasks")
-	dryRun := fs.Bool("dry-run", false, "print tasks without updating")
-	fs.Parse(args)
-
-	if fs.NArg() < 1 {
-		printUsage("usage: si dyad clear-blocked <dyad> [--status done] [--dry-run]")
-		return
-	}
-	dyad := fs.Arg(0)
-	if err := validateSlug(dyad); err != nil {
-		fatal(err)
-	}
-
-	ctx := context.Background()
-	tasks := []dyadTaskSnapshot{}
-	if err := getJSON(ctx, strings.TrimRight(*managerURL, "/")+"/dyad-tasks", &tasks); err != nil {
-		fatal(err)
-	}
-
-	updated := 0
-	for _, task := range tasks {
-		if task.Dyad != dyad {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(task.Status)) != "blocked" {
-			continue
-		}
-		updated++
-		if *dryRun {
-			infof("blocked task #%d (%s)", task.ID, task.Kind)
-			continue
-		}
-		notes := setTaskNotes(task.Notes, map[string]string{
-			"task.cleared":    time.Now().UTC().Format(time.RFC3339),
-			"task.cleared_by": envOr("REQUESTED_BY", "si"),
-		})
-		payload := map[string]interface{}{
-			"id":     task.ID,
-			"status": strings.TrimSpace(*status),
-			"notes":  notes,
-		}
-		if err := postJSON(ctx, strings.TrimRight(*managerURL, "/")+"/dyad-tasks/update", payload, nil); err != nil {
-			fatal(err)
-		}
-	}
-	if *dryRun {
-		infof("blocked tasks found: %d", updated)
-		return
-	}
-	successf("updated %d blocked tasks", updated)
-}
-
-func registerDyad(managerURL, name, role, dept string) error {
-	if err := validateSlug(name); err != nil {
-		return err
-	}
-	if err := validateSlug(role); err != nil {
-		return err
-	}
-	if err := validateSlug(dept); err != nil {
-		return err
-	}
-	if strings.TrimSpace(managerURL) == "" {
-		return errors.New("MANAGER_URL required")
-	}
-	payload := map[string]interface{}{
-		"dyad":       name,
-		"department": dept,
-		"role":       role,
-		"available":  true,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	return postJSON(ctx, strings.TrimRight(managerURL, "/")+"/dyads", payload, nil)
-}
-
 func max(a, b int) int {
 	if a > b {
 		return a
@@ -627,108 +501,6 @@ func max(a, b int) int {
 	return b
 }
 
-func setTaskNotes(notes string, kv map[string]string) string {
-	lines := []string{}
-	seen := map[string]bool{}
-	for _, line := range strings.Split(notes, "\n") {
-		trim := strings.TrimSpace(line)
-		if strings.HasPrefix(trim, "[") && strings.Contains(trim, "]=") {
-			end := strings.Index(trim, "]=")
-			key := strings.TrimSpace(trim[1:end])
-			if v, ok := kv[key]; ok {
-				lines = append(lines, fmt.Sprintf("[%s]=%s", key, v))
-				seen[key] = true
-				continue
-			}
-		}
-		if trim != "" {
-			lines = append(lines, line)
-		}
-	}
-	for k, v := range kv {
-		if seen[k] {
-			continue
-		}
-		lines = append(lines, fmt.Sprintf("[%s]=%s", k, v))
-	}
-	return strings.TrimSpace(strings.Join(lines, "\n"))
-}
-
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
-}
-
-func spawnDyadFromEnv(name, role, dept string) error {
-	if strings.TrimSpace(name) == "" {
-		return errors.New("dyad name required")
-	}
-	if role == "" {
-		role = "generic"
-	}
-	if dept == "" {
-		dept = role
-	}
-	managerURL := envOr("MANAGER_URL", "http://localhost:9090")
-	managerServiceURL := envOr("MANAGER_SERVICE_URL", "http://silexa-manager:9090")
-	if err := registerDyad(managerURL, name, role, dept); err != nil {
-		return err
-	}
-	actorImage := envOr("ACTOR_IMAGE", "silexa/actor:local")
-	criticImage := envOr("CRITIC_IMAGE", "silexa/critic:local")
-	codexModel := envOr("CODEX_MODEL", "gpt-5.2-codex")
-	codexEffortActor := envOr("CODEX_ACTOR_EFFORT", "")
-	codexEffortCritic := envOr("CODEX_CRITIC_EFFORT", "")
-	if codexEffortActor == "" || codexEffortCritic == "" {
-		actorEffort, criticEffort := defaultEffort(strings.ToLower(role))
-		if codexEffortActor == "" {
-			codexEffortActor = actorEffort
-		}
-		if codexEffortCritic == "" {
-			codexEffortCritic = criticEffort
-		}
-	}
-	root := mustRepoRoot()
-	workspaceHost := envOr("SILEXA_WORKSPACE_HOST", root)
-	configsHost := envOr("SILEXA_CONFIGS_HOST", filepath.Join(root, "configs"))
-	forwardPorts := envOr("SILEXA_DYAD_FORWARD_PORTS", "1455-1465")
-	approverToken := envOr("CREDENTIALS_APPROVER_TOKEN", "")
-	if approverToken == "" && name == "silexa-credentials" {
-		if token, ok, err := readFileTrim(filepath.Join(root, "secrets", "credentials_mcp_token")); err == nil && ok {
-			approverToken = token
-		}
-	}
-	telegramURL := envOr("TELEGRAM_NOTIFY_URL", "http://silexa-telegram-bot:8081/notify")
-	telegramChat := envOr("TELEGRAM_CHAT_ID", "")
-
-	client, err := shared.NewClient()
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	opts := shared.DyadOptions{
-		Dyad:              name,
-		Role:              role,
-		Department:        dept,
-		ActorImage:        actorImage,
-		CriticImage:       criticImage,
-		ManagerURL:        managerServiceURL,
-		TelegramURL:       telegramURL,
-		TelegramChatID:    telegramChat,
-		CodexModel:        codexModel,
-		CodexEffortActor:  codexEffortActor,
-		CodexEffortCritic: codexEffortCritic,
-		CodexModelLow:     envOr("CODEX_MODEL_LOW", ""),
-		CodexModelMedium:  envOr("CODEX_MODEL_MEDIUM", ""),
-		CodexModelHigh:    envOr("CODEX_MODEL_HIGH", ""),
-		CodexEffortLow:    envOr("CODEX_REASONING_EFFORT_LOW", ""),
-		CodexEffortMedium: envOr("CODEX_REASONING_EFFORT_MEDIUM", ""),
-		CodexEffortHigh:   envOr("CODEX_REASONING_EFFORT_HIGH", ""),
-		WorkspaceHost:     workspaceHost,
-		ConfigsHost:       configsHost,
-		ForwardPorts:      forwardPorts,
-		ApproverToken:     approverToken,
-		Network:           shared.DefaultNetwork,
-	}
-	_, _, err = client.EnsureDyad(context.Background(), opts)
-	return err
 }

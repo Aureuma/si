@@ -46,18 +46,8 @@ func cmdImagesBuild(args []string) {
 	root := mustRepoRoot()
 	specs := []imageBuildSpec{
 		{tag: "silexa/si-codex:local", contextDir: filepath.Join(root, "tools/si-codex-image")},
-		{tag: "silexa/telegram-bot:local", contextDir: filepath.Join(root, "agents/telegram-bot")},
-		{tag: "silexa/resource-broker:local", contextDir: filepath.Join(root, "agents/resource-broker")},
-		{tag: "silexa/infra-broker:local", contextDir: filepath.Join(root, "agents/infra-broker")},
-		{tag: "silexa/manager:local", contextDir: filepath.Join(root, "agents/manager")},
-		{tag: "silexa/codex-monitor:local", contextDir: root, dockerfile: filepath.Join(root, "agents/codex-monitor/Dockerfile")},
-		{tag: "silexa/router:local", contextDir: filepath.Join(root, "agents/router")},
 		{tag: "silexa/actor:local", contextDir: root, dockerfile: filepath.Join(root, "agents/actor/Dockerfile")},
 		{tag: "silexa/critic:local", contextDir: root, dockerfile: filepath.Join(root, "agents/critic/Dockerfile")},
-		{tag: "silexa/coder-agent:local", contextDir: filepath.Join(root, "agents/coder")},
-		{tag: "silexa/mcp-gateway:local", contextDir: filepath.Join(root, "tools/mcp-gateway")},
-		{tag: "silexa/credentials-mcp:local", contextDir: filepath.Join(root, "tools/credentials-mcp")},
-		{tag: "silexa/program-manager:local", contextDir: filepath.Join(root, "agents/program-manager")},
 	}
 	for _, spec := range specs {
 		if err := runDockerBuild(spec); err != nil {
