@@ -33,7 +33,7 @@ Usage:
 Core:
   si stack up|down|status
   si dyad spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test
-  si codex spawn|list|status|report|login|ps|exec|logs|tail|clone|remove|stop|start
+  si codex spawn|respawn|list|status|report|login|ps|exec|logs|tail|clone|remove|stop|start
   si task add|add-dyad|update
   si human add|complete
   si feedback add|broadcast
@@ -124,6 +124,7 @@ dyad:
 
 codex:
   si codex spawn <name>
+  si codex respawn <name> [--volumes]
     --image <docker image>
     --workspace <host path>
     --network <network>
