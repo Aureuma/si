@@ -473,11 +473,14 @@ func cmdCodexClone(args []string) {
 }
 
 func cmdCodexRemove(args []string) {
-	if len(args) < 1 {
+	fs := flag.NewFlagSet("codex remove", flag.ExitOnError)
+	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
+	_ = fs.Parse(args)
+	if fs.NArg() < 1 {
 		printUsage("usage: si codex remove <name>")
 		return
 	}
-	name := args[0]
+	name := fs.Arg(0)
 	containerName := codexContainerName(name)
 	client, err := shared.NewClient()
 	if err != nil {
@@ -495,6 +498,16 @@ func cmdCodexRemove(args []string) {
 	}
 	if err := client.RemoveContainer(ctx, id, true); err != nil {
 		fatal(err)
+	}
+	if *removeVolumes {
+		codexVol := "si-codex-" + name
+		ghVol := "si-gh-" + name
+		if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
+			warnf("codex volume remove failed: %v", err)
+		}
+		if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
+			warnf("gh volume remove failed: %v", err)
+		}
 	}
 	successf("codex container %s removed", containerName)
 }

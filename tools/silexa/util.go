@@ -207,7 +207,7 @@ codex:
   si codex logs <name> [--tail N]
   si codex tail <name> [--tail N]
   si codex clone <name> <Org/Repo> [--gh-pat TOKEN]
-  si codex remove <name>
+  si codex remove <name> [--volumes]
   si codex stop <name>
   si codex start <name>
 
