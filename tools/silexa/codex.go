@@ -29,12 +29,14 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si codex <spawn|list|status|report|login|exec|logs|tail|clone|remove|stop|start>")
+		printUsage("usage: si codex <spawn|respawn|list|status|report|login|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
 	case "spawn":
 		cmdCodexSpawn(args[1:])
+	case "respawn":
+		cmdCodexRespawn(args[1:])
 	case "list", "ps":
 		cmdCodexList(args[1:])
 	case "status":
@@ -62,9 +64,23 @@ func cmdCodex(args []string) {
 	}
 }
 
-func cmdCodexSpawn(args []string) {
-	workdirSet := flagProvided(args, "workdir")
-	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
+type codexSpawnFlags struct {
+	image         *string
+	workspaceHost *string
+	networkName   *string
+	repo          *string
+	ghPat         *string
+	cmdStr        *string
+	workdir       *string
+	codexVolume   *string
+	ghVolume      *string
+	detach        *bool
+	cleanSlate    *bool
+	envs          *multiFlag
+	ports         *multiFlag
+}
+
+func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
 	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
@@ -80,6 +96,27 @@ func cmdCodexSpawn(args []string) {
 	ports := multiFlag{}
 	fs.Var(&envs, "env", "env var (repeatable KEY=VALUE)")
 	fs.Var(&ports, "port", "port mapping (repeatable HOST:CONTAINER)")
+	return &codexSpawnFlags{
+		image:         image,
+		workspaceHost: workspaceHost,
+		networkName:   networkName,
+		repo:          repo,
+		ghPat:         ghPat,
+		cmdStr:        cmdStr,
+		workdir:       workdir,
+		codexVolume:   codexVolume,
+		ghVolume:      ghVolume,
+		detach:        detach,
+		cleanSlate:    cleanSlate,
+		envs:          &envs,
+		ports:         &ports,
+	}
+}
+
+func cmdCodexSpawn(args []string) {
+	workdirSet := flagProvided(args, "workdir")
+	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
+	flags := addCodexSpawnFlags(fs)
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -91,16 +128,16 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	containerName := codexContainerName(name)
-	if strings.TrimSpace(*workspaceHost) == "" {
-		*workspaceHost = mustRepoRoot()
+	if strings.TrimSpace(*flags.workspaceHost) == "" {
+		*flags.workspaceHost = mustRepoRoot()
 	}
 
 	workspaceTarget := "/workspace"
-	if target, ok := shared.InferWorkspaceTarget(*workspaceHost); ok {
+	if target, ok := shared.InferWorkspaceTarget(*flags.workspaceHost); ok {
 		workspaceTarget = target
 	}
-	if !workdirSet && *workdir == "/workspace" {
-		*workdir = workspaceTarget
+	if !workdirSet && *flags.workdir == "/workspace" {
+		*flags.workdir = workspaceTarget
 	}
 
 	client, err := shared.NewClient()
@@ -110,15 +147,15 @@ func cmdCodexSpawn(args []string) {
 	defer client.Close()
 	ctx := context.Background()
 
-	if strings.TrimSpace(*networkName) != "" {
-		_, _ = client.EnsureNetwork(ctx, *networkName, map[string]string{codexLabelKey: codexLabelValue})
+	if strings.TrimSpace(*flags.networkName) != "" {
+		_, _ = client.EnsureNetwork(ctx, *flags.networkName, map[string]string{codexLabelKey: codexLabelValue})
 	}
 
-	codexVol := strings.TrimSpace(*codexVolume)
+	codexVol := strings.TrimSpace(*flags.codexVolume)
 	if codexVol == "" {
 		codexVol = "si-codex-" + name
 	}
-	ghVol := strings.TrimSpace(*ghVolume)
+	ghVol := strings.TrimSpace(*flags.ghVolume)
 	if ghVol == "" {
 		ghVol = "si-gh-" + name
 	}
@@ -134,32 +171,32 @@ func cmdCodexSpawn(args []string) {
 		"HOME=/home/si",
 		"CODEX_HOME=/home/si/.codex",
 	}
-	if strings.TrimSpace(*repo) != "" {
-		env = append(env, "SI_REPO="+strings.TrimSpace(*repo))
+	if strings.TrimSpace(*flags.repo) != "" {
+		env = append(env, "SI_REPO="+strings.TrimSpace(*flags.repo))
 	}
-	if strings.TrimSpace(*ghPat) != "" {
-		env = append(env, "SI_GH_PAT="+strings.TrimSpace(*ghPat))
-		env = append(env, "GH_TOKEN="+strings.TrimSpace(*ghPat))
-		env = append(env, "GITHUB_TOKEN="+strings.TrimSpace(*ghPat))
+	if strings.TrimSpace(*flags.ghPat) != "" {
+		env = append(env, "SI_GH_PAT="+strings.TrimSpace(*flags.ghPat))
+		env = append(env, "GH_TOKEN="+strings.TrimSpace(*flags.ghPat))
+		env = append(env, "GITHUB_TOKEN="+strings.TrimSpace(*flags.ghPat))
 	}
-	env = append(env, envs...)
+	env = append(env, (*flags.envs)...)
 
 	cmd := []string{"bash", "-lc", "sleep infinity"}
-	if strings.TrimSpace(*cmdStr) != "" {
-		cmd = []string{"bash", "-lc", *cmdStr}
+	if strings.TrimSpace(*flags.cmdStr) != "" {
+		cmd = []string{"bash", "-lc", *flags.cmdStr}
 	}
 
-	exposed, bindings, err := parsePortBindings(ports)
+	exposed, bindings, err := parsePortBindings(*flags.ports)
 	if err != nil {
 		fatal(err)
 	}
 
 	cfg := &container.Config{
-		Image:        strings.TrimSpace(*image),
+		Image:        strings.TrimSpace(*flags.image),
 		Env:          filterEnv(env),
 		Labels:       labels,
 		ExposedPorts: exposed,
-		WorkingDir:   *workdir,
+		WorkingDir:   *flags.workdir,
 		Cmd:          cmd,
 	}
 	hostCfg := &container.HostConfig{
@@ -167,15 +204,15 @@ func cmdCodexSpawn(args []string) {
 		Mounts: []mount.Mount{
 			{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
 			{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
-			{Type: mount.TypeBind, Source: *workspaceHost, Target: workspaceTarget},
+			{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTarget},
 		},
 		PortBindings: bindings,
 	}
 	netCfg := &network.NetworkingConfig{}
-	if strings.TrimSpace(*networkName) != "" {
+	if strings.TrimSpace(*flags.networkName) != "" {
 		netCfg = &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				*networkName: {Aliases: []string{containerName}},
+				*flags.networkName: {Aliases: []string{containerName}},
 			},
 		}
 	}
@@ -201,11 +238,29 @@ func cmdCodexSpawn(args []string) {
 	if err := client.StartContainer(ctx, id); err != nil {
 		fatal(err)
 	}
-	seedCodexConfig(ctx, client, id, *cleanSlate)
+	seedCodexConfig(ctx, client, id, *flags.cleanSlate)
 	successf("codex container %s started", containerName)
-	if !*detach {
+	if !*flags.detach {
 		_ = execDockerCLI("attach", containerName)
 	}
+}
+
+func cmdCodexRespawn(args []string) {
+	fs := flag.NewFlagSet("codex respawn", flag.ExitOnError)
+	addCodexSpawnFlags(fs)
+	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
+	_ = fs.Parse(args)
+	if fs.NArg() < 1 {
+		printUsage("usage: si codex respawn <name> [--volumes] [spawn flags]")
+		return
+	}
+	name := fs.Arg(0)
+	removeArgs := []string{name}
+	if *removeVolumes {
+		removeArgs = append([]string{"--volumes"}, removeArgs...)
+	}
+	cmdCodexRemove(removeArgs)
+	cmdCodexSpawn(stripFlag(args, "volumes"))
 }
 
 func cmdCodexList(args []string) {
@@ -477,7 +532,7 @@ func cmdCodexRemove(args []string) {
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
 	_ = fs.Parse(args)
 	if fs.NArg() < 1 {
-		printUsage("usage: si codex remove <name>")
+		printUsage("usage: si codex remove <name> [--volumes]")
 		return
 	}
 	name := fs.Arg(0)
@@ -583,6 +638,25 @@ func flagProvided(args []string, name string) bool {
 		}
 	}
 	return false
+}
+
+func stripFlag(args []string, name string) []string {
+	short := "-" + name
+	long := "--" + name
+	shortEq := short + "="
+	longEq := long + "="
+	out := make([]string, 0, len(args))
+	for _, arg := range args {
+		switch {
+		case arg == short, arg == long:
+			continue
+		case strings.HasPrefix(arg, shortEq), strings.HasPrefix(arg, longEq):
+			continue
+		default:
+			out = append(out, arg)
+		}
+	}
+	return out
 }
 
 func parsePortBindings(values []string) (nat.PortSet, map[nat.Port][]nat.PortBinding, error) {
