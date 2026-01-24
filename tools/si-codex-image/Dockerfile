@@ -11,6 +11,11 @@ ENV HOME=/home/si
 ENV CODEX_HOME=/home/si/.codex
 WORKDIR /workspace
 
+RUN printf '%s\n' 'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' > /etc/profile.d/si-codex-alias.sh \
+    && chmod 0644 /etc/profile.d/si-codex-alias.sh \
+    && printf '\n%s\n' 'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' >> /home/si/.bashrc \
+    && chown si:si /home/si/.bashrc
+
 COPY entrypoint.sh /usr/local/bin/si-entrypoint
 RUN chmod +x /usr/local/bin/si-entrypoint
 
