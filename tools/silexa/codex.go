@@ -117,13 +117,17 @@ func cmdCodexSpawn(args []string) {
 	workdirSet := flagProvided(args, "workdir")
 	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
 	flags := addCodexSpawnFlags(fs)
-	fs.Parse(args)
+	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
+	fs.Parse(filtered)
 
-	if fs.NArg() < 1 {
+	name := nameArg
+	if name == "" && fs.NArg() > 0 {
+		name = fs.Arg(0)
+	}
+	if name == "" {
 		printUsage("usage: si codex spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
 		return
 	}
-	name := fs.Arg(0)
 	if err := validateSlug(name); err != nil {
 		fatal(err)
 	}
@@ -227,6 +231,11 @@ func cmdCodexSpawn(args []string) {
 				fatal(err)
 			}
 		}
+		if !*flags.cleanSlate {
+			if identity, ok := hostGitIdentity(); ok {
+				seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+			}
+		}
 		infof("codex container %s already exists", containerName)
 		return
 	}
@@ -239,6 +248,11 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	seedCodexConfig(ctx, client, id, *flags.cleanSlate)
+	if !*flags.cleanSlate {
+		if identity, ok := hostGitIdentity(); ok {
+			seedGitIdentity(ctx, client, id, "si", "/home/si", identity)
+		}
+	}
 	successf("codex container %s started", containerName)
 	if !*flags.detach {
 		_ = execDockerCLI("attach", containerName)
@@ -249,18 +263,20 @@ func cmdCodexRespawn(args []string) {
 	fs := flag.NewFlagSet("codex respawn", flag.ExitOnError)
 	addCodexSpawnFlags(fs)
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
-	_ = fs.Parse(args)
-	if fs.NArg() < 1 {
+	nameArg, filtered := splitNameAndFlags(args, codexRespawnBoolFlags())
+	_ = fs.Parse(filtered)
+	if nameArg == "" {
 		printUsage("usage: si codex respawn <name> [--volumes] [spawn flags]")
 		return
 	}
-	name := fs.Arg(0)
+	name := nameArg
 	removeArgs := []string{name}
 	if *removeVolumes {
 		removeArgs = append([]string{"--volumes"}, removeArgs...)
 	}
 	cmdCodexRemove(removeArgs)
-	cmdCodexSpawn(stripFlag(args, "volumes"))
+	spawnArgs := append(stripFlag(filtered, "volumes"), name)
+	cmdCodexSpawn(spawnArgs)
 }
 
 func cmdCodexList(args []string) {
@@ -638,6 +654,52 @@ func flagProvided(args []string, name string) bool {
 		}
 	}
 	return false
+}
+
+func codexSpawnBoolFlags() map[string]bool {
+	return map[string]bool{
+		"detach":      true,
+		"clean-slate": true,
+	}
+}
+
+func codexRespawnBoolFlags() map[string]bool {
+	flags := codexSpawnBoolFlags()
+	flags["volumes"] = true
+	return flags
+}
+
+func splitNameAndFlags(args []string, boolFlags map[string]bool) (string, []string) {
+	name := ""
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "" {
+			continue
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			if name == "" {
+				name = arg
+				continue
+			}
+			out = append(out, arg)
+			continue
+		}
+		out = append(out, arg)
+		flagName := strings.TrimLeft(arg, "-")
+		if idx := strings.Index(flagName, "="); idx != -1 {
+			flagName = flagName[:idx]
+			continue
+		}
+		if boolFlags[flagName] {
+			continue
+		}
+		if i+1 < len(args) {
+			out = append(out, args[i+1])
+			i++
+		}
+	}
+	return name, out
 }
 
 func stripFlag(args []string, name string) []string {

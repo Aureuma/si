@@ -14,36 +14,23 @@ import (
 func usage() {
 	fmt.Print(colorizeHelp(`si [command] [args]
 
-Holistic CLI for the Silexa stack. This help includes all commands, flags, and core features.
+Holistic CLI for Silexa. This help includes all commands, flags, and core features.
 
 Features:
-  - Core stack lifecycle: bring up/down core services and inspect status.
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
   - Codex containers: spawn/list/status/report/login/exec/tail/clone/remove/stop/start.
   - Codex one-off exec: run codex exec in an isolated container (with MCP disabled if desired).
-  - MCP gateway helpers: scout catalogs, sync catalogs, apply config to dyads.
-  - Tasks/human/feedback/access/metrics/reporting: interact with Manager APIs.
   - App scaffolding/build/deploy helpers.
   - Image build helpers for local dev.
+  - Docker passthrough for raw docker CLI calls.
 
 Usage:
   si <command> [subcommand] [args...]
   si help | -h | --help
 
 Core:
-  si stack up|down|status
-  si dyad spawn|list|remove|recreate|status|exec|logs|restart|register|cleanup|copy-login|clear-blocked|codex-loop-test
+  si dyad spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login
   si codex spawn|respawn|list|status|report|login|ps|exec|logs|tail|clone|remove|stop|start
-  si task add|add-dyad|update
-  si human add|complete
-  si feedback add|broadcast
-  si access request|resolve
-  si resource request
-  si metric post
-  si notify <message>
-  si report status|escalate|review|dyad
-  si roster apply|status
-  si mcp scout|sync|apply-config
   si docker <args...>
 
 Build/app:
@@ -58,21 +45,12 @@ Profiles:
 Command details
 ---------------
 
-stack:
-  si stack up                     (no flags)
-  si stack down                   (no flags)
-  si stack status                 (no flags)
-
 dyad:
   si dyad spawn <name> [role] [department]
     --role <role>
     --department <dept>
     --actor-image <image>
     --critic-image <image>
-    --manager-url <url>
-    --manager-service-url <url>
-    --telegram-url <url>
-    --telegram-chat-id <id>
     --codex-model <model>
     --codex-effort-actor <effort>
     --codex-effort-critic <effort>
@@ -85,7 +63,6 @@ dyad:
     --workspace <host path>
     --configs <host path>
     --forward-ports <range>
-    --approver-token <token>
 
   si dyad list                    (no flags)
   si dyad remove <name>           (aliases: teardown, destroy)
@@ -98,29 +75,12 @@ dyad:
     --member <actor|critic>
     --tail <lines>
   si dyad restart <name>
-  si dyad register <name> [role] [department]
   si dyad cleanup
   si dyad copy-login <dyad>
     --source <si-codex container name or suffix>
     --member <actor|critic>
     --source-home <path>
     --target-home <path>
-  si dyad clear-blocked <dyad>
-    --manager-url <url>
-    --status <status>
-    --dry-run
-  si dyad codex-loop-test <dyad>
-    --title <title>
-    --description <desc>
-    --priority <priority>
-    --timeout <duration>
-    --wait / --wait=false
-    --spawn
-    --role <role>         (only with --spawn)
-    --department <dept>   (only with --spawn)
-    --install-codex / --install-codex=false
-    --require-login / --require-login=false
-    --manager-url <url>
 
 codex:
   si codex spawn <name>
@@ -212,11 +172,6 @@ codex:
   si codex stop <name>
   si codex start <name>
 
-mcp:
-  si mcp scout
-  si mcp sync [--catalog <path>]
-  si mcp apply-config <dyad> [--member actor|critic] [--dest-dir <path>]
-
 app:
   si app init <app-name> [options]
     --no-db
@@ -249,42 +204,6 @@ images:
     -f, --file <Dockerfile>
     --build-arg KEY=VALUE   (repeatable)
 
-task:
-  si task add <title> [kind] [priority] [description] [link] [notes] [complexity]
-  si task add-dyad <title> <dyad> [actor] [critic] [priority] [description] [link] [notes] [complexity]
-  si task update <id> <status> [notes] [actor] [critic] [complexity]
-
-human:
-  si human add <title> <commands> [url] [timeout] [requested_by] [notes]
-  si human complete <id>
-
-feedback:
-  si feedback add <severity> <message> [source] [context]
-  si feedback broadcast <message> [severity]
-
-access:
-  si access request <requester> <resource> <action> [reason] [department]
-  si access resolve <id> <approved|denied> [resolved_by] [notes]
-
-resource:
-  si resource request <resource> <action> <payload> [requested_by] [notes]
-
-metric:
-  si metric post <dyad> <department> <name> <value> [unit] [recorded_by]
-
-notify:
-  si notify <message>
-
-report:
-  si report status
-  si report escalate
-  si report review
-  si report dyad
-
-roster:
-  si roster apply [--file <path>] [--spawn] [--dry-run]
-  si roster status
-
 profile:
   si profile <name>
 
@@ -293,15 +212,11 @@ capability:
 
 Environment defaults (selected)
 -------------------------------
-  MANAGER_URL, MANAGER_SERVICE_URL, TELEGRAM_NOTIFY_URL, TELEGRAM_CHAT_ID
   ACTOR_IMAGE, CRITIC_IMAGE, SI_CODEX_IMAGE, SI_NETWORK
   CODEX_MODEL, CODEX_REASONING_EFFORT, CODEX_MODEL_LOW|MEDIUM|HIGH
   CODEX_REASONING_EFFORT_LOW|MEDIUM|HIGH
   SILEXA_WORKSPACE_HOST, SILEXA_CONFIGS_HOST, SILEXA_DYAD_FORWARD_PORTS
   SI_CODEX_EXEC_VOLUME, GH_PAT, GH_TOKEN, GITHUB_TOKEN
-  MCP_GATEWAY_CONTAINER, DYAD_ROSTER_FILE
-  BROKER_URL, NOTIFY_URL, DYAD_TASK_COMPLEXITY, DYAD_TASK_KIND, REQUESTED_BY
-  CREDENTIALS_APPROVER_TOKEN
 `))
 }
 
@@ -491,7 +406,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|stack|dyad|codex|task|human|feedback|access|resource|metric|notify|report|roster|mcp|docker|app|images|image|profile|capability)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|app|images|image|profile|capability)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)

@@ -31,9 +31,6 @@ type DyadOptions struct {
 	Department        string
 	ActorImage        string
 	CriticImage       string
-	ManagerURL        string
-	TelegramURL       string
-	TelegramChatID    string
 	CodexModel        string
 	CodexEffortActor  string
 	CodexEffortCritic string
@@ -48,7 +45,6 @@ type DyadOptions struct {
 	CodexVolume       string
 	Network           string
 	ForwardPorts      string
-	ApproverToken     string
 }
 
 type ContainerSpec struct {
@@ -232,11 +228,6 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	actorEnv := buildDyadEnv(opts, "actor", opts.CodexEffortActor)
 	criticEnv := buildDyadEnv(opts, "critic", opts.CodexEffortCritic)
 
-	if opts.Dyad == "silexa-credentials" && strings.TrimSpace(opts.ApproverToken) != "" {
-		actorEnv = append(actorEnv, "CREDENTIALS_APPROVER_TOKEN="+strings.TrimSpace(opts.ApproverToken))
-		criticEnv = append(criticEnv, "CREDENTIALS_APPROVER_TOKEN="+strings.TrimSpace(opts.ApproverToken))
-	}
-
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_LOW", opts.CodexModelLow)
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_MEDIUM", opts.CodexModelMedium)
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_HIGH", opts.CodexModelHigh)
@@ -279,9 +270,6 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	}
 
 	criticEnv = append(criticEnv,
-		"MANAGER_URL="+strings.TrimSpace(opts.ManagerURL),
-		"TELEGRAM_NOTIFY_URL="+strings.TrimSpace(opts.TelegramURL),
-		"TELEGRAM_CHAT_ID="+strings.TrimSpace(opts.TelegramChatID),
 		"ACTOR_CONTAINER="+DyadContainerName(opts.Dyad, "actor"),
 		"HOME=/root",
 		"CODEX_HOME=/root/.codex",
