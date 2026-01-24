@@ -1,30 +1,20 @@
 # Silexa Substrate
 
-Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads). The control plane is the Go manager with a local persisted state file, and the default runtime is vanilla Docker.
+Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads) and Codex containers on vanilla Docker.
 
 ## Layout
 - `apps/`: Application repos built by agents (one repo per app).
 - `agents/`: Agent-specific code and tooling.
-- `tools/silexa`: Go-based CLI for Docker + manager workflows.
+- `tools/silexa`: Go-based CLI for Docker workflows (dyads, codex containers, app helpers).
 - `actor`: Node base image for interactive CLI agents (Codex CLI preinstalled; update inside container as needed).
-- `critic`: Go watcher that reads actor logs via Docker and sends heartbeats to the manager.
-- `manager`: Go service collecting critic heartbeats and storing state on disk.
-- `telegram-bot`: Go notifier listening on `:8081/notify` to push human-action items to Telegram (uses bot token secret + chat ID env).
+- `critic`: Go helper that prepares Codex config and idles.
 
 ## Quickstart (Docker)
-Build the CLI and images, then start the stack:
+Build the CLI and images:
 
 ```bash
 go build -o si ./tools/silexa
 ./si images build
-./si stack up
-```
-
-Check health and beats:
-
-```bash
-curl -fsSL http://localhost:9090/healthz
-curl -fsSL http://localhost:9090/beats
 ```
 
 ## Dyads (Actor + Critic)
@@ -52,7 +42,7 @@ curl -fsSL http://localhost:9090/beats
 ./si dyad list
 ```
 
-All dyads share the repo workspace; critics auto-heartbeat to the manager so the management layer can watch liveness and logs.
+All dyads share the repo workspace.
 
 ## Codex containers (on-demand)
 Spawn standalone Codex containers with isolated auth:
@@ -69,22 +59,10 @@ Clone later into an existing container:
 
 Each container uses its own persistent `~/.codex` volume so multiple Codex accounts can coexist on the same host.
 
-## Human-in-the-loop notifications (Telegram)
-- Secrets: put the bot token into `secrets/telegram_bot_token` (file content is the raw token string). Do **not** commit secrets. Optionally set `TELEGRAM_CHAT_ID` in `.env` (see `.env.example`), or supply `chat_id` per message.
-- Start/refresh services: `./si stack up` (manager is pre-wired with `TELEGRAM_NOTIFY_URL=http://silexa-telegram-bot:8081/notify`).
-- Command menu: `/status`, `/tasks`, `/task Title | command | notes`, `/help`. Any plain text message is logged as feedback; prefer `/task` for actionable asks.
-- Send a notification from host:  
-  `TELEGRAM_CHAT_ID=<id> ./si notify "Codex login needed: open http://127.0.0.1:<port>/..."`  
-- Create a structured human task (stored in manager and optionally forwarded to Telegram):  
-  `TELEGRAM_CHAT_ID=<id> ./si human add "Codex login for dyad web" "open http://127.0.0.1:<port>/" "http://127.0.0.1:<port>/" "15m" "web" "keep port open until callback"`  
-  Then check `curl -fsSL http://localhost:9090/human-tasks`.
-- Mark a task complete: `./si human complete <id>`.
-
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).
-2) Actor writes a Human Action Queue item with the URL and/or port; optionally triggers `silexa notify` so Telegram pings the operator.
-3) Human opens the URL on a browser-capable machine and completes OAuth.
-4) Actor resumes once callback is received; mark the queue item as done.
+2) Human opens the URL on a browser-capable machine and completes OAuth.
+3) Actor resumes once callback is received.
 
 ## Secrets and access notes
 - Tokens live in `secrets/` (mounted into the relevant containers).
@@ -93,4 +71,3 @@ Each container uses its own persistent `~/.codex` volume so multiple Codex accou
 ## Next steps
 - Update Codex CLI (or another LLM-driven CLI) inside actor containers as needed.
 - Add more dyads via `si dyad spawn`.
-- Wire higher-level task queues to feed work into actors and surface signals from manager to department heads.
