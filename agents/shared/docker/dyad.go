@@ -26,36 +26,36 @@ const (
 const DyadAppLabel = "silexa-dyad"
 
 type DyadOptions struct {
-	Dyad             string
-	Role             string
-	Department       string
-	ActorImage       string
-	CriticImage      string
-	ManagerURL       string
-	TelegramURL      string
-	TelegramChatID   string
-	CodexModel       string
-	CodexEffortActor string
+	Dyad              string
+	Role              string
+	Department        string
+	ActorImage        string
+	CriticImage       string
+	ManagerURL        string
+	TelegramURL       string
+	TelegramChatID    string
+	CodexModel        string
+	CodexEffortActor  string
 	CodexEffortCritic string
-	CodexModelLow    string
-	CodexModelMedium string
-	CodexModelHigh   string
-	CodexEffortLow   string
+	CodexModelLow     string
+	CodexModelMedium  string
+	CodexModelHigh    string
+	CodexEffortLow    string
 	CodexEffortMedium string
-	CodexEffortHigh  string
-	WorkspaceHost    string
-	ConfigsHost      string
-	CodexVolume      string
-	Network          string
-	ForwardPorts     string
-	ApproverToken    string
+	CodexEffortHigh   string
+	WorkspaceHost     string
+	ConfigsHost       string
+	CodexVolume       string
+	Network           string
+	ForwardPorts      string
+	ApproverToken     string
 }
 
 type ContainerSpec struct {
-	Name           string
-	Config         *container.Config
-	HostConfig     *container.HostConfig
-	NetworkConfig  *network.NetworkingConfig
+	Name          string
+	Config        *container.Config
+	HostConfig    *container.HostConfig
+	NetworkConfig *network.NetworkingConfig
 }
 
 func DyadContainerName(dyad, member string) string {
@@ -218,10 +218,10 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	}
 
 	labels := map[string]string{
-		LabelApp:   DyadAppLabel,
-		LabelDyad:  opts.Dyad,
-		LabelRole:  opts.Role,
-		LabelDept:  opts.Department,
+		LabelApp:  DyadAppLabel,
+		LabelDyad: opts.Dyad,
+		LabelRole: opts.Role,
+		LabelDept: opts.Department,
 	}
 
 	actorLabels := cloneLabels(labels)
@@ -257,21 +257,25 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	}
 
 	actorConfig := &container.Config{
-		Image:      opts.ActorImage,
-		WorkingDir: "/workspace/silexa/apps",
-		Env:        actorEnv,
-		Labels:     actorLabels,
-		Entrypoint: []string{"tini", "-s", "--", "/usr/local/bin/silexa-codex-init"},
-		Cmd:        []string{"--exec", "tail", "-f", "/dev/null"},
+		Image:        opts.ActorImage,
+		WorkingDir:   "/workspace/silexa/apps",
+		Env:          actorEnv,
+		Labels:       actorLabels,
+		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/silexa-codex-init"},
+		Cmd:          []string{"--exec", "tail", "-f", "/dev/null"},
 		ExposedPorts: actorExposed,
+	}
+	actorMounts := []mount.Mount{
+		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
+		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
+	}
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
+		actorMounts = append(actorMounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: target})
 	}
 	actorHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-		Mounts: []mount.Mount{
-			{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
-			{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
-		},
-		PortBindings: actorBindings,
+		Mounts:        actorMounts,
+		PortBindings:  actorBindings,
 	}
 
 	criticEnv = append(criticEnv,
@@ -289,14 +293,18 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		Labels: criticLabels,
 		User:   "root",
 	}
+	criticMounts := []mount.Mount{
+		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
+		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
+		{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
+		{Type: mount.TypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
+	}
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
+		criticMounts = append(criticMounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: target})
+	}
 	criticHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-		Mounts: []mount.Mount{
-			{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
-			{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
-			{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
-			{Type: mount.TypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
-		},
+		Mounts:        criticMounts,
 	}
 
 	netCfg := &network.NetworkingConfig{
