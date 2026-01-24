@@ -398,7 +398,7 @@ func (c *Client) RemoveContainer(ctx context.Context, containerID string, force 
 	}
 	return c.api.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force:         force,
-		RemoveVolumes: false,
+		RemoveVolumes: true,
 	})
 }
 
