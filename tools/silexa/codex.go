@@ -335,7 +335,7 @@ func cmdCodexExec(args []string) {
 	containerName := codexContainerName(name)
 	cmd := rest[1:]
 	if len(cmd) == 0 {
-		cmd = []string{"bash"}
+		cmd = []string{"bash", "-lc", `printf '\033]0;%s\007' "${SI_TERM_TITLE:-}"; exec bash`}
 	}
 	execArgs := []string{"exec"}
 	if term.IsTerminal(int(os.Stdin.Fd())) {
@@ -343,6 +343,7 @@ func cmdCodexExec(args []string) {
 	} else {
 		execArgs = append(execArgs, "-i")
 	}
+	execArgs = append(execArgs, "-e", "SI_TERM_TITLE="+name)
 	execArgs = append(execArgs, containerName)
 	execArgs = append(execArgs, cmd...)
 	if err := execDockerCLI(execArgs...); err != nil {
