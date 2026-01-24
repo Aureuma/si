@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -73,6 +75,7 @@ func cmdCodexSpawn(args []string) {
 	codexVolume := fs.String("codex-volume", "", "override codex volume name")
 	ghVolume := fs.String("gh-volume", "", "override github config volume name")
 	detach := fs.Bool("detach", true, "run container in background")
+	cleanSlate := fs.Bool("clean-slate", false, "skip copying host ~/.codex/config.toml into container")
 	envs := multiFlag{}
 	ports := multiFlag{}
 	fs.Var(&envs, "env", "env var (repeatable KEY=VALUE)")
@@ -198,6 +201,7 @@ func cmdCodexSpawn(args []string) {
 	if err := client.StartContainer(ctx, id); err != nil {
 		fatal(err)
 	}
+	seedCodexConfig(ctx, client, id, *cleanSlate)
 	successf("codex container %s started", containerName)
 	if !*detach {
 		_ = execDockerCLI("attach", containerName)
@@ -528,6 +532,57 @@ func codexContainerName(name string) string {
 		return name
 	}
 	return "si-codex-" + name
+}
+
+func seedCodexConfig(ctx context.Context, client *shared.Client, containerID string, cleanSlate bool) {
+	if cleanSlate {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return
+	}
+	hostPath := filepath.Join(home, ".codex", "config.toml")
+	data, err := os.ReadFile(hostPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		warnf("codex config copy skipped: %v", err)
+		return
+	}
+	const destPath = "/home/si/.codex/config.toml"
+	exists, err := fileExistsInContainer(ctx, client, containerID, destPath)
+	if err != nil {
+		warnf("codex config copy check failed: %v", err)
+		return
+	}
+	if exists {
+		return
+	}
+	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
+		warnf("codex config copy failed: %v", err)
+		return
+	}
+	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+}
+
+func fileExistsInContainer(ctx context.Context, client *shared.Client, containerID, path string) (bool, error) {
+	err := client.Exec(ctx, containerID, []string{"bash", "-lc", "test -f " + shellQuoteValue(path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	if err == nil {
+		return true, nil
+	}
+	if strings.Contains(err.Error(), "exec exit code") {
+		return false, nil
+	}
+	return false, err
+}
+
+func shellQuoteValue(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func flagProvided(args []string, name string) bool {
