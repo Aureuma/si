@@ -61,6 +61,7 @@ func cmdCodex(args []string) {
 }
 
 func cmdCodexSpawn(args []string) {
+	workdirSet := flagProvided(args, "workdir")
 	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
 	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
 	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
@@ -89,6 +90,14 @@ func cmdCodexSpawn(args []string) {
 	containerName := codexContainerName(name)
 	if strings.TrimSpace(*workspaceHost) == "" {
 		*workspaceHost = mustRepoRoot()
+	}
+
+	workspaceTarget := "/workspace"
+	if target, ok := shared.InferWorkspaceTarget(*workspaceHost); ok {
+		workspaceTarget = target
+	}
+	if !workdirSet && *workdir == "/workspace" {
+		*workdir = workspaceTarget
 	}
 
 	client, err := shared.NewClient()
@@ -155,7 +164,7 @@ func cmdCodexSpawn(args []string) {
 		Mounts: []mount.Mount{
 			{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
 			{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
-			{Type: mount.TypeBind, Source: *workspaceHost, Target: "/workspace"},
+			{Type: mount.TypeBind, Source: *workspaceHost, Target: workspaceTarget},
 		},
 		PortBindings: bindings,
 	}
@@ -518,6 +527,19 @@ func codexContainerName(name string) string {
 		return name
 	}
 	return "si-codex-" + name
+}
+
+func flagProvided(args []string, name string) bool {
+	short := "-" + name
+	long := "--" + name
+	shortEq := short + "="
+	longEq := long + "="
+	for _, arg := range args {
+		if arg == short || arg == long || strings.HasPrefix(arg, shortEq) || strings.HasPrefix(arg, longEq) {
+			return true
+		}
+	}
+	return false
 }
 
 func parsePortBindings(values []string) (nat.PortSet, map[nat.Port][]nat.PortBinding, error) {
