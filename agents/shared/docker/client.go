@@ -178,11 +178,11 @@ func (c *Client) ListContainers(ctx context.Context, all bool, labels map[string
 }
 
 type ExecOptions struct {
-	Env       []string
-	WorkDir   string
-	User      string
+	Env        []string
+	WorkDir    string
+	User       string
 	Privileged bool
-	TTY       bool
+	TTY        bool
 }
 
 func (c *Client) Exec(ctx context.Context, containerID string, cmd []string, opts ExecOptions, stdin io.Reader, stdout, stderr io.Writer) error {
@@ -398,8 +398,15 @@ func (c *Client) RemoveContainer(ctx context.Context, containerID string, force 
 	}
 	return c.api.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force:         force,
-		RemoveVolumes: true,
+		RemoveVolumes: false,
 	})
+}
+
+func (c *Client) RemoveVolume(ctx context.Context, name string, force bool) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("volume name required")
+	}
+	return c.api.VolumeRemove(ctx, name, force)
 }
 
 func (c *Client) CreateContainer(ctx context.Context, cfg *container.Config, hostCfg *container.HostConfig, netCfg *network.NetworkingConfig, name string) (string, error) {
