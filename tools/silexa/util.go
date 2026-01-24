@@ -133,6 +133,7 @@ codex:
     --workdir <path>
     --codex-volume <volume>
     --gh-volume <volume>
+    --clean-slate / --clean-slate=false
     --detach / --detach=false
     --env KEY=VALUE        (repeatable)
     --port HOST:CONTAINER  (repeatable)
