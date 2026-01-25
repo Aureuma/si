@@ -249,7 +249,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 
 	actorConfig := &container.Config{
 		Image:        opts.ActorImage,
-		WorkingDir:   "/workspace/silexa/apps",
+		WorkingDir:   "/workspace",
 		Env:          actorEnv,
 		Labels:       actorLabels,
 		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/silexa-codex-init"},

@@ -29,7 +29,7 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si codex <spawn|respawn|list|status|report|login|exec|logs|tail|clone|remove|stop|start>")
+		printUsage("usage: si codex <spawn|respawn|list|ps|status|report|login|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
@@ -82,7 +82,7 @@ type codexSpawnFlags struct {
 
 func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
-	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
+	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
 	repo := fs.String("repo", "", "github repo in Org/Repo form")
 	ghPat := fs.String("gh-pat", envOr("GH_PAT", envOr("GH_TOKEN", envOr("GITHUB_TOKEN", ""))), "github PAT for cloning")
@@ -352,7 +352,7 @@ func cmdCodexExec(args []string) {
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
 	noMcp := fs.Bool("no-mcp", false, "disable MCP servers (one-off mode)")
 	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
-	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
+	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace")
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
 	codexVolume := fs.String("codex-volume", envOr("SI_CODEX_EXEC_VOLUME", ""), "codex volume name")
