@@ -1,3 +1,0 @@
-name: silexa-infra
-runtime: go
-description: Silexa infra stack (prefer Pulumi over Terraform)

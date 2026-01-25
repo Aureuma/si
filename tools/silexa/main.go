@@ -22,8 +22,6 @@ func main() {
 		cmdImages(args)
 	case "image":
 		cmdImage(args)
-	case "app":
-		cmdApp(args)
 	case "profile":
 		cmdProfile(args)
 	case "capability":
