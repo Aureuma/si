@@ -7,10 +7,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	shared "silexa/agents/shared/docker"
 )
@@ -329,6 +327,9 @@ func cmdDyadExec(args []string) {
 	}
 	dyad := fs.Arg(0)
 	cmd := fs.Args()[1:]
+	if len(cmd) > 0 && cmd[0] == "--" {
+		cmd = cmd[1:]
+	}
 	if err := execInDyad(dyad, *member, cmd, *tty); err != nil {
 		fatal(err)
 	}

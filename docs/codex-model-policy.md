@@ -39,7 +39,7 @@ Recommended defaults (can be overridden per container via env):
 
 ## Spawned dyads
 
-`silexa dyad spawn` sets:
+`si dyad spawn` sets:
 - `CODEX_MODEL` (defaults to `gpt-5.2-codex`)
 - `CODEX_REASONING_EFFORT` for actor/critic based on `ROLE`
 - `CODEX_PER_DYAD=1` by default so Codex state (`~/.codex`) is not shared across dyads. Override to `0` only if you explicitly want a shared store.
@@ -51,4 +51,4 @@ Overrides:
 
 ## Docker defaults
 
-`silexa dyad spawn` sets `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per container (actor/critic).
+`si dyad spawn` sets `CODEX_MODEL` and `CODEX_REASONING_EFFORT` per container (actor/critic).

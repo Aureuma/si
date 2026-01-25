@@ -1,0 +1,9 @@
+go 1.25.0
+
+use (
+	./agents/critic
+	./agents/shared
+	./tools/codex-init
+	./tools/codex-stdout-parser
+	./tools/silexa
+)
