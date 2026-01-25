@@ -20,7 +20,6 @@ Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
   - Codex containers: spawn/list/status/report/login/exec/tail/clone/remove/stop/start.
   - Codex one-off exec: run codex exec in an isolated container (with MCP disabled if desired).
-  - App scaffolding/build/deploy helpers.
   - Image build helpers for local dev.
   - Docker passthrough for raw docker CLI calls.
 
@@ -33,10 +32,9 @@ Core:
   si codex spawn|respawn|list|status|report|login|ps|exec|logs|tail|clone|remove|stop|start
   si docker <args...>
 
-Build/app:
+Build:
   si images build
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
-  si app init|adopt|list|build|deploy|remove|status|secrets
 
 Profiles:
   si profile <profile-name>
@@ -171,31 +169,6 @@ codex:
   si codex remove <name> [--volumes]
   si codex stop <name>
   si codex start <name>
-
-app:
-  si app init <app-name> [options]
-    --no-db
-    --db-port <port>
-    --web-path <path>
-    --backend-path <path>
-    --infra-path <path>
-    --content-path <path>
-    --kind <kind>
-    --status <status>
-    --web-stack <stack>
-    --backend-stack <stack>
-    --language <lang>
-    --ui <ui>
-    --runtime <runtime>
-    --db <db kind>
-    --orm <orm>
-  si app adopt <app-name> [--with-db]   (passes through to app init)
-  si app list
-  si app build <app-name>
-  si app deploy <app-name> [--no-build] [--file <compose.yml>]
-  si app remove <app-name> [--file <compose.yml>]
-  si app status <app-name> [--file <compose.yml>]
-  si app secrets <app-name>
 
 images:
   si images build
@@ -406,7 +379,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|app|images|image|profile|capability)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|capability)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
@@ -426,7 +399,7 @@ func colorizeHelp(text string) string {
 			lines[i] = indentLine(line, styleHeading(trimmed))
 			continue
 		}
-		if strings.HasPrefix(trimmed, "Usage:") || strings.HasPrefix(trimmed, "Features:") || strings.HasPrefix(trimmed, "Core:") || strings.HasPrefix(trimmed, "Build/app:") || strings.HasPrefix(trimmed, "Profiles:") || strings.HasPrefix(trimmed, "Command details") || strings.HasPrefix(trimmed, "Environment defaults") {
+		if strings.HasPrefix(trimmed, "Usage:") || strings.HasPrefix(trimmed, "Features:") || strings.HasPrefix(trimmed, "Core:") || strings.HasPrefix(trimmed, "Build:") || strings.HasPrefix(trimmed, "Profiles:") || strings.HasPrefix(trimmed, "Command details") || strings.HasPrefix(trimmed, "Environment defaults") {
 			lines[i] = indentLine(line, styleHeading(trimmed))
 			continue
 		}

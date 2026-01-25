@@ -1,5 +1,3 @@
 module silexa/tools/codex-init
 
-go 1.22.0
-
-toolchain go1.22.12
+go 1.25.0

@@ -3,13 +3,14 @@
 Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads) and Codex containers on vanilla Docker.
 
 ## Layout
-- `apps/`: Application repos built by agents (one repo per app).
 - `agents/`: Agent-specific code and tooling.
-- `tools/silexa`: Go-based CLI for Docker workflows (dyads, codex containers, app helpers).
+- `tools/silexa`: Go-based CLI for Docker workflows (dyads, codex containers, image helpers).
 - `actor`: Node base image for interactive CLI agents (Codex CLI preinstalled; update inside container as needed).
 - `critic`: Go helper that prepares Codex config and idles.
 
 ## Quickstart (Docker)
+Requires Docker Engine.
+
 Build the CLI and images:
 
 ```bash
@@ -17,6 +18,13 @@ go build -o si ./tools/silexa
 ./si images build
 ```
 
+
+## Testing
+Run all module tests from repo root:
+
+```bash
+./tools/test.sh
+```
 ## Dyads (Actor + Critic)
 - Spawn a dyad (actor+critic):
 
@@ -64,8 +72,7 @@ Each container uses its own persistent `~/.codex` volume so multiple Codex accou
 2) Human opens the URL on a browser-capable machine and completes OAuth.
 3) Actor resumes once callback is received.
 
-## Secrets and access notes
-- Tokens live in `secrets/` (mounted into the relevant containers).
+## Access notes
 - Keep container privileges minimal; actors/critics do not need a container runtime socket.
 
 ## Next steps
