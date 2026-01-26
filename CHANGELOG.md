@@ -14,10 +14,13 @@ All notable changes to this project will be documented in this file.
 - Introduced Codex profiles and the `si codex profile` command.
 - Added profile-aware `si codex login` with host auth caching.
 - Added container file read support for auth caching.
+- Added `~/.si/settings.toml` for unified configuration and prompt theming.
+- Added shell prompt rendering driven by settings without editing `.bashrc`.
 
 ### Changed
 - Defaulted workspace mounts to the current directory for codex spawn/respawn and dyad spawn when `--workspace` is omitted.
 - Aligned CLI table widths using Unicode-aware display widths.
+- Replaced host `.bashrc` injection with settings-driven configuration.
 
 ### Fixed
 - Ensured Codex config and auth paths are created before copy operations.
