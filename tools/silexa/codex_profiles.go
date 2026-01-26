@@ -27,13 +27,30 @@ type codexProfileSummary struct {
 	AuthUpdated string `json:"auth_updated,omitempty"`
 }
 
-var codexProfiles = []codexProfile{
-	{ID: "america", Name: "🗽 America", Email: "lees_mellow2b@icloud.com"},
-	{ID: "berylla", Name: "❇️ Berylla", Email: "7shayan7@gmail.com"},
-	{ID: "cadma", Name: "💟 Cadma", Email: "calypso.bard-05@icloud.com"},
-	{ID: "darmstada", Name: "🐦‍🔥 Darmstada", Email: "bacon.trace.5e@icloud.com"},
-	{ID: "einsteina", Name: "🥇 Einsteina", Email: "lily-gusts.1e@icloud.com"},
-	{ID: "gadolina", Name: "🧲 Gadolina", Email: "maps-android.5t@icloud.com"},
+func codexProfiles() []codexProfile {
+	settings := loadSettingsOrDefault()
+	entries := settings.Codex.Profiles.Entries
+	if len(entries) == 0 {
+		return nil
+	}
+	items := make([]codexProfile, 0, len(entries))
+	for id, entry := range entries {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name)
+		email := strings.TrimSpace(entry.Email)
+		items = append(items, codexProfile{
+			ID:    id,
+			Name:  name,
+			Email: email,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].ID < items[j].ID
+	})
+	return items
 }
 
 func codexProfileByKey(key string) (codexProfile, bool) {
@@ -43,7 +60,7 @@ func codexProfileByKey(key string) (codexProfile, bool) {
 	}
 	lower := strings.ToLower(key)
 	normalized := normalizeCodexProfileKey(key)
-	for _, profile := range codexProfiles {
+	for _, profile := range codexProfiles() {
 		if strings.EqualFold(profile.ID, key) || strings.EqualFold(profile.Email, key) {
 			return profile, true
 		}
@@ -70,8 +87,9 @@ func requireCodexProfile(key string) (codexProfile, error) {
 }
 
 func codexProfileIDs() []string {
-	out := make([]string, 0, len(codexProfiles))
-	for _, profile := range codexProfiles {
+	profiles := codexProfiles()
+	out := make([]string, 0, len(profiles))
+	for _, profile := range profiles {
 		out = append(out, profile.ID)
 	}
 	sort.Strings(out)
@@ -147,11 +165,12 @@ func codexProfileAuthStatus(profile codexProfile) codexAuthCacheStatus {
 }
 
 func codexProfileSummaries() []codexProfileSummary {
-	if len(codexProfiles) == 0 {
+	profiles := codexProfiles()
+	if len(profiles) == 0 {
 		return nil
 	}
-	items := make([]codexProfileSummary, 0, len(codexProfiles))
-	for _, profile := range codexProfiles {
+	items := make([]codexProfileSummary, 0, len(profiles))
+	for _, profile := range profiles {
 		status := codexProfileAuthStatus(profile)
 		item := codexProfileSummary{
 			ID:         profile.ID,
