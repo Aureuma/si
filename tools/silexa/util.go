@@ -41,7 +41,7 @@ Build:
 Profiles:
   si profile [name]        (codex profiles)
   si persona <profile-name> (markdown profiles)
-  si capability <role>
+  si skill <role>
 
 Command details
 ---------------
@@ -187,8 +187,8 @@ images:
 persona:
   si persona <name>
 
-capability:
-  si capability <role>
+skill:
+  si skill <role>
 
 Environment defaults (selected)
 -------------------------------
@@ -392,7 +392,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|persona|capability)\\b`)
+cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|persona|skill)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
