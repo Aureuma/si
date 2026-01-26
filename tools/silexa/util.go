@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -18,7 +19,7 @@ Holistic CLI for Silexa. This help includes all commands, flags, and core featur
 
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
-  - Codex containers: spawn/list/status/report/login/exec/tail/clone/remove/stop/start.
+  - Codex containers: spawn/list/status/report/login/profile/exec/tail/clone/remove/stop/start.
   - Codex one-off exec: run codex exec in an isolated container (with MCP disabled if desired).
   - Image build helpers for local dev.
   - Docker passthrough for raw docker CLI calls.
@@ -29,7 +30,7 @@ Usage:
 
 Core:
   si dyad spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login
-  si codex spawn|respawn|list|status|report|login|ps|exec|logs|tail|clone|remove|stop|start
+  si codex spawn|respawn|list|status|report|login|profile|ps|exec|logs|tail|clone|remove|stop|start
   si docker <args...>
 
 Build:
@@ -58,7 +59,7 @@ dyad:
     --codex-effort-low <effort>
     --codex-effort-medium <effort>
     --codex-effort-high <effort>
-    --workspace <host path>
+    --workspace <host path>       (default: current dir)
     --configs <host path>
     --forward-ports <range>
 
@@ -84,7 +85,7 @@ codex:
   si codex spawn <name>
   si codex respawn <name> [--volumes]
     --image <docker image>
-    --workspace <host path>
+    --workspace <host path>       (default: current dir)
     --network <network>
     --repo <Org/Repo>
     --gh-pat <token>
@@ -92,6 +93,7 @@ codex:
     --workdir <path>
     --codex-volume <volume>
     --gh-volume <volume>
+    --profile <profile>
     --clean-slate / --clean-slate=false
     --detach / --detach=false
     --env KEY=VALUE        (repeatable)
@@ -138,8 +140,11 @@ codex:
     --prompts-file <path>
     --prompt <text>         (repeatable)
 
-  si codex login <name> [--device-auth]
+  si codex login [profile] [--device-auth]
     --device-auth / --device-auth=false
+
+  si codex profile [name]
+    --json
 
   si codex exec (two modes)
     One-off exec (isolated container):
@@ -436,8 +441,12 @@ func stripANSIForPad(s string) string {
 	return ansiStripRe.ReplaceAllString(s, "")
 }
 
+func displayWidth(s string) int {
+	return runewidth.StringWidth(stripANSIForPad(s))
+}
+
 func padRightANSI(s string, width int) string {
-	visible := len(stripANSIForPad(s))
+	visible := displayWidth(s)
 	if visible >= width {
 		return s
 	}

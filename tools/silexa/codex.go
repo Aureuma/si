@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -30,7 +31,7 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si codex <spawn|respawn|list|ps|status|report|login|exec|logs|tail|clone|remove|stop|start>")
+		printUsage("usage: si codex <spawn|respawn|list|ps|status|report|login|profile|exec|logs|tail|clone|remove|stop|start>")
 		return
 	}
 	switch args[0] {
@@ -46,6 +47,8 @@ func cmdCodex(args []string) {
 		cmdCodexReport(args[1:])
 	case "login":
 		cmdCodexLogin(args[1:])
+	case "profile":
+		cmdCodexProfile(args[1:])
 	case "exec":
 		cmdCodexExec(args[1:])
 	case "logs":
@@ -75,6 +78,7 @@ type codexSpawnFlags struct {
 	workdir       *string
 	codexVolume   *string
 	ghVolume      *string
+	profile       *string
 	detach        *bool
 	cleanSlate    *bool
 	envs          *multiFlag
@@ -91,6 +95,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	codexVolume := fs.String("codex-volume", "", "override codex volume name")
 	ghVolume := fs.String("gh-volume", "", "override github config volume name")
+	profile := fs.String("profile", "", "codex profile name/email")
 	detach := fs.Bool("detach", true, "run container in background")
 	cleanSlate := fs.Bool("clean-slate", false, "skip copying host ~/.codex/config.toml into container")
 	envs := multiFlag{}
@@ -107,6 +112,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 		workdir:       workdir,
 		codexVolume:   codexVolume,
 		ghVolume:      ghVolume,
+		profile:       profile,
 		detach:        detach,
 		cleanSlate:    cleanSlate,
 		envs:          &envs,
@@ -116,6 +122,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 
 func cmdCodexSpawn(args []string) {
 	workdirSet := flagProvided(args, "workdir")
+	workspaceSet := flagProvided(args, "workspace")
 	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
 	flags := addCodexSpawnFlags(fs)
 	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
@@ -133,6 +140,21 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	containerName := codexContainerName(name)
+	var profile *codexProfile
+	if strings.TrimSpace(*flags.profile) != "" {
+		parsed, err := requireCodexProfile(*flags.profile)
+		if err != nil {
+			fatal(err)
+		}
+		profile = &parsed
+	}
+	if !workspaceSet {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fatal(err)
+		}
+		*flags.workspaceHost = cwd
+	}
 	if strings.TrimSpace(*flags.workspaceHost) == "" {
 		*flags.workspaceHost = mustRepoRoot()
 	}
@@ -170,6 +192,9 @@ func cmdCodexSpawn(args []string) {
 	labels := map[string]string{
 		codexLabelKey: codexLabelValue,
 		"si.name":     name,
+	}
+	if profile != nil {
+		labels[codexProfileLabelKey] = profile.ID
 	}
 
 	env := []string{
@@ -227,6 +252,12 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	if existingID != "" {
+		if profile != nil && info != nil && info.Config != nil {
+			existingProfile := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
+			if existingProfile != "" && existingProfile != profile.ID {
+				warnf("codex container %s already uses profile %s", containerName, existingProfile)
+			}
+		}
 		if info != nil && info.State != nil && !info.State.Running {
 			if err := client.StartContainer(ctx, existingID); err != nil {
 				fatal(err)
@@ -249,6 +280,9 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	seedCodexConfig(ctx, client, id, *flags.cleanSlate)
+	if profile != nil {
+		seedCodexAuth(ctx, client, id, *flags.cleanSlate, *profile)
+	}
 	if !*flags.cleanSlate {
 		if identity, ok := hostGitIdentity(); ok {
 			seedGitIdentity(ctx, client, id, "si", "/home/si", identity)
@@ -404,9 +438,7 @@ func cmdCodexExec(args []string) {
 	}
 
 	if len(rest) < 1 {
-		printUsage("usage: si codex exec <name> [--] <command>")
-		fmt.Println(styleDim("   or: si codex exec --prompt \"...\" [--output-only] [--no-mcp]"))
-		name, ok := selectCodexContainer("exec")
+		name, ok := selectCodexContainer("exec", true)
 		if !ok {
 			return
 		}
@@ -432,7 +464,7 @@ func cmdCodexExec(args []string) {
 	}
 }
 
-func selectCodexContainer(action string) (string, bool) {
+func selectCodexContainer(action string, nameHint bool) (string, bool) {
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -479,7 +511,11 @@ func selectCodexContainer(action string) (string, bool) {
 				item.Image,
 			)
 		}
-		fmt.Println(styleDim("re-run with: si codex " + action + " <name>"))
+		hint := "re-run with: si codex " + action
+		if nameHint {
+			hint += " <name>"
+		}
+		fmt.Println(styleDim(hint))
 		return "", false
 	}
 
@@ -534,12 +570,36 @@ func cmdCodexLogin(args []string) {
 	fs := flag.NewFlagSet("codex login", flag.ExitOnError)
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
 	_ = fs.Parse(args)
-	if fs.NArg() < 1 {
-		printUsage("usage: si codex login <name>")
+	if fs.NArg() > 1 {
+		printUsage("usage: si codex login [profile] [--device-auth]")
 		return
 	}
-	name := fs.Arg(0)
-	containerName := codexContainerName(name)
+	profileKey := ""
+	if fs.NArg() == 1 {
+		profileKey = fs.Arg(0)
+	}
+
+	var profile *codexProfile
+	if strings.TrimSpace(profileKey) != "" {
+		parsed, err := requireCodexProfile(profileKey)
+		if err != nil {
+			fatal(err)
+		}
+		profile = &parsed
+	} else if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		selected, ok := selectCodexProfile("login", "")
+		if !ok {
+			return
+		}
+		profile = &selected
+	} else {
+		printUsage("usage: si codex login [profile] [--device-auth]")
+		return
+	}
+
+	if profile == nil {
+		return
+	}
 
 	client, err := shared.NewClient()
 	if err != nil {
@@ -547,13 +607,38 @@ func cmdCodexLogin(args []string) {
 	}
 	defer client.Close()
 	ctx := context.Background()
-	id, _, err := client.ContainerByName(ctx, containerName)
+
+	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"))
+	if image == "" {
+		fatal(fmt.Errorf("codex image required"))
+	}
+	containerName := fmt.Sprintf("si-codex-login-%s-%d", profile.ID, time.Now().UnixNano())
+	labels := map[string]string{
+		codexLabelKey:        codexLabelValue,
+		codexProfileLabelKey: profile.ID,
+		"si.mode":            "login",
+	}
+	cfg := &container.Config{
+		Image:  image,
+		Env:    filterEnv([]string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex"}),
+		Labels: labels,
+		Cmd:    []string{"bash", "-lc", "sleep infinity"},
+	}
+	hostCfg := &container.HostConfig{}
+	netCfg := &network.NetworkingConfig{}
+
+	id, err := client.CreateContainer(ctx, cfg, hostCfg, netCfg, containerName)
 	if err != nil {
 		fatal(err)
 	}
-	if id == "" {
-		fatal(fmt.Errorf("codex container %s not found", containerName))
+	removeContainer := func() {
+		_ = client.RemoveContainer(ctx, id, true)
 	}
+	if err := client.StartContainer(ctx, id); err != nil {
+		removeContainer()
+		fatal(err)
+	}
+	seedCodexConfig(ctx, client, id, false)
 
 	execArgs := []string{"exec"}
 	if term.IsTerminal(int(os.Stdin.Fd())) {
@@ -574,8 +659,63 @@ func cmdCodexLogin(args []string) {
 		execArgs = append(execArgs, "--device-auth")
 	}
 	if err := execDockerCLI(execArgs...); err != nil {
+		removeContainer()
 		fatal(err)
 	}
+	if err := cacheCodexAuthFromContainer(ctx, client, id, *profile); err != nil {
+		warnf("codex auth cache failed: %v", err)
+	} else {
+		successf("cached codex auth for profile %s", profile.ID)
+	}
+	removeContainer()
+}
+
+func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
+	items := codexProfileSummaries()
+	if len(items) == 0 {
+		fmt.Println(styleDim("no codex profiles configured"))
+		return codexProfile{}, false
+	}
+	defaultKey = strings.TrimSpace(defaultKey)
+
+	fmt.Println(styleHeading("Available codex profiles:"))
+	printCodexProfilesTable(items)
+
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Println(styleDim("re-run with: si codex " + action + " <profile>"))
+		return codexProfile{}, false
+	}
+
+	prompt := fmt.Sprintf("Select profile [1-%d]", len(items))
+	if defaultKey != "" {
+		prompt = fmt.Sprintf("Select profile [1-%d] (default %s)", len(items), defaultKey)
+	}
+	fmt.Printf("%s ", styleDim(prompt+":"))
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		fatal(err)
+	}
+	line = strings.TrimSpace(line)
+	if line == "" && defaultKey != "" {
+		if profile, ok := codexProfileByKey(defaultKey); ok {
+			return profile, true
+		}
+	}
+	if line == "" {
+		return codexProfile{}, false
+	}
+	idx, err := strconv.Atoi(line)
+	if err != nil || idx < 1 || idx > len(items) {
+		fmt.Println(styleDim("invalid selection"))
+		return codexProfile{}, false
+	}
+	profile, ok := codexProfileByKey(items[idx-1].ID)
+	if !ok {
+		fmt.Println(styleDim("invalid selection"))
+		return codexProfile{}, false
+	}
+	return profile, true
 }
 
 func cmdCodexLogs(args []string) {
@@ -740,11 +880,90 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 		return
 	}
 	const destPath = "/home/si/.codex/config.toml"
+	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
 		warnf("codex config copy failed: %v", err)
 		return
 	}
 	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+}
+
+func seedCodexAuth(ctx context.Context, client *shared.Client, containerID string, cleanSlate bool, profile codexProfile) {
+	if cleanSlate {
+		return
+	}
+	if strings.TrimSpace(profile.ID) == "" {
+		return
+	}
+	hostPath, err := codexProfileAuthPath(profile)
+	if err != nil {
+		warnf("codex auth copy skipped: %v", err)
+		return
+	}
+	data, err := os.ReadFile(hostPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		warnf("codex auth copy skipped: %v", err)
+		return
+	}
+	const destPath = "/home/si/.codex/auth.json"
+	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
+		warnf("codex auth copy failed: %v", err)
+		return
+	}
+	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+}
+
+func cacheCodexAuthFromContainer(ctx context.Context, client *shared.Client, containerID string, profile codexProfile) error {
+	if strings.TrimSpace(profile.ID) == "" {
+		return fmt.Errorf("profile id required")
+	}
+	data, err := client.ReadFileFromContainer(ctx, containerID, "/home/si/.codex/auth.json")
+	if err != nil {
+		if isMissingContainerFile(err) {
+			return nil
+		}
+		return err
+	}
+	dir, err := ensureCodexProfileDir(profile)
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(dir, "auth.json")
+	tmp, err := os.CreateTemp(dir, "auth-*.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func isMissingContainerFile(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "could not find the file") || strings.Contains(msg, "no such file")
 }
 
 func flagProvided(args []string, name string) bool {
