@@ -45,6 +45,7 @@ func cmdDyad(args []string) {
 }
 
 func cmdDyadSpawn(args []string) {
+	workspaceSet := flagProvided(args, "workspace")
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
 	deptFlag := fs.String("department", "", "dyad department")
@@ -100,6 +101,13 @@ func cmdDyadSpawn(args []string) {
 	}
 
 	root := ""
+	if !workspaceSet {
+		cwd, err := os.Getwd()
+		if err != nil {
+			fatal(err)
+		}
+		*workspaceHost = cwd
+	}
 	if strings.TrimSpace(*workspaceHost) == "" {
 		root = mustRepoRoot()
 		*workspaceHost = root
