@@ -1,10 +1,8 @@
-FROM node:22-bookworm
+FROM silexa/silexa:local
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates curl git gh tini \
+    && apt-get install -y --no-install-recommends gh \
     && rm -rf /var/lib/apt/lists/*
-
-RUN npm i -g @openai/codex
 
 RUN id -u si >/dev/null 2>&1 || useradd -m -s /bin/bash si
 ENV HOME=/home/si
