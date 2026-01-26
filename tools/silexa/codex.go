@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"flag"
@@ -337,10 +338,11 @@ func cmdCodexList(args []string) {
 	)
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
+		image := codexImageDisplay(c.Image)
 		fmt.Printf("%s %s %s\n",
 			padRightANSI(name, 28),
 			padRightANSI(styleStatus(c.State), 10),
-			padRightANSI(c.Image, 20),
+			padRightANSI(image, 20),
 		)
 	}
 }
@@ -404,7 +406,11 @@ func cmdCodexExec(args []string) {
 	if len(rest) < 1 {
 		printUsage("usage: si codex exec <name> [--] <command>")
 		fmt.Println(styleDim("   or: si codex exec --prompt \"...\" [--output-only] [--no-mcp]"))
-		return
+		name, ok := selectCodexContainer("exec")
+		if !ok {
+			return
+		}
+		rest = []string{name}
 	}
 	name := rest[0]
 	containerName := codexContainerName(name)
@@ -424,6 +430,104 @@ func cmdCodexExec(args []string) {
 	if err := execDockerCLI(execArgs...); err != nil {
 		fatal(err)
 	}
+}
+
+func selectCodexContainer(action string) (string, bool) {
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+	if err != nil {
+		fatal(err)
+	}
+	if len(containers) == 0 {
+		fmt.Println(styleDim("no codex containers found (run: si codex spawn <name>)"))
+		return "", false
+	}
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].Names[0] < containers[j].Names[0]
+	})
+
+	nameWidth := 0
+	items := make([]codexContainerItem, 0, len(containers))
+	for _, c := range containers {
+		name := strings.TrimPrefix(c.Names[0], "/")
+		if len(name) > nameWidth {
+			nameWidth = len(name)
+		}
+		items = append(items, codexContainerItem{
+			Name:  name,
+			State: c.State,
+			Image: codexImageDisplay(c.Image),
+		})
+	}
+	if nameWidth < 10 {
+		nameWidth = 10
+	}
+
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Println(styleHeading("Available codex containers:"))
+		for i, item := range items {
+			fmt.Printf("  %2d) %s %s %s\n",
+				i+1,
+				padRightANSI(item.Name, nameWidth),
+				padRightANSI(styleStatus(item.State), 10),
+				item.Image,
+			)
+		}
+		fmt.Println(styleDim("re-run with: si codex " + action + " <name>"))
+		return "", false
+	}
+
+	fmt.Println(styleHeading("Available codex containers:"))
+	for i, item := range items {
+		fmt.Printf("  %2d) %s %s %s\n",
+			i+1,
+			padRightANSI(item.Name, nameWidth),
+			padRightANSI(styleStatus(item.State), 10),
+			item.Image,
+		)
+	}
+
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] (or press Enter to cancel):", len(items))))
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		fatal(err)
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", false
+	}
+	idx, err := strconv.Atoi(line)
+	if err != nil || idx < 1 || idx > len(items) {
+		fmt.Println(styleDim("invalid selection"))
+		return "", false
+	}
+	return items[idx-1].Name, true
+}
+
+type codexContainerItem struct {
+	Name  string
+	State string
+	Image string
+}
+
+func codexImageDisplay(image string) string {
+	if image == "" {
+		return ""
+	}
+	if strings.HasPrefix(image, "sha256:") {
+		return ""
+	}
+	if at := strings.Index(image, "@sha256:"); at != -1 {
+		return image[:at]
+	}
+	return image
 }
 
 func cmdCodexLogin(args []string) {
