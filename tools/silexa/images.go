@@ -45,6 +45,7 @@ type imageBuildSpec struct {
 func cmdImagesBuild(args []string) {
 	root := mustRepoRoot()
 	specs := []imageBuildSpec{
+		{tag: "silexa/silexa:local", contextDir: filepath.Join(root, "tools/si-base-image")},
 		{tag: "silexa/si-codex:local", contextDir: filepath.Join(root, "tools/si-codex-image")},
 		{tag: "silexa/actor:local", contextDir: root, dockerfile: filepath.Join(root, "agents/actor/Dockerfile")},
 		{tag: "silexa/critic:local", contextDir: root, dockerfile: filepath.Join(root, "agents/critic/Dockerfile")},
