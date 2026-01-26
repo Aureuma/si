@@ -106,9 +106,9 @@ func printCodexProfilesTable(items []codexProfileSummary) {
 		padRightANSI(styleHeading("AUTH"), 8),
 	)
 	for _, item := range items {
-		auth := "missing"
+		auth := "Missing"
 		if item.AuthCached {
-			auth = "cached"
+			auth = "Logged-In"
 		}
 		fmt.Printf("%s %s %s %s\n",
 			padRightANSI(item.ID, widthID),
