@@ -123,6 +123,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 func cmdCodexSpawn(args []string) {
 	workdirSet := flagProvided(args, "workdir")
 	workspaceSet := flagProvided(args, "workspace")
+	explicitProfile := flagProvided(args, "profile")
 	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
 	flags := addCodexSpawnFlags(fs)
 	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
@@ -155,9 +156,6 @@ func cmdCodexSpawn(args []string) {
 	if !flagProvided(args, "gh-volume") && strings.TrimSpace(settings.Codex.GHVolume) != "" {
 		*flags.ghVolume = strings.TrimSpace(settings.Codex.GHVolume)
 	}
-	if !flagProvided(args, "profile") && strings.TrimSpace(settings.Codex.Profile) != "" {
-		*flags.profile = strings.TrimSpace(settings.Codex.Profile)
-	}
 	if !flagProvided(args, "detach") && settings.Codex.Detach != nil {
 		*flags.detach = *settings.Codex.Detach
 	}
@@ -177,14 +175,6 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	containerName := codexContainerName(name)
-	var profile *codexProfile
-	if strings.TrimSpace(*flags.profile) != "" {
-		parsed, err := requireCodexProfile(*flags.profile)
-		if err != nil {
-			fatal(err)
-		}
-		profile = &parsed
-	}
 	if !workspaceSet {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -210,6 +200,67 @@ func cmdCodexSpawn(args []string) {
 	}
 	defer client.Close()
 	ctx := context.Background()
+
+	existingID, info, err := client.ContainerByName(ctx, containerName)
+	if err != nil {
+		fatal(err)
+	}
+	if existingID != "" {
+		var profile *codexProfile
+		if explicitProfile && strings.TrimSpace(*flags.profile) != "" {
+			parsed, err := requireCodexProfile(*flags.profile)
+			if err != nil {
+				fatal(err)
+			}
+			profile = &parsed
+		}
+		if profile != nil && info != nil && info.Config != nil {
+			existingProfile := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
+			if existingProfile != "" && existingProfile != profile.ID {
+				warnf("codex container %s already uses profile %s", containerName, existingProfile)
+			}
+		}
+		if info != nil && info.State != nil && !info.State.Running {
+			if err := client.StartContainer(ctx, existingID); err != nil {
+				fatal(err)
+			}
+		}
+		if !*flags.cleanSlate {
+			if identity, ok := hostGitIdentity(); ok {
+				seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+			}
+		}
+		infof("codex container %s already exists", containerName)
+		return
+	}
+
+	if !explicitProfile {
+		defaultProfileKey := strings.TrimSpace(settings.Codex.Profile)
+		if defaultProfileKey == "" {
+			defaultProfileKey = strings.TrimSpace(settings.Codex.Profiles.Active)
+		}
+		if defaultProfileKey != "" && !term.IsTerminal(int(os.Stdin.Fd())) {
+			*flags.profile = defaultProfileKey
+		} else if len(codexProfileSummaries()) > 0 {
+			selected, ok := selectCodexProfile("spawn", defaultProfileKey)
+			if !ok {
+				return
+			}
+			*flags.profile = selected.ID
+		} else if !term.IsTerminal(int(os.Stdin.Fd())) && defaultProfileKey == "" {
+			printUsage("usage: si codex spawn <name> [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
+			return
+		}
+	}
+
+	var profile *codexProfile
+	if strings.TrimSpace(*flags.profile) != "" {
+		parsed, err := requireCodexProfile(*flags.profile)
+		if err != nil {
+			fatal(err)
+		}
+		profile = &parsed
+	}
 
 	if strings.TrimSpace(*flags.networkName) != "" {
 		_, _ = client.EnsureNetwork(ctx, *flags.networkName, map[string]string{codexLabelKey: codexLabelValue})
@@ -288,31 +339,6 @@ func cmdCodexSpawn(args []string) {
 		}
 	}
 
-	existingID, info, err := client.ContainerByName(ctx, containerName)
-	if err != nil {
-		fatal(err)
-	}
-	if existingID != "" {
-		if profile != nil && info != nil && info.Config != nil {
-			existingProfile := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
-			if existingProfile != "" && existingProfile != profile.ID {
-				warnf("codex container %s already uses profile %s", containerName, existingProfile)
-			}
-		}
-		if info != nil && info.State != nil && !info.State.Running {
-			if err := client.StartContainer(ctx, existingID); err != nil {
-				fatal(err)
-			}
-		}
-		if !*flags.cleanSlate {
-			if identity, ok := hostGitIdentity(); ok {
-				seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
-			}
-		}
-		infof("codex container %s already exists", containerName)
-		return
-	}
-
 	id, err := client.CreateContainer(ctx, cfg, hostCfg, netCfg, containerName)
 	if err != nil {
 		fatal(err)
@@ -344,6 +370,13 @@ func cmdCodexRespawn(args []string) {
 	if nameArg == "" {
 		printUsage("usage: si codex respawn <name> [--volumes] [spawn flags]")
 		return
+	}
+	if !flagProvided(args, "profile") {
+		selected, ok := selectCodexProfile("respawn", "")
+		if !ok {
+			return
+		}
+		filtered = append(filtered, "--profile", selected.ID)
 	}
 	name := nameArg
 	removeArgs := []string{name}
