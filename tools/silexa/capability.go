@@ -2,7 +2,7 @@ package main
 
 import "sort"
 
-var capabilityByRole = map[string]string{
+var skillByRole = map[string]string{
 	"actor-web": `Role: actor-web
 Model tier: code-tier (web/services), medium reasoning
 Tools: git, docker, curl, image builder (docker)
@@ -33,14 +33,14 @@ Tools: analysis, benchmarks
 Guardrails: verify assumptions; avoid production changes`,
 }
 
-func capabilityText(role string) (string, bool) {
-	text, ok := capabilityByRole[role]
+func skillText(role string) (string, bool) {
+	text, ok := skillByRole[role]
 	return text, ok
 }
 
-func capabilityRoles() []string {
-	roles := make([]string, 0, len(capabilityByRole))
-	for role := range capabilityByRole {
+func skillRoles() []string {
+	roles := make([]string, 0, len(skillByRole))
+	for role := range skillByRole {
 		roles = append(roles, role)
 	}
 	sort.Strings(roles)

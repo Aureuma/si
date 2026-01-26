@@ -30,8 +30,8 @@ func main() {
 		cmdImage(args)
 	case "persona":
 		cmdPersona(args)
-	case "capability":
-		cmdCapability(args)
+	case "skill":
+		cmdSkill(args)
 	case "help", "-h", "--help":
 		usage()
 	default:
