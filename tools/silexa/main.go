@@ -12,6 +12,8 @@ func main() {
 	cmd := os.Args[1]
 	args := os.Args[2:]
 	switch cmd {
+	case "version", "--version", "-v":
+		printVersion()
 	case "spawn", "respawn", "list", "ps", "status", "report", "login", "profile", "exec", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start":
 		if !dispatchCodexCommand(cmd, args) {
 			printUnknown("", cmd)
