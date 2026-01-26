@@ -344,6 +344,35 @@ func (c *Client) CopyFileToContainer(ctx context.Context, containerID, destPath 
 	})
 }
 
+func (c *Client) ReadFileFromContainer(ctx context.Context, containerID, srcPath string) ([]byte, error) {
+	if strings.TrimSpace(containerID) == "" {
+		return nil, errors.New("container id required")
+	}
+	srcPath = strings.TrimSpace(srcPath)
+	if srcPath == "" {
+		return nil, errors.New("source path required")
+	}
+	reader, _, err := c.api.CopyFromContainer(ctx, containerID, srcPath)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	tr := tar.NewReader(reader)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return nil, os.ErrNotExist
+		}
+		if err != nil {
+			return nil, err
+		}
+		if hdr.FileInfo().Mode().IsRegular() {
+			return io.ReadAll(tr)
+		}
+	}
+}
+
 type LogsOptions struct {
 	Since      time.Time
 	Tail       int

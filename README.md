@@ -50,7 +50,7 @@ Run all module tests from repo root:
 ./si dyad list
 ```
 
-All dyads share the repo workspace.
+By default, dyads mount the current directory; when run from the repo root they share the repo workspace. Use `--workspace` to override.
 
 ## Codex containers (on-demand)
 Spawn standalone Codex containers with isolated auth:
@@ -66,6 +66,7 @@ Clone later into an existing container:
 ```
 
 Each container uses its own persistent `~/.codex` volume so multiple Codex accounts can coexist on the same host.
+By default, `si codex spawn` mounts the current directory as `/workspace`; use `--workspace` to override.
 
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).
