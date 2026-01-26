@@ -46,21 +46,21 @@ func cmdPersona(args []string) {
 	}
 }
 
-func cmdCapability(args []string) {
-	fs := flag.NewFlagSet("capability", flag.ExitOnError)
+func cmdSkill(args []string) {
+	fs := flag.NewFlagSet("skill", flag.ExitOnError)
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		printUsage("usage: si capability <role>")
+		printUsage("usage: si skill <role>")
 		return
 	}
 	role := strings.TrimSpace(fs.Arg(0))
 	if role == "" {
-		printUsage("usage: si capability <role>")
+		printUsage("usage: si skill <role>")
 		return
 	}
-	text, ok := capabilityText(role)
+	text, ok := skillText(role)
 	if !ok {
-		roles := capabilityRoles()
+		roles := skillRoles()
 		if len(roles) > 0 {
 			fatal(fmt.Errorf("unknown role %q (available: %s)", role, strings.Join(roles, ", ")))
 		}
