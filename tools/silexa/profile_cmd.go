@@ -9,16 +9,16 @@ import (
 	"strings"
 )
 
-func cmdProfile(args []string) {
-	fs := flag.NewFlagSet("profile", flag.ExitOnError)
+func cmdPersona(args []string) {
+	fs := flag.NewFlagSet("persona", flag.ExitOnError)
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		printUsage("usage: si profile <name>")
+		printUsage("usage: si persona <name>")
 		return
 	}
 	name := strings.TrimSpace(fs.Arg(0))
 	if name == "" {
-		printUsage("usage: si profile <name>")
+		printUsage("usage: si persona <name>")
 		return
 	}
 	if strings.HasSuffix(name, ".md") {
