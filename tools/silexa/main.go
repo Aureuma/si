@@ -14,6 +14,12 @@ func main() {
 	switch cmd {
 	case "codex":
 		cmdCodex(args)
+	case "spawn", "respawn", "list", "ps", "status", "report", "login", "profile", "exec", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start":
+		if !dispatchCodexCommand(cmd, args) {
+			printUnknown("", cmd)
+			usage()
+			os.Exit(1)
+		}
 	case "docker":
 		cmdDocker(args)
 	case "dyad":
@@ -22,8 +28,8 @@ func main() {
 		cmdImages(args)
 	case "image":
 		cmdImage(args)
-	case "profile":
-		cmdProfile(args)
+	case "persona":
+		cmdPersona(args)
 	case "capability":
 		cmdCapability(args)
 	case "help", "-h", "--help":

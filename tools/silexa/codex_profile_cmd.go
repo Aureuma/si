@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-func cmdCodexProfile(args []string) {
-	fs := flag.NewFlagSet("codex profile", flag.ExitOnError)
+func cmdProfile(args []string) {
+fs := flag.NewFlagSet("profile", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 
@@ -19,14 +19,14 @@ func cmdCodexProfile(args []string) {
 	case 1:
 		showCodexProfile(fs.Arg(0), *jsonOut)
 	default:
-		printUsage("usage: si codex profile [name] [--json]")
+		printUsage("usage: si profile [name] [--json]")
 	}
 }
 
 func listCodexProfiles(jsonOut bool) {
 	items := codexProfileSummaries()
 	if len(items) == 0 {
-		infof("no codex profiles configured")
+		infof("no profiles configured")
 		return
 	}
 	if jsonOut {

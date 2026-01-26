@@ -57,16 +57,16 @@ Spawn standalone Codex containers with isolated auth:
 
 ```bash
 ./si images build
-./si codex spawn <name> --repo Org/Repo --gh-pat <token>
+./si spawn <name> --repo Org/Repo --gh-pat <token>
 ```
 
 Clone later into an existing container:
 ```bash
-./si codex clone <name> Org/Repo --gh-pat <token>
+./si clone <name> Org/Repo --gh-pat <token>
 ```
 
 Each container uses its own persistent `~/.codex` volume so multiple Codex accounts can coexist on the same host.
-By default, `si codex spawn` mounts the current directory as `/workspace`; use `--workspace` to override.
+By default, `si spawn` mounts the current directory as `/workspace`; use `--workspace` to override.
 
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).

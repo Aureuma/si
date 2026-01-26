@@ -65,7 +65,7 @@ type statusOptions struct {
 const tmuxStatusPrefix = "si-codex-status-"
 
 func cmdCodexStatus(args []string) {
-	fs := flag.NewFlagSet("codex status", flag.ExitOnError)
+fs := flag.NewFlagSet("status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	showRaw := fs.Bool("raw", false, "include raw status output")
 	timeout := fs.Duration("timeout", 25*time.Second, "status timeout")
@@ -85,7 +85,7 @@ func cmdCodexStatus(args []string) {
 	cleanupSessions := fs.Bool("cleanup-stale-sessions", true, "cleanup stale tmux sessions")
 	_ = fs.Parse(args)
 	if fs.NArg() < 1 {
-		printUsage("usage: si codex status <name> [--json] [--raw] [--status-only]")
+		printUsage("usage: si status <name> [--json] [--raw] [--status-only]")
 		return
 	}
 	name := fs.Arg(0)

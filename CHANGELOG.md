@@ -9,6 +9,12 @@ All notable changes to this project will be documented in this file.
 - Dates use UTC in YYYY-MM-DD.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 
+## [v1.0.1] - 2026-01-26
+### Changed
+- Promoted Codex container commands to top-level (for example `si exec`).
+- Renamed the markdown profile command to `si persona`.
+- Deprecated `si codex ...` in favor of top-level commands.
+
 ## [v1.0.0] - 2026-01-26
 ### Added
 - Introduced Codex profiles and the `si codex profile` command.
