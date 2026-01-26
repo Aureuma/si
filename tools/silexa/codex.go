@@ -31,41 +31,49 @@ const (
 
 func cmdCodex(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si codex <spawn|respawn|list|ps|status|report|login|profile|exec|logs|tail|clone|remove|stop|start>")
+		printUsage("usage: si <command> [args...]")
 		return
 	}
-	switch args[0] {
-	case "spawn":
-		cmdCodexSpawn(args[1:])
-	case "respawn":
-		cmdCodexRespawn(args[1:])
-	case "list", "ps":
-		cmdCodexList(args[1:])
-	case "status":
-		cmdCodexStatus(args[1:])
-	case "report":
-		cmdCodexReport(args[1:])
-	case "login":
-		cmdCodexLogin(args[1:])
-	case "profile":
-		cmdCodexProfile(args[1:])
-	case "exec":
-		cmdCodexExec(args[1:])
-	case "logs":
-		cmdCodexLogs(args[1:])
-	case "tail":
-		cmdCodexTail(args[1:])
-	case "clone":
-		cmdCodexClone(args[1:])
-	case "remove", "rm", "delete":
-		cmdCodexRemove(args[1:])
-	case "stop":
-		cmdCodexStop(args[1:])
-	case "start":
-		cmdCodexStart(args[1:])
-	default:
+	warnf("`si codex %s` is deprecated; use `si %s`", args[0], args[0])
+	if !dispatchCodexCommand(args[0], args[1:]) {
 		printUnknown("codex", args[0])
 	}
+}
+
+func dispatchCodexCommand(cmd string, args []string) bool {
+	switch cmd {
+	case "spawn":
+		cmdCodexSpawn(args)
+	case "respawn":
+		cmdCodexRespawn(args)
+	case "list", "ps":
+		cmdCodexList(args)
+	case "status":
+		cmdCodexStatus(args)
+	case "report":
+		cmdCodexReport(args)
+	case "login":
+		cmdCodexLogin(args)
+	case "profile":
+		cmdProfile(args)
+	case "exec":
+		cmdCodexExec(args)
+	case "logs":
+		cmdCodexLogs(args)
+	case "tail":
+		cmdCodexTail(args)
+	case "clone":
+		cmdCodexClone(args)
+	case "remove", "rm", "delete":
+		cmdCodexRemove(args)
+	case "stop":
+		cmdCodexStop(args)
+	case "start":
+		cmdCodexStart(args)
+	default:
+		return false
+	}
+	return true
 }
 
 type codexSpawnFlags struct {
@@ -124,7 +132,7 @@ func cmdCodexSpawn(args []string) {
 	workdirSet := flagProvided(args, "workdir")
 	workspaceSet := flagProvided(args, "workspace")
 	explicitProfile := flagProvided(args, "profile")
-	fs := flag.NewFlagSet("codex spawn", flag.ExitOnError)
+	fs := flag.NewFlagSet("spawn", flag.ExitOnError)
 	flags := addCodexSpawnFlags(fs)
 	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
 	fs.Parse(filtered)
@@ -168,7 +176,7 @@ func cmdCodexSpawn(args []string) {
 		name = fs.Arg(0)
 	}
 	if name == "" {
-		printUsage("usage: si codex spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
+		printUsage("usage: si spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
 		return
 	}
 	if err := validateSlug(name); err != nil {
@@ -248,7 +256,7 @@ func cmdCodexSpawn(args []string) {
 			}
 			*flags.profile = selected.ID
 		} else if !term.IsTerminal(int(os.Stdin.Fd())) && defaultProfileKey == "" {
-			printUsage("usage: si codex spawn <name> [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
+			printUsage("usage: si spawn <name> [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
 			return
 		}
 	}
@@ -362,13 +370,13 @@ func cmdCodexSpawn(args []string) {
 }
 
 func cmdCodexRespawn(args []string) {
-	fs := flag.NewFlagSet("codex respawn", flag.ExitOnError)
+	fs := flag.NewFlagSet("respawn", flag.ExitOnError)
 	addCodexSpawnFlags(fs)
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
 	nameArg, filtered := splitNameAndFlags(args, codexRespawnBoolFlags())
 	_ = fs.Parse(filtered)
 	if nameArg == "" {
-		printUsage("usage: si codex respawn <name> [--volumes] [spawn flags]")
+		printUsage("usage: si respawn <name> [--volumes] [spawn flags]")
 		return
 	}
 	if !flagProvided(args, "profile") {
@@ -389,7 +397,7 @@ func cmdCodexRespawn(args []string) {
 }
 
 func cmdCodexList(args []string) {
-	fs := flag.NewFlagSet("codex list", flag.ExitOnError)
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 
@@ -456,7 +464,7 @@ func cmdCodexList(args []string) {
 }
 
 func cmdCodexExec(args []string) {
-	fs := flag.NewFlagSet("codex exec", flag.ExitOnError)
+	fs := flag.NewFlagSet("exec", flag.ExitOnError)
 	oneOff := fs.Bool("one-off", false, "run a one-off codex exec in an isolated container")
 	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
@@ -486,8 +494,8 @@ func cmdCodexExec(args []string) {
 			prompt = strings.Join(rest, " ")
 		}
 		if strings.TrimSpace(prompt) == "" {
-			printUsage("usage: si codex exec --prompt \"...\" [--output-only] [--no-mcp]")
-			fmt.Println(styleDim("   or: si codex exec \"...\" [--output-only] [--no-mcp]"))
+			printUsage("usage: si exec --prompt \"...\" [--output-only] [--no-mcp]")
+			fmt.Println(styleDim("   or: si exec \"...\" [--output-only] [--no-mcp]"))
 			return
 		}
 		opts := codexExecOneOffOptions{
@@ -585,7 +593,7 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 		fatal(err)
 	}
 	if len(containers) == 0 {
-		fmt.Println(styleDim("no codex containers found (run: si codex spawn <name>)"))
+		fmt.Println(styleDim("no codex containers found (run: si spawn <name>)"))
 		return "", false
 	}
 	sort.Slice(containers, func(i, j int) bool {
@@ -619,7 +627,7 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 				item.Image,
 			)
 		}
-		hint := "re-run with: si codex " + action
+		hint := "re-run with: si " + action
 		if nameHint {
 			hint += " <name>"
 		}
@@ -675,7 +683,7 @@ func codexImageDisplay(image string) string {
 }
 
 func cmdCodexLogin(args []string) {
-	fs := flag.NewFlagSet("codex login", flag.ExitOnError)
+	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
 	_ = fs.Parse(args)
 	settings := loadSettingsOrDefault()
@@ -683,7 +691,7 @@ func cmdCodexLogin(args []string) {
 		*deviceAuth = *settings.Codex.Login.DeviceAuth
 	}
 	if fs.NArg() > 1 {
-		printUsage("usage: si codex login [profile] [--device-auth]")
+		printUsage("usage: si login [profile] [--device-auth]")
 		return
 	}
 	profileKey := ""
@@ -705,7 +713,7 @@ func cmdCodexLogin(args []string) {
 		}
 		profile = &selected
 	} else {
-		printUsage("usage: si codex login [profile] [--device-auth]")
+		printUsage("usage: si login [profile] [--device-auth]")
 		return
 	}
 
@@ -797,7 +805,7 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 	printCodexProfilesTable(items)
 
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
-		fmt.Println(styleDim("re-run with: si codex " + action + " <profile>"))
+		fmt.Println(styleDim("re-run with: si " + action + " <profile>"))
 		return codexProfile{}, false
 	}
 
@@ -835,7 +843,7 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 
 func cmdCodexLogs(args []string) {
 	if len(args) < 1 {
-		printUsage("usage: si codex logs <name> [--tail N]")
+		printUsage("usage: si logs <name> [--tail N]")
 		return
 	}
 	name := args[0]
@@ -848,7 +856,7 @@ func cmdCodexLogs(args []string) {
 
 func cmdCodexTail(args []string) {
 	if len(args) < 1 {
-		printUsage("usage: si codex tail <name> [--tail N]")
+		printUsage("usage: si tail <name> [--tail N]")
 		return
 	}
 	name := args[0]
@@ -861,12 +869,12 @@ func cmdCodexTail(args []string) {
 
 func cmdCodexClone(args []string) {
 	if len(args) < 2 {
-		printUsage("usage: si codex clone <name> <Org/Repo> [--gh-pat TOKEN]")
+		printUsage("usage: si clone <name> <Org/Repo> [--gh-pat TOKEN]")
 		return
 	}
 	name := args[0]
 	repo := strings.TrimSpace(args[1])
-	fs := flag.NewFlagSet("codex clone", flag.ExitOnError)
+	fs := flag.NewFlagSet("clone", flag.ExitOnError)
 	ghPat := fs.String("gh-pat", envOr("GH_PAT", envOr("GH_TOKEN", envOr("GITHUB_TOKEN", ""))), "github PAT for cloning")
 	_ = fs.Parse(args[2:])
 
@@ -903,11 +911,11 @@ func cmdCodexClone(args []string) {
 }
 
 func cmdCodexRemove(args []string) {
-	fs := flag.NewFlagSet("codex remove", flag.ExitOnError)
+	fs := flag.NewFlagSet("remove", flag.ExitOnError)
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
 	_ = fs.Parse(args)
 	if fs.NArg() < 1 {
-		printUsage("usage: si codex remove <name> [--volumes]")
+		printUsage("usage: si remove <name> [--volumes]")
 		return
 	}
 	name := fs.Arg(0)
@@ -944,7 +952,7 @@ func cmdCodexRemove(args []string) {
 
 func cmdCodexStop(args []string) {
 	if len(args) < 1 {
-		printUsage("usage: si codex stop <name>")
+		printUsage("usage: si stop <name>")
 		return
 	}
 	name := args[0]
@@ -956,7 +964,7 @@ func cmdCodexStop(args []string) {
 
 func cmdCodexStart(args []string) {
 	if len(args) < 1 {
-		printUsage("usage: si codex start <name>")
+		printUsage("usage: si start <name>")
 		return
 	}
 	name := args[0]

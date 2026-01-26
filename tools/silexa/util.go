@@ -19,18 +19,18 @@ Holistic CLI for Silexa. This help includes all commands, flags, and core featur
 
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
-  - Codex containers: spawn/list/status/report/login/profile/exec/tail/clone/remove/stop/start.
+  - Codex containers: spawn/respawn/list/status/report/login/profile/ps/exec/logs/tail/clone/remove/stop/start.
   - Codex one-off exec: run codex exec in an isolated container (with MCP disabled if desired).
   - Image build helpers for local dev.
   - Docker passthrough for raw docker CLI calls.
 
 Usage:
-  si <command> [subcommand] [args...]
+  si <command> [args...]
   si help | -h | --help
 
 Core:
   si dyad spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login
-  si codex spawn|respawn|list|status|report|login|profile|ps|exec|logs|tail|clone|remove|stop|start
+  si spawn|respawn|list|status|report|login|profile|ps|exec|logs|tail|clone|remove|stop|start
   si docker <args...>
 
 Build:
@@ -38,7 +38,8 @@ Build:
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
 
 Profiles:
-  si profile <profile-name>
+  si profile [name]        (codex profiles)
+  si persona <profile-name> (markdown profiles)
   si capability <role>
 
 Command details
@@ -82,8 +83,8 @@ dyad:
     --target-home <path>
 
 codex:
-  si codex spawn <name>
-  si codex respawn <name> [--volumes]
+  si spawn <name>
+  si respawn <name> [--volumes]
     --image <docker image>
     --workspace <host path>       (default: current dir)
     --network <network>
@@ -99,10 +100,10 @@ codex:
     --env KEY=VALUE        (repeatable)
     --port HOST:CONTAINER  (repeatable)
 
-  si codex list [--json]
+  si list [--json]
     --json
 
-  si codex status <name>
+  si status <name>
     --json
     --raw
     --timeout <duration>
@@ -121,7 +122,7 @@ codex:
     --lock-stale <duration>
     --cleanup-stale-sessions / --cleanup-stale-sessions=false
 
-  si codex report <name>
+  si report <name>
     --json
     --raw
     --ansi
@@ -140,16 +141,16 @@ codex:
     --prompts-file <path>
     --prompt <text>         (repeatable)
 
-  si codex login [profile] [--device-auth]
+  si login [profile] [--device-auth]
     --device-auth / --device-auth=false
 
-  si codex profile [name]
+  si profile [name]
     --json
 
-  si codex exec (two modes)
+  si exec (two modes)
     One-off exec (isolated container):
-      si codex exec --prompt "..." [--output-only] [--no-mcp]
-      si codex exec "..." [--output-only] [--no-mcp]
+      si exec --prompt "..." [--output-only] [--no-mcp]
+      si exec "..." [--output-only] [--no-mcp]
       --one-off
       --prompt <text>
       --output-only
@@ -166,14 +167,14 @@ codex:
       --env KEY=VALUE        (repeatable)
 
     Exec into existing container:
-      si codex exec <name> [--] <command>
+      si exec <name> [--] <command>
 
-  si codex logs <name> [--tail N]
-  si codex tail <name> [--tail N]
-  si codex clone <name> <Org/Repo> [--gh-pat TOKEN]
-  si codex remove <name> [--volumes]
-  si codex stop <name>
-  si codex start <name>
+  si logs <name> [--tail N]
+  si tail <name> [--tail N]
+  si clone <name> <Org/Repo> [--gh-pat TOKEN]
+  si remove <name> [--volumes]
+  si stop <name>
+  si start <name>
 
 images:
   si images build
@@ -182,8 +183,8 @@ images:
     -f, --file <Dockerfile>
     --build-arg KEY=VALUE   (repeatable)
 
-profile:
-  si profile <name>
+persona:
+  si persona <name>
 
 capability:
   si capability <role>
@@ -384,7 +385,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|capability)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|persona|capability)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)

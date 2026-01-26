@@ -6,7 +6,7 @@ Silexa reads a single TOML file for user-facing configuration. The canonical pat
 ~/.si/settings.toml
 ```
 
-This file is created automatically on first use. It is also updated when you log in with `si codex login` so that profile metadata (auth path/timestamps) are tracked in one place.
+This file is created automatically on first use. It is also updated when you log in with `si login` so that profile metadata (auth path/timestamps) are tracked in one place.
 
 ## Precedence
 When supported by a command, values resolve in this order:
@@ -30,7 +30,7 @@ Reference paths for the local `.si` directory layout.
 
 ### `[codex]`
 Defaults for Codex container commands (spawn/respawn/login/exec).
-- `codex.image` (string): docker image for `si codex spawn`
+- `codex.image` (string): docker image for `si spawn`
 - `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind
 - `codex.workdir` (string): container working directory
@@ -43,11 +43,11 @@ Defaults for Codex container commands (spawn/respawn/login/exec).
 - `codex.clean_slate` (bool): default clean-slate behavior
 
 #### `[codex.login]`
-Defaults for `si codex login`.
+Defaults for `si login`.
 - `codex.login.device_auth` (bool): default device auth flow (`true`/`false`)
 
 #### `[codex.exec]`
-Defaults for one-off `si codex exec`.
+Defaults for one-off `si exec`.
 - `codex.exec.model` (string): default model
 - `codex.exec.effort` (string): default reasoning effort
 
@@ -56,7 +56,7 @@ Profile metadata tracked in settings.
 - `codex.profiles.active` (string): the last profile used for login
 
 ##### `[codex.profiles.entries.<id>]`
-Per-profile entry keyed by profile ID (for example `america`). These entries are updated on successful `si codex login`.
+Per-profile entry keyed by profile ID (for example `america`). These entries are updated on successful `si login`.
 - `name` (string): profile display name
 - `email` (string): profile email
 - `auth_path` (string): path to auth.json
@@ -80,7 +80,7 @@ Defaults for dyad spawns.
 - `dyad.forward_ports` (string): port range, e.g. `1455-1465`
 
 ### `[shell.prompt]`
-Prompt rendering for `si codex exec` interactive shells. This applies without modifying `.bashrc`.
+Prompt rendering for `si exec` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
 - `shell.prompt.git_enabled` (bool): include git branch when available
 - `shell.prompt.prefix_template` (string): template for profile prefix. Use `{profile}` placeholder.
