@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 - Write short, user-facing bullets in past tense.
 - Dates use UTC in YYYY-MM-DD.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
+- Note: Entries before v1.0.1 reference the legacy `si codex ...` namespace.
 
 ## [v1.0.1] - 2026-01-26
 ### Changed
