@@ -29,17 +29,6 @@ const (
 	codexLabelValue = "codex"
 )
 
-func cmdCodex(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si <command> [args...]")
-		return
-	}
-	warnf("`si codex %s` is deprecated; use `si %s`", args[0], args[0])
-	if !dispatchCodexCommand(args[0], args[1:]) {
-		printUnknown("codex", args[0])
-	}
-}
-
 func dispatchCodexCommand(cmd string, args []string) bool {
 	switch cmd {
 	case "spawn":
