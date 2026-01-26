@@ -6,6 +6,8 @@ RUN apt-get update -y \
 
 RUN npm i -g @openai/codex
 
+RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
+
 RUN usermod -l si node \
     && groupmod -n si node \
     && usermod -d /home/si -m si

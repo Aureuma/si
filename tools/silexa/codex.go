@@ -127,6 +127,43 @@ func cmdCodexSpawn(args []string) {
 	flags := addCodexSpawnFlags(fs)
 	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
 	fs.Parse(filtered)
+	settings := loadSettingsOrDefault()
+
+	if !flagProvided(args, "image") && strings.TrimSpace(settings.Codex.Image) != "" {
+		*flags.image = strings.TrimSpace(settings.Codex.Image)
+	}
+	if !workspaceSet && strings.TrimSpace(settings.Codex.Workspace) != "" {
+		*flags.workspaceHost = strings.TrimSpace(settings.Codex.Workspace)
+		workspaceSet = true
+	}
+	if !flagProvided(args, "network") && strings.TrimSpace(settings.Codex.Network) != "" {
+		*flags.networkName = strings.TrimSpace(settings.Codex.Network)
+	}
+	if !flagProvided(args, "repo") && strings.TrimSpace(settings.Codex.Repo) != "" {
+		*flags.repo = strings.TrimSpace(settings.Codex.Repo)
+	}
+	if !flagProvided(args, "gh-pat") && strings.TrimSpace(settings.Codex.GHPAT) != "" {
+		*flags.ghPat = strings.TrimSpace(settings.Codex.GHPAT)
+	}
+	if !workdirSet && strings.TrimSpace(settings.Codex.Workdir) != "" {
+		*flags.workdir = strings.TrimSpace(settings.Codex.Workdir)
+		workdirSet = true
+	}
+	if !flagProvided(args, "codex-volume") && strings.TrimSpace(settings.Codex.CodexVolume) != "" {
+		*flags.codexVolume = strings.TrimSpace(settings.Codex.CodexVolume)
+	}
+	if !flagProvided(args, "gh-volume") && strings.TrimSpace(settings.Codex.GHVolume) != "" {
+		*flags.ghVolume = strings.TrimSpace(settings.Codex.GHVolume)
+	}
+	if !flagProvided(args, "profile") && strings.TrimSpace(settings.Codex.Profile) != "" {
+		*flags.profile = strings.TrimSpace(settings.Codex.Profile)
+	}
+	if !flagProvided(args, "detach") && settings.Codex.Detach != nil {
+		*flags.detach = *settings.Codex.Detach
+	}
+	if !flagProvided(args, "clean-slate") && settings.Codex.CleanSlate != nil {
+		*flags.cleanSlate = *settings.Codex.CleanSlate
+	}
 
 	name := nameArg
 	if name == "" && fs.NArg() > 0 {
@@ -208,6 +245,10 @@ func cmdCodexSpawn(args []string) {
 		env = append(env, "SI_GH_PAT="+strings.TrimSpace(*flags.ghPat))
 		env = append(env, "GH_TOKEN="+strings.TrimSpace(*flags.ghPat))
 		env = append(env, "GITHUB_TOKEN="+strings.TrimSpace(*flags.ghPat))
+	}
+	if profile != nil {
+		env = append(env, "SI_CODEX_PROFILE_ID="+profile.ID)
+		env = append(env, "SI_CODEX_PROFILE_NAME="+profile.Name)
 	}
 	env = append(env, (*flags.envs)...)
 
@@ -446,9 +487,37 @@ func cmdCodexExec(args []string) {
 	}
 	name := rest[0]
 	containerName := codexContainerName(name)
+	profileID := ""
+	profileName := ""
+	settings := loadSettingsOrDefault()
+	{
+		client, err := shared.NewClient()
+		if err == nil {
+			ctx := context.Background()
+			if id, info, err := client.ContainerByName(ctx, containerName); err == nil && id != "" {
+				if info != nil && info.Config != nil {
+					profileID = strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
+				}
+				if profileID != "" {
+					if prof, ok := codexProfileByKey(profileID); ok {
+						profileName = prof.Name
+					} else {
+						profileName = profileID
+					}
+				}
+			}
+			client.Close()
+		}
+	}
 	cmd := rest[1:]
 	if len(cmd) == 0 {
-		cmd = []string{"bash", "-lc", `printf '\033]0;%s\007' "${SI_TERM_TITLE:-}"; exec bash`}
+		rc := buildShellRC(settings)
+		cmd = []string{"bash", "-lc", fmt.Sprintf(`rc="/tmp/si-shellrc"
+cat > "$rc" <<'EOF'
+%s
+EOF
+printf '\033]0;%%s\007' "${SI_TERM_TITLE:-}"
+exec bash --rcfile "$rc" -i`, rc)}
 	}
 	execArgs := []string{"exec"}
 	if term.IsTerminal(int(os.Stdin.Fd())) {
@@ -457,6 +526,12 @@ func cmdCodexExec(args []string) {
 		execArgs = append(execArgs, "-i")
 	}
 	execArgs = append(execArgs, "-e", "SI_TERM_TITLE="+name)
+	if profileID != "" {
+		execArgs = append(execArgs, "-e", "SI_CODEX_PROFILE_ID="+profileID)
+	}
+	if profileName != "" {
+		execArgs = append(execArgs, "-e", "SI_CODEX_PROFILE_NAME="+profileName)
+	}
 	execArgs = append(execArgs, containerName)
 	execArgs = append(execArgs, cmd...)
 	if err := execDockerCLI(execArgs...); err != nil {
@@ -570,6 +645,10 @@ func cmdCodexLogin(args []string) {
 	fs := flag.NewFlagSet("codex login", flag.ExitOnError)
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
 	_ = fs.Parse(args)
+	settings := loadSettingsOrDefault()
+	if !flagProvided(args, "device-auth") && settings.Codex.Login.DeviceAuth != nil {
+		*deviceAuth = *settings.Codex.Login.DeviceAuth
+	}
 	if fs.NArg() > 1 {
 		printUsage("usage: si codex login [profile] [--device-auth]")
 		return
@@ -666,6 +745,9 @@ func cmdCodexLogin(args []string) {
 		warnf("codex auth cache failed: %v", err)
 	} else {
 		successf("cached codex auth for profile %s", profile.ID)
+	}
+	if err := updateSettingsProfile(*profile); err != nil {
+		warnf("settings update failed: %v", err)
 	}
 	removeContainer()
 }

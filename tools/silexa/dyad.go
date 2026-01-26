@@ -64,6 +64,51 @@ func cmdDyadSpawn(args []string) {
 	configsHost := fs.String("configs", envOr("SILEXA_CONFIGS_HOST", ""), "host path to configs")
 	forwardPorts := fs.String("forward-ports", envOr("SILEXA_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
 	fs.Parse(args)
+	settings := loadSettingsOrDefault()
+
+	if !flagProvided(args, "actor-image") && strings.TrimSpace(settings.Dyad.ActorImage) != "" {
+		*actorImage = strings.TrimSpace(settings.Dyad.ActorImage)
+	}
+	if !flagProvided(args, "critic-image") && strings.TrimSpace(settings.Dyad.CriticImage) != "" {
+		*criticImage = strings.TrimSpace(settings.Dyad.CriticImage)
+	}
+	if !flagProvided(args, "codex-model") && strings.TrimSpace(settings.Dyad.CodexModel) != "" {
+		*codexModel = strings.TrimSpace(settings.Dyad.CodexModel)
+	}
+	if !flagProvided(args, "codex-effort-actor") && strings.TrimSpace(settings.Dyad.CodexEffortActor) != "" {
+		*codexEffortActor = strings.TrimSpace(settings.Dyad.CodexEffortActor)
+	}
+	if !flagProvided(args, "codex-effort-critic") && strings.TrimSpace(settings.Dyad.CodexEffortCritic) != "" {
+		*codexEffortCritic = strings.TrimSpace(settings.Dyad.CodexEffortCritic)
+	}
+	if !flagProvided(args, "codex-model-low") && strings.TrimSpace(settings.Dyad.CodexModelLow) != "" {
+		*codexModelLow = strings.TrimSpace(settings.Dyad.CodexModelLow)
+	}
+	if !flagProvided(args, "codex-model-medium") && strings.TrimSpace(settings.Dyad.CodexModelMedium) != "" {
+		*codexModelMedium = strings.TrimSpace(settings.Dyad.CodexModelMedium)
+	}
+	if !flagProvided(args, "codex-model-high") && strings.TrimSpace(settings.Dyad.CodexModelHigh) != "" {
+		*codexModelHigh = strings.TrimSpace(settings.Dyad.CodexModelHigh)
+	}
+	if !flagProvided(args, "codex-effort-low") && strings.TrimSpace(settings.Dyad.CodexEffortLow) != "" {
+		*codexEffortLow = strings.TrimSpace(settings.Dyad.CodexEffortLow)
+	}
+	if !flagProvided(args, "codex-effort-medium") && strings.TrimSpace(settings.Dyad.CodexEffortMedium) != "" {
+		*codexEffortMedium = strings.TrimSpace(settings.Dyad.CodexEffortMedium)
+	}
+	if !flagProvided(args, "codex-effort-high") && strings.TrimSpace(settings.Dyad.CodexEffortHigh) != "" {
+		*codexEffortHigh = strings.TrimSpace(settings.Dyad.CodexEffortHigh)
+	}
+	if !workspaceSet && strings.TrimSpace(settings.Dyad.Workspace) != "" {
+		*workspaceHost = strings.TrimSpace(settings.Dyad.Workspace)
+		workspaceSet = true
+	}
+	if !flagProvided(args, "configs") && strings.TrimSpace(settings.Dyad.Configs) != "" {
+		*configsHost = strings.TrimSpace(settings.Dyad.Configs)
+	}
+	if !flagProvided(args, "forward-ports") && strings.TrimSpace(settings.Dyad.ForwardPorts) != "" {
+		*forwardPorts = strings.TrimSpace(settings.Dyad.ForwardPorts)
+	}
 
 	if fs.NArg() < 1 {
 		printUsage("usage: si dyad spawn <name> [role] [department]")
