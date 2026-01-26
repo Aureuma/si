@@ -27,6 +27,7 @@ Features:
 Usage:
   si <command> [args...]
   si help | -h | --help
+  si version | --version | -v
 
 Core:
   si dyad spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login
@@ -197,6 +198,12 @@ Environment defaults (selected)
   SILEXA_WORKSPACE_HOST, SILEXA_CONFIGS_HOST, SILEXA_DYAD_FORWARD_PORTS
   SI_CODEX_EXEC_VOLUME, GH_PAT, GH_TOKEN, GITHUB_TOKEN
 `))
+}
+
+const siVersion = "v1.1.0"
+
+func printVersion() {
+	fmt.Println(siVersion)
 }
 
 func envOr(key, def string) string {
