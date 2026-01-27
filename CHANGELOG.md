@@ -18,6 +18,18 @@ All notable changes to this project will be documented in this file.
 ### Removed
 - Removed the `si codex ...` namespace in favor of top-level commands.
 
+## [v1.1.0] - 2026-01-27
+### Added
+- Added the unified `silexa/silexa:local` image build for codex and dyad runtimes.
+### Changed
+- Defaulted codex and dyad images to `silexa/silexa:local`.
+- Updated dyad runtime entrypoints and HOME/CODEX_HOME defaults for the unified image.
+- Refreshed CLI help and docs to match the new image layout and flag ordering.
+### Removed
+- Removed the separate base, codex, actor, and critic Docker image definitions.
+### Fixed
+- Corrected dyad exec and copy-login usage guidance for flag ordering.
+
 ## [v1.0.0] - 2026-01-26
 ### Added
 - Introduced Codex profiles and the `si codex profile` command.
