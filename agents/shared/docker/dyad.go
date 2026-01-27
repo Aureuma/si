@@ -45,6 +45,7 @@ type DyadOptions struct {
 	CodexVolume       string
 	Network           string
 	ForwardPorts      string
+	DockerSocket      bool
 }
 
 type ContainerSpec struct {
@@ -225,6 +226,12 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	criticLabels := cloneLabels(labels)
 	criticLabels[LabelMember] = "critic"
 
+	socketMount := mount.Mount{}
+	hasSocket := false
+	if opts.DockerSocket {
+		socketMount, hasSocket = DockerSocketMount()
+	}
+
 	actorEnv := buildDyadEnv(opts, "actor", opts.CodexEffortActor)
 	criticEnv := buildDyadEnv(opts, "critic", opts.CodexEffortCritic)
 
@@ -266,6 +273,9 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
 		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 	}
+	if hasSocket {
+		actorMounts = append(actorMounts, socketMount)
+	}
 	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
 		actorMounts = append(actorMounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: target})
 	}
@@ -293,7 +303,9 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
 		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 		{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
-		{Type: mount.TypeBind, Source: "/var/run/docker.sock", Target: "/var/run/docker.sock"},
+	}
+	if hasSocket {
+		criticMounts = append(criticMounts, socketMount)
 	}
 	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
 		criticMounts = append(criticMounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: target})

@@ -64,6 +64,7 @@ dyad:
     --workspace <host path>       (default: current dir)
     --configs <host path>
     --forward-ports <range>
+    --docker-socket / --docker-socket=false
 
   si dyad list                    (no flags)
   si dyad remove <name>           (aliases: teardown, destroy)
@@ -95,6 +96,7 @@ codex:
     --workdir <path>
     --codex-volume <volume>
     --gh-volume <volume>
+    --docker-socket / --docker-socket=false
     --profile <profile>
     --clean-slate / --clean-slate=false
     --detach / --detach=false
@@ -162,6 +164,7 @@ codex:
       --network <network>
       --codex-volume <volume>
       --gh-volume <volume>
+      --docker-socket / --docker-socket=false
       --model <model>
       --effort <effort>
       --keep
@@ -200,7 +203,7 @@ Environment defaults (selected)
 `))
 }
 
-const siVersion = "v1.1.0"
+const siVersion = "v1.2.0"
 
 func printVersion() {
 	fmt.Println(siVersion)

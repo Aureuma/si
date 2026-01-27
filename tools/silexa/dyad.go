@@ -63,6 +63,7 @@ func cmdDyadSpawn(args []string) {
 	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace (repo root)")
 	configsHost := fs.String("configs", envOr("SILEXA_CONFIGS_HOST", ""), "host path to configs")
 	forwardPorts := fs.String("forward-ports", envOr("SILEXA_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
+	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in dyad containers")
 	fs.Parse(args)
 	settings := loadSettingsOrDefault()
 
@@ -108,6 +109,9 @@ func cmdDyadSpawn(args []string) {
 	}
 	if !flagProvided(args, "forward-ports") && strings.TrimSpace(settings.Dyad.ForwardPorts) != "" {
 		*forwardPorts = strings.TrimSpace(settings.Dyad.ForwardPorts)
+	}
+	if !flagProvided(args, "docker-socket") && settings.Dyad.DockerSocket != nil {
+		*dockerSocket = *settings.Dyad.DockerSocket
 	}
 
 	if fs.NArg() < 1 {
@@ -192,6 +196,7 @@ func cmdDyadSpawn(args []string) {
 		ConfigsHost:       *configsHost,
 		ForwardPorts:      *forwardPorts,
 		Network:           shared.DefaultNetwork,
+		DockerSocket:      *dockerSocket,
 	}
 
 	actorID, criticID, err := client.EnsureDyad(ctx, opts)

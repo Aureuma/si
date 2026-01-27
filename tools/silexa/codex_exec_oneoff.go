@@ -32,6 +32,7 @@ type codexExecOneOffOptions struct {
 	DisableMCP    bool
 	OutputOnly    bool
 	KeepContainer bool
+	DockerSocket  bool
 }
 
 func runCodexExecOneOff(opts codexExecOneOffOptions) error {
@@ -115,6 +116,11 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 			Target:   configTargetDir,
 			ReadOnly: true,
 		})
+	}
+	if opts.DockerSocket {
+		if socketMount, ok := shared.DockerSocketMount(); ok {
+			mounts = append(mounts, socketMount)
+		}
 	}
 
 	cfg := &container.Config{
