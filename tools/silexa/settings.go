@@ -37,6 +37,7 @@ type CodexSettings struct {
 	GHPAT       string               `toml:"gh_pat,omitempty"`
 	CodexVolume string               `toml:"codex_volume,omitempty"`
 	GHVolume    string               `toml:"gh_volume,omitempty"`
+	DockerSocket *bool               `toml:"docker_socket,omitempty"`
 	Profile     string               `toml:"profile,omitempty"`
 	Detach      *bool                `toml:"detach,omitempty"`
 	CleanSlate  *bool                `toml:"clean_slate,omitempty"`
@@ -81,6 +82,7 @@ type DyadSettings struct {
 	Workspace         string `toml:"workspace,omitempty"`
 	Configs           string `toml:"configs,omitempty"`
 	ForwardPorts      string `toml:"forward_ports,omitempty"`
+	DockerSocket      *bool  `toml:"docker_socket,omitempty"`
 }
 
 type ShellSettings struct {

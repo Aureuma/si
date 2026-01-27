@@ -38,6 +38,7 @@ Defaults for Codex container commands (spawn/respawn/login/exec).
 - `codex.gh_pat` (string): optional PAT (stored in settings; keep file permissions restrictive)
 - `codex.codex_volume` (string): override codex volume name
 - `codex.gh_volume` (string): override GitHub config volume name
+- `codex.docker_socket` (bool): mount host Docker socket into codex containers (default: `true`)
 - `codex.profile` (string): default profile ID/email
 - `codex.detach` (bool): default detach behavior
 - `codex.clean_slate` (bool): default clean-slate behavior
@@ -78,6 +79,7 @@ Defaults for dyad spawns.
 - `dyad.workspace` (string): host path for workspace bind
 - `dyad.configs` (string): host path for configs
 - `dyad.forward_ports` (string): port range, e.g. `1455-1465`
+- `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
 
 ### `[shell.prompt]`
 Prompt rendering for `si exec` interactive shells. This applies without modifying `.bashrc`.
@@ -117,6 +119,7 @@ image = "silexa/silexa:local"
 network = "silexa"
 workspace = "/home/ubuntu/Development/Silexa"
 workdir = "/workspace"
+docker_socket = true
 profile = "america"
 detach = true
 clean_slate = false
@@ -142,6 +145,7 @@ actor_image = "silexa/silexa:local"
 critic_image = "silexa/silexa:local"
 codex_model = "gpt-5.2-codex"
 forward_ports = "1455-1465"
+docker_socket = true
 workspace = "/home/ubuntu/Development/Silexa"
 
 [shell.prompt]
