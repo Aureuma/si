@@ -165,8 +165,32 @@ func cmdCodexSpawn(args []string) {
 		name = fs.Arg(0)
 	}
 	if name == "" {
-		printUsage("usage: si spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
-		return
+		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+			printUsage("usage: si spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
+			return
+		}
+		if !explicitProfile && len(codexProfileSummaries()) > 0 {
+			defaultProfileKey := strings.TrimSpace(settings.Codex.Profile)
+			if defaultProfileKey == "" {
+				defaultProfileKey = strings.TrimSpace(settings.Codex.Profiles.Active)
+			}
+			selected, ok := selectCodexProfile("spawn", defaultProfileKey)
+			if !ok {
+				return
+			}
+			*flags.profile = selected.ID
+			explicitProfile = true
+		}
+		fmt.Printf("%s ", styleDim("Container name:"))
+		reader := bufio.NewReader(os.Stdin)
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			fatal(err)
+		}
+		name = strings.TrimSpace(line)
+		if name == "" {
+			return
+		}
 	}
 	if err := validateSlug(name); err != nil {
 		fatal(err)
