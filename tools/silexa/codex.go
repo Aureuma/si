@@ -45,7 +45,7 @@ func dispatchCodexCommand(cmd string, args []string) bool {
 		cmdCodexLogin(args)
 	case "profile":
 		cmdProfile(args)
-	case "exec":
+	case "exec", "run":
 		cmdCodexExec(args)
 	case "logs":
 		cmdCodexLogs(args)
@@ -528,8 +528,8 @@ func cmdCodexExec(args []string) {
 			prompt = strings.Join(rest, " ")
 		}
 		if strings.TrimSpace(prompt) == "" {
-			printUsage("usage: si exec --prompt \"...\" [--output-only] [--no-mcp]")
-			fmt.Println(styleDim("   or: si exec \"...\" [--output-only] [--no-mcp]"))
+			printUsage("usage: si run --prompt \"...\" [--output-only] [--no-mcp]")
+			fmt.Println(styleDim("   or: si run \"...\" [--output-only] [--no-mcp]"))
 			return
 		}
 		opts := codexExecOneOffOptions{
@@ -555,7 +555,7 @@ func cmdCodexExec(args []string) {
 	}
 
 	if len(rest) < 1 {
-		name, ok := selectCodexContainer("exec", true)
+		name, ok := selectCodexContainer("run", true)
 		if !ok {
 			return
 		}

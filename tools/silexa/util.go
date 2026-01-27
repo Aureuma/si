@@ -19,8 +19,8 @@ Holistic CLI for Silexa. This help includes all commands, flags, and core featur
 
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
-  - Codex containers: spawn/respawn/list/status/report/login/profile/ps/exec/logs/tail/clone/remove/stop/start.
-  - Codex one-off exec: run codex exec in an isolated container (with MCP disabled if desired).
+  - Codex containers: spawn/respawn/list/status/report/login/profile/ps/run/logs/tail/clone/remove/stop/start.
+  - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Image build helpers for local dev.
   - Docker passthrough for raw docker CLI calls.
 
@@ -31,7 +31,7 @@ Usage:
 
 Core:
   si dyad spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login
-  si spawn|respawn|list|status|report|login|profile|ps|exec|logs|tail|clone|remove|stop|start
+  si spawn|respawn|list|status|report|login|profile|ps|run|logs|tail|clone|remove|stop|start
   si docker <args...>
 
 Build:
@@ -150,10 +150,10 @@ codex:
   si profile [name]
     --json
 
-  si exec (two modes)
-    One-off exec (isolated container):
-      si exec --prompt "..." [--output-only] [--no-mcp]
-      si exec "..." [--output-only] [--no-mcp]
+  si run (two modes, alias: exec)
+    One-off run (isolated container):
+      si run --prompt "..." [--output-only] [--no-mcp]
+      si run "..." [--output-only] [--no-mcp]
       --one-off
       --prompt <text>
       --output-only
@@ -170,8 +170,8 @@ codex:
       --keep
       --env KEY=VALUE        (repeatable)
 
-    Exec into existing container:
-      si codex exec <name> <command>
+    Run in existing container:
+      si run <name> <command>
 
   si logs <name> [--tail N]
   si tail <name> [--tail N]
