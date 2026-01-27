@@ -75,6 +75,7 @@ type codexSpawnFlags struct {
 	workdir       *string
 	codexVolume   *string
 	ghVolume      *string
+	dockerSocket  *bool
 	profile       *string
 	detach        *bool
 	cleanSlate    *bool
@@ -92,6 +93,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	codexVolume := fs.String("codex-volume", "", "override codex volume name")
 	ghVolume := fs.String("gh-volume", "", "override github config volume name")
+	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in the container")
 	profile := fs.String("profile", "", "codex profile name/email")
 	detach := fs.Bool("detach", true, "run container in background")
 	cleanSlate := fs.Bool("clean-slate", false, "skip copying host ~/.codex/config.toml into container")
@@ -109,6 +111,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 		workdir:       workdir,
 		codexVolume:   codexVolume,
 		ghVolume:      ghVolume,
+		dockerSocket:  dockerSocket,
 		profile:       profile,
 		detach:        detach,
 		cleanSlate:    cleanSlate,
@@ -139,6 +142,9 @@ func cmdCodexSpawn(args []string) {
 	}
 	if !flagProvided(args, "repo") && strings.TrimSpace(settings.Codex.Repo) != "" {
 		*flags.repo = strings.TrimSpace(settings.Codex.Repo)
+	}
+	if !flagProvided(args, "docker-socket") && settings.Codex.DockerSocket != nil {
+		*flags.dockerSocket = *settings.Codex.DockerSocket
 	}
 	if !flagProvided(args, "gh-pat") && strings.TrimSpace(settings.Codex.GHPAT) != "" {
 		*flags.ghPat = strings.TrimSpace(settings.Codex.GHPAT)
@@ -342,14 +348,20 @@ func cmdCodexSpawn(args []string) {
 		WorkingDir:   *flags.workdir,
 		Cmd:          cmd,
 	}
+	mounts := []mount.Mount{
+		{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
+		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
+		{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTarget},
+	}
+	if *flags.dockerSocket {
+		if socketMount, ok := shared.DockerSocketMount(); ok {
+			mounts = append(mounts, socketMount)
+		}
+	}
 	hostCfg := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-		Mounts: []mount.Mount{
-			{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
-			{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
-			{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTarget},
-		},
-		PortBindings: bindings,
+		Mounts:        mounts,
+		PortBindings:  bindings,
 	}
 	netCfg := &network.NetworkingConfig{}
 	if strings.TrimSpace(*flags.networkName) != "" {
@@ -490,10 +502,16 @@ func cmdCodexExec(args []string) {
 	ghVolume := fs.String("gh-volume", "", "gh config volume name")
 	model := fs.String("model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
 	effort := fs.String("effort", envOr("CODEX_REASONING_EFFORT", "medium"), "codex reasoning effort")
+	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in one-off containers")
 	keep := fs.Bool("keep", false, "keep the one-off container after execution")
 	envs := multiFlag{}
 	fs.Var(&envs, "env", "env var (repeatable KEY=VALUE)")
 	_ = fs.Parse(args)
+
+	settings := loadSettingsOrDefault()
+	if !flagProvided(args, "docker-socket") && settings.Codex.DockerSocket != nil {
+		*dockerSocket = *settings.Codex.DockerSocket
+	}
 
 	prompt := strings.TrimSpace(*promptFlag)
 	rest := fs.Args()
@@ -525,6 +543,7 @@ func cmdCodexExec(args []string) {
 			DisableMCP:    *noMcp,
 			OutputOnly:    *outputOnly,
 			KeepContainer: *keep,
+			DockerSocket:  *dockerSocket,
 		}
 		if err := runCodexExecOneOff(opts); err != nil {
 			fatal(err)
@@ -543,7 +562,6 @@ func cmdCodexExec(args []string) {
 	containerName := codexContainerName(name)
 	profileID := ""
 	profileName := ""
-	settings := loadSettingsOrDefault()
 	{
 		client, err := shared.NewClient()
 		if err == nil {
@@ -1117,8 +1135,9 @@ func flagProvided(args []string, name string) bool {
 
 func codexSpawnBoolFlags() map[string]bool {
 	return map[string]bool{
-		"detach":      true,
-		"clean-slate": true,
+		"detach":        true,
+		"clean-slate":   true,
+		"docker-socket": true,
 	}
 }
 
