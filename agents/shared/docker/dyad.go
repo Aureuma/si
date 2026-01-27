@@ -228,6 +228,11 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	actorEnv := buildDyadEnv(opts, "actor", opts.CodexEffortActor)
 	criticEnv := buildDyadEnv(opts, "critic", opts.CodexEffortCritic)
 
+	actorEnv = append(actorEnv,
+		"HOME=/root",
+		"CODEX_HOME=/root/.codex",
+	)
+
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_LOW", opts.CodexModelLow)
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_MEDIUM", opts.CodexModelMedium)
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_HIGH", opts.CodexModelHigh)
@@ -255,6 +260,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/silexa-codex-init"},
 		Cmd:          []string{"--exec", "tail", "-f", "/dev/null"},
 		ExposedPorts: actorExposed,
+		User:         "root",
 	}
 	actorMounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
@@ -276,10 +282,12 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	)
 
 	criticConfig := &container.Config{
-		Image:  opts.CriticImage,
-		Env:    criticEnv,
-		Labels: criticLabels,
-		User:   "root",
+		Image:      opts.CriticImage,
+		Env:        criticEnv,
+		Labels:     criticLabels,
+		Entrypoint: []string{"tini", "-s", "--"},
+		Cmd:        []string{"critic"},
+		User:       "root",
 	}
 	criticMounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},

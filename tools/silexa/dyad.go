@@ -49,8 +49,8 @@ func cmdDyadSpawn(args []string) {
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
 	deptFlag := fs.String("department", "", "dyad department")
-	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "silexa/actor:local"), "actor image")
-	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "silexa/critic:local"), "critic image")
+	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "silexa/silexa:local"), "actor image")
+	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "silexa/silexa:local"), "critic image")
 	codexModel := fs.String("codex-model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
 	codexEffortActor := fs.String("codex-effort-actor", envOr("CODEX_ACTOR_EFFORT", ""), "codex effort for actor")
 	codexEffortCritic := fs.String("codex-effort-critic", envOr("CODEX_CRITIC_EFFORT", ""), "codex effort for critic")
@@ -375,7 +375,7 @@ func cmdDyadExec(args []string) {
 	tty := fs.Bool("tty", false, "allocate TTY")
 	fs.Parse(args)
 	if fs.NArg() < 2 {
-		printUsage("usage: si dyad exec <dyad> [--member actor|critic] -- <cmd...>")
+		printUsage("usage: si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -415,7 +415,7 @@ func cmdDyadLogs(args []string) {
 	tail := fs.Int("tail", 200, "lines to tail")
 	fs.Parse(args)
 	if fs.NArg() < 1 {
-		printUsage("usage: si dyad logs <dyad> [--member actor|critic] [--tail N]")
+		printUsage("usage: si dyad logs [--member actor|critic] [--tail N] <dyad>")
 		return
 	}
 	dyad := fs.Arg(0)
@@ -489,7 +489,7 @@ func cmdDyadCopyLogin(args []string) {
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
-		printUsage("usage: si dyad copy-login <dyad> [--member actor|critic] [--source codex-status]")
+		printUsage("usage: si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>")
 		return
 	}
 	dyad := fs.Arg(0)
