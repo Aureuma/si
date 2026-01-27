@@ -888,7 +888,7 @@ func buildAppServerInput() []byte {
 			Params: map[string]interface{}{
 				"clientInfo": map[string]string{
 					"name":    "si",
-					"version": "0.0.0",
+					"version": "1.1.0",
 				},
 			},
 		},
