@@ -4,7 +4,7 @@ RUN apt-get update -y \
     && apt-get install -y --no-install-recommends ca-certificates curl git tini \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm i -g @openai/codex
+RUN npm i -g @openai/codex@0.91
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
