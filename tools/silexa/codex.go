@@ -401,8 +401,11 @@ func cmdCodexRespawn(args []string) {
 	nameArg, filtered := splitNameAndFlags(args, codexRespawnBoolFlags())
 	_ = fs.Parse(filtered)
 	if nameArg == "" {
-		printUsage("usage: si respawn <name> [--volumes] [spawn flags]")
-		return
+		selectedName, ok := selectCodexContainer("respawn", true)
+		if !ok {
+			return
+		}
+		nameArg = selectedName
 	}
 	if !flagProvided(args, "profile") {
 		selected, ok := selectCodexProfile("respawn", "")
