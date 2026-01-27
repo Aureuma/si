@@ -29,7 +29,7 @@ Reference paths for the local `.si` directory layout.
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
 
 ### `[codex]`
-Defaults for Codex container commands (spawn/respawn/login/exec).
+Defaults for Codex container commands (spawn/respawn/login/run).
 - `codex.image` (string): docker image for `si codex spawn` (default: `silexa/silexa:local`)
 - `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind
@@ -48,7 +48,7 @@ Defaults for `si login`.
 - `codex.login.device_auth` (bool): default device auth flow (`true`/`false`)
 
 #### `[codex.exec]`
-Defaults for one-off `si exec`.
+Defaults for one-off `si run` (alias `si exec`).
 - `codex.exec.model` (string): default model
 - `codex.exec.effort` (string): default reasoning effort
 
@@ -82,7 +82,7 @@ Defaults for dyad spawns.
 - `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
 
 ### `[shell.prompt]`
-Prompt rendering for `si exec` interactive shells. This applies without modifying `.bashrc`.
+Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
 - `shell.prompt.git_enabled` (bool): include git branch when available
 - `shell.prompt.prefix_template` (string): template for profile prefix. Use `{profile}` placeholder.
