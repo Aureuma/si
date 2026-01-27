@@ -30,7 +30,7 @@ Reference paths for the local `.si` directory layout.
 
 ### `[codex]`
 Defaults for Codex container commands (spawn/respawn/login/exec).
-- `codex.image` (string): docker image for `si spawn`
+- `codex.image` (string): docker image for `si codex spawn` (default: `silexa/silexa:local`)
 - `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind
 - `codex.workdir` (string): container working directory
@@ -64,8 +64,8 @@ Per-profile entry keyed by profile ID (for example `america`). These entries are
 
 ### `[dyad]`
 Defaults for dyad spawns.
-- `dyad.actor_image` (string)
-- `dyad.critic_image` (string)
+- `dyad.actor_image` (string): default `silexa/silexa:local`
+- `dyad.critic_image` (string): default `silexa/silexa:local`
 - `dyad.codex_model` (string)
 - `dyad.codex_effort_actor` (string)
 - `dyad.codex_effort_critic` (string)
@@ -113,7 +113,7 @@ settings = "~/.si/settings.toml"
 codex_profiles_dir = "~/.si/codex/profiles"
 
 [codex]
-image = "silexa/si-codex:local"
+image = "silexa/silexa:local"
 network = "silexa"
 workspace = "/home/ubuntu/Development/Silexa"
 workdir = "/workspace"
@@ -138,8 +138,8 @@ auth_path = "~/.si/codex/profiles/america/auth.json"
 auth_updated = "2026-01-26T00:00:00Z"
 
 [dyad]
-actor_image = "silexa/actor:local"
-critic_image = "silexa/critic:local"
+actor_image = "silexa/silexa:local"
+critic_image = "silexa/silexa:local"
 codex_model = "gpt-5.2-codex"
 forward_ports = "1455-1465"
 workspace = "/home/ubuntu/Development/Silexa"

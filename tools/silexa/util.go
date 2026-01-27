@@ -35,7 +35,7 @@ Core:
   si docker <args...>
 
 Build:
-  si images build
+  si images build                 (builds silexa/silexa:local)
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
 
 Profiles:
@@ -69,15 +69,15 @@ dyad:
   si dyad remove <name>           (aliases: teardown, destroy)
   si dyad recreate <name> [role] [department]
   si dyad status <name>
-  si dyad exec <dyad> [--member actor|critic] [--tty] -- <cmd...>
+  si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>
     --member <actor|critic>
     --tty
-  si dyad logs <dyad> [--member actor|critic] [--tail N]
+  si dyad logs [--member actor|critic] [--tail N] <dyad>
     --member <actor|critic>
     --tail <lines>
   si dyad restart <name>
   si dyad cleanup
-  si dyad copy-login <dyad>
+  si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>
     --source <si-codex container name or suffix>
     --member <actor|critic>
     --source-home <path>
@@ -168,7 +168,7 @@ codex:
       --env KEY=VALUE        (repeatable)
 
     Exec into existing container:
-      si exec <name> [--] <command>
+      si codex exec <name> <command>
 
   si logs <name> [--tail N]
   si tail <name> [--tail N]
@@ -178,7 +178,7 @@ codex:
   si start <name>
 
 images:
-  si images build
+  si images build                 (builds silexa/silexa:local)
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
     -t, --tag <tag>
     -f, --file <Dockerfile>

@@ -5,8 +5,7 @@ Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads)
 ## Layout
 - `agents/`: Agent-specific code and tooling.
 - `tools/silexa`: Go-based CLI for Docker workflows (dyads, codex containers, image helpers).
-- `actor`: Node base image for interactive CLI agents (Codex CLI preinstalled; update inside container as needed).
-- `critic`: Go helper that prepares Codex config and idles.
+- `tools/si-image`: Unified Docker image for Codex containers and dyad actor/critic runtime.
 
 ## Quickstart (Docker)
 Requires Docker Engine.
@@ -18,6 +17,7 @@ go build -o si ./tools/silexa
 ./si images build
 ```
 
+This builds the unified image `silexa/silexa:local` used by dyads and codex containers.
 
 ## Testing
 Run all module tests from repo root:
@@ -41,7 +41,7 @@ Run all module tests from repo root:
 - Run commands in an actor:
 
 ```bash
-./si dyad exec <dyad> --member actor -- bash
+./si dyad exec --member actor <dyad> -- bash
 ```
 
 - List running dyads:
@@ -74,7 +74,7 @@ By default, `si spawn` mounts the current directory as `/workspace`; use `--work
 3) Actor resumes once callback is received.
 
 ## Access notes
-- Keep container privileges minimal; actors/critics do not need a container runtime socket.
+- Keep container privileges minimal; only the critic needs the Docker socket; the actor does not.
 
 ## Next steps
 - Update Codex CLI (or another LLM-driven CLI) inside actor containers as needed.
