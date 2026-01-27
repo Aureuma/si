@@ -697,6 +697,81 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 	return items[idx-1].Name, true
 }
 
+func selectCodexContainerFromList(action string) (string, bool) {
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+	if err != nil {
+		fatal(err)
+	}
+	if len(containers) == 0 {
+		fmt.Println(styleDim("no codex containers found (run: si spawn <name>)"))
+		return "", false
+	}
+	sort.Slice(containers, func(i, j int) bool {
+		return containers[i].Names[0] < containers[j].Names[0]
+	})
+
+	items := make([]codexContainerItem, 0, len(containers))
+	for _, c := range containers {
+		name := strings.TrimPrefix(c.Names[0], "/")
+		items = append(items, codexContainerItem{
+			Name:  name,
+			State: c.State,
+			Image: codexImageDisplay(c.Image),
+		})
+	}
+
+	fmt.Printf("%s %s %s\n",
+		padRightANSI(styleHeading("CONTAINER"), 28),
+		padRightANSI(styleHeading("STATE"), 10),
+		padRightANSI(styleHeading("IMAGE"), 20),
+	)
+	for _, item := range items {
+		fmt.Printf("%s %s %s\n",
+			padRightANSI(item.Name, 28),
+			padRightANSI(styleStatus(item.State), 10),
+			padRightANSI(item.Image, 20),
+		)
+	}
+
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Println(styleDim("re-run with: si " + action + " <name>"))
+		return "", false
+	}
+
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] or name (or press Enter to cancel):", len(items))))
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		fatal(err)
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", false
+	}
+	if idx, err := strconv.Atoi(line); err == nil {
+		if idx < 1 || idx > len(items) {
+			fmt.Println(styleDim("invalid selection"))
+			return "", false
+		}
+		return items[idx-1].Name, true
+	}
+	line = strings.TrimPrefix(line, "/")
+	for _, item := range items {
+		if item.Name == line {
+			return item.Name, true
+		}
+	}
+	fmt.Println(styleDim("invalid selection"))
+	return "", false
+}
+
 type codexContainerItem struct {
 	Name  string
 	State string
@@ -948,11 +1023,16 @@ func cmdCodexRemove(args []string) {
 	fs := flag.NewFlagSet("remove", flag.ExitOnError)
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
 	_ = fs.Parse(args)
+	name := ""
 	if fs.NArg() < 1 {
-		printUsage("usage: si remove <name> [--volumes]")
-		return
+		selectedName, ok := selectCodexContainerFromList("remove")
+		if !ok {
+			return
+		}
+		name = selectedName
+	} else {
+		name = fs.Arg(0)
 	}
-	name := fs.Arg(0)
 	containerName := codexContainerName(name)
 	client, err := shared.NewClient()
 	if err != nil {
