@@ -17,7 +17,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v1.1.0] - 2026-01-26
 ### Changed
-- Promoted Codex container commands to top-level (for example `si exec`).
+- Promoted Codex container commands to top-level (for example `si run`, alias `si exec`).
 - Renamed the markdown profile command to `si persona`.
 
 ### Removed
