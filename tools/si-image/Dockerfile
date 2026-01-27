@@ -23,7 +23,13 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/critic ./cmd/criti
 FROM node:22-bookworm
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates curl gh git socat tini \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg gh git socat tini \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+    && chmod a+r /etc/apt/keyrings/docker.gpg \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm i -g @openai/codex
