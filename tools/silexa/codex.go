@@ -83,7 +83,7 @@ type codexSpawnFlags struct {
 }
 
 func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
-	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
+	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/silexa:local"), "docker image")
 	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
 	repo := fs.String("repo", "", "github repo in Org/Repo form")
@@ -482,7 +482,7 @@ func cmdCodexExec(args []string) {
 	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
 	noMcp := fs.Bool("no-mcp", false, "disable MCP servers (one-off mode)")
-	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"), "docker image")
+	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/silexa:local"), "docker image")
 	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace")
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
@@ -741,7 +741,7 @@ func cmdCodexLogin(args []string) {
 	defer client.Close()
 	ctx := context.Background()
 
-	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "silexa/si-codex:local"))
+	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "silexa/silexa:local"))
 	if image == "" {
 		fatal(fmt.Errorf("codex image required"))
 	}
