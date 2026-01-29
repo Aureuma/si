@@ -57,6 +57,7 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		"HOME=/home/si",
 		"CODEX_HOME=/home/si/.codex",
 	}
+	env = append(env, hostUserEnv()...)
 	if strings.TrimSpace(opts.Model) != "" {
 		env = append(env, "CODEX_MODEL="+strings.TrimSpace(opts.Model))
 	}

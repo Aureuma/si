@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/mattn/go-runewidth"
@@ -215,6 +216,18 @@ func envOr(key, def string) string {
 		return def
 	}
 	return val
+}
+
+func hostUserEnv() []string {
+	uid := os.Getuid()
+	gid := os.Getgid()
+	if uid <= 0 || gid <= 0 {
+		return nil
+	}
+	return []string{
+		"SI_HOST_UID=" + strconv.Itoa(uid),
+		"SI_HOST_GID=" + strconv.Itoa(gid),
+	}
 }
 
 func readFileTrim(path string) (string, bool, error) {
