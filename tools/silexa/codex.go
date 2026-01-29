@@ -316,6 +316,7 @@ func cmdCodexSpawn(args []string) {
 		"HOME=/home/si",
 		"CODEX_HOME=/home/si/.codex",
 	}
+	env = append(env, hostUserEnv()...)
 	if strings.TrimSpace(*flags.repo) != "" {
 		env = append(env, "SI_REPO="+strings.TrimSpace(*flags.repo))
 	}
@@ -849,7 +850,7 @@ func cmdCodexLogin(args []string) {
 	}
 	cfg := &container.Config{
 		Image:  image,
-		Env:    filterEnv([]string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex"}),
+		Env:    filterEnv(append([]string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex"}, hostUserEnv()...)),
 		Labels: labels,
 		Cmd:    []string{"bash", "-lc", "sleep infinity"},
 	}
