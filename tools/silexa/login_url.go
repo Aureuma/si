@@ -170,7 +170,7 @@ func copyDeviceCodeToClipboard(code string) {
 		warnf("copy device code failed: %v", err)
 		return
 	}
-	successf("copied device code to clipboard")
+	successf("📋 copied device one-time code to clipboard")
 }
 
 func copyToClipboard(text string) error {
