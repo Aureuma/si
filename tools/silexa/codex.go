@@ -909,7 +909,7 @@ func cmdCodexLogin(args []string) {
 	if err := cacheCodexAuthFromContainer(ctx, client, id, *profile); err != nil {
 		warnf("codex auth cache failed: %v", err)
 	} else {
-		successf("cached codex auth for profile %s", profile.ID)
+		successf("🔐 cached codex auth for profile %s", profile.ID)
 	}
 	if err := updateSettingsProfile(*profile); err != nil {
 		warnf("settings update failed: %v", err)
