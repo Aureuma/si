@@ -90,6 +90,7 @@ If you need a quick summary of commits since the last release:
 ```
 git log --oneline "$(git describe --tags --abbrev=0)..HEAD"
 ```
+GitHub Releases should include a clear, hand-written release note (not just a verbatim copy of `CHANGELOG.md`). Use the changelog and commit history as inputs, then write a concise, user-facing summary of what changed since the last published GitHub Release.
 Option A: Use the changelog entry as the release body.
 1. Extract the new `vX.Y.Z` section into `release-notes.md` (manual or script).
 2. Create the release with a title and notes file:
