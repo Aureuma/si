@@ -46,6 +46,8 @@ Defaults for Codex container commands (spawn/respawn/login/run).
 #### `[codex.login]`
 Defaults for `si login`.
 - `codex.login.device_auth` (bool): default device auth flow (`true`/`false`)
+- `codex.login.open_url` (bool): open the login URL in a browser after it is printed
+- `codex.login.open_url_command` (string): command to open the login URL. Use `{url}` to inject the URL, otherwise it is appended. Supported placeholders: `{url}`, `{profile}`, `{profile_id}`, `{profile_name}`, `{profile_email}`. Special value `safari-profile` opens Safari using a profile window derived from the selected Codex profile name (including emojis). macOS only; requires Accessibility permission for System Events. Use `si login --safari-profile "<name>"` to override.
 
 #### `[codex.exec]`
 Defaults for one-off `si run` (alias `si exec`).
@@ -126,6 +128,8 @@ clean_slate = false
 
 [codex.login]
 device_auth = true
+open_url = false
+open_url_command = "safari-profile"
 
 [codex.exec]
 model = "gpt-5.2-codex"
