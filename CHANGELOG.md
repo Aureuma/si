@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v1.1.0 reference the legacy `si codex ...` namespace.
 
+## [v1.3.0] - 2026-01-30
+### Added
+- Added automatic login URL opening with Safari profile support and overrides.
+- Added device code clipboard copy for macOS and Linux.
+### Fixed
+- Stripped ANSI escape sequences from login URLs.
+
 ## [v1.2.0] - 2026-01-27
 ### Added
 - Added docker socket mount toggles for codex and dyad spawns, including one-off exec.
