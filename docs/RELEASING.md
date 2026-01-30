@@ -73,7 +73,7 @@ git commit -m "Bump version to vX.Y.Z"
 ```
 git tag -a vX.Y.Z -m "vX.Y.Z"
 ```
-- Annotated tags are recommended for releases and are the best practice.
+- Annotated tags are recommended for releases and are the best practice (they store metadata like tagger, date, and message).
 
 ### 6) Push commits and the new tag
 ```
@@ -82,6 +82,8 @@ git push origin vX.Y.Z
 ```
 - Push the tag explicitly to avoid conflicts with existing tags.
 - `gh release create` can auto-create a tag if it doesn't exist; using `--verify-tag` ensures you only release a tag you already created and pushed.
+- If you let `gh release create` auto-create a tag, fetch tags afterward to sync locally: `git fetch --tags origin`.
+- If you do let it auto-create a tag, use `--target <branch|sha>` to pin the release to the desired commit.
 
 ### 7) Prepare release notes (from the changelog or commits)
 If you need a quick summary of commits since the last release:
@@ -104,11 +106,14 @@ gh release create vX.Y.Z \\
   --notes-from-tag \\
   --verify-tag
 ```
+Notes:
+- `--notes-from-tag` uses the annotated tag message when present; otherwise it falls back to the commit message.
 Option C: Use GitHub auto-generated release notes and prepend highlights.
 ```
 gh release create vX.Y.Z \\
   --title "vX.Y.Z - Suggested Name" \\
   --generate-notes \\
+  --notes-start-tag vA.B.C \\
   --notes "Highlights:\\n- ...\\n- ..." \\
   --verify-tag
 ```
@@ -123,6 +128,7 @@ Notes:
 gh release view vX.Y.Z --web
 ```
 - Confirm title, notes, and tag target are correct.
+- Optional: if your repo uses release attestations, run `gh release verify vX.Y.Z`.
 
 ## Tagging Rules
 - Use annotated tags: `git tag -a vX.Y.Z -m "vX.Y.Z" <commit>`.
