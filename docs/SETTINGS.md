@@ -48,6 +48,8 @@ Defaults for `si login`.
 - `codex.login.device_auth` (bool): default device auth flow (`true`/`false`)
 - `codex.login.open_url` (bool): open the login URL in a browser after it is printed
 - `codex.login.open_url_command` (string): command to open the login URL. Use `{url}` to inject the URL, otherwise it is appended. Supported placeholders: `{url}`, `{profile}`, `{profile_id}`, `{profile_name}`, `{profile_email}`. Special value `safari-profile` opens Safari using a profile window derived from the selected Codex profile name (including emojis). macOS only; requires Accessibility permission for System Events. Use `si login --safari-profile "<name>"` to override.
+Notes:
+- When `si login` detects a one-time device code, it copies it to the clipboard (macOS: `pbcopy`, Linux: `wl-copy`, `xclip`, or `xsel`).
 
 #### `[codex.exec]`
 Defaults for one-off `si run` (alias `si exec`).
