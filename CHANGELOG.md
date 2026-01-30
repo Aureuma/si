@@ -10,6 +10,10 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v1.1.0 reference the legacy `si codex ...` namespace.
 
+## [v1.3.1] - 2026-01-30
+### Changed
+- Updated the release process guide with end-to-end steps, tagging, and GitHub release flow.
+
 ## [v1.3.0] - 2026-01-30
 ### Added
 - Added automatic login URL opening with Safari profile support and overrides.
