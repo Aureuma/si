@@ -897,19 +897,14 @@ func cmdCodexLogin(args []string) {
 	if *deviceAuth {
 		execArgs = append(execArgs, "--device-auth")
 	}
-	if *openURL {
-		watcher := newLoginURLWatcher(func(url string) {
+	watcher := newLoginURLWatcher(func(url string) {
+		if *openURL {
 			openLoginURL(url, *profile, *openURLCmd, *safariProfile)
-		})
-		if err := execDockerCLIWithOutput(execArgs, watcher.Feed); err != nil {
-			removeContainer()
-			fatal(err)
 		}
-	} else {
-		if err := execDockerCLI(execArgs...); err != nil {
-			removeContainer()
-			fatal(err)
-		}
+	}, copyDeviceCodeToClipboard)
+	if err := execDockerCLIWithOutput(execArgs, watcher.Feed); err != nil {
+		removeContainer()
+		fatal(err)
 	}
 	if err := cacheCodexAuthFromContainer(ctx, client, id, *profile); err != nil {
 		warnf("codex auth cache failed: %v", err)

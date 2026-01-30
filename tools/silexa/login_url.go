@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -15,6 +17,7 @@ var (
 	ansiEscapeRegex        = regexp.MustCompile(`\x1b\[[0-9;]*[A-Za-z]`)
 	ansiEscapeOSCRegex     = regexp.MustCompile(`\x1b\][^\x07]*\x07`)
 	ansiEscapeEncodedRegex = regexp.MustCompile(`(?i)%1b%5b[0-9;]*[a-z]`)
+	deviceCodeRegex        = regexp.MustCompile(`\b[A-Z0-9]{4,8}-[A-Z0-9]{4,8}\b`)
 )
 
 type loginURLWatcher struct {
@@ -22,24 +25,37 @@ type loginURLWatcher struct {
 	buf    []byte
 	opened bool
 	opener func(string)
+	code   bool
+	copier func(string)
 }
 
-func newLoginURLWatcher(opener func(string)) *loginURLWatcher {
-	return &loginURLWatcher{opener: opener}
+func newLoginURLWatcher(opener func(string), copier func(string)) *loginURLWatcher {
+	return &loginURLWatcher{opener: opener, copier: copier}
 }
 
 func (w *loginURLWatcher) Feed(chunk []byte) {
-	if w == nil || w.opener == nil || len(chunk) == 0 {
+	if w == nil || len(chunk) == 0 {
 		return
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.buf = append(w.buf, chunk...)
-	matches := loginURLRegex.FindAllString(string(w.buf), -1)
-	if !w.opened && len(matches) > 0 {
+	cleaned := stripANSIEscapes(string(w.buf))
+	matches := loginURLRegex.FindAllString(cleaned, -1)
+	if !w.opened && w.opener != nil && len(matches) > 0 {
 		if target := pickLoginURL(matches); target != "" {
 			w.opened = true
 			go w.opener(target)
+		}
+	}
+	if !w.code && w.copier != nil {
+		codes := deviceCodeRegex.FindAllString(cleaned, -1)
+		if len(codes) > 0 {
+			code := strings.TrimSpace(codes[len(codes)-1])
+			if code != "" {
+				w.code = true
+				go w.copier(code)
+			}
 		}
 	}
 	if len(w.buf) > 2048 {
@@ -143,6 +159,60 @@ func runShellCommand(cmdLine string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func copyDeviceCodeToClipboard(code string) {
+	code = strings.TrimSpace(stripANSIEscapes(code))
+	if code == "" {
+		return
+	}
+	if err := copyToClipboard(code); err != nil {
+		warnf("copy device code failed: %v", err)
+		return
+	}
+	successf("copied device code to clipboard")
+}
+
+func copyToClipboard(text string) error {
+	switch runtime.GOOS {
+	case "darwin":
+		return runClipboardCmd("pbcopy", text)
+	case "linux":
+		if path, err := exec.LookPath("wl-copy"); err == nil {
+			return runClipboardCmd(path, text)
+		}
+		if path, err := exec.LookPath("xclip"); err == nil {
+			return runClipboardCmd(path, text, "-selection", "clipboard")
+		}
+		if path, err := exec.LookPath("xsel"); err == nil {
+			return runClipboardCmd(path, text, "--clipboard", "--input")
+		}
+		return fmt.Errorf("no clipboard tool found (install wl-copy, xclip, or xsel)")
+	case "windows":
+		return runClipboardCmd("cmd", text, "/c", "clip")
+	default:
+		return fmt.Errorf("clipboard not supported on %s", runtime.GOOS)
+	}
+}
+
+func runClipboardCmd(cmdPath string, text string, args ...string) error {
+	cmd := exec.Command(cmdPath, args...)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		_ = stdin.Close()
+		return err
+	}
+	if _, err := io.WriteString(stdin, text); err != nil {
+		_ = stdin.Close()
+		return err
+	}
+	if err := stdin.Close(); err != nil {
+		return err
+	}
+	return cmd.Wait()
 }
 
 func isSafariProfileCommand(command string) bool {
