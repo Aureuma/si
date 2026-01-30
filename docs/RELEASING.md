@@ -33,20 +33,103 @@ Guidelines:
 - Short, user-facing bullets in past tense.
 - Dates are UTC in YYYY-MM-DD.
 
+## Release Process (Best-Practice Sequence)
+This sequence follows typical maintainer workflows: verify state, prepare release notes, update versions, tag, push, then publish a GitHub Release.
+
+### 0) Pre-flight checks (clean repo, sync tags)
+```
+git status -sb
+git fetch --tags origin
+git switch main
+git pull --ff-only
+```
+- Ensure the working tree is clean and the branch is up to date.
+- Make sure you have all remote tags locally before picking the next version.
+
+### 1) Determine the next version + release name
+- Decide `vX.Y.Z` using the SemVer rules above.
+- Choose a short suggested name for the release title (e.g., “Safari Login Flow”).
+- Title format for GitHub Release: `vX.Y.Z - Suggested Name`.
+
+### 2) Draft the changelog entry (authoritative notes)
+1. Add a new entry to the top of `CHANGELOG.md` with today’s UTC date.
+2. Summarize user-facing changes in 2–6 bullets.
+3. Keep language past tense and user-focused.
+
+### 3) Bump version strings in code
+Update any version constants used by the CLI or status endpoints (currently):
+- `tools/silexa/util.go` (`siVersion`)
+- `tools/silexa/codex_status.go` (`clientInfo.version`)
+
+### 4) Verify and commit the release prep
+```
+go test ./tools/silexa
+git add CHANGELOG.md tools/silexa/util.go tools/silexa/codex_status.go
+git commit -m "Bump version to vX.Y.Z"
+```
+- Keep release prep changes in a dedicated commit.
+
+### 5) Create an annotated tag for the release commit
+```
+git tag -a vX.Y.Z -m "vX.Y.Z"
+```
+- Annotated tags are recommended for releases and are the best practice.
+
+### 6) Push commits and the new tag
+```
+git push
+git push origin vX.Y.Z
+```
+- Push the tag explicitly to avoid conflicts with existing tags.
+- `gh release create` can auto-create a tag if it doesn't exist; using `--verify-tag` ensures you only release a tag you already created and pushed.
+
+### 7) Prepare release notes (from the changelog or commits)
+If you need a quick summary of commits since the last release:
+```
+git log --oneline "$(git describe --tags --abbrev=0)..HEAD"
+```
+Option A: Use the changelog entry as the release body.
+1. Extract the new `vX.Y.Z` section into `release-notes.md` (manual or script).
+2. Create the release with a title and notes file:
+```
+gh release create vX.Y.Z \\
+  --title "vX.Y.Z - Suggested Name" \\
+  --notes-file release-notes.md \\
+  --verify-tag
+```
+Option B: Use the annotated tag message as the release body.
+```
+gh release create vX.Y.Z \\
+  --title "vX.Y.Z - Suggested Name" \\
+  --notes-from-tag \\
+  --verify-tag
+```
+Option C: Use GitHub auto-generated release notes and prepend highlights.
+```
+gh release create vX.Y.Z \\
+  --title "vX.Y.Z - Suggested Name" \\
+  --generate-notes \\
+  --notes "Highlights:\\n- ...\\n- ..." \\
+  --verify-tag
+```
+Notes:
+- `--verify-tag` aborts if the tag doesn’t already exist on the remote.
+- `--generate-notes` uses GitHub’s Release Notes API and can be combined with `--notes`.
+- Add `--notes-start-tag vA.B.C` to define the start tag for generated notes when needed.
+- Add `--fail-on-no-commits` if you want to prevent duplicate releases when there are no new commits.
+
+### 8) Verify the published release
+```
+gh release view vX.Y.Z --web
+```
+- Confirm title, notes, and tag target are correct.
+
 ## Tagging Rules
 - Use annotated tags: `git tag -a vX.Y.Z -m "vX.Y.Z" <commit>`.
 - Tags should point at the release commit that includes the changelog update.
-- Push tags explicitly: `git push origin --tags`.
-
-## Release Process
-1. Update `CHANGELOG.md` with the new version entry.
-2. Run tests and record any known issues.
-3. Commit the changelog/release notes.
-4. Create an annotated tag for the release commit.
-5. Push commits and tags.
-6. Publish the GitHub release using the tag and changelog notes.
+- Push tags explicitly: `git push origin vX.Y.Z`.
 
 ## Release Notes Style
-- Lead with 2-4 key changes.
+- Lead with 2–4 key changes.
 - Balance Added/Changed/Fixed where possible.
 - Keep tone concise and user-focused.
