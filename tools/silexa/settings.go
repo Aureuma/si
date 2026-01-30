@@ -29,25 +29,27 @@ type SettingsPaths struct {
 }
 
 type CodexSettings struct {
-	Image       string               `toml:"image,omitempty"`
-	Network     string               `toml:"network,omitempty"`
-	Workspace   string               `toml:"workspace,omitempty"`
-	Workdir     string               `toml:"workdir,omitempty"`
-	Repo        string               `toml:"repo,omitempty"`
-	GHPAT       string               `toml:"gh_pat,omitempty"`
-	CodexVolume string               `toml:"codex_volume,omitempty"`
-	GHVolume    string               `toml:"gh_volume,omitempty"`
-	DockerSocket *bool               `toml:"docker_socket,omitempty"`
-	Profile     string               `toml:"profile,omitempty"`
-	Detach      *bool                `toml:"detach,omitempty"`
-	CleanSlate  *bool                `toml:"clean_slate,omitempty"`
-	Login       CodexLoginSettings   `toml:"login,omitempty"`
-	Exec        CodexExecSettings    `toml:"exec,omitempty"`
-	Profiles    CodexProfilesSetting `toml:"profiles,omitempty"`
+	Image        string               `toml:"image,omitempty"`
+	Network      string               `toml:"network,omitempty"`
+	Workspace    string               `toml:"workspace,omitempty"`
+	Workdir      string               `toml:"workdir,omitempty"`
+	Repo         string               `toml:"repo,omitempty"`
+	GHPAT        string               `toml:"gh_pat,omitempty"`
+	CodexVolume  string               `toml:"codex_volume,omitempty"`
+	GHVolume     string               `toml:"gh_volume,omitempty"`
+	DockerSocket *bool                `toml:"docker_socket,omitempty"`
+	Profile      string               `toml:"profile,omitempty"`
+	Detach       *bool                `toml:"detach,omitempty"`
+	CleanSlate   *bool                `toml:"clean_slate,omitempty"`
+	Login        CodexLoginSettings   `toml:"login,omitempty"`
+	Exec         CodexExecSettings    `toml:"exec,omitempty"`
+	Profiles     CodexProfilesSetting `toml:"profiles,omitempty"`
 }
 
 type CodexLoginSettings struct {
-	DeviceAuth *bool `toml:"device_auth,omitempty"`
+	DeviceAuth     *bool  `toml:"device_auth,omitempty"`
+	OpenURL        *bool  `toml:"open_url,omitempty"`
+	OpenURLCommand string `toml:"open_url_command,omitempty"`
 }
 
 type CodexExecSettings struct {

@@ -795,13 +795,22 @@ func codexImageDisplay(image string) string {
 func cmdCodexLogin(args []string) {
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
+	openURL := fs.Bool("open-url", false, "open login URL in browser")
+	openURLCmd := fs.String("open-url-cmd", "", "command to open login URL (use {url})")
+	safariProfile := fs.String("safari-profile", "", "override Safari profile name (macOS only)")
 	_ = fs.Parse(args)
 	settings := loadSettingsOrDefault()
 	if !flagProvided(args, "device-auth") && settings.Codex.Login.DeviceAuth != nil {
 		*deviceAuth = *settings.Codex.Login.DeviceAuth
 	}
+	if !flagProvided(args, "open-url") && settings.Codex.Login.OpenURL != nil {
+		*openURL = *settings.Codex.Login.OpenURL
+	}
+	if !flagProvided(args, "open-url-cmd") && strings.TrimSpace(settings.Codex.Login.OpenURLCommand) != "" {
+		*openURLCmd = settings.Codex.Login.OpenURLCommand
+	}
 	if fs.NArg() > 1 {
-		printUsage("usage: si login [profile] [--device-auth]")
+		printUsage("usage: si login [profile] [--device-auth] [--open-url] [--open-url-cmd <command>] [--safari-profile <name>]")
 		return
 	}
 	profileKey := ""
@@ -823,7 +832,7 @@ func cmdCodexLogin(args []string) {
 		}
 		profile = &selected
 	} else {
-		printUsage("usage: si login [profile] [--device-auth]")
+		printUsage("usage: si login [profile] [--device-auth] [--open-url] [--open-url-cmd <command>] [--safari-profile <name>]")
 		return
 	}
 
@@ -888,9 +897,19 @@ func cmdCodexLogin(args []string) {
 	if *deviceAuth {
 		execArgs = append(execArgs, "--device-auth")
 	}
-	if err := execDockerCLI(execArgs...); err != nil {
-		removeContainer()
-		fatal(err)
+	if *openURL {
+		watcher := newLoginURLWatcher(func(url string) {
+			openLoginURL(url, *profile, *openURLCmd, *safariProfile)
+		})
+		if err := execDockerCLIWithOutput(execArgs, watcher.Feed); err != nil {
+			removeContainer()
+			fatal(err)
+		}
+	} else {
+		if err := execDockerCLI(execArgs...); err != nil {
+			removeContainer()
+			fatal(err)
+		}
 	}
 	if err := cacheCodexAuthFromContainer(ctx, client, id, *profile); err != nil {
 		warnf("codex auth cache failed: %v", err)

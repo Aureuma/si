@@ -145,8 +145,11 @@ codex:
     --prompts-file <path>
     --prompt <text>         (repeatable)
 
-  si login [profile] [--device-auth]
+  si login [profile] [--device-auth] [--open-url] [--open-url-cmd <command>] [--safari-profile <name>]
     --device-auth / --device-auth=false
+    --open-url / --open-url=false
+    --open-url-cmd <command>
+    --safari-profile <name>
 
   si profile [name]
     --json
