@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	shared "silexa/agents/shared/docker"
+	shared "si/agents/shared/docker"
 )
 
 type reportOptions struct {

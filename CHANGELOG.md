@@ -31,9 +31,9 @@ All notable changes to this project will be documented in this file.
 
 ## [v1.1.0] - 2026-01-27
 ### Added
-- Added the unified `silexa/silexa:local` image build for codex and dyad runtimes.
+- Added the unified `aureuma/si:local` image build for codex and dyad runtimes.
 ### Changed
-- Defaulted codex and dyad images to `silexa/silexa:local`.
+- Defaulted codex and dyad images to `aureuma/si:local`.
 - Updated dyad runtime entrypoints and HOME/CODEX_HOME defaults for the unified image.
 - Refreshed CLI help and docs to match the new image layout and flag ordering.
 ### Removed

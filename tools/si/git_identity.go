@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	shared "silexa/agents/shared/docker"
+	shared "si/agents/shared/docker"
 )
 
 type gitIdentity struct {

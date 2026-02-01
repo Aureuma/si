@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	shared "silexa/agents/shared/docker"
+	shared "si/agents/shared/docker"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
