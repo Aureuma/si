@@ -59,6 +59,8 @@ func dispatchCodexCommand(cmd string, args []string) bool {
 		cmdCodexStop(args)
 	case "start":
 		cmdCodexStart(args)
+	case "warm-weekly":
+		cmdWarmWeekly(args)
 	default:
 		return false
 	}
@@ -498,6 +500,7 @@ func cmdCodexExec(args []string) {
 	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
 	noMcp := fs.Bool("no-mcp", false, "disable MCP servers (one-off mode)")
+	profileKey := fs.String("profile", "", "codex profile name/email (one-off mode)")
 	image := fs.String("image", envOr("SI_CODEX_IMAGE", "aureuma/si:local"), "docker image")
 	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
 	workdir := fs.String("workdir", "/workspace", "container working directory")
@@ -533,6 +536,14 @@ func cmdCodexExec(args []string) {
 			fmt.Println(styleDim("   or: si run \"...\" [--output-only] [--no-mcp]"))
 			return
 		}
+		var profile *codexProfile
+		if strings.TrimSpace(*profileKey) != "" {
+			parsed, err := requireCodexProfile(*profileKey)
+			if err != nil {
+				fatal(err)
+			}
+			profile = &parsed
+		}
 		opts := codexExecOneOffOptions{
 			Prompt:        prompt,
 			Image:         strings.TrimSpace(*image),
@@ -548,6 +559,7 @@ func cmdCodexExec(args []string) {
 			OutputOnly:    *outputOnly,
 			KeepContainer: *keep,
 			DockerSocket:  *dockerSocket,
+			Profile:       profile,
 		}
 		if err := runCodexExecOneOff(opts); err != nil {
 			fatal(err)
@@ -926,7 +938,7 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 	defaultKey = strings.TrimSpace(defaultKey)
 
 	fmt.Println(styleHeading("Available codex profiles:"))
-	printCodexProfilesTable(items)
+	printCodexProfilesTable(items, false)
 
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Println(styleDim("re-run with: si " + action + " <profile>"))

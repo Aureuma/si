@@ -33,6 +33,7 @@ type codexExecOneOffOptions struct {
 	OutputOnly    bool
 	KeepContainer bool
 	DockerSocket  bool
+	Profile       *codexProfile
 }
 
 func runCodexExecOneOff(opts codexExecOneOffOptions) error {
@@ -58,6 +59,14 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		"CODEX_HOME=/home/si/.codex",
 	}
 	env = append(env, hostUserEnv()...)
+	if opts.Profile != nil {
+		if strings.TrimSpace(opts.Profile.ID) != "" {
+			env = append(env, "SI_CODEX_PROFILE_ID="+opts.Profile.ID)
+		}
+		if strings.TrimSpace(opts.Profile.Name) != "" {
+			env = append(env, "SI_CODEX_PROFILE_NAME="+opts.Profile.Name)
+		}
+	}
 	if strings.TrimSpace(opts.Model) != "" {
 		env = append(env, "CODEX_MODEL="+strings.TrimSpace(opts.Model))
 	}
@@ -155,6 +164,9 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	}
 	if err := client.StartContainer(ctx, id); err != nil {
 		return err
+	}
+	if opts.Profile != nil {
+		seedCodexAuth(ctx, client, id, false, *opts.Profile)
 	}
 
 	cmd := buildCodexExecCommand(opts, prompt)

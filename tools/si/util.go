@@ -148,6 +148,7 @@ codex:
       --prompt <text>
       --output-only
       --no-mcp
+      --profile <profile>
       --image <docker image>
       --workspace <host path>
       --workdir <path>
@@ -169,6 +170,27 @@ codex:
   si remove <name> [--volumes]
   si stop <name>
   si start <name>
+
+  si warm-weekly [--profile <profile>]
+    --profile <profile>     (repeatable)
+    --prompt <text>
+    --prompt-file <path>
+    --jitter-min <minutes>
+    --jitter-max <minutes>
+    --dry-run
+    --run-now
+    --no-mcp / --no-mcp=false
+    --output-only / --output-only=false
+    --model <model>
+    --effort <level>
+    --image <image>
+    --workspace <path>
+    --workdir <path>
+    --network <name>
+    --codex-volume <name>
+    --gh-volume <name>
+    --docker-socket / --docker-socket=false
+    --keep
 
 images:
   si images build                 (builds aureuma/si:local)

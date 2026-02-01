@@ -156,12 +156,25 @@ func loadProfileAuthTokens(profile codexProfile) (profileAuthTokens, error) {
 }
 
 func fetchUsageStatus(ctx context.Context, client *http.Client, usageURL string, auth profileAuthTokens) (codexStatus, error) {
+	payload, err := fetchUsagePayloadWithClient(ctx, client, usageURL, auth)
+	if err != nil {
+		return codexStatus{}, err
+	}
+	return codexStatusFromUsage(payload, time.Now()), nil
+}
+
+func fetchUsagePayload(ctx context.Context, usageURL string, auth profileAuthTokens) (usagePayload, error) {
+	client := &http.Client{Timeout: 20 * time.Second}
+	return fetchUsagePayloadWithClient(ctx, client, usageURL, auth)
+}
+
+func fetchUsagePayloadWithClient(ctx context.Context, client *http.Client, usageURL string, auth profileAuthTokens) (usagePayload, error) {
 	if strings.TrimSpace(usageURL) == "" {
-		return codexStatus{}, errors.New("usage url missing")
+		return usagePayload{}, errors.New("usage url missing")
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, usageURL, nil)
 	if err != nil {
-		return codexStatus{}, err
+		return usagePayload{}, err
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+auth.AccessToken)
@@ -171,27 +184,26 @@ func fetchUsageStatus(ctx context.Context, client *http.Client, usageURL string,
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return codexStatus{}, err
+		return usagePayload{}, err
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return codexStatus{}, err
+		return usagePayload{}, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		snippet := strings.TrimSpace(string(body))
 		if len(snippet) > 400 {
 			snippet = snippet[:400]
 		}
-		return codexStatus{}, fmt.Errorf("usage api status %d: %s", resp.StatusCode, snippet)
+		return usagePayload{}, fmt.Errorf("usage api status %d: %s", resp.StatusCode, snippet)
 	}
 
 	var payload usagePayload
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return codexStatus{}, err
+		return usagePayload{}, err
 	}
-
-	return codexStatusFromUsage(payload, time.Now()), nil
+	return payload, nil
 }
 
 func codexStatusFromUsage(payload usagePayload, now time.Time) codexStatus {
