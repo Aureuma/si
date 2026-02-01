@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	shared "si/agents/shared/docker"
 )
@@ -60,14 +63,86 @@ func seedGitIdentity(ctx context.Context, client *shared.Client, containerID, us
 	if strings.TrimSpace(home) != "" {
 		opts.Env = []string{"HOME=" + strings.TrimSpace(home)}
 	}
+	if !containerHasGit(ctx, client, containerID, opts) {
+		warnf("git identity seed skipped: git not available for %s", opts.User)
+		return
+	}
+	if strings.TrimSpace(home) != "" && !waitForWritableHome(ctx, client, containerID, opts) {
+		warnf("git identity seed skipped: home not writable for %s (%s)", opts.User, strings.TrimSpace(home))
+		return
+	}
+	if strings.TrimSpace(home) != "" && !ensureGitConfigWritable(ctx, client, containerID, opts, strings.TrimSpace(user), strings.TrimSpace(home)) {
+		warnf("git identity seed skipped: gitconfig not writable for %s (%s)", opts.User, strings.TrimSpace(home))
+		return
+	}
 	if identity.Name != "" {
-		if err := client.Exec(ctx, containerID, []string{"git", "config", "--global", "user.name", identity.Name}, opts, nil, nil, nil); err != nil {
+		if err := execGitConfig(ctx, client, containerID, opts, "user.name", identity.Name); err != nil {
 			warnf("git user.name set failed: %v", err)
 		}
 	}
 	if identity.Email != "" {
-		if err := client.Exec(ctx, containerID, []string{"git", "config", "--global", "user.email", identity.Email}, opts, nil, nil, nil); err != nil {
+		if err := execGitConfig(ctx, client, containerID, opts, "user.email", identity.Email); err != nil {
 			warnf("git user.email set failed: %v", err)
 		}
 	}
+}
+
+func waitForWritableHome(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions) bool {
+	const attempts = 10
+	const delay = 200 * time.Millisecond
+	for i := 0; i < attempts; i++ {
+		if err := client.Exec(ctx, containerID, []string{"sh", "-lc", "test -d \"$HOME\" && test -w \"$HOME\""}, opts, nil, nil, nil); err == nil {
+			return true
+		}
+		time.Sleep(delay)
+	}
+	return false
+}
+
+func containerHasGit(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions) bool {
+	if err := client.Exec(ctx, containerID, []string{"git", "--version"}, opts, nil, nil, nil); err != nil {
+		return false
+	}
+	return true
+}
+
+func ensureGitConfigWritable(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions, user, home string) bool {
+	if strings.TrimSpace(home) == "" {
+		return true
+	}
+	if gitConfigWritable(ctx, client, containerID, opts) {
+		return true
+	}
+	if strings.TrimSpace(user) == "" {
+		return false
+	}
+	rootOpts := shared.ExecOptions{}
+	if strings.TrimSpace(home) != "" {
+		rootOpts.Env = []string{"HOME=" + strings.TrimSpace(home)}
+	}
+	_ = client.Exec(ctx, containerID, []string{"chown", user + ":" + user, home}, rootOpts, nil, nil, nil)
+	_ = client.Exec(ctx, containerID, []string{"chown", user + ":" + user, home + "/.gitconfig"}, rootOpts, nil, nil, nil)
+	_ = client.Exec(ctx, containerID, []string{"chmod", "u+rw", home}, rootOpts, nil, nil, nil)
+	_ = client.Exec(ctx, containerID, []string{"chmod", "u+rw", home + "/.gitconfig"}, rootOpts, nil, nil, nil)
+	return gitConfigWritable(ctx, client, containerID, opts)
+}
+
+func gitConfigWritable(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions) bool {
+	script := `test -d "$HOME" && test -w "$HOME" && { [ ! -e "$HOME/.gitconfig" ] || { test -f "$HOME/.gitconfig" && test -w "$HOME/.gitconfig"; }; }`
+	if err := client.Exec(ctx, containerID, []string{"sh", "-lc", script}, opts, nil, nil, nil); err != nil {
+		return false
+	}
+	return true
+}
+
+func execGitConfig(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions, key, value string) error {
+	var stderr bytes.Buffer
+	if err := client.Exec(ctx, containerID, []string{"git", "config", "--global", key, value}, opts, nil, nil, &stderr); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
+		return err
+	}
+	return nil
 }
