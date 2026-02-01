@@ -111,20 +111,6 @@ codex:
     --json
     --raw
     --timeout <duration>
-    --tmux-capture <alt|main>
-    --tmux-keep
-    --status-only
-    --debug
-    --status-attempts <n>
-    --status-window <duration>
-    --status-deadline <duration>
-    --retry-delay <duration>
-    --prompt-lines <n>
-    --require-context / --require-context=false
-    --allow-mcp-startup
-    --lock-timeout <duration>
-    --lock-stale <duration>
-    --cleanup-stale-sessions / --cleanup-stale-sessions=false
 
   si report <name>
     --json
@@ -411,7 +397,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|persona|skill)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|persona|skill)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
