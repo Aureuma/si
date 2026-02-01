@@ -9,7 +9,7 @@ FROM golang:1.25-bookworm AS codex-init-build
 WORKDIR /src/tools/codex-init
 COPY tools/codex-init/go.mod ./go.mod
 COPY tools/codex-init/*.go ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/silexa-codex-init .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/si-codex-init .
 
 FROM golang:1.25-bookworm AS critic-build
 WORKDIR /src
@@ -66,7 +66,7 @@ COPY tools/si-image/entrypoint.sh /usr/local/bin/si-entrypoint
 RUN chmod +x /usr/local/bin/si-entrypoint
 
 COPY --from=codex-stdout-parser-build /out/codex-stdout-parser /usr/local/bin/codex-stdout-parser
-COPY --from=codex-init-build /out/silexa-codex-init /usr/local/bin/silexa-codex-init
+COPY --from=codex-init-build /out/si-codex-init /usr/local/bin/si-codex-init
 COPY --from=critic-build /out/critic /usr/local/bin/critic
 
 ENTRYPOINT ["tini", "-s", "--", "/usr/local/bin/si-entrypoint"]

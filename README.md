@@ -1,10 +1,10 @@
-# Silexa Substrate
+# si Substrate
 
-Silexa is an AI-first substrate for orchestrating multiple coding agents (Dyads) and Codex containers on vanilla Docker.
+`si` is an AI-first substrate for orchestrating multiple coding agents (Dyads) and Codex containers on vanilla Docker.
 
 ## Layout
 - `agents/`: Agent-specific code and tooling.
-- `tools/silexa`: Go-based CLI for Docker workflows (dyads, codex containers, image helpers).
+- `tools/si`: Go-based CLI for Docker workflows (dyads, codex containers, image helpers).
 - `tools/si-image`: Unified Docker image for Codex containers and dyad actor/critic runtime.
 
 ## Quickstart (Docker)
@@ -13,11 +13,11 @@ Requires Docker Engine.
 Build the CLI and images:
 
 ```bash
-go build -o si ./tools/silexa
+go build -o si ./tools/si
 ./si images build
 ```
 
-This builds the unified image `silexa/silexa:local` used by dyads and codex containers.
+This builds the unified image `aureuma/si:local` used by dyads and codex containers.
 
 ## Testing
 Run all module tests from repo root:

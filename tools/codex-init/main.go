@@ -27,7 +27,7 @@ func main() {
 
 	managed := false
 	if data, err := os.ReadFile(configPath); err == nil {
-		if bytes.Contains(data, []byte("managed by silexa-codex-init")) {
+		if bytes.Contains(data, []byte("managed by ")) && bytes.Contains(data, []byte("codex-init")) {
 			managed = true
 		}
 	}
@@ -145,9 +145,9 @@ func escapeValue(value string) string {
 }
 
 func defaultConfig(model, effort, dyad, member, role, dept, now string) string {
-	return fmt.Sprintf(`# managed by silexa-codex-init
+return fmt.Sprintf(`# managed by si-codex-init
 #
-# Shared Codex defaults for Silexa dyads.
+# Shared Codex defaults for si dyads.
 
 model = "%s"
 model_reasoning_effort = "%s"
@@ -158,7 +158,7 @@ web_search_request = true
 [sandbox_workspace_write]
 network_access = true
 
-[silexa]
+[si]
 dyad = "%s"
 member = "%s"
 role = "%s"
