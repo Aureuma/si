@@ -45,7 +45,7 @@ type imageBuildSpec struct {
 func cmdImagesBuild(args []string) {
 	root := mustRepoRoot()
 	specs := []imageBuildSpec{
-		{tag: "silexa/silexa:local", contextDir: root, dockerfile: filepath.Join(root, "tools/si-image/Dockerfile")},
+		{tag: "aureuma/si:local", contextDir: root, dockerfile: filepath.Join(root, "tools/si-image/Dockerfile")},
 	}
 	for _, spec := range specs {
 		if err := runDockerBuild(spec); err != nil {

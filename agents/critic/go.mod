@@ -1,5 +1,5 @@
-module silexa/agents/critic
+module si/agents/critic
 
 go 1.25.0
 
-replace silexa/agents/shared => ../shared
+replace si/agents/shared => ../shared

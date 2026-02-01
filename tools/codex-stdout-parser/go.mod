@@ -1,4 +1,4 @@
-module silexa/tools/codex-stdout-parser
+module si/tools/codex-stdout-parser
 
 go 1.25.0
 

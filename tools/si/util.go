@@ -16,7 +16,7 @@ import (
 func usage() {
 	fmt.Print(colorizeHelp(`si [command] [args]
 
-Holistic CLI for Silexa. This help includes all commands, flags, and core features.
+Holistic CLI for si. This help includes all commands, flags, and core features.
 
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
@@ -36,7 +36,7 @@ Core:
   si docker <args...>
 
 Build:
-  si images build                 (builds silexa/silexa:local)
+  si images build                 (builds aureuma/si:local)
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
 
 Profiles:
@@ -185,7 +185,7 @@ codex:
   si start <name>
 
 images:
-  si images build                 (builds silexa/silexa:local)
+  si images build                 (builds aureuma/si:local)
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
     -t, --tag <tag>
     -f, --file <Dockerfile>
@@ -202,7 +202,7 @@ Environment defaults (selected)
   ACTOR_IMAGE, CRITIC_IMAGE, SI_CODEX_IMAGE, SI_NETWORK
   CODEX_MODEL, CODEX_REASONING_EFFORT, CODEX_MODEL_LOW|MEDIUM|HIGH
   CODEX_REASONING_EFFORT_LOW|MEDIUM|HIGH
-  SILEXA_WORKSPACE_HOST, SILEXA_CONFIGS_HOST, SILEXA_DYAD_FORWARD_PORTS
+  SI_WORKSPACE_HOST, SI_CONFIGS_HOST, SI_DYAD_FORWARD_PORTS
   SI_CODEX_EXEC_VOLUME, GH_PAT, GH_TOKEN, GITHUB_TOKEN
 `))
 }

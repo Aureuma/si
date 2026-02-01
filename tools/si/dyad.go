@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	shared "silexa/agents/shared/docker"
+	shared "si/agents/shared/docker"
 )
 
 func cmdDyad(args []string) {
@@ -49,8 +49,8 @@ func cmdDyadSpawn(args []string) {
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
 	deptFlag := fs.String("department", "", "dyad department")
-	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "silexa/silexa:local"), "actor image")
-	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "silexa/silexa:local"), "critic image")
+	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "aureuma/si:local"), "actor image")
+	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "aureuma/si:local"), "critic image")
 	codexModel := fs.String("codex-model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
 	codexEffortActor := fs.String("codex-effort-actor", envOr("CODEX_ACTOR_EFFORT", ""), "codex effort for actor")
 	codexEffortCritic := fs.String("codex-effort-critic", envOr("CODEX_CRITIC_EFFORT", ""), "codex effort for critic")
@@ -60,9 +60,9 @@ func cmdDyadSpawn(args []string) {
 	codexEffortLow := fs.String("codex-effort-low", envOr("CODEX_REASONING_EFFORT_LOW", ""), "codex effort low")
 	codexEffortMedium := fs.String("codex-effort-medium", envOr("CODEX_REASONING_EFFORT_MEDIUM", ""), "codex effort medium")
 	codexEffortHigh := fs.String("codex-effort-high", envOr("CODEX_REASONING_EFFORT_HIGH", ""), "codex effort high")
-	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace (repo root)")
-	configsHost := fs.String("configs", envOr("SILEXA_CONFIGS_HOST", ""), "host path to configs")
-	forwardPorts := fs.String("forward-ports", envOr("SILEXA_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
+	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace (repo root)")
+	configsHost := fs.String("configs", envOr("SI_CONFIGS_HOST", ""), "host path to configs")
+	forwardPorts := fs.String("forward-ports", envOr("SI_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
 	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in dyad containers")
 	fs.Parse(args)
 	settings := loadSettingsOrDefault()

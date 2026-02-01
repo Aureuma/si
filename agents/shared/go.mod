@@ -1,4 +1,4 @@
-module silexa/agents/shared
+module si/agents/shared
 
 go 1.25.0
 

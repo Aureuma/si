@@ -58,13 +58,13 @@ git pull --ff-only
 
 ### 3) Bump version strings in code
 Update any version constants used by the CLI or status endpoints (currently):
-- `tools/silexa/util.go` (`siVersion`)
-- `tools/silexa/codex_status.go` (`clientInfo.version`)
+- `tools/si/util.go` (`siVersion`)
+- `tools/si/codex_status.go` (`clientInfo.version`)
 
 ### 4) Verify and commit the release prep
 ```
-go test ./tools/silexa
-git add CHANGELOG.md tools/silexa/util.go tools/silexa/codex_status.go
+go test ./tools/si
+git add CHANGELOG.md tools/si/util.go tools/si/codex_status.go
 git commit -m "Bump version to vX.Y.Z"
 ```
 - Keep release prep changes in a dedicated commit.

@@ -19,4 +19,4 @@ data/
 !data/resource-broker/.gitkeep
 !data/infra-broker/.gitkeep
 .artifacts/
-si
+/si

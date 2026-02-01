@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"sync"
 
-	shared "silexa/agents/shared/docker"
+	shared "si/agents/shared/docker"
 )
 
 func cmdDocker(args []string) {

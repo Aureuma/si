@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	shared "silexa/agents/shared/docker"
+	shared "si/agents/shared/docker"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -84,8 +84,8 @@ type codexSpawnFlags struct {
 }
 
 func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
-	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/silexa:local"), "docker image")
-	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace")
+	image := fs.String("image", envOr("SI_CODEX_IMAGE", "aureuma/si:local"), "docker image")
+	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
 	repo := fs.String("repo", "", "github repo in Org/Repo form")
 	ghPat := fs.String("gh-pat", envOr("GH_PAT", envOr("GH_TOKEN", envOr("GITHUB_TOKEN", ""))), "github PAT for cloning")
@@ -498,8 +498,8 @@ func cmdCodexExec(args []string) {
 	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
 	noMcp := fs.Bool("no-mcp", false, "disable MCP servers (one-off mode)")
-	image := fs.String("image", envOr("SI_CODEX_IMAGE", "silexa/silexa:local"), "docker image")
-	workspaceHost := fs.String("workspace", envOr("SILEXA_WORKSPACE_HOST", ""), "host path to workspace")
+	image := fs.String("image", envOr("SI_CODEX_IMAGE", "aureuma/si:local"), "docker image")
+	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace")
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
 	codexVolume := fs.String("codex-volume", envOr("SI_CODEX_EXEC_VOLUME", ""), "codex volume name")
@@ -847,7 +847,7 @@ func cmdCodexLogin(args []string) {
 	defer client.Close()
 	ctx := context.Background()
 
-	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "silexa/silexa:local"))
+	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "aureuma/si:local"))
 	if image == "" {
 		fatal(fmt.Errorf("codex image required"))
 	}

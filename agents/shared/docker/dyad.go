@@ -15,15 +15,15 @@ import (
 )
 
 const (
-	DefaultNetwork = "silexa"
+	DefaultNetwork = "si"
 	LabelApp       = "app"
-	LabelDyad      = "silexa.dyad"
-	LabelMember    = "silexa.member"
-	LabelRole      = "silexa.role"
-	LabelDept      = "silexa.department"
+	LabelDyad      = "si.dyad"
+	LabelMember    = "si.member"
+	LabelRole      = "si.role"
+	LabelDept      = "si.department"
 )
 
-const DyadAppLabel = "silexa-dyad"
+const DyadAppLabel = "si-dyad"
 
 type DyadOptions struct {
 	Dyad              string
@@ -61,7 +61,7 @@ func DyadContainerName(dyad, member string) string {
 	if dyad == "" || member == "" {
 		return ""
 	}
-	return "silexa-" + member + "-" + dyad
+	return "si-" + member + "-" + dyad
 }
 
 func (c *Client) DyadStatus(ctx context.Context, dyad string) (bool, bool, error) {
@@ -205,7 +205,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		opts.Network = DefaultNetwork
 	}
 	if strings.TrimSpace(opts.CodexVolume) == "" {
-		opts.CodexVolume = "silexa-codex-" + opts.Dyad
+		opts.CodexVolume = "si-codex-" + opts.Dyad
 	}
 	if strings.TrimSpace(opts.WorkspaceHost) == "" {
 		return ContainerSpec{}, ContainerSpec{}, errors.New("workspace host path required")
@@ -264,7 +264,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		WorkingDir:   "/workspace",
 		Env:          actorEnv,
 		Labels:       actorLabels,
-		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/silexa-codex-init"},
+		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/si-codex-init"},
 		Cmd:          []string{"--exec", "tail", "-f", "/dev/null"},
 		ExposedPorts: actorExposed,
 		User:         "root",

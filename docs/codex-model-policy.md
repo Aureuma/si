@@ -7,7 +7,7 @@ Reasoning level is controlled via:
 - `CODEX_REASONING_EFFORT=medium|high|xhigh` (policy avoids `low`)
 
 These values are applied in two places:
-1) **Default Codex config**: `silexa-codex-init` writes `~/.codex/config.toml` with `model` and `model_reasoning_effort`.
+1) **Default Codex config**: `si-codex-init` writes `~/.codex/config.toml` with `model` and `model_reasoning_effort`.
 2) **Critic-driven execution**: when a critic runs interactive `codex`/`codex resume` inside an actor, it explicitly passes `-m $CODEX_MODEL` and `-c model_reasoning_effort=$CODEX_REASONING_EFFORT`.
 
 ## Complexity-based overrides

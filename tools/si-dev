@@ -14,17 +14,17 @@ needs_build=0
 if [[ ! -x "${BIN}" ]]; then
   needs_build=1
 else
-  if find "${ROOT}/tools/silexa" "${ROOT}/agents/shared" -name '*.go' -newer "${BIN}" -print -quit | grep -q .; then
+  if find "${ROOT}/tools/si" "${ROOT}/agents/shared" -name '*.go' -newer "${BIN}" -print -quit | grep -q .; then
     needs_build=1
   fi
-  if [[ "${ROOT}/tools/silexa/go.mod" -nt "${BIN}" || "${ROOT}/tools/silexa/go.sum" -nt "${BIN}" ]]; then
+  if [[ "${ROOT}/tools/si/go.mod" -nt "${BIN}" || "${ROOT}/tools/si/go.sum" -nt "${BIN}" ]]; then
     needs_build=1
   fi
 fi
 
 if [[ ${needs_build} -eq 1 ]]; then
   mkdir -p "${ROOT}/.artifacts"
-  (cd "${ROOT}/tools/silexa" && go build -o "${BIN}" .)
+  (cd "${ROOT}/tools/si" && go build -o "${BIN}" .)
 fi
 
 exec "${BIN}" "$@"
