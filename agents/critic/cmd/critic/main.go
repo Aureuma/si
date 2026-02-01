@@ -22,7 +22,7 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 	codexHome := envOr("CODEX_HOME", filepath.Join(home, ".codex"))
 	codexConfigDir := envOr("CODEX_CONFIG_DIR", codexHome)
 	cfg := filepath.Join(codexConfigDir, "config.toml")
-	templatePath := envOr("CODEX_CONFIG_TEMPLATE", "/workspace/silexa/configs/codex-config.template.toml")
+	templatePath := envOr("CODEX_CONFIG_TEMPLATE", "/workspace/si/configs/codex-config.template.toml")
 	force := envOr("CODEX_INIT_FORCE", "0")
 
 	_ = os.MkdirAll(codexConfigDir, 0o700)
@@ -36,7 +36,8 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 
 	managed := false
 	if existing, err := os.ReadFile(cfg); err == nil {
-		managed = strings.Contains(string(existing), "managed by silexa-codex-init")
+		managed = strings.Contains(string(existing), "managed by ") &&
+			strings.Contains(string(existing), "codex-init")
 		if force != "1" && !managed {
 			return
 		}
@@ -67,9 +68,9 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 	logger.Printf("codex base config ensured at %s", cfg)
 }
 
-const defaultCodexTemplate = `# managed by silexa-codex-init
+const defaultCodexTemplate = `# managed by si-codex-init
 #
-# Shared Codex defaults for Silexa dyads.
+# Shared Codex defaults for si dyads.
 
 model = "__CODEX_MODEL__"
 model_reasoning_effort = "__CODEX_REASONING_EFFORT__"
@@ -80,7 +81,7 @@ web_search_request = true
 [sandbox_workspace_write]
 network_access = true
 
-[silexa]
+[si]
 dyad = "__DYAD_NAME__"
 member = "__DYAD_MEMBER__"
 role = "__ROLE__"

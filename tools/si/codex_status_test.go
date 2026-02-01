@@ -14,7 +14,7 @@ func TestParseCodexStatus(t *testing.T) {
 │ information on rate limits and credits                            │
 │                                                                   │
 │  Model:            gpt-5.2-codex (reasoning high, summaries auto) │
-│  Directory:        ~/Development/Silexa                           │
+│  Directory:        ~/Development/si                               │
 │  Approval:         never                                          │
 │  Sandbox:          danger-full-access                             │
 │  Agents.md:        <none>                                         │

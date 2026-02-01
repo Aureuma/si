@@ -1,4 +1,4 @@
-module silexa/tools/silexa
+module si/tools/si
 
 go 1.25.0
 
@@ -6,7 +6,7 @@ require (
 	github.com/docker/docker v26.1.4+incompatible
 	github.com/docker/go-connections v0.5.0
 	golang.org/x/term v0.39.0
-	silexa/agents/shared v0.0.0
+	si/agents/shared v0.0.0
 )
 
 require (
@@ -37,4 +37,4 @@ require (
 	golang.org/x/time v0.14.0 // indirect
 )
 
-replace silexa/agents/shared => ../../agents/shared
+replace si/agents/shared => ../../agents/shared
