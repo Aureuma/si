@@ -28,6 +28,13 @@ func cmdWarmWeekly(args []string) {
 	jitterMax := fs.Int("jitter-max", 5, "max jitter minutes after reset")
 	dryRun := fs.Bool("dry-run", false, "print schedule without running")
 	runNow := fs.Bool("run-now", false, "run immediately using jitter instead of waiting for reset")
+	ofeliaInstall := fs.Bool("ofelia-install", false, "install/update ofelia scheduler")
+	ofeliaWrite := fs.Bool("ofelia-write", false, "write ofelia config without starting container")
+	ofeliaRemove := fs.Bool("ofelia-remove", false, "remove ofelia scheduler container")
+	ofeliaName := fs.String("ofelia-name", defaultOfeliaName, "ofelia container name")
+	ofeliaImage := fs.String("ofelia-image", defaultOfeliaImage, "ofelia docker image")
+	ofeliaConfig := fs.String("ofelia-config", "", "ofelia config path")
+	ofeliaPrompt := fs.String("ofelia-prompt", "", "ofelia prompt file path")
 	noMcp := fs.Bool("no-mcp", true, "disable MCP servers")
 	outputOnly := fs.Bool("output-only", true, "print only the Codex response")
 	image := fs.String("image", envOr("SI_CODEX_IMAGE", "aureuma/si:local"), "docker image")
@@ -68,7 +75,80 @@ func cmdWarmWeekly(args []string) {
 		infof("no logged-in profiles found")
 		return
 	}
+	if *ofeliaRemove {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := removeOfeliaWarmContainer(ctx, *ofeliaName); err != nil {
+			fatal(err)
+		}
+		successf("removed ofelia container %s", *ofeliaName)
+		return
+	}
 
+	if *ofeliaInstall || *ofeliaWrite {
+		configPath := strings.TrimSpace(*ofeliaConfig)
+		promptPath := strings.TrimSpace(*ofeliaPrompt)
+		if configPath == "" || promptPath == "" {
+			defaultConfig, defaultPrompt, err := defaultOfeliaPaths()
+			if err != nil {
+				fatal(err)
+			}
+			if configPath == "" {
+				configPath = defaultConfig
+			}
+			if promptPath == "" {
+				promptPath = defaultPrompt
+			}
+		}
+
+		jobs := make([]ofeliaWarmJob, 0, len(profiles))
+		now := time.Now()
+		for _, profile := range profiles {
+			job, err := buildOfeliaWarmJob(profile, now)
+			if err != nil {
+				warnf("profile %s skipped: %v", profile.ID, err)
+				continue
+			}
+			jobs = append(jobs, job)
+		}
+		if len(jobs) == 0 {
+			infof("no ofelia jobs created")
+			return
+		}
+
+		tz := strings.TrimSpace(os.Getenv("TZ"))
+		if tz == "" {
+			if loc := time.Now().Location(); loc != nil {
+				tz = loc.String()
+			}
+		}
+		opts := ofeliaWarmOptions{
+			Name:        strings.TrimSpace(*ofeliaName),
+			Image:       strings.TrimSpace(*image),
+			OfeliaImage: strings.TrimSpace(*ofeliaImage),
+			ConfigPath:  configPath,
+			PromptPath:  promptPath,
+			TZ:          tz,
+			Model:       strings.TrimSpace(*model),
+			Effort:      strings.TrimSpace(*effort),
+			JitterMin:   minJitter,
+			JitterMax:   maxJitter,
+		}
+		if err := ensureOfeliaWarmConfig(jobs, prompt, opts); err != nil {
+			fatal(err)
+		}
+		printOfeliaWarmJobs(jobs, opts)
+		if *ofeliaWrite && !*ofeliaInstall {
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		defer cancel()
+		if err := ensureOfeliaWarmContainer(ctx, opts); err != nil {
+			fatal(err)
+		}
+		successf("ofelia scheduler %s running", opts.Name)
+		return
+	}
 	schedules := make([]weeklyWarmSchedule, 0, len(profiles))
 	now := time.Now()
 	for i, profile := range profiles {

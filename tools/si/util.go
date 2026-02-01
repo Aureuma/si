@@ -179,6 +179,13 @@ codex:
     --jitter-max <minutes>
     --dry-run
     --run-now
+    --ofelia-install
+    --ofelia-write
+    --ofelia-remove
+    --ofelia-name <name>
+    --ofelia-image <image>
+    --ofelia-config <path>
+    --ofelia-prompt <path>
     --no-mcp / --no-mcp=false
     --output-only / --output-only=false
     --model <model>
