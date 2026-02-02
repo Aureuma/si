@@ -164,7 +164,11 @@ func cmdDyadSpawn(args []string) {
 		root = *workspaceHost
 	}
 	if strings.TrimSpace(*configsHost) == "" {
-		*configsHost = root + string(os.PathSeparator) + "configs"
+		resolved, err := resolveConfigsHost(root)
+		if err != nil {
+			fatal(err)
+		}
+		*configsHost = resolved
 	}
 	if strings.TrimSpace(*forwardPorts) == "" {
 		*forwardPorts = "1455-1465"
