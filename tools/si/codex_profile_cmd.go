@@ -71,11 +71,13 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 	}
 	status := codexProfileAuthStatus(profile)
 	item := codexProfileSummary{
-		ID:         profile.ID,
-		Name:       profile.Name,
-		Email:      profile.Email,
-		AuthCached: status.Exists,
-		AuthPath:   status.Path,
+		ID:              profile.ID,
+		Name:            profile.Name,
+		Email:           profile.Email,
+		AuthCached:      status.Exists,
+		AuthPath:        status.Path,
+		FiveHourLeftPct: -1,
+		WeeklyLeftPct:   -1,
 	}
 	if status.Exists {
 		item.AuthUpdated = status.Modified.UTC().Format(time.RFC3339)
