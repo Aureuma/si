@@ -272,6 +272,14 @@ func repoRoot() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return repoRootFrom(dir)
+}
+
+func repoRootFrom(dir string) (string, error) {
+	if strings.TrimSpace(dir) == "" {
+		return "", fmt.Errorf("repo root not found (empty start dir)")
+	}
+	dir = filepath.Clean(dir)
 	for {
 		if exists(filepath.Join(dir, "configs")) && exists(filepath.Join(dir, "agents")) {
 			return dir, nil
@@ -283,6 +291,30 @@ func repoRoot() (string, error) {
 		dir = parent
 	}
 	return "", fmt.Errorf("repo root not found (expected configs/ and agents/)")
+}
+
+func repoRootFromExecutable() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	return repoRootFrom(filepath.Dir(exe))
+}
+
+func resolveConfigsHost(workspaceHost string) (string, error) {
+	workspaceHost = strings.TrimSpace(workspaceHost)
+	if workspaceHost != "" {
+		if root, err := repoRootFrom(workspaceHost); err == nil {
+			return filepath.Join(root, "configs"), nil
+		}
+	}
+	if root, err := repoRoot(); err == nil {
+		return filepath.Join(root, "configs"), nil
+	}
+	if root, err := repoRootFromExecutable(); err == nil {
+		return filepath.Join(root, "configs"), nil
+	}
+	return "", fmt.Errorf("configs dir not found; use --configs or run from the si repo root")
 }
 
 func exists(path string) bool {
