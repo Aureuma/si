@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -200,10 +199,9 @@ func cmdCodexSpawn(args []string) {
 			name = selected.ID
 		}
 		if name == "" {
-			fmt.Printf("%s ", styleDim("Container name:"))
-			reader := bufio.NewReader(os.Stdin)
-			line, err := reader.ReadString('\n')
-			if err != nil && err != io.EOF {
+			fmt.Printf("%s ", styleDim("Container name (Esc to cancel):"))
+			line, err := promptLine(os.Stdin)
+			if err != nil {
 				fatal(err)
 			}
 			name = strings.TrimSpace(line)
@@ -799,13 +797,11 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 		)
 	}
 
-	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] (or press Enter to cancel):", len(items))))
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] (Enter/Esc to cancel):", len(items))))
+	line, err := promptLine(os.Stdin)
+	if err != nil {
 		fatal(err)
 	}
-	line = strings.TrimSpace(line)
 	if isEscCancelInput(line) {
 		return "", false
 	}
@@ -868,13 +864,11 @@ func selectCodexContainerFromList(action string) (string, bool) {
 		return "", false
 	}
 
-	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] or name (or press Enter to cancel):", len(items))))
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] or name (Enter/Esc to cancel):", len(items))))
+	line, err := promptLine(os.Stdin)
+	if err != nil {
 		fatal(err)
 	}
-	line = strings.TrimSpace(line)
 	if isEscCancelInput(line) {
 		return "", false
 	}
@@ -1113,15 +1107,15 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 
 	prompt := fmt.Sprintf("Select profile [1-%d]", len(items))
 	if defaultKey != "" {
-		prompt = fmt.Sprintf("Select profile [1-%d] (default %s)", len(items), defaultKey)
+		prompt = fmt.Sprintf("Select profile [1-%d] (default %s, Esc to cancel)", len(items), defaultKey)
+	} else {
+		prompt = fmt.Sprintf("Select profile [1-%d] (Esc to cancel)", len(items))
 	}
 	fmt.Printf("%s ", styleDim(prompt+":"))
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	line, err := promptLine(os.Stdin)
+	if err != nil {
 		fatal(err)
 	}
-	line = strings.TrimSpace(line)
 	if isEscCancelInput(line) {
 		return codexProfile{}, false
 	}
