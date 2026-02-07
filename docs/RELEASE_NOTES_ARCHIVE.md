@@ -1,10 +1,10 @@
 # Release Notes Archive
 
-This archive preserves the original GitHub Release notes before the `v1.x` tags/releases were renumbered onto the `v0.x` line.
+This archive preserves release notes after renumbering onto the `v0.x` line.
 
-## v1.0.0 (renumbered to v0.39.0)
+## v0.39.0
 
-Title: `Silex Primus v1.0.0`
+Title: `Silex Primus v0.39.0`
 
 Published: `2026-01-26T18:40:01Z`
 
@@ -18,14 +18,14 @@ Highlights:
 - 🧰 CLI output polish: Unicode-aware column widths and safer config/auth seeding paths.
 - 📜 New `CHANGELOG.md` and `docs/RELEASING.md` formalize release history and process.
 
-In the margins: 1·26·2026 · v1.0.0
+In the margins: 1·26·2026 · v0.39.0
 
 Full details are in CHANGELOG.md.
 ```
 
-## v1.1.0 (renumbered to v0.40.0)
+## v0.40.0
 
-Title: `v1.1.0 — Unified image runtime`
+Title: `v0.40.0 — Unified image runtime`
 
 Published: `2026-01-27T15:57:37Z`
 
@@ -37,14 +37,14 @@ Published: `2026-01-27T15:57:37Z`
 - Refreshed CLI help and docs for the new image layout and flag ordering.
 ```
 
-## v1.2.0 (renumbered to v0.41.0)
+## v0.41.0
 
-Title: `v1.2.0 - Consolidated Release`
+Title: `v0.41.0 - Consolidated Release`
 
 Published: `2026-01-30T18:04:30Z`
 
 ```
-Release v1.2.0 consolidates recent improvements to the login flow and release tooling.
+Release v0.41.0 consolidates recent improvements to the login flow and release tooling.
 
 Highlights:
 - Added automatic login URL opening with Safari profile support and overrides.
