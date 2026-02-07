@@ -24,6 +24,8 @@ func main() {
 		cmdAnalyze(args)
 	case "stripe":
 		cmdStripe(args)
+	case "self":
+		cmdSelf(args)
 	case "docker":
 		cmdDocker(args)
 	case "dyad":
