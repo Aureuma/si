@@ -43,6 +43,9 @@ type ClientConfig struct {
 	BaseURL           string
 	Timeout           time.Duration
 	MaxNetworkRetries int64
+	LogPath           string
+	LogContext        map[string]string
+	Logger            EventLogger
 }
 
 type Request struct {

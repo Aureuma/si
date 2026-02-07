@@ -92,6 +92,7 @@ type StripeSettings struct {
 	Organization   string                          `toml:"organization,omitempty"`
 	DefaultAccount string                          `toml:"default_account,omitempty"`
 	DefaultEnv     string                          `toml:"default_env,omitempty"`
+	LogFile        string                          `toml:"log_file,omitempty"`
 	Accounts       map[string]StripeAccountSetting `toml:"accounts,omitempty"`
 }
 

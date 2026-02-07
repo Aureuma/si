@@ -21,6 +21,7 @@ type rawRequester interface {
 type Client struct {
 	cfg ClientConfig
 	raw rawRequester
+	log EventLogger
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
@@ -35,6 +36,9 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 	if cfg.BaseURL == "" {
 		cfg.BaseURL = stripe.APIURL
+	}
+	if cfg.Logger == nil && strings.TrimSpace(cfg.LogPath) != "" {
+		cfg.Logger = NewJSONLLogger(strings.TrimSpace(cfg.LogPath))
 	}
 	backendCfg := &stripe.BackendConfig{
 		HTTPClient:        &http.Client{Timeout: cfg.Timeout},
@@ -52,6 +56,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	return &Client{
 		cfg: cfg,
 		raw: rawrequest.Client{B: rawBackend, Key: strings.TrimSpace(cfg.APIKey)},
+		log: cfg.Logger,
 	}, nil
 }
 
@@ -62,7 +67,7 @@ func newClientWithRaw(cfg ClientConfig, raw rawRequester) (*Client, error) {
 	if strings.TrimSpace(cfg.APIKey) == "" {
 		return nil, fmt.Errorf("stripe api key is required")
 	}
-	return &Client{cfg: cfg, raw: raw}, nil
+	return &Client{cfg: cfg, raw: raw, log: cfg.Logger}, nil
 }
 
 func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
@@ -84,6 +89,14 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	start := time.Now().UTC()
+	c.logEvent("request", map[string]any{
+		"method":          method,
+		"path":            reqPath,
+		"idempotency_key": RedactSensitive(strings.TrimSpace(req.IdempotencyKey)),
+		"params_count":    len(req.Params),
+		"body_bytes":      len(content),
+	})
 	rawParams := &stripe.RawParams{}
 	if strings.TrimSpace(c.cfg.AccountID) != "" {
 		rawParams.SetStripeAccount(strings.TrimSpace(c.cfg.AccountID))
@@ -107,12 +120,40 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 
 	select {
 	case <-ctx.Done():
+		c.logEvent("error", map[string]any{
+			"method":      method,
+			"path":        reqPath,
+			"duration_ms": time.Since(start).Milliseconds(),
+			"error":       RedactSensitive(ctx.Err().Error()),
+		})
 		return Response{}, ctx.Err()
 	case pack := <-resultCh:
 		if pack.err != nil {
-			return Response{}, NormalizeAPIError(pack.err, "")
+			apiErr := NormalizeAPIError(pack.err, "")
+			fields := map[string]any{
+				"method":      method,
+				"path":        reqPath,
+				"duration_ms": time.Since(start).Milliseconds(),
+				"error":       RedactSensitive(apiErr.Error()),
+			}
+			if apiErr != nil {
+				fields["status"] = apiErr.StatusCode
+				fields["type"] = apiErr.Type
+				fields["code"] = apiErr.Code
+				fields["request_id"] = apiErr.RequestID
+			}
+			c.logEvent("error", fields)
+			return Response{}, apiErr
 		}
-		return normalizeResponse(pack.resp), nil
+		resp := normalizeResponse(pack.resp)
+		c.logEvent("response", map[string]any{
+			"method":      method,
+			"path":        reqPath,
+			"duration_ms": time.Since(start).Milliseconds(),
+			"status":      resp.StatusCode,
+			"request_id":  resp.RequestID,
+		})
+		return resp, nil
 	}
 }
 
@@ -187,4 +228,21 @@ func buildRequestContent(path string, method string, params map[string]string, r
 		return string(body), reqPath, nil
 	}
 	return values.Encode(), reqPath, nil
+}
+
+func (c *Client) logEvent(kind string, fields map[string]any) {
+	if c == nil || c.log == nil {
+		return
+	}
+	event := map[string]any{
+		"component": "stripebridge",
+		"event":     kind,
+	}
+	for key, value := range c.cfg.LogContext {
+		event["ctx_"+key] = RedactSensitive(strings.TrimSpace(value))
+	}
+	for key, value := range fields {
+		event[key] = value
+	}
+	c.log.Log(event)
 }
