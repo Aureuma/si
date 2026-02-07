@@ -596,9 +596,11 @@ func cmdDyadCopyLogin(args []string) {
 		memberVal = selected
 	}
 	if !sourceProvided && isInteractiveTerminal() {
-		if selected, ok := selectCodexContainer("dyad copy-login", true); ok {
-			*source = selected
+		selected, ok := selectCodexContainer("dyad copy-login", true)
+		if !ok {
+			return
 		}
+		*source = selected
 	}
 	sourceName := codexContainerName(strings.TrimSpace(*source))
 	if sourceName == "" {
