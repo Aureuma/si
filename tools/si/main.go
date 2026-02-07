@@ -14,7 +14,7 @@ func main() {
 	switch cmd {
 	case "version", "--version", "-v":
 		printVersion()
-	case "spawn", "respawn", "list", "ps", "status", "report", "login", "profile", "exec", "run", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start", "warm-weekly":
+	case "spawn", "respawn", "list", "ps", "status", "report", "login", "exec", "run", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start", "warm-weekly":
 		if !dispatchCodexCommand(cmd, args) {
 			printUnknown("", cmd)
 			usage()

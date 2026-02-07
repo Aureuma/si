@@ -20,7 +20,7 @@ Holistic CLI for si. This help includes all commands, flags, and core features.
 
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
-  - Codex containers: spawn/respawn/list/status/report/login/profile/ps/run/logs/tail/clone/remove/stop/start.
+  - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Image build helpers for local dev.
   - Docker passthrough for raw docker CLI calls.
@@ -32,7 +32,7 @@ Usage:
 
 Core:
   si dyad spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login
-  si spawn|respawn|list|status|report|login|profile|ps|run|logs|tail|clone|remove|stop|start
+  si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
   si docker <args...>
 
 Build:
@@ -40,7 +40,7 @@ Build:
   si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
 
 Profiles:
-  si profile [name]        (codex profiles)
+  si status [profile]      (codex profiles)
   si persona <profile-name> (markdown profiles)
   si skill <role>
 
@@ -111,10 +111,13 @@ codex:
   si list [--json]
     --json
 
-  si status <name>
+  si status [name|profile]
     --json
     --raw
     --timeout <duration>
+    --profile <profile>
+    --profiles
+    --no-status
 
   si report <name>
     --json
@@ -140,10 +143,6 @@ codex:
     --open-url / --open-url=false
     --open-url-cmd <command>
     --safari-profile <name>
-
-  si profile [name]
-    --json
-    --no-status
 
   si run (two modes, alias: exec)
     One-off run (isolated container):
@@ -463,7 +462,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|profile|persona|skill)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
