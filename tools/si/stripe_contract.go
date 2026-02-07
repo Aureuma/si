@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -60,12 +62,19 @@ func stripeAccountAliases(settings Settings) []string {
 }
 
 func buildStripeClient(runtime stripeRuntimeContext) (*stripebridge.Client, error) {
+	settings := loadSettingsOrDefault()
 	cfg := stripebridge.ClientConfig{
 		APIKey:            runtime.APIKey,
 		AccountID:         runtime.AccountID,
 		BaseURL:           runtime.BaseURL,
 		Timeout:           30 * time.Second,
 		MaxNetworkRetries: 2,
+		LogPath:           resolveStripeLogPath(settings),
+		LogContext: map[string]string{
+			"account_alias": runtime.AccountAlias,
+			"account_id":    runtime.AccountID,
+			"environment":   string(runtime.Environment),
+		},
 	}
 	client, err := stripebridge.NewClient(cfg)
 	if err != nil {
@@ -84,4 +93,18 @@ func formatStripeContext(runtime stripeRuntimeContext) string {
 		accountID = "-"
 	}
 	return fmt.Sprintf("account=%s (%s), env=%s", account, accountID, runtime.Environment)
+}
+
+func resolveStripeLogPath(settings Settings) string {
+	if value := strings.TrimSpace(os.Getenv("SI_STRIPE_LOG_FILE")); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(settings.Stripe.LogFile); value != "" {
+		return value
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, ".si", "logs", "stripe.log")
 }
