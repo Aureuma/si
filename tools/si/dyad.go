@@ -13,6 +13,13 @@ import (
 )
 
 func cmdDyad(args []string) {
+	if len(args) > 0 {
+		switch strings.TrimSpace(args[0]) {
+		case "help", "-h", "--help":
+			printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login>")
+			return
+		}
+	}
 	if len(args) == 0 {
 		if !isInteractiveTerminal() {
 			printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login>")
