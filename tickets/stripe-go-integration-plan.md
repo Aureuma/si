@@ -153,9 +153,9 @@ Status values: `Not Started | In Progress | Blocked | Done`
 ## WS-00 Contracts (Interface-first foundation)
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Core interfaces and runtime DTOs implemented in `tools/si/stripe_contract.go`.
 
 Path ownership:
 - `tools/si/stripe_contract.go`
@@ -175,9 +175,9 @@ Acceptance:
 ## WS-01 CLI Entry & Dispatch
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: `si stripe` is wired in command dispatch and help text.
 
 Path ownership:
 - `tools/si/main.go` (stripe command registration only)
@@ -195,9 +195,9 @@ Acceptance:
 ## WS-02 Auth/Config/Credentials
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Stripe config model, credential precedence, env policy, and context commands implemented.
 
 Path ownership:
 - `tools/si/settings.go` (`[stripe]` config block)
@@ -226,9 +226,9 @@ Acceptance:
 ## WS-03 Stripe Bridge Core (Library wrapper)
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Bridge implemented with raw request execution, response normalization, pagination helper, and redaction-aware error mapping.
 
 Path ownership:
 - `tools/si/internal/stripebridge/client.go`
@@ -258,9 +258,9 @@ Acceptance:
 ## WS-04 Object Registry & CRUD Capability Map
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Registry and CRUD operation matrix implemented for broad object support with explicit unsupported-op guidance.
 
 Path ownership:
 - `tools/si/internal/stripebridge/registry.go`
@@ -279,9 +279,9 @@ Acceptance:
 ## WS-05 Object Command Handlers
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Object CRUD and raw handlers implemented; output includes context banner and JSON/human modes.
 
 Path ownership:
 - `tools/si/stripe_object_cmd.go`
@@ -303,9 +303,9 @@ Acceptance:
 ## WS-06 Reporting & Monitoring
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Reporting presets implemented with time-window filters and account/environment context.
 
 Path ownership:
 - `tools/si/stripe_report_cmd.go`
@@ -328,9 +328,9 @@ Acceptance:
 ## WS-07 Safety, Idempotency, and Observability
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Confirmation gates, force overrides, idempotency keys, request-id/error surfacing, redaction, and JSONL structured logging are implemented.
 
 Path ownership:
 - `tools/si/stripe_safety.go`
@@ -365,9 +365,9 @@ Acceptance:
 ## WS-08 Testing Matrix (Unit + Integration)
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: Unit tests now include auth/config, parsing, registry/CRUD, redaction, client request shaping, sync planning, report logic, command-level sync rendering, output-mode tests, and optional live-gated E2E hook.
 
 Path ownership:
 - `tools/si/*stripe*_test.go`
@@ -389,9 +389,9 @@ Acceptance:
 ## WS-09 Docs, Runbook, and Release Notes
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: README, settings reference, STRIPE runbook, and changelog/release note entry are updated.
 
 Path ownership:
 - `README.md`
@@ -416,9 +416,9 @@ Acceptance:
 ## WS-10 Live-to-Sandbox Sync & Drift Reconciliation
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: codex
+- Notes: live-to-sandbox plan/apply implemented with family filters, dry-run, confirmation, mapping, and partial-failure accumulation.
 
 Path ownership:
 - `tools/si/stripe_sync_cmd.go`
