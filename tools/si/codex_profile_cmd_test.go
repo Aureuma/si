@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -106,11 +107,11 @@ func TestProfileAuthLabel(t *testing.T) {
 	if got := profileAuthLabel(codexProfileSummary{AuthCached: true}); got != "Logged-In" {
 		t.Fatalf("expected Logged-In, got %q", got)
 	}
-	if got := profileAuthLabel(codexProfileSummary{AuthCached: true, StatusError: "token expired"}); got != "Error" {
-		t.Fatalf("expected Error for auth status failure, got %q", got)
+	if got := profileAuthLabel(codexProfileSummary{AuthCached: true, StatusError: "token expired"}); got != "Missing" {
+		t.Fatalf("expected Missing for auth status failure, got %q", got)
 	}
-	if got := profileAuthLabel(codexProfileSummary{AuthCached: false, StatusError: "auth cache missing"}); got != "Error" {
-		t.Fatalf("expected Error, got %q", got)
+	if got := profileAuthLabel(codexProfileSummary{AuthCached: false, StatusError: "auth cache missing"}); got != "Missing" {
+		t.Fatalf("expected Missing, got %q", got)
 	}
 	if got := profileAuthLabel(codexProfileSummary{AuthCached: false}); got != "Missing" {
 		t.Fatalf("expected Missing, got %q", got)
@@ -122,7 +123,7 @@ func TestProfileLimitDisplayForMissingAuth(t *testing.T) {
 		AuthCached:  false,
 		StatusError: "auth cache not found",
 	}
-	if got := profileFiveHourDisplay(item); got != "AUTH-ERR" {
+	if got := profileFiveHourDisplay(item); got != "-" {
 		t.Fatalf("unexpected 5H display %q", got)
 	}
 	if got := profileWeeklyDisplay(item); got != "-" {
@@ -135,11 +136,26 @@ func TestProfileLimitDisplayForLoggedInAuthError(t *testing.T) {
 		AuthCached:  true,
 		StatusError: "token refresh failed",
 	}
-	if got := profileFiveHourDisplay(item); got != "AUTH-ERR" {
+	if got := profileFiveHourDisplay(item); got != "-" {
 		t.Fatalf("unexpected 5H display %q", got)
 	}
 	if got := profileWeeklyDisplay(item); got != "-" {
 		t.Fatalf("unexpected WEEKLY display %q", got)
+	}
+}
+
+func TestProfileStatusWarningsSkipsAuthErrors(t *testing.T) {
+	items := []codexProfileSummary{
+		{ID: "america", AuthCached: false, StatusError: "auth cache missing"},
+		{ID: "cadma", AuthCached: true, StatusError: "token expired"},
+		{ID: "berylla", AuthCached: true, StatusError: "upstream temporary failure"},
+	}
+	warnings := profileStatusWarnings(items)
+	if len(warnings) != 1 {
+		t.Fatalf("expected one non-auth warning, got %d (%v)", len(warnings), warnings)
+	}
+	if !strings.Contains(warnings[0], "profile berylla status error:") {
+		t.Fatalf("unexpected warning content: %q", warnings[0])
 	}
 }
 

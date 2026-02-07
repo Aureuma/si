@@ -67,13 +67,7 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 
 	printCodexProfilesTable(items, withStatus)
 	if withStatus {
-		warnings := make([]string, 0, len(items))
-		for _, item := range items {
-			if item.StatusError != "" {
-				warnings = append(warnings, fmt.Sprintf("profile %s status error: %s", item.ID, summarizeProfileStatusError(item.ID, item.StatusError)))
-			}
-		}
-		for _, msg := range warnings {
+		for _, msg := range profileStatusWarnings(items) {
 			fmt.Printf("%s %s\n", styleWarn("warning:"), msg)
 		}
 	}
@@ -232,36 +226,45 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 }
 
 func profileAuthLabel(item codexProfileSummary) string {
-	if isProfileAuthError(item.StatusError) {
-		return "Error"
-	}
-	if item.AuthCached {
+	if item.AuthCached && !isProfileAuthError(item.StatusError) {
 		return "Logged-In"
-	}
-	if strings.TrimSpace(item.StatusError) != "" {
-		return "Error"
 	}
 	return "Missing"
 }
 
 func profileFiveHourDisplay(item codexProfileSummary) string {
+	if !item.AuthCached || isProfileAuthError(item.StatusError) {
+		return "-"
+	}
 	if strings.TrimSpace(item.StatusError) == "" {
 		return formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
-	}
-	if isProfileAuthError(item.StatusError) || !item.AuthCached {
-		return "AUTH-ERR"
 	}
 	return "ERR"
 }
 
 func profileWeeklyDisplay(item codexProfileSummary) string {
+	if !item.AuthCached || isProfileAuthError(item.StatusError) {
+		return "-"
+	}
 	if strings.TrimSpace(item.StatusError) == "" {
 		return formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
 	}
-	if isProfileAuthError(item.StatusError) || !item.AuthCached {
-		return "-"
-	}
 	return "ERR"
+}
+
+func profileStatusWarnings(items []codexProfileSummary) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if strings.TrimSpace(item.StatusError) == "" {
+			continue
+		}
+		// Auth errors are reflected as AUTH=Missing; avoid noisy warnings.
+		if isProfileAuthError(item.StatusError) || !item.AuthCached {
+			continue
+		}
+		out = append(out, fmt.Sprintf("profile %s status error: %s", item.ID, summarizeProfileStatusError(item.ID, item.StatusError)))
+	}
+	return out
 }
 
 func isProfileAuthError(raw string) bool {

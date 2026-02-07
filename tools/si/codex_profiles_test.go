@@ -46,7 +46,6 @@ func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
-	prevAttempts := codexAuthSyncAttempts
 	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
 		path, err := codexProfileAuthPath(p)
 		if err != nil {
@@ -64,7 +63,7 @@ func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 	codexAuthSyncAttempts = sync.Map{}
 	defer func() {
 		syncProfileAuthFromContainerStatusFn = prevFn
-		codexAuthSyncAttempts = prevAttempts
+		codexAuthSyncAttempts = sync.Map{}
 	}()
 
 	status := codexProfileAuthStatus(profile)
@@ -82,7 +81,6 @@ func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
 	profile := codexProfile{ID: "einsteina", Name: "Einsteina", Email: "einsteina@example.com"}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
-	prevAttempts := codexAuthSyncAttempts
 	var calls int32
 	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
 		atomic.AddInt32(&calls, 1)
@@ -91,7 +89,7 @@ func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
 	codexAuthSyncAttempts = sync.Map{}
 	defer func() {
 		syncProfileAuthFromContainerStatusFn = prevFn
-		codexAuthSyncAttempts = prevAttempts
+		codexAuthSyncAttempts = sync.Map{}
 	}()
 
 	_ = codexProfileAuthStatus(profile)

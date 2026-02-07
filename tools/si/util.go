@@ -23,6 +23,7 @@ Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
+  - Static analysis: run go vet + golangci-lint across go.work modules.
   - Image build helpers for local dev.
   - Docker passthrough for raw docker CLI calls.
 
@@ -34,6 +35,7 @@ Usage:
 Core:
   si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
+  si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
 Build:
@@ -203,6 +205,20 @@ persona:
 
 skill:
   si skill <role>
+
+analyze:
+  si analyze
+  si analyze --module tools/si
+  si analyze --skip-lint
+  si analyze --fix
+  si analyze --no-fail
+
+  Runs static analysis over go.work modules:
+    - go vet ./...
+    - golangci-lint run ./...
+
+  Aliases:
+    si lint ...   (same as si analyze)
 
 Environment defaults (selected)
 -------------------------------
@@ -469,7 +485,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill|analyze|lint)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
