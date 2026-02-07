@@ -14,7 +14,7 @@ Build the CLI and images:
 
 ```bash
 go build -o si ./tools/si
-./si images build
+./si image build
 ```
 
 This builds the unified image `aureuma/si:local` used by dyads and codex containers.
@@ -79,7 +79,7 @@ By default, dyads mount the current directory; when run from the repo root they 
 Spawn standalone Codex containers with isolated auth:
 
 ```bash
-./si images build
+./si image build
 ./si spawn --profile america --repo Org/Repo --gh-pat <token>
 ```
 

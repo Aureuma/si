@@ -30,8 +30,6 @@ func main() {
 		cmdDocker(args)
 	case "dyad":
 		cmdDyad(args)
-	case "images":
-		cmdImages(args)
 	case "image":
 		cmdImage(args)
 	case "persona":

@@ -1,26 +1,12 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
-
-func cmdImages(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si images <build>")
-		return
-	}
-	switch args[0] {
-	case "build":
-		cmdImagesBuild(args[1:])
-	default:
-		printUnknown("images", args[0])
-	}
-}
 
 func cmdImage(args []string) {
 	if len(args) == 0 {
@@ -42,7 +28,7 @@ type imageBuildSpec struct {
 	buildArgs  []string
 }
 
-func cmdImagesBuild(args []string) {
+func cmdImageBuild(args []string) {
 	root := mustRepoRoot()
 	specs := []imageBuildSpec{
 		{tag: "aureuma/si:local", contextDir: root, dockerfile: filepath.Join(root, "tools/si-image/Dockerfile")},
@@ -53,48 +39,6 @@ func cmdImagesBuild(args []string) {
 		}
 	}
 	_ = args
-}
-
-func cmdImageBuild(args []string) {
-	fs := flag.NewFlagSet("image build", flag.ExitOnError)
-	tag := fs.String("t", "", "image tag")
-	tagLong := fs.String("tag", "", "image tag")
-	dockerfile := fs.String("f", "", "dockerfile")
-	dockerfileLong := fs.String("file", "", "dockerfile")
-	buildArgs := multiFlag{}
-	fs.Var(&buildArgs, "build-arg", "build argument (repeatable)")
-	fs.Parse(args)
-	if *tag == "" {
-		*tag = *tagLong
-	}
-	if *dockerfile == "" {
-		*dockerfile = *dockerfileLong
-	}
-	if fs.NArg() < 1 || *tag == "" {
-		printUsage("usage: si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>")
-		return
-	}
-	contextDir := fs.Arg(0)
-	spec := imageBuildSpec{
-		tag:        *tag,
-		contextDir: contextDir,
-		dockerfile: *dockerfile,
-		buildArgs:  buildArgs,
-	}
-	if err := runDockerBuild(spec); err != nil {
-		fatal(err)
-	}
-}
-
-type multiFlag []string
-
-func (m *multiFlag) String() string {
-	return strings.Join(*m, ",")
-}
-
-func (m *multiFlag) Set(value string) error {
-	*m = append(*m, value)
-	return nil
 }
 
 func runDockerBuild(spec imageBuildSpec) error {
