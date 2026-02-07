@@ -1350,25 +1350,38 @@ func seedCodexAuth(ctx context.Context, client *shared.Client, containerID strin
 		warnf("codex auth copy skipped: %v", err)
 		return
 	}
-	const destPath = "/home/si/.codex/auth.json"
-	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
-	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
-		warnf("codex auth copy failed: %v", err)
+	copied := false
+	for _, destPath := range codexContainerAuthPaths() {
+		_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+		if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
+			warnf("codex auth copy failed (%s): %v", destPath, err)
+			continue
+		}
+		copied = true
+		owner := "si:si"
+		if strings.HasPrefix(destPath, "/root/") {
+			owner = "root:root"
+		}
+		_ = client.Exec(ctx, containerID, []string{"chown", owner, destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	}
+	if !copied {
 		return
 	}
-	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 }
 
 func cacheCodexAuthFromContainer(ctx context.Context, client *shared.Client, containerID string, profile codexProfile) error {
 	if strings.TrimSpace(profile.ID) == "" {
 		return fmt.Errorf("profile id required")
 	}
-	data, err := client.ReadFileFromContainer(ctx, containerID, "/home/si/.codex/auth.json")
+	data, err := readCodexAuthFromContainer(ctx, client, containerID)
 	if err != nil {
 		if isMissingContainerFile(err) {
 			return nil
 		}
 		return err
+	}
+	if len(data) == 0 {
+		return nil
 	}
 	dir, err := ensureCodexProfileDir(profile)
 	if err != nil {
@@ -1395,6 +1408,32 @@ func cacheCodexAuthFromContainer(ctx context.Context, client *shared.Client, con
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+func codexContainerAuthPaths() []string {
+	return []string{
+		"/home/si/.codex/auth.json",
+		"/root/.codex/auth.json",
+	}
+}
+
+func readCodexAuthFromContainer(ctx context.Context, client *shared.Client, containerID string) ([]byte, error) {
+	var lastErr error
+	for _, candidate := range codexContainerAuthPaths() {
+		data, err := client.ReadFileFromContainer(ctx, containerID, candidate)
+		if err == nil {
+			return data, nil
+		}
+		if isMissingContainerFile(err) {
+			lastErr = err
+			continue
+		}
+		return nil, err
+	}
+	if lastErr != nil {
+		return nil, os.ErrNotExist
+	}
+	return nil, os.ErrNotExist
 }
 
 func isMissingContainerFile(err error) bool {
