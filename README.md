@@ -44,6 +44,19 @@ Run all module tests from repo root:
 ./si dyad exec --member actor <dyad> -- bash
 ```
 
+- Stop/start dyad containers:
+
+```bash
+./si dyad stop <name>
+./si dyad start <name>
+```
+
+- Copy Codex login into a dyad member:
+
+```bash
+./si dyad copy-login --member actor <dyad>
+```
+
 - List running dyads:
 
 ```bash

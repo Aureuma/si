@@ -7,22 +7,25 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 
 	shared "si/agents/shared/docker"
 )
 
+const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup|copy-login|login>"
+
 func cmdDyad(args []string) {
 	if len(args) > 0 {
 		switch strings.TrimSpace(args[0]) {
 		case "help", "-h", "--help":
-			printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login>")
+			printUsage(dyadUsageText)
 			return
 		}
 	}
 	if len(args) == 0 {
 		if !isInteractiveTerminal() {
-			printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login>")
+			printUsage(dyadUsageText)
 			return
 		}
 		selected, ok := selectDyadAction()
@@ -46,6 +49,10 @@ func cmdDyad(args []string) {
 		cmdDyadExec(args[1:])
 	case "logs":
 		cmdDyadLogs(args[1:])
+	case "start":
+		cmdDyadStart(args[1:])
+	case "stop":
+		cmdDyadStop(args[1:])
 	case "restart":
 		cmdDyadRestart(args[1:])
 	case "cleanup":
@@ -268,6 +275,10 @@ func defaultEffort(role string) (string, string) {
 }
 
 func cmdDyadList(args []string) {
+	if len(args) > 0 {
+		printUsage("usage: si dyad list")
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -294,9 +305,6 @@ func cmdDyadRemove(args []string) {
 	if name == "" {
 		selected, ok := selectDyadName("remove")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad remove <name>")
-			}
 			return
 		}
 		name = selected
@@ -316,9 +324,6 @@ func cmdDyadRecreate(args []string) {
 	if len(args) < 1 || strings.TrimSpace(args[0]) == "" {
 		selected, ok := selectDyadName("recreate")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad recreate <name> [role] [department]")
-			}
 			return
 		}
 		args = append([]string{selected}, args...)
@@ -341,9 +346,6 @@ func cmdDyadStatus(args []string) {
 	if name == "" {
 		selected, ok := selectDyadName("status")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad status <name>")
-			}
 			return
 		}
 		name = selected
@@ -394,9 +396,6 @@ func cmdDyadExec(args []string) {
 	if dyad == "" {
 		selected, ok := selectDyadName("exec")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>")
-			}
 			return
 		}
 		dyad = selected
@@ -476,9 +475,6 @@ func cmdDyadLogs(args []string) {
 	if dyad == "" {
 		selected, ok := selectDyadName("logs")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad logs [--member actor|critic] [--tail N] <dyad>")
-			}
 			return
 		}
 		dyad = selected
@@ -522,9 +518,6 @@ func cmdDyadRestart(args []string) {
 	if name == "" {
 		selected, ok := selectDyadName("restart")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad restart <name>")
-			}
 			return
 		}
 		name = selected
@@ -540,7 +533,100 @@ func cmdDyadRestart(args []string) {
 	successf("dyad %s restarted", name)
 }
 
+func cmdDyadStart(args []string) {
+	name := ""
+	if len(args) > 0 {
+		name = strings.TrimSpace(args[0])
+	}
+	if name == "" {
+		selected, ok := selectDyadName("start")
+		if !ok {
+			return
+		}
+		name = selected
+	}
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+	targets, err := dyadContainerTargets(ctx, client, name)
+	if err != nil {
+		fatal(err)
+	}
+	if len(targets) == 0 {
+		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
+		return
+	}
+	if err := execDockerCLI(append([]string{"start"}, targets...)...); err != nil {
+		fatal(err)
+	}
+	successf("dyad %s started", name)
+}
+
+func cmdDyadStop(args []string) {
+	name := ""
+	if len(args) > 0 {
+		name = strings.TrimSpace(args[0])
+	}
+	if name == "" {
+		selected, ok := selectDyadName("stop")
+		if !ok {
+			return
+		}
+		name = selected
+	}
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+	targets, err := dyadContainerTargets(ctx, client, name)
+	if err != nil {
+		fatal(err)
+	}
+	if len(targets) == 0 {
+		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
+		return
+	}
+	if err := execDockerCLI(append([]string{"stop"}, targets...)...); err != nil {
+		fatal(err)
+	}
+	successf("dyad %s stopped", name)
+}
+
+func dyadContainerTargets(ctx context.Context, client *shared.Client, dyad string) ([]string, error) {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		return nil, errors.New("dyad required")
+	}
+	actorName := shared.DyadContainerName(dyad, "actor")
+	criticName := shared.DyadContainerName(dyad, "critic")
+	actorID, _, err := client.ContainerByName(ctx, actorName)
+	if err != nil {
+		return nil, err
+	}
+	criticID, _, err := client.ContainerByName(ctx, criticName)
+	if err != nil {
+		return nil, err
+	}
+	targets := make([]string, 0, 2)
+	if strings.TrimSpace(actorID) != "" {
+		targets = append(targets, actorName)
+	}
+	if strings.TrimSpace(criticID) != "" {
+		targets = append(targets, criticName)
+	}
+	return targets, nil
+}
+
 func cmdDyadCleanup(args []string) {
+	if len(args) > 0 {
+		printUsage("usage: si dyad cleanup")
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -568,7 +654,7 @@ func cmdDyadCopyLogin(args []string) {
 	sourceProvided := flagProvided(args, "source")
 	memberProvided := flagProvided(args, "member")
 	fs := flag.NewFlagSet("dyad copy-login", flag.ExitOnError)
-	source := fs.String("source", envOr("SI_CODEX_SOURCE", "codex-status"), "si-codex container name or suffix")
+	source := fs.String("source", envOr("SI_CODEX_SOURCE", ""), "source codex profile/container")
 	member := fs.String("member", "actor", "target member (actor or critic)")
 	sourceHome := fs.String("source-home", "/home/si", "home dir in source container")
 	targetHome := fs.String("target-home", "/root", "home dir in target container")
@@ -581,9 +667,6 @@ func cmdDyadCopyLogin(args []string) {
 	if dyad == "" {
 		selected, ok := selectDyadName("copy-login")
 		if !ok {
-			if !isInteractiveTerminal() {
-				printUsage("usage: si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>")
-			}
 			return
 		}
 		dyad = selected
@@ -602,17 +685,6 @@ func cmdDyadCopyLogin(args []string) {
 		}
 		memberVal = selected
 	}
-	if !sourceProvided && isInteractiveTerminal() {
-		selected, ok := selectCodexContainer("dyad copy-login", true)
-		if !ok {
-			return
-		}
-		*source = selected
-	}
-	sourceName := codexContainerName(strings.TrimSpace(*source))
-	if sourceName == "" {
-		fatal(errors.New("source container required"))
-	}
 	targetName := shared.DyadContainerName(dyad, memberVal)
 	if targetName == "" {
 		fatal(errors.New("target container required"))
@@ -624,6 +696,25 @@ func cmdDyadCopyLogin(args []string) {
 	}
 	defer client.Close()
 	ctx := context.Background()
+	if !sourceProvided && strings.TrimSpace(*source) == "" {
+		autoSource, autoErr := inferDyadCopyLoginSource(ctx, client)
+		if autoErr == nil {
+			*source = autoSource
+		} else if !isInteractiveTerminal() {
+			fatal(autoErr)
+		}
+	}
+	if !sourceProvided && strings.TrimSpace(*source) == "" && isInteractiveTerminal() {
+		selected, ok := selectCodexContainer("dyad copy-login", true)
+		if !ok {
+			return
+		}
+		*source = selected
+	}
+	sourceName := codexContainerName(strings.TrimSpace(*source))
+	if sourceName == "" {
+		fatal(errors.New("source container required"))
+	}
 	if id, _, err := client.ContainerByName(ctx, sourceName); err != nil || id == "" {
 		if err != nil {
 			fatal(err)
@@ -652,6 +743,94 @@ func cmdDyadCopyLogin(args []string) {
 		fatal(err)
 	}
 	successf("copied codex login from %s to %s (%s)", sourceName, targetName, memberVal)
+}
+
+func inferDyadCopyLoginSource(ctx context.Context, client *shared.Client) (string, error) {
+	if client == nil {
+		return "", errors.New("docker client required")
+	}
+	defaultCandidate := ""
+	defaultKey := codexDefaultProfileKey(loadSettingsOrDefault())
+	if strings.TrimSpace(defaultKey) != "" {
+		if profile, ok := codexProfileByKey(defaultKey); ok {
+			defaultCandidate = codexContainerName(profile.ID)
+		} else {
+			defaultCandidate = codexContainerName(defaultKey)
+		}
+	}
+	containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+	if err != nil {
+		return "", err
+	}
+	allNames := make([]string, 0, len(containers))
+	runningNames := make([]string, 0, len(containers))
+	seen := map[string]struct{}{}
+	for _, item := range containers {
+		name := ""
+		if len(item.Names) > 0 {
+			name = strings.TrimSpace(strings.TrimPrefix(item.Names[0], "/"))
+		}
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		allNames = append(allNames, name)
+		if strings.EqualFold(strings.TrimSpace(item.State), "running") {
+			runningNames = append(runningNames, name)
+		}
+	}
+	return chooseDyadCopyLoginSource(defaultCandidate, runningNames, allNames)
+}
+
+func chooseDyadCopyLoginSource(defaultCandidate string, runningNames, allNames []string) (string, error) {
+	defaultCandidate = strings.TrimSpace(defaultCandidate)
+	all := uniqueSortedValues(allNames)
+	running := uniqueSortedValues(runningNames)
+
+	if defaultCandidate != "" && containsString(all, defaultCandidate) {
+		return defaultCandidate, nil
+	}
+	if len(running) == 1 {
+		return running[0], nil
+	}
+	if len(all) == 1 {
+		return all[0], nil
+	}
+	if len(all) == 0 {
+		return "", errors.New("no codex containers found; run `si spawn --profile <profile>` or pass --source <profile|container>")
+	}
+	return "", fmt.Errorf("multiple codex containers found (%s); pass --source <profile|container>", strings.Join(all, ", "))
+}
+
+func uniqueSortedValues(items []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func containsString(items []string, value string) bool {
+	value = strings.TrimSpace(value)
+	for _, item := range items {
+		if strings.TrimSpace(item) == value {
+			return true
+		}
+	}
+	return false
 }
 
 func max(a, b int) int {

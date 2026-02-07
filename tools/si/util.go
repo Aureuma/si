@@ -32,7 +32,7 @@ Usage:
   si version | --version | -v
 
 Core:
-  si dyad spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login
+  si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup|copy-login|login
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
   si docker <args...>
 
@@ -82,11 +82,13 @@ dyad:
   si dyad logs [--member actor|critic] [--tail N] <dyad>
     --member <actor|critic>
     --tail <lines>
+  si dyad start <name>
+  si dyad stop <name>
   si dyad restart <name>
   si dyad cleanup
-  si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>
-  si dyad login      [--member actor|critic] [--source codex-status] <dyad>   (alias)
-    --source <si-codex container name or suffix>
+  si dyad copy-login [--member actor|critic] [--source <profile|container>] <dyad>
+  si dyad login      [--member actor|critic] [--source <profile|container>] <dyad>   (alias)
+    --source <codex profile id or si-codex container name>
     --member <actor|critic>
     --source-home <path>
     --target-home <path>
