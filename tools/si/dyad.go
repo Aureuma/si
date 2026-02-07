@@ -5,15 +5,14 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
-	"os/exec"
-	"sort"
 	"strings"
 
 	shared "si/agents/shared/docker"
 )
 
-const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup|copy-login|login>"
+const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup>"
 
 func cmdDyad(args []string) {
 	if len(args) > 0 {
@@ -57,8 +56,6 @@ func cmdDyad(args []string) {
 		cmdDyadRestart(args[1:])
 	case "cleanup":
 		cmdDyadCleanup(args[1:])
-	case "copy-login":
-		cmdDyadCopyLogin(args[1:])
 	default:
 		printUnknown("dyad", args[0])
 	}
@@ -86,6 +83,7 @@ func cmdDyadSpawn(args []string) {
 	configsHost := fs.String("configs", envOr("SI_CONFIGS_HOST", ""), "host path to configs")
 	forwardPorts := fs.String("forward-ports", envOr("SI_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
 	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in dyad containers")
+	profileKey := fs.String("profile", "", "codex profile name/email/id")
 	nameArg, filtered := splitDyadSpawnArgs(args)
 	fs.Parse(filtered)
 	settings := loadSettingsOrDefault()
@@ -143,7 +141,7 @@ func cmdDyadSpawn(args []string) {
 	}
 	if name == "" {
 		if !isInteractiveTerminal() {
-			printUsage("usage: si dyad spawn <name> [role] [department]")
+			printUsage("usage: si dyad spawn <name> [role] [department] [--profile <profile>]")
 			return
 		}
 		var ok bool
@@ -228,6 +226,17 @@ func cmdDyadSpawn(args []string) {
 	defer client.Close()
 
 	ctx := context.Background()
+	profile, err := resolveDyadSpawnProfile(strings.TrimSpace(*profileKey))
+	if err != nil {
+		fatal(err)
+	}
+	if profile == nil {
+		return
+	}
+	status := codexProfileAuthStatus(*profile)
+	if !status.Exists {
+		fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", profile.ID, profile.ID))
+	}
 	opts := shared.DyadOptions{
 		Dyad:              name,
 		Role:              role,
@@ -253,6 +262,10 @@ func cmdDyadSpawn(args []string) {
 	actorID, criticID, err := client.EnsureDyad(ctx, opts)
 	if err != nil {
 		fatal(err)
+	}
+	if profile != nil {
+		seedDyadProfileAuth(ctx, client, actorID, *profile)
+		seedDyadProfileAuth(ctx, client, criticID, *profile)
 	}
 	if identity, ok := hostGitIdentity(); ok {
 		seedGitIdentity(ctx, client, actorID, "root", "/root", identity)
@@ -329,6 +342,21 @@ func cmdDyadRecreate(args []string) {
 		args = append([]string{selected}, args...)
 	}
 	name := args[0]
+	profileArg, hasProfileArg := dyadProfileArg(args[1:])
+	if !hasProfileArg {
+		profileArg = ""
+	}
+	profile, err := resolveDyadSpawnProfile(profileArg)
+	if err != nil {
+		fatal(err)
+	}
+	if profile == nil {
+		return
+	}
+	status := codexProfileAuthStatus(*profile)
+	if !status.Exists {
+		fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", profile.ID, profile.ID))
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -647,190 +675,88 @@ func cmdDyadCleanup(args []string) {
 		}
 	}
 	successf("removed %d stopped dyad containers", removed)
-	_ = args
 }
 
-func cmdDyadCopyLogin(args []string) {
-	sourceProvided := flagProvided(args, "source")
-	memberProvided := flagProvided(args, "member")
-	fs := flag.NewFlagSet("dyad copy-login", flag.ExitOnError)
-	source := fs.String("source", envOr("SI_CODEX_SOURCE", ""), "source codex profile/container")
-	member := fs.String("member", "actor", "target member (actor or critic)")
-	sourceHome := fs.String("source-home", "/home/si", "home dir in source container")
-	targetHome := fs.String("target-home", "/root", "home dir in target container")
-	fs.Parse(args)
-
-	dyad := ""
-	if fs.NArg() > 0 {
-		dyad = strings.TrimSpace(fs.Arg(0))
-	}
-	if dyad == "" {
-		selected, ok := selectDyadName("copy-login")
-		if !ok {
-			return
-		}
-		dyad = selected
-	}
-	if err := validateSlug(dyad); err != nil {
-		fatal(err)
-	}
-	memberVal, err := normalizeDyadMember(*member, "actor")
-	if err != nil {
-		fatal(err)
-	}
-	if !memberProvided && isInteractiveTerminal() {
-		selected, ok := selectDyadMember("copy-login", memberVal)
-		if !ok {
-			return
-		}
-		memberVal = selected
-	}
-	targetName := shared.DyadContainerName(dyad, memberVal)
-	if targetName == "" {
-		fatal(errors.New("target container required"))
-	}
-
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
-	ctx := context.Background()
-	if !sourceProvided && strings.TrimSpace(*source) == "" {
-		autoSource, autoErr := inferDyadCopyLoginSource(ctx, client)
-		if autoErr == nil {
-			*source = autoSource
-		} else if !isInteractiveTerminal() {
-			fatal(autoErr)
-		}
-	}
-	if !sourceProvided && strings.TrimSpace(*source) == "" && isInteractiveTerminal() {
-		selected, ok := selectCodexContainer("dyad copy-login", true)
-		if !ok {
-			return
-		}
-		*source = selected
-	}
-	sourceName := codexContainerName(strings.TrimSpace(*source))
-	if sourceName == "" {
-		fatal(errors.New("source container required"))
-	}
-	if id, _, err := client.ContainerByName(ctx, sourceName); err != nil || id == "" {
+func resolveDyadSpawnProfile(profileKey string) (*codexProfile, error) {
+	profileKey = strings.TrimSpace(profileKey)
+	if profileKey != "" {
+		profile, err := requireCodexProfile(profileKey)
 		if err != nil {
-			fatal(err)
+			return nil, err
 		}
-		fatal(fmt.Errorf("source container not found: %s", sourceName))
-	}
-	if id, _, err := client.ContainerByName(ctx, targetName); err != nil || id == "" {
-		if err != nil {
-			fatal(err)
-		}
-		fatal(fmt.Errorf("target container not found: %s", targetName))
+		return &profile, nil
 	}
 
-	pipeline := fmt.Sprintf(
-		"docker exec %s tar -C %s -cf - .codex | docker exec -i %s tar -C %s -xf -",
-		shellQuote(sourceName),
-		shellQuote(*sourceHome),
-		shellQuote(targetName),
-		shellQuote(*targetHome),
-	)
-	cmd := exec.Command("bash", "-lc", pipeline)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	if err := cmd.Run(); err != nil {
-		fatal(err)
-	}
-	successf("copied codex login from %s to %s (%s)", sourceName, targetName, memberVal)
-}
-
-func inferDyadCopyLoginSource(ctx context.Context, client *shared.Client) (string, error) {
-	if client == nil {
-		return "", errors.New("docker client required")
-	}
-	defaultCandidate := ""
 	defaultKey := codexDefaultProfileKey(loadSettingsOrDefault())
 	if strings.TrimSpace(defaultKey) != "" {
 		if profile, ok := codexProfileByKey(defaultKey); ok {
-			defaultCandidate = codexContainerName(profile.ID)
-		} else {
-			defaultCandidate = codexContainerName(defaultKey)
+			if codexProfileAuthStatus(profile).Exists {
+				return &profile, nil
+			}
 		}
 	}
-	containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+
+	loggedIn := loggedInProfiles()
+	if len(loggedIn) == 1 {
+		profile := loggedIn[0]
+		return &profile, nil
+	}
+
+	if isInteractiveTerminal() {
+		if len(codexProfileSummaries()) == 0 {
+			return nil, errors.New("no codex profiles configured; run `si login` first")
+		}
+		selected, ok := selectCodexProfile("dyad spawn", defaultKey)
+		if !ok {
+			return nil, nil
+		}
+		return &selected, nil
+	}
+
+	if len(loggedIn) == 0 {
+		return nil, errors.New("no logged-in profiles found; run `si login` first")
+	}
+	return nil, fmt.Errorf("multiple logged-in profiles found; use `--profile <profile>`")
+}
+
+func dyadProfileArg(args []string) (string, bool) {
+	for i := 0; i < len(args); i++ {
+		arg := strings.TrimSpace(args[i])
+		if arg == "" {
+			continue
+		}
+		if strings.HasPrefix(arg, "--profile=") {
+			return strings.TrimSpace(strings.TrimPrefix(arg, "--profile=")), true
+		}
+		if arg == "--profile" && i+1 < len(args) {
+			return strings.TrimSpace(args[i+1]), true
+		}
+	}
+	return "", false
+}
+
+func seedDyadProfileAuth(ctx context.Context, client *shared.Client, containerID string, profile codexProfile) {
+	if client == nil || strings.TrimSpace(containerID) == "" || strings.TrimSpace(profile.ID) == "" {
+		return
+	}
+	hostPath, err := codexProfileAuthPath(profile)
 	if err != nil {
-		return "", err
+		warnf("dyad auth copy skipped: %v", err)
+		return
 	}
-	allNames := make([]string, 0, len(containers))
-	runningNames := make([]string, 0, len(containers))
-	seen := map[string]struct{}{}
-	for _, item := range containers {
-		name := ""
-		if len(item.Names) > 0 {
-			name = strings.TrimSpace(strings.TrimPrefix(item.Names[0], "/"))
+	data, err := os.ReadFile(hostPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			warnf("dyad auth copy skipped: %v", err)
 		}
-		if name == "" {
-			continue
-		}
-		if _, ok := seen[name]; ok {
-			continue
-		}
-		seen[name] = struct{}{}
-		allNames = append(allNames, name)
-		if strings.EqualFold(strings.TrimSpace(item.State), "running") {
-			runningNames = append(runningNames, name)
-		}
+		return
 	}
-	return chooseDyadCopyLoginSource(defaultCandidate, runningNames, allNames)
-}
-
-func chooseDyadCopyLoginSource(defaultCandidate string, runningNames, allNames []string) (string, error) {
-	defaultCandidate = strings.TrimSpace(defaultCandidate)
-	all := uniqueSortedValues(allNames)
-	running := uniqueSortedValues(runningNames)
-
-	if defaultCandidate != "" && containsString(all, defaultCandidate) {
-		return defaultCandidate, nil
+	const destPath = "/root/.codex/auth.json"
+	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", "/root/.codex"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
+		warnf("dyad auth copy failed: %v", err)
+		return
 	}
-	if len(running) == 1 {
-		return running[0], nil
-	}
-	if len(all) == 1 {
-		return all[0], nil
-	}
-	if len(all) == 0 {
-		return "", errors.New("no codex containers found; run `si spawn --profile <profile>` or pass --source <profile|container>")
-	}
-	return "", fmt.Errorf("multiple codex containers found (%s); pass --source <profile|container>", strings.Join(all, ", "))
-}
-
-func uniqueSortedValues(items []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		if _, ok := seen[item]; ok {
-			continue
-		}
-		seen[item] = struct{}{}
-		out = append(out, item)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func containsString(items []string, value string) bool {
-	value = strings.TrimSpace(value)
-	for _, item := range items {
-		if strings.TrimSpace(item) == value {
-			return true
-		}
-	}
-	return false
 }
 
 func max(a, b int) int {
@@ -838,8 +764,4 @@ func max(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }

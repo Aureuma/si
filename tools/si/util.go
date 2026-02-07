@@ -32,7 +32,7 @@ Usage:
   si version | --version | -v
 
 Core:
-  si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup|copy-login|login
+  si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
   si docker <args...>
 
@@ -55,6 +55,7 @@ dyad:
   si dyad spawn <name> [role] [department]
     --role <role>
     --department <dept>
+    --profile <profile>
     --actor-image <image>
     --critic-image <image>
     --codex-model <model>
@@ -70,10 +71,11 @@ dyad:
     --configs <host path>
     --forward-ports <range>
     --docker-socket / --docker-socket=false
+    Note: dyads use existing si login profiles (no separate dyad login command).
 
   si dyad list                    (no flags)
   si dyad remove <name>           (aliases: teardown, destroy, rm, delete)
-  si dyad recreate <name> [role] [department]
+  si dyad recreate <name> [role] [department] [--profile <profile>]
   si dyad status <name>
   si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>
   si dyad run  [--member actor|critic] [--tty] <dyad> -- <cmd...>   (alias)
@@ -86,12 +88,6 @@ dyad:
   si dyad stop <name>
   si dyad restart <name>
   si dyad cleanup
-  si dyad copy-login [--member actor|critic] [--source <profile|container>] <dyad>
-  si dyad login      [--member actor|critic] [--source <profile|container>] <dyad>   (alias)
-    --source <codex profile id or si-codex container name>
-    --member <actor|critic>
-    --source-home <path>
-    --target-home <path>
 
 codex:
   si spawn [name]

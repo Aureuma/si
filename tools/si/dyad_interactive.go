@@ -40,7 +40,6 @@ var dyadActions = []dyadAction{
 	{Name: "restart", Description: "restart dyad containers"},
 	{Name: "remove", Description: "remove dyad"},
 	{Name: "cleanup", Description: "remove stopped dyad containers"},
-	{Name: "login", Description: "copy codex login into dyad (alias: copy-login)"},
 }
 
 func isInteractiveTerminal() bool {
@@ -59,8 +58,6 @@ func normalizeDyadCommand(cmd string) string {
 		return "start"
 	case "down":
 		return "stop"
-	case "login", "codex-login-copy":
-		return "copy-login"
 	default:
 		return strings.ToLower(strings.TrimSpace(cmd))
 	}
