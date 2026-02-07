@@ -89,3 +89,18 @@ func TestEnvValue(t *testing.T) {
 		t.Fatalf("expected empty missing env value, got %q", got)
 	}
 }
+
+func TestCodexAuthVolumeFromContainerInfo(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "volume",
+				Name:        "si-codex-america",
+				Destination: "/home/si/.codex",
+			},
+		},
+	}
+	if got := codexAuthVolumeFromContainerInfo(info); got != "si-codex-america" {
+		t.Fatalf("unexpected auth volume %q", got)
+	}
+}
