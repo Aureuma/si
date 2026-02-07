@@ -26,6 +26,21 @@ func TestWarmWeeklyBootstrapSucceeded(t *testing.T) {
 	}
 }
 
+func TestWarmWeeklyNeedsBootstrap(t *testing.T) {
+	if !warmWeeklyNeedsBootstrap(true, 0, true, true) {
+		t.Fatalf("expected force bootstrap to always warm")
+	}
+	if warmWeeklyNeedsBootstrap(false, 0, true, true) {
+		t.Fatalf("expected no bootstrap when usage+reset signals are available")
+	}
+	if !warmWeeklyNeedsBootstrap(false, 0, false, true) {
+		t.Fatalf("expected bootstrap when usage signal is missing")
+	}
+	if !warmWeeklyNeedsBootstrap(false, 0, true, false) {
+		t.Fatalf("expected bootstrap when reset signal is missing")
+	}
+}
+
 func TestWeeklyUsedPercent(t *testing.T) {
 	payload := usagePayload{
 		RateLimit: &usageRateLimit{
