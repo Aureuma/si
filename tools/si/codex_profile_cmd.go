@@ -5,23 +5,41 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
 func cmdProfile(args []string) {
 	fs := flag.NewFlagSet("profile", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
-	withStatus := fs.Bool("status", false, "fetch usage limits for logged-in profiles")
-	_ = fs.Parse(args)
-
-	switch fs.NArg() {
-	case 0:
-		listCodexProfiles(*jsonOut, *withStatus)
-	case 1:
-		showCodexProfile(fs.Arg(0), *jsonOut, *withStatus)
-	default:
-		printUsage("usage: si profile [name] [--json] [--status]")
+	noStatus := fs.Bool("no-status", false, "disable usage status lookup and limit columns")
+	nameArg, filtered := splitProfileNameAndFlags(args)
+	_ = fs.Parse(filtered)
+	withStatus := !*noStatus
+	nameArg = strings.TrimSpace(nameArg)
+	rest := fs.Args()
+	if nameArg == "" && len(rest) > 0 {
+		nameArg = strings.TrimSpace(rest[0])
+		rest = rest[1:]
 	}
+	if len(rest) > 0 {
+		printUsage("usage: si profile [name] [--json] [--no-status]")
+		return
+	}
+
+	switch {
+	case nameArg == "":
+		listCodexProfiles(*jsonOut, withStatus)
+	case nameArg != "":
+		showCodexProfile(nameArg, *jsonOut, withStatus)
+	}
+}
+
+func splitProfileNameAndFlags(args []string) (string, []string) {
+	return splitNameAndFlags(args, map[string]bool{
+		"json":      true,
+		"no-status": true,
+	})
 }
 
 func listCodexProfiles(jsonOut bool, withStatus bool) {
