@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -9,10 +10,13 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	shared "si/agents/shared/docker"
 )
 
 type profileStatusResult struct {
@@ -22,12 +26,21 @@ type profileStatusResult struct {
 }
 
 type profileAuthTokens struct {
-	AccessToken string `json:"access_token"`
-	AccountID   string `json:"account_id"`
+	AccessToken  string `json:"access_token"`
+	AccountID    string `json:"account_id"`
+	IDToken      string `json:"id_token,omitempty"`
+	RefreshToken string `json:"refresh_token,omitempty"`
 }
 
 type profileAuthFile struct {
-	Tokens *profileAuthTokens `json:"tokens"`
+	Tokens      *profileAuthTokens `json:"tokens"`
+	LastRefresh string             `json:"last_refresh,omitempty"`
+}
+
+type tokenRefreshResponse struct {
+	AccessToken  string `json:"access_token"`
+	IDToken      string `json:"id_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type usagePayload struct {
@@ -156,6 +169,21 @@ func fetchProfileStatus(profile codexProfile, client *http.Client, usageURL stri
 	}
 
 	status, err := fetchUsageStatus(ctx, client, usageURL, auth)
+	if err != nil && isExpiredAuthError(err) {
+		refreshed, refreshErr := refreshProfileAuthTokens(ctx, client, profile, auth)
+		if refreshErr == nil {
+			status, err = fetchUsageStatus(ctx, client, usageURL, refreshed)
+		} else if isRefreshTokenReusedError(refreshErr) {
+			synced, syncErr := syncProfileAuthFromContainer(ctx, profile)
+			if syncErr == nil {
+				status, err = fetchUsageStatus(ctx, client, usageURL, synced)
+			} else {
+				return profileStatusResult{ID: profile.ID, Err: fmt.Errorf("usage token expired; refresh failed (%v) and container auth sync failed: %w", refreshErr, syncErr)}
+			}
+		} else {
+			return profileStatusResult{ID: profile.ID, Err: fmt.Errorf("usage token expired and refresh failed: %w", refreshErr)}
+		}
+	}
 	if err != nil {
 		return profileStatusResult{ID: profile.ID, Err: err}
 	}
@@ -164,25 +192,192 @@ func fetchProfileStatus(profile codexProfile, client *http.Client, usageURL stri
 }
 
 func loadProfileAuthTokens(profile codexProfile) (profileAuthTokens, error) {
-	path, err := codexProfileAuthPath(profile)
+	_, auth, err := loadProfileAuthFile(profile)
 	if err != nil {
 		return profileAuthTokens{}, err
+	}
+	return *auth.Tokens, nil
+}
+
+func loadProfileAuthFile(profile codexProfile) (string, profileAuthFile, error) {
+	path, err := codexProfileAuthPath(profile)
+	if err != nil {
+		return "", profileAuthFile{}, err
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return profileAuthTokens{}, err
+		return "", profileAuthFile{}, err
 	}
 	var auth profileAuthFile
 	if err := json.Unmarshal(raw, &auth); err != nil {
-		return profileAuthTokens{}, err
+		return "", profileAuthFile{}, err
 	}
 	if auth.Tokens == nil {
-		return profileAuthTokens{}, errors.New("auth tokens missing")
+		return "", profileAuthFile{}, errors.New("auth tokens missing")
 	}
 	if strings.TrimSpace(auth.Tokens.AccessToken) == "" {
-		return profileAuthTokens{}, errors.New("access token missing")
+		return "", profileAuthFile{}, errors.New("access token missing")
 	}
-	return *auth.Tokens, nil
+	return path, auth, nil
+}
+
+func saveProfileAuthFile(path string, auth profileAuthFile) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("auth path missing")
+	}
+	data, err := json.MarshalIndent(auth, "", "  ")
+	if err != nil {
+		return err
+	}
+	if len(data) == 0 {
+		return errors.New("empty auth payload")
+	}
+	data = append(data, '\n')
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, "auth-*.json")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
+func refreshProfileAuthTokens(ctx context.Context, client *http.Client, profile codexProfile, current profileAuthTokens) (profileAuthTokens, error) {
+	if client == nil {
+		client = &http.Client{Timeout: 20 * time.Second}
+	}
+	if strings.TrimSpace(current.RefreshToken) == "" {
+		return profileAuthTokens{}, errors.New("refresh token missing")
+	}
+	clientID, err := profileOAuthClientID(current)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	refreshURL := profileTokenURL()
+	reqBody := map[string]string{
+		"grant_type":    "refresh_token",
+		"client_id":     clientID,
+		"refresh_token": strings.TrimSpace(current.RefreshToken),
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, refreshURL, strings.NewReader(string(body)))
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		apiErr := &usageAPIError{StatusCode: resp.StatusCode}
+		var parsed usageAPIErrorResponse
+		if err := json.Unmarshal(respBody, &parsed); err == nil {
+			apiErr.Code = strings.TrimSpace(parsed.Error.Code)
+			apiErr.Message = strings.TrimSpace(parsed.Error.Message)
+		}
+		if apiErr.Message == "" {
+			snippet := strings.TrimSpace(string(respBody))
+			if len(snippet) > 200 {
+				snippet = snippet[:200]
+			}
+			apiErr.Message = snippet
+		}
+		return profileAuthTokens{}, apiErr
+	}
+	var refreshed tokenRefreshResponse
+	if err := json.Unmarshal(respBody, &refreshed); err != nil {
+		return profileAuthTokens{}, err
+	}
+	if strings.TrimSpace(refreshed.AccessToken) == "" {
+		return profileAuthTokens{}, errors.New("refreshed access token missing")
+	}
+
+	updated := current
+	updated.AccessToken = strings.TrimSpace(refreshed.AccessToken)
+	if strings.TrimSpace(refreshed.IDToken) != "" {
+		updated.IDToken = strings.TrimSpace(refreshed.IDToken)
+	}
+	if strings.TrimSpace(refreshed.RefreshToken) != "" {
+		updated.RefreshToken = strings.TrimSpace(refreshed.RefreshToken)
+	}
+
+	path, authFile, err := loadProfileAuthFile(profile)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	authFile.Tokens = &updated
+	authFile.LastRefresh = time.Now().UTC().Format(time.RFC3339Nano)
+	if err := saveProfileAuthFile(path, authFile); err != nil {
+		return profileAuthTokens{}, err
+	}
+	return updated, nil
+}
+
+func profileTokenURL() string {
+	if val := strings.TrimSpace(os.Getenv("SI_CODEX_TOKEN_URL")); val != "" {
+		return val
+	}
+	return "https://auth.openai.com/oauth/token"
+}
+
+func profileOAuthClientID(auth profileAuthTokens) (string, error) {
+	idToken := strings.TrimSpace(auth.IDToken)
+	if idToken == "" {
+		return "", errors.New("id token missing")
+	}
+	parts := strings.Split(idToken, ".")
+	if len(parts) < 2 {
+		return "", errors.New("invalid id token")
+	}
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", err
+	}
+	var claims struct {
+		Aud interface{} `json:"aud"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", err
+	}
+	switch aud := claims.Aud.(type) {
+	case string:
+		aud = strings.TrimSpace(aud)
+		if aud != "" {
+			return aud, nil
+		}
+	case []interface{}:
+		for _, item := range aud {
+			if s, ok := item.(string); ok && strings.TrimSpace(s) != "" {
+				return strings.TrimSpace(s), nil
+			}
+		}
+	}
+	return "", errors.New("oauth client id missing in id token")
 }
 
 func fetchUsageStatus(ctx context.Context, client *http.Client, usageURL string, auth profileAuthTokens) (codexStatus, error) {
@@ -252,6 +447,43 @@ func isExpiredAuthError(err error) bool {
 	}
 	msg := strings.ToLower(strings.TrimSpace(err.Error()))
 	return strings.Contains(msg, "token_expired") || strings.Contains(msg, "token is expired")
+}
+
+func isRefreshTokenReusedError(err error) bool {
+	var apiErr *usageAPIError
+	if errors.As(err, &apiErr) {
+		return strings.EqualFold(strings.TrimSpace(apiErr.Code), "refresh_token_reused")
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "refresh_token_reused")
+}
+
+func syncProfileAuthFromContainer(ctx context.Context, profile codexProfile) (profileAuthTokens, error) {
+	client, err := shared.NewClient()
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	defer client.Close()
+
+	refs, err := codexContainersByProfile(ctx, client, profile.ID)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	if len(refs) == 0 {
+		return profileAuthTokens{}, fmt.Errorf("no codex container found for profile %s", profile.ID)
+	}
+	preferred := choosePreferredCodexContainer(refs, codexContainerName(profile.ID))
+	id, _, err := client.ContainerByName(ctx, preferred.Name)
+	if err != nil {
+		return profileAuthTokens{}, err
+	}
+	if strings.TrimSpace(id) == "" {
+		return profileAuthTokens{}, fmt.Errorf("codex container %s not found", preferred.Name)
+	}
+	if err := cacheCodexAuthFromContainer(ctx, client, id, profile); err != nil {
+		return profileAuthTokens{}, err
+	}
+	return loadProfileAuthTokens(profile)
 }
 
 func codexStatusFromUsage(payload usagePayload, now time.Time) codexStatus {
