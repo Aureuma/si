@@ -297,7 +297,8 @@ func summarizeProfileStatusError(profileID string, raw string) string {
 	if strings.Contains(msg, "refresh_token_reused") {
 		return fmt.Sprintf("token refresh failed (refresh token reused); run `si login %s`", strings.TrimSpace(profileID))
 	}
-	if strings.Contains(strings.ToLower(msg), "token expired") {
+	lower := strings.ToLower(msg)
+	if strings.Contains(lower, "token expired") || strings.Contains(lower, "token_expired") || strings.Contains(lower, "token is expired") {
 		return fmt.Sprintf("token expired; run `si login %s`", strings.TrimSpace(profileID))
 	}
 	const maxLen = 180

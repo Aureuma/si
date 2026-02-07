@@ -150,4 +150,7 @@ func TestSummarizeProfileStatusError(t *testing.T) {
 	if got := summarizeProfileStatusError("cadma", "usage token expired; refresh failed (usage api status 401 (refresh_token_reused): reused)"); got != "token refresh failed (refresh token reused); run `si login cadma`" {
 		t.Fatalf("unexpected refresh summary: %q", got)
 	}
+	if got := summarizeProfileStatusError("cadma", "usage api status 401 (token_expired): Provided authentication token is expired."); got != "token expired; run `si login cadma`" {
+		t.Fatalf("unexpected token-expired summary: %q", got)
+	}
 }
