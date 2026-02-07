@@ -29,6 +29,10 @@ type imageBuildSpec struct {
 }
 
 func cmdImageBuild(args []string) {
+	if len(args) != 0 {
+		printUsage("usage: si image build")
+		return
+	}
 	root := mustRepoRoot()
 	specs := []imageBuildSpec{
 		{tag: "aureuma/si:local", contextDir: root, dockerfile: filepath.Join(root, "tools/si-image/Dockerfile")},

@@ -43,7 +43,7 @@ Core:
   si docker <args...>
 
 Build:
-  si image build                  (builds aureuma/si:local)
+  si image build                  (builds aureuma/si:local; no extra args)
 
 Profiles:
   si status [profile]      (codex profiles)
@@ -197,7 +197,7 @@ codex:
     si warmup [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 
 image:
-  si image build                  (builds aureuma/si:local)
+  si image build                  (builds aureuma/si:local; no extra args)
 
 persona:
   si persona <name>

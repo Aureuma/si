@@ -63,7 +63,8 @@ Update any version constants used by the CLI or status endpoints (currently):
 
 ### 4) Verify and commit the release prep
 ```
-go test ./tools/si
+./tools/test.sh
+./si analyze --module tools/si
 git add CHANGELOG.md tools/si/util.go tools/si/codex_status.go
 git commit -m "Bump version to vX.Y.Z"
 ```
