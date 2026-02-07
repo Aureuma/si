@@ -103,12 +103,69 @@ func parseMenuSelection(line string, options []string) (int, error) {
 }
 
 func promptLine(r io.Reader) (string, error) {
+	if f, ok := r.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		return promptTTYLine(f)
+	}
 	reader := bufio.NewReader(r)
 	line, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {
 		return "", err
 	}
 	return strings.TrimSpace(line), nil
+}
+
+func promptTTYLine(f *os.File) (string, error) {
+	fd := int(f.Fd())
+	state, err := term.MakeRaw(fd)
+	if err != nil {
+		reader := bufio.NewReader(f)
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil && readErr != io.EOF {
+			return "", readErr
+		}
+		return strings.TrimSpace(line), nil
+	}
+	defer func() { _ = term.Restore(fd, state) }()
+
+	buf := make([]byte, 0, 64)
+	one := []byte{0}
+	for {
+		n, readErr := f.Read(one)
+		if readErr != nil {
+			if readErr == io.EOF {
+				fmt.Fprint(os.Stdout, "\n")
+				return strings.TrimSpace(string(buf)), nil
+			}
+			return "", readErr
+		}
+		if n == 0 {
+			continue
+		}
+		b := one[0]
+		switch b {
+		case '\r', '\n':
+			fmt.Fprint(os.Stdout, "\n")
+			return strings.TrimSpace(string(buf)), nil
+		case 0x1b:
+			// ESC cancels immediately across interactive prompts.
+			fmt.Fprint(os.Stdout, "\n")
+			return "\x1b", nil
+		case 0x7f, 0x08:
+			if len(buf) > 0 {
+				buf = buf[:len(buf)-1]
+				fmt.Fprint(os.Stdout, "\b \b")
+			}
+		default:
+			if b >= 0x20 && b != 0x7f {
+				buf = append(buf, b)
+				fmt.Fprintf(os.Stdout, "%c", b)
+			}
+		}
+		if readErr == io.EOF {
+			fmt.Fprint(os.Stdout, "\n")
+			return strings.TrimSpace(string(buf)), nil
+		}
+	}
 }
 
 func promptRequired(prompt string) (string, bool) {
