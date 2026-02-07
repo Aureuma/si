@@ -34,11 +34,13 @@ func TestSplitProfileNameAndFlags(t *testing.T) {
 
 func TestApplyProfileStatusResultAuthFailureDowngradesAuth(t *testing.T) {
 	item := codexProfileSummary{
-		ID:              "cadma",
-		AuthCached:      true,
-		AuthUpdated:     "2026-02-07T18:00:00Z",
-		FiveHourLeftPct: -1,
-		WeeklyLeftPct:   -1,
+		ID:                "cadma",
+		AuthCached:        true,
+		AuthUpdated:       "2026-02-07T18:00:00Z",
+		FiveHourLeftPct:   99,
+		FiveHourRemaining: 299,
+		WeeklyLeftPct:     99,
+		WeeklyRemaining:   10000,
 	}
 	res := profileStatusResult{
 		ID: "cadma",
@@ -58,6 +60,9 @@ func TestApplyProfileStatusResultAuthFailureDowngradesAuth(t *testing.T) {
 	if item.FiveHourLeftPct != -1 || item.WeeklyLeftPct != -1 {
 		t.Fatalf("expected limits to reset, got %+v", item)
 	}
+	if item.FiveHourRemaining != -1 || item.WeeklyRemaining != -1 {
+		t.Fatalf("expected remaining timers to reset, got %+v", item)
+	}
 }
 
 func TestApplyProfileStatusResultNonExpiredErrorSetsStatusError(t *testing.T) {
@@ -71,22 +76,29 @@ func TestApplyProfileStatusResultNonExpiredErrorSetsStatusError(t *testing.T) {
 
 func TestApplyProfileStatusResultSuccess(t *testing.T) {
 	item := codexProfileSummary{
-		ID:              "cadma",
-		FiveHourLeftPct: -1,
-		WeeklyLeftPct:   -1,
+		ID:                "cadma",
+		FiveHourLeftPct:   -1,
+		FiveHourRemaining: -1,
+		WeeklyLeftPct:     -1,
+		WeeklyRemaining:   -1,
 	}
 	res := profileStatusResult{
 		ID: "cadma",
 		Status: codexStatus{
-			FiveHourLeftPct: 42.5,
-			FiveHourReset:   "2026-02-08T00:00:00Z",
-			WeeklyLeftPct:   88.8,
-			WeeklyReset:     "2026-02-14T00:00:00Z",
+			FiveHourLeftPct:   42.5,
+			FiveHourReset:     "2026-02-08T00:00:00Z",
+			FiveHourRemaining: 151,
+			WeeklyLeftPct:     88.8,
+			WeeklyReset:       "2026-02-14T00:00:00Z",
+			WeeklyRemaining:   10080,
 		},
 	}
 	applyProfileStatusResult(&item, res)
 	if item.FiveHourLeftPct != 42.5 || item.WeeklyLeftPct != 88.8 {
 		t.Fatalf("unexpected usage limits: %+v", item)
+	}
+	if item.FiveHourRemaining != 151 || item.WeeklyRemaining != 10080 {
+		t.Fatalf("expected remaining durations to be populated: %+v", item)
 	}
 	if item.FiveHourReset == "" || item.WeeklyReset == "" {
 		t.Fatalf("expected reset timestamps to be populated: %+v", item)
