@@ -237,6 +237,13 @@ func TestUsageWindowRemainingUsesResetAtCountdown(t *testing.T) {
 	}
 }
 
+func TestProfileCodexAuthVolumeFallback(t *testing.T) {
+	profile := codexProfile{ID: "cadma"}
+	if got := profileCodexAuthVolume(profile, nil, nil, context.Background()); got != "si-codex-cadma" {
+		t.Fatalf("unexpected fallback volume name %q", got)
+	}
+}
+
 func buildTestJWT(payload map[string]interface{}) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
 	bodyBytes, _ := json.Marshal(payload)

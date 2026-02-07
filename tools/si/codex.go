@@ -1724,6 +1724,16 @@ func cacheCodexAuthFromContainer(ctx context.Context, client *shared.Client, con
 	if len(data) == 0 {
 		return nil
 	}
+	return cacheCodexAuthBytes(profile, data)
+}
+
+func cacheCodexAuthBytes(profile codexProfile, data []byte) error {
+	if strings.TrimSpace(profile.ID) == "" {
+		return fmt.Errorf("profile id required")
+	}
+	if len(data) == 0 {
+		return nil
+	}
 	dir, err := ensureCodexProfileDir(profile)
 	if err != nil {
 		return err
@@ -1775,6 +1785,65 @@ func readCodexAuthFromContainer(ctx context.Context, client *shared.Client, cont
 		return nil, os.ErrNotExist
 	}
 	return nil, os.ErrNotExist
+}
+
+func readCodexAuthFromVolume(ctx context.Context, client *shared.Client, volumeName string) ([]byte, error) {
+	if client == nil {
+		return nil, errors.New("docker client required")
+	}
+	volumeName = strings.TrimSpace(volumeName)
+	if volumeName == "" {
+		return nil, errors.New("codex auth volume required")
+	}
+	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "aureuma/si:local"))
+	if image == "" {
+		return nil, errors.New("codex image required")
+	}
+	tmpName := fmt.Sprintf("si-codex-authsync-%d", time.Now().UnixNano())
+	cfg := &container.Config{
+		Image: image,
+		Cmd:   []string{"bash", "-lc", "sleep infinity"},
+	}
+	hostCfg := &container.HostConfig{
+		Mounts: []mount.Mount{
+			{
+				Type:     mount.TypeVolume,
+				Source:   volumeName,
+				Target:   "/home/si/.codex",
+				ReadOnly: true,
+			},
+		},
+	}
+	netCfg := &network.NetworkingConfig{}
+	id, err := client.CreateContainer(ctx, cfg, hostCfg, netCfg, tmpName)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = client.RemoveContainer(context.Background(), id, true)
+	}()
+	if err := client.StartContainer(ctx, id); err != nil {
+		return nil, err
+	}
+	return readCodexAuthFromContainer(ctx, client, id)
+}
+
+func codexAuthVolumeFromContainerInfo(info *types.ContainerJSON) string {
+	if info == nil {
+		return ""
+	}
+	for _, point := range info.Mounts {
+		dest := strings.TrimSpace(point.Destination)
+		if dest != "/home/si/.codex" && dest != "/root/.codex" {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(string(point.Type)), "volume") {
+			if name := strings.TrimSpace(point.Name); name != "" {
+				return name
+			}
+		}
+	}
+	return ""
 }
 
 func isMissingContainerFile(err error) bool {
