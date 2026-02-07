@@ -112,7 +112,8 @@ func promptLine(r io.Reader) (string, error) {
 }
 
 func promptRequired(prompt string) (string, bool) {
-	fmt.Printf("%s ", styleDim(prompt))
+	prompt = strings.TrimSpace(strings.TrimSuffix(prompt, ":"))
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("%s (Esc to cancel):", prompt)))
 	line, err := promptLine(os.Stdin)
 	if err != nil {
 		fatal(err)
@@ -132,7 +133,8 @@ func promptWithDefault(prompt, def string) (string, bool) {
 	if def == "" {
 		return promptRequired(prompt)
 	}
-	fmt.Printf("%s ", styleDim(fmt.Sprintf("%s (default %s):", prompt, def)))
+	prompt = strings.TrimSpace(strings.TrimSuffix(prompt, ":"))
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("%s (default %s, Esc to cancel):", prompt, def)))
 	line, err := promptLine(os.Stdin)
 	if err != nil {
 		fatal(err)
@@ -157,7 +159,7 @@ func selectDyadAction() (string, bool) {
 		fmt.Printf("  %2d) %-10s %s\n", i+1, action.Name, styleDim(action.Description))
 		options = append(options, action.Name)
 	}
-	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select command [1-%d] (or press Enter to cancel):", len(options))))
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select command [1-%d] (Enter/Esc to cancel):", len(options))))
 	line, err := promptLine(os.Stdin)
 	if err != nil {
 		fatal(err)
@@ -266,7 +268,7 @@ func selectDyadName(action string) (string, bool) {
 	for _, row := range rows {
 		options = append(options, row.Dyad)
 	}
-	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select dyad [1-%d] or name (or press Enter to cancel):", len(options))))
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select dyad [1-%d] or name (Enter/Esc to cancel):", len(options))))
 	line, err := promptLine(os.Stdin)
 	if err != nil {
 		fatal(err)
@@ -292,7 +294,7 @@ func selectDyadMember(action string, defaultMember string) (string, bool) {
 	}
 	options := []string{"actor", "critic"}
 	defaultMember = strings.ToLower(strings.TrimSpace(defaultMember))
-	prompt := fmt.Sprintf("Select %s member [1-%d] (default %s):", action, len(options), defaultMember)
+	prompt := fmt.Sprintf("Select %s member [1-%d] (default %s, Esc to cancel):", action, len(options), defaultMember)
 	fmt.Printf("%s ", styleDim(prompt))
 	line, err := promptLine(os.Stdin)
 	if err != nil {
@@ -325,7 +327,7 @@ func selectDyadRole(defaultRole string) (string, bool) {
 	if !isInteractiveTerminal() {
 		return defaultRole, true
 	}
-	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select dyad role [1-%d] (default %s):", len(options), defaultRole)))
+	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select dyad role [1-%d] (default %s, Esc to cancel):", len(options), defaultRole)))
 	line, err := promptLine(os.Stdin)
 	if err != nil {
 		fatal(err)
