@@ -177,10 +177,33 @@ func TestRefreshProfileAuthTokensUpdatesFile(t *testing.T) {
 }
 
 func TestFormatLimitColumnIncludesResetAndCountdown(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = false
+	defer func() { ansiEnabled = prev }()
+
 	got := formatLimitColumn(71, "20:52", 151)
 	want := "71% (20:52, in 2h31m)"
 	if got != want {
 		t.Fatalf("unexpected formatted limit: got %q want %q", got, want)
+	}
+}
+
+func TestStyleLimitTextByPctColorBuckets(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = true
+	defer func() { ansiEnabled = prev }()
+
+	white := styleLimitTextByPct("100% (23:12, in 5h)", 100)
+	if !strings.Contains(white, "\x1b[1;37m") {
+		t.Fatalf("expected bold white for 100%%, got %q", white)
+	}
+	green := styleLimitTextByPct("71% (20:52, in 2h31m)", 71)
+	if !strings.Contains(green, "\x1b[32m") {
+		t.Fatalf("expected green for mid-range percent, got %q", green)
+	}
+	magenta := styleLimitTextByPct("25% (14:33, in 140h)", 25)
+	if !strings.Contains(magenta, "\x1b[35m") {
+		t.Fatalf("expected magenta for <=25%%, got %q", magenta)
 	}
 }
 

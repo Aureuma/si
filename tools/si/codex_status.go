@@ -341,30 +341,10 @@ func printCodexStatus(s codexStatus) {
 		}
 	}
 	if s.FiveHourLeftPct >= 0 {
-		remaining := formatRemainingDuration(s.FiveHourRemaining)
-		switch {
-		case s.FiveHourReset != "" && remaining != "":
-			fmt.Printf("  %s %.0f%% left (resets %s, in %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, s.FiveHourReset, remaining)
-		case s.FiveHourReset != "":
-			fmt.Printf("  %s %.0f%% left (resets %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, s.FiveHourReset)
-		case remaining != "":
-			fmt.Printf("  %s %.0f%% left (in %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, remaining)
-		default:
-			fmt.Printf("  %s %.0f%% left\n", styleSection("5h limit:"), s.FiveHourLeftPct)
-		}
+		fmt.Printf("  %s %s\n", styleSection("5h limit:"), formatLimitDetail(s.FiveHourLeftPct, s.FiveHourReset, s.FiveHourRemaining))
 	}
 	if s.WeeklyLeftPct >= 0 {
-		remaining := formatRemainingDuration(s.WeeklyRemaining)
-		switch {
-		case s.WeeklyReset != "" && remaining != "":
-			fmt.Printf("  %s %.0f%% left (resets %s, in %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, s.WeeklyReset, remaining)
-		case s.WeeklyReset != "":
-			fmt.Printf("  %s %.0f%% left (resets %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, s.WeeklyReset)
-		case remaining != "":
-			fmt.Printf("  %s %.0f%% left (in %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, remaining)
-		default:
-			fmt.Printf("  %s %.0f%% left\n", styleSection("Weekly limit:"), s.WeeklyLeftPct)
-		}
+		fmt.Printf("  %s %s\n", styleSection("Weekly limit:"), formatLimitDetail(s.WeeklyLeftPct, s.WeeklyReset, s.WeeklyRemaining))
 	}
 }
 
