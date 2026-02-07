@@ -11,6 +11,7 @@ func main() {
 	}
 	cmd := os.Args[1]
 	args := os.Args[2:]
+	maybeWarmWeeklyAutostart(cmd)
 	switch cmd {
 	case "version", "--version", "-v":
 		printVersion()

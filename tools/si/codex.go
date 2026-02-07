@@ -1086,6 +1086,7 @@ func cmdCodexLogin(args []string) {
 	if err := updateSettingsProfile(*profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
+	triggerWarmWeeklyAfterLogin(*profile)
 	removeContainer()
 }
 
