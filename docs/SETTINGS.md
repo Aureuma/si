@@ -93,6 +93,30 @@ Defaults for dyad spawns.
 - `dyad.forward_ports` (string): port range, e.g. `1455-1465`
 - `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
 
+### `[stripe]`
+Defaults for `si stripe` account and environment context.
+- `stripe.organization` (string): optional organization label
+- `stripe.default_account` (string): default account alias (or `acct_` id)
+- `stripe.default_env` (string): `live` or `sandbox` (default: `sandbox`)
+
+#### `[stripe.accounts.<alias>]`
+Per-account Stripe settings.
+- `id` (string): Stripe account id (`acct_...`) used for scoped calls
+- `name` (string): display name
+- `live_key` (string): direct live API key (prefer env refs instead)
+- `sandbox_key` (string): direct sandbox API key (prefer env refs instead)
+- `live_key_env` (string): env var name holding the live key
+- `sandbox_key_env` (string): env var name holding the sandbox key
+
+Credential resolution order for `si stripe`:
+1. `--api-key` (or `--live-api-key`/`--sandbox-api-key` for sync)
+2. Account settings key (`live_key` / `sandbox_key`)
+3. Account settings env ref (`live_key_env` / `sandbox_key_env`)
+4. Environment-specific env fallback (`SI_STRIPE_LIVE_API_KEY` / `SI_STRIPE_SANDBOX_API_KEY`)
+5. Generic env fallback (`SI_STRIPE_API_KEY`)
+
+`SI_STRIPE_ACCOUNT` can provide default account selection when settings do not specify one.
+
 ### `[shell.prompt]`
 Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
@@ -161,6 +185,17 @@ codex_model = "gpt-5.2-codex"
 forward_ports = "1455-1465"
 docker_socket = true
 workspace = "/home/ubuntu/Development/si"
+
+[stripe]
+organization = "main-org"
+default_account = "core"
+default_env = "sandbox"
+
+[stripe.accounts.core]
+id = "acct_1234567890"
+name = "Core Account"
+live_key_env = "STRIPE_CORE_LIVE_KEY"
+sandbox_key_env = "STRIPE_CORE_SANDBOX_KEY"
 
 [shell.prompt]
 enabled = true

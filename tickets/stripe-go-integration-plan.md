@@ -134,17 +134,17 @@ Use a hybrid model:
 
 | Workstream | Status | Owner | Branch | PR | Last Update |
 |---|---|---|---|---|---|
-| WS-00 Contracts | Not Started |  |  |  |  |
-| WS-01 CLI Entry | Not Started |  |  |  |  |
-| WS-02 Auth/Config | Not Started |  |  |  |  |
-| WS-03 Bridge Core | Not Started |  |  |  |  |
-| WS-04 CRUD Registry | Not Started |  |  |  |  |
-| WS-05 Object Commands | Not Started |  |  |  |  |
-| WS-06 Reporting | Not Started |  |  |  |  |
-| WS-07 Safety/Observability | Not Started |  |  |  |  |
-| WS-08 Testing | Not Started |  |  |  |  |
-| WS-09 Docs/Release | Not Started |  |  |  |  |
-| WS-10 Env Sync | Not Started |  |  |  |  |
+| WS-00 Contracts | Done | codex | main |  | 2026-02-07 |
+| WS-01 CLI Entry | Done | codex | main |  | 2026-02-07 |
+| WS-02 Auth/Config | Done | codex | main |  | 2026-02-07 |
+| WS-03 Bridge Core | Done | codex | main |  | 2026-02-07 |
+| WS-04 CRUD Registry | Done | codex | main |  | 2026-02-07 |
+| WS-05 Object Commands | Done | codex | main |  | 2026-02-07 |
+| WS-06 Reporting | Done | codex | main |  | 2026-02-07 |
+| WS-07 Safety/Observability | Done | codex | main |  | 2026-02-07 |
+| WS-08 Testing | Done | codex | main |  | 2026-02-07 |
+| WS-09 Docs/Release | Done | codex | main |  | 2026-02-07 |
+| WS-10 Env Sync | Done | codex | main |  | 2026-02-07 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 
