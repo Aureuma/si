@@ -119,10 +119,19 @@ func TestProfileLimitDisplayForMissingAuth(t *testing.T) {
 		AuthCached:  false,
 		StatusError: "auth cache not found",
 	}
-	if got := profileFiveHourDisplay(item); got != "AUTH: auth cache not found" {
+	if got := profileFiveHourDisplay(item); got != "AUTH-ERR" {
 		t.Fatalf("unexpected 5H display %q", got)
 	}
 	if got := profileWeeklyDisplay(item); got != "-" {
 		t.Fatalf("unexpected WEEKLY display %q", got)
+	}
+}
+
+func TestSummarizeProfileStatusError(t *testing.T) {
+	if got := summarizeProfileStatusError("america", "auth cache not found at /tmp/auth.json; run `si login`"); got != "auth cache missing; run `si login america`" {
+		t.Fatalf("unexpected auth-cache summary: %q", got)
+	}
+	if got := summarizeProfileStatusError("cadma", "usage token expired; refresh failed (usage api status 401 (refresh_token_reused): reused)"); got != "token refresh failed (refresh token reused); run `si login cadma`" {
+		t.Fatalf("unexpected refresh summary: %q", got)
 	}
 }
