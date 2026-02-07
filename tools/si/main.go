@@ -11,11 +11,10 @@ func main() {
 	}
 	cmd := os.Args[1]
 	args := os.Args[2:]
-	maybeWarmWeeklyAutostart(cmd)
 	switch cmd {
 	case "version", "--version", "-v":
 		printVersion()
-	case "spawn", "respawn", "list", "ps", "status", "report", "login", "exec", "run", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start", "warm-weekly":
+	case "spawn", "respawn", "list", "ps", "status", "report", "login", "exec", "run", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start", "warmup":
 		if !dispatchCodexCommand(cmd, args) {
 			printUnknown("", cmd)
 			usage()
