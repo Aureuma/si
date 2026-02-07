@@ -22,17 +22,19 @@ type codexProfile struct {
 }
 
 type codexProfileSummary struct {
-	ID              string  `json:"id"`
-	Name            string  `json:"name"`
-	Email           string  `json:"email"`
-	AuthCached      bool    `json:"auth_cached"`
-	AuthPath        string  `json:"auth_path,omitempty"`
-	AuthUpdated     string  `json:"auth_updated,omitempty"`
-	StatusError     string  `json:"status_error,omitempty"`
-	FiveHourLeftPct float64 `json:"five_hour_left_pct,omitempty"`
-	FiveHourReset   string  `json:"five_hour_reset,omitempty"`
-	WeeklyLeftPct   float64 `json:"weekly_left_pct,omitempty"`
-	WeeklyReset     string  `json:"weekly_reset,omitempty"`
+	ID                string  `json:"id"`
+	Name              string  `json:"name"`
+	Email             string  `json:"email"`
+	AuthCached        bool    `json:"auth_cached"`
+	AuthPath          string  `json:"auth_path,omitempty"`
+	AuthUpdated       string  `json:"auth_updated,omitempty"`
+	StatusError       string  `json:"status_error,omitempty"`
+	FiveHourLeftPct   float64 `json:"five_hour_left_pct,omitempty"`
+	FiveHourReset     string  `json:"five_hour_reset,omitempty"`
+	FiveHourRemaining int     `json:"five_hour_remaining_minutes,omitempty"`
+	WeeklyLeftPct     float64 `json:"weekly_left_pct,omitempty"`
+	WeeklyReset       string  `json:"weekly_reset,omitempty"`
+	WeeklyRemaining   int     `json:"weekly_remaining_minutes,omitempty"`
 }
 
 func codexProfiles() []codexProfile {
@@ -270,13 +272,15 @@ func codexProfileSummaries() []codexProfileSummary {
 	for _, profile := range profiles {
 		status := codexProfileAuthStatus(profile)
 		item := codexProfileSummary{
-			ID:              profile.ID,
-			Name:            profile.Name,
-			Email:           profile.Email,
-			AuthCached:      status.Exists,
-			AuthPath:        status.Path,
-			FiveHourLeftPct: -1,
-			WeeklyLeftPct:   -1,
+			ID:                profile.ID,
+			Name:              profile.Name,
+			Email:             profile.Email,
+			AuthCached:        status.Exists,
+			AuthPath:          status.Path,
+			FiveHourLeftPct:   -1,
+			FiveHourRemaining: -1,
+			WeeklyLeftPct:     -1,
+			WeeklyRemaining:   -1,
 		}
 		if status.Exists {
 			item.AuthUpdated = status.Modified.UTC().Format(time.RFC3339)

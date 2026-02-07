@@ -82,13 +82,15 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 	}
 	status := codexProfileAuthStatus(profile)
 	item := codexProfileSummary{
-		ID:              profile.ID,
-		Name:            profile.Name,
-		Email:           profile.Email,
-		AuthCached:      status.Exists,
-		AuthPath:        status.Path,
-		FiveHourLeftPct: -1,
-		WeeklyLeftPct:   -1,
+		ID:                profile.ID,
+		Name:              profile.Name,
+		Email:             profile.Email,
+		AuthCached:        status.Exists,
+		AuthPath:          status.Path,
+		FiveHourLeftPct:   -1,
+		FiveHourRemaining: -1,
+		WeeklyLeftPct:     -1,
+		WeeklyRemaining:   -1,
 	}
 	if status.Exists {
 		item.AuthUpdated = status.Modified.UTC().Format(time.RFC3339)
@@ -124,8 +126,8 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 		if item.StatusError != "" {
 			fmt.Printf("%s %s\n", styleHeading("Status error:"), item.StatusError)
 		} else if status.Exists {
-			fmt.Printf("%s %s\n", styleHeading("5h limit:"), formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset))
-			fmt.Printf("%s %s\n", styleHeading("Weekly limit:"), formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset))
+			fmt.Printf("%s %s\n", styleHeading("5h limit:"), formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining))
+			fmt.Printf("%s %s\n", styleHeading("Weekly limit:"), formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining))
 		} else {
 			fmt.Printf("%s %s\n", styleHeading("Status:"), "unavailable (auth missing)")
 		}
@@ -142,8 +144,10 @@ func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult
 			item.AuthUpdated = ""
 			item.FiveHourLeftPct = -1
 			item.FiveHourReset = ""
+			item.FiveHourRemaining = -1
 			item.WeeklyLeftPct = -1
 			item.WeeklyReset = ""
+			item.WeeklyRemaining = -1
 			item.StatusError = ""
 			return
 		}
@@ -152,8 +156,10 @@ func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult
 	}
 	item.FiveHourLeftPct = res.Status.FiveHourLeftPct
 	item.FiveHourReset = res.Status.FiveHourReset
+	item.FiveHourRemaining = res.Status.FiveHourRemaining
 	item.WeeklyLeftPct = res.Status.WeeklyLeftPct
 	item.WeeklyReset = res.Status.WeeklyReset
+	item.WeeklyRemaining = res.Status.WeeklyRemaining
 }
 
 func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
@@ -176,14 +182,14 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 			widthEmail = w
 		}
 		if withStatus {
-			limit := formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset)
+			limit := formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
 			if item.StatusError != "" {
 				limit = "ERR"
 			}
 			if w := displayWidth(limit); w > width5h {
 				width5h = w
 			}
-			limit = formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset)
+			limit = formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
 			if item.StatusError != "" {
 				limit = "ERR"
 			}
@@ -216,8 +222,8 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 			auth = "Logged-In"
 		}
 		if withStatus {
-			fiveHour := formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset)
-			weekly := formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset)
+			fiveHour := formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
+			weekly := formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
 			if item.StatusError != "" {
 				fiveHour = "ERR"
 				weekly = "ERR"
