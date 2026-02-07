@@ -134,7 +134,8 @@ func promptTTYLine(f *os.File) (string, error) {
 		n, readErr := f.Read(one)
 		if readErr != nil {
 			if readErr == io.EOF {
-				fmt.Fprint(os.Stdout, "\n")
+				// term.MakeRaw disables output post-processing, so emit CRLF explicitly.
+				fmt.Fprint(os.Stdout, "\r\n")
 				return strings.TrimSpace(string(buf)), nil
 			}
 			return "", readErr
@@ -145,11 +146,11 @@ func promptTTYLine(f *os.File) (string, error) {
 		b := one[0]
 		switch b {
 		case '\r', '\n':
-			fmt.Fprint(os.Stdout, "\n")
+			fmt.Fprint(os.Stdout, "\r\n")
 			return strings.TrimSpace(string(buf)), nil
 		case 0x1b:
 			// ESC cancels immediately across interactive prompts.
-			fmt.Fprint(os.Stdout, "\n")
+			fmt.Fprint(os.Stdout, "\r\n")
 			return "\x1b", nil
 		case 0x7f, 0x08:
 			if len(buf) > 0 {
@@ -163,7 +164,7 @@ func promptTTYLine(f *os.File) (string, error) {
 			}
 		}
 		if readErr == io.EOF {
-			fmt.Fprint(os.Stdout, "\n")
+			fmt.Fprint(os.Stdout, "\r\n")
 			return strings.TrimSpace(string(buf)), nil
 		}
 	}
