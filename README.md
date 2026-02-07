@@ -29,7 +29,7 @@ Run all module tests from repo root:
 - Spawn a dyad (actor+critic):
 
 ```bash
-./si dyad spawn <name> [role] [department]
+./si dyad spawn <name> [role] [department] --profile <profile>
 ```
 
 - Teardown a dyad:
@@ -51,18 +51,15 @@ Run all module tests from repo root:
 ./si dyad start <name>
 ```
 
-- Copy Codex login into a dyad member:
-
-```bash
-./si dyad copy-login --member actor <dyad>
-```
-
 - List running dyads:
 
 ```bash
 ./si dyad list
 ```
 
+Dyads use existing `si login` profiles for Codex auth (no separate dyad login flow).  
+By default, dyad spawn uses the active/default profile when available, or lets you choose interactively. Use `--profile` to force a specific profile.  
+If no logged-in profile is available, run `si login` first.
 By default, dyads mount the current directory; when run from the repo root they share the repo workspace. Use `--workspace` to override.
 
 ## Codex containers (on-demand)
