@@ -18,35 +18,35 @@ const weeklyWarmPrompt = "You are warming the Codex weekly limit. Read the follo
 	"Project memo: We are preparing a phased rollout of a developer tool that integrates a local agent runner with remote services. The rollout has four phases: internal dogfood, private beta, public beta, and general availability. The engineering team has completed the core runtime, but the configuration surface is still shifting and the documentation is inconsistent across repos. The most recent feedback indicates that authentication handoffs can fail when tokens are rotated, and the CLI error messages are too vague to guide the user to a fix. In addition, the system depends on several third-party APIs with tight rate limits and intermittent latency spikes. The platform team is optimistic about the stability of the backend, but we have not completed load testing for the largest anticipated enterprise tenant. The security team has requested a review of the permissions model, especially around automated file edits and command execution. The product team expects a weekly release cadence and wants upgrade notes to be concise. Support has flagged a backlog of tickets related to onboarding flow confusion, and the current FAQ has not been updated since the last UI change. There is also an open question about whether the new multi-profile feature should default to the last-used profile or prompt the user every time. Finally, the legal team has asked for a clear statement of data retention policy, but no owner has been assigned.\n\n" +
 	"Additional context: The integration must support macOS and Linux. We plan to ship a background scheduler that triggers a maintenance task weekly. If the scheduler misfires, we could see noisy alerts and wasted tokens. The team has proposed sending a small prompt to verify the pipeline, but this prompt should be large enough to actually consume tokens so the weekly limit timer advances. The marketing team wants to announce the rollout with a blog post, but this is blocked on finalizing the SLA language. The roadmap includes adding a UI dashboard to show usage limits, but the backend endpoint is still evolving. An internal review suggested that a short, consistent warm-up prompt would be easiest to maintain. The deployment checklist is long and includes updating image tags, verifying auth storage, and confirming the rate limit resets are correctly detected. We have one week to stabilize, and any delays will impact the target launch date."
 
-func cmdWarmWeekly(args []string) {
+func cmdWarmup(args []string) {
 	if len(args) > 0 {
 		switch strings.ToLower(strings.TrimSpace(args[0])) {
 		case "help", "-h", "--help":
-			printWarmWeeklyUsage()
+			printWarmupUsage()
 			return
 		case "enable":
-			cmdWarmWeeklyEnable(args[1:])
+			cmdWarmupEnable(args[1:])
 			return
 		case "reconcile":
-			cmdWarmWeeklyReconcile(args[1:])
+			cmdWarmupReconcile(args[1:])
 			return
 		case "status":
-			cmdWarmWeeklyStatus(args[1:])
+			cmdWarmupStatus(args[1:])
 			return
 		case "disable":
-			cmdWarmWeeklyDisable(args[1:])
+			cmdWarmupDisable(args[1:])
 			return
 		}
 	}
 	if len(args) == 0 {
-		cmdWarmWeeklyReconcile(nil)
+		cmdWarmupReconcile(nil)
 		return
 	}
-	cmdWarmWeeklyLegacy(args)
+	cmdWarmupLegacy(args)
 }
 
-func cmdWarmWeeklyLegacy(args []string) {
-	fs := flag.NewFlagSet("warm-weekly", flag.ExitOnError)
+func cmdWarmupLegacy(args []string) {
+	fs := flag.NewFlagSet("warmup", flag.ExitOnError)
 	profilesFlag := multiFlag{}
 	fs.Var(&profilesFlag, "profile", "codex profile name/email (repeatable)")
 	promptFlag := fs.String("prompt", "", "prompt to execute")
@@ -221,7 +221,7 @@ func cmdWarmWeeklyLegacy(args []string) {
 				DockerSocket:  *dockerSocket,
 			})
 			if err != nil {
-				warnf("weekly warm failed for %s: %v", schedule.Profile.ID, err)
+				warnf("warmup failed for %s: %v", schedule.Profile.ID, err)
 			}
 		}()
 	}

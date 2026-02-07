@@ -62,7 +62,7 @@ func ensureOfeliaWarmConfig(jobs []ofeliaWarmJob, prompt string, opts ofeliaWarm
 		return jobs[i].Profile.ID < jobs[j].Profile.ID
 	})
 	for _, job := range jobs {
-		jobName := fmt.Sprintf("si-warm-weekly-%s", sanitizeOfeliaName(job.Profile.ID))
+		jobName := fmt.Sprintf("si-warmup-%s", sanitizeOfeliaName(job.Profile.ID))
 		buf.WriteString(fmt.Sprintf("[job-run \"%s\"]\n", jobName))
 		buf.WriteString(fmt.Sprintf("schedule = %s\n", job.Schedule))
 		buf.WriteString(fmt.Sprintf("image = %s\n", opts.Image))
@@ -70,7 +70,7 @@ func ensureOfeliaWarmConfig(jobs []ofeliaWarmJob, prompt string, opts ofeliaWarm
 		if authPath, err := codexProfileAuthPath(job.Profile); err == nil && strings.TrimSpace(authPath) != "" {
 			buf.WriteString(fmt.Sprintf("volume = %s:/home/si/.codex/auth.json:ro\n", authPath))
 		}
-		buf.WriteString(fmt.Sprintf("volume = %s:/etc/si/warm-weekly-prompt.txt:ro\n", opts.PromptPath))
+		buf.WriteString(fmt.Sprintf("volume = %s:/etc/si/warmup-prompt.txt:ro\n", opts.PromptPath))
 		buf.WriteString("\n")
 	}
 
@@ -210,7 +210,7 @@ func buildOfeliaWarmCommand(opts ofeliaWarmOptions) string {
 	if effort == "" {
 		effort = "medium"
 	}
-	return fmt.Sprintf("/bin/bash -lc '%s; sleep $((j*60)); export HOME=/home/si CODEX_HOME=/home/si/.codex; codex -m %s -c model_reasoning_effort=%s --dangerously-bypass-approvals-and-sandbox exec \"$(cat /etc/si/warm-weekly-prompt.txt)\"'", jitterExpr, model, effort)
+	return fmt.Sprintf("/bin/bash -lc '%s; sleep $((j*60)); export HOME=/home/si CODEX_HOME=/home/si/.codex; codex -m %s -c model_reasoning_effort=%s --dangerously-bypass-approvals-and-sandbox exec \"$(cat /etc/si/warmup-prompt.txt)\"'", jitterExpr, model, effort)
 }
 
 func sanitizeOfeliaName(value string) string {
@@ -238,11 +238,11 @@ func defaultOfeliaPaths() (string, string, error) {
 		return "", "", err
 	}
 	base := filepath.Join(home, ".si", "ofelia")
-	return filepath.Join(base, "warm-weekly.ini"), filepath.Join(base, "warm-weekly-prompt.txt"), nil
+	return filepath.Join(base, "warmup.ini"), filepath.Join(base, "warmup-prompt.txt"), nil
 }
 
 func printOfeliaWarmJobs(jobs []ofeliaWarmJob, opts ofeliaWarmOptions) {
-	fmt.Println(styleHeading("Ofelia warm-weekly jobs:"))
+	fmt.Println(styleHeading("Ofelia warmup jobs:"))
 	for _, job := range jobs {
 		fmt.Printf("  %s schedule %s (reset %s)\n", job.Profile.ID, job.Schedule, formatResetAt(job.ResetAt))
 	}

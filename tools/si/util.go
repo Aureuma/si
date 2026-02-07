@@ -178,13 +178,13 @@ codex:
   si stop <name>
   si start <name>
 
-  si warm-weekly enable [--profile <profile>] [--quiet] [--no-reconcile]
-  si warm-weekly reconcile [--profile <profile>] [--force-bootstrap] [--quiet]
-  si warm-weekly status [--json]
-  si warm-weekly disable [--quiet]
+  si warmup enable [--profile <profile>] [--quiet] [--no-reconcile]
+  si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet]
+  si warmup status [--json]
+  si warmup disable [--quiet]
 
   Legacy compatibility:
-    si warm-weekly [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
+    si warmup [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 
 images:
   si images build                 (builds aureuma/si:local)

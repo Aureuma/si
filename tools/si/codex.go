@@ -56,8 +56,8 @@ func dispatchCodexCommand(cmd string, args []string) bool {
 		cmdCodexStop(args)
 	case "start":
 		cmdCodexStart(args)
-	case "warm-weekly":
-		cmdWarmWeekly(args)
+	case "warmup":
+		cmdWarmup(args)
 	default:
 		return false
 	}
@@ -1086,7 +1086,7 @@ func cmdCodexLogin(args []string) {
 	if err := updateSettingsProfile(*profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
-	triggerWarmWeeklyAfterLogin(*profile)
+	triggerWarmupAfterLogin(*profile)
 	removeContainer()
 }
 

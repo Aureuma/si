@@ -19,15 +19,14 @@ import (
 )
 
 const (
-	warmWeeklyStateVersion          = 1
-	warmWeeklyReconcileSchedule     = "0 0 * * * *"
-	warmWeeklyReconcileJobName      = "si-warm-weekly-reconcile"
-	warmWeeklyMinUsageDelta         = 0.05
-	warmWeeklyResetJitterMinutes    = 2
-	warmWeeklyAutostartMarkerName   = "autostart.v1"
-	warmWeeklyDisabledMarkerName    = "disabled.v1"
-	warmWeeklyReconcileConfigName   = "warm-weekly-reconcile.ini"
-	warmWeeklyAutostartEnvGuardName = "SI_WARM_WEEKLY_BOOTSTRAP"
+	warmWeeklyStateVersion        = 1
+	warmWeeklyReconcileSchedule   = "0 0 * * * *"
+	warmWeeklyReconcileJobName    = "si-warmup-reconcile"
+	warmWeeklyMinUsageDelta       = 0.05
+	warmWeeklyResetJitterMinutes  = 2
+	warmWeeklyAutostartMarkerName = "autostart.v1"
+	warmWeeklyDisabledMarkerName  = "disabled.v1"
+	warmWeeklyReconcileConfigName = "warmup-reconcile.ini"
 )
 
 type warmWeeklyState struct {
@@ -67,42 +66,42 @@ type warmWeeklyReconcileSummary struct {
 	Failed  int
 }
 
-func printWarmWeeklyUsage() {
-	fmt.Print(colorizeHelp(`si warm-weekly <enable|reconcile|status|disable> [flags]
+func printWarmupUsage() {
+	fmt.Print(colorizeHelp(`si warmup <enable|reconcile|status|disable> [flags]
 
 Commands:
-  si warm-weekly enable [--profile <profile>] [--quiet] [--no-reconcile]
-  si warm-weekly reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N]
-  si warm-weekly status [--json]
-  si warm-weekly disable [--quiet]
+  si warmup enable [--profile <profile>] [--quiet] [--no-reconcile]
+  si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N]
+  si warmup status [--json]
+  si warmup disable [--quiet]
 
 Legacy compatibility:
-  si warm-weekly [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
+  si warmup [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 `))
 }
 
-func cmdWarmWeeklyEnable(args []string) {
-	fs := flag.NewFlagSet("warm-weekly enable", flag.ExitOnError)
+func cmdWarmupEnable(args []string) {
+	fs := flag.NewFlagSet("warmup enable", flag.ExitOnError)
 	profiles := multiFlag{}
 	fs.Var(&profiles, "profile", "codex profile name/email (repeatable)")
 	quiet := fs.Bool("quiet", false, "suppress non-error output")
 	noReconcile := fs.Bool("no-reconcile", false, "skip immediate reconcile")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si warm-weekly enable [--profile <profile>] [--quiet] [--no-reconcile]")
+		printUsage("usage: si warmup enable [--profile <profile>] [--quiet] [--no-reconcile]")
 		return
 	}
 	if err := ensureWarmWeeklyReconcileScheduler(); err != nil {
 		fatal(err)
 	}
 	if err := setWarmWeeklyDisabled(false); err != nil {
-		warnf("warm-weekly enable: failed to clear disabled marker: %v", err)
+		warnf("warmup enable: failed to clear disabled marker: %v", err)
 	}
 	if err := writeWarmWeeklyAutostartMarker(); err != nil {
-		warnf("warm-weekly enable: failed to write marker: %v", err)
+		warnf("warmup enable: failed to write marker: %v", err)
 	}
 	if !*quiet {
-		successf("warm-weekly scheduler enabled")
+		successf("warmup scheduler enabled")
 	}
 	if *noReconcile {
 		return
@@ -120,29 +119,29 @@ func cmdWarmWeeklyEnable(args []string) {
 	}
 }
 
-func cmdWarmWeeklyDisable(args []string) {
-	fs := flag.NewFlagSet("warm-weekly disable", flag.ExitOnError)
+func cmdWarmupDisable(args []string) {
+	fs := flag.NewFlagSet("warmup disable", flag.ExitOnError)
 	quiet := fs.Bool("quiet", false, "suppress non-error output")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si warm-weekly disable [--quiet]")
+		printUsage("usage: si warmup disable [--quiet]")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := removeOfeliaWarmContainer(ctx, defaultOfeliaName); err != nil && !errors.Is(err, os.ErrNotExist) {
-		warnf("warm-weekly disable: scheduler remove failed: %v", err)
+		warnf("warmup disable: scheduler remove failed: %v", err)
 	}
 	if err := setWarmWeeklyDisabled(true); err != nil {
-		warnf("warm-weekly disable: failed to set disabled marker: %v", err)
+		warnf("warmup disable: failed to set disabled marker: %v", err)
 	}
 	if !*quiet {
-		successf("warm-weekly scheduler disabled")
+		successf("warmup scheduler disabled")
 	}
 }
 
-func cmdWarmWeeklyReconcile(args []string) {
-	fs := flag.NewFlagSet("warm-weekly reconcile", flag.ExitOnError)
+func cmdWarmupReconcile(args []string) {
+	fs := flag.NewFlagSet("warmup reconcile", flag.ExitOnError)
 	profiles := multiFlag{}
 	fs.Var(&profiles, "profile", "codex profile name/email (repeatable)")
 	forceBootstrap := fs.Bool("force-bootstrap", false, "force warm attempts even when profile already has weekly usage")
@@ -151,7 +150,7 @@ func cmdWarmWeeklyReconcile(args []string) {
 	prompt := fs.String("prompt", "", "override warm prompt")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si warm-weekly reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N] [--prompt <text>]")
+		printUsage("usage: si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N] [--prompt <text>]")
 		return
 	}
 	opts := warmWeeklyReconcileOptions{
@@ -171,17 +170,17 @@ func cmdWarmWeeklyReconcile(args []string) {
 	}
 	if !opts.Quiet {
 		fmt.Printf("%s scanned=%d warmed=%d ready=%d skipped=%d paused=%d failed=%d\n",
-			styleHeading("Warm-weekly reconcile:"),
+			styleHeading("Warmup reconcile:"),
 			summary.Scanned, summary.Warmed, summary.Ready, summary.Skipped, summary.Paused, summary.Failed)
 	}
 }
 
-func cmdWarmWeeklyStatus(args []string) {
-	fs := flag.NewFlagSet("warm-weekly status", flag.ExitOnError)
+func cmdWarmupStatus(args []string) {
+	fs := flag.NewFlagSet("warmup status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si warm-weekly status [--json]")
+		printUsage("usage: si warmup status [--json]")
 		return
 	}
 	state, err := loadWarmWeeklyState()
@@ -206,7 +205,7 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 	if opts.MaxAttempts > 3 {
 		opts.MaxAttempts = 3
 	}
-	unlock, err := acquireCodexLock("warm-weekly-reconcile", "global", 2*time.Second, 2*time.Hour)
+	unlock, err := acquireCodexLock("warmup-reconcile", "global", 2*time.Second, 2*time.Hour)
 	if err != nil {
 		return warmWeeklyReconcileSummary{}, err
 	}
@@ -228,6 +227,7 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 		_ = saveWarmWeeklyState(state)
 		return warmWeeklyReconcileSummary{}, nil
 	}
+	selectedProfilesOnly := len(opts.ProfileKeys) > 0
 
 	execOpts := defaultWarmWeeklyExecOptions()
 	summary := warmWeeklyReconcileSummary{}
@@ -240,7 +240,7 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 			state.Profiles[profile.ID] = entry
 		}
 		nextDue := parseWarmWeeklyTime(entry.NextDue)
-		if !opts.ForceBootstrap && !nextDue.IsZero() && nextDue.After(now) {
+		if !opts.ForceBootstrap && !selectedProfilesOnly && !nextDue.IsZero() && nextDue.After(now) {
 			summary.Skipped++
 			appendWarmWeeklyLog("debug", "skip_not_due", profile.ID, map[string]interface{}{"next_due": entry.NextDue, "trigger": opts.Trigger})
 			continue
@@ -307,7 +307,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	}
 	entry.LastWeeklyUsedPct = usedBefore
 
-	needsWarm := opts.ForceBootstrap || !resetKnown || !usedKnown || usedBefore <= warmWeeklyMinUsageDelta
+	needsWarm := warmWeeklyNeedsBootstrap(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown)
 	if !needsWarm {
 		entry.Paused = false
 		entry.LastResult = "ready"
@@ -410,6 +410,16 @@ func warmWeeklyPromptForAttempt(base string, attempt int) string {
 	}
 }
 
+func warmWeeklyNeedsBootstrap(force bool, usedBefore float64, usedKnown bool, resetKnown bool) bool {
+	_ = usedBefore
+	if force {
+		return true
+	}
+	// If reset timing is present and usage data is readable, the weekly window is
+	// already active even if rounded display still shows 100%.
+	return !usedKnown || !resetKnown
+}
+
 func warmWeeklyBootstrapSucceeded(before, after float64) bool {
 	if after-before >= warmWeeklyMinUsageDelta {
 		return true
@@ -501,7 +511,7 @@ func saveWarmWeeklyState(state warmWeeklyState) error {
 		return err
 	}
 	data = append(data, '\n')
-	tmp, err := os.CreateTemp(filepath.Dir(path), "warm-weekly-state-*.json")
+	tmp, err := os.CreateTemp(filepath.Dir(path), "warmup-state-*.json")
 	if err != nil {
 		return err
 	}
@@ -547,7 +557,7 @@ func printWarmWeeklyState(state warmWeeklyState) {
 		return rows[i].ProfileID < rows[j].ProfileID
 	})
 	if len(rows) == 0 {
-		infof("warm-weekly state is empty")
+		infof("warmup state is empty")
 		return
 	}
 	widthProfile := displayWidth("PROFILE")
@@ -700,7 +710,7 @@ func ensureWarmWeeklyReconcileConfig(configPath string, executablePath string, s
 	if image == "" {
 		image = "aureuma/si:local"
 	}
-	command := fmt.Sprintf("/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; %s warm-weekly reconcile --quiet'", shellSingleQuote("/usr/local/bin/si"))
+	command := fmt.Sprintf("/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; %s warmup reconcile --quiet'", shellSingleQuote("/usr/local/bin/si"))
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("[job-run \"%s\"]\n", warmWeeklyReconcileJobName))
@@ -713,47 +723,27 @@ func ensureWarmWeeklyReconcileConfig(configPath string, executablePath string, s
 	return os.WriteFile(configPath, []byte(b.String()), 0o600)
 }
 
-func triggerWarmWeeklyAfterLogin(profile codexProfile) {
+func triggerWarmupAfterLogin(profile codexProfile) {
 	profileID := strings.TrimSpace(profile.ID)
 	if profileID == "" {
 		return
 	}
-	_ = launchWarmWeeklyCommand("warm-weekly", "enable", "--quiet")
-	_ = launchWarmWeeklyCommand("warm-weekly", "reconcile", "--profile", profileID, "--force-bootstrap", "--quiet")
-	_ = launchWarmWeeklyCommand("warm-weekly", "reconcile", "--quiet")
-}
-
-func maybeWarmWeeklyAutostart(cmd string) {
-	if strings.TrimSpace(os.Getenv(warmWeeklyAutostartEnvGuardName)) == "1" {
-		return
-	}
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("SI_WARM_WEEKLY_AUTOSTART")), "0") ||
-		strings.EqualFold(strings.TrimSpace(os.Getenv("SI_WARM_WEEKLY_AUTOSTART")), "false") {
-		return
-	}
-	switch strings.TrimSpace(cmd) {
-	case "", "help", "-h", "--help", "version", "--version", "-v", "warm-weekly":
-		return
-	}
 	if warmWeeklyDisabled() {
+		appendWarmWeeklyLog("info", "login_trigger_skipped_disabled", profileID, nil)
 		return
 	}
-	if warmWeeklyAutostartMarkerExists() {
-		return
+	if err := launchWarmupCommand("warmup", "enable", "--quiet", "--profile", profileID); err != nil {
+		appendWarmWeeklyLog("warn", "login_trigger_failed", profileID, map[string]interface{}{"error": err.Error()})
 	}
-	if !acquireWarmWeeklyAutostartGate() {
-		return
-	}
-	_ = launchWarmWeeklyCommand("warm-weekly", "enable", "--quiet")
 }
 
-func launchWarmWeeklyCommand(args ...string) error {
+func launchWarmupCommand(args ...string) error {
 	exePath, err := os.Executable()
 	if err != nil {
 		return err
 	}
 	cmd := exec.Command(exePath, args...)
-	cmd.Env = append(os.Environ(), warmWeeklyAutostartEnvGuardName+"=1")
+	cmd.Env = os.Environ()
 	cmd.Stdin = nil
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
@@ -765,7 +755,7 @@ func warmWeeklyDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".si", "warm-weekly"), nil
+	return filepath.Join(home, ".si", "warmup"), nil
 }
 
 func warmWeeklyStatePath() (string, error) {
@@ -781,7 +771,7 @@ func warmWeeklyLogPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".si", "logs", "warm-weekly.log"), nil
+	return filepath.Join(home, ".si", "logs", "warmup.log"), nil
 }
 
 func warmWeeklyAutostartMarkerPath() (string, error) {
@@ -798,15 +788,6 @@ func warmWeeklyDisabledMarkerPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, warmWeeklyDisabledMarkerName), nil
-}
-
-func warmWeeklyAutostartMarkerExists() bool {
-	path, err := warmWeeklyAutostartMarkerPath()
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(path)
-	return err == nil
 }
 
 func writeWarmWeeklyAutostartMarker() error {
@@ -852,25 +833,6 @@ func defaultWarmWeeklyReconcileConfigPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".si", "ofelia", warmWeeklyReconcileConfigName), nil
-}
-
-func acquireWarmWeeklyAutostartGate() bool {
-	lockPath := filepath.Join(os.TempDir(), "si-warm-weekly-autostart.lock")
-	info, err := os.Stat(lockPath)
-	if err == nil && time.Since(info.ModTime()) > 2*time.Minute {
-		_ = os.Remove(lockPath)
-	}
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-	if err != nil {
-		return false
-	}
-	_, _ = fmt.Fprintf(f, "pid=%d time=%s\n", os.Getpid(), time.Now().Format(time.RFC3339))
-	_ = f.Close()
-	go func() {
-		time.Sleep(2 * time.Minute)
-		_ = os.Remove(lockPath)
-	}()
-	return true
 }
 
 func parseWarmWeeklyTime(value string) time.Time {
