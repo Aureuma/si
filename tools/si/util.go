@@ -285,17 +285,6 @@ func hostUserEnv() []string {
 	}
 }
 
-func readFileTrim(path string) (string, bool, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", false, nil
-		}
-		return "", false, err
-	}
-	return strings.TrimSpace(string(data)), true, nil
-}
-
 func mustRepoRoot() string {
 	root, err := repoRoot()
 	if err != nil {

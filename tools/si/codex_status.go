@@ -254,10 +254,6 @@ func debugf(opts statusOptions, format string, args ...interface{}) {
 	_, _ = fmt.Fprintf(os.Stderr, "%s %s\n", styleDim("[codex-status]"), msg)
 }
 
-func acquireStatusLock(name string, opts statusOptions) (func(), error) {
-	return acquireCodexLock("status", name, opts.LockTimeout, opts.LockStaleAfter)
-}
-
 func acquireCodexLock(kind, name string, timeout, staleAfter time.Duration) (func(), error) {
 	lockPath := filepath.Join(os.TempDir(), fmt.Sprintf("si-codex-%s-%s.lock", kind, name))
 	deadline := time.Now().Add(timeout)

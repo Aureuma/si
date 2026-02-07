@@ -1341,10 +1341,6 @@ func cmdCodexLogin(args []string) {
 		return
 	}
 
-	if profile == nil {
-		return
-	}
-
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -1439,7 +1435,7 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 		return codexProfile{}, false
 	}
 
-	prompt := fmt.Sprintf("Select profile [1-%d]", len(items))
+	var prompt string
 	if defaultKey != "" {
 		prompt = fmt.Sprintf("Select profile [1-%d] (default %s, Esc to cancel)", len(items), defaultKey)
 	} else {
@@ -1903,7 +1899,6 @@ func splitNameAndFlags(args []string, boolFlags map[string]bool) (string, []stri
 		out = append(out, arg)
 		flagName := strings.TrimLeft(arg, "-")
 		if idx := strings.Index(flagName, "="); idx != -1 {
-			flagName = flagName[:idx]
 			continue
 		}
 		if boolFlags[flagName] {
