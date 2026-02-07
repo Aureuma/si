@@ -207,6 +207,9 @@ func cmdCodexSpawn(args []string) {
 				fatal(err)
 			}
 			name = strings.TrimSpace(line)
+			if isEscCancelInput(name) {
+				return
+			}
 			if name == "" {
 				return
 			}
@@ -803,6 +806,9 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 		fatal(err)
 	}
 	line = strings.TrimSpace(line)
+	if isEscCancelInput(line) {
+		return "", false
+	}
 	if line == "" {
 		return "", false
 	}
@@ -869,6 +875,9 @@ func selectCodexContainerFromList(action string) (string, bool) {
 		fatal(err)
 	}
 	line = strings.TrimSpace(line)
+	if isEscCancelInput(line) {
+		return "", false
+	}
 	if line == "" {
 		return "", false
 	}
@@ -1113,6 +1122,9 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 		fatal(err)
 	}
 	line = strings.TrimSpace(line)
+	if isEscCancelInput(line) {
+		return codexProfile{}, false
+	}
 	if line == "" && defaultKey != "" {
 		if profile, ok := codexProfileByKey(defaultKey); ok {
 			return profile, true

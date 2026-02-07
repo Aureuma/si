@@ -242,6 +242,10 @@ func envOr(key, def string) string {
 	return val
 }
 
+func isEscCancelInput(value string) bool {
+	return strings.ContainsRune(value, '\x1b')
+}
+
 func hostUserEnv() []string {
 	uid := os.Getuid()
 	gid := os.Getgid()
