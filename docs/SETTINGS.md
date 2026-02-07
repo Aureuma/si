@@ -30,7 +30,7 @@ Reference paths for the local `.si` directory layout.
 
 ### `[codex]`
 Defaults for Codex container commands (spawn/respawn/login/run).
-- `codex.image` (string): docker image for `si codex spawn` (default: `aureuma/si:local`)
+- `codex.image` (string): docker image for `si spawn` (default: `aureuma/si:local`)
 - `codex.network` (string): docker network name
 - `codex.workspace` (string): host path for workspace bind
 - `codex.workdir` (string): container working directory

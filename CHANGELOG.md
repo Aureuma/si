@@ -8,9 +8,22 @@ All notable changes to this project will be documented in this file.
 - Write short, user-facing bullets in past tense.
 - Dates use UTC in YYYY-MM-DD.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
-- Note: Entries before v1.1.0 reference the legacy `si codex ...` namespace.
+- Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
-## [v1.2.0] - 2026-01-30
+## [v0.42.0] - 2026-02-07
+### Added
+- Added profile-indexed spawn guards so codex profiles cannot create multiple containers.
+- Added deterministic profile-container selection tests for spawn/respawn enforcement.
+### Changed
+- Merged `si profile` behavior into `si status`, including list/default/single-profile flows.
+- Defaulted `si status` to include profile usage columns and added `--no-status` for classic output.
+- Defaulted spawn/respawn profile flows to use the profile ID as the container name.
+- Hardened respawn profile flows to clean up legacy duplicate containers for the same profile.
+### Fixed
+- Treated expired usage API tokens as stale profile auth instead of hard status errors.
+- Fixed status/profile argument parsing so flags work both before and after positional values.
+
+## [v0.41.0] - 2026-01-30
 ### Added
 - Added automatic login URL opening with Safari profile support and overrides.
 - Added device code clipboard copy for macOS and Linux.
@@ -21,15 +34,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Stripped ANSI escape sequences from login URLs.
 
-## [v1.1.0] - 2026-01-26
-### Changed
-- Promoted Codex container commands to top-level (for example `si run`, alias `si exec`).
-- Renamed the markdown profile command to `si persona`.
-
-### Removed
-- Removed the `si codex ...` namespace in favor of top-level commands.
-
-## [v1.1.0] - 2026-01-27
+## [v0.40.0] - 2026-01-27
 ### Added
 - Added the unified `aureuma/si:local` image build for codex and dyad runtimes.
 ### Changed
@@ -41,7 +46,15 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Corrected dyad exec and copy-login usage guidance for flag ordering.
 
-## [v1.0.0] - 2026-01-26
+## [v0.39.1] - 2026-01-26
+### Changed
+- Promoted Codex container commands to top-level (for example `si run`, alias `si exec`).
+- Renamed the markdown profile command to `si persona`.
+
+### Removed
+- Removed the `si codex ...` namespace in favor of top-level commands.
+
+## [v0.39.0] - 2026-01-26
 ### Added
 - Introduced Codex profiles and the `si codex profile` command.
 - Added profile-aware `si codex login` with host auth caching.
