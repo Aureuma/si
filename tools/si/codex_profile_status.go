@@ -193,7 +193,7 @@ func fetchProfileStatus(profile codexProfile, client *http.Client, usageURL stri
 				}
 				status, err = fetchUsageStatus(ctx, client, usageURL, auth)
 			} else {
-				return profileStatusResult{ID: profile.ID, Err: fmt.Errorf("usage token expired; refresh failed (%v) and container auth sync failed: %w", refreshErr, syncErr)}
+				return profileStatusResult{ID: profile.ID, Err: fmt.Errorf("usage token expired; refresh failed (%v) and auth sync failed: %w", refreshErr, syncErr)}
 			}
 		}
 	}
@@ -512,25 +512,66 @@ func syncProfileAuthFromContainer(ctx context.Context, profile codexProfile) (pr
 	}
 	defer client.Close()
 
+	var containerErr error
 	refs, err := codexContainersByProfile(ctx, client, profile.ID)
-	if err != nil {
-		return profileAuthTokens{}, err
+	if err == nil && len(refs) > 0 {
+		preferred := choosePreferredCodexContainer(refs, codexContainerName(profile.ID))
+		id, _, lookupErr := client.ContainerByName(ctx, preferred.Name)
+		if lookupErr != nil {
+			containerErr = lookupErr
+		} else if strings.TrimSpace(id) == "" {
+			containerErr = fmt.Errorf("codex container %s not found", preferred.Name)
+		} else if cacheErr := cacheCodexAuthFromContainer(ctx, client, id, profile); cacheErr != nil {
+			containerErr = cacheErr
+		} else {
+			return loadProfileAuthTokens(profile)
+		}
+	} else if err != nil {
+		containerErr = err
+	} else {
+		containerErr = fmt.Errorf("no codex container found for profile %s", profile.ID)
 	}
-	if len(refs) == 0 {
-		return profileAuthTokens{}, fmt.Errorf("no codex container found for profile %s", profile.ID)
+
+	var volumeErr error
+	volName := profileCodexAuthVolume(profile, refs, client, ctx)
+	if strings.TrimSpace(volName) != "" {
+		if data, volErr := readCodexAuthFromVolume(ctx, client, volName); volErr == nil {
+			if cacheErr := cacheCodexAuthBytes(profile, data); cacheErr == nil {
+				return loadProfileAuthTokens(profile)
+			} else {
+				volumeErr = cacheErr
+			}
+		} else {
+			volumeErr = volErr
+		}
 	}
-	preferred := choosePreferredCodexContainer(refs, codexContainerName(profile.ID))
-	id, _, err := client.ContainerByName(ctx, preferred.Name)
-	if err != nil {
-		return profileAuthTokens{}, err
+	switch {
+	case containerErr != nil && volumeErr != nil:
+		return profileAuthTokens{}, fmt.Errorf("container auth sync failed: %v; volume auth sync failed (%s): %v", containerErr, volName, volumeErr)
+	case containerErr != nil:
+		return profileAuthTokens{}, containerErr
+	case volumeErr != nil:
+		return profileAuthTokens{}, fmt.Errorf("volume auth sync failed (%s): %v", volName, volumeErr)
+	default:
+		return profileAuthTokens{}, errors.New("container and volume auth sync failed")
 	}
-	if strings.TrimSpace(id) == "" {
-		return profileAuthTokens{}, fmt.Errorf("codex container %s not found", preferred.Name)
+}
+
+func profileCodexAuthVolume(profile codexProfile, refs []codexProfileContainerRef, client *shared.Client, ctx context.Context) string {
+	if client != nil && len(refs) > 0 {
+		preferred := choosePreferredCodexContainer(refs, codexContainerName(profile.ID))
+		id, info, err := client.ContainerByName(ctx, preferred.Name)
+		if err == nil && strings.TrimSpace(id) != "" {
+			if volumeName := codexAuthVolumeFromContainerInfo(info); strings.TrimSpace(volumeName) != "" {
+				return volumeName
+			}
+		}
 	}
-	if err := cacheCodexAuthFromContainer(ctx, client, id, profile); err != nil {
-		return profileAuthTokens{}, err
+	id := strings.TrimSpace(profile.ID)
+	if id == "" {
+		return ""
 	}
-	return loadProfileAuthTokens(profile)
+	return "si-codex-" + id
 }
 
 func codexStatusFromUsage(payload usagePayload, now time.Time) codexStatus {
