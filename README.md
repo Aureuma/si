@@ -130,6 +130,25 @@ Behavior:
 - `si login` triggers `warmup enable --profile <profile>` automatically after successful auth cache write.
 - `--quiet` suppresses warmup command output.
 
+## Stripe
+`si` includes a Stripe bridge command family:
+
+```bash
+./si stripe auth status
+./si stripe context list
+./si stripe context use --account core --env sandbox
+./si stripe object list product --limit 20
+./si stripe object create product --param name=Starter
+./si stripe raw --method GET --path /v1/balance
+./si stripe report balance-overview
+./si stripe sync live-to-sandbox plan --account core
+./si stripe sync live-to-sandbox apply --account core --dry-run
+```
+
+Environment policy:
+- Use `live` and `sandbox`.
+- `test` is intentionally rejected as a CLI environment mode.
+
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).
 2) Human opens the URL on a browser-capable machine and completes OAuth.
