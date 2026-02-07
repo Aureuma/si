@@ -31,7 +31,7 @@ Usage:
   si version | --version | -v
 
 Core:
-  si dyad spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login
+  si dyad spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login
   si spawn|respawn|list|status|report|login|profile|ps|run|logs|tail|clone|remove|stop|start
   si docker <args...>
 
@@ -48,6 +48,8 @@ Command details
 ---------------
 
 dyad:
+  Running si dyad with no subcommand opens an interactive command picker.
+
   si dyad spawn <name> [role] [department]
     --role <role>
     --department <dept>
@@ -68,10 +70,11 @@ dyad:
     --docker-socket / --docker-socket=false
 
   si dyad list                    (no flags)
-  si dyad remove <name>           (aliases: teardown, destroy)
+  si dyad remove <name>           (aliases: teardown, destroy, rm, delete)
   si dyad recreate <name> [role] [department]
   si dyad status <name>
   si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>
+  si dyad run  [--member actor|critic] [--tty] <dyad> -- <cmd...>   (alias)
     --member <actor|critic>
     --tty
   si dyad logs [--member actor|critic] [--tail N] <dyad>
@@ -80,6 +83,7 @@ dyad:
   si dyad restart <name>
   si dyad cleanup
   si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>
+  si dyad login      [--member actor|critic] [--source codex-status] <dyad>   (alias)
     --source <si-codex container name or suffix>
     --member <actor|critic>
     --source-home <path>
