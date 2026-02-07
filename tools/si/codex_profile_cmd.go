@@ -137,8 +137,14 @@ func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult
 		return
 	}
 	if res.Err != nil {
-		// Keep AUTH based on local cache presence; expired auth just means limits are unavailable.
-		if isExpiredAuthError(res.Err) {
+		if isAuthFailureError(res.Err) {
+			item.AuthCached = false
+			item.AuthUpdated = ""
+			item.FiveHourLeftPct = -1
+			item.FiveHourReset = ""
+			item.WeeklyLeftPct = -1
+			item.WeeklyReset = ""
+			item.StatusError = ""
 			return
 		}
 		item.StatusError = res.Err.Error()

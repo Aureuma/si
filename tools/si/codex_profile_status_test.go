@@ -67,6 +67,26 @@ func TestIsRefreshTokenReusedError(t *testing.T) {
 	}
 }
 
+func TestIsAuthFailureError(t *testing.T) {
+	if !isAuthFailureError(&usageAPIError{
+		StatusCode: http.StatusUnauthorized,
+		Code:       "invalid_token",
+		Message:    "invalid token",
+	}) {
+		t.Fatalf("expected unauthorized token error to be auth failure")
+	}
+	if isAuthFailureError(errors.New("upstream timeout")) {
+		t.Fatalf("expected timeout to not be auth failure")
+	}
+}
+
+func TestIsAuthFailureErrorFromRateLimitMessage(t *testing.T) {
+	err := errors.New(`failed to fetch codex rate limits: GET https://chatgpt.com/backend-api/wham/usage failed: 401 Unauthorized; body={"error":{"code":"token_expired"}}`)
+	if !isAuthFailureError(err) {
+		t.Fatalf("expected wrapped rate-limit auth message to be treated as auth failure")
+	}
+}
+
 func TestProfileOAuthClientID(t *testing.T) {
 	idToken := buildTestJWT(map[string]interface{}{
 		"aud": []interface{}{"app_test_client"},

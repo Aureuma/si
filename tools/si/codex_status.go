@@ -118,7 +118,7 @@ func cmdCodexStatus(args []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
 
-	id, _, err := client.ContainerByName(ctx, containerName)
+	id, info, err := client.ContainerByName(ctx, containerName)
 	if err != nil {
 		fatal(err)
 	}
@@ -132,6 +132,24 @@ func cmdCodexStatus(args []string) {
 
 	parsed, raw, err := fetchCodexAppServerStatus(ctx, client, id)
 	if err != nil {
+		if isAuthFailureError(err) {
+			if hasProfileCandidate {
+				showCodexProfile(profileCandidate.ID, *jsonOut, withProfileStatus)
+				return
+			}
+			if info != nil && info.Config != nil {
+				if labelKey := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey]); labelKey != "" {
+					if fallbackProfile, ok := codexProfileByKey(labelKey); ok {
+						showCodexProfile(fallbackProfile.ID, *jsonOut, withProfileStatus)
+						return
+					}
+				}
+			}
+			if fallbackProfile, ok := codexProfileByKey(name); ok {
+				showCodexProfile(fallbackProfile.ID, *jsonOut, withProfileStatus)
+				return
+			}
+		}
 		fatal(err)
 	}
 	if *showRaw {
