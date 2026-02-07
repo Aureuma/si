@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"errors"
+	"net/http"
+	"testing"
+)
 
 func TestSplitProfileNameAndFlags(t *testing.T) {
 	name, filtered := splitProfileNameAndFlags([]string{"cadma", "--no-status", "--json"})
@@ -25,5 +29,62 @@ func TestSplitProfileNameAndFlags(t *testing.T) {
 	}
 	if len(filtered) != 1 || filtered[0] != "extra" {
 		t.Fatalf("unexpected filtered args: %v", filtered)
+	}
+}
+
+func TestApplyProfileStatusResultExpiredTokenKeepsAuth(t *testing.T) {
+	item := codexProfileSummary{
+		ID:              "cadma",
+		AuthCached:      true,
+		FiveHourLeftPct: -1,
+		WeeklyLeftPct:   -1,
+	}
+	res := profileStatusResult{
+		ID: "cadma",
+		Err: &usageAPIError{
+			StatusCode: http.StatusUnauthorized,
+			Code:       "token_expired",
+			Message:    "expired",
+		},
+	}
+	applyProfileStatusResult(&item, res)
+	if !item.AuthCached {
+		t.Fatalf("expected AuthCached to stay true")
+	}
+	if item.StatusError != "" {
+		t.Fatalf("expected no status error, got %q", item.StatusError)
+	}
+}
+
+func TestApplyProfileStatusResultNonExpiredErrorSetsStatusError(t *testing.T) {
+	item := codexProfileSummary{ID: "cadma"}
+	res := profileStatusResult{ID: "cadma", Err: errors.New("boom")}
+	applyProfileStatusResult(&item, res)
+	if item.StatusError != "boom" {
+		t.Fatalf("unexpected status error %q", item.StatusError)
+	}
+}
+
+func TestApplyProfileStatusResultSuccess(t *testing.T) {
+	item := codexProfileSummary{
+		ID:              "cadma",
+		FiveHourLeftPct: -1,
+		WeeklyLeftPct:   -1,
+	}
+	res := profileStatusResult{
+		ID: "cadma",
+		Status: codexStatus{
+			FiveHourLeftPct: 42.5,
+			FiveHourReset:   "2026-02-08T00:00:00Z",
+			WeeklyLeftPct:   88.8,
+			WeeklyReset:     "2026-02-14T00:00:00Z",
+		},
+	}
+	applyProfileStatusResult(&item, res)
+	if item.FiveHourLeftPct != 42.5 || item.WeeklyLeftPct != 88.8 {
+		t.Fatalf("unexpected usage limits: %+v", item)
+	}
+	if item.FiveHourReset == "" || item.WeeklyReset == "" {
+		t.Fatalf("expected reset timestamps to be populated: %+v", item)
 	}
 }

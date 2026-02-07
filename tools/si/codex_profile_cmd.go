@@ -52,18 +52,7 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 		statuses := collectProfileStatuses(items)
 		for i := range items {
 			if res, ok := statuses[items[i].ID]; ok {
-				if res.Err != nil {
-					if isExpiredAuthError(res.Err) {
-						items[i].AuthCached = false
-						continue
-					}
-					items[i].StatusError = res.Err.Error()
-					continue
-				}
-				items[i].FiveHourLeftPct = res.Status.FiveHourLeftPct
-				items[i].FiveHourReset = res.Status.FiveHourReset
-				items[i].WeeklyLeftPct = res.Status.WeeklyLeftPct
-				items[i].WeeklyReset = res.Status.WeeklyReset
+				applyProfileStatusResult(&items[i], res)
 			}
 		}
 	}
@@ -107,18 +96,7 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 	if withStatus && status.Exists {
 		statuses := collectProfileStatuses([]codexProfileSummary{item})
 		if res, ok := statuses[item.ID]; ok {
-			if res.Err != nil {
-				if isExpiredAuthError(res.Err) {
-					item.AuthCached = false
-				} else {
-					item.StatusError = res.Err.Error()
-				}
-			} else {
-				item.FiveHourLeftPct = res.Status.FiveHourLeftPct
-				item.FiveHourReset = res.Status.FiveHourReset
-				item.WeeklyLeftPct = res.Status.WeeklyLeftPct
-				item.WeeklyReset = res.Status.WeeklyReset
-			}
+			applyProfileStatusResult(&item, res)
 		}
 	}
 	if jsonOut {
@@ -152,6 +130,24 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 			fmt.Printf("%s %s\n", styleHeading("Status:"), "unavailable (auth missing)")
 		}
 	}
+}
+
+func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult) {
+	if item == nil {
+		return
+	}
+	if res.Err != nil {
+		// Keep AUTH based on local cache presence; expired auth just means limits are unavailable.
+		if isExpiredAuthError(res.Err) {
+			return
+		}
+		item.StatusError = res.Err.Error()
+		return
+	}
+	item.FiveHourLeftPct = res.Status.FiveHourLeftPct
+	item.FiveHourReset = res.Status.FiveHourReset
+	item.WeeklyLeftPct = res.Status.WeeklyLeftPct
+	item.WeeklyReset = res.Status.WeeklyReset
 }
 
 func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
