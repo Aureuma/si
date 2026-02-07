@@ -22,6 +22,7 @@ Holistic CLI for si. This help includes all commands, flags, and core features.
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
+  - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
   - Image build helpers for local dev.
@@ -35,6 +36,7 @@ Usage:
 Core:
   si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
+  si stripe <auth|context|object|raw|report|sync>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
@@ -219,6 +221,23 @@ analyze:
 
   Aliases:
     si lint ...   (same as si analyze)
+
+stripe:
+  si stripe auth status [--account <alias>] [--env <live|sandbox>] [--json]
+  si stripe context list|current|use [--account <alias|acct_id>] [--env <live|sandbox>]
+  si stripe object list <object> [--limit N] [--param key=value] [--json]
+  si stripe object get <object> <id> [--param key=value] [--json]
+  si stripe object create <object> [--param key=value] [--idempotency-key <key>] [--json]
+  si stripe object update <object> <id> [--param key=value] [--idempotency-key <key>] [--json]
+  si stripe object delete <object> <id> [--force] [--idempotency-key <key>] [--json]
+  si stripe raw --method <GET|POST|DELETE> --path <api-path> [--param key=value] [--json]
+  si stripe report <revenue-summary|payment-intent-status|subscription-churn|balance-overview> [--json]
+  si stripe sync live-to-sandbox plan [--only <family>] [--json]
+  si stripe sync live-to-sandbox apply [--only <family>] [--dry-run] [--force] [--json]
+
+  Environment policy:
+    CLI uses live and sandbox.
+    test is not accepted as a standalone environment mode.
 
 Environment defaults (selected)
 -------------------------------
@@ -485,7 +504,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill|analyze|lint)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill|analyze|lint|stripe)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
