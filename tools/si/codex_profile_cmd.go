@@ -232,6 +232,9 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 }
 
 func profileAuthLabel(item codexProfileSummary) string {
+	if isProfileAuthError(item.StatusError) {
+		return "Error"
+	}
 	if item.AuthCached {
 		return "Logged-In"
 	}
@@ -245,7 +248,7 @@ func profileFiveHourDisplay(item codexProfileSummary) string {
 	if strings.TrimSpace(item.StatusError) == "" {
 		return formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
 	}
-	if !item.AuthCached {
+	if isProfileAuthError(item.StatusError) || !item.AuthCached {
 		return "AUTH-ERR"
 	}
 	return "ERR"
@@ -255,10 +258,32 @@ func profileWeeklyDisplay(item codexProfileSummary) string {
 	if strings.TrimSpace(item.StatusError) == "" {
 		return formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
 	}
-	if !item.AuthCached {
+	if isProfileAuthError(item.StatusError) || !item.AuthCached {
 		return "-"
 	}
 	return "ERR"
+}
+
+func isProfileAuthError(raw string) bool {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return false
+	}
+	keywords := []string{
+		"auth",
+		"token",
+		"unauthorized",
+		"forbidden",
+		"credential",
+		"refresh",
+		"login",
+	}
+	for _, key := range keywords {
+		if strings.Contains(raw, key) {
+			return true
+		}
+	}
+	return false
 }
 
 func summarizeProfileStatusError(profileID string, raw string) string {
