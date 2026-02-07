@@ -90,8 +90,8 @@ dyad:
     --target-home <path>
 
 codex:
-  si spawn <name>
-  si respawn <name> [--volumes]
+  si spawn [name]
+  si respawn [name] [--volumes]
     --image <docker image>
     --workspace <host path>       (default: current dir)
     --network <network>

@@ -124,11 +124,13 @@ func cmdCodexSpawn(args []string) {
 	workdirSet := flagProvided(args, "workdir")
 	workspaceSet := flagProvided(args, "workspace")
 	explicitProfile := flagProvided(args, "profile")
+	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	fs := flag.NewFlagSet("spawn", flag.ExitOnError)
 	flags := addCodexSpawnFlags(fs)
 	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
 	fs.Parse(filtered)
 	settings := loadSettingsOrDefault()
+	defaultProfileKey := codexDefaultProfileKey(settings)
 
 	if !flagProvided(args, "image") && strings.TrimSpace(settings.Codex.Image) != "" {
 		*flags.image = strings.TrimSpace(settings.Codex.Image)
@@ -166,36 +168,48 @@ func cmdCodexSpawn(args []string) {
 		*flags.cleanSlate = *settings.Codex.CleanSlate
 	}
 
-	name := nameArg
+	name := strings.TrimSpace(nameArg)
 	if name == "" && fs.NArg() > 0 {
-		name = fs.Arg(0)
+		name = strings.TrimSpace(fs.Arg(0))
+	}
+	if !explicitProfile && strings.TrimSpace(*flags.profile) == "" && defaultProfileKey != "" && !interactive {
+		*flags.profile = defaultProfileKey
+		explicitProfile = true
+	}
+	if name == "" && strings.TrimSpace(*flags.profile) != "" {
+		selected, err := requireCodexProfile(*flags.profile)
+		if err != nil {
+			fatal(err)
+		}
+		*flags.profile = selected.ID
+		explicitProfile = true
+		name = selected.ID
 	}
 	if name == "" {
-		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
-			printUsage("usage: si spawn <name> [--repo Org/Repo] [--gh-pat TOKEN]")
+		if !interactive {
+			printUsage("usage: si spawn [name] [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
 			return
 		}
 		if !explicitProfile && len(codexProfileSummaries()) > 0 {
-			defaultProfileKey := strings.TrimSpace(settings.Codex.Profile)
-			if defaultProfileKey == "" {
-				defaultProfileKey = strings.TrimSpace(settings.Codex.Profiles.Active)
-			}
 			selected, ok := selectCodexProfile("spawn", defaultProfileKey)
 			if !ok {
 				return
 			}
 			*flags.profile = selected.ID
 			explicitProfile = true
+			name = selected.ID
 		}
-		fmt.Printf("%s ", styleDim("Container name:"))
-		reader := bufio.NewReader(os.Stdin)
-		line, err := reader.ReadString('\n')
-		if err != nil && err != io.EOF {
-			fatal(err)
-		}
-		name = strings.TrimSpace(line)
 		if name == "" {
-			return
+			fmt.Printf("%s ", styleDim("Container name:"))
+			reader := bufio.NewReader(os.Stdin)
+			line, err := reader.ReadString('\n')
+			if err != nil && err != io.EOF {
+				fatal(err)
+			}
+			name = strings.TrimSpace(line)
+			if name == "" {
+				return
+			}
 		}
 	}
 	if err := validateSlug(name); err != nil {
@@ -262,11 +276,7 @@ func cmdCodexSpawn(args []string) {
 	}
 
 	if !explicitProfile {
-		defaultProfileKey := strings.TrimSpace(settings.Codex.Profile)
-		if defaultProfileKey == "" {
-			defaultProfileKey = strings.TrimSpace(settings.Codex.Profiles.Active)
-		}
-		if defaultProfileKey != "" && !term.IsTerminal(int(os.Stdin.Fd())) {
+		if defaultProfileKey != "" && !interactive {
 			*flags.profile = defaultProfileKey
 		} else if len(codexProfileSummaries()) > 0 {
 			selected, ok := selectCodexProfile("spawn", defaultProfileKey)
@@ -274,8 +284,8 @@ func cmdCodexSpawn(args []string) {
 				return
 			}
 			*flags.profile = selected.ID
-		} else if !term.IsTerminal(int(os.Stdin.Fd())) && defaultProfileKey == "" {
-			printUsage("usage: si spawn <name> [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
+		} else if !interactive && defaultProfileKey == "" {
+			printUsage("usage: si spawn [name] [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
 			return
 		}
 	}
@@ -397,23 +407,47 @@ func cmdCodexSpawn(args []string) {
 
 func cmdCodexRespawn(args []string) {
 	fs := flag.NewFlagSet("respawn", flag.ExitOnError)
-	addCodexSpawnFlags(fs)
+	flags := addCodexSpawnFlags(fs)
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
 	nameArg, filtered := splitNameAndFlags(args, codexRespawnBoolFlags())
 	_ = fs.Parse(filtered)
+	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	defaultProfileKey := codexDefaultProfileKey(loadSettingsOrDefault())
+	profileExplicit := flagProvided(args, "profile")
+	profileInjected := false
+	if !profileExplicit && strings.TrimSpace(*flags.profile) == "" && defaultProfileKey != "" && !interactive {
+		*flags.profile = defaultProfileKey
+	}
+	profileKey := strings.TrimSpace(*flags.profile)
+	if profileKey == "" && !profileExplicit {
+		selected, ok := selectCodexProfile("respawn", defaultProfileKey)
+		if !ok {
+			return
+		}
+		profileKey = selected.ID
+		filtered = append(filtered, "--profile", selected.ID)
+		profileInjected = true
+	}
+	if profileKey != "" {
+		selected, err := requireCodexProfile(profileKey)
+		if err != nil {
+			fatal(err)
+		}
+		profileKey = selected.ID
+		if !profileExplicit && !profileInjected {
+			filtered = append(filtered, "--profile", selected.ID)
+		}
+	}
+	nameArg = strings.TrimSpace(nameArg)
+	if nameArg == "" && profileKey != "" {
+		nameArg = profileKey
+	}
 	if nameArg == "" {
 		selectedName, ok := selectCodexContainer("respawn", true)
 		if !ok {
 			return
 		}
 		nameArg = selectedName
-	}
-	if !flagProvided(args, "profile") {
-		selected, ok := selectCodexProfile("respawn", "")
-		if !ok {
-			return
-		}
-		filtered = append(filtered, "--profile", selected.ID)
 	}
 	name := nameArg
 	removeArgs := []string{name}
@@ -638,7 +672,7 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 		fatal(err)
 	}
 	if len(containers) == 0 {
-		fmt.Println(styleDim("no codex containers found (run: si spawn <name>)"))
+		fmt.Println(styleDim("no codex containers found (run: si spawn [name])"))
 		return "", false
 	}
 	sort.Slice(containers, func(i, j int) bool {
@@ -721,7 +755,7 @@ func selectCodexContainerFromList(action string) (string, bool) {
 		fatal(err)
 	}
 	if len(containers) == 0 {
-		fmt.Println(styleDim("no codex containers found (run: si spawn <name>)"))
+		fmt.Println(styleDim("no codex containers found (run: si spawn [name])"))
 		return "", false
 	}
 	sort.Slice(containers, func(i, j int) bool {
@@ -1122,6 +1156,14 @@ func codexContainerName(name string) string {
 		return name
 	}
 	return "si-codex-" + name
+}
+
+func codexDefaultProfileKey(settings Settings) string {
+	key := strings.TrimSpace(settings.Codex.Profile)
+	if key == "" {
+		key = strings.TrimSpace(settings.Codex.Profiles.Active)
+	}
+	return key
 }
 
 func codexContainerSlug(name string) string {
