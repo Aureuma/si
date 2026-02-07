@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -403,6 +404,21 @@ func styleSuccess(s string) string { return colorize(s, "32") }
 func styleWarn(s string) string    { return colorize(s, "33") }
 func styleError(s string) string   { return colorize(s, "31") }
 func styleUsage(s string) string   { return colorize(s, "1", "33") }
+
+func styleLimitTextByPct(text string, pct float64) string {
+	if strings.TrimSpace(text) == "" || pct < 0 {
+		return text
+	}
+	rounded := int(math.Round(pct))
+	switch {
+	case rounded >= 100:
+		return colorize(text, "1", "37")
+	case rounded <= 25:
+		return colorize(text, "35")
+	default:
+		return colorize(text, "32")
+	}
+}
 
 func styleStatus(s string) string {
 	val := strings.ToLower(strings.TrimSpace(s))
