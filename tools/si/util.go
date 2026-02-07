@@ -23,6 +23,7 @@ Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
+  - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
   - Image build helpers for local dev.
@@ -37,6 +38,7 @@ Core:
   si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
   si stripe <auth|context|object|raw|report|sync>
+  si self <build|upgrade|run>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
@@ -238,6 +240,15 @@ stripe:
   Environment policy:
     CLI uses live and sandbox.
     test is not accepted as a standalone environment mode.
+
+self:
+  si self build [--repo <path>] [--output <path>]
+  si self upgrade [--repo <path>] [--install-path <path>]
+  si self run [--repo <path>] [--] [si args...]
+
+  Typical workflows:
+    Stable use: build/install once, then run that binary and call si self upgrade when you want to upgrade.
+    Active dev: run si self build --output ./si or si self run -- <args...> from your checkout.
 
 Environment defaults (selected)
 -------------------------------
@@ -504,7 +515,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill|analyze|lint|stripe)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill|analyze|lint|stripe|self)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
