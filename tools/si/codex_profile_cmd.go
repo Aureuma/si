@@ -35,6 +35,10 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 		for i := range items {
 			if res, ok := statuses[items[i].ID]; ok {
 				if res.Err != nil {
+					if isExpiredAuthError(res.Err) {
+						items[i].AuthCached = false
+						continue
+					}
 					items[i].StatusError = res.Err.Error()
 					continue
 				}
@@ -86,7 +90,11 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 		statuses := collectProfileStatuses([]codexProfileSummary{item})
 		if res, ok := statuses[item.ID]; ok {
 			if res.Err != nil {
-				item.StatusError = res.Err.Error()
+				if isExpiredAuthError(res.Err) {
+					item.AuthCached = false
+				} else {
+					item.StatusError = res.Err.Error()
+				}
 			} else {
 				item.FiveHourLeftPct = res.Status.FiveHourLeftPct
 				item.FiveHourReset = res.Status.FiveHourReset
@@ -110,7 +118,7 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 	if status.Path != "" {
 		fmt.Printf("%s %s\n", styleHeading("Auth path:"), status.Path)
 	}
-	if status.Exists {
+	if item.AuthCached {
 		fmt.Printf("%s %s\n", styleHeading("Auth cached:"), "yes")
 		fmt.Printf("%s %s\n", styleHeading("Auth updated:"), status.Modified.UTC().Format(time.RFC3339))
 	} else {
