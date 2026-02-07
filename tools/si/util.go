@@ -50,6 +50,7 @@ Command details
 
 dyad:
   Running si dyad with no subcommand opens an interactive command picker.
+  si dyad help prints dyad-only usage.
 
   si dyad spawn <name> [role] [department]
     --role <role>
@@ -179,7 +180,7 @@ codex:
   si start <name>
 
   si warmup enable [--profile <profile>] [--quiet] [--no-reconcile]
-  si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet]
+  si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N] [--prompt <text>]
   si warmup status [--json]
   si warmup disable [--quiet]
 

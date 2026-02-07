@@ -71,7 +71,7 @@ func printWarmupUsage() {
 
 Commands:
   si warmup enable [--profile <profile>] [--quiet] [--no-reconcile]
-  si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N]
+  si warmup reconcile [--profile <profile>] [--force-bootstrap] [--quiet] [--max-attempts N] [--prompt <text>]
   si warmup status [--json]
   si warmup disable [--quiet]
 
@@ -230,6 +230,7 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 	selectedProfilesOnly := len(opts.ProfileKeys) > 0
 
 	execOpts := defaultWarmWeeklyExecOptions()
+	execOpts.Quiet = opts.Quiet
 	summary := warmWeeklyReconcileSummary{}
 
 	for _, profile := range profiles {
