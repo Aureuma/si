@@ -10,6 +10,21 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [v0.43.0] - 2026-02-07
+### Added
+- Added `si stripe` command family with account context, object CRUD, raw API access, reporting presets, and live-to-sandbox sync plan/apply.
+- Added Stripe bridge internals for normalized request execution, pagination helpers, object registry mapping, and sync orchestration.
+- Added structured Stripe JSONL observability logs at `~/.si/logs/stripe.log` (configurable via settings/env).
+- Added Stripe test coverage for auth/config parsing, registry/CRUD mapping, bridge client behavior, sync planning, report logic, and output mode handling.
+
+### Changed
+- Updated CLI help and docs with Stripe multi-account `live|sandbox` workflows and sandbox-first terminology.
+- Updated Stripe ticket status tracking with per-workstream completion notes.
+
+### Fixed
+- Fixed Stripe command flag parsing so positional and flag arguments can be passed in mixed order.
+- Improved wrapped Stripe error rendering so full actionable details remain visible with contextual command errors.
+
 ## [v0.42.0] - 2026-02-07
 ### Added
 - Added profile-indexed spawn guards so codex profiles cannot create multiple containers.
