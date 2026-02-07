@@ -2,38 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 )
-
-func cmdProfile(args []string) {
-	fs := flag.NewFlagSet("profile", flag.ExitOnError)
-	jsonOut := fs.Bool("json", false, "output json")
-	noStatus := fs.Bool("no-status", false, "disable usage status lookup and limit columns")
-	nameArg, filtered := splitProfileNameAndFlags(args)
-	_ = fs.Parse(filtered)
-	withStatus := !*noStatus
-	nameArg = strings.TrimSpace(nameArg)
-	rest := fs.Args()
-	if nameArg == "" && len(rest) > 0 {
-		nameArg = strings.TrimSpace(rest[0])
-		rest = rest[1:]
-	}
-	if len(rest) > 0 {
-		printUsage("usage: si profile [name] [--json] [--no-status]")
-		return
-	}
-
-	switch {
-	case nameArg == "":
-		listCodexProfiles(*jsonOut, withStatus)
-	case nameArg != "":
-		showCodexProfile(nameArg, *jsonOut, withStatus)
-	}
-}
 
 func splitProfileNameAndFlags(args []string) (string, []string) {
 	return splitNameAndFlags(args, map[string]bool{
