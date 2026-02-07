@@ -509,3 +509,77 @@ Use this block in PR description and in this ticket under each WS:
 2. Real-time streaming dashboards.
 3. Multi-tenant RBAC policy engine inside CLI.
 4. Automatic code generation pipeline from Stripe OpenAPI in CI (optional enhancement).
+
+## 12. Requested Constraints Audit (User-Specified)
+
+This section explicitly verifies the requested constraints and where each is implemented.
+
+### A) Multi-account + multi-environment model
+- Requirement: multiple accounts under one organization; each account has `live` and `sandbox`.
+- Status: Implemented.
+- Implemented in:
+  - `tools/si/settings.go` (`[stripe]` + `[stripe.accounts.<alias>]`)
+  - `tools/si/stripe_auth.go` (`auth/context` resolution and selection)
+  - `tools/si/stripe_contract.go` (runtime context and client build)
+  - `docs/SETTINGS.md` + `docs/STRIPE.md`
+- Notes:
+  - Organization label is modeled via `stripe.organization`.
+  - Account selection supports alias and `acct_...` IDs.
+  - Context commands (`list/current/use`) apply account+env consistently.
+
+### B) No standalone `test` mode; use `sandbox`
+- Requirement: do not intentionally create/use a separate CLI `test` mode.
+- Status: Implemented.
+- Implemented in:
+  - `tools/si/internal/stripebridge/types.go` (`ParseEnvironment`)
+  - `tools/si/stripe_auth.go` (env parsing/validation path)
+  - `tools/si/util.go` + docs policy text
+  - tests in `tools/si/stripe_auth_test.go`
+- Behavior:
+  - `test` is rejected with actionable guidance to use `sandbox`.
+
+### C) Live-to-sandbox replication for fresh sandbox parity
+- Requirement: replicate live objects (products/prices/coupons/etc.) into sandbox.
+- Status: Implemented (first-pass families + mapping + plan/apply).
+- Implemented in:
+  - `tools/si/stripe_sync_cmd.go`
+  - `tools/si/internal/stripebridge/sync.go`
+  - `tools/si/internal/stripebridge/sync_plan.go`
+  - `tools/si/internal/stripebridge/sync_apply.go`
+- Supported first-pass families:
+  - `products`, `prices`, `coupons`, `promotion_codes`, `tax_rates`, `shipping_rates`
+- Notes:
+  - Includes `plan` and `apply` modes, `--dry-run`, `--only`, confirmation, and live→sandbox ID mapping.
+
+### D) Surface Stripe library errors clearly to CLI users
+- Requirement: user should see exactly what happened.
+- Status: Implemented.
+- Implemented in:
+  - `tools/si/internal/stripebridge/errors.go` (normalization + redaction)
+  - `tools/si/stripe_output.go` (full diagnostic render)
+- Surfaced fields:
+  - HTTP status, type, code, decline_code, param, message, request_id, doc_url, request_log_url, raw payload
+- Notes:
+  - Sensitive values are redacted while preserving actionable diagnostics.
+
+### E) SI-consistent color/theme and CLI UX
+- Requirement: follow SI color/style conventions and proper themed input/output.
+- Status: Implemented.
+- Implemented in:
+  - `tools/si/stripe_output.go` (style helpers + consistent rendering)
+  - `tools/si/stripe_safety.go` (interactive confirmations aligned with SI UX)
+  - `tools/si/util.go` (help/theming)
+- Notes:
+  - Output follows SI style helpers (`styleHeading`, `styleWarn`, `styleError`, `styleDim`, etc.).
+  - JSON mode remains machine-readable and can be used with no-color environments.
+
+### F) Broad CRUD coverage including account/organization
+- Requirement: deep control across Stripe objects including account/organization and beyond.
+- Status: Implemented via hybrid approach.
+- Implemented in:
+  - `tools/si/internal/stripebridge/registry.go` (curated broad object matrix)
+  - `tools/si/stripe_object_cmd.go` (CRUD commands)
+  - `tools/si/stripe_object_cmd.go` + `cmdStripeRaw` fallback for full endpoint reach
+- Notes:
+  - Some resources have API-level nonstandard semantics (for example delete not supported on certain object families); these are explicitly reported with guidance.
+  - `si stripe raw` remains the parity escape hatch for full Stripe API coverage.
