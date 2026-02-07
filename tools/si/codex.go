@@ -212,6 +212,40 @@ func cmdCodexSpawn(args []string) {
 			}
 		}
 	}
+	if !explicitProfile {
+		if defaultProfileKey != "" && !interactive {
+			*flags.profile = defaultProfileKey
+		} else if len(codexProfileSummaries()) > 0 {
+			selected, ok := selectCodexProfile("spawn", defaultProfileKey)
+			if !ok {
+				return
+			}
+			*flags.profile = selected.ID
+		} else if !interactive && defaultProfileKey == "" {
+			printUsage("usage: si spawn [name] [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
+			return
+		}
+	}
+	var profile *codexProfile
+	if strings.TrimSpace(*flags.profile) != "" {
+		parsed, err := requireCodexProfile(*flags.profile)
+		if err != nil {
+			fatal(err)
+		}
+		*flags.profile = parsed.ID
+		profile = &parsed
+		if name == "" {
+			name = parsed.ID
+		}
+		if name != parsed.ID {
+			warnf("profile %s selected; using container name %s", parsed.ID, parsed.ID)
+			name = parsed.ID
+		}
+	}
+	if name == "" {
+		printUsage("usage: si spawn [name] [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
+		return
+	}
 	if err := validateSlug(name); err != nil {
 		fatal(err)
 	}
@@ -242,19 +276,49 @@ func cmdCodexSpawn(args []string) {
 	defer client.Close()
 	ctx := context.Background()
 
+	if profile != nil {
+		profileContainers, err := codexContainersByProfile(ctx, client, profile.ID)
+		if err != nil {
+			fatal(err)
+		}
+		if len(profileContainers) > 0 {
+			choice := choosePreferredCodexContainer(profileContainers, containerName)
+			if len(profileContainers) > 1 {
+				names := make([]string, 0, len(profileContainers))
+				for _, item := range profileContainers {
+					names = append(names, item.Name)
+				}
+				warnf("multiple codex containers found for profile %s: %s", profile.ID, strings.Join(names, ", "))
+			}
+			existingID, info, err := client.ContainerByName(ctx, choice.Name)
+			if err != nil {
+				fatal(err)
+			}
+			if existingID != "" {
+				if choice.Name != containerName {
+					warnf("profile %s already bound to %s", profile.ID, choice.Name)
+				}
+				if info != nil && info.State != nil && !info.State.Running {
+					if err := client.StartContainer(ctx, existingID); err != nil {
+						fatal(err)
+					}
+				}
+				if !*flags.cleanSlate {
+					if identity, ok := hostGitIdentity(); ok {
+						seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+					}
+				}
+				infof("codex container %s already exists for profile %s", choice.Name, profile.ID)
+				return
+			}
+		}
+	}
+
 	existingID, info, err := client.ContainerByName(ctx, containerName)
 	if err != nil {
 		fatal(err)
 	}
 	if existingID != "" {
-		var profile *codexProfile
-		if explicitProfile && strings.TrimSpace(*flags.profile) != "" {
-			parsed, err := requireCodexProfile(*flags.profile)
-			if err != nil {
-				fatal(err)
-			}
-			profile = &parsed
-		}
 		if profile != nil && info != nil && info.Config != nil {
 			existingProfile := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
 			if existingProfile != "" && existingProfile != profile.ID {
@@ -273,30 +337,6 @@ func cmdCodexSpawn(args []string) {
 		}
 		infof("codex container %s already exists", containerName)
 		return
-	}
-
-	if !explicitProfile {
-		if defaultProfileKey != "" && !interactive {
-			*flags.profile = defaultProfileKey
-		} else if len(codexProfileSummaries()) > 0 {
-			selected, ok := selectCodexProfile("spawn", defaultProfileKey)
-			if !ok {
-				return
-			}
-			*flags.profile = selected.ID
-		} else if !interactive && defaultProfileKey == "" {
-			printUsage("usage: si spawn [name] [--profile <profile>] [--repo Org/Repo] [--gh-pat TOKEN]")
-			return
-		}
-	}
-
-	var profile *codexProfile
-	if strings.TrimSpace(*flags.profile) != "" {
-		parsed, err := requireCodexProfile(*flags.profile)
-		if err != nil {
-			fatal(err)
-		}
-		profile = &parsed
 	}
 
 	if strings.TrimSpace(*flags.networkName) != "" {
@@ -411,15 +451,16 @@ func cmdCodexRespawn(args []string) {
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
 	nameArg, filtered := splitNameAndFlags(args, codexRespawnBoolFlags())
 	_ = fs.Parse(filtered)
+	requestedName := strings.TrimSpace(nameArg)
 	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	defaultProfileKey := codexDefaultProfileKey(loadSettingsOrDefault())
 	profileExplicit := flagProvided(args, "profile")
 	profileInjected := false
-	if !profileExplicit && strings.TrimSpace(*flags.profile) == "" && defaultProfileKey != "" && !interactive {
+	if !profileExplicit && strings.TrimSpace(*flags.profile) == "" && defaultProfileKey != "" && !interactive && requestedName == "" {
 		*flags.profile = defaultProfileKey
 	}
 	profileKey := strings.TrimSpace(*flags.profile)
-	if profileKey == "" && !profileExplicit {
+	if profileKey == "" && !profileExplicit && requestedName == "" {
 		selected, ok := selectCodexProfile("respawn", defaultProfileKey)
 		if !ok {
 			return
@@ -438,8 +479,12 @@ func cmdCodexRespawn(args []string) {
 			filtered = append(filtered, "--profile", selected.ID)
 		}
 	}
-	nameArg = strings.TrimSpace(nameArg)
+	nameArg = requestedName
 	if nameArg == "" && profileKey != "" {
+		nameArg = profileKey
+	}
+	if profileKey != "" && nameArg != "" && nameArg != profileKey {
+		warnf("profile %s selected; using container name %s", profileKey, profileKey)
 		nameArg = profileKey
 	}
 	if nameArg == "" {
@@ -450,11 +495,38 @@ func cmdCodexRespawn(args []string) {
 		nameArg = selectedName
 	}
 	name := nameArg
-	removeArgs := []string{name}
-	if *removeVolumes {
-		removeArgs = append([]string{"--volumes"}, removeArgs...)
+	removeTargets := map[string]struct{}{
+		name: {},
 	}
-	cmdCodexRemove(removeArgs)
+	if profileKey != "" {
+		client, err := shared.NewClient()
+		if err != nil {
+			fatal(err)
+		}
+		refs, err := codexContainersByProfile(context.Background(), client, profileKey)
+		_ = client.Close()
+		if err != nil {
+			fatal(err)
+		}
+		for _, ref := range refs {
+			removeTargets[codexContainerSlug(ref.Name)] = struct{}{}
+		}
+	}
+	targets := make([]string, 0, len(removeTargets))
+	for target := range removeTargets {
+		target = strings.TrimSpace(target)
+		if target != "" {
+			targets = append(targets, target)
+		}
+	}
+	sort.Strings(targets)
+	for _, target := range targets {
+		removeArgs := []string{target}
+		if *removeVolumes {
+			removeArgs = append([]string{"--volumes"}, removeArgs...)
+		}
+		cmdCodexRemove(removeArgs)
+	}
 	spawnArgs := append(stripFlag(filtered, "volumes"), name)
 	cmdCodexSpawn(spawnArgs)
 }
@@ -821,6 +893,59 @@ type codexContainerItem struct {
 	Name  string
 	State string
 	Image string
+}
+
+type codexProfileContainerRef struct {
+	Name  string
+	State string
+}
+
+func codexContainersByProfile(ctx context.Context, client *shared.Client, profileID string) ([]codexProfileContainerRef, error) {
+	profileID = strings.TrimSpace(profileID)
+	if profileID == "" {
+		return nil, nil
+	}
+	containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+	if err != nil {
+		return nil, err
+	}
+	refs := make([]codexProfileContainerRef, 0, len(containers))
+	for _, item := range containers {
+		labelValue := strings.TrimSpace(item.Labels[codexProfileLabelKey])
+		if !strings.EqualFold(labelValue, profileID) {
+			continue
+		}
+		name := ""
+		if len(item.Names) > 0 {
+			name = strings.TrimSpace(strings.TrimPrefix(item.Names[0], "/"))
+		}
+		if name == "" {
+			continue
+		}
+		refs = append(refs, codexProfileContainerRef{Name: name, State: strings.TrimSpace(item.State)})
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		return refs[i].Name < refs[j].Name
+	})
+	return refs, nil
+}
+
+func choosePreferredCodexContainer(items []codexProfileContainerRef, preferred string) codexProfileContainerRef {
+	if len(items) == 0 {
+		return codexProfileContainerRef{}
+	}
+	preferred = strings.TrimSpace(preferred)
+	for _, item := range items {
+		if item.Name == preferred {
+			return item
+		}
+	}
+	for _, item := range items {
+		if strings.EqualFold(item.State, "running") {
+			return item
+		}
+	}
+	return items[0]
 }
 
 func codexImageDisplay(image string) string {
