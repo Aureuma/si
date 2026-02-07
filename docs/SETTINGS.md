@@ -34,6 +34,8 @@ Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/disabled.v1` (warmup scheduler disabled marker)
 - `~/.si/logs/warmup.log` (JSONL operational log)
 
+Warmup scheduling is triggered by `si login` (and explicit `si warmup enable`), not by `si status`.
+
 ### `[codex]`
 Defaults for Codex container commands (spawn/respawn/login/run).
 - `codex.image` (string): docker image for `si spawn` (default: `aureuma/si:local`)

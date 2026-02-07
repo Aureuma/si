@@ -246,6 +246,7 @@ type weeklyWarmExecOptions struct {
 	Effort        string
 	DisableMCP    bool
 	OutputOnly    bool
+	Quiet         bool
 	KeepContainer bool
 	DockerSocket  bool
 }
@@ -370,6 +371,7 @@ func runWeeklyWarmPrompt(profile codexProfile, prompt string, opts weeklyWarmExe
 		Effort:        strings.TrimSpace(opts.Effort),
 		DisableMCP:    opts.DisableMCP,
 		OutputOnly:    opts.OutputOnly,
+		Quiet:         opts.Quiet,
 		KeepContainer: opts.KeepContainer,
 		DockerSocket:  opts.DockerSocket,
 		Profile:       &profile,
