@@ -106,6 +106,9 @@ func TestProfileAuthLabel(t *testing.T) {
 	if got := profileAuthLabel(codexProfileSummary{AuthCached: true}); got != "Logged-In" {
 		t.Fatalf("expected Logged-In, got %q", got)
 	}
+	if got := profileAuthLabel(codexProfileSummary{AuthCached: true, StatusError: "token expired"}); got != "Error" {
+		t.Fatalf("expected Error for auth status failure, got %q", got)
+	}
 	if got := profileAuthLabel(codexProfileSummary{AuthCached: false, StatusError: "auth cache missing"}); got != "Error" {
 		t.Fatalf("expected Error, got %q", got)
 	}
@@ -118,6 +121,19 @@ func TestProfileLimitDisplayForMissingAuth(t *testing.T) {
 	item := codexProfileSummary{
 		AuthCached:  false,
 		StatusError: "auth cache not found",
+	}
+	if got := profileFiveHourDisplay(item); got != "AUTH-ERR" {
+		t.Fatalf("unexpected 5H display %q", got)
+	}
+	if got := profileWeeklyDisplay(item); got != "-" {
+		t.Fatalf("unexpected WEEKLY display %q", got)
+	}
+}
+
+func TestProfileLimitDisplayForLoggedInAuthError(t *testing.T) {
+	item := codexProfileSummary{
+		AuthCached:  true,
+		StatusError: "token refresh failed",
 	}
 	if got := profileFiveHourDisplay(item); got != "AUTH-ERR" {
 		t.Fatalf("unexpected 5H display %q", got)
