@@ -67,4 +67,3 @@ func readHTTPError(resp *http.Response) error {
 	}
 	return fmt.Errorf("http %d: %s", resp.StatusCode, msg)
 }
-
