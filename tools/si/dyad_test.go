@@ -20,13 +20,49 @@ func TestNormalizeDyadCommandAliases(t *testing.T) {
 		"ps":               "list",
 		"rm":               "remove",
 		"delete":           "remove",
-		"start":            "restart",
+		"start":            "start",
+		"up":               "start",
+		"down":             "stop",
+		"stop":             "stop",
 	}
 	for in, want := range cases {
 		got := normalizeDyadCommand(in)
 		if got != want {
 			t.Fatalf("normalizeDyadCommand(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestChooseDyadCopyLoginSource(t *testing.T) {
+	got, err := chooseDyadCopyLoginSource("si-codex-berylla", []string{"si-codex-cadma"}, []string{"si-codex-berylla", "si-codex-cadma"})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got != "si-codex-berylla" {
+		t.Fatalf("expected default candidate, got %q", got)
+	}
+
+	got, err = chooseDyadCopyLoginSource("", []string{"si-codex-einsteina"}, []string{"si-codex-einsteina", "si-codex-cadma"})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got != "si-codex-einsteina" {
+		t.Fatalf("expected single running container, got %q", got)
+	}
+
+	got, err = chooseDyadCopyLoginSource("", nil, []string{"si-codex-berylla"})
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got != "si-codex-berylla" {
+		t.Fatalf("expected single container fallback, got %q", got)
+	}
+
+	if _, err := chooseDyadCopyLoginSource("", nil, nil); err == nil {
+		t.Fatalf("expected error when no containers exist")
+	}
+	if _, err := chooseDyadCopyLoginSource("", []string{"si-codex-a", "si-codex-b"}, []string{"si-codex-a", "si-codex-b"}); err == nil {
+		t.Fatalf("expected ambiguity error for multiple running containers")
 	}
 }
 
