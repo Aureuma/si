@@ -10,7 +10,7 @@
 ## Quickstart (Docker)
 Requires Docker Engine.
 
-Build the CLI and images:
+Build the CLI and runtime image:
 
 ```bash
 go build -o si ./tools/si
@@ -18,6 +18,7 @@ go build -o si ./tools/si
 ```
 
 This builds the unified image `aureuma/si:local` used by dyads and codex containers.
+`si image build` is the only image-build command surface.
 
 ## Testing
 Run all module tests from repo root:
