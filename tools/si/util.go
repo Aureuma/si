@@ -143,6 +143,7 @@ codex:
 
   si profile [name]
     --json
+    --no-status
 
   si run (two modes, alias: exec)
     One-off run (isolated container):
