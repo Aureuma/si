@@ -28,6 +28,12 @@ Reference paths for the local `.si` directory layout.
 - `paths.settings` (string): default `~/.si/settings.toml`
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
 
+Warm-weekly runtime files are also stored under `~/.si`:
+- `~/.si/warm-weekly/state.json` (reconcile state/feedback loop)
+- `~/.si/warm-weekly/autostart.v1` (one-time autostart marker)
+- `~/.si/warm-weekly/disabled.v1` (autostart disabled marker)
+- `~/.si/logs/warm-weekly.log` (JSONL operational log)
+
 ### `[codex]`
 Defaults for Codex container commands (spawn/respawn/login/run).
 - `codex.image` (string): docker image for `si spawn` (default: `aureuma/si:local`)
