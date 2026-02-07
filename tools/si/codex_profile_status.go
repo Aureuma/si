@@ -458,6 +458,28 @@ func isRefreshTokenReusedError(err error) bool {
 	return strings.Contains(msg, "refresh_token_reused")
 }
 
+func isAuthFailureError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *usageAPIError
+	if errors.As(err, &apiErr) {
+		code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+		if apiErr.StatusCode == http.StatusUnauthorized || apiErr.StatusCode == http.StatusForbidden {
+			return true
+		}
+		if strings.Contains(code, "token") || strings.Contains(code, "auth") || strings.Contains(code, "credential") {
+			return true
+		}
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "token_expired") ||
+		strings.Contains(msg, "invalid token") ||
+		strings.Contains(msg, "refresh token") ||
+		strings.Contains(msg, "authentication") ||
+		strings.Contains(msg, "unauthorized")
+}
+
 func syncProfileAuthFromContainer(ctx context.Context, profile codexProfile) (profileAuthTokens, error) {
 	client, err := shared.NewClient()
 	if err != nil {

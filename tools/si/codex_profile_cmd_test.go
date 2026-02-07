@@ -32,10 +32,11 @@ func TestSplitProfileNameAndFlags(t *testing.T) {
 	}
 }
 
-func TestApplyProfileStatusResultExpiredTokenKeepsAuth(t *testing.T) {
+func TestApplyProfileStatusResultAuthFailureDowngradesAuth(t *testing.T) {
 	item := codexProfileSummary{
 		ID:              "cadma",
 		AuthCached:      true,
+		AuthUpdated:     "2026-02-07T18:00:00Z",
 		FiveHourLeftPct: -1,
 		WeeklyLeftPct:   -1,
 	}
@@ -48,11 +49,14 @@ func TestApplyProfileStatusResultExpiredTokenKeepsAuth(t *testing.T) {
 		},
 	}
 	applyProfileStatusResult(&item, res)
-	if !item.AuthCached {
-		t.Fatalf("expected AuthCached to stay true")
+	if item.AuthCached {
+		t.Fatalf("expected AuthCached to be downgraded")
 	}
-	if item.StatusError != "" {
-		t.Fatalf("expected no status error, got %q", item.StatusError)
+	if item.AuthUpdated != "" {
+		t.Fatalf("expected AuthUpdated to clear, got %q", item.AuthUpdated)
+	}
+	if item.FiveHourLeftPct != -1 || item.WeeklyLeftPct != -1 {
+		t.Fatalf("expected limits to reset, got %+v", item)
 	}
 }
 
