@@ -67,10 +67,14 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 
 	printCodexProfilesTable(items, withStatus)
 	if withStatus {
+		warnings := make([]string, 0, len(items))
 		for _, item := range items {
-			if item.StatusError != "" && item.AuthCached {
-				warnf("profile %s status error: %s", item.ID, item.StatusError)
+			if item.StatusError != "" {
+				warnings = append(warnings, fmt.Sprintf("profile %s status error: %s", item.ID, summarizeProfileStatusError(item.ID, item.StatusError)))
 			}
+		}
+		for _, msg := range warnings {
+			fmt.Printf("%s %s\n", styleWarn("warning:"), msg)
 		}
 	}
 }
@@ -242,7 +246,7 @@ func profileFiveHourDisplay(item codexProfileSummary) string {
 		return formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
 	}
 	if !item.AuthCached {
-		return "AUTH: " + strings.TrimSpace(item.StatusError)
+		return "AUTH-ERR"
 	}
 	return "ERR"
 }
@@ -255,4 +259,25 @@ func profileWeeklyDisplay(item codexProfileSummary) string {
 		return "-"
 	}
 	return "ERR"
+}
+
+func summarizeProfileStatusError(profileID string, raw string) string {
+	msg := strings.TrimSpace(raw)
+	if msg == "" {
+		return "unknown error"
+	}
+	if strings.Contains(msg, "auth cache not found") {
+		return fmt.Sprintf("auth cache missing; run `si login %s`", strings.TrimSpace(profileID))
+	}
+	if strings.Contains(msg, "refresh_token_reused") {
+		return fmt.Sprintf("token refresh failed (refresh token reused); run `si login %s`", strings.TrimSpace(profileID))
+	}
+	if strings.Contains(strings.ToLower(msg), "token expired") {
+		return fmt.Sprintf("token expired; run `si login %s`", strings.TrimSpace(profileID))
+	}
+	const maxLen = 180
+	if len(msg) > maxLen {
+		return strings.TrimSpace(msg[:maxLen-1]) + "..."
+	}
+	return msg
 }
