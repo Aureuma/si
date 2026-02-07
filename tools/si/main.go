@@ -20,6 +20,8 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
+	case "analyze", "lint":
+		cmdAnalyze(args)
 	case "docker":
 		cmdDocker(args)
 	case "dyad":

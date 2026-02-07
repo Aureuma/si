@@ -25,6 +25,19 @@ Run all module tests from repo root:
 ```bash
 ./tools/test.sh
 ```
+
+Run static analysis across go.work modules:
+
+```bash
+./si analyze
+```
+
+Scope to a module or keep CI green while reviewing findings:
+
+```bash
+./si analyze --module tools/si
+./si analyze --no-fail
+```
 ## Dyads (Actor + Critic)
 - Spawn a dyad (actor+critic):
 
