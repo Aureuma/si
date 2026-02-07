@@ -13,6 +13,7 @@ type Settings struct {
 	SchemaVersion int              `toml:"schema_version"`
 	Paths         SettingsPaths    `toml:"paths"`
 	Codex         CodexSettings    `toml:"codex"`
+	Stripe        StripeSettings   `toml:"stripe,omitempty"`
 	Dyad          DyadSettings     `toml:"dyad"`
 	Shell         ShellSettings    `toml:"shell"`
 	Metadata      SettingsMetadata `toml:"metadata,omitempty"`
@@ -85,6 +86,22 @@ type DyadSettings struct {
 	Configs           string `toml:"configs,omitempty"`
 	ForwardPorts      string `toml:"forward_ports,omitempty"`
 	DockerSocket      *bool  `toml:"docker_socket,omitempty"`
+}
+
+type StripeSettings struct {
+	Organization   string                          `toml:"organization,omitempty"`
+	DefaultAccount string                          `toml:"default_account,omitempty"`
+	DefaultEnv     string                          `toml:"default_env,omitempty"`
+	Accounts       map[string]StripeAccountSetting `toml:"accounts,omitempty"`
+}
+
+type StripeAccountSetting struct {
+	ID            string `toml:"id,omitempty"`
+	Name          string `toml:"name,omitempty"`
+	LiveKey       string `toml:"live_key,omitempty"`
+	SandboxKey    string `toml:"sandbox_key,omitempty"`
+	LiveKeyEnv    string `toml:"live_key_env,omitempty"`
+	SandboxKeyEnv string `toml:"sandbox_key_env,omitempty"`
 }
 
 type ShellSettings struct {
@@ -197,6 +214,10 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	if settings.Paths.CodexProfilesDir == "" {
 		settings.Paths.CodexProfilesDir = "~/.si/codex/profiles"
+	}
+	settings.Stripe.DefaultEnv = normalizeStripeEnvironment(settings.Stripe.DefaultEnv)
+	if settings.Stripe.DefaultEnv == "" {
+		settings.Stripe.DefaultEnv = "sandbox"
 	}
 }
 
