@@ -26,7 +26,7 @@ Features:
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
-  - Image build helpers for local dev.
+  - Image build for local dev.
   - Docker passthrough for raw docker CLI calls.
 
 Usage:
@@ -43,8 +43,7 @@ Core:
   si docker <args...>
 
 Build:
-  si images build                 (builds aureuma/si:local)
-  si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
+  si image build                  (builds aureuma/si:local)
 
 Profiles:
   si status [profile]      (codex profiles)
@@ -197,12 +196,8 @@ codex:
   Legacy compatibility:
     si warmup [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 
-images:
-  si images build                 (builds aureuma/si:local)
-  si image build -t <tag> [-f <Dockerfile>] [--build-arg KEY=VALUE] <context>
-    -t, --tag <tag>
-    -f, --file <Dockerfile>
-    --build-arg KEY=VALUE   (repeatable)
+image:
+  si image build                  (builds aureuma/si:local)
 
 persona:
   si persona <name>
@@ -515,7 +510,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|images|image|persona|skill|analyze|lint|stripe|self)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|image|persona|skill|analyze|lint|stripe|self)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
