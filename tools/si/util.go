@@ -107,6 +107,8 @@ codex:
     --detach / --detach=false
     --env KEY=VALUE        (repeatable)
     --port HOST:CONTAINER  (repeatable)
+    Note: when a profile is selected, container name defaults to that profile ID.
+    One codex container is enforced per profile.
 
   si list [--json]
     --json
@@ -226,7 +228,7 @@ Environment defaults (selected)
 `))
 }
 
-const siVersion = "v1.2.0"
+const siVersion = "v0.42.0"
 
 func printVersion() {
 	fmt.Println(siVersion)
