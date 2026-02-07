@@ -21,10 +21,6 @@ type stripeRuntimeContext struct {
 	BaseURL      string
 }
 
-type stripeCredentialProvider interface {
-	Resolve(account string, env string, apiKey string) (stripeRuntimeContext, error)
-}
-
 type stripeBridgeClient interface {
 	Do(ctx context.Context, req stripebridge.Request) (stripebridge.Response, error)
 	ListAll(ctx context.Context, path string, params map[string]string, limit int) ([]map[string]any, error)

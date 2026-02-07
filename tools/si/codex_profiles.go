@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -245,60 +244,6 @@ func attemptRecoverCodexAuthCache(profile codexProfile) bool {
 	defer cancel()
 	_, err := syncProfileAuthFromContainerStatusFn(ctx, profile)
 	return err == nil
-}
-
-func jwtTokenExpiry(token string) (time.Time, bool) {
-	token = strings.TrimSpace(token)
-	if token == "" {
-		return time.Time{}, false
-	}
-	parts := strings.Split(token, ".")
-	if len(parts) < 2 {
-		return time.Time{}, false
-	}
-	payload, err := decodeJWTPayload(parts[1])
-	if err != nil {
-		return time.Time{}, false
-	}
-	var claims struct {
-		Exp int64 `json:"exp"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return time.Time{}, false
-	}
-	if claims.Exp <= 0 {
-		return time.Time{}, false
-	}
-	return time.Unix(claims.Exp, 0).UTC(), true
-}
-
-func decodeJWTPayload(payload string) ([]byte, error) {
-	payload = strings.TrimSpace(payload)
-	if payload == "" {
-		return nil, errors.New("empty payload")
-	}
-	decoders := []*base64.Encoding{
-		base64.RawURLEncoding,
-		base64.URLEncoding,
-		base64.RawStdEncoding,
-		base64.StdEncoding,
-	}
-	for _, enc := range decoders {
-		data, err := enc.DecodeString(payload)
-		if err == nil {
-			return data, nil
-		}
-	}
-	if rem := len(payload) % 4; rem != 0 {
-		padded := payload + strings.Repeat("=", 4-rem)
-		for _, enc := range []*base64.Encoding{base64.URLEncoding, base64.StdEncoding} {
-			data, err := enc.DecodeString(padded)
-			if err == nil {
-				return data, nil
-			}
-		}
-	}
-	return nil, errors.New("invalid payload")
 }
 
 func codexProfileSummaries() []codexProfileSummary {
