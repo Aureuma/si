@@ -543,9 +543,20 @@ func usageWindowRemaining(window *usageWindow, now time.Time) (float64, int, str
 	}
 	left := 100 - used
 	remainingMinutes := 0
+	if window.ResetAt != nil && *window.ResetAt > 0 {
+		resetAt := time.Unix(*window.ResetAt, 0)
+		if resetAt.After(now) {
+			remainingMinutes = int(math.Ceil(resetAt.Sub(now).Minutes()))
+		}
+	}
+	if remainingMinutes <= 0 && window.ResetAfterSeconds != nil && *window.ResetAfterSeconds > 0 {
+		remainingMinutes = int(math.Ceil(float64(*window.ResetAfterSeconds) / 60.0))
+	}
 	if window.LimitWindowSeconds != nil && *window.LimitWindowSeconds > 0 {
 		minutes := math.Round(float64(*window.LimitWindowSeconds) / 60.0)
-		remainingMinutes = int(math.Round(minutes * left / 100.0))
+		if remainingMinutes <= 0 {
+			remainingMinutes = int(math.Round(minutes * left / 100.0))
+		}
 	}
 	reset := usageResetAt(window, now)
 	return left, remainingMinutes, reset
@@ -564,7 +575,7 @@ func usageResetAt(window *usageWindow, now time.Time) string {
 	return ""
 }
 
-func formatLimitColumn(pct float64, reset string) string {
+func formatLimitColumn(pct float64, reset string, remainingMinutes int) string {
 	if pct < 0 {
 		return "-"
 	}
@@ -572,8 +583,31 @@ func formatLimitColumn(pct float64, reset string) string {
 	if pct == 0 && reset == "" {
 		return "-"
 	}
+	remaining := formatRemainingDuration(remainingMinutes)
+	if reset != "" && remaining != "" {
+		return fmt.Sprintf("%.0f%% (%s, in %s)", pct, reset, remaining)
+	}
 	if reset != "" {
 		return fmt.Sprintf("%.0f%% (%s)", pct, reset)
 	}
+	if remaining != "" {
+		return fmt.Sprintf("%.0f%% (in %s)", pct, remaining)
+	}
 	return fmt.Sprintf("%.0f%%", pct)
+}
+
+func formatRemainingDuration(minutes int) string {
+	if minutes <= 0 {
+		return ""
+	}
+	hours := minutes / 60
+	mins := minutes % 60
+	switch {
+	case hours > 0 && mins > 0:
+		return fmt.Sprintf("%dh%02dm", hours, mins)
+	case hours > 0:
+		return fmt.Sprintf("%dh", hours)
+	default:
+		return fmt.Sprintf("%dm", mins)
+	}
 }

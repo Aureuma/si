@@ -176,6 +176,44 @@ func TestRefreshProfileAuthTokensUpdatesFile(t *testing.T) {
 	}
 }
 
+func TestFormatLimitColumnIncludesResetAndCountdown(t *testing.T) {
+	got := formatLimitColumn(71, "20:52", 151)
+	want := "71% (20:52, in 2h31m)"
+	if got != want {
+		t.Fatalf("unexpected formatted limit: got %q want %q", got, want)
+	}
+}
+
+func TestFormatRemainingDuration(t *testing.T) {
+	if got := formatRemainingDuration(0); got != "" {
+		t.Fatalf("expected empty for zero minutes, got %q", got)
+	}
+	if got := formatRemainingDuration(59); got != "59m" {
+		t.Fatalf("expected 59m, got %q", got)
+	}
+	if got := formatRemainingDuration(60); got != "1h" {
+		t.Fatalf("expected 1h, got %q", got)
+	}
+	if got := formatRemainingDuration(125); got != "2h05m" {
+		t.Fatalf("expected 2h05m, got %q", got)
+	}
+}
+
+func TestUsageWindowRemainingUsesResetAtCountdown(t *testing.T) {
+	now := time.Unix(1700000000, 0).UTC()
+	resetAt := now.Add(95 * time.Minute).Unix()
+	limitSeconds := int64(5 * 60 * 60)
+	window := &usageWindow{
+		UsedPercent:        50,
+		LimitWindowSeconds: &limitSeconds,
+		ResetAt:            &resetAt,
+	}
+	_, remaining, _ := usageWindowRemaining(window, now)
+	if remaining != 95 {
+		t.Fatalf("expected reset countdown 95m, got %d", remaining)
+	}
+}
+
 func buildTestJWT(payload map[string]interface{}) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
 	bodyBytes, _ := json.Marshal(payload)

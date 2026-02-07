@@ -341,16 +341,28 @@ func printCodexStatus(s codexStatus) {
 		}
 	}
 	if s.FiveHourLeftPct >= 0 {
-		if s.FiveHourReset != "" {
+		remaining := formatRemainingDuration(s.FiveHourRemaining)
+		switch {
+		case s.FiveHourReset != "" && remaining != "":
+			fmt.Printf("  %s %.0f%% left (resets %s, in %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, s.FiveHourReset, remaining)
+		case s.FiveHourReset != "":
 			fmt.Printf("  %s %.0f%% left (resets %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, s.FiveHourReset)
-		} else {
+		case remaining != "":
+			fmt.Printf("  %s %.0f%% left (in %s)\n", styleSection("5h limit:"), s.FiveHourLeftPct, remaining)
+		default:
 			fmt.Printf("  %s %.0f%% left\n", styleSection("5h limit:"), s.FiveHourLeftPct)
 		}
 	}
 	if s.WeeklyLeftPct >= 0 {
-		if s.WeeklyReset != "" {
+		remaining := formatRemainingDuration(s.WeeklyRemaining)
+		switch {
+		case s.WeeklyReset != "" && remaining != "":
+			fmt.Printf("  %s %.0f%% left (resets %s, in %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, s.WeeklyReset, remaining)
+		case s.WeeklyReset != "":
 			fmt.Printf("  %s %.0f%% left (resets %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, s.WeeklyReset)
-		} else {
+		case remaining != "":
+			fmt.Printf("  %s %.0f%% left (in %s)\n", styleSection("Weekly limit:"), s.WeeklyLeftPct, remaining)
+		default:
 			fmt.Printf("  %s %.0f%% left\n", styleSection("Weekly limit:"), s.WeeklyLeftPct)
 		}
 	}
@@ -579,13 +591,13 @@ func parseAppServerUsageOutput(raw string, totalLimitMin int) (appUsage, error) 
 		return usage, errors.New("rate limits missing")
 	}
 	if rateResp.RateLimits.Primary != nil {
-		remainingPct, remainingMinutes := windowUsage(rateResp.RateLimits.Primary, totalLimitMin)
+		remainingPct, remainingMinutes := windowUsage(rateResp.RateLimits.Primary, totalLimitMin, time.Now())
 		usage.RemainingPct = remainingPct
 		usage.RemainingMinutes = remainingMinutes
 		usage.PrimaryReset = formatReset(rateResp.RateLimits.Primary.ResetsAt)
 	}
 	if rateResp.RateLimits.Secondary != nil {
-		remainingPct, remainingMinutes := windowUsage(rateResp.RateLimits.Secondary, 0)
+		remainingPct, remainingMinutes := windowUsage(rateResp.RateLimits.Secondary, 0, time.Now())
 		usage.WeeklyRemainingPct = remainingPct
 		usage.WeeklyRemainingMinutes = remainingMinutes
 		usage.SecondaryReset = formatReset(rateResp.RateLimits.Secondary.ResetsAt)
@@ -621,7 +633,7 @@ func parseAppServerID(raw json.RawMessage) (int, bool) {
 	return 0, false
 }
 
-func windowUsage(window *appRateLimitWindow, fallbackMinutes int) (float64, int) {
+func windowUsage(window *appRateLimitWindow, fallbackMinutes int, now time.Time) (float64, int) {
 	if window == nil {
 		return -1, 0
 	}
@@ -637,7 +649,13 @@ func windowUsage(window *appRateLimitWindow, fallbackMinutes int) (float64, int)
 		windowMinutes = fallbackMinutes
 	}
 	remainingMinutes := 0
-	if windowMinutes > 0 {
+	if window.ResetsAt != nil && *window.ResetsAt > 0 {
+		resetAt := time.Unix(*window.ResetsAt, 0)
+		if resetAt.After(now) {
+			remainingMinutes = int(math.Ceil(resetAt.Sub(now).Minutes()))
+		}
+	}
+	if remainingMinutes <= 0 && windowMinutes > 0 {
 		remainingMinutes = int(math.Round(float64(windowMinutes) * remaining / 100.0))
 	}
 	return remaining, remainingMinutes
