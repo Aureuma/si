@@ -63,20 +63,55 @@ type statusOptions struct {
 }
 
 func cmdCodexStatus(args []string) {
+	nameArg, filtered := splitNameAndFlags(args, codexStatusBoolFlags())
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	showRaw := fs.Bool("raw", false, "include raw app-server output")
 	timeout := fs.Duration("timeout", 20*time.Second, "status timeout")
-	_ = fs.Parse(args)
-	if fs.NArg() < 1 {
-		printUsage("usage: si status <name> [--json] [--raw]")
+	profileKey := fs.String("profile", "", "show codex profile status for profile id/name/email")
+	profiles := fs.Bool("profiles", false, "list codex profiles")
+	noStatus := fs.Bool("no-status", false, "disable usage status lookup for profile output")
+	_ = fs.Parse(filtered)
+	withProfileStatus := !*noStatus
+
+	name := codexContainerSlug(strings.TrimSpace(nameArg))
+	if name == "" && fs.NArg() > 0 {
+		name = codexContainerSlug(strings.TrimSpace(fs.Arg(0)))
+	}
+	if fs.NArg() > 1 {
+		printUsage("usage: si status [name|profile] [--json] [--raw] [--profile <profile>] [--profiles] [--no-status]")
 		return
 	}
-	name := fs.Arg(0)
+	if *profiles {
+		if name != "" || strings.TrimSpace(*profileKey) != "" {
+			printUsage("usage: si status [name|profile] [--json] [--raw] [--profile <profile>] [--profiles] [--no-status]")
+			return
+		}
+		listCodexProfiles(*jsonOut, withProfileStatus)
+		return
+	}
+	if strings.TrimSpace(*profileKey) != "" {
+		if name != "" {
+			printUsage("usage: si status [name|profile] [--json] [--raw] [--profile <profile>] [--profiles] [--no-status]")
+			return
+		}
+		showCodexProfile(*profileKey, *jsonOut, withProfileStatus)
+		return
+	}
+	if name == "" {
+		listCodexProfiles(*jsonOut, withProfileStatus)
+		return
+	}
+
+	profileCandidate, hasProfileCandidate := codexProfileByKey(name)
 	containerName := codexContainerName(name)
 
 	client, err := shared.NewClient()
 	if err != nil {
+		if hasProfileCandidate {
+			showCodexProfile(profileCandidate.ID, *jsonOut, withProfileStatus)
+			return
+		}
 		fatal(err)
 	}
 	defer client.Close()
@@ -88,6 +123,10 @@ func cmdCodexStatus(args []string) {
 		fatal(err)
 	}
 	if id == "" {
+		if hasProfileCandidate {
+			showCodexProfile(profileCandidate.ID, *jsonOut, withProfileStatus)
+			return
+		}
 		fatal(fmt.Errorf("codex container %s not found", containerName))
 	}
 
@@ -109,6 +148,15 @@ func cmdCodexStatus(args []string) {
 	}
 
 	printCodexStatus(parsed)
+}
+
+func codexStatusBoolFlags() map[string]bool {
+	return map[string]bool{
+		"json":      true,
+		"raw":       true,
+		"profiles":  true,
+		"no-status": true,
+	}
 }
 
 func buildTmuxCodexCommand(containerID string) string {

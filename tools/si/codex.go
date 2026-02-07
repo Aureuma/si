@@ -43,8 +43,6 @@ func dispatchCodexCommand(cmd string, args []string) bool {
 		cmdCodexReport(args)
 	case "login":
 		cmdCodexLogin(args)
-	case "profile":
-		cmdProfile(args)
 	case "exec", "run":
 		cmdCodexExec(args)
 	case "logs":
@@ -1124,6 +1122,12 @@ func codexContainerName(name string) string {
 		return name
 	}
 	return "si-codex-" + name
+}
+
+func codexContainerSlug(name string) string {
+	name = strings.TrimSpace(name)
+	name = strings.TrimPrefix(name, "/")
+	return strings.TrimPrefix(name, "si-codex-")
 }
 
 func seedCodexConfig(ctx context.Context, client *shared.Client, containerID string, cleanSlate bool) {
