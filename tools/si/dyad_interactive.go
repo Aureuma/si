@@ -33,8 +33,10 @@ var dyadActions = []dyadAction{
 	{Name: "spawn", Description: "create actor+critic dyad"},
 	{Name: "list", Description: "list dyads"},
 	{Name: "status", Description: "show dyad status"},
-	{Name: "run", Description: "run command in dyad (alias: exec)"},
+	{Name: "exec", Description: "run command in dyad (alias: run)"},
 	{Name: "logs", Description: "show dyad logs"},
+	{Name: "start", Description: "start dyad containers"},
+	{Name: "stop", Description: "stop dyad containers"},
 	{Name: "restart", Description: "restart dyad containers"},
 	{Name: "remove", Description: "remove dyad"},
 	{Name: "cleanup", Description: "remove stopped dyad containers"},
@@ -53,8 +55,10 @@ func normalizeDyadCommand(cmd string) string {
 		return "remove"
 	case "run":
 		return "exec"
-	case "start":
-		return "restart"
+	case "up":
+		return "start"
+	case "down":
+		return "stop"
 	case "login", "codex-login-copy":
 		return "copy-login"
 	default:
