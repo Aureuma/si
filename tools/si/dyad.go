@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
 	shared "si/agents/shared/docker"
@@ -15,15 +14,22 @@ import (
 
 func cmdDyad(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|logs|restart|cleanup|copy-login>")
-		return
+		if !isInteractiveTerminal() {
+			printUsage("usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|restart|cleanup|copy-login|login>")
+			return
+		}
+		selected, ok := selectDyadAction()
+		if !ok {
+			return
+		}
+		args = []string{selected}
 	}
-	switch args[0] {
+	switch normalizeDyadCommand(args[0]) {
 	case "spawn":
 		cmdDyadSpawn(args[1:])
 	case "list":
 		cmdDyadList(args[1:])
-	case "remove", "teardown", "destroy":
+	case "remove":
 		cmdDyadRemove(args[1:])
 	case "recreate":
 		cmdDyadRecreate(args[1:])
@@ -37,7 +43,7 @@ func cmdDyad(args []string) {
 		cmdDyadRestart(args[1:])
 	case "cleanup":
 		cmdDyadCleanup(args[1:])
-	case "copy-login", "codex-login-copy":
+	case "copy-login":
 		cmdDyadCopyLogin(args[1:])
 	default:
 		printUnknown("dyad", args[0])
@@ -46,6 +52,8 @@ func cmdDyad(args []string) {
 
 func cmdDyadSpawn(args []string) {
 	workspaceSet := flagProvided(args, "workspace")
+	roleProvided := flagProvided(args, "role")
+	deptProvided := flagProvided(args, "department")
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
 	deptFlag := fs.String("department", "", "dyad department")
@@ -64,7 +72,8 @@ func cmdDyadSpawn(args []string) {
 	configsHost := fs.String("configs", envOr("SI_CONFIGS_HOST", ""), "host path to configs")
 	forwardPorts := fs.String("forward-ports", envOr("SI_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
 	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in dyad containers")
-	fs.Parse(args)
+	nameArg, filtered := splitDyadSpawnArgs(args)
+	fs.Parse(filtered)
 	settings := loadSettingsOrDefault()
 
 	if !flagProvided(args, "actor-image") && strings.TrimSpace(settings.Dyad.ActorImage) != "" {
@@ -114,25 +123,49 @@ func cmdDyadSpawn(args []string) {
 		*dockerSocket = *settings.Dyad.DockerSocket
 	}
 
-	if fs.NArg() < 1 {
-		printUsage("usage: si dyad spawn <name> [role] [department]")
-		return
+	name := strings.TrimSpace(nameArg)
+	if name == "" && fs.NArg() > 0 {
+		name = strings.TrimSpace(fs.Arg(0))
 	}
-	name := fs.Arg(0)
+	if name == "" {
+		if !isInteractiveTerminal() {
+			printUsage("usage: si dyad spawn <name> [role] [department]")
+			return
+		}
+		var ok bool
+		name, ok = promptRequired("Dyad name:")
+		if !ok {
+			return
+		}
+	}
 	if err := validateSlug(name); err != nil {
 		fatal(err)
 	}
 
 	role := strings.TrimSpace(*roleFlag)
-	if role == "" && fs.NArg() > 1 {
-		role = fs.Arg(1)
+	if role == "" && fs.NArg() > 0 {
+		role = fs.Arg(0)
+	}
+	if role == "" && !roleProvided && isInteractiveTerminal() {
+		selected, ok := selectDyadRole("generic")
+		if !ok {
+			return
+		}
+		role = selected
 	}
 	if role == "" {
 		role = "generic"
 	}
 	dept := strings.TrimSpace(*deptFlag)
-	if dept == "" && fs.NArg() > 2 {
-		dept = fs.Arg(2)
+	if dept == "" && fs.NArg() > 1 {
+		dept = fs.Arg(1)
+	}
+	if dept == "" && !deptProvided && isInteractiveTerminal() {
+		selected, ok := promptWithDefault("Department:", role)
+		if !ok {
+			return
+		}
+		dept = strings.TrimSpace(selected)
 	}
 	if dept == "" {
 		dept = role
@@ -233,86 +266,34 @@ func cmdDyadList(args []string) {
 		fatal(err)
 	}
 	defer client.Close()
-	ctx := context.Background()
-
-	containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
+	containers, err := client.ListContainers(context.Background(), true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
 	if err != nil {
 		fatal(err)
 	}
-	type row struct {
-		Dyad   string
-		Role   string
-		Dept   string
-		Actor  string
-		Critic string
-	}
-	rows := map[string]*row{}
-	for _, c := range containers {
-		dyad := c.Labels[shared.LabelDyad]
-		if dyad == "" {
-			continue
-		}
-		item, ok := rows[dyad]
-		if !ok {
-			item = &row{
-				Dyad: dyad,
-				Role: c.Labels[shared.LabelRole],
-				Dept: c.Labels[shared.LabelDept],
-			}
-			rows[dyad] = item
-		}
-		member := c.Labels[shared.LabelMember]
-		state := c.State
-		if member == "actor" {
-			item.Actor = state
-		} else if member == "critic" {
-			item.Critic = state
-		}
-	}
-	keys := make([]string, 0, len(rows))
-	for k := range rows {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	if len(keys) == 0 {
+	rows := buildDyadRows(containers)
+	if len(rows) == 0 {
 		infof("no dyads found")
 		return
 	}
-	widths := map[string]int{"dyad": 4, "role": 4, "dept": 4, "actor": 5, "critic": 6}
-	for _, k := range keys {
-		r := rows[k]
-		widths["dyad"] = max(widths["dyad"], len(r.Dyad))
-		widths["role"] = max(widths["role"], len(r.Role))
-		widths["dept"] = max(widths["dept"], len(r.Dept))
-		widths["actor"] = max(widths["actor"], len(r.Actor))
-		widths["critic"] = max(widths["critic"], len(r.Critic))
-	}
-	fmt.Printf("%s  %s  %s  %s  %s\n",
-		padRightANSI(styleHeading("DYAD"), widths["dyad"]),
-		padRightANSI(styleHeading("ROLE"), widths["role"]),
-		padRightANSI(styleHeading("DEPT"), widths["dept"]),
-		padRightANSI(styleHeading("ACTOR"), widths["actor"]),
-		padRightANSI(styleHeading("CRITIC"), widths["critic"]),
-	)
-	for _, k := range keys {
-		r := rows[k]
-		fmt.Printf("%s  %s  %s  %s  %s\n",
-			padRightANSI(r.Dyad, widths["dyad"]),
-			padRightANSI(r.Role, widths["role"]),
-			padRightANSI(r.Dept, widths["dept"]),
-			padRightANSI(styleStatus(r.Actor), widths["actor"]),
-			padRightANSI(styleStatus(r.Critic), widths["critic"]),
-		)
-	}
+	printDyadRows(rows)
 	_ = args
 }
 
 func cmdDyadRemove(args []string) {
-	if len(args) < 1 {
-		printUsage("usage: si dyad remove <name>")
-		return
+	name := ""
+	if len(args) > 0 {
+		name = strings.TrimSpace(args[0])
 	}
-	name := args[0]
+	if name == "" {
+		selected, ok := selectDyadName("remove")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad remove <name>")
+			}
+			return
+		}
+		name = selected
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -325,9 +306,15 @@ func cmdDyadRemove(args []string) {
 }
 
 func cmdDyadRecreate(args []string) {
-	if len(args) < 1 {
-		printUsage("usage: si dyad recreate <name> [role] [department]")
-		return
+	if len(args) < 1 || strings.TrimSpace(args[0]) == "" {
+		selected, ok := selectDyadName("recreate")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad recreate <name> [role] [department]")
+			}
+			return
+		}
+		args = append([]string{selected}, args...)
 	}
 	name := args[0]
 	client, err := shared.NewClient()
@@ -340,11 +327,20 @@ func cmdDyadRecreate(args []string) {
 }
 
 func cmdDyadStatus(args []string) {
-	if len(args) < 1 {
-		printUsage("usage: si dyad status <name>")
-		return
+	name := ""
+	if len(args) > 0 {
+		name = strings.TrimSpace(args[0])
 	}
-	name := args[0]
+	if name == "" {
+		selected, ok := selectDyadName("status")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad status <name>")
+			}
+			return
+		}
+		name = selected
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -379,20 +375,62 @@ func cmdDyadStatus(args []string) {
 }
 
 func cmdDyadExec(args []string) {
+	memberProvided := flagProvided(args, "member")
 	fs := flag.NewFlagSet("dyad exec", flag.ExitOnError)
 	member := fs.String("member", "actor", "actor or critic")
 	tty := fs.Bool("tty", false, "allocate TTY")
 	fs.Parse(args)
-	if fs.NArg() < 2 {
-		printUsage("usage: si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>")
-		return
+	dyad := ""
+	if fs.NArg() > 0 {
+		dyad = strings.TrimSpace(fs.Arg(0))
 	}
-	dyad := fs.Arg(0)
-	cmd := fs.Args()[1:]
+	if dyad == "" {
+		selected, ok := selectDyadName("exec")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>")
+			}
+			return
+		}
+		dyad = selected
+	}
+	memberVal, err := normalizeDyadMember(*member, "actor")
+	if err != nil {
+		fatal(err)
+	}
+	if !memberProvided && isInteractiveTerminal() {
+		selected, ok := selectDyadMember("exec", memberVal)
+		if !ok {
+			return
+		}
+		memberVal = selected
+	}
+
+	rest := fs.Args()
+	cmd := []string{}
+	if len(rest) > 1 {
+		cmd = rest[1:]
+	}
 	if len(cmd) > 0 && cmd[0] == "--" {
 		cmd = cmd[1:]
 	}
-	if err := execInDyad(dyad, *member, cmd, *tty); err != nil {
+	if len(cmd) == 0 {
+		if !isInteractiveTerminal() {
+			printUsage("usage: si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>")
+			return
+		}
+		line, ok := promptWithDefault("Command:", "bash")
+		if !ok {
+			return
+		}
+		line = strings.TrimSpace(line)
+		if strings.ContainsAny(line, " \t") {
+			cmd = []string{"bash", "-lc", line}
+		} else {
+			cmd = []string{line}
+		}
+	}
+	if err := execInDyad(dyad, memberVal, cmd, *tty); err != nil {
 		fatal(err)
 	}
 }
@@ -419,21 +457,42 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 }
 
 func cmdDyadLogs(args []string) {
+	memberProvided := flagProvided(args, "member")
 	fs := flag.NewFlagSet("dyad logs", flag.ExitOnError)
 	member := fs.String("member", "critic", "actor or critic")
 	tail := fs.Int("tail", 200, "lines to tail")
 	fs.Parse(args)
-	if fs.NArg() < 1 {
-		printUsage("usage: si dyad logs [--member actor|critic] [--tail N] <dyad>")
-		return
+	dyad := ""
+	if fs.NArg() > 0 {
+		dyad = strings.TrimSpace(fs.Arg(0))
 	}
-	dyad := fs.Arg(0)
+	if dyad == "" {
+		selected, ok := selectDyadName("logs")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad logs [--member actor|critic] [--tail N] <dyad>")
+			}
+			return
+		}
+		dyad = selected
+	}
+	memberVal, err := normalizeDyadMember(*member, "critic")
+	if err != nil {
+		fatal(err)
+	}
+	if !memberProvided && isInteractiveTerminal() {
+		selected, ok := selectDyadMember("logs", memberVal)
+		if !ok {
+			return
+		}
+		memberVal = selected
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
 	}
 	defer client.Close()
-	containerName := shared.DyadContainerName(dyad, *member)
+	containerName := shared.DyadContainerName(dyad, memberVal)
 	id, _, err := client.ContainerByName(context.Background(), containerName)
 	if err != nil {
 		fatal(err)
@@ -449,11 +508,20 @@ func cmdDyadLogs(args []string) {
 }
 
 func cmdDyadRestart(args []string) {
-	if len(args) < 1 {
-		printUsage("usage: si dyad restart <name>")
-		return
+	name := ""
+	if len(args) > 0 {
+		name = strings.TrimSpace(args[0])
 	}
-	name := args[0]
+	if name == "" {
+		selected, ok := selectDyadName("restart")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad restart <name>")
+			}
+			return
+		}
+		name = selected
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -490,6 +558,8 @@ func cmdDyadCleanup(args []string) {
 }
 
 func cmdDyadCopyLogin(args []string) {
+	sourceProvided := flagProvided(args, "source")
+	memberProvided := flagProvided(args, "member")
 	fs := flag.NewFlagSet("dyad copy-login", flag.ExitOnError)
 	source := fs.String("source", envOr("SI_CODEX_SOURCE", "codex-status"), "si-codex container name or suffix")
 	member := fs.String("member", "actor", "target member (actor or critic)")
@@ -497,20 +567,38 @@ func cmdDyadCopyLogin(args []string) {
 	targetHome := fs.String("target-home", "/root", "home dir in target container")
 	fs.Parse(args)
 
-	if fs.NArg() < 1 {
-		printUsage("usage: si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>")
-		return
+	dyad := ""
+	if fs.NArg() > 0 {
+		dyad = strings.TrimSpace(fs.Arg(0))
 	}
-	dyad := fs.Arg(0)
+	if dyad == "" {
+		selected, ok := selectDyadName("copy-login")
+		if !ok {
+			if !isInteractiveTerminal() {
+				printUsage("usage: si dyad copy-login [--member actor|critic] [--source codex-status] <dyad>")
+			}
+			return
+		}
+		dyad = selected
+	}
 	if err := validateSlug(dyad); err != nil {
 		fatal(err)
 	}
-	memberVal := strings.ToLower(strings.TrimSpace(*member))
-	if memberVal == "" {
-		memberVal = "actor"
+	memberVal, err := normalizeDyadMember(*member, "actor")
+	if err != nil {
+		fatal(err)
 	}
-	if memberVal != "actor" && memberVal != "critic" {
-		fatal(fmt.Errorf("invalid member %q (expected actor or critic)", memberVal))
+	if !memberProvided && isInteractiveTerminal() {
+		selected, ok := selectDyadMember("copy-login", memberVal)
+		if !ok {
+			return
+		}
+		memberVal = selected
+	}
+	if !sourceProvided && isInteractiveTerminal() {
+		if selected, ok := selectCodexContainer("dyad copy-login", true); ok {
+			*source = selected
+		}
 	}
 	sourceName := codexContainerName(strings.TrimSpace(*source))
 	if sourceName == "" {
