@@ -83,6 +83,9 @@ func parseMenuSelection(line string, options []string) (int, error) {
 	if line == "" {
 		return -1, nil
 	}
+	if isEscCancelInput(line) {
+		return -1, nil
+	}
 	idx, err := strconv.Atoi(line)
 	if err == nil {
 		if idx < 1 || idx > len(options) {
@@ -114,6 +117,9 @@ func promptRequired(prompt string) (string, bool) {
 	if err != nil {
 		fatal(err)
 	}
+	if isEscCancelInput(line) {
+		return "", false
+	}
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return "", false
@@ -130,6 +136,9 @@ func promptWithDefault(prompt, def string) (string, bool) {
 	line, err := promptLine(os.Stdin)
 	if err != nil {
 		fatal(err)
+	}
+	if isEscCancelInput(line) {
+		return "", false
 	}
 	line = strings.TrimSpace(line)
 	if line == "" {
