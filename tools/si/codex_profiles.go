@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
@@ -160,7 +162,13 @@ type codexAuthCacheStatus struct {
 	Path     string
 	Exists   bool
 	Modified time.Time
+	Reason   string
 }
+
+var (
+	codexAuthSyncAttempts                sync.Map
+	syncProfileAuthFromContainerStatusFn = syncProfileAuthFromContainer
+)
 
 func codexProfileAuthStatus(profile codexProfile) codexAuthCacheStatus {
 	path, err := codexProfileAuthPath(profile)
@@ -168,45 +176,75 @@ func codexProfileAuthStatus(profile codexProfile) codexAuthCacheStatus {
 		return codexAuthCacheStatus{}
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.IsDir() {
-		return codexAuthCacheStatus{Path: path}
+	if err == nil && !info.IsDir() && isValidCodexAuthFile(path, time.Now()) {
+		return codexAuthCacheStatus{Path: path, Exists: true, Modified: info.ModTime()}
 	}
-	if !isValidCodexAuthFile(path, time.Now()) {
-		return codexAuthCacheStatus{Path: path}
+	if attemptRecoverCodexAuthCache(profile) {
+		info, err = os.Stat(path)
+		if err == nil && !info.IsDir() && isValidCodexAuthFile(path, time.Now()) {
+			return codexAuthCacheStatus{Path: path, Exists: true, Modified: info.ModTime()}
+		}
 	}
-	return codexAuthCacheStatus{Path: path, Exists: true, Modified: info.ModTime()}
+	reason := codexAuthMissingReason(path, info, err)
+	return codexAuthCacheStatus{Path: path, Reason: reason}
 }
 
 func isValidCodexAuthFile(path string, now time.Time) bool {
+	_ = now
+	return codexAuthValidationError(path) == nil
+}
+
+func codexAuthValidationError(path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return false
+		return err
 	}
 	var parsed struct {
 		Tokens struct {
 			AccessToken string `json:"access_token"`
 			IDToken     string `json:"id_token"`
+			Refresh     string `json:"refresh_token"`
 		} `json:"tokens"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return false
+		return fmt.Errorf("invalid auth json: %w", err)
 	}
 	accessToken := strings.TrimSpace(parsed.Tokens.AccessToken)
-	if accessToken == "" {
+	refreshToken := strings.TrimSpace(parsed.Tokens.Refresh)
+	if accessToken == "" && refreshToken == "" {
+		return errors.New("auth tokens missing (need access_token or refresh_token)")
+	}
+	return nil
+}
+
+func codexAuthMissingReason(path string, info os.FileInfo, statErr error) string {
+	if statErr != nil {
+		if errors.Is(statErr, os.ErrNotExist) {
+			return fmt.Sprintf("auth cache not found at %s; run `si login`", path)
+		}
+		return fmt.Sprintf("auth cache read failed at %s: %v", path, statErr)
+	}
+	if info != nil && info.IsDir() {
+		return fmt.Sprintf("auth cache path is a directory: %s", path)
+	}
+	if err := codexAuthValidationError(path); err != nil {
+		return fmt.Sprintf("invalid auth cache at %s: %v", path, err)
+	}
+	return fmt.Sprintf("auth cache unavailable at %s", path)
+}
+
+func attemptRecoverCodexAuthCache(profile codexProfile) bool {
+	profileID := strings.TrimSpace(profile.ID)
+	if profileID == "" || syncProfileAuthFromContainerStatusFn == nil {
 		return false
 	}
-	now = now.UTC()
-	if exp, ok := jwtTokenExpiry(accessToken); ok {
-		if !exp.After(now) {
-			return false
-		}
+	if _, loaded := codexAuthSyncAttempts.LoadOrStore(strings.ToLower(profileID), struct{}{}); loaded {
+		return false
 	}
-	if exp, ok := jwtTokenExpiry(parsed.Tokens.IDToken); ok {
-		if !exp.After(now) {
-			return false
-		}
-	}
-	return true
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	_, err := syncProfileAuthFromContainerStatusFn(ctx, profile)
+	return err == nil
 }
 
 func jwtTokenExpiry(token string) (time.Time, bool) {
@@ -277,6 +315,7 @@ func codexProfileSummaries() []codexProfileSummary {
 			Email:             profile.Email,
 			AuthCached:        status.Exists,
 			AuthPath:          status.Path,
+			StatusError:       status.Reason,
 			FiveHourLeftPct:   -1,
 			FiveHourRemaining: -1,
 			WeeklyLeftPct:     -1,

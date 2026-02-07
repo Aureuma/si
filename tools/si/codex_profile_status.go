@@ -168,20 +168,45 @@ func fetchProfileStatus(profile codexProfile, client *http.Client, usageURL stri
 		return profileStatusResult{ID: profile.ID, Err: err}
 	}
 
+	if strings.TrimSpace(auth.AccessToken) == "" && strings.TrimSpace(auth.RefreshToken) != "" {
+		if refreshed, refreshErr := refreshProfileAuthTokens(ctx, client, profile, auth); refreshErr == nil {
+			auth = refreshed
+		}
+	}
+
+	syncedFromContainer := false
 	status, err := fetchUsageStatus(ctx, client, usageURL, auth)
 	if err != nil && isExpiredAuthError(err) {
 		refreshed, refreshErr := refreshProfileAuthTokens(ctx, client, profile, auth)
 		if refreshErr == nil {
+			auth = refreshed
 			status, err = fetchUsageStatus(ctx, client, usageURL, refreshed)
-		} else if isRefreshTokenReusedError(refreshErr) {
+		} else {
 			synced, syncErr := syncProfileAuthFromContainer(ctx, profile)
 			if syncErr == nil {
-				status, err = fetchUsageStatus(ctx, client, usageURL, synced)
+				syncedFromContainer = true
+				auth = synced
+				if strings.TrimSpace(auth.AccessToken) == "" && strings.TrimSpace(auth.RefreshToken) != "" {
+					if refreshed, refreshErr := refreshProfileAuthTokens(ctx, client, profile, auth); refreshErr == nil {
+						auth = refreshed
+					}
+				}
+				status, err = fetchUsageStatus(ctx, client, usageURL, auth)
 			} else {
 				return profileStatusResult{ID: profile.ID, Err: fmt.Errorf("usage token expired; refresh failed (%v) and container auth sync failed: %w", refreshErr, syncErr)}
 			}
-		} else {
-			return profileStatusResult{ID: profile.ID, Err: fmt.Errorf("usage token expired and refresh failed: %w", refreshErr)}
+		}
+	}
+	if err != nil && isAuthFailureError(err) && !syncedFromContainer {
+		synced, syncErr := syncProfileAuthFromContainer(ctx, profile)
+		if syncErr == nil {
+			auth = synced
+			if strings.TrimSpace(auth.AccessToken) == "" && strings.TrimSpace(auth.RefreshToken) != "" {
+				if refreshed, refreshErr := refreshProfileAuthTokens(ctx, client, profile, auth); refreshErr == nil {
+					auth = refreshed
+				}
+			}
+			status, err = fetchUsageStatus(ctx, client, usageURL, auth)
 		}
 	}
 	if err != nil {

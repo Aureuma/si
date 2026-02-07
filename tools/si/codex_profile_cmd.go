@@ -139,18 +139,6 @@ func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult
 		return
 	}
 	if res.Err != nil {
-		if isAuthFailureError(res.Err) {
-			item.AuthCached = false
-			item.AuthUpdated = ""
-			item.FiveHourLeftPct = -1
-			item.FiveHourReset = ""
-			item.FiveHourRemaining = -1
-			item.WeeklyLeftPct = -1
-			item.WeeklyReset = ""
-			item.WeeklyRemaining = -1
-			item.StatusError = ""
-			return
-		}
 		item.StatusError = res.Err.Error()
 		return
 	}
@@ -169,6 +157,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 	widthID := displayWidth("PROFILE")
 	widthName := displayWidth("NAME")
 	widthEmail := displayWidth("EMAIL")
+	widthAuth := displayWidth("AUTH")
 	width5h := displayWidth("5H")
 	widthWeekly := displayWidth("WEEKLY")
 	for _, item := range items {
@@ -181,18 +170,16 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 		if w := displayWidth(item.Email); w > widthEmail {
 			widthEmail = w
 		}
+		auth := profileAuthLabel(item)
+		if w := displayWidth(auth); w > widthAuth {
+			widthAuth = w
+		}
 		if withStatus {
-			limit := formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
-			if item.StatusError != "" {
-				limit = "ERR"
-			}
+			limit := profileFiveHourDisplay(item)
 			if w := displayWidth(limit); w > width5h {
 				width5h = w
 			}
-			limit = formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
-			if item.StatusError != "" {
-				limit = "ERR"
-			}
+			limit = profileWeeklyDisplay(item)
 			if w := displayWidth(limit); w > widthWeekly {
 				widthWeekly = w
 			}
@@ -204,7 +191,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 			padRightANSI(styleHeading("PROFILE"), widthID),
 			padRightANSI(styleHeading("NAME"), widthName),
 			padRightANSI(styleHeading("EMAIL"), widthEmail),
-			padRightANSI(styleHeading("AUTH"), 8),
+			padRightANSI(styleHeading("AUTH"), widthAuth),
 			padRightANSI(styleHeading("5H"), width5h),
 			padRightANSI(styleHeading("WEEKLY"), widthWeekly),
 		)
@@ -213,26 +200,19 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 			padRightANSI(styleHeading("PROFILE"), widthID),
 			padRightANSI(styleHeading("NAME"), widthName),
 			padRightANSI(styleHeading("EMAIL"), widthEmail),
-			padRightANSI(styleHeading("AUTH"), 8),
+			padRightANSI(styleHeading("AUTH"), widthAuth),
 		)
 	}
 	for _, item := range items {
-		auth := "Missing"
-		if item.AuthCached {
-			auth = "Logged-In"
-		}
+		auth := profileAuthLabel(item)
 		if withStatus {
-			fiveHour := formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
-			weekly := formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
-			if item.StatusError != "" {
-				fiveHour = "ERR"
-				weekly = "ERR"
-			}
+			fiveHour := profileFiveHourDisplay(item)
+			weekly := profileWeeklyDisplay(item)
 			fmt.Printf("%s %s %s %s %s %s\n",
 				padRightANSI(item.ID, widthID),
 				padRightANSI(item.Name, widthName),
 				padRightANSI(item.Email, widthEmail),
-				padRightANSI(auth, 8),
+				padRightANSI(auth, widthAuth),
 				padRightANSI(fiveHour, width5h),
 				padRightANSI(weekly, widthWeekly),
 			)
@@ -241,8 +221,38 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 				padRightANSI(item.ID, widthID),
 				padRightANSI(item.Name, widthName),
 				padRightANSI(item.Email, widthEmail),
-				padRightANSI(auth, 8),
+				padRightANSI(auth, widthAuth),
 			)
 		}
 	}
+}
+
+func profileAuthLabel(item codexProfileSummary) string {
+	if item.AuthCached {
+		return "Logged-In"
+	}
+	if strings.TrimSpace(item.StatusError) != "" {
+		return "Error"
+	}
+	return "Missing"
+}
+
+func profileFiveHourDisplay(item codexProfileSummary) string {
+	if strings.TrimSpace(item.StatusError) == "" {
+		return formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
+	}
+	if !item.AuthCached {
+		return "AUTH: " + strings.TrimSpace(item.StatusError)
+	}
+	return "ERR"
+}
+
+func profileWeeklyDisplay(item codexProfileSummary) string {
+	if strings.TrimSpace(item.StatusError) == "" {
+		return formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
+	}
+	if !item.AuthCached {
+		return "-"
+	}
+	return "ERR"
 }
