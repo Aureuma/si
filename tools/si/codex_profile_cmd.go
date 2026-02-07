@@ -68,7 +68,7 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 	printCodexProfilesTable(items, withStatus)
 	if withStatus {
 		for _, item := range items {
-			if item.StatusError != "" {
+			if item.StatusError != "" && item.AuthCached {
 				warnf("profile %s status error: %s", item.ID, item.StatusError)
 			}
 		}
