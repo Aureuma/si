@@ -68,3 +68,7 @@ On API failures, `si stripe` surfaces:
 - `request_id`, `doc_url`, `request_log_url`
 - raw payload (with secret redaction)
 
+## Observability
+- Bridge events are written as JSON lines to `~/.si/logs/stripe.log` by default.
+- Override with `stripe.log_file` in settings or `SI_STRIPE_LOG_FILE`.
+- Logged events include context (`account`, `environment`), request path/method, status, request ID, and duration.

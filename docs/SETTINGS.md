@@ -98,6 +98,7 @@ Defaults for `si stripe` account and environment context.
 - `stripe.organization` (string): optional organization label
 - `stripe.default_account` (string): default account alias (or `acct_` id)
 - `stripe.default_env` (string): `live` or `sandbox` (default: `sandbox`)
+- `stripe.log_file` (string): JSONL log path for Stripe bridge request/response events (default: `~/.si/logs/stripe.log`)
 
 #### `[stripe.accounts.<alias>]`
 Per-account Stripe settings.
@@ -190,6 +191,7 @@ workspace = "/home/ubuntu/Development/si"
 organization = "main-org"
 default_account = "core"
 default_env = "sandbox"
+log_file = "~/.si/logs/stripe.log"
 
 [stripe.accounts.core]
 id = "acct_1234567890"
