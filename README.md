@@ -87,6 +87,19 @@ Inspect profiles and usage:
 ./si status <profile>
 ```
 
+Run/attach workflows:
+
+```bash
+# open shell in existing container
+./si run <container-or-profile>
+
+# attach to persistent codex tmux pane
+./si run <container-or-profile> --tmux
+
+# ensure autopoietic companion sidecar, then attach tmux codex pane
+./si run <container-or-profile> --autopoietic --tmux
+```
+
 ## Warmup
 `si` can auto-bootstrap weekly usage timers for logged-in Codex profiles:
 
