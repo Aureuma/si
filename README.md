@@ -149,6 +149,20 @@ Environment policy:
 - Use `live` and `sandbox`.
 - `test` is intentionally rejected as a CLI environment mode.
 
+## Self Build/Upgrade
+Build or upgrade the `si` binary from the repo itself:
+
+```bash
+# dev checkout build
+./si self build --output ./si
+
+# explicit stable upgrade of installed binary
+si self upgrade
+
+# run current checkout without rebuilding a binary artifact
+si self run -- version
+```
+
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).
 2) Human opens the URL on a browser-capable machine and completes OAuth.
