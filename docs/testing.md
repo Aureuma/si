@@ -12,3 +12,23 @@ Use the repo test runner from the root:
 ```
 
 That script runs `go test` across the workspace modules listed in `go.work`.
+
+## Static analysis
+Run static analysis from the repo root:
+
+```bash
+./si analyze
+```
+
+Scope it to the CLI module when iterating locally:
+
+```bash
+./si analyze --module tools/si
+```
+
+## Image build smoke check
+The canonical local image build command is:
+
+```bash
+./si image build
+```
