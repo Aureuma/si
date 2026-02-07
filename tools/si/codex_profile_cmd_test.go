@@ -32,7 +32,7 @@ func TestSplitProfileNameAndFlags(t *testing.T) {
 	}
 }
 
-func TestApplyProfileStatusResultAuthFailureDowngradesAuth(t *testing.T) {
+func TestApplyProfileStatusResultAuthFailureKeepsAuthAndSetsError(t *testing.T) {
 	item := codexProfileSummary{
 		ID:                "cadma",
 		AuthCached:        true,
@@ -51,17 +51,14 @@ func TestApplyProfileStatusResultAuthFailureDowngradesAuth(t *testing.T) {
 		},
 	}
 	applyProfileStatusResult(&item, res)
-	if item.AuthCached {
-		t.Fatalf("expected AuthCached to be downgraded")
+	if !item.AuthCached {
+		t.Fatalf("expected AuthCached to remain true")
 	}
-	if item.AuthUpdated != "" {
-		t.Fatalf("expected AuthUpdated to clear, got %q", item.AuthUpdated)
+	if item.AuthUpdated != "2026-02-07T18:00:00Z" {
+		t.Fatalf("expected AuthUpdated to remain unchanged, got %q", item.AuthUpdated)
 	}
-	if item.FiveHourLeftPct != -1 || item.WeeklyLeftPct != -1 {
-		t.Fatalf("expected limits to reset, got %+v", item)
-	}
-	if item.FiveHourRemaining != -1 || item.WeeklyRemaining != -1 {
-		t.Fatalf("expected remaining timers to reset, got %+v", item)
+	if item.StatusError == "" {
+		t.Fatalf("expected auth failure to surface as status error")
 	}
 }
 
@@ -102,5 +99,30 @@ func TestApplyProfileStatusResultSuccess(t *testing.T) {
 	}
 	if item.FiveHourReset == "" || item.WeeklyReset == "" {
 		t.Fatalf("expected reset timestamps to be populated: %+v", item)
+	}
+}
+
+func TestProfileAuthLabel(t *testing.T) {
+	if got := profileAuthLabel(codexProfileSummary{AuthCached: true}); got != "Logged-In" {
+		t.Fatalf("expected Logged-In, got %q", got)
+	}
+	if got := profileAuthLabel(codexProfileSummary{AuthCached: false, StatusError: "auth cache missing"}); got != "Error" {
+		t.Fatalf("expected Error, got %q", got)
+	}
+	if got := profileAuthLabel(codexProfileSummary{AuthCached: false}); got != "Missing" {
+		t.Fatalf("expected Missing, got %q", got)
+	}
+}
+
+func TestProfileLimitDisplayForMissingAuth(t *testing.T) {
+	item := codexProfileSummary{
+		AuthCached:  false,
+		StatusError: "auth cache not found",
+	}
+	if got := profileFiveHourDisplay(item); got != "AUTH: auth cache not found" {
+		t.Fatalf("unexpected 5H display %q", got)
+	}
+	if got := profileWeeklyDisplay(item); got != "-" {
+		t.Fatalf("unexpected WEEKLY display %q", got)
 	}
 }
