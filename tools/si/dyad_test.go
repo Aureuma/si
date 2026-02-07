@@ -75,6 +75,16 @@ func TestParseMenuSelection(t *testing.T) {
 		t.Fatalf("empty selection mismatch: idx=%d err=%v", idx, err)
 	}
 
+	idx, err = parseMenuSelection("\x1b", options)
+	if err != nil || idx != -1 {
+		t.Fatalf("esc selection mismatch: idx=%d err=%v", idx, err)
+	}
+
+	idx, err = parseMenuSelection("\x1b[A", options)
+	if err != nil || idx != -1 {
+		t.Fatalf("esc sequence selection mismatch: idx=%d err=%v", idx, err)
+	}
+
 	if _, err := parseMenuSelection("0", options); err == nil {
 		t.Fatalf("expected out-of-range error")
 	}
