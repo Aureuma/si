@@ -1,41 +1,104 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestIsValidCodexAuthFileRejectsExpiredAccessToken(t *testing.T) {
+func TestIsValidCodexAuthFileAcceptsExpiredAccessTokenWhenRefreshExists(t *testing.T) {
 	path := writeAuthFixture(t, profileAuthTokens{
-		AccessToken: testJWTWithExp(t, time.Now().UTC().Add(-1*time.Hour), false),
-		IDToken:     testJWTWithExp(t, time.Now().UTC().Add(1*time.Hour), false),
-	})
-	if isValidCodexAuthFile(path, time.Now()) {
-		t.Fatalf("expected expired access token to be invalid")
-	}
-}
-
-func TestIsValidCodexAuthFileRejectsExpiredIDToken(t *testing.T) {
-	path := writeAuthFixture(t, profileAuthTokens{
-		AccessToken: testJWTWithExp(t, time.Now().UTC().Add(1*time.Hour), false),
-		IDToken:     testJWTWithExp(t, time.Now().UTC().Add(-1*time.Hour), false),
-	})
-	if isValidCodexAuthFile(path, time.Now()) {
-		t.Fatalf("expected expired id token to be invalid")
-	}
-}
-
-func TestIsValidCodexAuthFileAcceptsPaddedJWTPayload(t *testing.T) {
-	path := writeAuthFixture(t, profileAuthTokens{
-		AccessToken: testJWTWithExp(t, time.Now().UTC().Add(1*time.Hour), true),
-		IDToken:     testJWTWithExp(t, time.Now().UTC().Add(1*time.Hour), true),
+		AccessToken:  testJWTWithExp(t, time.Now().UTC().Add(-1*time.Hour), false),
+		RefreshToken: "refresh-token",
 	})
 	if !isValidCodexAuthFile(path, time.Now()) {
-		t.Fatalf("expected padded jwt payload to be accepted")
+		t.Fatalf("expected auth with refresh token to be valid")
+	}
+}
+
+func TestIsValidCodexAuthFileAcceptsExpiredIDTokenWhenAccessExists(t *testing.T) {
+	path := writeAuthFixture(t, profileAuthTokens{
+		AccessToken: "access-token",
+		IDToken:     testJWTWithExp(t, time.Now().UTC().Add(-1*time.Hour), false),
+	})
+	if !isValidCodexAuthFile(path, time.Now()) {
+		t.Fatalf("expected auth with access token to be valid")
+	}
+}
+
+func TestIsValidCodexAuthFileRejectsMissingAccessAndRefresh(t *testing.T) {
+	path := writeAuthFixture(t, profileAuthTokens{IDToken: "id-token-only"})
+	if isValidCodexAuthFile(path, time.Now()) {
+		t.Fatalf("expected auth without access/refresh to be invalid")
+	}
+}
+
+func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+
+	prevFn := syncProfileAuthFromContainerStatusFn
+	prevAttempts := codexAuthSyncAttempts
+	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
+		path, err := codexProfileAuthPath(p)
+		if err != nil {
+			return profileAuthTokens{}, err
+		}
+		data, _ := json.Marshal(profileAuthFile{Tokens: &profileAuthTokens{AccessToken: "access-token"}})
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return profileAuthTokens{}, err
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			return profileAuthTokens{}, err
+		}
+		return profileAuthTokens{AccessToken: "access-token"}, nil
+	}
+	codexAuthSyncAttempts = sync.Map{}
+	defer func() {
+		syncProfileAuthFromContainerStatusFn = prevFn
+		codexAuthSyncAttempts = prevAttempts
+	}()
+
+	status := codexProfileAuthStatus(profile)
+	if !status.Exists {
+		t.Fatalf("expected auth status to recover from container sync")
+	}
+	if strings.TrimSpace(status.Path) == "" {
+		t.Fatalf("expected auth path to be populated")
+	}
+}
+
+func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "einsteina", Name: "Einsteina", Email: "einsteina@example.com"}
+
+	prevFn := syncProfileAuthFromContainerStatusFn
+	prevAttempts := codexAuthSyncAttempts
+	var calls int32
+	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
+		atomic.AddInt32(&calls, 1)
+		return profileAuthTokens{}, os.ErrNotExist
+	}
+	codexAuthSyncAttempts = sync.Map{}
+	defer func() {
+		syncProfileAuthFromContainerStatusFn = prevFn
+		codexAuthSyncAttempts = prevAttempts
+	}()
+
+	_ = codexProfileAuthStatus(profile)
+	_ = codexProfileAuthStatus(profile)
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("expected one sync attempt, got %d", got)
 	}
 }
 
