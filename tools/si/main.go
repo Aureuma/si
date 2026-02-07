@@ -22,6 +22,8 @@ func main() {
 		}
 	case "analyze", "lint":
 		cmdAnalyze(args)
+	case "stripe":
+		cmdStripe(args)
 	case "docker":
 		cmdDocker(args)
 	case "dyad":
