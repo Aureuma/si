@@ -19,6 +19,33 @@ const weeklyWarmPrompt = "You are warming the Codex weekly limit. Read the follo
 	"Additional context: The integration must support macOS and Linux. We plan to ship a background scheduler that triggers a maintenance task weekly. If the scheduler misfires, we could see noisy alerts and wasted tokens. The team has proposed sending a small prompt to verify the pipeline, but this prompt should be large enough to actually consume tokens so the weekly limit timer advances. The marketing team wants to announce the rollout with a blog post, but this is blocked on finalizing the SLA language. The roadmap includes adding a UI dashboard to show usage limits, but the backend endpoint is still evolving. An internal review suggested that a short, consistent warm-up prompt would be easiest to maintain. The deployment checklist is long and includes updating image tags, verifying auth storage, and confirming the rate limit resets are correctly detected. We have one week to stabilize, and any delays will impact the target launch date."
 
 func cmdWarmWeekly(args []string) {
+	if len(args) > 0 {
+		switch strings.ToLower(strings.TrimSpace(args[0])) {
+		case "help", "-h", "--help":
+			printWarmWeeklyUsage()
+			return
+		case "enable":
+			cmdWarmWeeklyEnable(args[1:])
+			return
+		case "reconcile":
+			cmdWarmWeeklyReconcile(args[1:])
+			return
+		case "status":
+			cmdWarmWeeklyStatus(args[1:])
+			return
+		case "disable":
+			cmdWarmWeeklyDisable(args[1:])
+			return
+		}
+	}
+	if len(args) == 0 {
+		cmdWarmWeeklyReconcile(nil)
+		return
+	}
+	cmdWarmWeeklyLegacy(args)
+}
+
+func cmdWarmWeeklyLegacy(args []string) {
 	fs := flag.NewFlagSet("warm-weekly", flag.ExitOnError)
 	profilesFlag := multiFlag{}
 	fs.Var(&profilesFlag, "profile", "codex profile name/email (repeatable)")
