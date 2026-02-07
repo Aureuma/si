@@ -31,6 +31,7 @@ type codexExecOneOffOptions struct {
 	Effort        string
 	DisableMCP    bool
 	OutputOnly    bool
+	Quiet         bool
 	KeepContainer bool
 	DockerSocket  bool
 	Profile       *codexProfile
@@ -171,14 +172,16 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 
 	cmd := buildCodexExecCommand(opts, prompt)
 	raw, err := execInContainerRaw(ctx, client, id, cmd, shared.ExecOptions{TTY: true, WorkDir: opts.Workdir})
-	if opts.OutputOnly {
-		out := extractCodexExecOutput(raw)
-		if out == "" {
-			out = strings.TrimSpace(raw)
+	if !opts.Quiet {
+		if opts.OutputOnly {
+			out := extractCodexExecOutput(raw)
+			if out == "" {
+				out = strings.TrimSpace(raw)
+			}
+			_, _ = os.Stdout.Write([]byte(out))
+		} else {
+			_, _ = os.Stdout.Write([]byte(raw))
 		}
-		_, _ = os.Stdout.Write([]byte(out))
-	} else {
-		_, _ = os.Stdout.Write([]byte(raw))
 	}
 	return err
 }

@@ -57,16 +57,25 @@ Spawn standalone Codex containers with isolated auth:
 
 ```bash
 ./si images build
-./si spawn <name> --repo Org/Repo --gh-pat <token>
+./si spawn --profile america --repo Org/Repo --gh-pat <token>
 ```
 
 Clone later into an existing container:
 ```bash
-./si clone <name> Org/Repo --gh-pat <token>
+./si clone america Org/Repo --gh-pat <token>
 ```
 
 Each container uses its own persistent `~/.codex` volume so multiple Codex accounts can coexist on the same host.
 By default, `si spawn` mounts the current directory as `/workspace`; use `--workspace` to override.
+When a profile is selected, `si` uses that profile ID as the container name and enforces one container per profile.
+
+Inspect profiles and usage:
+
+```bash
+./si status
+./si status --no-status
+./si status <profile>
+```
 
 ## Warmup
 `si` can auto-bootstrap weekly usage timers for logged-in Codex profiles:
@@ -83,6 +92,7 @@ Behavior:
 - `reconcile` warms profiles that are logged in but still at fresh weekly usage.
 - `status` shows per-profile warm state and next due time.
 - `si login` triggers `warmup enable --profile <profile>` automatically after successful auth cache write.
+- `--quiet` suppresses warmup command output.
 
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).
