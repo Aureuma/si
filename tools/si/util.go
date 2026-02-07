@@ -178,33 +178,13 @@ codex:
   si stop <name>
   si start <name>
 
-  si warm-weekly [--profile <profile>]
-    --profile <profile>     (repeatable)
-    --prompt <text>
-    --prompt-file <path>
-    --jitter-min <minutes>
-    --jitter-max <minutes>
-    --dry-run
-    --run-now
-    --ofelia-install
-    --ofelia-write
-    --ofelia-remove
-    --ofelia-name <name>
-    --ofelia-image <image>
-    --ofelia-config <path>
-    --ofelia-prompt <path>
-    --no-mcp / --no-mcp=false
-    --output-only / --output-only=false
-    --model <model>
-    --effort <level>
-    --image <image>
-    --workspace <path>
-    --workdir <path>
-    --network <name>
-    --codex-volume <name>
-    --gh-volume <name>
-    --docker-socket / --docker-socket=false
-    --keep
+  si warm-weekly enable [--profile <profile>] [--quiet] [--no-reconcile]
+  si warm-weekly reconcile [--profile <profile>] [--force-bootstrap] [--quiet]
+  si warm-weekly status [--json]
+  si warm-weekly disable [--quiet]
+
+  Legacy compatibility:
+    si warm-weekly [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 
 images:
   si images build                 (builds aureuma/si:local)

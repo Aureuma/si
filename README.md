@@ -68,6 +68,21 @@ Clone later into an existing container:
 Each container uses its own persistent `~/.codex` volume so multiple Codex accounts can coexist on the same host.
 By default, `si spawn` mounts the current directory as `/workspace`; use `--workspace` to override.
 
+## Warm Weekly Limits
+`si` can auto-bootstrap weekly usage timers for logged-in Codex profiles:
+
+```bash
+./si warm-weekly enable
+./si warm-weekly reconcile
+./si warm-weekly status
+./si warm-weekly disable
+```
+
+Behavior:
+- `enable` installs an hourly scheduler and triggers immediate reconcile.
+- `reconcile` warms profiles that are logged in but still at fresh weekly usage.
+- `status` shows per-profile warm state and next due time.
+
 ## Codex CLI login flow (pattern)
 1) Actor runs `codex login` (gets a local callback URL + port).
 2) Human opens the URL on a browser-capable machine and completes OAuth.
