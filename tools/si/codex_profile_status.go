@@ -36,6 +36,36 @@ type usagePayload struct {
 	RateLimit *usageRateLimit `json:"rate_limit"`
 }
 
+type usageAPIErrorResponse struct {
+	Error struct {
+		Message string `json:"message"`
+		Code    string `json:"code"`
+	} `json:"error"`
+	Status int `json:"status"`
+}
+
+type usageAPIError struct {
+	StatusCode int
+	Code       string
+	Message    string
+}
+
+func (e *usageAPIError) Error() string {
+	if e == nil {
+		return "usage api error"
+	}
+	if strings.TrimSpace(e.Code) != "" && strings.TrimSpace(e.Message) != "" {
+		return fmt.Sprintf("usage api status %d (%s): %s", e.StatusCode, e.Code, e.Message)
+	}
+	if strings.TrimSpace(e.Message) != "" {
+		return fmt.Sprintf("usage api status %d: %s", e.StatusCode, e.Message)
+	}
+	if strings.TrimSpace(e.Code) != "" {
+		return fmt.Sprintf("usage api status %d (%s)", e.StatusCode, e.Code)
+	}
+	return fmt.Sprintf("usage api status %d", e.StatusCode)
+}
+
 type usageRateLimit struct {
 	Primary   *usageWindow `json:"primary_window"`
 	Secondary *usageWindow `json:"secondary_window"`
@@ -192,11 +222,20 @@ func fetchUsagePayloadWithClient(ctx context.Context, client *http.Client, usage
 		return usagePayload{}, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		snippet := strings.TrimSpace(string(body))
-		if len(snippet) > 400 {
-			snippet = snippet[:400]
+		apiErr := &usageAPIError{StatusCode: resp.StatusCode}
+		var parsed usageAPIErrorResponse
+		if err := json.Unmarshal(body, &parsed); err == nil {
+			apiErr.Code = strings.TrimSpace(parsed.Error.Code)
+			apiErr.Message = strings.TrimSpace(parsed.Error.Message)
 		}
-		return usagePayload{}, fmt.Errorf("usage api status %d: %s", resp.StatusCode, snippet)
+		if apiErr.Message == "" {
+			snippet := strings.TrimSpace(string(body))
+			if len(snippet) > 200 {
+				snippet = snippet[:200]
+			}
+			apiErr.Message = snippet
+		}
+		return usagePayload{}, apiErr
 	}
 
 	var payload usagePayload
@@ -204,6 +243,15 @@ func fetchUsagePayloadWithClient(ctx context.Context, client *http.Client, usage
 		return usagePayload{}, err
 	}
 	return payload, nil
+}
+
+func isExpiredAuthError(err error) bool {
+	var apiErr *usageAPIError
+	if errors.As(err, &apiErr) {
+		return strings.EqualFold(strings.TrimSpace(apiErr.Code), "token_expired")
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "token_expired") || strings.Contains(msg, "token is expired")
 }
 
 func codexStatusFromUsage(payload usagePayload, now time.Time) codexStatus {
