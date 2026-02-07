@@ -10,59 +10,23 @@ import (
 
 func TestNormalizeDyadCommandAliases(t *testing.T) {
 	cases := map[string]string{
-		"spawn":            "spawn",
-		"run":              "exec",
-		" RUN ":            "exec",
-		"exec":             "exec",
-		"login":            "copy-login",
-		" LOGIN ":          "copy-login",
-		"codex-login-copy": "copy-login",
-		"ps":               "list",
-		"rm":               "remove",
-		"delete":           "remove",
-		"start":            "start",
-		"up":               "start",
-		"down":             "stop",
-		"stop":             "stop",
+		"spawn":  "spawn",
+		"run":    "exec",
+		" RUN ":  "exec",
+		"exec":   "exec",
+		"ps":     "list",
+		"rm":     "remove",
+		"delete": "remove",
+		"start":  "start",
+		"up":     "start",
+		"down":   "stop",
+		"stop":   "stop",
 	}
 	for in, want := range cases {
 		got := normalizeDyadCommand(in)
 		if got != want {
 			t.Fatalf("normalizeDyadCommand(%q) = %q, want %q", in, got, want)
 		}
-	}
-}
-
-func TestChooseDyadCopyLoginSource(t *testing.T) {
-	got, err := chooseDyadCopyLoginSource("si-codex-berylla", []string{"si-codex-cadma"}, []string{"si-codex-berylla", "si-codex-cadma"})
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if got != "si-codex-berylla" {
-		t.Fatalf("expected default candidate, got %q", got)
-	}
-
-	got, err = chooseDyadCopyLoginSource("", []string{"si-codex-einsteina"}, []string{"si-codex-einsteina", "si-codex-cadma"})
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if got != "si-codex-einsteina" {
-		t.Fatalf("expected single running container, got %q", got)
-	}
-
-	got, err = chooseDyadCopyLoginSource("", nil, []string{"si-codex-berylla"})
-	if err != nil {
-		t.Fatalf("unexpected err: %v", err)
-	}
-	if got != "si-codex-berylla" {
-		t.Fatalf("expected single container fallback, got %q", got)
-	}
-
-	if _, err := chooseDyadCopyLoginSource("", nil, nil); err == nil {
-		t.Fatalf("expected error when no containers exist")
-	}
-	if _, err := chooseDyadCopyLoginSource("", []string{"si-codex-a", "si-codex-b"}, []string{"si-codex-a", "si-codex-b"}); err == nil {
-		t.Fatalf("expected ambiguity error for multiple running containers")
 	}
 }
 
@@ -266,6 +230,18 @@ func TestIsBoolLiteral(t *testing.T) {
 		if isBoolLiteral(input) {
 			t.Fatalf("expected %q to not be a bool literal", input)
 		}
+	}
+}
+
+func TestDyadProfileArg(t *testing.T) {
+	if value, ok := dyadProfileArg([]string{"--profile", "berylla"}); !ok || value != "berylla" {
+		t.Fatalf("expected --profile value, got ok=%v value=%q", ok, value)
+	}
+	if value, ok := dyadProfileArg([]string{"--profile=einsteina"}); !ok || value != "einsteina" {
+		t.Fatalf("expected --profile= value, got ok=%v value=%q", ok, value)
+	}
+	if _, ok := dyadProfileArg([]string{"--role", "generic"}); ok {
+		t.Fatalf("expected missing profile to return ok=false")
 	}
 }
 
