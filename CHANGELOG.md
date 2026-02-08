@@ -10,6 +10,17 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [v0.45.0] - 2026-02-08
+### Added
+- Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) and raw API access.
+- Added Cloudflare bridge internals for request execution, retry/backoff, error normalization, redaction, and JSONL logging.
+- Added Cloudflare command coverage for common workflows across zone/dns/tls/cache/security/workers/pages/r2/d1/kv/queues/access/tunnels/load balancers/logs/reports.
+- Added Cloudflare tests for auth/context resolution, path/template behavior, bridge client auth wiring, and error normalization.
+- Added `docs/CLOUDFLARE.md` with setup and operational command recipes.
+
+### Changed
+- Updated CLI help, README, and settings reference to document Cloudflare multi-account context and vault-compatible credential keys.
+
 ## [v0.44.0] - 2026-02-08
 ### Added
 - Added `si github` command family with GitHub App-only auth, account context management, and direct REST/GraphQL bridge support.
