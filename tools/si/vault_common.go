@@ -92,3 +92,30 @@ func vaultRequireTrusted(settings Settings, target vault.Target, doc vault.Doten
 	}
 	return fp, nil
 }
+
+func vaultAuditSink(settings Settings) vault.AuditSink {
+	return vault.NewJSONLAudit(vaultAuditLogPath(settings))
+}
+
+func vaultAuditEvent(settings Settings, target vault.Target, typ string, fields map[string]any) {
+	sink := vaultAuditSink(settings)
+	if sink == nil {
+		return
+	}
+	event := map[string]any{
+		"type":     strings.TrimSpace(typ),
+		"user":     strings.TrimSpace(os.Getenv("USER")),
+		"uid":      os.Getuid(),
+		"gid":      os.Getgid(),
+		"repoRoot": strings.TrimSpace(target.RepoRoot),
+		"vaultDir": strings.TrimSpace(target.VaultDir),
+		"env":      strings.TrimSpace(target.Env),
+	}
+	for k, v := range fields {
+		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		event[k] = v
+	}
+	sink.Log(event)
+}

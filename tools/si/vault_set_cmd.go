@@ -88,6 +88,14 @@ func cmdVaultSet(args []string) {
 		}
 	}
 
+	vaultAuditEvent(settings, target, "set", map[string]any{
+		"envFile":   filepath.Clean(target.File),
+		"key":       key,
+		"section":   strings.TrimSpace(*section),
+		"changed":   changed,
+		"fromStdin": *stdin,
+	})
+
 	fmt.Printf("file: %s\n", filepath.Clean(target.File))
 	fmt.Printf("set:  %s\n", key)
 }

@@ -67,6 +67,14 @@ func cmdVaultEncrypt(args []string) {
 		}
 	}
 
+	vaultAuditEvent(settings, target, "encrypt", map[string]any{
+		"envFile":          filepath.Clean(target.File),
+		"reencrypt":        *reencrypt,
+		"encryptedKeys":    res.EncryptedKeys,
+		"reencryptedKeys":  res.ReencryptedKeys,
+		"skippedEncrypted": res.SkippedEncrypted,
+	})
+
 	fmt.Printf("file: %s\n", filepath.Clean(target.File))
 	fmt.Printf("encrypted: %d\n", len(res.EncryptedKeys))
 	if *reencrypt {

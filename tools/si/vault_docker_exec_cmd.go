@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	shared "si/agents/shared/docker"
@@ -54,6 +55,19 @@ func cmdVaultDockerExec(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	keys := make([]string, 0, len(dec.Values))
+	for k := range dec.Values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	vaultAuditEvent(settings, target, "docker_exec", map[string]any{
+		"envFile":      target.File,
+		"container":    strings.TrimSpace(*container),
+		"cmd0":         rest[0],
+		"argsLen":      len(rest) - 1,
+		"keys":         keys,
+		"remoteDocker": func() bool { insecure, _ := isInsecureDockerHost(); return insecure }(),
+	})
 
 	client, err := shared.NewClient()
 	if err != nil {

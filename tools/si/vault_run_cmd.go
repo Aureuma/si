@@ -53,6 +53,20 @@ func cmdVaultRun(args []string) {
 		warnf("vault file contains plaintext keys: %s (consider `si vault encrypt`)", strings.Join(dec.PlaintextKeys, ", "))
 	}
 
+	keys := make([]string, 0, len(dec.Values))
+	for k := range dec.Values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	vaultAuditEvent(settings, target, "run", map[string]any{
+		"envFile":       target.File,
+		"cmd0":          rest[0],
+		"argsLen":       len(rest) - 1,
+		"keys":          keys,
+		"decryptedKeys": dec.DecryptedKeys,
+		"plaintextKeys": dec.PlaintextKeys,
+	})
+
 	cmd := exec.CommandContext(context.Background(), rest[0], rest[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
