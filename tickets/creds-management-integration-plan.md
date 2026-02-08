@@ -542,7 +542,7 @@ The work is complete when all are true:
 | Workstream | Status | Owner | Branch | PR | Last Update |
 |---|---|---|---|---|---|
 | WS-00 Contracts | Not Started |  |  |  | 2026-02-07 |
-| WS-01 CLI Entry & Help | Not Started |  |  |  | 2026-02-07 |
+| WS-01 CLI Entry & Help | Done | codex | main |  | 2026-02-08 |
 | WS-02 File Format + Parser (line-preserving) | Not Started |  |  |  | 2026-02-07 |
 | WS-03 Crypto Engine | Not Started |  |  |  | 2026-02-07 |
 | WS-04 Key Storage + Trust Store (Keychain/Keyring + CI env) | Not Started |  |  |  | 2026-02-07 |
