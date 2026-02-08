@@ -231,6 +231,43 @@ Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
 
+## Google Places
+`si` includes a Google Places API (New) bridge under `si google places`:
+
+```bash
+# auth/context/diagnostics
+./si google places auth status --account core
+./si google places context list
+./si google places context current
+./si google places context use --account core --env prod --language en --region US
+./si google places doctor --account core
+
+# session lifecycle
+./si google places session new
+./si google places session list
+./si google places session inspect <token>
+./si google places session end <token>
+
+# search/details/photos
+./si google places autocomplete --input "coffee" --session <token>
+./si google places search-text --query "coffee near sf" --field-mask places.id,places.displayName,places.formattedAddress
+./si google places search-nearby --center 37.7749,-122.4194 --radius 1200 --included-type cafe --field-mask places.id,places.displayName,places.formattedAddress
+./si google places details ChIJN1t_tDeuEmsRUsoyG83frY4 --session <token> --field-mask id,name,displayName,formattedAddress
+./si google places photo get places/<place_id>/photos/<photo_id>
+./si google places photo download places/<place_id>/photos/<photo_id> --output ./photo.jpg
+
+# helpers/reporting/raw
+./si google places types list --group food
+./si google places types validate cafe
+./si google places report usage --since 2026-02-08T00:00:00Z
+./si google places report sessions
+./si google places raw --method GET --path /v1/places/<place_id> --field-mask id,name
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
 ## Self Build/Upgrade
 Build or upgrade the `si` binary from the repo itself:
 
