@@ -64,6 +64,12 @@ func cmdVaultUnset(args []string) {
 		}
 	}
 
+	vaultAuditEvent(settings, target, "unset", map[string]any{
+		"envFile": filepath.Clean(target.File),
+		"key":     key,
+		"changed": changed,
+	})
+
 	fmt.Printf("file:  %s\n", filepath.Clean(target.File))
 	if changed {
 		fmt.Printf("unset: %s\n", key)

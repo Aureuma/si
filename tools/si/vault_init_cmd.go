@@ -102,6 +102,14 @@ func cmdVaultInit(args []string) {
 		fatal(err)
 	}
 
+	vaultAuditEvent(settings, target, "init", map[string]any{
+		"envFile":    filepath.Clean(target.File),
+		"recipient":  recipient,
+		"trustFp":    fp,
+		"keyCreated": createdKey,
+		"keySource":  identityInfo.Source,
+	})
+
 	fmt.Printf("vault dir: %s\n", filepath.Clean(target.VaultDir))
 	fmt.Printf("env file:  %s\n", filepath.Clean(target.File))
 	fmt.Printf("recipient: %s\n", recipient)
