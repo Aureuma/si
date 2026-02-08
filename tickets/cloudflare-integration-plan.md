@@ -12,6 +12,7 @@ Primary Goal: Add `si cloudflare ...` as a first-class command family for Cloudf
   - `e0afadb` `feat(si): add cloudflare command surface and runtime bridge`
   - `28940f9` `test/docs(si): validate cloudflare bridge and publish operator docs`
   - `d449d3c` `chore(si): remove dead bridge helpers and pass static analysis`
+  - `4b08c59` `test(cloudflare): add mock e2e coverage and close WS-10`
 - Notes:
   - Runtime auth is API token-only and vault-compatible.
   - Multi-account and `prod|staging|dev` context mapping are implemented.
