@@ -552,7 +552,7 @@ The work is complete when all are true:
 | WS-08 Docker Build Secrets | Not Started |  |  |  | 2026-02-07 |
 | WS-09 Auditing | Done | codex | main |  | 2026-02-08 |
 | WS-10 Tests | In Progress | codex | main |  | 2026-02-08 |
-| WS-11 Docs | Not Started |  |  |  | 2026-02-07 |
+| WS-11 Docs | Done | codex | main |  | 2026-02-08 |
 | WS-12 Future Approvals (design only) | Not Started |  |  |  | 2026-02-07 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
