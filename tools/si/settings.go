@@ -15,6 +15,7 @@ type Settings struct {
 	Codex         CodexSettings    `toml:"codex"`
 	Vault         VaultSettings    `toml:"vault,omitempty"`
 	Stripe        StripeSettings   `toml:"stripe,omitempty"`
+	Github        GitHubSettings   `toml:"github,omitempty"`
 	Dyad          DyadSettings     `toml:"dyad"`
 	Shell         ShellSettings    `toml:"shell"`
 	Metadata      SettingsMetadata `toml:"metadata,omitempty"`
@@ -118,6 +119,31 @@ type StripeAccountSetting struct {
 	SandboxKey    string `toml:"sandbox_key,omitempty"`
 	LiveKeyEnv    string `toml:"live_key_env,omitempty"`
 	SandboxKeyEnv string `toml:"sandbox_key_env,omitempty"`
+}
+
+type GitHubSettings struct {
+	DefaultAccount  string                        `toml:"default_account,omitempty"`
+	DefaultAuthMode string                        `toml:"default_auth_mode,omitempty"`
+	APIBaseURL      string                        `toml:"api_base_url,omitempty"`
+	DefaultOwner    string                        `toml:"default_owner,omitempty"`
+	VaultEnv        string                        `toml:"vault_env,omitempty"`
+	VaultFile       string                        `toml:"vault_file,omitempty"`
+	LogFile         string                        `toml:"log_file,omitempty"`
+	Accounts        map[string]GitHubAccountEntry `toml:"accounts,omitempty"`
+}
+
+type GitHubAccountEntry struct {
+	Name             string `toml:"name,omitempty"`
+	Owner            string `toml:"owner,omitempty"`
+	APIBaseURL       string `toml:"api_base_url,omitempty"`
+	AuthMode         string `toml:"auth_mode,omitempty"`
+	VaultPrefix      string `toml:"vault_prefix,omitempty"`
+	AppID            int64  `toml:"app_id,omitempty"`
+	AppIDEnv         string `toml:"app_id_env,omitempty"`
+	AppPrivateKeyPEM string `toml:"app_private_key_pem,omitempty"`
+	AppPrivateKeyEnv string `toml:"app_private_key_env,omitempty"`
+	InstallationID   int64  `toml:"installation_id,omitempty"`
+	InstallationEnv  string `toml:"installation_id_env,omitempty"`
 }
 
 type ShellSettings struct {
@@ -252,6 +278,19 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Stripe.DefaultEnv = normalizeStripeEnvironment(settings.Stripe.DefaultEnv)
 	if settings.Stripe.DefaultEnv == "" {
 		settings.Stripe.DefaultEnv = "sandbox"
+	}
+	settings.Github.DefaultAuthMode = strings.ToLower(strings.TrimSpace(settings.Github.DefaultAuthMode))
+	if settings.Github.DefaultAuthMode == "" {
+		settings.Github.DefaultAuthMode = "app"
+	}
+	settings.Github.APIBaseURL = strings.TrimSpace(settings.Github.APIBaseURL)
+	if settings.Github.APIBaseURL == "" {
+		settings.Github.APIBaseURL = "https://api.github.com"
+	}
+	settings.Github.DefaultOwner = strings.TrimSpace(settings.Github.DefaultOwner)
+	settings.Github.DefaultAccount = strings.TrimSpace(settings.Github.DefaultAccount)
+	if settings.Github.VaultEnv == "" {
+		settings.Github.VaultEnv = "dev"
 	}
 }
 
