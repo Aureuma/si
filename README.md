@@ -235,6 +235,9 @@ Environment policy:
 Build or upgrade the `si` binary from the repo itself:
 
 ```bash
+# installer (builds + installs to ~/.local/bin by default)
+./tools/install-si.sh
+
 # dev checkout build
 ./si self build --output ./si
 
