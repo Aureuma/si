@@ -4,6 +4,18 @@ Date: 2026-02-08
 Owner: Unassigned
 Primary Goal: Add `si cloudflare ...` as a first-class command family for Cloudflare control, monitoring, and operations across common products using a secure, vault-compatible credential model and consistent `si` UX.
 
+## Implementation Status Snapshot (2026-02-08)
+
+- Overall Status: Done
+- Implementation Type: Implemented end-to-end in `tools/si` with bridge, command surface, tests, docs, and static-analysis cleanup
+- Key Commits:
+  - `e0afadb` `feat(si): add cloudflare command surface and runtime bridge`
+  - `28940f9` `test/docs(si): validate cloudflare bridge and publish operator docs`
+  - `d449d3c` `chore(si): remove dead bridge helpers and pass static analysis`
+- Notes:
+  - Runtime auth is API token-only and vault-compatible.
+  - Multi-account and `prod|staging|dev` context mapping are implemented.
+
 ## 0. Decision Lock (Initial)
 
 This plan is explicitly locked to:
@@ -694,4 +706,3 @@ Use this template for each update:
 3. Non-token auth modes as first-class runtime paths.
 4. Replacing Terraform/IaC entirely.
 5. Centralized cloud secret managers as default credential source.
-

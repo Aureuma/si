@@ -4,6 +4,19 @@ Date: 2026-02-08
 Owner: Unassigned
 Primary Goal: Add `si github ...` as a first-class command family for broad GitHub control, monitoring, and automation using GitHub REST/GraphQL APIs with credentials sourced from `si vault` (or strict compatibility with that architecture).
 
+## Implementation Status Snapshot (2026-02-08)
+
+- Overall Status: Done
+- Implementation Type: Fully implemented in `tools/si` (command surface, bridge, tests, docs)
+- Key Commits:
+  - `8001647` `feat(github): add app-only github bridge foundation`
+  - `bc344f2` `feat(github): add repo, pr, and issue command handlers`
+  - `586e6be` `feat(github): implement workflow, release, and secret commands`
+  - `d9d24b1` `test(github): add subprocess e2e coverage and fix json output mode`
+- Notes:
+  - Auth model is locked to GitHub App only.
+  - `go-github` dependency is intentionally not used; direct REST/GraphQL bridge is in place.
+
 ## 0. Decision Lock (Updated)
 
 This plan is now explicitly locked to:
