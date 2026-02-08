@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"si/tools/si/internal/apibridge"
+	"si/tools/si/internal/providers"
 )
 
 type Client struct {
@@ -24,10 +25,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("cloudflare api token is required")
 	}
 	if strings.TrimSpace(cfg.BaseURL) == "" {
-		cfg.BaseURL = "https://api.cloudflare.com/client/v4"
+		cfg.BaseURL = providers.Specs[providers.Cloudflare].BaseURL
 	}
 	if strings.TrimSpace(cfg.UserAgent) == "" {
-		cfg.UserAgent = "si-cloudflare/1.0"
+		cfg.UserAgent = providers.Specs[providers.Cloudflare].UserAgent
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
@@ -57,10 +58,13 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			if h == nil {
 				return ""
 			}
-			if v := strings.TrimSpace(h.Get("CF-Ray")); v != "" {
-				return v
+			spec := providers.Specs[providers.Cloudflare]
+			for _, k := range spec.RequestIDHeaders {
+				if v := strings.TrimSpace(h.Get(k)); v != "" {
+					return v
+				}
 			}
-			return strings.TrimSpace(h.Get("X-Request-ID"))
+			return ""
 		},
 		RetryDecider: func(ctx context.Context, attempt int, req apibridge.Request, resp *http.Response, _ []byte, callErr error) apibridge.RetryDecision {
 			_ = ctx
@@ -101,7 +105,7 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 
 	headers := make(map[string]string, 4+len(req.Headers))
 	headers["Authorization"] = "Bearer " + strings.TrimSpace(c.cfg.APIToken)
-	headers["Accept"] = "application/json"
+	headers["Accept"] = providers.Specs[providers.Cloudflare].Accept
 	for k, v := range req.Headers {
 		k = strings.TrimSpace(k)
 		if k == "" {
