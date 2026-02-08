@@ -46,6 +46,7 @@ type RetryDecision struct {
 type RetryDecider func(ctx context.Context, attempt int, req Request, resp *http.Response, body []byte, callErr error) RetryDecision
 
 type Config struct {
+	Component string
 	BaseURL    string
 	UserAgent  string
 	Timeout    time.Duration
@@ -60,6 +61,10 @@ type Config struct {
 	// If nil, the engine strips the query string.
 	SanitizeURL func(raw string) string
 
+	// Redact is applied to LogContext values.
+	// Callers should provide a provider-specific redactor when LogContext could contain secrets.
+	Redact func(value string) string
+
 	// RequestIDFromHeaders extracts a request correlation identifier from response headers.
 	RequestIDFromHeaders func(h http.Header) string
 
@@ -67,4 +72,3 @@ type Config struct {
 	// If nil, DefaultRetryDecider is used.
 	RetryDecider RetryDecider
 }
-
