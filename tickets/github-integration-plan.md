@@ -258,7 +258,7 @@ Settings must not store raw token material.
 | WS-03 App Auth Provider | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-04 Legacy Auth Providers | Done (Removed) | Codex | main | n/a | 2026-02-08 |
 | WS-05 Bridge Core (REST/GraphQL) | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-06 Core Resource Commands | Not Started |  |  |  | 2026-02-08 |
+| WS-06 Core Resource Commands | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-07 Actions/Releases/Secrets | Not Started |  |  |  | 2026-02-08 |
 | WS-08 Raw + Safety + Output | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-09 Testing + E2E | In Progress | Codex | main | n/a | 2026-02-08 |
@@ -393,9 +393,9 @@ Acceptance:
 ## WS-06 Core Resource Commands
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: repo/pr/issue command families implemented; behavior and e2e coverage still being expanded.
 
 Path ownership:
 - `tools/si/github_repo_cmd.go`
