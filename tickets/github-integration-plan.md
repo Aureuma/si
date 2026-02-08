@@ -259,7 +259,7 @@ Settings must not store raw token material.
 | WS-04 Legacy Auth Providers | Done (Removed) | Codex | main | n/a | 2026-02-08 |
 | WS-05 Bridge Core (REST/GraphQL) | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-06 Core Resource Commands | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-07 Actions/Releases/Secrets | Not Started |  |  |  | 2026-02-08 |
+| WS-07 Actions/Releases/Secrets | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-08 Raw + Safety + Output | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-09 Testing + E2E | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-10 Docs + Release | Not Started |  |  |  | 2026-02-08 |
@@ -413,9 +413,9 @@ Acceptance:
 ## WS-07 Actions / Releases / Secrets
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: workflow/release/secret command families implemented; integration/e2e validation still in progress.
 
 Path ownership:
 - `tools/si/github_workflow_cmd.go`
