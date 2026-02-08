@@ -39,27 +39,3 @@ func cmdGithub(args []string) {
 		printUsage(githubUsageText)
 	}
 }
-
-func cmdGithubRepo(args []string) {
-	printUsage("usage: si github repo <list|get|create|update|archive|delete> ...")
-}
-
-func cmdGithubPR(args []string) {
-	printUsage("usage: si github pr <list|get|create|comment|merge> ...")
-}
-
-func cmdGithubIssue(args []string) {
-	printUsage("usage: si github issue <list|get|create|comment|close|reopen> ...")
-}
-
-func cmdGithubWorkflow(args []string) {
-	printUsage("usage: si github workflow <list|run|runs|run get|run cancel|run rerun|logs> ...")
-}
-
-func cmdGithubRelease(args []string) {
-	printUsage("usage: si github release <list|get|create|upload|delete> ...")
-}
-
-func cmdGithubSecret(args []string) {
-	printUsage("usage: si github secret <repo|env|org> ...")
-}
