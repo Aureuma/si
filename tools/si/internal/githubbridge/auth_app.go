@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"si/tools/si/internal/apibridge"
 )
 
 type AppProviderConfig struct {
@@ -156,7 +158,7 @@ func (p *AppProvider) signedJWT(now time.Time) (string, error) {
 }
 
 func (p *AppProvider) exchangeInstallationToken(ctx context.Context, installationID int64, jwtToken string) (Token, error) {
-	u, err := resolveURL(p.cfg.BaseURL, fmt.Sprintf("/app/installations/%d/access_tokens", installationID), nil)
+	u, err := apibridge.ResolveURL(p.cfg.BaseURL, fmt.Sprintf("/app/installations/%d/access_tokens", installationID), nil)
 	if err != nil {
 		return Token{}, err
 	}
@@ -207,7 +209,7 @@ func (p *AppProvider) lookupInstallationID(ctx context.Context, owner string, re
 		)
 	}
 	for _, path := range try {
-		u, urlErr := resolveURL(p.cfg.BaseURL, path, nil)
+		u, urlErr := apibridge.ResolveURL(p.cfg.BaseURL, path, nil)
 		if urlErr != nil {
 			continue
 		}
