@@ -545,7 +545,7 @@ The work is complete when all are true:
 | WS-01 CLI Entry & Help | Done | codex | main |  | 2026-02-08 |
 | WS-02 File Format + Parser (line-preserving) | In Progress | codex | main |  | 2026-02-08 |
 | WS-03 Crypto Engine | In Progress | codex | main |  | 2026-02-08 |
-| WS-04 Key Storage + Trust Store (Keychain/Keyring + CI env) | Not Started |  |  |  | 2026-02-07 |
+| WS-04 Key Storage + Trust Store (Keychain/Keyring + CI env) | In Progress | codex | main |  | 2026-02-08 |
 | WS-05 Vault Repo Submodule (init, discovery, status) | Not Started |  |  |  | 2026-02-07 |
 | WS-06 Formatter (sections + canonical style) | Not Started |  |  |  | 2026-02-07 |
 | WS-07 Docker Runtime Injection | Not Started |  |  |  | 2026-02-07 |
