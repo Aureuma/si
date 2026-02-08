@@ -1,6 +1,6 @@
 # API Bridge Refactor (Shared HTTP Engine + Provider Specs)
 
-Status: `in progress`
+Status: `done`
 
 ## Goal
 Reduce duplication across `tools/si/internal/*bridge` clients by extracting a single shared HTTP execution engine (auth/header injection, URL building, retries/backoff, logging, and response capture) while keeping CLI behavior stable.
@@ -25,7 +25,7 @@ This is explicitly **not** a “unified API” layer (Merge-style canonical mode
 ## Workstreams
 
 ### WS-1: Shared HTTP Engine (`tools/si/internal/apibridge`) (Step 1)
-Status: `in progress`
+Status: `done`
 
 Tasks
 - Add `apibridge.Client` with:
@@ -46,7 +46,7 @@ Notes
 - Provider code remains responsible for parsing payload shapes and turning failures into `APIErrorDetails`.
 
 ### WS-2: Migrate Cloudflare Bridge to `apibridge` (Step 2)
-Status: `pending`
+Status: `done`
 
 Tasks
 - Keep external types stable in `internal/cloudflarebridge` (`ClientConfig`, `Request`, `Response`, errors).
@@ -61,7 +61,7 @@ Tasks
   - response parsing of `result`, `errors`, request id extraction
 
 ### WS-3: Migrate GitHub / Google Places / YouTube Bridges (Step 3)
-Status: `pending`
+Status: `done`
 
 Tasks
 - GitHub:
@@ -80,7 +80,7 @@ Verification
 - `./si analyze --module tools/si` passes.
 
 ### WS-4: Provider Spec Registry (Step 4)
-Status: `pending`
+Status: `done`
 
 Tasks
 - Add `tools/si/internal/providers/specs.go` (or similar) with:
@@ -96,7 +96,7 @@ Notes
 - The goal is to reduce duplicated constants and make “new provider” additions predictable.
 
 ### WS-5: End-to-End Verification
-Status: `pending`
+Status: `done`
 
 Tasks
 - Run:
@@ -105,6 +105,11 @@ Tasks
   - `./si analyze --module tools/si`
 - Spot-check a couple of local `--help` outputs to ensure no dispatch regression.
 
+Results
+- `./tools/test.sh` passed.
+- `./tools/test-install-si.sh` passed.
+- `./si analyze --module tools/si` passed (`go vet` + `golangci-lint`).
+
 ## Risks / Mitigations
 - Risk: changing retry semantics silently.
   - Mitigation: keep provider-specific retry functions; add explicit tests around retry conditions.
@@ -112,4 +117,3 @@ Tasks
   - Mitigation: keep provider redaction logic where it exists; only centralize JSONL writing.
 - Risk: breaking YouTube upload URL handling.
   - Mitigation: keep URL selection logic in youtubebridge; pass absolute URLs into the shared engine.
-
