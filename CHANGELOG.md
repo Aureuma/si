@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.47.0] - 2026-02-08
 ### Added
+- Added `tools/install-si.sh` installer for macOS and Linux, plus `tools/test-install-si.sh` for installer e2e coverage.
 - Added `si google youtube` command family with auth/context flows (`auth`, `context`, `doctor`) and YouTube Data API v3 operations.
 - Added YouTube command coverage for search/support, channel/video/playlist/playlist-item/subscription/comment resources, live broadcast/stream/chat, captions, thumbnails, raw fallback, and usage reporting.
 - Added YouTube OAuth device-flow login/logout plus local token cache/refresh plumbing (`~/.si/google/youtube/oauth_tokens.json`).
@@ -37,6 +38,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.45.0] - 2026-02-08
 ### Added
+- Added `si vault` git-based encrypted credentials management (age recipients, TOFU trust, formatter, audit log, and Docker-friendly runtime injection).
 - Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) and raw API access.
 - Added Cloudflare bridge internals for request execution, retry/backoff, error normalization, redaction, and JSONL logging.
 - Added Cloudflare command coverage for common workflows across zone/dns/tls/cache/security/workers/pages/r2/d1/kv/queues/access/tunnels/load balancers/logs/reports.
