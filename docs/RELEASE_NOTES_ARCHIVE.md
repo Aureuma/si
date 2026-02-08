@@ -9,7 +9,7 @@ Title: `Silex Primus v0.39.0`
 Published: `2026-01-26T18:40:01Z`
 
 ```
-Silex Primus marks the 1.0 milestone for Silexa.
+Silex Primus marks a major milestone for Silexa.
 
 Highlights:
 - ✨ Codex profiles are now first-class: `si codex profile` lists identities and `si codex login` can target a profile.
