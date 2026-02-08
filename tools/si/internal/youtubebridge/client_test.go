@@ -104,3 +104,45 @@ func TestClientListAllPaginates(t *testing.T) {
 		t.Fatalf("unexpected item count: %d", len(items))
 	}
 }
+
+func TestClientDo_UseUploadUsesUploadBaseURL(t *testing.T) {
+	base := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = w
+		t.Fatalf("base server should not be called (got path=%q)", r.URL.Path)
+	}))
+	defer base.Close()
+
+	upload := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/youtube/v3/videos" {
+			t.Fatalf("unexpected path: %q", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("key"); got != "api-key-1" {
+			t.Fatalf("unexpected key query: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	}))
+	defer upload.Close()
+
+	client, err := NewClient(ClientConfig{
+		AuthMode:       AuthModeAPIKey,
+		APIKey:         "api-key-1",
+		BaseURL:        base.URL,
+		UploadBaseURL:  upload.URL,
+		MaxRetries:     0,
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	resp, err := client.Do(context.Background(), Request{
+		Method:    http.MethodGet,
+		Path:      "/youtube/v3/videos",
+		Params:    map[string]string{"part": "id"},
+		UseUpload: true,
+	})
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	if resp.StatusCode != 200 {
+		t.Fatalf("unexpected status: %d", resp.StatusCode)
+	}
+}
