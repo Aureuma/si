@@ -13,6 +13,7 @@ type Settings struct {
 	SchemaVersion int              `toml:"schema_version"`
 	Paths         SettingsPaths    `toml:"paths"`
 	Codex         CodexSettings    `toml:"codex"`
+	Vault         VaultSettings    `toml:"vault,omitempty"`
 	Stripe        StripeSettings   `toml:"stripe,omitempty"`
 	Dyad          DyadSettings     `toml:"dyad"`
 	Shell         ShellSettings    `toml:"shell"`
@@ -86,6 +87,20 @@ type DyadSettings struct {
 	Configs           string `toml:"configs,omitempty"`
 	ForwardPorts      string `toml:"forward_ports,omitempty"`
 	DockerSocket      *bool  `toml:"docker_socket,omitempty"`
+}
+
+type VaultSettings struct {
+	Dir        string `toml:"dir,omitempty"`
+	DefaultEnv string `toml:"default_env,omitempty"`
+	TrustStore string `toml:"trust_store,omitempty"`
+	AuditLog   string `toml:"audit_log,omitempty"`
+
+	// KeyBackend selects where the device private key is stored.
+	// Supported values: keyring, file
+	KeyBackend string `toml:"key_backend,omitempty"`
+
+	// KeyFile is used when KeyBackend=file (or when file fallback is explicitly enabled).
+	KeyFile string `toml:"key_file,omitempty"`
 }
 
 type StripeSettings struct {
@@ -215,6 +230,24 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	if settings.Paths.CodexProfilesDir == "" {
 		settings.Paths.CodexProfilesDir = "~/.si/codex/profiles"
+	}
+	if settings.Vault.Dir == "" {
+		settings.Vault.Dir = "vault"
+	}
+	if settings.Vault.DefaultEnv == "" {
+		settings.Vault.DefaultEnv = "dev"
+	}
+	if settings.Vault.TrustStore == "" {
+		settings.Vault.TrustStore = "~/.si/vault/trust.json"
+	}
+	if settings.Vault.AuditLog == "" {
+		settings.Vault.AuditLog = "~/.si/logs/vault.log"
+	}
+	if settings.Vault.KeyBackend == "" {
+		settings.Vault.KeyBackend = "keyring"
+	}
+	if settings.Vault.KeyFile == "" {
+		settings.Vault.KeyFile = "~/.si/vault/keys/age.key"
 	}
 	settings.Stripe.DefaultEnv = normalizeStripeEnvironment(settings.Stripe.DefaultEnv)
 	if settings.Stripe.DefaultEnv == "" {
