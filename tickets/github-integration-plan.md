@@ -254,7 +254,7 @@ Settings must not store raw token material.
 |---|---|---|---|---|---|
 | WS-00 Contracts | Done | Codex | main | n/a | 2026-02-08 |
 | WS-01 CLI Entry | Done | Codex | main | n/a | 2026-02-08 |
-| WS-02 Vault/Auth Context | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-02 Vault/Auth Context | Done | Codex | main | n/a | 2026-02-08 |
 | WS-03 App Auth Provider | Done | Codex | main | n/a | 2026-02-08 |
 | WS-04 Legacy Auth Providers | Done (Removed) | Codex | main | n/a | 2026-02-08 |
 | WS-05 Bridge Core (REST/GraphQL) | Done | Codex | main | n/a | 2026-02-08 |
@@ -308,9 +308,9 @@ Acceptance:
 ## WS-02 Vault/Auth Context Resolution
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: App-only resolver implemented; tests pending.
+- Notes: App-only resolver implemented with unit tests for env-prefix and credential key resolution.
 
 Path ownership:
 - `tools/si/settings.go` (`[github]` non-secret config)
