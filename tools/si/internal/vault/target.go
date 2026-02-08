@@ -96,6 +96,12 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 	if !opts.AllowMissingVaultDir && !IsDir(vaultAbs) {
 		return Target{}, fmt.Errorf("vault dir not found: %s (run si vault init)", vaultAbs)
 	}
+	vaultRelClean := filepath.Clean(vaultRel)
+	if filepath.IsAbs(vaultRelClean) {
+		if rel, err := filepath.Rel(repoRoot, vaultAbs); err == nil {
+			vaultRelClean = filepath.Clean(rel)
+		}
+	}
 
 	fileAbs := filepath.Join(vaultAbs, ".env."+env)
 	if !opts.AllowMissingFile {
@@ -108,7 +114,7 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 		CWD:            cwd,
 		RepoRoot:       repoRoot,
 		VaultDir:       vaultAbs,
-		VaultDirRel:    filepath.Clean(vaultRel),
+		VaultDirRel:    vaultRelClean,
 		Env:            env,
 		File:           fileAbs,
 		FileIsExplicit: false,
