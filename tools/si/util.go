@@ -241,18 +241,23 @@ stripe:
     test is not accepted as a standalone environment mode.
 
 vault:
-  si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>]
-  si vault status [--vault-dir <path>] [--env <name>]
-  si vault fmt [--vault-dir <path>] [--env <name>] [--all] [--check]
-  si vault encrypt [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]
-  si vault set <KEY> <VALUE> [--vault-dir <path>] [--env <name>] [--section <name>] [--stdin] [--format]
-  si vault unset <KEY> [--vault-dir <path>] [--env <name>] [--section <name>] [--format]
-  si vault get <KEY> [--vault-dir <path>] [--env <name>] [--reveal]
-  si vault list [--vault-dir <path>] [--env <name>]
-  si vault run [--vault-dir <path>] [--env <name>] -- <cmd...>
-  si vault docker exec --container <name|id> [--vault-dir <path>] [--env <name>] -- <cmd...>
-  si vault trust status|accept|forget
-  si vault recipients list|add|remove
+  Target selection (most commands):
+    --file <path>               (explicit env file path, overrides --vault-dir/--env)
+    --vault-dir <path>          (default: vault; resolved relative to git root)
+    --env <name>                (default: dev; maps to .env.<env>)
+
+  si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>] [--key-backend <keyring|file>] [--key-file <path>]
+  si vault status [--file <path>] [--vault-dir <path>] [--env <name>]
+  si vault fmt [--file <path>] [--vault-dir <path>] [--env <name>] [--all] [--check]
+  si vault encrypt [--file <path>] [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]
+  si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--env <name>] [--section <name>] [--stdin] [--format]
+  si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--env <name>] [--format]
+  si vault get <KEY> [--file <path>] [--vault-dir <path>] [--env <name>] [--reveal]
+  si vault list [--file <path>] [--vault-dir <path>] [--env <name>]
+  si vault run [--file <path>] [--vault-dir <path>] [--env <name>] -- <cmd...>
+  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--env <name>] [--allow-insecure-docker-host] -- <cmd...>
+  si vault trust status|accept|forget [--file <path>] [--vault-dir <path>] [--env <name>]
+  si vault recipients list|add|remove [--file <path>] [--vault-dir <path>] [--env <name>]
 
   Alias:
     si creds ...

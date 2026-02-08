@@ -20,6 +20,11 @@ go build -o si ./tools/si
 This builds the unified image `aureuma/si:local` used by dyads and codex containers.
 `si image build` is the only image-build command surface.
 
+## Vault (Secrets)
+`si vault` manages encrypted `.env.<env>` files stored in a pinned vault submodule and injects secrets into local processes or `docker exec` at runtime.
+
+See `docs/VAULT.md`.
+
 ## Testing
 Run all module tests from repo root:
 
