@@ -59,7 +59,7 @@ func cmdGithubReleaseList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	items, err := client.ListAll(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", repoOwner, repoName, "releases"), Params: parseGitHubParams(params), Owner: repoOwner, Repo: repoName}, *maxPages)
@@ -100,7 +100,7 @@ func cmdGithubReleaseGet(args []string) {
 	if _, err := strconv.Atoi(releaseRef); err != nil {
 		endpoint = path.Join("/repos", repoOwner, repoName, "releases", "tags", releaseRef)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: endpoint, Owner: repoOwner, Repo: repoName})
@@ -167,7 +167,7 @@ func cmdGithubReleaseCreate(args []string) {
 	if *prerelease {
 		payload["prerelease"] = true
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: path.Join("/repos", repoOwner, repoName, "releases"), JSONBody: payload, Owner: repoOwner, Repo: repoName})
@@ -226,7 +226,7 @@ func cmdGithubReleaseUpload(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: uploadURL, RawBody: string(assetBytes), ContentType: strings.TrimSpace(*contentType), Owner: repoOwner, Repo: repoName})
@@ -267,7 +267,7 @@ func cmdGithubReleaseDelete(args []string) {
 	if err := requireGithubConfirmation("delete release "+releaseRef+" from "+repoOwner+"/"+repoName, *force); err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/repos", repoOwner, repoName, "releases", strconv.Itoa(release.ID)), Owner: repoOwner, Repo: repoName})

@@ -37,7 +37,7 @@ func cmdGithubRaw(args []string) {
 		AppKey:         *appKey,
 		InstallationID: *installationID,
 	})
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{
@@ -82,7 +82,7 @@ func cmdGithubGraphQL(args []string) {
 		AppKey:         *appKey,
 		InstallationID: *installationID,
 	})
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{
@@ -124,7 +124,10 @@ func mustGithubClient(account string, owner string, baseURL string, overrides gi
 	return runtime, client
 }
 
-func printGithubContextBanner(runtime githubRuntimeContext) {
+func printGithubContextBanner(runtime githubRuntimeContext, jsonOut bool) {
+	if jsonOut {
+		return
+	}
 	fmt.Printf("%s %s\n", styleDim("github context:"), formatGithubContext(runtime))
 }
 

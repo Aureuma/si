@@ -59,7 +59,7 @@ func cmdGithubIssueList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	items, err := client.ListAll(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", repoOwner, repoName, "issues"), Params: parseGitHubParams(params), Owner: repoOwner, Repo: repoName}, *maxPages)
@@ -96,7 +96,7 @@ func cmdGithubIssueGet(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", repoOwner, repoName, "issues", strconv.Itoa(number)), Owner: repoOwner, Repo: repoName})
@@ -140,7 +140,7 @@ func cmdGithubIssueCreate(args []string) {
 	if strings.TrimSpace(*body) != "" {
 		payload["body"] = strings.TrimSpace(*body)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: path.Join("/repos", repoOwner, repoName, "issues"), JSONBody: payload, Owner: repoOwner, Repo: repoName})
@@ -180,7 +180,7 @@ func cmdGithubIssueComment(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: path.Join("/repos", repoOwner, repoName, "issues", strconv.Itoa(number), "comments"), JSONBody: map[string]any{"body": strings.TrimSpace(*body)}, Owner: repoOwner, Repo: repoName})
@@ -224,7 +224,7 @@ func cmdGithubIssueSetState(args []string, state string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "PATCH", Path: path.Join("/repos", repoOwner, repoName, "issues", strconv.Itoa(number)), JSONBody: map[string]any{"state": state}, Owner: repoOwner, Repo: repoName})
