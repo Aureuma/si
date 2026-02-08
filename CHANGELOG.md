@@ -10,6 +10,18 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [v0.46.0] - 2026-02-08
+### Added
+- Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`) and session lifecycle helpers.
+- Added Google Places command coverage for autocomplete, text search, nearby search, details, photo retrieval/download, type discovery, local reporting, and raw API access.
+- Added Google Places bridge internals for request execution, retry/backoff, response normalization, redaction, and JSONL logging.
+- Added Google Places tests for auth/context parsing, field-mask policy, helper parsing, bridge client behavior, and e2e subprocess command coverage.
+- Added `docs/GOOGLE_PLACES.md` as the dedicated command guide.
+
+### Changed
+- Updated CLI dispatch/help and settings schema to include `[google]` multi-account configuration and vault-compatible credential keys.
+- Updated README and settings reference with Google Places setup and usage recipes.
+
 ## [v0.45.0] - 2026-02-08
 ### Added
 - Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) and raw API access.

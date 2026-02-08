@@ -179,6 +179,36 @@ Credential resolution for `si cloudflare` is vault-compatible and token-only:
 4. Account-prefix env keys (`CLOUDFLARE_<ACCOUNT>_API_TOKEN`, `CLOUDFLARE_<ACCOUNT>_ACCOUNT_ID`, `CLOUDFLARE_<ACCOUNT>_PROD_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_STAGING_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_DEV_ZONE_ID`)
 5. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
 
+### `[google]`
+Defaults for `si google places` (Google Places API New with multi-account and env context labels).
+- `google.default_account` (string): default account alias
+- `google.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
+- `google.api_base_url` (string): API base URL (default: `https://places.googleapis.com`)
+- `google.vault_env` (string): vault env hint (default: `dev`)
+- `google.vault_file` (string): optional explicit vault file path
+- `google.log_file` (string): JSONL log path for Google Places bridge request/response events (default: `~/.si/logs/google-places.log`)
+
+#### `[google.accounts.<alias>]`
+Per-account Google Places context and env-key pointers.
+- `name` (string): display name
+- `project_id` (string): default Google Cloud project id
+- `project_id_env` (string): env var with project id
+- `api_base_url` (string): per-account API base URL override
+- `vault_prefix` (string): env key prefix override (example `GOOGLE_CORE_`)
+- `places_api_key_env` (string): env var with generic Places API key
+- `prod_places_api_key_env` (string): env var with prod Places API key
+- `staging_places_api_key_env` (string): env var with staging Places API key
+- `dev_places_api_key_env` (string): env var with dev Places API key
+- `default_region_code` (string): default CLDR region code
+- `default_language_code` (string): default BCP-47 language code
+
+Credential resolution for `si google places` is vault-compatible and API-key based:
+1. CLI overrides (`--api-key`, `--project-id`)
+2. Account settings (`project_id`)
+3. Account env refs (`project_id_env`, `places_api_key_env`, `prod_places_api_key_env`, `staging_places_api_key_env`, `dev_places_api_key_env`)
+4. Account-prefix env keys (`GOOGLE_<ACCOUNT>_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_PROD_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_STAGING_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_DEV_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_PROJECT_ID`)
+5. Global env fallbacks (`GOOGLE_PLACES_API_KEY`, `GOOGLE_PROJECT_ID`)
+
 ### `[vault]`
 Defaults for `si vault` (encrypted `.env.<env>` files, typically stored in a separate vault repo submodule).
 - `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
@@ -298,6 +328,23 @@ api_token_env = "CLOUDFLARE_CORE_API_TOKEN"
 prod_zone_id = "11111111111111111111111111111111"
 staging_zone_id = "22222222222222222222222222222222"
 dev_zone_id = "33333333333333333333333333333333"
+
+[google]
+default_account = "core"
+default_env = "prod"
+api_base_url = "https://places.googleapis.com"
+log_file = "~/.si/logs/google-places.log"
+
+[google.accounts.core]
+name = "Core Google Places"
+project_id = "acme-places-prod"
+vault_prefix = "GOOGLE_CORE_"
+places_api_key_env = "GOOGLE_CORE_PLACES_API_KEY"
+prod_places_api_key_env = "GOOGLE_CORE_PROD_PLACES_API_KEY"
+staging_places_api_key_env = "GOOGLE_CORE_STAGING_PLACES_API_KEY"
+dev_places_api_key_env = "GOOGLE_CORE_DEV_PLACES_API_KEY"
+default_region_code = "US"
+default_language_code = "en"
 
 [vault]
 dir = "vault"
