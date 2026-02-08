@@ -260,9 +260,9 @@ Settings must not store raw token material.
 | WS-05 Bridge Core (REST/GraphQL) | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-06 Core Resource Commands | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-07 Actions/Releases/Secrets | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-08 Raw + Safety + Output | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-08 Raw + Safety + Output | Done | Codex | main | n/a | 2026-02-08 |
 | WS-09 Testing + E2E | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-10 Docs + Release | Not Started |  |  |  | 2026-02-08 |
+| WS-10 Docs + Release | In Progress | Codex | main | n/a | 2026-02-08 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 
@@ -433,9 +433,9 @@ Acceptance:
 ## WS-08 Raw + Output + Safety
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: raw/graphql + output formatter added; safety policy file still pending.
+- Notes: raw/graphql commands, output formatter, and confirmation safety helpers are implemented.
 
 Path ownership:
 - `tools/si/github_raw_cmd.go`
@@ -473,9 +473,9 @@ Acceptance:
 ## WS-10 Docs + Release
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: README, settings docs, and dedicated GitHub guide added; changelog/release note sync pending.
 
 Path ownership:
 - `README.md`
