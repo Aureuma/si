@@ -72,6 +72,76 @@ func GitSubmoduleUpdate(repoRoot, path string) error {
 	return nil
 }
 
+func GitRemoteBranches(repoDir string) ([]string, error) {
+	repoDir = strings.TrimSpace(repoDir)
+	if repoDir == "" {
+		return nil, fmt.Errorf("repo dir required")
+	}
+	cmd := exec.Command("git", "for-each-ref", "--format=%(refname:short)", "refs/remotes/origin")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
+	branches := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || line == "origin/HEAD" {
+			continue
+		}
+		branches = append(branches, line)
+	}
+	return branches, nil
+}
+
+func GitEnsureCheckout(repoDir string) error {
+	repoDir = strings.TrimSpace(repoDir)
+	if repoDir == "" {
+		return fmt.Errorf("repo dir required")
+	}
+	if _, err := GitHeadCommit(repoDir); err == nil {
+		return nil
+	}
+
+	branches, err := GitRemoteBranches(repoDir)
+	if err == nil {
+		hasRemote := map[string]bool{}
+		for _, b := range branches {
+			hasRemote[b] = true
+		}
+		for _, candidate := range []string{"main", "master"} {
+			remote := "origin/" + candidate
+			if !hasRemote[remote] {
+				continue
+			}
+			cmd := exec.Command("git", "checkout", "-B", candidate, remote)
+			cmd.Dir = repoDir
+			if err := cmd.Run(); err == nil {
+				return nil
+			}
+		}
+		for _, b := range branches {
+			if strings.HasPrefix(b, "origin/") {
+				name := strings.TrimPrefix(b, "origin/")
+				if strings.TrimSpace(name) == "" {
+					continue
+				}
+				cmd := exec.Command("git", "checkout", "-B", name, b)
+				cmd.Dir = repoDir
+				if err := cmd.Run(); err == nil {
+					return nil
+				}
+			}
+		}
+	}
+
+	// Last resort for an empty or HEADless repo: create an orphan main branch.
+	cmd := exec.Command("git", "checkout", "--orphan", "main")
+	cmd.Dir = repoDir
+	return cmd.Run()
+}
+
 func GitRemoteOriginURL(repoDir string) (string, error) {
 	repoDir = strings.TrimSpace(repoDir)
 	if repoDir == "" {
