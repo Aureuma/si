@@ -1,0 +1,75 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"filippo.io/age"
+	"si/tools/si/internal/vault"
+)
+
+func cmdVaultEncrypt(args []string) {
+	settings := loadSettingsOrDefault()
+	fs := flag.NewFlagSet("vault encrypt", flag.ExitOnError)
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
+	format := fs.Bool("format", false, "run `si vault fmt` after encrypting")
+	reencrypt := fs.Bool("reencrypt", false, "re-encrypt already-encrypted values (intentional git noise)")
+	fs.Parse(args)
+	if len(fs.Args()) != 0 {
+		printUsage("usage: si vault encrypt [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]")
+		return
+	}
+
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	if err != nil {
+		fatal(err)
+	}
+	data, err := os.ReadFile(target.File)
+	if err != nil {
+		fatal(err)
+	}
+	doc := vault.ParseDotenv(data)
+	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
+		fatal(err)
+	}
+
+	var identity *age.X25519Identity
+	if *reencrypt {
+		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
+		if err != nil {
+			fatal(err)
+		}
+		identity = info.Identity
+	}
+
+	res, err := vault.EncryptDotenvValues(&doc, identity, *reencrypt)
+	if err != nil {
+		fatal(err)
+	}
+	if res.Changed {
+		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
+			fatal(err)
+		}
+	}
+	if *format {
+		formatted, changed, err := vault.FormatVaultDotenv(doc)
+		if err != nil {
+			fatal(err)
+		}
+		if changed {
+			if err := vault.WriteDotenvFileAtomic(target.File, formatted.Bytes()); err != nil {
+				fatal(err)
+			}
+		}
+	}
+
+	fmt.Printf("file: %s\n", filepath.Clean(target.File))
+	fmt.Printf("encrypted: %d\n", len(res.EncryptedKeys))
+	if *reencrypt {
+		fmt.Printf("reencrypted: %d\n", len(res.ReencryptedKeys))
+	}
+}
