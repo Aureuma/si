@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"si/tools/si/internal/apibridge"
+	"si/tools/si/internal/providers"
 )
 
 type Client struct {
@@ -24,10 +25,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("github token provider is required")
 	}
 	if strings.TrimSpace(cfg.BaseURL) == "" {
-		cfg.BaseURL = "https://api.github.com"
+		cfg.BaseURL = providers.Specs[providers.GitHub].BaseURL
 	}
 	if strings.TrimSpace(cfg.UserAgent) == "" {
-		cfg.UserAgent = "si-github/1.0"
+		cfg.UserAgent = providers.Specs[providers.GitHub].UserAgent
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
@@ -57,7 +58,13 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			if h == nil {
 				return ""
 			}
-			return strings.TrimSpace(h.Get("X-GitHub-Request-Id"))
+			spec := providers.Specs[providers.GitHub]
+			for _, k := range spec.RequestIDHeaders {
+				if v := strings.TrimSpace(h.Get(k)); v != "" {
+					return v
+				}
+			}
+			return ""
 		},
 		RetryDecider: func(ctx context.Context, attempt int, req apibridge.Request, resp *http.Response, body []byte, callErr error) apibridge.RetryDecision {
 			_ = ctx
@@ -106,9 +113,15 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 		method = http.MethodGet
 	}
 
+	spec := providers.Specs[providers.GitHub]
 	headers := make(map[string]string, 6+len(req.Headers))
-	headers["Accept"] = "application/vnd.github+json"
-	headers["X-GitHub-Api-Version"] = "2022-11-28"
+	headers["Accept"] = spec.Accept
+	for k, v := range spec.DefaultHeaders {
+		if strings.TrimSpace(k) == "" || strings.TrimSpace(v) == "" {
+			continue
+		}
+		headers[k] = v
+	}
 	for k, v := range req.Headers {
 		k = strings.TrimSpace(k)
 		if k == "" {

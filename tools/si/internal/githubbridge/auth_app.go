@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"si/tools/si/internal/apibridge"
+	"si/tools/si/internal/providers"
 )
 
 type AppProviderConfig struct {
@@ -167,8 +168,11 @@ func (p *AppProvider) exchangeInstallationToken(ctx context.Context, installatio
 		return Token{}, err
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+jwtToken)
-	httpReq.Header.Set("Accept", "application/vnd.github+json")
-	httpReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	spec := providers.Specs[providers.GitHub]
+	httpReq.Header.Set("Accept", spec.Accept)
+	for k, v := range spec.DefaultHeaders {
+		httpReq.Header.Set(k, v)
+	}
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return Token{}, err
@@ -217,13 +221,16 @@ func (p *AppProvider) lookupInstallationID(ctx context.Context, owner string, re
 		if reqErr != nil {
 			continue
 		}
-		httpReq.Header.Set("Authorization", "Bearer "+jwtToken)
-		httpReq.Header.Set("Accept", "application/vnd.github+json")
-		httpReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-		resp, callErr := p.httpClient.Do(httpReq)
-		if callErr != nil {
-			continue
-		}
+			httpReq.Header.Set("Authorization", "Bearer "+jwtToken)
+			spec := providers.Specs[providers.GitHub]
+			httpReq.Header.Set("Accept", spec.Accept)
+			for k, v := range spec.DefaultHeaders {
+				httpReq.Header.Set(k, v)
+			}
+			resp, callErr := p.httpClient.Do(httpReq)
+			if callErr != nil {
+				continue
+			}
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {

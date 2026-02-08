@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"si/tools/si/internal/apibridge"
+	"si/tools/si/internal/providers"
 )
 
 type Client struct {
@@ -23,10 +24,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		return nil, fmt.Errorf("google places api key is required")
 	}
 	if strings.TrimSpace(cfg.BaseURL) == "" {
-		cfg.BaseURL = "https://places.googleapis.com"
+		cfg.BaseURL = providers.Specs[providers.GooglePlaces].BaseURL
 	}
 	if strings.TrimSpace(cfg.UserAgent) == "" {
-		cfg.UserAgent = "si-google-places/1.0"
+		cfg.UserAgent = providers.Specs[providers.GooglePlaces].UserAgent
 	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
@@ -56,10 +57,13 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			if h == nil {
 				return ""
 			}
-			if v := strings.TrimSpace(h.Get("X-Request-Id")); v != "" {
-				return v
+			spec := providers.Specs[providers.GooglePlaces]
+			for _, k := range spec.RequestIDHeaders {
+				if v := strings.TrimSpace(h.Get(k)); v != "" {
+					return v
+				}
 			}
-			return strings.TrimSpace(h.Get("X-Google-Request-Id"))
+			return ""
 		},
 		RetryDecider: func(ctx context.Context, attempt int, req apibridge.Request, resp *http.Response, _ []byte, callErr error) apibridge.RetryDecision {
 			_ = ctx
@@ -100,7 +104,7 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 
 	headers := make(map[string]string, 6+len(req.Headers))
 	headers["X-Goog-Api-Key"] = strings.TrimSpace(c.cfg.APIKey)
-	headers["Accept"] = "application/json"
+	headers["Accept"] = providers.Specs[providers.GooglePlaces].Accept
 	if fieldMask := strings.TrimSpace(req.FieldMask); fieldMask != "" {
 		headers["X-Goog-FieldMask"] = fieldMask
 	}
