@@ -133,3 +133,27 @@ func parseRecipientLine(line string) (string, bool) {
 	}
 	return rest, true
 }
+
+func RemoveRecipient(doc *DotenvFile, recipient string) bool {
+	if doc == nil {
+		return false
+	}
+	recipient = strings.TrimSpace(recipient)
+	if recipient == "" {
+		return false
+	}
+	changed := false
+	out := make([]RawLine, 0, len(doc.Lines))
+	for _, line := range doc.Lines {
+		r, ok := parseRecipientLine(line.Text)
+		if ok && strings.TrimSpace(r) == recipient {
+			changed = true
+			continue
+		}
+		out = append(out, line)
+	}
+	if changed {
+		doc.Lines = out
+	}
+	return changed
+}

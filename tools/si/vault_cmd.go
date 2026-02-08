@@ -59,30 +59,3 @@ func cmdVaultDocker(args []string) {
 		printUsage("usage: si vault docker <exec>")
 	}
 }
-
-func cmdVaultInit(args []string)        { fatal(errNotImplemented("vault init")) }
-func cmdVaultStatus(args []string)      { fatal(errNotImplemented("vault status")) }
-func cmdVaultFmt(args []string)         { fatal(errNotImplemented("vault fmt")) }
-func cmdVaultEncrypt(args []string)     { fatal(errNotImplemented("vault encrypt")) }
-func cmdVaultSet(args []string)         { fatal(errNotImplemented("vault set")) }
-func cmdVaultUnset(args []string)       { fatal(errNotImplemented("vault unset")) }
-func cmdVaultGet(args []string)         { fatal(errNotImplemented("vault get")) }
-func cmdVaultList(args []string)        { fatal(errNotImplemented("vault list")) }
-func cmdVaultRun(args []string)         { fatal(errNotImplemented("vault run")) }
-func cmdVaultDockerExec(args []string)  { fatal(errNotImplemented("vault docker exec")) }
-func cmdVaultTrust(args []string)       { fatal(errNotImplemented("vault trust")) }
-func cmdVaultRecipients(args []string)  { fatal(errNotImplemented("vault recipients")) }
-
-func errNotImplemented(name string) error {
-	return &notImplementedError{name: name}
-}
-
-type notImplementedError struct{ name string }
-
-func (e *notImplementedError) Error() string {
-	if strings.TrimSpace(e.name) == "" {
-		return "not implemented"
-	}
-	return e.name + ": not implemented"
-}
-
