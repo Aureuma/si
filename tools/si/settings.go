@@ -179,6 +179,7 @@ type GoogleSettings struct {
 	VaultEnv       string                        `toml:"vault_env,omitempty"`
 	VaultFile      string                        `toml:"vault_file,omitempty"`
 	LogFile        string                        `toml:"log_file,omitempty"`
+	YouTube        GoogleYouTubeSettings         `toml:"youtube,omitempty"`
 	Accounts       map[string]GoogleAccountEntry `toml:"accounts,omitempty"`
 }
 
@@ -194,6 +195,32 @@ type GoogleAccountEntry struct {
 	DevPlacesAPIKeyEnv     string `toml:"dev_places_api_key_env,omitempty"`
 	DefaultRegionCode      string `toml:"default_region_code,omitempty"`
 	DefaultLanguageCode    string `toml:"default_language_code,omitempty"`
+}
+
+type GoogleYouTubeSettings struct {
+	APIBaseURL       string                               `toml:"api_base_url,omitempty"`
+	UploadBaseURL    string                               `toml:"upload_base_url,omitempty"`
+	DefaultAuthMode  string                               `toml:"default_auth_mode,omitempty"`
+	UploadChunkSize  int                                  `toml:"upload_chunk_size_mb,omitempty"`
+	QuotaBudgetDaily int64                                `toml:"quota_budget_daily,omitempty"`
+	Accounts         map[string]GoogleYouTubeAccountEntry `toml:"accounts,omitempty"`
+}
+
+type GoogleYouTubeAccountEntry struct {
+	Name                    string `toml:"name,omitempty"`
+	ProjectID               string `toml:"project_id,omitempty"`
+	ProjectIDEnv            string `toml:"project_id_env,omitempty"`
+	VaultPrefix             string `toml:"vault_prefix,omitempty"`
+	YouTubeAPIKeyEnv        string `toml:"youtube_api_key_env,omitempty"`
+	ProdYouTubeAPIKeyEnv    string `toml:"prod_youtube_api_key_env,omitempty"`
+	StagingYouTubeAPIKeyEnv string `toml:"staging_youtube_api_key_env,omitempty"`
+	DevYouTubeAPIKeyEnv     string `toml:"dev_youtube_api_key_env,omitempty"`
+	YouTubeClientIDEnv      string `toml:"youtube_client_id_env,omitempty"`
+	YouTubeClientSecretEnv  string `toml:"youtube_client_secret_env,omitempty"`
+	YouTubeRedirectURIEnv   string `toml:"youtube_redirect_uri_env,omitempty"`
+	YouTubeRefreshTokenEnv  string `toml:"youtube_refresh_token_env,omitempty"`
+	DefaultRegionCode       string `toml:"default_region_code,omitempty"`
+	DefaultLanguageCode     string `toml:"default_language_code,omitempty"`
 }
 
 type ShellSettings struct {
@@ -365,6 +392,26 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Google.DefaultAccount = strings.TrimSpace(settings.Google.DefaultAccount)
 	if settings.Google.VaultEnv == "" {
 		settings.Google.VaultEnv = "dev"
+	}
+	settings.Google.YouTube.DefaultAuthMode = strings.ToLower(strings.TrimSpace(settings.Google.YouTube.DefaultAuthMode))
+	switch settings.Google.YouTube.DefaultAuthMode {
+	case "api-key", "oauth":
+	default:
+		settings.Google.YouTube.DefaultAuthMode = "api-key"
+	}
+	settings.Google.YouTube.APIBaseURL = strings.TrimSpace(settings.Google.YouTube.APIBaseURL)
+	if settings.Google.YouTube.APIBaseURL == "" {
+		settings.Google.YouTube.APIBaseURL = "https://www.googleapis.com"
+	}
+	settings.Google.YouTube.UploadBaseURL = strings.TrimSpace(settings.Google.YouTube.UploadBaseURL)
+	if settings.Google.YouTube.UploadBaseURL == "" {
+		settings.Google.YouTube.UploadBaseURL = "https://www.googleapis.com/upload"
+	}
+	if settings.Google.YouTube.UploadChunkSize <= 0 {
+		settings.Google.YouTube.UploadChunkSize = 16
+	}
+	if settings.Google.YouTube.QuotaBudgetDaily <= 0 {
+		settings.Google.YouTube.QuotaBudgetDaily = 10000
 	}
 }
 

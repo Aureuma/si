@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-const googleUsageText = "usage: si google <places>"
+const googleUsageText = "usage: si google <places|youtube>"
 
 func cmdGoogle(args []string) {
 	if len(args) == 0 {
@@ -16,6 +16,8 @@ func cmdGoogle(args []string) {
 		printUsage(googleUsageText)
 	case "places":
 		cmdGooglePlaces(rest)
+	case "youtube", "yt":
+		cmdGoogleYouTube(rest)
 	default:
 		printUnknown("google", cmd)
 		printUsage(googleUsageText)
