@@ -1034,7 +1034,12 @@ func consumeRunContainerModeFlags(args []string, autopoietic, tmuxAttach *bool) 
 	}
 	out := make([]string, 0, len(args))
 	out = append(out, args[0])
+	parseModeFlags := true
 	for _, arg := range args[1:] {
+		if !parseModeFlags {
+			out = append(out, arg)
+			continue
+		}
 		switch strings.TrimSpace(arg) {
 		case "--autopoietic":
 			if autopoietic != nil {
@@ -1045,6 +1050,7 @@ func consumeRunContainerModeFlags(args []string, autopoietic, tmuxAttach *bool) 
 				*tmuxAttach = true
 			}
 		default:
+			parseModeFlags = false
 			out = append(out, arg)
 		}
 	}
@@ -1083,7 +1089,7 @@ func attachCodexTmuxPane(containerName string) error {
 }
 
 func buildCodexTmuxCommand(containerName string) string {
-	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd /workspace 2>/dev/null || true; codex"
+	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
