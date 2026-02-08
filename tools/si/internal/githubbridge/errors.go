@@ -11,7 +11,7 @@ var (
 	reGithubToken     = regexp.MustCompile(`\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]+\b`)
 	reGithubPatLong   = regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]+\b`)
 	reBearerToken     = regexp.MustCompile(`(?i)\bBearer\s+[A-Za-z0-9._-]+\b`)
-	rePrivateKeyBlock = regexp.MustCompile(`-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----`)
+	rePrivateKeyBlock = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*-----END [A-Z ]*PRIVATE KEY-----`)
 	reJWTLike         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\b`)
 )
 
