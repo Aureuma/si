@@ -541,17 +541,17 @@ The work is complete when all are true:
 
 | Workstream | Status | Owner | Branch | PR | Last Update |
 |---|---|---|---|---|---|
-| WS-00 Contracts | In Progress | codex | main |  | 2026-02-08 |
+| WS-00 Contracts | Done | codex | main |  | 2026-02-08 |
 | WS-01 CLI Entry & Help | Done | codex | main |  | 2026-02-08 |
-| WS-02 File Format + Parser (line-preserving) | In Progress | codex | main |  | 2026-02-08 |
-| WS-03 Crypto Engine | In Progress | codex | main |  | 2026-02-08 |
-| WS-04 Key Storage + Trust Store (Keychain/Keyring + CI env) | In Progress | codex | main |  | 2026-02-08 |
-| WS-05 Vault Repo Submodule (init, discovery, status) | In Progress | codex | main |  | 2026-02-08 |
-| WS-06 Formatter (sections + canonical style) | In Progress | codex | main |  | 2026-02-08 |
-| WS-07 Docker Runtime Injection | Not Started |  |  |  | 2026-02-07 |
+| WS-02 File Format + Parser (line-preserving) | Done | codex | main |  | 2026-02-08 |
+| WS-03 Crypto Engine | Done | codex | main |  | 2026-02-08 |
+| WS-04 Key Storage + Trust Store (Keychain/Keyring + CI env) | Done | codex | main |  | 2026-02-08 |
+| WS-05 Vault Repo Submodule (init, discovery, status) | Done | codex | main |  | 2026-02-08 |
+| WS-06 Formatter (sections + canonical style) | Done | codex | main |  | 2026-02-08 |
+| WS-07 Docker Runtime Injection | Done | codex | main |  | 2026-02-08 |
 | WS-08 Docker Build Secrets | Not Started |  |  |  | 2026-02-07 |
-| WS-09 Auditing | In Progress | codex | main |  | 2026-02-08 |
-| WS-10 Tests | Not Started |  |  |  | 2026-02-07 |
+| WS-09 Auditing | Done | codex | main |  | 2026-02-08 |
+| WS-10 Tests | In Progress | codex | main |  | 2026-02-08 |
 | WS-11 Docs | Not Started |  |  |  | 2026-02-07 |
 | WS-12 Future Approvals (design only) | Not Started |  |  |  | 2026-02-07 |
 
