@@ -551,7 +551,7 @@ The work is complete when all are true:
 | WS-07 Docker Runtime Injection | Done | codex | main |  | 2026-02-08 |
 | WS-08 Docker Build Secrets | Not Started |  |  |  | 2026-02-07 |
 | WS-09 Auditing | Done | codex | main |  | 2026-02-08 |
-| WS-10 Tests | In Progress | codex | main |  | 2026-02-08 |
+| WS-10 Tests | Done | codex | main |  | 2026-02-08 |
 | WS-11 Docs | Done | codex | main |  | 2026-02-08 |
 | WS-12 Future Approvals (design only) | Not Started |  |  |  | 2026-02-07 |
 
