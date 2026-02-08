@@ -304,7 +304,8 @@ ensure_go() {
 
   local work
   work="$(mktemp -d)"
-  trap 'rm -rf "${work}"' RETURN
+  # Best-effort cleanup happens at the end of this function; on failure we may
+  # leave the directory behind to preserve diagnostics.
 
   local tgz_path="${work}/${tgz}"
   curl -fsSL -o "${tgz_path}" "${url}"
@@ -335,6 +336,7 @@ ensure_go() {
   fi
 
   log info "go: installed ${have} at ${go_path}"
+  rm -rf "${work}" || true
   printf '%s' "${go_path}"
 }
 
