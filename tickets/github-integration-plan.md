@@ -1,8 +1,24 @@
-# Ticket: `si github` Full GitHub Integration (Vault-Compatible, App-First)
+# Ticket: `si github` Full GitHub Integration (Vault-Compatible, App-Only)
 
-Date: 2026-02-08  
-Owner: Unassigned  
+Date: 2026-02-08
+Owner: Unassigned
 Primary Goal: Add `si github ...` as a first-class command family for broad GitHub control, monitoring, and automation using GitHub REST/GraphQL APIs with credentials sourced from `si vault` (or strict compatibility with that architecture).
+
+## 0. Decision Lock (Updated)
+
+This plan is now explicitly locked to:
+
+1. GitHub App authentication only.
+2. Direct REST + GraphQL API integration (custom bridge in `tools/si/internal/githubbridge`).
+3. No `go-github` SDK dependency.
+4. No PAT and no OAuth command paths for `si github`.
+
+Rationale:
+
+- Matches unattended/automation-first security requirements.
+- Keeps full control over output formatting, redaction, and error surfacing.
+- Preserves raw endpoint parity without waiting on SDK coverage.
+- Aligns with the requirement to use vault-compatible credentials.
 
 ## 1. Requirement Understanding (What Must Be Delivered)
 
@@ -15,13 +31,7 @@ It must support:
 - Broad GitHub operations across repositories, pull requests, issues, actions/workflows, releases, and secrets.
 - Clear auth model aligned with GitHub surfaces:
   - API is capability only.
-  - Auth choices are GitHub App, OAuth App, PAT.
-- Secure unattended automation defaults:
-  - GitHub App is default for service/automation flows.
-- Developer convenience fallback:
-  - PAT support for local and one-off usage.
-- Optional user-identity flow:
-  - OAuth App support designed, but not required for MVP unless needed by specific commands.
+  - Auth is GitHub App only.
 - Credentials must come from `si vault` or be fully compatible with the architecture in `tickets/creds-management-integration-plan.md`.
 - Multi-account context support.
 - Consistent `si` UX:
@@ -36,51 +46,46 @@ Implementation is complete when all are true:
 1. `si github` is wired in command dispatch and help.
 2. Credential resolution is vault-first and compatible with `si vault` storage and execution model.
 3. GitHub App auth flow is implemented for unattended operations (JWT -> installation token).
-4. PAT auth flow is implemented for local/manual usage.
-5. Command context supports multiple GitHub accounts and clear default selection.
-6. Core CRUD-style operations exist for key object families:
+4. Command context supports multiple GitHub accounts and clear default selection.
+5. Core CRUD-style operations exist for key object families:
    - repo, issue, pull request, release, workflow run.
-7. Actions/workflow controls exist (list runs, view run, rerun/cancel, logs/artifacts access).
-8. GitHub secrets management commands exist with strong safety checks.
-9. A raw fallback exists for endpoint parity:
+6. Actions/workflow controls exist (list runs, view run, rerun/cancel, logs/artifacts access).
+7. GitHub secrets management commands exist with strong safety checks.
+8. Raw fallback exists for endpoint parity:
    - REST raw
    - GraphQL query/mutation.
-10. Error handling surfaces actionable detail (status, request id, message, docs URL) with secret redaction.
-11. Rate-limit and abuse-limit handling is resilient (backoff/retry policy for safe operations).
-12. Output is consistent with `si` styling; `--json` provides deterministic machine-readable output.
-13. Unit + integration tests cover command parsing, auth, bridge behavior, and failure paths.
-14. Docs are updated so an engineer can use `si github` without code diving.
+9. Error handling surfaces actionable detail (status, request id, message, docs URL) with secret redaction.
+10. Rate-limit and abuse-limit handling is resilient (backoff/retry policy for safe operations).
+11. Output is consistent with `si` styling; `--json` provides deterministic machine-readable output.
+12. Unit + integration tests cover command parsing, auth, bridge behavior, and failure paths.
+13. Docs are updated so an engineer can use `si github` without code diving.
 
 ## 3. Auth Mental Model (Adopted Policy)
 
 ### API
 
 - GitHub API is capability only.
-- All command behavior must be independent of auth mode at handler level.
+- Command handlers remain capability-focused, with auth handled by runtime resolver + provider.
 
-### Auth modes
+### Auth mode
 
-`si github` supports three auth modes:
+`si github` uses one auth mode:
 
-1. `app` (default for automation):
+1. `app`:
    - GitHub App private key + app id + installation id (or installation lookup).
    - short-lived installation token.
-2. `pat` (local convenience):
-   - PAT from vault/env compatibility path.
-3. `oauth` (user identity mode):
-   - kept as a designed extension path; not required for MVP command coverage unless explicitly needed.
 
-Default resolution order:
+Resolution policy:
 
-1. explicit `--auth-mode`
-2. context default auth mode
-3. `app` if app credentials exist
-4. else `pat` if PAT exists
-5. else fail with actionable credential guidance.
+1. Resolve account + owner + base URL.
+2. Resolve app credentials from vault-compatible key set.
+3. Build App provider.
+4. Fetch short-lived installation token.
+5. Execute API request.
 
 ## 4. Vault Compatibility Contract (Mandatory)
 
-`si github` must follow `tickets/creds-management-integration-plan.md` principles:
+`si github` follows `tickets/creds-management-integration-plan.md` principles:
 
 - Secrets encrypted at rest in vault repo (`vault/.env.<env>` pattern).
 - No plaintext secret persistence in repo or settings.
@@ -107,14 +112,9 @@ Global default keys:
 
 Per-account key pattern:
 
-- `GITHUB_<ACCOUNT>_AUTH_MODE` (`app|pat|oauth`)
 - `GITHUB_<ACCOUNT>_APP_ID`
 - `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`
 - `GITHUB_<ACCOUNT>_INSTALLATION_ID` (optional if install lookup is used)
-- `GITHUB_<ACCOUNT>_PAT`
-- `GITHUB_<ACCOUNT>_OAUTH_CLIENT_ID` (future)
-- `GITHUB_<ACCOUNT>_OAUTH_CLIENT_SECRET` (future)
-- `GITHUB_<ACCOUNT>_OAUTH_REFRESH_TOKEN` (future)
 
 Notes:
 
@@ -127,17 +127,19 @@ Notes:
 
 - `[github]`
   - `default_account`
-  - `default_auth_mode`
+  - `default_auth_mode` (fixed to `app`)
   - `api_base_url`
   - `vault_env` (default `dev`)
   - `vault_file` (optional explicit override)
 - `[github.accounts.<alias>]`
   - `owner` (default owner/org)
   - `api_base_url` override
-  - `auth_mode` default override
   - `vault_prefix` (example: `GITHUB_CORE_`)
+  - `app_id_env`
+  - `app_private_key_env`
+  - `installation_id_env`
 
-Settings must not store raw PAT/private keys.
+Settings must not store raw token material.
 
 ## 5. Command Surface (Planned)
 
@@ -146,7 +148,7 @@ Settings must not store raw PAT/private keys.
 - `si github auth status`
 - `si github context list`
 - `si github context current`
-- `si github context use --account <alias> [--auth-mode app|pat|oauth]`
+- `si github context use --account <alias> [--owner <owner>] [--base-url <url>]`
 
 ### 5.2 Repository operations
 
@@ -204,46 +206,21 @@ Settings must not store raw PAT/private keys.
 - `si github raw --method <GET|POST|PATCH|PUT|DELETE> --path <api-path> [--param ...]`
 - `si github graphql --query <q> [--var k=json ...]`
 
-## 6. Architecture Draft (V1)
-
-Initial simple design:
-
-1. Command handlers directly call GitHub REST helpers.
-2. Auth mode resolved in each command.
-3. Minimal shared client logic.
-
-### V1 Weaknesses
-
-- Duplicate auth/token lifecycle logic across commands.
-- Inconsistent retry/rate-limit behavior.
-- Harder to enforce uniform redaction/output/safety rules.
-- Difficult to parallelize implementation safely.
-
-## 7. Architecture Revision (V2, Recommended)
-
-Revised design:
+## 6. Architecture (V2 Locked)
 
 1. Shared bridge package for REST/GraphQL, retry, rate-limit parsing, and error normalization.
-2. Auth provider abstraction:
-   - AppProvider
-   - PATProvider
-   - OAuthProvider (stub/extension).
+2. App auth provider only:
+   - JWT signer
+   - installation token exchange
+   - installation lookup fallback.
 3. Context resolver layer:
    - account alias
    - owner defaults
-   - base URL (GitHub.com vs GHES)
-   - auth mode selection.
-4. Command layer is thin and declarative.
-5. Capability preflight:
-   - optional `--check-permissions` mode to detect missing scopes/permissions early.
+   - base URL (GitHub.com vs GHES).
+4. Command layer remains thin and declarative.
+5. No `go-github` dependency in this architecture.
 
-Why V2:
-
-- Cleanly separates capability surface from auth model.
-- Enforces GitHub App-first unattended design without breaking PAT workflows.
-- Keeps command UX stable while backend providers evolve.
-
-## 8. Global File Boundary Contract
+## 7. Global File Boundary Contract
 
 ### Allowed paths
 
@@ -271,39 +248,39 @@ Why V2:
 - Never persist ephemeral installation tokens to git-tracked files.
 - Redact auth headers and known token formats in all errors and debug output.
 
-## 9. Workstream Status Board
+## 8. Workstream Status Board
 
 | Workstream | Status | Owner | Branch | PR | Last Update |
 |---|---|---|---|---|---|
-| WS-00 Contracts | Not Started |  |  |  | 2026-02-08 |
-| WS-01 CLI Entry | Not Started |  |  |  | 2026-02-08 |
-| WS-02 Vault/Auth Context | Not Started |  |  |  | 2026-02-08 |
-| WS-03 App Auth Provider | Not Started |  |  |  | 2026-02-08 |
-| WS-04 PAT/OAuth Provider | Not Started |  |  |  | 2026-02-08 |
-| WS-05 Bridge Core (REST/GraphQL) | Not Started |  |  |  | 2026-02-08 |
+| WS-00 Contracts | Done | Codex | main | n/a | 2026-02-08 |
+| WS-01 CLI Entry | Done | Codex | main | n/a | 2026-02-08 |
+| WS-02 Vault/Auth Context | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-03 App Auth Provider | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-04 Legacy Auth Providers | Done (Removed) | Codex | main | n/a | 2026-02-08 |
+| WS-05 Bridge Core (REST/GraphQL) | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-06 Core Resource Commands | Not Started |  |  |  | 2026-02-08 |
 | WS-07 Actions/Releases/Secrets | Not Started |  |  |  | 2026-02-08 |
-| WS-08 Raw + Safety + Output | Not Started |  |  |  | 2026-02-08 |
-| WS-09 Testing + E2E | Not Started |  |  |  | 2026-02-08 |
+| WS-08 Raw + Safety + Output | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-09 Testing + E2E | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-10 Docs + Release | Not Started |  |  |  | 2026-02-08 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 
-## 10. Independent Parallel Workstreams
+## 9. Independent Parallel Workstreams
 
 ## WS-00 Contracts
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: Codex
+- Notes: runtime contracts and bridge DTOs added.
 
 Path ownership:
 - `tools/si/github_contract.go`
 - `tools/si/internal/githubbridge/types.go`
 
 Deliverables:
-1. Runtime context models (`account`, `owner`, `auth mode`, `api base`).
+1. Runtime context models (`account`, `owner`, `api base`).
 2. Provider interfaces and normalized error DTO.
 
 Acceptance:
@@ -312,9 +289,9 @@ Acceptance:
 ## WS-01 CLI Entry and Help
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: Codex
+- Notes: dispatch/help wiring landed.
 
 Path ownership:
 - `tools/si/main.go`
@@ -326,14 +303,14 @@ Deliverables:
 2. Help text aligned with existing `si` style.
 
 Acceptance:
-- `si --help` and `si github --help` are complete and accurate.
+- `si --help` and `si github --help` include GitHub command surface.
 
 ## WS-02 Vault/Auth Context Resolution
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: App-only resolver implemented; tests pending.
 
 Path ownership:
 - `tools/si/settings.go` (`[github]` non-secret config)
@@ -351,9 +328,9 @@ Acceptance:
 ## WS-03 GitHub App Provider
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: JWT signing + installation exchange + lookup implemented; tests pending.
 
 Path ownership:
 - `tools/si/internal/githubbridge/auth_app.go`
@@ -369,38 +346,36 @@ Deliverables:
 Acceptance:
 - Unattended commands can run with short-lived installation tokens only.
 
-## WS-04 PAT/OAuth Provider
+## WS-04 Legacy Auth Providers (Removed)
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: Done
+- Owner: Codex
+- Notes: PAT/OAuth provider files removed by design.
 
 Path ownership:
-- `tools/si/internal/githubbridge/auth_pat.go`
-- `tools/si/internal/githubbridge/auth_oauth.go` (stub or implementation)
+- removed: `tools/si/internal/githubbridge/auth_pat.go`
+- removed: `tools/si/internal/githubbridge/auth_oauth.go`
 
 Deliverables:
-1. PAT provider with scope diagnostics where available.
-2. OAuth provider scaffolding (or explicit deferred stub).
+1. App-only policy enforced in code and plan.
 
 Acceptance:
-- PAT flows are reliable for local workflows.
-- OAuth status is explicit (implemented vs deferred).
+- No PAT/OAuth path exists in `si github` runtime auth selection.
 
 ## WS-05 Bridge Core (REST/GraphQL)
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: client/errors/pagination/logging implemented; endpoint-specific wrappers pending.
 
 Path ownership:
 - `tools/si/internal/githubbridge/client.go`
-- `tools/si/internal/githubbridge/rest.go`
-- `tools/si/internal/githubbridge/graphql.go`
 - `tools/si/internal/githubbridge/errors.go`
 - `tools/si/internal/githubbridge/pagination.go`
+- `tools/si/internal/githubbridge/request.go`
+- `tools/si/internal/githubbridge/logging.go`
 
 Deliverables:
 1. Unified request execution and response normalization.
@@ -433,7 +408,7 @@ Deliverables:
 2. Safe defaults for mutating operations.
 
 Acceptance:
-- Core resource workflows function end-to-end for app and pat auth modes.
+- Core resource workflows function end-to-end with GitHub App auth.
 
 ## WS-07 Actions / Releases / Secrets
 
@@ -458,9 +433,9 @@ Acceptance:
 ## WS-08 Raw + Output + Safety
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: raw/graphql + output formatter added; safety policy file still pending.
 
 Path ownership:
 - `tools/si/github_raw_cmd.go`
@@ -473,14 +448,14 @@ Deliverables:
 3. Redaction and confirmation policies.
 
 Acceptance:
-- Unknown API surfaces are still reachable without shipping new typed commands.
+- Unknown API surfaces are reachable without shipping new typed commands.
 
 ## WS-09 Testing + E2E
 
 Status:
-- State: Not Started
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: baseline `go test ./tools/si/...` passes; github-focused tests pending.
 
 Path ownership:
 - `tools/si/*github*_test.go`
@@ -509,66 +484,60 @@ Path ownership:
 - `CHANGELOG.md`
 
 Deliverables:
-1. Docs for auth mode decisions and vault setup.
-2. Practical command recipes for app and pat usage.
+1. Docs for GitHub App auth decisions and vault setup.
+2. Practical command recipes for App usage.
 3. Release notes and help updates.
 
 Acceptance:
 - New engineers can configure and use `si github` with vault in under 15 minutes.
 
-## 11. Edge Case Matrix (Must Be Tested)
+## 10. Edge Case Matrix (Must Be Tested)
 
 1. App credentials present but installation id missing.
 2. App installed on multiple orgs/repos and owner is ambiguous.
 3. Installation token lacks permission for requested operation.
-4. PAT lacks required scopes or is SSO-restricted.
-5. Token expired mid-pagination.
-6. Secondary rate limit / abuse limit from burst operations.
-7. GitHub Enterprise base URL with self-signed certs.
-8. Repo renamed/transferred between API calls.
-9. Workflow log/artifact endpoints returning redirects/large payloads.
-10. GraphQL partial success with `errors` and partial `data`.
-11. Secret set commands with invalid key names or missing visibility target.
-12. Non-interactive mode for destructive commands without `--force`.
-13. Vault key exists but decrypt fails (wrong recipient / trust drift).
-14. Vault unavailable: env fallback works only when explicitly enabled/available.
-15. Mixed auth modes in one session (`context use` changes mode/account).
+4. Token expired mid-pagination.
+5. Secondary rate limit / abuse limit from burst operations.
+6. GitHub Enterprise base URL with self-signed certs.
+7. Repo renamed/transferred between API calls.
+8. Workflow log/artifact endpoints returning redirects/large payloads.
+9. GraphQL partial success with `errors` and partial `data`.
+10. Secret set commands with invalid key names or missing visibility target.
+11. Non-interactive mode for destructive commands without `--force`.
+12. Vault key exists but decrypt fails (wrong recipient / trust drift).
+13. Vault unavailable: env fallback works only when explicitly enabled/available.
+14. Installation lookup cannot resolve owner context.
+15. Mixed account contexts in one session (`context use` changes account/base URL).
 
-## 12. Self-Review and Plan Revision (Introspection)
+## 11. Self-Review and Plan Revision (Introspection)
 
-### 12.1 Critique of initial draft
+### 11.1 Critique of initial draft
 
-Initial draft risked:
+Initial draft had unnecessary auth breadth for this product objective:
 
-- overloading MVP with full OAuth login UX
-- under-specifying vault integration detail
-- not explicitly addressing GHES and multi-install ambiguity
-- not separating bridge/auth/context enough for parallel work.
+- PAT and OAuth increased complexity without improving unattended automation.
+- Auth matrix would have expanded testing and support burden.
 
-### 12.2 Revisions applied
+### 11.2 Revisions applied
 
-1. OAuth moved to optional/stub path unless required by concrete flows.
-2. Vault compatibility upgraded to a strict contract with canonical key naming.
-3. Added explicit App-first auth policy and fallback chain.
-4. Added dedicated context and provider layers to isolate responsibilities.
-5. Added edge-case matrix with rate-limit, GHES, and installation ambiguity cases.
-6. Added precise path boundaries and parallel workstreams to reduce merge conflicts.
+1. Removed PAT/OAuth from scope and runtime architecture.
+2. Standardized on GitHub App-only credentials and token flow.
+3. Removed SDK dependence discussion and locked to direct REST/GraphQL bridge.
+4. Updated workstreams and statuses to reflect current in-repo implementation state.
 
-### 12.3 Additional enhancements recommended
+### 11.3 Additional enhancements recommended
 
 1. Add `si github doctor` for:
    - credential source diagnostics
-   - permission preflight
+   - installation lookup diagnostics
    - rate-limit visibility.
-2. Add `si github policy check` to validate command against current auth mode permissions before execution.
-3. Add lightweight per-run token cache keyed by account+auth mode with strict expiry.
-4. Add audit log stream:
-   - command/action metadata only
-   - no secret values.
+2. Add capability preflight (`si github policy check`) using endpoint probes.
+3. Add lightweight per-run token cache keyed by account + owner with strict expiry.
+4. Add audit log stream with command/action metadata only.
 5. Add migration command when native vault integration lands:
    - `si github auth migrate-to-vault`.
 
-## 13. Agent Update Template (Per Workstream)
+## 12. Agent Update Template (Per Workstream)
 
 Use this template for each workstream update:
 
@@ -585,11 +554,11 @@ Use this template for each workstream update:
 - Last updated: YYYY-MM-DD
 ```
 
-## 14. Out Of Scope (MVP)
+## 13. Out Of Scope (MVP)
 
-1. Full browser OAuth dance and hosted callback UX.
-2. Organization-wide policy administration parity with every GitHub admin endpoint.
-3. Full Codespaces/package/container registry management in first cut.
-4. Centralized secret manager backend (HashiCorp Vault/cloud secret managers).
-5. Server-side webhook receiver service inside `si` runtime.
-
+1. Browser OAuth flow or user-identity auth features.
+2. PAT-based auth mode.
+3. Organization-wide policy administration parity with every GitHub admin endpoint.
+4. Full Codespaces/package/container registry management in first cut.
+5. Centralized secret manager backend (HashiCorp Vault/cloud secret managers).
+6. Server-side webhook receiver service inside `si` runtime.

@@ -1,0 +1,453 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+
+	"si/tools/si/internal/githubbridge"
+)
+
+type githubAuthOverrides struct {
+	AppID          int64
+	AppKey         string
+	InstallationID int64
+}
+
+func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFlag string, overrides githubAuthOverrides) (githubRuntimeContext, error) {
+	settings := loadSettingsOrDefault()
+	alias, account := resolveGitHubAccountSelection(settings, accountFlag)
+
+	owner := strings.TrimSpace(ownerFlag)
+	if owner == "" {
+		owner = strings.TrimSpace(account.Owner)
+	}
+	if owner == "" {
+		owner = strings.TrimSpace(settings.Github.DefaultOwner)
+	}
+	if owner == "" {
+		owner = strings.TrimSpace(os.Getenv("GITHUB_DEFAULT_OWNER"))
+	}
+
+	baseURL := strings.TrimSpace(baseURLFlag)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(account.APIBaseURL)
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(settings.Github.APIBaseURL)
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("GITHUB_API_BASE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = "https://api.github.com"
+	}
+
+	appID, appIDSource := resolveGitHubAppID(alias, account, overrides)
+	appKey, appKeySource := resolveGitHubAppKey(alias, account, overrides)
+	installationID, installationSource := resolveGitHubInstallationID(alias, account, overrides)
+	if appID <= 0 || strings.TrimSpace(appKey) == "" {
+		return githubRuntimeContext{}, fmt.Errorf("github app auth requires app id and private key (keys: %sAPP_ID, %sAPP_PRIVATE_KEY_PEM)", githubAccountEnvPrefix(alias, account), githubAccountEnvPrefix(alias, account))
+	}
+
+	provider, err := githubbridge.NewAppProvider(githubbridge.AppProviderConfig{
+		AppID:          appID,
+		InstallationID: installationID,
+		PrivateKeyPEM:  appKey,
+		BaseURL:        baseURL,
+		Owner:          owner,
+		TokenSource:    strings.Join(nonEmpty(appIDSource, appKeySource, installationSource), ","),
+	})
+	if err != nil {
+		return githubRuntimeContext{}, err
+	}
+	source := strings.Join(nonEmpty(appIDSource, appKeySource, installationSource), ",")
+
+	return githubRuntimeContext{
+		AccountAlias: alias,
+		Owner:        owner,
+		AuthMode:     githubbridge.AuthModeApp,
+		Source:       source,
+		BaseURL:      baseURL,
+		Provider:     provider,
+	}, nil
+}
+
+func resolveGitHubAccountSelection(settings Settings, accountFlag string) (string, GitHubAccountEntry) {
+	selected := strings.TrimSpace(accountFlag)
+	if selected == "" {
+		selected = strings.TrimSpace(settings.Github.DefaultAccount)
+	}
+	if selected == "" {
+		selected = strings.TrimSpace(os.Getenv("GITHUB_DEFAULT_ACCOUNT"))
+	}
+	if selected == "" {
+		aliases := githubAccountAliases(settings)
+		if len(aliases) == 1 {
+			selected = aliases[0]
+		}
+	}
+	if selected == "" {
+		return "", GitHubAccountEntry{}
+	}
+	if entry, ok := settings.Github.Accounts[selected]; ok {
+		return selected, entry
+	}
+	return selected, GitHubAccountEntry{}
+}
+
+func githubAccountAliases(settings Settings) []string {
+	if len(settings.Github.Accounts) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(settings.Github.Accounts))
+	for alias := range settings.Github.Accounts {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		out = append(out, alias)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func resolveGitHubAppID(alias string, account GitHubAccountEntry, overrides githubAuthOverrides) (int64, string) {
+	if overrides.AppID > 0 {
+		return overrides.AppID, "flag:--app-id"
+	}
+	if account.AppID > 0 {
+		return account.AppID, "settings.app_id"
+	}
+	if ref := strings.TrimSpace(account.AppIDEnv); ref != "" {
+		if parsed := parseInt64(os.Getenv(ref)); parsed > 0 {
+			return parsed, "env:" + ref
+		}
+	}
+	if parsed := parseInt64(resolveGitHubEnv(alias, account, "APP_ID")); parsed > 0 {
+		return parsed, "env:" + githubAccountEnvPrefix(alias, account) + "APP_ID"
+	}
+	if parsed := parseInt64(os.Getenv("GITHUB_APP_ID")); parsed > 0 {
+		return parsed, "env:GITHUB_APP_ID"
+	}
+	return 0, ""
+}
+
+func resolveGitHubAppKey(alias string, account GitHubAccountEntry, overrides githubAuthOverrides) (string, string) {
+	if strings.TrimSpace(overrides.AppKey) != "" {
+		return strings.TrimSpace(overrides.AppKey), "flag:--app-key"
+	}
+	if strings.TrimSpace(account.AppPrivateKeyPEM) != "" {
+		return strings.TrimSpace(account.AppPrivateKeyPEM), "settings.app_private_key_pem"
+	}
+	if ref := strings.TrimSpace(account.AppPrivateKeyEnv); ref != "" {
+		if value := strings.TrimSpace(os.Getenv(ref)); value != "" {
+			return value, "env:" + ref
+		}
+	}
+	if value := strings.TrimSpace(resolveGitHubEnv(alias, account, "APP_PRIVATE_KEY_PEM")); value != "" {
+		return value, "env:" + githubAccountEnvPrefix(alias, account) + "APP_PRIVATE_KEY_PEM"
+	}
+	if value := strings.TrimSpace(os.Getenv("GITHUB_APP_PRIVATE_KEY_PEM")); value != "" {
+		return value, "env:GITHUB_APP_PRIVATE_KEY_PEM"
+	}
+	return "", ""
+}
+
+func resolveGitHubInstallationID(alias string, account GitHubAccountEntry, overrides githubAuthOverrides) (int64, string) {
+	if overrides.InstallationID > 0 {
+		return overrides.InstallationID, "flag:--installation-id"
+	}
+	if account.InstallationID > 0 {
+		return account.InstallationID, "settings.installation_id"
+	}
+	if ref := strings.TrimSpace(account.InstallationEnv); ref != "" {
+		if parsed := parseInt64(os.Getenv(ref)); parsed > 0 {
+			return parsed, "env:" + ref
+		}
+	}
+	if parsed := parseInt64(resolveGitHubEnv(alias, account, "INSTALLATION_ID")); parsed > 0 {
+		return parsed, "env:" + githubAccountEnvPrefix(alias, account) + "INSTALLATION_ID"
+	}
+	if parsed := parseInt64(os.Getenv("GITHUB_INSTALLATION_ID")); parsed > 0 {
+		return parsed, "env:GITHUB_INSTALLATION_ID"
+	}
+	return 0, ""
+}
+
+func resolveGitHubEnv(alias string, account GitHubAccountEntry, key string) string {
+	prefix := githubAccountEnvPrefix(alias, account)
+	if prefix != "" {
+		if value := strings.TrimSpace(os.Getenv(prefix + key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func githubAccountEnvPrefix(alias string, account GitHubAccountEntry) string {
+	if prefix := strings.TrimSpace(account.VaultPrefix); prefix != "" {
+		if strings.HasSuffix(prefix, "_") {
+			return strings.ToUpper(prefix)
+		}
+		return strings.ToUpper(prefix) + "_"
+	}
+	alias = slugUpper(alias)
+	if alias == "" {
+		return ""
+	}
+	return "GITHUB_" + alias + "_"
+}
+
+func slugUpper(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r - 32)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('_')
+		}
+	}
+	return strings.Trim(strings.ReplaceAll(b.String(), "__", "_"), "_")
+}
+
+func parseInt64(value string) int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	parsed, _ := strconv.ParseInt(value, 10, 64)
+	return parsed
+}
+
+func nonEmpty(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
+func cmdGithubAuth(args []string) {
+	if len(args) == 0 {
+		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--json]")
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		cmdGithubAuthStatus(args[1:])
+	default:
+		printUnknown("github auth", args[0])
+	}
+}
+
+func cmdGithubAuthStatus(args []string) {
+	fs := flag.NewFlagSet("github auth status", flag.ExitOnError)
+	account := fs.String("account", "", "account alias")
+	owner := fs.String("owner", "", "default owner/org")
+	baseURL := fs.String("base-url", "", "github api base url")
+	appID := fs.Int64("app-id", 0, "override app id")
+	appKey := fs.String("app-key", "", "override app private key pem")
+	installationID := fs.Int64("installation-id", 0, "override installation id")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--json]")
+		return
+	}
+	runtime, err := resolveGithubRuntimeContext(*account, *owner, *baseURL, githubAuthOverrides{
+		AppID:          *appID,
+		AppKey:         *appKey,
+		InstallationID: *installationID,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	tokenPreview := "-"
+	source := strings.TrimSpace(runtime.Source)
+	if provider := runtime.Provider; provider != nil {
+		token, tokenErr := provider.Token(context.Background(), githubbridge.TokenRequest{Owner: runtime.Owner})
+		if tokenErr == nil {
+			tokenPreview = previewGitHubSecret(token.Value)
+		}
+	}
+	payload := map[string]any{
+		"account_alias": runtime.AccountAlias,
+		"owner":         runtime.Owner,
+		"auth_mode":     runtime.AuthMode,
+		"base_url":      runtime.BaseURL,
+		"source":        source,
+		"token_preview": tokenPreview,
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	fmt.Printf("%s %s\n", styleHeading("GitHub auth:"), styleSuccess("ready"))
+	fmt.Printf("%s %s\n", styleHeading("Context:"), formatGithubContext(runtime))
+	fmt.Printf("%s %s\n", styleHeading("Source:"), orDash(source))
+	fmt.Printf("%s %s\n", styleHeading("Token preview:"), tokenPreview)
+}
+
+func cmdGithubContext(args []string) {
+	if len(args) == 0 {
+		printUsage("usage: si github context <list|current|use>")
+		return
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		cmdGithubContextList(args[1:])
+	case "current":
+		cmdGithubContextCurrent(args[1:])
+	case "use":
+		cmdGithubContextUse(args[1:])
+	default:
+		printUnknown("github context", args[0])
+	}
+}
+
+func cmdGithubContextList(args []string) {
+	fs := flag.NewFlagSet("github context list", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si github context list [--json]")
+		return
+	}
+	settings := loadSettingsOrDefault()
+	aliases := githubAccountAliases(settings)
+	rows := make([]map[string]string, 0, len(aliases))
+	for _, alias := range aliases {
+		entry := settings.Github.Accounts[alias]
+		rows = append(rows, map[string]string{
+			"alias":        alias,
+			"name":         strings.TrimSpace(entry.Name),
+			"owner":        strings.TrimSpace(entry.Owner),
+			"auth_mode":    "app",
+			"default":      boolString(alias == strings.TrimSpace(settings.Github.DefaultAccount)),
+			"api_base_url": strings.TrimSpace(entry.APIBaseURL),
+		})
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(rows); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	if len(rows) == 0 {
+		infof("no github accounts configured in settings")
+		return
+	}
+	fmt.Printf("%s %s %s %s %s %s\n",
+		padRightANSI(styleHeading("ALIAS"), 18),
+		padRightANSI(styleHeading("DEFAULT"), 8),
+		padRightANSI(styleHeading("AUTH"), 7),
+		padRightANSI(styleHeading("OWNER"), 20),
+		padRightANSI(styleHeading("BASE URL"), 32),
+		styleHeading("NAME"),
+	)
+	for _, row := range rows {
+		fmt.Printf("%s %s %s %s %s %s\n",
+			padRightANSI(row["alias"], 18),
+			padRightANSI(row["default"], 8),
+			padRightANSI(orDash(row["auth_mode"]), 7),
+			padRightANSI(orDash(row["owner"]), 20),
+			padRightANSI(orDash(row["api_base_url"]), 32),
+			orDash(row["name"]),
+		)
+	}
+}
+
+func cmdGithubContextCurrent(args []string) {
+	fs := flag.NewFlagSet("github context current", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si github context current [--json]")
+		return
+	}
+	runtime, err := resolveGithubRuntimeContext("", "", "", githubAuthOverrides{})
+	if err != nil {
+		fatal(err)
+	}
+	payload := map[string]any{
+		"account_alias": runtime.AccountAlias,
+		"owner":         runtime.Owner,
+		"auth_mode":     runtime.AuthMode,
+		"base_url":      runtime.BaseURL,
+		"source":        runtime.Source,
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	fmt.Printf("%s %s\n", styleHeading("Current github context:"), formatGithubContext(runtime))
+	fmt.Printf("%s %s\n", styleHeading("Source:"), orDash(runtime.Source))
+}
+
+func cmdGithubContextUse(args []string) {
+	fs := flag.NewFlagSet("github context use", flag.ExitOnError)
+	account := fs.String("account", "", "default account alias")
+	owner := fs.String("owner", "", "default owner/org")
+	baseURL := fs.String("base-url", "", "default github api base url")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si github context use [--account <alias>] [--owner <owner>] [--base-url <url>]")
+		return
+	}
+	settings := loadSettingsOrDefault()
+	if value := strings.TrimSpace(*account); value != "" {
+		settings.Github.DefaultAccount = value
+	}
+	if value := strings.TrimSpace(*owner); value != "" {
+		settings.Github.DefaultOwner = value
+	}
+	if value := strings.TrimSpace(*baseURL); value != "" {
+		settings.Github.APIBaseURL = value
+	}
+	settings.Github.DefaultAuthMode = string(githubbridge.AuthModeApp)
+	if err := saveSettings(settings); err != nil {
+		fatal(err)
+	}
+	successf("github context updated")
+}
+
+func previewGitHubSecret(secret string) string {
+	secret = strings.TrimSpace(secret)
+	if secret == "" {
+		return "-"
+	}
+	secret = githubbridge.RedactSensitive(secret)
+	if len(secret) <= 10 {
+		return secret
+	}
+	return secret[:8] + "..."
+}
