@@ -9,10 +9,10 @@ import (
 )
 
 var (
-	reBearerToken     = regexp.MustCompile(`(?i)\\bBearer\\s+[A-Za-z0-9._-]+\\b`)
-	reAPIToken        = regexp.MustCompile(`(?i)\\b[A-Za-z0-9_-]{36,}\\b`)
+	reBearerToken     = regexp.MustCompile(`(?i)\bBearer\s+[A-Za-z0-9._-]+\b`)
+	reAPIToken        = regexp.MustCompile(`(?i)\b[A-Za-z0-9_-]{36,}\b`)
 	rePrivateKeyBlock = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*-----END [A-Z ]*PRIVATE KEY-----`)
-	reJWTLike         = regexp.MustCompile(`\\beyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9._-]+\\.[A-Za-z0-9._-]+\\b`)
+	reJWTLike         = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\b`)
 )
 
 func RedactSensitive(value string) string {

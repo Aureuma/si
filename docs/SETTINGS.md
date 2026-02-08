@@ -149,6 +149,36 @@ Credential resolution for `si github` is vault-compatible and app-only:
 4. Account-prefix env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, `GITHUB_<ACCOUNT>_INSTALLATION_ID`)
 5. Global env fallbacks (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PEM`, `GITHUB_INSTALLATION_ID`)
 
+### `[cloudflare]`
+Defaults for `si cloudflare` (token auth with multi-account and env context labels).
+- `cloudflare.default_account` (string): default account alias
+- `cloudflare.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
+- `cloudflare.api_base_url` (string): API base URL (default: `https://api.cloudflare.com/client/v4`)
+- `cloudflare.vault_env` (string): vault env hint (default: `dev`)
+- `cloudflare.vault_file` (string): optional explicit vault file path
+- `cloudflare.log_file` (string): JSONL log path for Cloudflare bridge request/response events (default: `~/.si/logs/cloudflare.log`)
+
+#### `[cloudflare.accounts.<alias>]`
+Per-account Cloudflare context and env-key pointers.
+- `name` (string): display name
+- `account_id` (string): Cloudflare account id
+- `account_id_env` (string): env var with account id
+- `api_base_url` (string): per-account API base URL override
+- `vault_prefix` (string): env key prefix override (example `CLOUDFLARE_CORE_`)
+- `default_zone_id` (string): default zone id fallback
+- `default_zone_name` (string): default zone name fallback
+- `prod_zone_id` (string): zone id used when `env=prod`
+- `staging_zone_id` (string): zone id used when `env=staging`
+- `dev_zone_id` (string): zone id used when `env=dev`
+- `api_token_env` (string): env var with API token
+
+Credential resolution for `si cloudflare` is vault-compatible and token-only:
+1. CLI overrides (`--api-token`, `--account-id`, `--zone-id`)
+2. Account settings (`account_id`, env-mapped zone ids, defaults)
+3. Account env refs (`account_id_env`, `api_token_env`)
+4. Account-prefix env keys (`CLOUDFLARE_<ACCOUNT>_API_TOKEN`, `CLOUDFLARE_<ACCOUNT>_ACCOUNT_ID`, `CLOUDFLARE_<ACCOUNT>_PROD_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_STAGING_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_DEV_ZONE_ID`)
+5. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
+
 ### `[vault]`
 Defaults for `si vault` (encrypted `.env.<env>` files, typically stored in a separate vault repo submodule).
 - `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
@@ -253,6 +283,21 @@ vault_prefix = "GITHUB_CORE_"
 app_id_env = "GITHUB_CORE_APP_ID"
 app_private_key_env = "GITHUB_CORE_APP_PRIVATE_KEY_PEM"
 installation_id_env = "GITHUB_CORE_INSTALLATION_ID"
+
+[cloudflare]
+default_account = "core"
+default_env = "prod"
+api_base_url = "https://api.cloudflare.com/client/v4"
+log_file = "~/.si/logs/cloudflare.log"
+
+[cloudflare.accounts.core]
+name = "Core Cloudflare"
+vault_prefix = "CLOUDFLARE_CORE_"
+account_id_env = "CLOUDFLARE_CORE_ACCOUNT_ID"
+api_token_env = "CLOUDFLARE_CORE_API_TOKEN"
+prod_zone_id = "11111111111111111111111111111111"
+staging_zone_id = "22222222222222222222222222222222"
+dev_zone_id = "33333333333333333333333333333333"
 
 [vault]
 dir = "vault"
