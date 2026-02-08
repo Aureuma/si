@@ -303,6 +303,7 @@ func loadSettings() (Settings, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			settings := defaultSettings()
+			applySettingsDefaults(&settings)
 			_ = saveSettings(settings)
 			return settings, nil
 		}
