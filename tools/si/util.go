@@ -25,6 +25,7 @@ Features:
   - Vault: encrypted secrets stored in a pinned submodule; format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - GitHub bridge: App-auth context, REST/GraphQL access, and repository automation commands.
+  - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
@@ -42,6 +43,7 @@ Core:
   si vault <init|status|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|object|raw|report|sync>
   si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
+  si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
   si self <build|upgrade|run>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -278,6 +280,38 @@ github:
   Auth policy:
     GitHub App only.
     Configure app credentials via vault-compatible env keys (for example GITHUB_<ACCOUNT>_APP_ID, GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM).
+
+cloudflare:
+  si cloudflare auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si cloudflare context list|current|use [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--base-url <url>]
+  si cloudflare doctor [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si cloudflare zone|dns|waf|ruleset|firewall|ratelimit|queue|tunnel|lb <list|get|create|update|delete> ...
+  si cloudflare workers script|route <list|get|create|update|delete> ...
+  si cloudflare workers secret <set|delete> --script <name> --name <secret> [--text <value>]
+  si cloudflare pages project <list|get|create|update|delete> ...
+  si cloudflare pages deploy <list|trigger|rollback> --project <name> [--deployment <id>]
+  si cloudflare r2 bucket <list|get|create|update|delete> ...
+  si cloudflare r2 object <list|get|put|delete> --bucket <name> [--key <key>]
+  si cloudflare d1 db <list|get|create|update|delete> ...
+  si cloudflare d1 query --db <id> --sql <statement>
+  si cloudflare d1 migration <list|apply> --db <id>
+  si cloudflare kv namespace <list|get|create|update|delete> ...
+  si cloudflare kv key <list|get|put|delete|bulk> --namespace <id> [--key <key>]
+  si cloudflare access app|policy <list|get|create|update|delete> ...
+  si cloudflare tls get|set --setting <name> [--value <value>]
+  si cloudflare tls cert <list|get|create|update|delete> ...
+  si cloudflare tls origin-cert <list|create|revoke> ...
+  si cloudflare cache purge [--everything|--tag ...|--host ...|--prefix ...] [--force]
+  si cloudflare cache settings <get|set> --setting <name> [--value <value>]
+  si cloudflare analytics <http|security|cache> ...
+  si cloudflare logs job <list|get|create|update|delete> ...
+  si cloudflare logs received ...
+  si cloudflare report <traffic-summary|security-events|cache-summary|billing-summary> [--from <iso>] [--to <iso>]
+  si cloudflare raw --method <GET|POST|PATCH|PUT|DELETE> --path <api-path> [--param key=value] [--body raw] [--json]
+
+  Environment policy:
+    CLI uses prod, staging, and dev context labels.
+    test is intentionally not used; map sandbox workflows to staging/dev context.
 
 self:
   si self build [--repo <path>] [--output <path>]
