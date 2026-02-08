@@ -30,6 +30,8 @@ func main() {
 		cmdGithub(args)
 	case "cloudflare", "cf":
 		cmdCloudflare(args)
+	case "google":
+		cmdGoogle(args)
 	case "self":
 		cmdSelf(args)
 	case "docker":
