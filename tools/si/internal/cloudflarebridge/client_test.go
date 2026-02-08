@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"si/tools/si/internal/apibridge"
 )
 
 func TestClientDo(t *testing.T) {
@@ -37,7 +39,7 @@ func TestClientDo(t *testing.T) {
 }
 
 func TestResolveURL(t *testing.T) {
-	u, err := resolveURL("https://api.cloudflare.com/client/v4", "/zones", map[string]string{"page": "2"})
+	u, err := apibridge.ResolveURL("https://api.cloudflare.com/client/v4", "/zones", map[string]string{"page": "2"})
 	if err != nil {
 		t.Fatalf("resolveURL: %v", err)
 	}

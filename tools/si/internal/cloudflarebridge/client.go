@@ -1,23 +1,22 @@
 package cloudflarebridge
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"si/tools/si/internal/apibridge"
 )
 
 type Client struct {
-	cfg        ClientConfig
-	httpClient *http.Client
-	log        EventLogger
+	cfg ClientConfig
+	api *apibridge.Client
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
@@ -43,132 +42,114 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if client == nil {
 		client = &http.Client{Timeout: cfg.Timeout}
 	}
-	return &Client{cfg: cfg, httpClient: client, log: cfg.Logger}, nil
+	api, err := apibridge.NewClient(apibridge.Config{
+		Component:   "cloudflarebridge",
+		BaseURL:     cfg.BaseURL,
+		UserAgent:   cfg.UserAgent,
+		Timeout:     cfg.Timeout,
+		MaxRetries:  cfg.MaxRetries,
+		Logger:      cfg.Logger,
+		LogContext:  cfg.LogContext,
+		HTTPClient:  client,
+		SanitizeURL: sanitizeURL,
+		Redact:      RedactSensitive,
+		RequestIDFromHeaders: func(h http.Header) string {
+			if h == nil {
+				return ""
+			}
+			if v := strings.TrimSpace(h.Get("CF-Ray")); v != "" {
+				return v
+			}
+			return strings.TrimSpace(h.Get("X-Request-ID"))
+		},
+		RetryDecider: func(ctx context.Context, attempt int, req apibridge.Request, resp *http.Response, _ []byte, callErr error) apibridge.RetryDecision {
+			_ = ctx
+			if callErr != nil {
+				if apibridge.IsSafeMethod(req.Method) {
+					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				}
+				return apibridge.RetryDecision{}
+			}
+			if resp == nil || !apibridge.IsSafeMethod(req.Method) {
+				return apibridge.RetryDecision{}
+			}
+			switch resp.StatusCode {
+			case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+				return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+			default:
+				if resp.StatusCode >= 500 {
+					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				}
+				return apibridge.RetryDecision{}
+			}
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Client{cfg: cfg, api: api}, nil
 }
 
 func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
-	if c == nil {
+	if c == nil || c.api == nil {
 		return Response{}, fmt.Errorf("cloudflare client is not initialized")
 	}
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
 	if method == "" {
 		method = http.MethodGet
 	}
-	endpoint, err := resolveURL(c.cfg.BaseURL, req.Path, req.Params)
+
+	headers := make(map[string]string, 4+len(req.Headers))
+	headers["Authorization"] = "Bearer " + strings.TrimSpace(c.cfg.APIToken)
+	headers["Accept"] = "application/json"
+	for k, v := range req.Headers {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		headers[k] = v
+	}
+
+	apiResp, err := c.api.Do(ctx, apibridge.Request{
+		Method:      method,
+		Path:        req.Path,
+		Params:      req.Params,
+		Headers:     headers,
+		RawBody:     req.RawBody,
+		JSONBody:    req.JSONBody,
+		ContentType: req.ContentType,
+	})
 	if err != nil {
 		return Response{}, err
 	}
-	attempts := c.cfg.MaxRetries + 1
-	if attempts < 1 {
-		attempts = 1
+
+	body := strings.TrimSpace(string(apiResp.Body))
+	resp := normalizeResponseParts(apiResp.StatusCode, apiResp.Status, apiResp.Headers, body)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 && resp.Success {
+		return resp, nil
 	}
-	var lastErr error
-	for attempt := 1; attempt <= attempts; attempt++ {
-		httpReq, reqErr := c.buildRequest(ctx, method, endpoint, req)
-		if reqErr != nil {
-			return Response{}, reqErr
-		}
-		start := time.Now().UTC()
-		c.logEvent("request", map[string]any{
-			"method":  method,
-			"path":    sanitizeURL(endpoint),
-			"attempt": attempt,
-		})
-		httpResp, callErr := c.httpClient.Do(httpReq)
-		if callErr != nil {
-			lastErr = callErr
-			if attempt < attempts && isRetryableNetwork(method, callErr) {
-				time.Sleep(backoffDelay(attempt))
-				continue
-			}
-			return Response{}, callErr
-		}
-		bodyBytes, _ := io.ReadAll(httpResp.Body)
-		_ = httpResp.Body.Close()
-		body := strings.TrimSpace(string(bodyBytes))
-		resp := normalizeResponse(httpResp, body)
-		c.logEvent("response", map[string]any{
-			"method":      method,
-			"path":        sanitizeURL(endpoint),
-			"attempt":     attempt,
-			"status":      resp.StatusCode,
-			"request_id":  resp.RequestID,
-			"duration_ms": time.Since(start).Milliseconds(),
-		})
-		if resp.StatusCode >= 200 && resp.StatusCode < 300 && resp.Success {
-			return resp, nil
-		}
-		apiErr := NormalizeHTTPError(resp.StatusCode, httpResp.Header, body)
-		lastErr = apiErr
-		if attempt < attempts && isRetryableHTTP(method, resp.StatusCode) {
-			time.Sleep(backoffDelay(attempt))
-			continue
-		}
-		return Response{}, apiErr
-	}
-	if lastErr == nil {
-		lastErr = fmt.Errorf("cloudflare request failed")
-	}
-	return Response{}, lastErr
+	return Response{}, NormalizeHTTPError(resp.StatusCode, apiResp.Headers, body)
 }
 
-func (c *Client) buildRequest(ctx context.Context, method string, endpoint string, req Request) (*http.Request, error) {
-	bodyReader := io.Reader(nil)
-	if strings.TrimSpace(req.RawBody) != "" {
-		bodyReader = strings.NewReader(req.RawBody)
-	} else if req.JSONBody != nil {
-		raw, err := json.Marshal(req.JSONBody)
-		if err != nil {
-			return nil, err
-		}
-		bodyReader = bytes.NewReader(raw)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.cfg.APIToken))
-	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("User-Agent", c.cfg.UserAgent)
-	if bodyReader != nil {
-		contentType := strings.TrimSpace(req.ContentType)
-		if contentType == "" {
-			contentType = "application/json"
-		}
-		httpReq.Header.Set("Content-Type", contentType)
-	}
-	for key, value := range req.Headers {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		httpReq.Header.Set(key, value)
-	}
-	return httpReq, nil
-}
-
-func normalizeResponse(httpResp *http.Response, body string) Response {
+func normalizeResponseParts(statusCode int, status string, headers http.Header, body string) Response {
 	out := Response{}
-	if httpResp == nil {
-		return out
-	}
-	out.StatusCode = httpResp.StatusCode
-	out.Status = httpResp.Status
+	out.StatusCode = statusCode
+	out.Status = status
 	out.Body = RedactSensitive(body)
 	out.Success = out.StatusCode >= 200 && out.StatusCode < 300
-	out.RequestID = strings.TrimSpace(httpResp.Header.Get("CF-Ray"))
+	out.RequestID = strings.TrimSpace(headers.Get("CF-Ray"))
 	if out.RequestID == "" {
-		out.RequestID = strings.TrimSpace(httpResp.Header.Get("X-Request-ID"))
+		out.RequestID = strings.TrimSpace(headers.Get("X-Request-ID"))
 	}
-	if len(httpResp.Header) > 0 {
-		headers := make([]string, 0, len(httpResp.Header))
-		for key := range httpResp.Header {
-			headers = append(headers, key)
+	if len(headers) > 0 {
+		keys := make([]string, 0, len(headers))
+		for key := range headers {
+			keys = append(keys, key)
 		}
-		sort.Strings(headers)
-		out.Headers = make(map[string]string, len(headers))
-		for _, key := range headers {
-			out.Headers[key] = RedactSensitive(strings.Join(httpResp.Header.Values(key), ","))
+		sort.Strings(keys)
+		out.Headers = make(map[string]string, len(keys))
+		for _, key := range keys {
+			out.Headers[key] = RedactSensitive(strings.Join(headers.Values(key), ","))
 		}
 	}
 	if strings.TrimSpace(body) == "" {
@@ -216,50 +197,6 @@ func anySliceToMaps(values []any) []map[string]any {
 		out = append(out, obj)
 	}
 	return out
-}
-
-func resolveURL(baseURL string, path string, params map[string]string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", fmt.Errorf("request path is required")
-	}
-	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-		u, err := url.Parse(path)
-		if err != nil {
-			return "", err
-		}
-		addQuery(u, params)
-		return u.String(), nil
-	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	base, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil {
-		return "", err
-	}
-	rel, err := url.Parse(path)
-	if err != nil {
-		return "", err
-	}
-	u := base.ResolveReference(rel)
-	addQuery(u, params)
-	return u.String(), nil
-}
-
-func addQuery(u *url.URL, params map[string]string) {
-	if u == nil || len(params) == 0 {
-		return
-	}
-	q := u.Query()
-	for key, value := range params {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		q.Set(key, strings.TrimSpace(value))
-	}
-	u.RawQuery = q.Encode()
 }
 
 func sanitizeURL(raw string) string {
@@ -350,55 +287,4 @@ func atoiDefault(raw string, fallback int) int {
 	return parsed
 }
 
-func isRetryableNetwork(method string, _ error) bool {
-	return isSafeMethod(method)
-}
-
-func isRetryableHTTP(method string, statusCode int) bool {
-	if !isSafeMethod(method) {
-		return false
-	}
-	switch statusCode {
-	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-		return true
-	}
-	return statusCode >= 500
-}
-
-func isSafeMethod(method string) bool {
-	switch strings.ToUpper(strings.TrimSpace(method)) {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
-		return true
-	default:
-		return false
-	}
-}
-
-func backoffDelay(attempt int) time.Duration {
-	if attempt < 1 {
-		attempt = 1
-	}
-	base := 300 * time.Millisecond
-	d := base * time.Duration(1<<(attempt-1))
-	if d > 3*time.Second {
-		return 3 * time.Second
-	}
-	return d
-}
-
-func (c *Client) logEvent(kind string, fields map[string]any) {
-	if c == nil || c.log == nil {
-		return
-	}
-	event := map[string]any{
-		"component": "cloudflarebridge",
-		"event":     kind,
-	}
-	for key, value := range c.cfg.LogContext {
-		event["ctx_"+key] = RedactSensitive(strings.TrimSpace(value))
-	}
-	for key, value := range fields {
-		event[key] = value
-	}
-	c.log.Log(event)
-}
+// Note: structured logging and retries are handled by apibridge.
