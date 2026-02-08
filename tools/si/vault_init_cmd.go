@@ -40,8 +40,12 @@ func cmdVaultInit(args []string) {
 		}
 	}
 
-	// Ensure the submodule checkout exists.
-	_ = vault.GitSubmoduleUpdate(target.RepoRoot, target.VaultDirRel)
+	// Ensure the submodule checkout exists (when this vault dir is configured as a submodule).
+	if sm, err := vault.GitSubmoduleStatus(target.RepoRoot, target.VaultDirRel); err == nil && sm != nil && sm.Present {
+		if err := vault.GitSubmoduleUpdate(target.RepoRoot, target.VaultDirRel); err != nil {
+			fatal(err)
+		}
+	}
 	if *ignoreDirty {
 		_, _ = vault.EnsureGitmodulesIgnoreDirty(target.RepoRoot, target.VaultDirRel)
 	}
