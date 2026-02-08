@@ -268,6 +268,48 @@ Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
 
+## Google YouTube
+`si` includes a YouTube Data API v3 bridge under `si google youtube`:
+
+```bash
+# auth/context/diagnostics
+./si google youtube auth status --account core --mode api-key
+./si google youtube auth login --account core --mode oauth
+./si google youtube context list
+./si google youtube context current
+./si google youtube context use --account core --env prod --mode oauth
+./si google youtube doctor --account core --mode oauth
+
+# discovery/read
+./si google youtube search list --query "engineering vlog" --type video
+./si google youtube support languages
+./si google youtube support regions
+./si google youtube support categories --region US
+./si google youtube channel mine --mode oauth
+./si google youtube video list --id <video_id>
+./si google youtube playlist list --mine --mode oauth
+
+# mutations/assets/live (oauth)
+./si google youtube video upload --mode oauth --file ./clip.mp4 --title "Demo" --privacy unlisted
+./si google youtube video rate --mode oauth --id <video_id> --rating like
+./si google youtube playlist-item add --mode oauth --playlist-id <playlist_id> --video-id <video_id>
+./si google youtube caption upload --mode oauth --video-id <video_id> --file ./captions.vtt --language en
+./si google youtube caption download --mode oauth --id <caption_id> --output ./captions.vtt
+./si google youtube thumbnail set --mode oauth --video-id <video_id> --file ./thumb.jpg
+./si google youtube live broadcast list --mode oauth
+./si google youtube live stream list --mode oauth
+./si google youtube live chat list --mode oauth --live-chat-id <chat_id>
+
+# observability/raw
+./si google youtube report usage --since 2026-02-08T00:00:00Z
+./si google youtube report quota
+./si google youtube raw --method GET --path /youtube/v3/search --param part=id --param q=music
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
 ## Self Build/Upgrade
 Build or upgrade the `si` binary from the repo itself:
 
