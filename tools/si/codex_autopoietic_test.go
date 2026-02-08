@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types"
@@ -38,6 +39,35 @@ func TestConsumeRunContainerModeFlags(t *testing.T) {
 	}
 	if len(args) != 2 || args[0] != "berylla" || args[1] != "bash" {
 		t.Fatalf("unexpected args after consume: %v", args)
+	}
+}
+
+func TestConsumeRunContainerModeFlagsStopsAtCommand(t *testing.T) {
+	autopo := false
+	tmux := false
+	args := consumeRunContainerModeFlags([]string{"berylla", "printf", "%s\n", "--tmux"}, &autopo, &tmux)
+	if autopo || tmux {
+		t.Fatalf("expected mode flags to remain false once command args begin")
+	}
+	if len(args) != 4 || args[0] != "berylla" || args[1] != "printf" || args[3] != "--tmux" {
+		t.Fatalf("unexpected args after consume: %v", args)
+	}
+}
+
+func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
+	cmd := buildCodexTmuxCommand("si-codex-berylla")
+	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
+		t.Fatalf("expected tmux command to use codex bypass flag, got: %s", cmd)
+	}
+	if !strings.Contains(cmd, "sudo -n") {
+		t.Fatalf("expected tmux command to keep sudo fallback, got: %s", cmd)
+	}
+}
+
+func TestBuildTmuxCodexCommandUsesBypassFlag(t *testing.T) {
+	cmd := buildTmuxCodexCommand("abc123")
+	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
+		t.Fatalf("expected report/status tmux command to use codex bypass flag, got: %s", cmd)
 	}
 }
 
