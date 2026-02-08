@@ -81,7 +81,7 @@ func cmdGithubRepoSecretSet(args []string) {
 	if name == "" {
 		fatal(fmt.Errorf("secret name is required"))
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	if err := upsertGithubSecret(context.Background(), client, secretScopeRepo{Owner: repoOwner, Repo: repoName}, name, strings.TrimSpace(*value)); err != nil {
 		printGithubError(err)
 		return
@@ -115,7 +115,7 @@ func cmdGithubRepoSecretDelete(args []string) {
 	if err := requireGithubConfirmation("delete repo secret "+name+" from "+repoOwner+"/"+repoName, *force); err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/repos", repoOwner, repoName, "actions", "secrets", name), Owner: repoOwner, Repo: repoName})
@@ -168,7 +168,7 @@ func cmdGithubEnvSecretSet(args []string) {
 	}
 	envName := strings.TrimSpace(fs.Arg(1))
 	name := strings.TrimSpace(fs.Arg(2))
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	if err := upsertGithubSecret(context.Background(), client, secretScopeEnv{Owner: repoOwner, Repo: repoName, Env: envName}, name, strings.TrimSpace(*value)); err != nil {
 		printGithubError(err)
 		return
@@ -203,7 +203,7 @@ func cmdGithubEnvSecretDelete(args []string) {
 	if err := requireGithubConfirmation("delete environment secret "+name+" from "+repoOwner+"/"+repoName+" env "+envName, *force); err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/repos", repoOwner, repoName, "environments", envName, "secrets", name), Owner: repoOwner, Repo: repoName})
@@ -263,7 +263,7 @@ func cmdGithubOrgSecretSet(args []string) {
 	if name == "" {
 		fatal(fmt.Errorf("secret name is required"))
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	if err := upsertGithubSecret(context.Background(), client, secretScopeOrg{Org: org, Visibility: strings.TrimSpace(*visibility), RepoIDs: parseGitHubCSVInts(*repos)}, name, strings.TrimSpace(*value)); err != nil {
 		printGithubError(err)
 		return
@@ -297,7 +297,7 @@ func cmdGithubOrgSecretDelete(args []string) {
 	if err := requireGithubConfirmation("delete org secret "+name+" from "+org, *force); err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/orgs", org, "actions", "secrets", name), Owner: org})

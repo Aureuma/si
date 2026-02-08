@@ -70,7 +70,7 @@ func cmdGithubRepoList(args []string) {
 	if selectedOwner == "" {
 		fatal(fmt.Errorf("owner is required (use --owner, context owner, or positional owner)"))
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	items, err := client.ListAll(ctx, githubbridge.Request{
@@ -127,7 +127,7 @@ func cmdGithubRepoGet(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", repoOwner, repoName), Owner: repoOwner, Repo: repoName})
@@ -178,7 +178,7 @@ func cmdGithubRepoCreate(args []string) {
 	}
 	body := parseGitHubBodyParams(params)
 	body["name"] = repoName
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: path.Join("/orgs", selectedOwner, "repos"), JSONBody: body, Owner: selectedOwner})
@@ -220,7 +220,7 @@ func cmdGithubRepoUpdate(args []string) {
 	if len(body) == 0 {
 		fatal(fmt.Errorf("at least one --param key=value is required"))
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "PATCH", Path: path.Join("/repos", repoOwner, repoName), JSONBody: body, Owner: repoOwner, Repo: repoName})
@@ -260,7 +260,7 @@ func cmdGithubRepoArchive(args []string) {
 	if err := requireGithubConfirmation("archive repository "+repoOwner+"/"+repoName, *force); err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "PATCH", Path: path.Join("/repos", repoOwner, repoName), JSONBody: map[string]any{"archived": true}, Owner: repoOwner, Repo: repoName})
@@ -300,7 +300,7 @@ func cmdGithubRepoDelete(args []string) {
 	if err := requireGithubConfirmation("delete repository "+repoOwner+"/"+repoName, *force); err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/repos", repoOwner, repoName), Owner: repoOwner, Repo: repoName})
