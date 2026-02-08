@@ -36,7 +36,17 @@ func cmdVaultInit(args []string) {
 			fatal(fmt.Errorf("vault dir not found (%s); provide --submodule-url to add it as a git submodule", filepath.Clean(target.VaultDir)))
 		}
 		if err := vault.GitSubmoduleAdd(target.RepoRoot, *submoduleURL, target.VaultDirRel); err != nil {
-			fatal(err)
+			// A common failure mode for brand-new repos is a missing/invalid remote HEAD.
+			// Git may clone the repo but fail to checkout, returning an error while leaving
+			// a usable git working directory behind.
+			if vault.IsDir(target.VaultDir) {
+				warnf("vault submodule add failed; attempting checkout recovery: %v", err)
+				if recErr := vault.GitEnsureCheckout(target.VaultDir); recErr != nil {
+					fatal(fmt.Errorf("%w (recovery failed: %v)", err, recErr))
+				}
+			} else {
+				fatal(err)
+			}
 		}
 	}
 
@@ -44,6 +54,11 @@ func cmdVaultInit(args []string) {
 	if sm, err := vault.GitSubmoduleStatus(target.RepoRoot, target.VaultDirRel); err == nil && sm != nil && sm.Present {
 		if err := vault.GitSubmoduleUpdate(target.RepoRoot, target.VaultDirRel); err != nil {
 			fatal(err)
+		}
+	}
+	if vault.IsDir(target.VaultDir) {
+		if err := vault.GitEnsureCheckout(target.VaultDir); err != nil {
+			fatal(fmt.Errorf("vault repo checkout failed: %w", err))
 		}
 	}
 	if *ignoreDirty {
