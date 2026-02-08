@@ -1,0 +1,434 @@
+package youtubebridge
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"sort"
+	"strings"
+	"time"
+)
+
+type Client struct {
+	cfg        ClientConfig
+	httpClient *http.Client
+	log        EventLogger
+}
+
+func NewClient(cfg ClientConfig) (*Client, error) {
+	cfg.AuthMode = normalizeAuthMode(cfg.AuthMode)
+	if cfg.AuthMode == "" {
+		cfg.AuthMode = AuthModeAPIKey
+	}
+	if cfg.AuthMode == AuthModeAPIKey && strings.TrimSpace(cfg.APIKey) == "" {
+		return nil, fmt.Errorf("youtube api key is required for api-key mode")
+	}
+	if cfg.AuthMode == AuthModeOAuth && cfg.TokenProvider == nil {
+		return nil, fmt.Errorf("token provider is required for oauth mode")
+	}
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		cfg.BaseURL = "https://www.googleapis.com"
+	}
+	if strings.TrimSpace(cfg.UploadBaseURL) == "" {
+		cfg.UploadBaseURL = "https://www.googleapis.com/upload"
+	}
+	if strings.TrimSpace(cfg.UserAgent) == "" {
+		cfg.UserAgent = "si-youtube/1.0"
+	}
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 30 * time.Second
+	}
+	if cfg.MaxRetries < 0 {
+		cfg.MaxRetries = 0
+	}
+	if cfg.Logger == nil && strings.TrimSpace(cfg.LogPath) != "" {
+		cfg.Logger = NewJSONLLogger(strings.TrimSpace(cfg.LogPath))
+	}
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: cfg.Timeout}
+	}
+	return &Client{cfg: cfg, httpClient: client, log: cfg.Logger}, nil
+}
+
+func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
+	if c == nil {
+		return Response{}, fmt.Errorf("youtube client is not initialized")
+	}
+	method := strings.ToUpper(strings.TrimSpace(req.Method))
+	if method == "" {
+		method = http.MethodGet
+	}
+	endpoint, err := c.resolveRequestURL(req)
+	if err != nil {
+		return Response{}, err
+	}
+	attempts := c.cfg.MaxRetries + 1
+	if attempts < 1 {
+		attempts = 1
+	}
+	var lastErr error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		httpReq, reqErr := c.buildRequest(ctx, method, endpoint, req)
+		if reqErr != nil {
+			return Response{}, reqErr
+		}
+		start := time.Now().UTC()
+		c.logEvent("request", map[string]any{
+			"method":  method,
+			"path":    sanitizeURL(endpoint),
+			"attempt": attempt,
+		})
+		httpResp, callErr := c.httpClient.Do(httpReq)
+		if callErr != nil {
+			lastErr = callErr
+			if attempt < attempts && isRetryableNetwork(method, callErr) {
+				time.Sleep(backoffDelay(attempt))
+				continue
+			}
+			return Response{}, callErr
+		}
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		_ = httpResp.Body.Close()
+		body := strings.TrimSpace(string(bodyBytes))
+		resp := normalizeResponse(httpResp, body)
+		c.logEvent("response", map[string]any{
+			"method":      method,
+			"path":        sanitizeURL(endpoint),
+			"attempt":     attempt,
+			"status":      resp.StatusCode,
+			"request_id":  resp.RequestID,
+			"duration_ms": time.Since(start).Milliseconds(),
+		})
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return resp, nil
+		}
+		apiErr := NormalizeHTTPError(resp.StatusCode, httpResp.Header, body)
+		lastErr = apiErr
+		if attempt < attempts && isRetryableHTTP(method, resp.StatusCode) {
+			time.Sleep(backoffDelay(attempt))
+			continue
+		}
+		return Response{}, apiErr
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("youtube request failed")
+	}
+	return Response{}, lastErr
+}
+
+func (c *Client) resolveRequestURL(req Request) (string, error) {
+	base := c.cfg.BaseURL
+	if req.UseUpload {
+		base = c.cfg.UploadBaseURL
+	}
+	params := cloneParams(req.Params)
+	if c.cfg.AuthMode == AuthModeAPIKey {
+		if strings.TrimSpace(params["key"]) == "" {
+			params["key"] = strings.TrimSpace(c.cfg.APIKey)
+		}
+	}
+	return resolveURL(base, req.Path, params)
+}
+
+func (c *Client) buildRequest(ctx context.Context, method, endpoint string, req Request) (*http.Request, error) {
+	bodyReader := io.Reader(nil)
+	if strings.TrimSpace(req.RawBody) != "" {
+		bodyReader = strings.NewReader(req.RawBody)
+	} else if req.JSONBody != nil {
+		raw, err := json.Marshal(req.JSONBody)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = bytes.NewReader(raw)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Accept", "application/json")
+	httpReq.Header.Set("User-Agent", c.cfg.UserAgent)
+	if c.cfg.AuthMode == AuthModeOAuth {
+		tok, err := c.cfg.TokenProvider.Token(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(tok.Value) == "" {
+			return nil, fmt.Errorf("oauth token provider returned empty token")
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tok.Value))
+	}
+	if bodyReader != nil {
+		contentType := strings.TrimSpace(req.ContentType)
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		httpReq.Header.Set("Content-Type", contentType)
+	}
+	for key, value := range req.Headers {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		httpReq.Header.Set(key, value)
+	}
+	return httpReq, nil
+}
+
+func normalizeResponse(httpResp *http.Response, body string) Response {
+	out := Response{}
+	if httpResp == nil {
+		return out
+	}
+	out.StatusCode = httpResp.StatusCode
+	out.Status = httpResp.Status
+	out.Body = RedactSensitive(body)
+	out.RequestID = strings.TrimSpace(httpResp.Header.Get("X-Google-Request-Id"))
+	if out.RequestID == "" {
+		out.RequestID = strings.TrimSpace(httpResp.Header.Get("X-Request-Id"))
+	}
+	if len(httpResp.Header) > 0 {
+		headers := make([]string, 0, len(httpResp.Header))
+		for key := range httpResp.Header {
+			headers = append(headers, key)
+		}
+		sort.Strings(headers)
+		out.Headers = make(map[string]string, len(headers))
+		for _, key := range headers {
+			out.Headers[key] = RedactSensitive(strings.Join(httpResp.Header.Values(key), ","))
+		}
+	}
+	if strings.TrimSpace(body) == "" {
+		return out
+	}
+	var parsed any
+	if err := json.Unmarshal([]byte(body), &parsed); err != nil {
+		return out
+	}
+	switch typed := parsed.(type) {
+	case []any:
+		out.List = anySliceToMaps(typed)
+		return out
+	case map[string]any:
+		out.Data = typed
+		if items, ok := typed["items"].([]any); ok {
+			out.List = anySliceToMaps(items)
+		}
+		return out
+	default:
+		return out
+	}
+}
+
+func (c *Client) ListAll(ctx context.Context, req Request, maxPages int) ([]map[string]any, error) {
+	if c == nil {
+		return nil, fmt.Errorf("youtube client is not initialized")
+	}
+	if maxPages <= 0 {
+		maxPages = 10
+	}
+	items := make([]map[string]any, 0, 128)
+	params := cloneParams(req.Params)
+	body := cloneMap(req.JSONBody)
+	for page := 1; page <= maxPages; page++ {
+		resp, err := c.Do(ctx, Request{
+			Method:      req.Method,
+			Path:        req.Path,
+			Params:      params,
+			Headers:     req.Headers,
+			RawBody:     req.RawBody,
+			JSONBody:    body,
+			ContentType: req.ContentType,
+			UseUpload:   req.UseUpload,
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(resp.List) > 0 {
+			items = append(items, resp.List...)
+		}
+		next := ""
+		if resp.Data != nil {
+			if token, ok := resp.Data["nextPageToken"].(string); ok {
+				next = strings.TrimSpace(token)
+			}
+		}
+		if next == "" {
+			break
+		}
+		if body != nil {
+			body["pageToken"] = next
+		} else {
+			params["pageToken"] = next
+		}
+	}
+	return items, nil
+}
+
+func anySliceToMaps(values []any) []map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(values))
+	for _, value := range values {
+		obj, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		out = append(out, obj)
+	}
+	return out
+}
+
+func resolveURL(baseURL string, path string, params map[string]string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("request path is required")
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		u, err := url.Parse(path)
+		if err != nil {
+			return "", err
+		}
+		addQuery(u, params)
+		return u.String(), nil
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", err
+	}
+	rel, err := url.Parse(path)
+	if err != nil {
+		return "", err
+	}
+	u := base.ResolveReference(rel)
+	addQuery(u, params)
+	return u.String(), nil
+}
+
+func addQuery(u *url.URL, params map[string]string) {
+	if u == nil || len(params) == 0 {
+		return
+	}
+	q := u.Query()
+	for key, value := range params {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		q.Set(key, strings.TrimSpace(value))
+	}
+	u.RawQuery = q.Encode()
+}
+
+func sanitizeURL(raw string) string {
+	raw = RedactSensitive(raw)
+	if u, err := url.Parse(raw); err == nil {
+		u.RawQuery = ""
+		return u.String()
+	}
+	return raw
+}
+
+func cloneParams(in map[string]string) map[string]string {
+	if len(in) == 0 {
+		return map[string]string{}
+	}
+	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneMap(in any) map[string]any {
+	if in == nil {
+		return nil
+	}
+	obj, ok := in.(map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]any, len(obj))
+	for key, value := range obj {
+		out[key] = value
+	}
+	return out
+}
+
+func isRetryableNetwork(method string, _ error) bool {
+	return isSafeMethod(method)
+}
+
+func isRetryableHTTP(method string, statusCode int) bool {
+	if !isSafeMethod(method) {
+		return false
+	}
+	switch statusCode {
+	case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return statusCode >= 500
+}
+
+func isSafeMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func backoffDelay(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	base := 300 * time.Millisecond
+	d := base * time.Duration(1<<(attempt-1))
+	if d > 3*time.Second {
+		return 3 * time.Second
+	}
+	return d
+}
+
+func (c *Client) logEvent(kind string, fields map[string]any) {
+	if c == nil || c.log == nil {
+		return
+	}
+	event := map[string]any{
+		"component": "youtubebridge",
+		"event":     kind,
+	}
+	for key, value := range c.cfg.LogContext {
+		event["ctx_"+key] = RedactSensitive(strings.TrimSpace(value))
+	}
+	if c.cfg.AuthMode != "" {
+		event["auth_mode"] = string(c.cfg.AuthMode)
+	}
+	if c.cfg.TokenProvider != nil {
+		event["auth_source"] = c.cfg.TokenProvider.Source()
+	}
+	for key, value := range fields {
+		event[key] = value
+	}
+	c.log.Log(event)
+}
+
+func normalizeAuthMode(mode AuthMode) AuthMode {
+	switch AuthMode(strings.ToLower(strings.TrimSpace(string(mode)))) {
+	case AuthModeOAuth:
+		return AuthModeOAuth
+	case AuthModeAPIKey:
+		return AuthModeAPIKey
+	default:
+		return ""
+	}
+}
