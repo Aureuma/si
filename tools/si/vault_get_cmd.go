@@ -63,6 +63,11 @@ func cmdVaultGet(args []string) {
 		if err != nil {
 			fatal(err)
 		}
+		vaultAuditEvent(settings, target, "reveal", map[string]any{
+			"envFile":   filepath.Clean(target.File),
+			"key":       key,
+			"encrypted": true,
+		})
 		fmt.Print(plain)
 		if !strings.HasSuffix(plain, "\n") {
 			fmt.Print("\n")
@@ -75,6 +80,11 @@ func cmdVaultGet(args []string) {
 		fmt.Printf("%s: plaintext (run `si vault encrypt` to encrypt)\n", key)
 		return
 	}
+	vaultAuditEvent(settings, target, "reveal", map[string]any{
+		"envFile":   filepath.Clean(target.File),
+		"key":       key,
+		"encrypted": false,
+	})
 	fmt.Print(val)
 	if !strings.HasSuffix(val, "\n") {
 		fmt.Print("\n")
