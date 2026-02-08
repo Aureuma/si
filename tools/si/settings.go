@@ -10,15 +10,16 @@ import (
 )
 
 type Settings struct {
-	SchemaVersion int              `toml:"schema_version"`
-	Paths         SettingsPaths    `toml:"paths"`
-	Codex         CodexSettings    `toml:"codex"`
-	Vault         VaultSettings    `toml:"vault,omitempty"`
-	Stripe        StripeSettings   `toml:"stripe,omitempty"`
-	Github        GitHubSettings   `toml:"github,omitempty"`
-	Dyad          DyadSettings     `toml:"dyad"`
-	Shell         ShellSettings    `toml:"shell"`
-	Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+	SchemaVersion int                `toml:"schema_version"`
+	Paths         SettingsPaths      `toml:"paths"`
+	Codex         CodexSettings      `toml:"codex"`
+	Vault         VaultSettings      `toml:"vault,omitempty"`
+	Stripe        StripeSettings     `toml:"stripe,omitempty"`
+	Github        GitHubSettings     `toml:"github,omitempty"`
+	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
+	Dyad          DyadSettings       `toml:"dyad"`
+	Shell         ShellSettings      `toml:"shell"`
+	Metadata      SettingsMetadata   `toml:"metadata,omitempty"`
 }
 
 type SettingsMetadata struct {
@@ -144,6 +145,30 @@ type GitHubAccountEntry struct {
 	AppPrivateKeyEnv string `toml:"app_private_key_env,omitempty"`
 	InstallationID   int64  `toml:"installation_id,omitempty"`
 	InstallationEnv  string `toml:"installation_id_env,omitempty"`
+}
+
+type CloudflareSettings struct {
+	DefaultAccount string                            `toml:"default_account,omitempty"`
+	DefaultEnv     string                            `toml:"default_env,omitempty"`
+	APIBaseURL     string                            `toml:"api_base_url,omitempty"`
+	VaultEnv       string                            `toml:"vault_env,omitempty"`
+	VaultFile      string                            `toml:"vault_file,omitempty"`
+	LogFile        string                            `toml:"log_file,omitempty"`
+	Accounts       map[string]CloudflareAccountEntry `toml:"accounts,omitempty"`
+}
+
+type CloudflareAccountEntry struct {
+	Name            string `toml:"name,omitempty"`
+	AccountID       string `toml:"account_id,omitempty"`
+	AccountIDEnv    string `toml:"account_id_env,omitempty"`
+	APIBaseURL      string `toml:"api_base_url,omitempty"`
+	VaultPrefix     string `toml:"vault_prefix,omitempty"`
+	DefaultZoneID   string `toml:"default_zone_id,omitempty"`
+	DefaultZoneName string `toml:"default_zone_name,omitempty"`
+	ProdZoneID      string `toml:"prod_zone_id,omitempty"`
+	StagingZoneID   string `toml:"staging_zone_id,omitempty"`
+	DevZoneID       string `toml:"dev_zone_id,omitempty"`
+	APITokenEnv     string `toml:"api_token_env,omitempty"`
 }
 
 type ShellSettings struct {
@@ -291,6 +316,18 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Github.DefaultAccount = strings.TrimSpace(settings.Github.DefaultAccount)
 	if settings.Github.VaultEnv == "" {
 		settings.Github.VaultEnv = "dev"
+	}
+	settings.Cloudflare.DefaultEnv = normalizeCloudflareEnvironment(settings.Cloudflare.DefaultEnv)
+	if settings.Cloudflare.DefaultEnv == "" {
+		settings.Cloudflare.DefaultEnv = "prod"
+	}
+	settings.Cloudflare.APIBaseURL = strings.TrimSpace(settings.Cloudflare.APIBaseURL)
+	if settings.Cloudflare.APIBaseURL == "" {
+		settings.Cloudflare.APIBaseURL = "https://api.cloudflare.com/client/v4"
+	}
+	settings.Cloudflare.DefaultAccount = strings.TrimSpace(settings.Cloudflare.DefaultAccount)
+	if settings.Cloudflare.VaultEnv == "" {
+		settings.Cloudflare.VaultEnv = "dev"
 	}
 }
 

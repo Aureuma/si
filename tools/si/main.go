@@ -28,6 +28,8 @@ func main() {
 		cmdVault(args)
 	case "github":
 		cmdGithub(args)
+	case "cloudflare", "cf":
+		cmdCloudflare(args)
 	case "self":
 		cmdSelf(args)
 	case "docker":
