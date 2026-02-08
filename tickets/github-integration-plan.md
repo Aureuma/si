@@ -255,9 +255,9 @@ Settings must not store raw token material.
 | WS-00 Contracts | Done | Codex | main | n/a | 2026-02-08 |
 | WS-01 CLI Entry | Done | Codex | main | n/a | 2026-02-08 |
 | WS-02 Vault/Auth Context | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-03 App Auth Provider | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-03 App Auth Provider | Done | Codex | main | n/a | 2026-02-08 |
 | WS-04 Legacy Auth Providers | Done (Removed) | Codex | main | n/a | 2026-02-08 |
-| WS-05 Bridge Core (REST/GraphQL) | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-05 Bridge Core (REST/GraphQL) | Done | Codex | main | n/a | 2026-02-08 |
 | WS-06 Core Resource Commands | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-07 Actions/Releases/Secrets | In Progress | Codex | main | n/a | 2026-02-08 |
 | WS-08 Raw + Safety + Output | Done | Codex | main | n/a | 2026-02-08 |
@@ -328,9 +328,9 @@ Acceptance:
 ## WS-03 GitHub App Provider
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: JWT signing + installation exchange + lookup implemented; tests pending.
+- Notes: JWT signing + installation exchange + lookup implemented with unit/integration tests.
 
 Path ownership:
 - `tools/si/internal/githubbridge/auth_app.go`
@@ -366,9 +366,9 @@ Acceptance:
 ## WS-05 Bridge Core (REST/GraphQL)
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: client/errors/pagination/logging implemented; endpoint-specific wrappers pending.
+- Notes: client/errors/pagination/logging implemented with tests for URL building, auth headers, pagination links, and redaction behavior.
 
 Path ownership:
 - `tools/si/internal/githubbridge/client.go`
