@@ -17,6 +17,7 @@ type Settings struct {
 	Stripe        StripeSettings     `toml:"stripe,omitempty"`
 	Github        GitHubSettings     `toml:"github,omitempty"`
 	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
+	Google        GoogleSettings     `toml:"google,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
 	Metadata      SettingsMetadata   `toml:"metadata,omitempty"`
@@ -169,6 +170,30 @@ type CloudflareAccountEntry struct {
 	StagingZoneID   string `toml:"staging_zone_id,omitempty"`
 	DevZoneID       string `toml:"dev_zone_id,omitempty"`
 	APITokenEnv     string `toml:"api_token_env,omitempty"`
+}
+
+type GoogleSettings struct {
+	DefaultAccount string                        `toml:"default_account,omitempty"`
+	DefaultEnv     string                        `toml:"default_env,omitempty"`
+	APIBaseURL     string                        `toml:"api_base_url,omitempty"`
+	VaultEnv       string                        `toml:"vault_env,omitempty"`
+	VaultFile      string                        `toml:"vault_file,omitempty"`
+	LogFile        string                        `toml:"log_file,omitempty"`
+	Accounts       map[string]GoogleAccountEntry `toml:"accounts,omitempty"`
+}
+
+type GoogleAccountEntry struct {
+	Name                   string `toml:"name,omitempty"`
+	ProjectID              string `toml:"project_id,omitempty"`
+	ProjectIDEnv           string `toml:"project_id_env,omitempty"`
+	APIBaseURL             string `toml:"api_base_url,omitempty"`
+	VaultPrefix            string `toml:"vault_prefix,omitempty"`
+	PlacesAPIKeyEnv        string `toml:"places_api_key_env,omitempty"`
+	ProdPlacesAPIKeyEnv    string `toml:"prod_places_api_key_env,omitempty"`
+	StagingPlacesAPIKeyEnv string `toml:"staging_places_api_key_env,omitempty"`
+	DevPlacesAPIKeyEnv     string `toml:"dev_places_api_key_env,omitempty"`
+	DefaultRegionCode      string `toml:"default_region_code,omitempty"`
+	DefaultLanguageCode    string `toml:"default_language_code,omitempty"`
 }
 
 type ShellSettings struct {
@@ -328,6 +353,18 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Cloudflare.DefaultAccount = strings.TrimSpace(settings.Cloudflare.DefaultAccount)
 	if settings.Cloudflare.VaultEnv == "" {
 		settings.Cloudflare.VaultEnv = "dev"
+	}
+	settings.Google.DefaultEnv = normalizeGoogleEnvironment(settings.Google.DefaultEnv)
+	if settings.Google.DefaultEnv == "" {
+		settings.Google.DefaultEnv = "prod"
+	}
+	settings.Google.APIBaseURL = strings.TrimSpace(settings.Google.APIBaseURL)
+	if settings.Google.APIBaseURL == "" {
+		settings.Google.APIBaseURL = "https://places.googleapis.com"
+	}
+	settings.Google.DefaultAccount = strings.TrimSpace(settings.Google.DefaultAccount)
+	if settings.Google.VaultEnv == "" {
+		settings.Google.VaultEnv = "dev"
 	}
 }
 

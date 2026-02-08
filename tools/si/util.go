@@ -26,6 +26,7 @@ Features:
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - GitHub bridge: App-auth context, REST/GraphQL access, and repository automation commands.
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
+  - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
@@ -44,6 +45,7 @@ Core:
   si stripe <auth|context|object|raw|report|sync>
   si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
+  si google <places>
   si self <build|upgrade|run>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -313,6 +315,27 @@ cloudflare:
     CLI uses prod, staging, and dev context labels.
     test is intentionally not used; map sandbox workflows to staging/dev context.
 
+google:
+  si google places auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si google places context list|current|use [--account <alias>] [--env <prod|staging|dev>]
+  si google places doctor [--account <alias>] [--env <prod|staging|dev>] [--json]
+
+  si google places session new|inspect|end|list ...
+
+  si google places autocomplete --input <text> [--session <token>] [--include-query-predictions] [--field-mask <mask>] [--json]
+  si google places search-text --query <text> [--page-size <n>] [--all] [--field-mask <mask>] [--json]
+  si google places search-nearby --center <lat,lng> --radius <m> [--included-type <type>] [--all] [--field-mask <mask>] [--json]
+  si google places details <place_id_or_name> [--session <token>] [--field-mask <mask>] [--json]
+  si google places photo get <photo_name> [--max-width <px>] [--max-height <px>] [--json]
+  si google places photo download <photo_name> --output <path> [--max-width <px>] [--max-height <px>] [--json]
+  si google places types list|validate ...
+  si google places report usage|sessions [--since <ts>] [--until <ts>] [--json]
+  si google places raw --method <GET|POST> --path <api-path> [--param key=value] [--body raw] [--field-mask <mask>] [--json]
+
+  Environment policy:
+    CLI uses prod, staging, and dev context labels.
+    test is intentionally not used; map sandbox workflows to staging/dev context.
+
 self:
   si self build [--repo <path>] [--output <path>]
   si self upgrade [--repo <path>] [--install-path <path>]
@@ -332,7 +355,7 @@ Environment defaults (selected)
 `))
 }
 
-const siVersion = "v0.43.0"
+const siVersion = "v0.46.0"
 
 func printVersion() {
 	fmt.Println(siVersion)
@@ -576,7 +599,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|image|persona|skill|analyze|lint|stripe|vault|creds|self)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
