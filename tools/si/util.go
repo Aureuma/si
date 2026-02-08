@@ -22,6 +22,7 @@ Holistic CLI for si. This help includes all commands, flags, and core features.
 Features:
   - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
+  - Vault: encrypted secrets stored in a pinned submodule; format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
@@ -37,6 +38,7 @@ Usage:
 Core:
   si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
+  si vault <init|status|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|object|raw|report|sync>
   si self <build|upgrade|run>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
@@ -235,6 +237,23 @@ stripe:
   Environment policy:
     CLI uses live and sandbox.
     test is not accepted as a standalone environment mode.
+
+vault:
+  si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>]
+  si vault status [--vault-dir <path>] [--env <name>]
+  si vault fmt [--vault-dir <path>] [--env <name>] [--all] [--check]
+  si vault encrypt [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]
+  si vault set <KEY> <VALUE> [--vault-dir <path>] [--env <name>] [--section <name>] [--stdin] [--format]
+  si vault unset <KEY> [--vault-dir <path>] [--env <name>] [--section <name>] [--format]
+  si vault get <KEY> [--vault-dir <path>] [--env <name>] [--reveal]
+  si vault list [--vault-dir <path>] [--env <name>]
+  si vault run [--vault-dir <path>] [--env <name>] -- <cmd...>
+  si vault docker exec --container <name|id> [--vault-dir <path>] [--env <name>] -- <cmd...>
+  si vault trust status|accept|forget
+  si vault recipients list|add|remove
+
+  Alias:
+    si creds ...
 
 self:
   si self build [--repo <path>] [--output <path>]
@@ -499,7 +518,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|image|persona|skill|analyze|lint|stripe|self)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|image|persona|skill|analyze|lint|stripe|vault|creds|self)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
