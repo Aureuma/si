@@ -550,7 +550,7 @@ The work is complete when all are true:
 | WS-06 Formatter (sections + canonical style) | In Progress | codex | main |  | 2026-02-08 |
 | WS-07 Docker Runtime Injection | Not Started |  |  |  | 2026-02-07 |
 | WS-08 Docker Build Secrets | Not Started |  |  |  | 2026-02-07 |
-| WS-09 Auditing | Not Started |  |  |  | 2026-02-07 |
+| WS-09 Auditing | In Progress | codex | main |  | 2026-02-08 |
 | WS-10 Tests | Not Started |  |  |  | 2026-02-07 |
 | WS-11 Docs | Not Started |  |  |  | 2026-02-07 |
 | WS-12 Future Approvals (design only) | Not Started |  |  |  | 2026-02-07 |
