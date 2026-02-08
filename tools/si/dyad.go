@@ -492,13 +492,20 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 
 func cmdDyadLogs(args []string) {
 	memberProvided := flagProvided(args, "member")
+	dyadArg, filtered := splitDyadLogsNameAndFlags(args)
 	fs := flag.NewFlagSet("dyad logs", flag.ExitOnError)
 	member := fs.String("member", "critic", "actor or critic")
 	tail := fs.Int("tail", 200, "lines to tail")
-	fs.Parse(args)
-	dyad := ""
-	if fs.NArg() > 0 {
-		dyad = strings.TrimSpace(fs.Arg(0))
+	fs.Parse(filtered)
+	dyad := strings.TrimSpace(dyadArg)
+	rest := fs.Args()
+	if dyad == "" && len(rest) > 0 {
+		dyad = strings.TrimSpace(rest[0])
+		rest = rest[1:]
+	}
+	if len(rest) > 0 {
+		printUsage("usage: si dyad logs [--member actor|critic] [--tail N] <dyad>")
+		return
 	}
 	if dyad == "" {
 		selected, ok := selectDyadName("logs")
@@ -536,6 +543,13 @@ func cmdDyadLogs(args []string) {
 		fatal(err)
 	}
 	fmt.Print(out)
+}
+
+func splitDyadLogsNameAndFlags(args []string) (string, []string) {
+	return splitNameAndFlags(args, map[string]bool{
+		"member": false,
+		"tail":   false,
+	})
 }
 
 func cmdDyadRestart(args []string) {
