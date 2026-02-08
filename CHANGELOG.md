@@ -10,58 +10,26 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
-## [v0.47.0] - 2026-02-08
-### Added
-- Added `tools/install-si.sh` installer for macOS and Linux, plus `tools/test-install-si.sh` for installer e2e coverage.
-- Added `si google youtube` command family with auth/context flows (`auth`, `context`, `doctor`) and YouTube Data API v3 operations.
-- Added YouTube command coverage for search/support, channel/video/playlist/playlist-item/subscription/comment resources, live broadcast/stream/chat, captions, thumbnails, raw fallback, and usage reporting.
-- Added YouTube OAuth device-flow login/logout plus local token cache/refresh plumbing (`~/.si/google/youtube/oauth_tokens.json`).
-- Added YouTube bridge internals for request execution, retry/backoff, response normalization, redaction, and JSONL logging.
-- Added YouTube tests for runtime/auth resolution, bridge client behavior, redaction/error parsing, and e2e subprocess command coverage.
-- Added `docs/GOOGLE_YOUTUBE.md` as the dedicated command guide.
-
-### Changed
-- Updated CLI dispatch/help and settings schema to include `[google.youtube]` configuration.
-- Updated README and settings reference with YouTube setup and usage recipes.
-
-## [v0.46.0] - 2026-02-08
-### Added
-- Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`) and session lifecycle helpers.
-- Added Google Places command coverage for autocomplete, text search, nearby search, details, photo retrieval/download, type discovery, local reporting, and raw API access.
-- Added Google Places bridge internals for request execution, retry/backoff, response normalization, redaction, and JSONL logging.
-- Added Google Places tests for auth/context parsing, field-mask policy, helper parsing, bridge client behavior, and e2e subprocess command coverage.
-- Added `docs/GOOGLE_PLACES.md` as the dedicated command guide.
-
-### Changed
-- Updated CLI dispatch/help and settings schema to include `[google]` multi-account configuration and vault-compatible credential keys.
-- Updated README and settings reference with Google Places setup and usage recipes.
-
-## [v0.45.0] - 2026-02-08
-### Added
-- Added `si vault` git-based encrypted credentials management (age recipients, TOFU trust, formatter, audit log, and Docker-friendly runtime injection).
-- Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) and raw API access.
-- Added Cloudflare bridge internals for request execution, retry/backoff, error normalization, redaction, and JSONL logging.
-- Added Cloudflare command coverage for common workflows across zone/dns/tls/cache/security/workers/pages/r2/d1/kv/queues/access/tunnels/load balancers/logs/reports.
-- Added Cloudflare tests for auth/context resolution, path/template behavior, bridge client auth wiring, and error normalization.
-- Added `docs/CLOUDFLARE.md` with setup and operational command recipes.
-
-### Changed
-- Updated CLI help, README, and settings reference to document Cloudflare multi-account context and vault-compatible credential keys.
-
 ## [v0.44.0] - 2026-02-08
 ### Added
+- Added `si vault` git-based encrypted credentials management (age recipients, TOFU trust store, formatter, audit log, and Docker-friendly runtime injection).
 - Added `si github` command family with GitHub App-only auth, account context management, and direct REST/GraphQL bridge support.
-- Added typed GitHub resource command handlers for repositories, pull requests, issues, workflows, releases, and secrets.
-- Added GitHub secret management with public-key retrieval and sealed-box compatible client-side encryption before upload.
-- Added GitHub bridge unit tests for app token flows, URL/pagination behavior, and error redaction.
-- Added `docs/GITHUB.md` as the dedicated command guide.
+- Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) plus raw API access.
+- Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`), session lifecycle helpers, and raw API access.
+- Added `si google youtube` command family with API key + OAuth device-flow auth, broad resource coverage, and raw API access.
+- Added `si self` commands to build/upgrade/run `si` from a repo checkout (`si self build`, `si self upgrade`, `si self run`).
+- Added `tools/install-si.sh` installer for macOS and Linux, plus `tools/test-install-si.sh` for installer e2e coverage.
+- Added dedicated command guides: `docs/VAULT.md`, `docs/GITHUB.md`, `docs/CLOUDFLARE.md`, `docs/GOOGLE_PLACES.md`, and `docs/GOOGLE_YOUTUBE.md`.
 
 ### Changed
-- Updated CLI help, README, and settings reference to document GitHub App-only credential model and command usage.
-- Updated ticket workstream tracking for the GitHub integration implementation plan.
+- Renamed `si images` to `si image` (singular) and refreshed help/docs to match.
+- Updated CLI dispatch/help and settings schema to include vault + GitHub/Cloudflare/Google integrations.
 
 ### Fixed
-- Fixed release asset upload handling to use GitHub-provided `upload_url` metadata instead of hardcoded host assumptions, improving GHES/base URL compatibility.
+- Fixed GitHub release asset upload handling to use GitHub-provided `upload_url` metadata instead of hardcoded host assumptions, improving GHES/base URL compatibility.
+- Fixed first-run settings creation to apply defaults on initial settings generation.
+- Hardened vault initialization for submodule edge cases (HEADless clones, absent submodule config) and reduced unnecessary `git submodule update` work.
+- Fixed installer cleanup trapping to avoid leaving temporary build directories behind.
 
 ## [v0.43.0] - 2026-02-07
 ### Added
