@@ -72,6 +72,20 @@ need_cmd() {
   command -v "${c}" >/dev/null 2>&1 || die "missing required command: ${c}"
 }
 
+mktemp_dir() {
+  # mktemp differs between GNU (Linux) and BSD (macOS). Prefer a portable shim.
+  local d=""
+  if d="$(mktemp -d 2>/dev/null)"; then
+    printf '%s' "${d}"
+    return 0
+  fi
+  if d="$(mktemp -d -t si 2>/dev/null)"; then
+    printf '%s' "${d}"
+    return 0
+  fi
+  die "mktemp -d failed"
+}
+
 is_tty() {
   [[ -t 1 ]]
 }
@@ -303,7 +317,7 @@ ensure_go() {
   fi
 
   local work
-  work="$(mktemp -d)"
+  work="$(mktemp_dir)"
   # Best-effort cleanup happens at the end of this function; on failure we may
   # leave the directory behind to preserve diagnostics.
 
@@ -563,7 +577,7 @@ trap cleanup EXIT
 if [[ -z "${SOURCE_DIR}" ]]; then
   need_cmd git
   if [[ -z "${TMP_DIR}" ]]; then
-    WORKDIR="$(mktemp -d)"
+    WORKDIR="$(mktemp_dir)"
   else
     WORKDIR="${TMP_DIR%/}/si-install.$$"
     run mkdir -p "${WORKDIR}"
@@ -589,7 +603,7 @@ fi
 go_bin="$(ensure_go "${required_go}" "${OS}" "${ARCH}")"
 
 if [[ -z "${TMP_DIR}" ]]; then
-  build_dir="$(mktemp -d)"
+  build_dir="$(mktemp_dir)"
 else
   build_dir="${TMP_DIR%/}/si-build.$$"
   run mkdir -p "${build_dir}"
