@@ -155,6 +155,46 @@ Environment policy:
 - Use `live` and `sandbox`.
 - `test` is intentionally rejected as a CLI environment mode.
 
+## GitHub
+`si` includes an App-auth GitHub bridge:
+
+```bash
+# auth/context
+./si github auth status --account core
+./si github context list
+./si github context use --account core --owner Aureuma
+
+# repositories
+./si github repo list Aureuma
+./si github repo get Aureuma/si
+./si github repo create si-sandbox --owner Aureuma
+
+# pull requests + issues
+./si github pr list Aureuma/si
+./si github pr get Aureuma/si 123
+./si github issue list Aureuma/si
+./si github issue create Aureuma/si --title "Bug report"
+
+# workflows + releases
+./si github workflow runs Aureuma/si
+./si github workflow run Aureuma/si ci.yml --ref main
+./si github release list Aureuma/si
+./si github release create Aureuma/si --tag v0.44.0 --title "v0.44.0"
+
+# secrets
+./si github secret repo set Aureuma/si MY_SECRET --value "..."
+./si github secret env set Aureuma/si sandbox MY_SECRET --value "..."
+./si github secret org set Aureuma MY_SECRET --value "..." --visibility private
+
+# raw escape hatches
+./si github raw --method GET --path /repos/Aureuma/si
+./si github graphql --query 'query { viewer { login } }'
+```
+
+Auth policy:
+- GitHub App only.
+- Configure app credentials via vault-compatible env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, optional `GITHUB_<ACCOUNT>_INSTALLATION_ID`).
+
 ## Self Build/Upgrade
 Build or upgrade the `si` binary from the repo itself:
 

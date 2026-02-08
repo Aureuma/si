@@ -118,6 +118,37 @@ Credential resolution order for `si stripe`:
 
 `SI_STRIPE_ACCOUNT` can provide default account selection when settings do not specify one.
 
+### `[github]`
+Defaults for `si github` (GitHub App-only auth).
+- `github.default_account` (string): default account alias
+- `github.default_auth_mode` (string): always `app` for `si github`
+- `github.api_base_url` (string): API base URL (default: `https://api.github.com`)
+- `github.default_owner` (string): default owner/org for commands that accept owner fallback
+- `github.vault_env` (string): vault env hint (default: `dev`)
+- `github.vault_file` (string): optional explicit vault file path
+- `github.log_file` (string): JSONL log path for GitHub bridge request/response events (default: `~/.si/logs/github.log`)
+
+#### `[github.accounts.<alias>]`
+Per-account GitHub App settings.
+- `name` (string): display name
+- `owner` (string): default owner/org for this account
+- `api_base_url` (string): per-account API base URL (supports GHES)
+- `auth_mode` (string): kept for compatibility; `si github` enforces `app`
+- `vault_prefix` (string): env key prefix override (example `GITHUB_CORE_`)
+- `app_id` (int): direct app id (prefer env refs for secretless settings)
+- `app_id_env` (string): env var with app id
+- `app_private_key_pem` (string): direct private key PEM (prefer env refs)
+- `app_private_key_env` (string): env var with private key PEM
+- `installation_id` (int): explicit installation id
+- `installation_id_env` (string): env var with installation id
+
+Credential resolution for `si github` is vault-compatible and app-only:
+1. CLI overrides (`--app-id`, `--app-key`, `--installation-id`)
+2. Account settings (`app_id`, `app_private_key_pem`, `installation_id`)
+3. Account env refs (`app_id_env`, `app_private_key_env`, `installation_id_env`)
+4. Account-prefix env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, `GITHUB_<ACCOUNT>_INSTALLATION_ID`)
+5. Global env fallbacks (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PEM`, `GITHUB_INSTALLATION_ID`)
+
 ### `[vault]`
 Defaults for `si vault` (encrypted `.env.<env>` files, typically stored in a separate vault repo submodule).
 - `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
@@ -207,6 +238,21 @@ id = "acct_1234567890"
 name = "Core Account"
 live_key_env = "STRIPE_CORE_LIVE_KEY"
 sandbox_key_env = "STRIPE_CORE_SANDBOX_KEY"
+
+[github]
+default_account = "core"
+default_auth_mode = "app"
+api_base_url = "https://api.github.com"
+default_owner = "Aureuma"
+log_file = "~/.si/logs/github.log"
+
+[github.accounts.core]
+name = "Core GitHub App"
+owner = "Aureuma"
+vault_prefix = "GITHUB_CORE_"
+app_id_env = "GITHUB_CORE_APP_ID"
+app_private_key_env = "GITHUB_CORE_APP_PRIVATE_KEY_PEM"
+installation_id_env = "GITHUB_CORE_INSTALLATION_ID"
 
 [vault]
 dir = "vault"
