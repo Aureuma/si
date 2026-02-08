@@ -373,7 +373,7 @@ Environment defaults (selected)
 `))
 }
 
-const siVersion = "v0.47.0"
+const siVersion = "v0.44.0"
 
 func printVersion() {
 	fmt.Println(siVersion)
