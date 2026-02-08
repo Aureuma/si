@@ -1,0 +1,4 @@
+[submodule "vault"]
+	path = vault
+	url = https://github.com/SHi-ON/core.git
+	ignore = dirty
