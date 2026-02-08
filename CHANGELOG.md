@@ -10,6 +10,21 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [v0.44.0] - 2026-02-08
+### Added
+- Added `si github` command family with GitHub App-only auth, account context management, and direct REST/GraphQL bridge support.
+- Added typed GitHub resource command handlers for repositories, pull requests, issues, workflows, releases, and secrets.
+- Added GitHub secret management with public-key retrieval and sealed-box compatible client-side encryption before upload.
+- Added GitHub bridge unit tests for app token flows, URL/pagination behavior, and error redaction.
+- Added `docs/GITHUB.md` as the dedicated command guide.
+
+### Changed
+- Updated CLI help, README, and settings reference to document GitHub App-only credential model and command usage.
+- Updated ticket workstream tracking for the GitHub integration implementation plan.
+
+### Fixed
+- Fixed release asset upload handling to use GitHub-provided `upload_url` metadata instead of hardcoded host assumptions, improving GHES/base URL compatibility.
+
 ## [v0.43.0] - 2026-02-07
 ### Added
 - Added `si stripe` command family with account context, object CRUD, raw API access, reporting presets, and live-to-sandbox sync plan/apply.

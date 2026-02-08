@@ -258,11 +258,11 @@ Settings must not store raw token material.
 | WS-03 App Auth Provider | Done | Codex | main | n/a | 2026-02-08 |
 | WS-04 Legacy Auth Providers | Done (Removed) | Codex | main | n/a | 2026-02-08 |
 | WS-05 Bridge Core (REST/GraphQL) | Done | Codex | main | n/a | 2026-02-08 |
-| WS-06 Core Resource Commands | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-07 Actions/Releases/Secrets | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-06 Core Resource Commands | Done | Codex | main | n/a | 2026-02-08 |
+| WS-07 Actions/Releases/Secrets | Done | Codex | main | n/a | 2026-02-08 |
 | WS-08 Raw + Safety + Output | Done | Codex | main | n/a | 2026-02-08 |
-| WS-09 Testing + E2E | In Progress | Codex | main | n/a | 2026-02-08 |
-| WS-10 Docs + Release | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-09 Testing + E2E | Done | Codex | main | n/a | 2026-02-08 |
+| WS-10 Docs + Release | Done | Codex | main | n/a | 2026-02-08 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 
@@ -393,9 +393,9 @@ Acceptance:
 ## WS-06 Core Resource Commands
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: repo/pr/issue command families implemented; behavior and e2e coverage still being expanded.
+- Notes: repo/pr/issue command families implemented and command-surface smoke validation completed.
 
 Path ownership:
 - `tools/si/github_repo_cmd.go`
@@ -413,9 +413,9 @@ Acceptance:
 ## WS-07 Actions / Releases / Secrets
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: workflow/release/secret command families implemented; integration/e2e validation still in progress.
+- Notes: workflow/release/secret command families implemented with command-surface smoke validation and helper tests.
 
 Path ownership:
 - `tools/si/github_workflow_cmd.go`
@@ -453,9 +453,9 @@ Acceptance:
 ## WS-09 Testing + E2E
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: baseline `go test ./tools/si/...` passes; github-focused tests pending.
+- Notes: github-focused tests added (auth provider, client, pagination, redaction, auth helpers, release URL helper) and full `go test ./tools/si/...` passes.
 
 Path ownership:
 - `tools/si/*github*_test.go`
@@ -473,9 +473,9 @@ Acceptance:
 ## WS-10 Docs + Release
 
 Status:
-- State: In Progress
+- State: Done
 - Owner: Codex
-- Notes: README, settings docs, and dedicated GitHub guide added; changelog/release note sync pending.
+- Notes: README/settings/help/docs updated and changelog entry added for GitHub integration.
 
 Path ownership:
 - `README.md`
