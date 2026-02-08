@@ -139,11 +139,23 @@ func cmdCodexReport(args []string) {
 	if lockErr != nil {
 		fatal(lockErr)
 	}
-	defer unlock()
+	locked := true
+	releaseLock := func() {
+		if !locked {
+			return
+		}
+		locked = false
+		unlock()
+	}
+	failWithUnlock := func(err error) {
+		releaseLock()
+		fatal(err)
+	}
+	defer releaseLock()
 
 	client, err := shared.NewClient()
 	if err != nil {
-		fatal(err)
+		failWithUnlock(err)
 	}
 	defer client.Close()
 
@@ -151,14 +163,14 @@ func cmdCodexReport(args []string) {
 	containerName := codexContainerName(name)
 	id, _, err := client.ContainerByName(ctx, containerName)
 	if err != nil {
-		fatal(err)
+		failWithUnlock(err)
 	}
 	if id == "" {
-		fatal(fmt.Errorf("codex container %s not found", containerName))
+		failWithUnlock(fmt.Errorf("codex container %s not found", containerName))
 	}
 
 	if err := ensureTmuxAvailable(); err != nil {
-		fatal(err)
+		failWithUnlock(err)
 	}
 	cleanupStaleTmuxSessions(ctx, opts.TmuxPrefix, 30*time.Minute, statusOptions{Debug: opts.Debug})
 
@@ -167,14 +179,14 @@ func cmdCodexReport(args []string) {
 
 	output, reports, err := fetchCodexReportsViaTmux(reportCtx, id, prompts, opts)
 	if err != nil {
-		fatal(err)
+		failWithUnlock(err)
 	}
 
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(reports); err != nil {
-			fatal(err)
+			failWithUnlock(err)
 		}
 		return
 	}

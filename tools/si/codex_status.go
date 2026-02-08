@@ -178,7 +178,7 @@ func codexStatusBoolFlags() map[string]bool {
 }
 
 func buildTmuxCodexCommand(containerID string) string {
-	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; codex"
+	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; codex --dangerously-bypass-approvals-and-sandbox"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %q", containerID, inner)
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
