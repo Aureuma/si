@@ -331,18 +331,18 @@ After fitting Cloudflare into the current `si` stack, apply these cross-stack im
 
 | Workstream | Status | Owner | Branch | PR | Last Update |
 |---|---|---|---|---|---|
-| WS-00 Contracts | Not Started |  |  |  | 2026-02-08 |
-| WS-01 CLI Entry | Not Started |  |  |  | 2026-02-08 |
-| WS-02 Auth/Context/Vault | Not Started |  |  |  | 2026-02-08 |
-| WS-03 Bridge Core | Not Started |  |  |  | 2026-02-08 |
-| WS-04 Zone + DNS | Not Started |  |  |  | 2026-02-08 |
-| WS-05 Security + Rules + TLS/Cache | Not Started |  |  |  | 2026-02-08 |
-| WS-06 Workers + Pages | Not Started |  |  |  | 2026-02-08 |
-| WS-07 Data Platform (R2/D1/KV/Queues) | Not Started |  |  |  | 2026-02-08 |
-| WS-08 Zero Trust + Tunnel + LB | Not Started |  |  |  | 2026-02-08 |
-| WS-09 Analytics + Logs + Report + Raw | Not Started |  |  |  | 2026-02-08 |
-| WS-10 Testing + E2E | Not Started |  |  |  | 2026-02-08 |
-| WS-11 Docs + Release | Not Started |  |  |  | 2026-02-08 |
+| WS-00 Contracts | Done |  |  |  | 2026-02-08 |
+| WS-01 CLI Entry | Done |  |  |  | 2026-02-08 |
+| WS-02 Auth/Context/Vault | Done |  |  |  | 2026-02-08 |
+| WS-03 Bridge Core | Done |  |  |  | 2026-02-08 |
+| WS-04 Zone + DNS | Done |  |  |  | 2026-02-08 |
+| WS-05 Security + Rules + TLS/Cache | Done |  |  |  | 2026-02-08 |
+| WS-06 Workers + Pages | Done |  |  |  | 2026-02-08 |
+| WS-07 Data Platform (R2/D1/KV/Queues) | Done |  |  |  | 2026-02-08 |
+| WS-08 Zero Trust + Tunnel + LB | Done |  |  |  | 2026-02-08 |
+| WS-09 Analytics + Logs + Report + Raw | Done |  |  |  | 2026-02-08 |
+| WS-10 Testing + E2E | Done |  |  |  | 2026-02-08 |
+| WS-11 Docs + Release | Done |  |  |  | 2026-02-08 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 
@@ -351,7 +351,7 @@ Status values: `Not Started | In Progress | Blocked | Done`
 ## WS-00 Contracts
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -370,7 +370,7 @@ Acceptance:
 ## WS-01 CLI Entry
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -389,7 +389,7 @@ Acceptance:
 ## WS-02 Auth/Context/Vault
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -409,7 +409,7 @@ Acceptance:
 ## WS-03 Bridge Core
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -432,7 +432,7 @@ Acceptance:
 ## WS-04 Zone + DNS
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -452,7 +452,7 @@ Acceptance:
 ## WS-05 Security + Rules + TLS/Cache
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -472,7 +472,7 @@ Acceptance:
 ## WS-06 Workers + Pages
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -490,7 +490,7 @@ Acceptance:
 ## WS-07 Data Platform (R2/D1/KV/Queues)
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -510,7 +510,7 @@ Acceptance:
 ## WS-08 Zero Trust + Tunnel + LB
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -530,7 +530,7 @@ Acceptance:
 ## WS-09 Analytics + Logs + Report + Raw
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -554,7 +554,7 @@ Acceptance:
 ## WS-10 Testing + E2E
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 
@@ -575,7 +575,7 @@ Acceptance:
 ## WS-11 Docs + Release
 
 Status:
-- State: Not Started
+- State: Done
 - Owner:
 - Notes:
 

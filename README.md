@@ -195,6 +195,42 @@ Auth policy:
 - GitHub App only.
 - Configure app credentials via vault-compatible env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, optional `GITHUB_<ACCOUNT>_INSTALLATION_ID`).
 
+## Cloudflare
+`si` includes a token-auth Cloudflare bridge with multi-account context:
+
+```bash
+# auth/context/diagnostics
+./si cloudflare auth status --account core
+./si cloudflare context list
+./si cloudflare context use --account core --env prod --zone-id <zone_id>
+./si cloudflare doctor --account core
+
+# common resources
+./si cloudflare zone list
+./si cloudflare dns list --zone-id <zone_id>
+./si cloudflare workers script list --account-id <account_id>
+./si cloudflare pages project list --account-id <account_id>
+./si cloudflare r2 bucket list --account-id <account_id>
+./si cloudflare d1 query --account-id <account_id> --db <db_id> --sql "select 1"
+
+# security/cache/tls
+./si cloudflare cache purge --zone-id <zone_id> --everything --force
+./si cloudflare tls get --zone-id <zone_id> --setting min_tls_version
+./si cloudflare waf list --zone-id <zone_id>
+
+# analytics/logging/reporting
+./si cloudflare analytics http --zone-id <zone_id>
+./si cloudflare logs job list --zone-id <zone_id>
+./si cloudflare report traffic-summary --zone-id <zone_id>
+
+# raw fallback
+./si cloudflare raw --method GET --path /zones
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
 ## Self Build/Upgrade
 Build or upgrade the `si` binary from the repo itself:
 
