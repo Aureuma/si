@@ -27,6 +27,7 @@ Features:
   - GitHub bridge: App-auth context, REST/GraphQL access, and repository automation commands.
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
   - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
+  - Google YouTube bridge: auth/context flows, channel/video/playlist/live/caption operations, uploads, and usage reporting.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
@@ -45,7 +46,7 @@ Core:
   si stripe <auth|context|object|raw|report|sync>
   si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
-  si google <places>
+  si google <places|youtube>
   si self <build|upgrade|run>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -332,6 +333,23 @@ google:
   si google places report usage|sessions [--since <ts>] [--until <ts>] [--json]
   si google places raw --method <GET|POST> --path <api-path> [--param key=value] [--body raw] [--field-mask <mask>] [--json]
 
+  si google youtube auth status|login|logout [--account <alias>] [--env <prod|staging|dev>] [--mode <api-key|oauth>] [--json]
+  si google youtube context list|current|use [--account <alias>] [--env <prod|staging|dev>]
+  si google youtube doctor [--account <alias>] [--env <prod|staging|dev>] [--mode <api-key|oauth>] [--json]
+  si google youtube search list --query <text> [--type <video|channel|playlist>] [--all] [--json]
+  si google youtube channel list|get|mine|update ...
+  si google youtube video list|get|update|delete|upload|rate|get-rating ...
+  si google youtube playlist list|get|create|update|delete ...
+  si google youtube playlist-item list|add|update|remove ...
+  si google youtube subscription list|create|delete ...
+  si google youtube comment list|get|create|update|delete|thread ...
+  si google youtube caption list|upload|update|delete|download ...
+  si google youtube thumbnail set --video-id <id> --file <path>
+  si google youtube live broadcast|stream|chat ...
+  si google youtube support languages|regions|categories ...
+  si google youtube report usage|quota [--since <ts>] [--until <ts>] [--json]
+  si google youtube raw --method <GET|POST|PUT|DELETE> --path <api-path> [--param key=value] [--body raw] [--json]
+
   Environment policy:
     CLI uses prod, staging, and dev context labels.
     test is intentionally not used; map sandbox workflows to staging/dev context.
@@ -355,7 +373,7 @@ Environment defaults (selected)
 `))
 }
 
-const siVersion = "v0.46.0"
+const siVersion = "v0.47.0"
 
 func printVersion() {
 	fmt.Println(siVersion)

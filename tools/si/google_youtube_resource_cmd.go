@@ -2087,7 +2087,7 @@ func cmdGoogleYouTubeRaw(args []string) {
 
 func cmdGoogleYouTubeReport(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si google youtube report <usage>")
+		printUsage("usage: si google youtube report <usage|quota>")
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
@@ -2095,9 +2095,11 @@ func cmdGoogleYouTubeReport(args []string) {
 	switch sub {
 	case "usage":
 		cmdGoogleYouTubeReportUsage(rest)
+	case "quota":
+		cmdGoogleYouTubeReportQuota(rest)
 	default:
 		printUnknown("google youtube report", sub)
-		printUsage("usage: si google youtube report <usage>")
+		printUsage("usage: si google youtube report <usage|quota>")
 	}
 }
 
@@ -2136,6 +2138,66 @@ func cmdGoogleYouTubeReportUsage(args []string) {
 		return
 	}
 	printGoogleYouTubeUsageReport(report)
+}
+
+func cmdGoogleYouTubeReportQuota(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "estimate": true})
+	fs := flag.NewFlagSet("google youtube report quota", flag.ExitOnError)
+	account := fs.String("account", "", "filter account alias")
+	env := fs.String("env", "", "filter environment")
+	estimate := fs.Bool("estimate", true, "estimate quota from local logs")
+	sinceRaw := fs.String("since", "", "start timestamp (unix seconds or RFC3339); default: start of current UTC day")
+	untilRaw := fs.String("until", "", "end timestamp (unix seconds or RFC3339); default: now")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si google youtube report quota [--account <alias>] [--env <prod|staging|dev>] [--since <ts>] [--until <ts>] [--json]")
+		return
+	}
+	var since *time.Time
+	var until *time.Time
+	if strings.TrimSpace(*sinceRaw) == "" && strings.TrimSpace(*untilRaw) == "" {
+		now := time.Now().UTC()
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+		since = &start
+		until = &now
+	} else {
+		parsedSince, parsedUntil, err := parseGoogleReportWindow(*sinceRaw, *untilRaw)
+		if err != nil {
+			fatal(err)
+		}
+		since = parsedSince
+		until = parsedUntil
+	}
+	settings := loadSettingsOrDefault()
+	logPath := googleYouTubeLogPathForSettings(settings)
+	report, err := buildGoogleYouTubeUsageReport(logPath, strings.TrimSpace(*account), normalizeGoogleEnvironment(*env), since, until, settings.Google.YouTube.QuotaBudgetDaily)
+	if err != nil {
+		fatal(err)
+	}
+	payload := map[string]any{
+		"account":            strings.TrimSpace(*account),
+		"environment":        normalizeGoogleEnvironment(*env),
+		"window_since":       report["window_since"],
+		"window_until":       report["window_until"],
+		"quota_budget_daily": report["quota_budget_daily"],
+		"estimated_quota":    report["estimated_quota"],
+		"quota_remaining":    report["quota_remaining"],
+		"estimated":          *estimate,
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	fmt.Printf("%s %s\\n", styleHeading("Google YouTube quota report:"), styleSuccess("ok"))
+	fmt.Printf("%s %s\\n", styleHeading("Window:"), fmt.Sprintf("%s -> %s", stringifyGoogleYouTubeAny(payload["window_since"]), stringifyGoogleYouTubeAny(payload["window_until"])))
+	fmt.Printf("%s %s\\n", styleHeading("Budget:"), stringifyGoogleYouTubeAny(payload["quota_budget_daily"]))
+	fmt.Printf("%s %s\\n", styleHeading("Estimated used:"), stringifyGoogleYouTubeAny(payload["estimated_quota"]))
+	fmt.Printf("%s %s\\n", styleHeading("Remaining:"), stringifyGoogleYouTubeAny(payload["quota_remaining"]))
 }
 
 func googleYouTubeUploadVideo(ctx context.Context, runtime googleYouTubeRuntimeContext, filePath string, metadata map[string]any, part string, resumable bool) (youtubebridge.Response, error) {

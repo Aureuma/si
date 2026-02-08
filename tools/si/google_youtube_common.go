@@ -29,11 +29,7 @@ type googleYouTubeCommonOptions struct {
 }
 
 func googleYouTubeCommonFlagSet(name string, args []string, allowRaw bool) (*flag.FlagSet, *googleYouTubeCommonOptions) {
-	boolFlags := map[string]bool{"json": true}
-	if allowRaw {
-		boolFlags["raw"] = true
-	}
-	args = stripeFlagsFirst(args, boolFlags)
+	_ = args
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	opts := &googleYouTubeCommonOptions{}
 	opts.account = fs.String("account", "", "account alias")
