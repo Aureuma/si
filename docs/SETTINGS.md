@@ -118,6 +118,15 @@ Credential resolution order for `si stripe`:
 
 `SI_STRIPE_ACCOUNT` can provide default account selection when settings do not specify one.
 
+### `[vault]`
+Defaults for `si vault` (encrypted `.env.<env>` files, typically stored in a separate vault repo submodule).
+- `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
+- `vault.default_env` (string): default environment name used to resolve `.env.<env>` (default: `dev`)
+- `vault.trust_store` (string): local TOFU trust store path (default: `~/.si/vault/trust.json`)
+- `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
+- `vault.key_backend` (string): where the device private key is stored. Supported: `keyring`, `file` (default: `keyring`)
+- `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
+
 ### `[shell.prompt]`
 Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
@@ -198,6 +207,14 @@ id = "acct_1234567890"
 name = "Core Account"
 live_key_env = "STRIPE_CORE_LIVE_KEY"
 sandbox_key_env = "STRIPE_CORE_SANDBOX_KEY"
+
+[vault]
+dir = "vault"
+default_env = "dev"
+trust_store = "~/.si/vault/trust.json"
+audit_log = "~/.si/logs/vault.log"
+key_backend = "keyring"
+key_file = "~/.si/vault/keys/age.key"
 
 [shell.prompt]
 enabled = true
