@@ -5,8 +5,8 @@ This project follows Semantic Versioning and keeps a human-focused changelog.
 ## Versioning Rules
 - Use SemVer: MAJOR.MINOR.PATCH (tag format: `vX.Y.Z`).
 - Breaking changes:
-  - Pre-1.0: bump MINOR (0.y.0).
-  - 1.0+: bump MAJOR.
+  - While the project is on the `v0.x` line: bump MINOR.
+  - After the project graduates off the `v0.x` line: bump MAJOR.
 - Features: bump MINOR.
 - Fixes/docs-only releases: bump PATCH.
 
