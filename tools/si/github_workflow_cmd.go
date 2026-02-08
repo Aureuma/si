@@ -52,7 +52,7 @@ func cmdGithubWorkflowList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", repoOwner, repoName, "actions", "workflows"), Owner: repoOwner, Repo: repoName})
@@ -125,7 +125,7 @@ func cmdGithubWorkflowRun(args []string) {
 		}
 		payload["inputs"] = inputMap
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: path.Join("/repos", repoOwner, repoName, "actions", "workflows", workflow, "dispatches"), JSONBody: payload, Owner: repoOwner, Repo: repoName})
@@ -164,7 +164,7 @@ func cmdGithubWorkflowRuns(args []string) {
 	if strings.TrimSpace(*workflow) != "" {
 		p = path.Join("/repos", repoOwner, repoName, "actions", "workflows", strings.TrimSpace(*workflow), "runs")
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: p, Params: parseGitHubParams(params), Owner: repoOwner, Repo: repoName})
@@ -231,7 +231,7 @@ func cmdGithubWorkflowRunAction(args []string, action string) {
 		method = "POST"
 		p = path.Join(p, "rerun")
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: method, Path: p, Owner: repoOwner, Repo: repoName})
@@ -267,7 +267,7 @@ func cmdGithubWorkflowLogs(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	printGithubContextBanner(runtime)
+	printGithubContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", repoOwner, repoName, "actions", "runs", strconv.Itoa(runID), "logs"), Owner: repoOwner, Repo: repoName})
