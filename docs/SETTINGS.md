@@ -180,13 +180,13 @@ Credential resolution for `si cloudflare` is vault-compatible and token-only:
 5. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
 
 ### `[google]`
-Defaults for `si google places` (Google Places API New with multi-account and env context labels).
+Defaults for `si google places` and `si google youtube` (multi-account and env context labels).
 - `google.default_account` (string): default account alias
 - `google.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
 - `google.api_base_url` (string): API base URL (default: `https://places.googleapis.com`)
 - `google.vault_env` (string): vault env hint (default: `dev`)
 - `google.vault_file` (string): optional explicit vault file path
-- `google.log_file` (string): JSONL log path for Google Places bridge request/response events (default: `~/.si/logs/google-places.log`)
+- `google.log_file` (string): shared JSONL log path override for Google bridges. If unset, Places defaults to `~/.si/logs/google-places.log` and YouTube defaults to `~/.si/logs/google-youtube.log`.
 
 #### `[google.accounts.<alias>]`
 Per-account Google Places context and env-key pointers.
@@ -208,6 +208,41 @@ Credential resolution for `si google places` is vault-compatible and API-key bas
 3. Account env refs (`project_id_env`, `places_api_key_env`, `prod_places_api_key_env`, `staging_places_api_key_env`, `dev_places_api_key_env`)
 4. Account-prefix env keys (`GOOGLE_<ACCOUNT>_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_PROD_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_STAGING_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_DEV_PLACES_API_KEY`, `GOOGLE_<ACCOUNT>_PROJECT_ID`)
 5. Global env fallbacks (`GOOGLE_PLACES_API_KEY`, `GOOGLE_PROJECT_ID`)
+
+### `[google.youtube]`
+Defaults for `si google youtube` (YouTube Data API v3).
+- `google.youtube.api_base_url` (string): API base URL (default: `https://www.googleapis.com`)
+- `google.youtube.upload_base_url` (string): upload API base URL (default: `https://www.googleapis.com/upload`)
+- `google.youtube.default_auth_mode` (string): `api-key` or `oauth` (default: `api-key`)
+- `google.youtube.upload_chunk_size_mb` (int): default chunk hint for upload flows (default: `16`)
+- `google.youtube.quota_budget_daily` (int): local daily quota budget used for report estimation (default: `10000`)
+
+#### `[google.youtube.accounts.<alias>]`
+Per-account YouTube context and env-key pointers.
+- `name` (string): display name
+- `project_id` (string): default Google Cloud project id
+- `project_id_env` (string): env var with project id
+- `vault_prefix` (string): env key prefix override (example `GOOGLE_CORE_`)
+- `youtube_api_key_env` (string): env var with generic YouTube API key
+- `prod_youtube_api_key_env` (string): env var with prod YouTube API key
+- `staging_youtube_api_key_env` (string): env var with staging YouTube API key
+- `dev_youtube_api_key_env` (string): env var with dev YouTube API key
+- `youtube_client_id_env` (string): env var with OAuth client id
+- `youtube_client_secret_env` (string): env var with OAuth client secret
+- `youtube_redirect_uri_env` (string): env var with OAuth redirect uri
+- `youtube_refresh_token_env` (string): env var with OAuth refresh token
+- `default_region_code` (string): default region code
+- `default_language_code` (string): default language code
+
+Credential resolution for `si google youtube` is vault-compatible and supports both API key and OAuth:
+1. CLI overrides (`--api-key`, `--project-id`, `--client-id`, `--client-secret`, `--redirect-uri`, `--access-token`, `--refresh-token`)
+2. Account settings (`project_id`)
+3. Account env refs (`project_id_env`, `youtube_api_key_env`, env-specific api key refs, OAuth refs)
+4. Account-prefix env keys (`GOOGLE_<ACCOUNT>_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_PROD_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_STAGING_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_DEV_YOUTUBE_API_KEY`, `GOOGLE_<ACCOUNT>_YOUTUBE_CLIENT_ID`, `GOOGLE_<ACCOUNT>_YOUTUBE_CLIENT_SECRET`, `GOOGLE_<ACCOUNT>_YOUTUBE_REDIRECT_URI`, `GOOGLE_<ACCOUNT>_YOUTUBE_ACCESS_TOKEN`, `GOOGLE_<ACCOUNT>_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_<ACCOUNT>_PROD_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_<ACCOUNT>_STAGING_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_<ACCOUNT>_DEV_YOUTUBE_REFRESH_TOKEN`)
+5. Global env fallbacks (`GOOGLE_YOUTUBE_API_KEY`, `GOOGLE_YOUTUBE_CLIENT_ID`, `GOOGLE_YOUTUBE_CLIENT_SECRET`, `GOOGLE_YOUTUBE_REDIRECT_URI`, `GOOGLE_YOUTUBE_ACCESS_TOKEN`, `GOOGLE_YOUTUBE_REFRESH_TOKEN`, `GOOGLE_PROJECT_ID`)
+
+Local OAuth token cache for `si google youtube auth login` is stored at:
+- `~/.si/google/youtube/oauth_tokens.json`
 
 ### `[vault]`
 Defaults for `si vault` (encrypted `.env.<env>` files, typically stored in a separate vault repo submodule).
@@ -343,6 +378,28 @@ places_api_key_env = "GOOGLE_CORE_PLACES_API_KEY"
 prod_places_api_key_env = "GOOGLE_CORE_PROD_PLACES_API_KEY"
 staging_places_api_key_env = "GOOGLE_CORE_STAGING_PLACES_API_KEY"
 dev_places_api_key_env = "GOOGLE_CORE_DEV_PLACES_API_KEY"
+default_region_code = "US"
+default_language_code = "en"
+
+[google.youtube]
+api_base_url = "https://www.googleapis.com"
+upload_base_url = "https://www.googleapis.com/upload"
+default_auth_mode = "api-key"
+upload_chunk_size_mb = 16
+quota_budget_daily = 10000
+
+[google.youtube.accounts.core]
+name = "Core YouTube"
+project_id = "acme-youtube-prod"
+vault_prefix = "GOOGLE_CORE_"
+youtube_api_key_env = "GOOGLE_CORE_YOUTUBE_API_KEY"
+prod_youtube_api_key_env = "GOOGLE_CORE_PROD_YOUTUBE_API_KEY"
+staging_youtube_api_key_env = "GOOGLE_CORE_STAGING_YOUTUBE_API_KEY"
+dev_youtube_api_key_env = "GOOGLE_CORE_DEV_YOUTUBE_API_KEY"
+youtube_client_id_env = "GOOGLE_CORE_YOUTUBE_CLIENT_ID"
+youtube_client_secret_env = "GOOGLE_CORE_YOUTUBE_CLIENT_SECRET"
+youtube_redirect_uri_env = "GOOGLE_CORE_YOUTUBE_REDIRECT_URI"
+youtube_refresh_token_env = "GOOGLE_CORE_YOUTUBE_REFRESH_TOKEN"
 default_region_code = "US"
 default_language_code = "en"
 

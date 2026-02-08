@@ -71,6 +71,11 @@ func normalizeGoogleYouTubeAuthMode(raw string) string {
 }
 
 func parseGoogleYouTubeAuthMode(raw string) (string, error) {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	switch trimmed {
+	case "service-account", "service", "sa":
+		return "", fmt.Errorf("service-account auth is not supported for youtube user/channel workflows; use api-key or oauth")
+	}
 	mode := normalizeGoogleYouTubeAuthMode(raw)
 	if mode == "" {
 		if strings.TrimSpace(raw) == "" {

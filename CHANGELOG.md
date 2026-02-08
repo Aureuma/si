@@ -10,6 +10,19 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [v0.47.0] - 2026-02-08
+### Added
+- Added `si google youtube` command family with auth/context flows (`auth`, `context`, `doctor`) and YouTube Data API v3 operations.
+- Added YouTube command coverage for search/support, channel/video/playlist/playlist-item/subscription/comment resources, live broadcast/stream/chat, captions, thumbnails, raw fallback, and usage reporting.
+- Added YouTube OAuth device-flow login/logout plus local token cache/refresh plumbing (`~/.si/google/youtube/oauth_tokens.json`).
+- Added YouTube bridge internals for request execution, retry/backoff, response normalization, redaction, and JSONL logging.
+- Added YouTube tests for runtime/auth resolution, bridge client behavior, redaction/error parsing, and e2e subprocess command coverage.
+- Added `docs/GOOGLE_YOUTUBE.md` as the dedicated command guide.
+
+### Changed
+- Updated CLI dispatch/help and settings schema to include `[google.youtube]` configuration.
+- Updated README and settings reference with YouTube setup and usage recipes.
+
 ## [v0.46.0] - 2026-02-08
 ### Added
 - Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`) and session lifecycle helpers.
