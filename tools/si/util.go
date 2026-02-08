@@ -24,6 +24,7 @@ Features:
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
   - Vault: encrypted secrets stored in a pinned submodule; format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
+  - GitHub bridge: App-auth context, REST/GraphQL access, and repository automation commands.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
@@ -40,6 +41,7 @@ Core:
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|status|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|object|raw|report|sync>
+  si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
   si self <build|upgrade|run>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -254,6 +256,16 @@ vault:
 
   Alias:
     si creds ...
+
+github:
+  si github auth status [--account <alias>] [--owner <owner>] [--json]
+  si github context list|current|use [--account <alias>] [--owner <owner>] [--base-url <url>]
+  si github raw --method <GET|POST|PATCH|PUT|DELETE> --path <api-path> [--param key=value] [--body raw] [--json]
+  si github graphql --query <query> [--var key=json] [--json]
+
+  Auth policy:
+    GitHub App only.
+    Configure app credentials via vault-compatible env keys (for example GITHUB_<ACCOUNT>_APP_ID, GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM).
 
 self:
   si self build [--repo <path>] [--output <path>]

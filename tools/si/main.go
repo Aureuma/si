@@ -26,6 +26,8 @@ func main() {
 		cmdStripe(args)
 	case "vault", "creds":
 		cmdVault(args)
+	case "github":
+		cmdGithub(args)
 	case "self":
 		cmdSelf(args)
 	case "docker":
