@@ -40,9 +40,20 @@ func cmdVaultInit(args []string) {
 			// Git may clone the repo but fail to checkout, returning an error while leaving
 			// a usable git working directory behind.
 			if vault.IsDir(target.VaultDir) {
-				warnf("vault submodule add failed; attempting checkout recovery: %v", err)
+				originURL, oerr := vault.GitRemoteOriginURL(target.VaultDir)
+				if oerr != nil {
+					fatal(err)
+				}
+				warnf("vault submodule add failed; attempting checkout recovery + submodule re-register: %v", err)
 				if recErr := vault.GitEnsureCheckout(target.VaultDir); recErr != nil {
 					fatal(fmt.Errorf("%w (recovery failed: %v)", err, recErr))
+				}
+				branch, berr := vault.GitCurrentBranch(target.VaultDir)
+				if berr != nil || strings.TrimSpace(branch) == "" {
+					branch = "main"
+				}
+				if regErr := vault.GitSubmoduleAddForce(target.RepoRoot, originURL, target.VaultDirRel, branch); regErr != nil {
+					fatal(fmt.Errorf("%w (recovery failed: %v)", err, regErr))
 				}
 			} else {
 				fatal(err)
@@ -66,18 +77,31 @@ func cmdVaultInit(args []string) {
 	}
 
 	// Ensure we have a device identity and public recipient.
+	keyBackendOverride := strings.TrimSpace(*keyBackend)
+	keyFileOverride := strings.TrimSpace(*keyFile)
 	keyCfg := vaultKeyConfigFromSettings(settings)
-	if strings.TrimSpace(*keyBackend) != "" {
-		keyCfg.Backend = strings.TrimSpace(*keyBackend)
+	if keyBackendOverride != "" {
+		keyCfg.Backend = keyBackendOverride
 	}
-	if strings.TrimSpace(*keyFile) != "" {
-		keyCfg.KeyFile = strings.TrimSpace(*keyFile)
+	if keyFileOverride != "" {
+		keyCfg.KeyFile = keyFileOverride
 	}
 	identityInfo, createdKey, err := vault.EnsureIdentity(keyCfg)
 	if err != nil {
 		fatal(err)
 	}
 	recipient := identityInfo.Identity.Recipient().String()
+	if keyBackendOverride != "" || keyFileOverride != "" {
+		if keyBackendOverride != "" {
+			settings.Vault.KeyBackend = keyBackendOverride
+		}
+		if keyFileOverride != "" {
+			settings.Vault.KeyFile = keyFileOverride
+		}
+		if err := saveSettings(settings); err != nil {
+			fatal(err)
+		}
+	}
 
 	// Read or create the env file.
 	var doc vault.DotenvFile

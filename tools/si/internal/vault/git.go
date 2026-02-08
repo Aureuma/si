@@ -72,6 +72,33 @@ func GitSubmoduleUpdate(repoRoot, path string) error {
 	return nil
 }
 
+func GitSubmoduleAddForce(repoRoot, url, path, branch string) error {
+	repoRoot = strings.TrimSpace(repoRoot)
+	url = strings.TrimSpace(url)
+	path = strings.TrimSpace(path)
+	branch = strings.TrimSpace(branch)
+	if repoRoot == "" || url == "" || path == "" {
+		return fmt.Errorf("repo root, url, and path required")
+	}
+	args := []string{"submodule", "add", "--force"}
+	if branch != "" {
+		args = append(args, "-b", branch)
+	}
+	args = append(args, url, path)
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoRoot
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return fmt.Errorf("%w: %s", err, msg)
+		}
+		return err
+	}
+	return nil
+}
+
 func GitRemoteBranches(repoDir string) ([]string, error) {
 	repoDir = strings.TrimSpace(repoDir)
 	if repoDir == "" {
@@ -93,6 +120,20 @@ func GitRemoteBranches(repoDir string) ([]string, error) {
 		branches = append(branches, line)
 	}
 	return branches, nil
+}
+
+func GitCurrentBranch(repoDir string) (string, error) {
+	repoDir = strings.TrimSpace(repoDir)
+	if repoDir == "" {
+		return "", fmt.Errorf("repo dir required")
+	}
+	cmd := exec.Command("git", "branch", "--show-current")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 func GitEnsureCheckout(repoDir string) error {
