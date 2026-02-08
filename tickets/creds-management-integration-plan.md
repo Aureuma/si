@@ -4,6 +4,23 @@ Date: 2026-02-07
 Owner: Unassigned
 Primary Goal: Add a first-class `si vault ...` command family that manages credentials encrypted at rest (committed to a separate private git repo, usually as a submodule) and injects/decrypts them in a Docker-friendly way without writing plaintext secrets to disk by default.
 
+## Implementation Status Snapshot (2026-02-08)
+
+- Overall Status: Done (MVP)
+- Verified: `go test ./...` passes in `tools/si`
+- Key Commits:
+  - `7be8658` `feat(vault): wire command dispatch and help`
+  - `f1924ea` `feat(vault): add line-preserving dotenv editor`
+  - `0760cfe` `feat(vault): add age-based crypto engine`
+  - `1fa659f` `feat(vault): add key storage and TOFU trust store`
+  - `3b8c59e` `feat(vault): add git/submodule helpers and target resolution`
+  - `0636d8e` `feat(vault): implement core vault commands`
+  - `787513f` `feat(vault): add JSONL audit logging`
+  - `9e859a5` `docs(vault): add VAULT.md and refresh help`
+- Known Gaps:
+  - WS-08 Docker Build Secrets: not implemented.
+  - `si vault docker exec` supports exec-time env injection; `/run/secrets` file injection mode is not implemented.
+
 ## 1. Requirement Understanding (What Must Be Delivered)
 
 We need a credentials system integrated into `si` that:
@@ -548,12 +565,12 @@ The work is complete when all are true:
 | WS-04 Key Storage + Trust Store (Keychain/Keyring + CI env) | Done | codex | main |  | 2026-02-08 |
 | WS-05 Vault Repo Submodule (init, discovery, status) | Done | codex | main |  | 2026-02-08 |
 | WS-06 Formatter (sections + canonical style) | Done | codex | main |  | 2026-02-08 |
-| WS-07 Docker Runtime Injection | Done | codex | main |  | 2026-02-08 |
-| WS-08 Docker Build Secrets | Not Started |  |  |  | 2026-02-07 |
+| WS-07 Docker Runtime Injection | Done (exec env) | codex | main |  | 2026-02-08 |
+| WS-08 Docker Build Secrets | Not Started |  |  |  | 2026-02-08 |
 | WS-09 Auditing | Done | codex | main |  | 2026-02-08 |
 | WS-10 Tests | Done | codex | main |  | 2026-02-08 |
 | WS-11 Docs | Done | codex | main |  | 2026-02-08 |
-| WS-12 Future Approvals (design only) | Not Started |  |  |  | 2026-02-07 |
+| WS-12 Future Approvals (design only) | Not Started |  |  |  | 2026-02-08 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 

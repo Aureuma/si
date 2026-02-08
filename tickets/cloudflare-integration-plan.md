@@ -6,8 +6,8 @@ Primary Goal: Add `si cloudflare ...` as a first-class command family for Cloudf
 
 ## Implementation Status Snapshot (2026-02-08)
 
-- Overall Status: Done
-- Implementation Type: Implemented end-to-end in `tools/si` with bridge, command surface, tests, docs, and static-analysis cleanup
+- Overall Status: In Progress (mock E2E tests pending)
+- Implementation Type: Implemented in `tools/si` (command surface, bridge, docs); unit/integration tests present; mock subprocess E2E tests still pending
 - Key Commits:
   - `e0afadb` `feat(si): add cloudflare command surface and runtime bridge`
   - `28940f9` `test/docs(si): validate cloudflare bridge and publish operator docs`
@@ -15,6 +15,7 @@ Primary Goal: Add `si cloudflare ...` as a first-class command family for Cloudf
 - Notes:
   - Runtime auth is API token-only and vault-compatible.
   - Multi-account and `prod|staging|dev` context mapping are implemented.
+  - Remaining gap: mock-API subprocess E2E coverage (WS-10).
 
 ## 0. Decision Lock (Initial)
 
@@ -22,7 +23,7 @@ This plan is explicitly locked to:
 
 1. `si cloudflare` as the canonical command (with optional alias `si cf`).
 2. API token authentication only for the CLI runtime (no legacy global API key default path).
-3. Official Cloudflare Go SDK as the typed bridge where practical, with raw REST fallback for parity.
+3. Custom REST bridge (no Cloudflare SDK dependency), with raw REST fallback for parity.
 4. Vault-compatible credential resolution (`si vault run` compatibility) and no secret persistence in git-tracked settings.
 5. Multi-account and multi-environment context model, where environments map to account/zone defaults (not a Cloudflare-internal sandbox mode).
 
@@ -261,7 +262,7 @@ Settings must not store raw token values.
 
 Initial design:
 
-1. Product command handlers call SDK service clients directly.
+1. Product command handlers call the shared REST bridge directly.
 2. Per-command context/auth resolution.
 3. Minimal shared formatting and safety utilities.
 
@@ -343,18 +344,18 @@ After fitting Cloudflare into the current `si` stack, apply these cross-stack im
 
 | Workstream | Status | Owner | Branch | PR | Last Update |
 |---|---|---|---|---|---|
-| WS-00 Contracts | Done |  |  |  | 2026-02-08 |
-| WS-01 CLI Entry | Done |  |  |  | 2026-02-08 |
-| WS-02 Auth/Context/Vault | Done |  |  |  | 2026-02-08 |
-| WS-03 Bridge Core | Done |  |  |  | 2026-02-08 |
-| WS-04 Zone + DNS | Done |  |  |  | 2026-02-08 |
-| WS-05 Security + Rules + TLS/Cache | Done |  |  |  | 2026-02-08 |
-| WS-06 Workers + Pages | Done |  |  |  | 2026-02-08 |
-| WS-07 Data Platform (R2/D1/KV/Queues) | Done |  |  |  | 2026-02-08 |
-| WS-08 Zero Trust + Tunnel + LB | Done |  |  |  | 2026-02-08 |
-| WS-09 Analytics + Logs + Report + Raw | Done |  |  |  | 2026-02-08 |
-| WS-10 Testing + E2E | Done |  |  |  | 2026-02-08 |
-| WS-11 Docs + Release | Done |  |  |  | 2026-02-08 |
+| WS-00 Contracts | Done | Codex | main | n/a | 2026-02-08 |
+| WS-01 CLI Entry | Done | Codex | main | n/a | 2026-02-08 |
+| WS-02 Auth/Context/Vault | Done | Codex | main | n/a | 2026-02-08 |
+| WS-03 Bridge Core | Done | Codex | main | n/a | 2026-02-08 |
+| WS-04 Zone + DNS | Done | Codex | main | n/a | 2026-02-08 |
+| WS-05 Security + Rules + TLS/Cache | Done | Codex | main | n/a | 2026-02-08 |
+| WS-06 Workers + Pages | Done | Codex | main | n/a | 2026-02-08 |
+| WS-07 Data Platform (R2/D1/KV/Queues) | Done | Codex | main | n/a | 2026-02-08 |
+| WS-08 Zero Trust + Tunnel + LB | Done | Codex | main | n/a | 2026-02-08 |
+| WS-09 Analytics + Logs + Report + Raw | Done | Codex | main | n/a | 2026-02-08 |
+| WS-10 Testing + E2E | In Progress | Codex | main | n/a | 2026-02-08 |
+| WS-11 Docs + Release | Done | Codex | main | n/a | 2026-02-08 |
 
 Status values: `Not Started | In Progress | Blocked | Done`
 
@@ -566,14 +567,14 @@ Acceptance:
 ## WS-10 Testing + E2E
 
 Status:
-- State: Done
-- Owner:
-- Notes:
+- State: In Progress
+- Owner: Codex
+- Notes: Unit + bridge tests exist; mock-API subprocess E2E coverage is not implemented yet.
 
 Path ownership:
-- `tools/si/*cloudflare*_test.go`
+- `tools/si/cloudflare_auth_test.go`
 - `tools/si/internal/cloudflarebridge/*_test.go`
-- `tools/si/testdata/cloudflare/**`
+- (TODO) `tools/si/cloudflare_e2e_test.go` + `tools/si/testdata/cloudflare/**`
 
 Deliverables:
 1. Unit tests for parsers/context/resolution/redaction.
