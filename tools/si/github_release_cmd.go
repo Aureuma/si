@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -208,7 +209,7 @@ func cmdGithubReleaseUpload(args []string) {
 	if releaseRef == "" {
 		fatal(fmt.Errorf("release tag or id is required"))
 	}
-	releaseID, err := resolveReleaseID(context.Background(), client, repoOwner, repoName, releaseRef)
+	release, err := resolveReleaseMeta(context.Background(), client, repoOwner, repoName, releaseRef)
 	if err != nil {
 		fatal(err)
 	}
@@ -221,11 +222,14 @@ func cmdGithubReleaseUpload(args []string) {
 	if strings.TrimSpace(*label) != "" {
 		query["label"] = strings.TrimSpace(*label)
 	}
-	uploadURL := "https://uploads.github.com" + path.Join("/repos", repoOwner, repoName, "releases", strconv.Itoa(releaseID), "assets")
+	uploadURL, err := expandReleaseUploadURL(release.UploadURL, query)
+	if err != nil {
+		fatal(err)
+	}
 	printGithubContextBanner(runtime)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: uploadURL, Params: query, RawBody: string(assetBytes), ContentType: strings.TrimSpace(*contentType), Owner: repoOwner, Repo: repoName})
+	resp, err := client.Do(ctx, githubbridge.Request{Method: "POST", Path: uploadURL, RawBody: string(assetBytes), ContentType: strings.TrimSpace(*contentType), Owner: repoOwner, Repo: repoName})
 	if err != nil {
 		printGithubError(err)
 		return
@@ -256,7 +260,7 @@ func cmdGithubReleaseDelete(args []string) {
 		fatal(err)
 	}
 	releaseRef := strings.TrimSpace(fs.Arg(1))
-	releaseID, err := resolveReleaseID(context.Background(), client, repoOwner, repoName, releaseRef)
+	release, err := resolveReleaseMeta(context.Background(), client, repoOwner, repoName, releaseRef)
 	if err != nil {
 		fatal(err)
 	}
@@ -266,7 +270,7 @@ func cmdGithubReleaseDelete(args []string) {
 	printGithubContextBanner(runtime)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/repos", repoOwner, repoName, "releases", strconv.Itoa(releaseID)), Owner: repoOwner, Repo: repoName})
+	resp, err := client.Do(ctx, githubbridge.Request{Method: "DELETE", Path: path.Join("/repos", repoOwner, repoName, "releases", strconv.Itoa(release.ID)), Owner: repoOwner, Repo: repoName})
 	if err != nil {
 		printGithubError(err)
 		return
@@ -274,31 +278,83 @@ func cmdGithubReleaseDelete(args []string) {
 	printGithubResponse(resp, *jsonOut, *raw)
 }
 
-func resolveReleaseID(ctx context.Context, client githubBridgeClient, owner string, repo string, ref string) (int, error) {
+type githubReleaseMeta struct {
+	ID        int
+	UploadURL string
+}
+
+func resolveReleaseMeta(ctx context.Context, client githubBridgeClient, owner string, repo string, ref string) (githubReleaseMeta, error) {
+	meta := githubReleaseMeta{}
 	if id, err := strconv.Atoi(strings.TrimSpace(ref)); err == nil && id > 0 {
-		return id, nil
+		meta.ID = id
+		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+		resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", owner, repo, "releases", strconv.Itoa(id)), Owner: owner, Repo: repo})
+		if err != nil {
+			return githubReleaseMeta{}, err
+		}
+		if value, ok := resp.Data["upload_url"].(string); ok {
+			meta.UploadURL = strings.TrimSpace(value)
+		}
+		return meta, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: path.Join("/repos", owner, repo, "releases", "tags", strings.TrimSpace(ref)), Owner: owner, Repo: repo})
 	if err != nil {
-		return 0, err
+		return githubReleaseMeta{}, err
 	}
 	if resp.Data == nil {
-		return 0, fmt.Errorf("release response missing data")
+		return githubReleaseMeta{}, fmt.Errorf("release response missing data")
 	}
 	rawID, ok := resp.Data["id"]
 	if !ok {
-		return 0, fmt.Errorf("release response missing id")
+		return githubReleaseMeta{}, fmt.Errorf("release response missing id")
 	}
 	switch typed := rawID.(type) {
 	case float64:
-		return int(typed), nil
+		meta.ID = int(typed)
 	case int:
-		return typed, nil
+		meta.ID = typed
 	case int64:
-		return int(typed), nil
+		meta.ID = int(typed)
 	default:
-		return 0, fmt.Errorf("invalid release id type")
+		return githubReleaseMeta{}, fmt.Errorf("invalid release id type")
 	}
+	if value, ok := resp.Data["upload_url"].(string); ok {
+		meta.UploadURL = strings.TrimSpace(value)
+	}
+	return meta, nil
+}
+
+func expandReleaseUploadURL(raw string, query map[string]string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("release upload url missing from github response")
+	}
+	if idx := strings.Index(raw, "{"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("release upload url invalid")
+	}
+	if len(query) == 0 {
+		return raw, nil
+	}
+	parts := make([]string, 0, len(query))
+	for key, value := range query {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		parts = append(parts, key+"="+url.QueryEscape(strings.TrimSpace(value)))
+	}
+	if len(parts) == 0 {
+		return raw, nil
+	}
+	if strings.Contains(raw, "?") {
+		return raw + "&" + strings.Join(parts, "&"), nil
+	}
+	return raw + "?" + strings.Join(parts, "&"), nil
 }
