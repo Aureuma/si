@@ -56,6 +56,10 @@ fi
 if [[ -n "${SI_REPO:-}" ]]; then
   REPO_NAME="${SI_REPO##*/}"
   TARGET_DIR="/workspace/${REPO_NAME}"
+  if [[ -e "$TARGET_DIR" && ! -d "$TARGET_DIR/.git" ]]; then
+    echo "clone target exists but is not a git repo: $TARGET_DIR" >&2
+    exit 1
+  fi
   if [[ ! -d "$TARGET_DIR/.git" ]]; then
     export GIT_TERMINAL_PROMPT=0
     TOKEN="${SI_GH_PAT:-${GH_TOKEN:-${GITHUB_TOKEN:-}}}"
@@ -63,10 +67,16 @@ if [[ -n "${SI_REPO:-}" ]]; then
       export GH_TOKEN="$TOKEN"
       export GITHUB_TOKEN="$TOKEN"
       if ! gh repo clone "$SI_REPO" "$TARGET_DIR" 2>/dev/null; then
-        git clone "https://${TOKEN}@github.com/${SI_REPO}.git" "$TARGET_DIR" || true
+        if ! git clone "https://${TOKEN}@github.com/${SI_REPO}.git" "$TARGET_DIR"; then
+          echo "failed to clone repo: ${SI_REPO}" >&2
+          exit 1
+        fi
       fi
     else
-      git clone "https://github.com/${SI_REPO}.git" "$TARGET_DIR" || true
+      if ! git clone "https://github.com/${SI_REPO}.git" "$TARGET_DIR"; then
+        echo "failed to clone repo: ${SI_REPO}" >&2
+        exit 1
+      fi
     fi
   fi
 fi

@@ -351,3 +351,43 @@ func TestDefaultEffort(t *testing.T) {
 		t.Fatalf("unexpected generic defaults: actor=%q critic=%q", actor, critic)
 	}
 }
+
+func TestSplitDyadLogsNameAndFlags(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		wantDyad   string
+		wantRemain []string
+	}{
+		{
+			name:       "name-first",
+			args:       []string{"figi", "--member", "critic", "--tail", "5"},
+			wantDyad:   "figi",
+			wantRemain: []string{"--member", "critic", "--tail", "5"},
+		},
+		{
+			name:       "flags-first",
+			args:       []string{"--member", "actor", "--tail", "10", "figi"},
+			wantDyad:   "figi",
+			wantRemain: []string{"--member", "actor", "--tail", "10"},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			gotDyad, gotRemain := splitDyadLogsNameAndFlags(tc.args)
+			if gotDyad != tc.wantDyad {
+				t.Fatalf("unexpected dyad name: got %q want %q", gotDyad, tc.wantDyad)
+			}
+			if len(gotRemain) != len(tc.wantRemain) {
+				t.Fatalf("unexpected remaining args len=%d want=%d (%v)", len(gotRemain), len(tc.wantRemain), gotRemain)
+			}
+			for i := range gotRemain {
+				if gotRemain[i] != tc.wantRemain[i] {
+					t.Fatalf("unexpected remaining arg[%d]: got %q want %q", i, gotRemain[i], tc.wantRemain[i])
+				}
+			}
+		})
+	}
+}

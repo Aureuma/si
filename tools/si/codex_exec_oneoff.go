@@ -281,6 +281,9 @@ func stripCodexANSI(s string) string {
 
 func extractCodexExecOutput(raw string) string {
 	clean := stripCodexANSI(raw)
+	if out, ok := extractCodexExecOutputFromRoleBlocks(clean); ok {
+		return out
+	}
 	lines := strings.Split(clean, "\n")
 	filtered := make([]string, 0, len(lines))
 	for _, line := range lines {
@@ -307,6 +310,53 @@ func extractCodexExecOutput(raw string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.Join(blocks[len(blocks)-1], "\n"))
+}
+
+func extractCodexExecOutputFromRoleBlocks(clean string) (string, bool) {
+	lines := strings.Split(clean, "\n")
+	var captures [][]string
+	current := []string{}
+	capturing := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(strings.TrimRight(line, "\r\n"))
+		lower := strings.ToLower(trimmed)
+		switch lower {
+		case "codex":
+			if capturing && len(current) > 0 {
+				captures = append(captures, current)
+			}
+			capturing = true
+			current = []string{}
+			continue
+		case "user", "tokens used":
+			if capturing && len(current) > 0 {
+				captures = append(captures, current)
+			}
+			capturing = false
+			current = []string{}
+			continue
+		}
+		if !capturing {
+			continue
+		}
+		if trimmed == "" {
+			if len(current) > 0 {
+				current = append(current, "")
+			}
+			continue
+		}
+		current = append(current, trimmed)
+	}
+	if capturing && len(current) > 0 {
+		captures = append(captures, current)
+	}
+	for i := len(captures) - 1; i >= 0; i-- {
+		joined := strings.TrimSpace(strings.Join(captures[i], "\n"))
+		if joined != "" {
+			return joined, true
+		}
+	}
+	return "", false
 }
 
 func splitBlocks(lines []string) [][]string {
