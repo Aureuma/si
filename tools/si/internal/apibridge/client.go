@@ -21,6 +21,9 @@ func NewClient(cfg Config) (*Client, error) {
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		return nil, fmt.Errorf("base url is required")
 	}
+	if strings.TrimSpace(cfg.Component) == "" {
+		cfg.Component = "apibridge"
+	}
 	if cfg.Timeout <= 0 {
 		cfg.Timeout = 30 * time.Second
 	}
@@ -29,6 +32,9 @@ func NewClient(cfg Config) (*Client, error) {
 	}
 	if cfg.SanitizeURL == nil {
 		cfg.SanitizeURL = StripQuery
+	}
+	if cfg.Redact == nil {
+		cfg.Redact = func(value string) string { return value }
 	}
 	if cfg.RetryDecider == nil {
 		cfg.RetryDecider = DefaultRetryDecider
@@ -180,7 +186,7 @@ func (c *Client) logEvent(kind string, req Request, fields map[string]any) {
 		return
 	}
 	event := map[string]any{
-		"component": "apibridge",
+		"component": c.cfg.Component,
 		"event":     kind,
 	}
 	if len(c.cfg.LogContext) > 0 {
@@ -194,7 +200,7 @@ func (c *Client) logEvent(kind string, req Request, fields map[string]any) {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			event["ctx_"+k] = c.cfg.LogContext[k]
+			event["ctx_"+k] = c.cfg.Redact(c.cfg.LogContext[k])
 		}
 	}
 	if len(req.LogFields) > 0 {
@@ -232,4 +238,3 @@ func sleep(d time.Duration) {
 	}
 	time.Sleep(d)
 }
-
