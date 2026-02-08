@@ -1,23 +1,22 @@
 package githubbridge
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"si/tools/si/internal/apibridge"
 )
 
 type Client struct {
-	cfg        ClientConfig
-	httpClient *http.Client
-	log        EventLogger
+	cfg ClientConfig
+	api *apibridge.Client
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
@@ -43,135 +42,128 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if client == nil {
 		client = &http.Client{Timeout: cfg.Timeout}
 	}
-	return &Client{cfg: cfg, httpClient: client, log: cfg.Logger}, nil
+	api, err := apibridge.NewClient(apibridge.Config{
+		Component:   "githubbridge",
+		BaseURL:     cfg.BaseURL,
+		UserAgent:   cfg.UserAgent,
+		Timeout:     cfg.Timeout,
+		MaxRetries:  cfg.MaxRetries,
+		Logger:      cfg.Logger,
+		LogContext:  cfg.LogContext,
+		HTTPClient:  client,
+		SanitizeURL: sanitizeURL,
+		Redact:      RedactSensitive,
+		RequestIDFromHeaders: func(h http.Header) string {
+			if h == nil {
+				return ""
+			}
+			return strings.TrimSpace(h.Get("X-GitHub-Request-Id"))
+		},
+		RetryDecider: func(ctx context.Context, attempt int, req apibridge.Request, resp *http.Response, body []byte, callErr error) apibridge.RetryDecision {
+			_ = ctx
+			method := req.Method
+			if callErr != nil {
+				if apibridge.IsSafeMethod(method) {
+					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				}
+				return apibridge.RetryDecision{}
+			}
+			if resp == nil || !apibridge.IsSafeMethod(method) {
+				return apibridge.RetryDecision{}
+			}
+			statusCode := resp.StatusCode
+			// Preserve existing retry semantics (ignore Retry-After for now).
+			if statusCode == http.StatusTooManyRequests || statusCode == http.StatusBadGateway || statusCode == http.StatusServiceUnavailable || statusCode == http.StatusGatewayTimeout {
+				return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+			}
+			if statusCode == http.StatusForbidden {
+				if strings.TrimSpace(resp.Header.Get("X-RateLimit-Remaining")) == "0" {
+					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				}
+				lower := strings.ToLower(string(body))
+				if strings.Contains(lower, "secondary rate limit") || strings.Contains(lower, "abuse") {
+					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				}
+			}
+			if statusCode >= 500 {
+				return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+			}
+			return apibridge.RetryDecision{}
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &Client{cfg: cfg, api: api}, nil
 }
 
 func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
-	if c == nil || c.cfg.Provider == nil {
+	if c == nil || c.api == nil || c.cfg.Provider == nil {
 		return Response{}, fmt.Errorf("github client is not initialized")
 	}
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
 	if method == "" {
 		method = http.MethodGet
 	}
-	u, err := resolveURL(c.cfg.BaseURL, req.Path, req.Params)
+
+	headers := make(map[string]string, 6+len(req.Headers))
+	headers["Accept"] = "application/vnd.github+json"
+	headers["X-GitHub-Api-Version"] = "2022-11-28"
+	for k, v := range req.Headers {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		headers[k] = v
+	}
+
+	apiResp, err := c.api.Do(ctx, apibridge.Request{
+		Method:      method,
+		Path:        req.Path,
+		Params:      req.Params,
+		Headers:     headers,
+		RawBody:     req.RawBody,
+		JSONBody:    req.JSONBody,
+		ContentType: req.ContentType,
+		LogFields: map[string]any{
+			"auth_mode": string(c.cfg.Provider.Mode()),
+		},
+		Prepare: func(ctx context.Context, _ int, httpReq *http.Request) error {
+			tok, err := c.cfg.Provider.Token(ctx, TokenRequest{Owner: req.Owner, Repo: req.Repo, InstallationID: req.InstallationID})
+			if err != nil {
+				return err
+			}
+			httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(tok.Value))
+			return nil
+		},
+	})
 	if err != nil {
 		return Response{}, err
 	}
-	attempts := c.cfg.MaxRetries + 1
-	if attempts < 1 {
-		attempts = 1
-	}
 
-	var lastErr error
-	for attempt := 1; attempt <= attempts; attempt++ {
-		token, tokenErr := c.cfg.Provider.Token(ctx, TokenRequest{Owner: req.Owner, Repo: req.Repo, InstallationID: req.InstallationID})
-		if tokenErr != nil {
-			return Response{}, tokenErr
-		}
-		httpReq, reqErr := c.buildRequest(ctx, method, u, token, req)
-		if reqErr != nil {
-			return Response{}, reqErr
-		}
-		start := time.Now().UTC()
-		c.logEvent("request", map[string]any{
-			"method":    method,
-			"path":      sanitizeURL(u),
-			"attempt":   attempt,
-			"auth_mode": string(c.cfg.Provider.Mode()),
-		})
-		httpResp, callErr := c.httpClient.Do(httpReq)
-		if callErr != nil {
-			lastErr = callErr
-			if attempt < attempts && isRetryableNetwork(method, callErr) {
-				time.Sleep(backoffDelay(attempt))
-				continue
-			}
-			return Response{}, callErr
-		}
-		bodyBytes, _ := io.ReadAll(httpResp.Body)
-		_ = httpResp.Body.Close()
-		body := strings.TrimSpace(string(bodyBytes))
-		response := normalizeResponse(httpResp, body)
-		c.logEvent("response", map[string]any{
-			"method":      method,
-			"path":        sanitizeURL(u),
-			"attempt":     attempt,
-			"status":      response.StatusCode,
-			"request_id":  response.RequestID,
-			"duration_ms": time.Since(start).Milliseconds(),
-		})
-		if response.StatusCode >= 200 && response.StatusCode < 300 {
-			return response, nil
-		}
-		apiErr := NormalizeHTTPError(response.StatusCode, httpResp.Header, body)
-		lastErr = apiErr
-		if attempt < attempts && isRetryableHTTP(method, response.StatusCode, httpResp.Header, body) {
-			time.Sleep(backoffDelay(attempt))
-			continue
-		}
-		return Response{}, apiErr
+	body := strings.TrimSpace(string(apiResp.Body))
+	response := normalizeResponseParts(apiResp.StatusCode, apiResp.Status, apiResp.Headers, body)
+	if response.StatusCode >= 200 && response.StatusCode < 300 {
+		return response, nil
 	}
-	if lastErr == nil {
-		lastErr = fmt.Errorf("github request failed")
-	}
-	return Response{}, lastErr
+	return Response{}, NormalizeHTTPError(response.StatusCode, apiResp.Headers, body)
 }
 
-func (c *Client) buildRequest(ctx context.Context, method string, endpoint string, token Token, req Request) (*http.Request, error) {
-	bodyReader := io.Reader(nil)
-	if strings.TrimSpace(req.RawBody) != "" {
-		bodyReader = strings.NewReader(req.RawBody)
-	} else if req.JSONBody != nil {
-		raw, err := json.Marshal(req.JSONBody)
-		if err != nil {
-			return nil, err
-		}
-		bodyReader = bytes.NewReader(raw)
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
-	if err != nil {
-		return nil, err
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token.Value))
-	httpReq.Header.Set("Accept", "application/vnd.github+json")
-	httpReq.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	httpReq.Header.Set("User-Agent", c.cfg.UserAgent)
-	if bodyReader != nil {
-		contentType := strings.TrimSpace(req.ContentType)
-		if contentType == "" {
-			contentType = "application/json"
-		}
-		httpReq.Header.Set("Content-Type", contentType)
-	}
-	for key, value := range req.Headers {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		httpReq.Header.Set(key, value)
-	}
-	return httpReq, nil
-}
-
-func normalizeResponse(httpResp *http.Response, body string) Response {
+func normalizeResponseParts(statusCode int, status string, headers http.Header, body string) Response {
 	out := Response{}
-	if httpResp == nil {
-		return out
-	}
-	out.StatusCode = httpResp.StatusCode
-	out.Status = httpResp.Status
+	out.StatusCode = statusCode
+	out.Status = status
 	out.Body = RedactSensitive(body)
-	out.RequestID = strings.TrimSpace(httpResp.Header.Get("X-GitHub-Request-Id"))
-	if len(httpResp.Header) > 0 {
-		headers := make([]string, 0, len(httpResp.Header))
-		for key := range httpResp.Header {
-			headers = append(headers, key)
+	out.RequestID = strings.TrimSpace(headers.Get("X-GitHub-Request-Id"))
+	if len(headers) > 0 {
+		keys := make([]string, 0, len(headers))
+		for key := range headers {
+			keys = append(keys, key)
 		}
-		sort.Strings(headers)
-		out.Headers = make(map[string]string, len(headers))
-		for _, key := range headers {
-			out.Headers[key] = RedactSensitive(strings.Join(httpResp.Header.Values(key), ","))
+		sort.Strings(keys)
+		out.Headers = make(map[string]string, len(keys))
+		for _, key := range keys {
+			out.Headers[key] = RedactSensitive(strings.Join(headers.Values(key), ","))
 		}
 	}
 	if out.Body == "" {
@@ -264,50 +256,6 @@ func extractList(resp Response) []map[string]any {
 	return nil
 }
 
-func resolveURL(baseURL string, path string, params map[string]string) (string, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "", fmt.Errorf("request path is required")
-	}
-	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-		u, err := url.Parse(path)
-		if err != nil {
-			return "", err
-		}
-		addQuery(u, params)
-		return u.String(), nil
-	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	base, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil {
-		return "", err
-	}
-	rel, err := url.Parse(path)
-	if err != nil {
-		return "", err
-	}
-	u := base.ResolveReference(rel)
-	addQuery(u, params)
-	return u.String(), nil
-}
-
-func addQuery(u *url.URL, params map[string]string) {
-	if u == nil || len(params) == 0 {
-		return
-	}
-	q := u.Query()
-	for key, value := range params {
-		key = strings.TrimSpace(key)
-		if key == "" {
-			continue
-		}
-		q.Set(key, strings.TrimSpace(value))
-	}
-	u.RawQuery = q.Encode()
-}
-
 func sanitizeURL(raw string) string {
 	raw = RedactSensitive(raw)
 	if u, err := url.Parse(raw); err == nil {
@@ -328,66 +276,4 @@ func cloneParams(in map[string]string) map[string]string {
 	return out
 }
 
-func isRetryableNetwork(method string, _ error) bool {
-	return isSafeMethod(method)
-}
-
-func isRetryableHTTP(method string, statusCode int, headers http.Header, body string) bool {
-	if !isSafeMethod(method) {
-		return false
-	}
-	if statusCode == http.StatusTooManyRequests || statusCode == http.StatusBadGateway || statusCode == http.StatusServiceUnavailable || statusCode == http.StatusGatewayTimeout {
-		return true
-	}
-	if statusCode == http.StatusForbidden {
-		if headers != nil && strings.TrimSpace(headers.Get("X-RateLimit-Remaining")) == "0" {
-			return true
-		}
-		lower := strings.ToLower(body)
-		if strings.Contains(lower, "secondary rate limit") || strings.Contains(lower, "abuse") {
-			return true
-		}
-	}
-	if statusCode >= 500 {
-		return true
-	}
-	return false
-}
-
-func isSafeMethod(method string) bool {
-	switch strings.ToUpper(strings.TrimSpace(method)) {
-	case http.MethodGet, http.MethodHead, http.MethodOptions:
-		return true
-	default:
-		return false
-	}
-}
-
-func backoffDelay(attempt int) time.Duration {
-	if attempt < 1 {
-		attempt = 1
-	}
-	base := 300 * time.Millisecond
-	d := base * time.Duration(1<<(attempt-1))
-	if d > 3*time.Second {
-		return 3 * time.Second
-	}
-	return d
-}
-
-func (c *Client) logEvent(kind string, fields map[string]any) {
-	if c == nil || c.log == nil {
-		return
-	}
-	event := map[string]any{
-		"component": "githubbridge",
-		"event":     kind,
-	}
-	for key, value := range c.cfg.LogContext {
-		event["ctx_"+key] = RedactSensitive(strings.TrimSpace(value))
-	}
-	for key, value := range fields {
-		event[key] = value
-	}
-	c.log.Log(event)
-}
+// Note: structured logging and retries are handled by apibridge.

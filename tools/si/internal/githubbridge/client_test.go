@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"si/tools/si/internal/apibridge"
 )
 
 type staticProvider struct {
@@ -45,7 +47,7 @@ func TestClientDo(t *testing.T) {
 }
 
 func TestResolveURL(t *testing.T) {
-	u, err := resolveURL("https://api.github.com", "/repos/a/b", map[string]string{"page": "2"})
+	u, err := apibridge.ResolveURL("https://api.github.com", "/repos/a/b", map[string]string{"page": "2"})
 	if err != nil {
 		t.Fatalf("resolveURL: %v", err)
 	}
