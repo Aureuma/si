@@ -375,7 +375,6 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_TURN_TIMEOUT_SECONDS")
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_RETRY_MAX")
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_RETRY_BASE_SECONDS")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_CODEX_COMMAND")
 		env = appendHostEnvIfSet(env, "DYAD_STATE_DIR")
 	}
 	return env
