@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"net/http"
 	"os"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	shared "si/agents/shared/docker"
+	"si/tools/si/internal/apibridge"
 )
 
 type profileStatusResult struct {
@@ -299,25 +299,31 @@ func refreshProfileAuthTokens(ctx context.Context, client *http.Client, profile 
 		"client_id":     clientID,
 		"refresh_token": strings.TrimSpace(current.RefreshToken),
 	}
-	body, err := json.Marshal(reqBody)
+
+	api, err := apibridge.NewClient(apibridge.Config{
+		Component:   "codex-profile-status",
+		BaseURL:     refreshURL,
+		UserAgent:   "si-codex/1.0",
+		Timeout:     client.Timeout,
+		MaxRetries:  0,
+		HTTPClient:  client,
+		SanitizeURL: apibridge.StripQuery,
+	})
 	if err != nil {
 		return profileAuthTokens{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, refreshURL, strings.NewReader(string(body)))
+	resp, err := api.Do(ctx, apibridge.Request{
+		Method:   http.MethodPost,
+		URL:      refreshURL,
+		JSONBody: reqBody,
+		Headers: map[string]string{
+			"Accept": "application/json",
+		},
+	})
 	if err != nil {
 		return profileAuthTokens{}, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return profileAuthTokens{}, err
-	}
-	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return profileAuthTokens{}, err
-	}
+	respBody := resp.Body
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		apiErr := &usageAPIError{StatusCode: resp.StatusCode}
 		var parsed usageAPIErrorResponse
@@ -422,25 +428,35 @@ func fetchUsagePayloadWithClient(ctx context.Context, client *http.Client, usage
 	if strings.TrimSpace(usageURL) == "" {
 		return usagePayload{}, errors.New("usage url missing")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, usageURL, nil)
+	api, err := apibridge.NewClient(apibridge.Config{
+		Component:   "codex-profile-status",
+		BaseURL:     usageURL,
+		UserAgent:   "si-codex/1.0",
+		Timeout:     client.Timeout,
+		MaxRetries:  0,
+		HTTPClient:  client,
+		SanitizeURL: apibridge.StripQuery,
+	})
 	if err != nil {
 		return usagePayload{}, err
 	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Authorization", "Bearer "+auth.AccessToken)
+	headers := map[string]string{
+		"Accept":        "application/json",
+		"Authorization": "Bearer " + auth.AccessToken,
+	}
 	if strings.TrimSpace(auth.AccountID) != "" {
-		req.Header.Set("ChatGPT-Account-Id", strings.TrimSpace(auth.AccountID))
+		headers["ChatGPT-Account-Id"] = strings.TrimSpace(auth.AccountID)
 	}
 
-	resp, err := client.Do(req)
+	resp, err := api.Do(ctx, apibridge.Request{
+		Method:  http.MethodGet,
+		URL:     usageURL,
+		Headers: headers,
+	})
 	if err != nil {
 		return usagePayload{}, err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return usagePayload{}, err
-	}
+	body := resp.Body
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		apiErr := &usageAPIError{StatusCode: resp.StatusCode}
 		var parsed usageAPIErrorResponse
