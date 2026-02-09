@@ -10,9 +10,12 @@ long_lines="${FAKE_CODEX_LONG_LINES:-0}"
 long_if_contains="${FAKE_CODEX_LONG_IF_CONTAINS:-}"
 no_markers="${FAKE_CODEX_NO_MARKERS:-0}"
 
+turn=0
+
 echo "fake-codex ready"
 printf "%s " "${prompt_char}"
 while IFS= read -r line; do
+  turn=$((turn+1))
   if [[ "${delay}" != "0" ]]; then
     sleep "${delay}" || true
   fi
@@ -34,11 +37,18 @@ while IFS= read -r line; do
   fi
 
   member="${DYAD_MEMBER:-unknown}"
+  sig="${line}"
+  # Keep it short so it fits in tmux tail capture and is easy to grep in artifacts.
+  if [[ "${#sig}" -gt 60 ]]; then
+    sig="${sig:0:60}"
+  fi
 
   if [[ "${no_markers}" == "1" ]]; then
     if [[ "${member}" == "critic" ]]; then
       echo "Assessment:"
       echo "- member: ${member}"
+      echo "- turn: ${turn}"
+      echo "- input_sig: ${sig}"
       echo "Risks:"
       echo "- none"
       echo "Required Fixes:"
@@ -51,6 +61,8 @@ while IFS= read -r line; do
     else
       echo "Summary:"
       echo "- member: ${member}"
+      echo "- turn: ${turn}"
+      echo "- input_sig: ${sig}"
       echo "Changes:"
       echo "- none"
       echo "Validation:"
@@ -65,6 +77,8 @@ while IFS= read -r line; do
     if [[ "${member}" == "critic" ]]; then
       echo "Assessment:"
       echo "- member: ${member}"
+      echo "- turn: ${turn}"
+      echo "- input_sig: ${sig}"
       echo "Risks:"
       echo "- none"
       echo "Required Fixes:"
@@ -77,6 +91,8 @@ while IFS= read -r line; do
     else
       echo "Summary:"
       echo "- member: ${member}"
+      echo "- turn: ${turn}"
+      echo "- input_sig: ${sig}"
       echo "Changes:"
       echo "- none"
       echo "Validation:"
