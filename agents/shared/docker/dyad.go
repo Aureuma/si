@@ -409,6 +409,17 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 		env = appendHostEnvIfSet(env, "DYAD_CODEX_START_CMD")
 		env = appendHostEnvIfSet(env, "DYAD_STATE_DIR")
 	}
+	// Forward fake-codex tuning knobs so `DYAD_CODEX_START_CMD=/workspace/tools/dyad/fake-codex.sh`
+	// can be used for offline dyad smoke tests with long/slow outputs.
+	for _, key := range []string{
+		"FAKE_CODEX_PROMPT_CHAR",
+		"FAKE_CODEX_DELAY_SECONDS",
+		"FAKE_CODEX_LONG_LINES",
+		"FAKE_CODEX_LONG_IF_CONTAINS",
+		"FAKE_CODEX_NO_MARKERS",
+	} {
+		env = appendHostEnvIfSet(env, key)
+	}
 	return env
 }
 
