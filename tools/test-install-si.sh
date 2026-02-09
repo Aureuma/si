@@ -57,6 +57,9 @@ mkdir -p "${tmp}/bin dir"
 note "dry-run: darwin/arm64 go download URL computation"
 "${INSTALLER}" --dry-run --source-dir "${ROOT}" --os darwin --arch arm64 --go-mode auto --force >/dev/null
 
+note "dry-run: no-path-hint flag"
+"${INSTALLER}" --dry-run --no-path-hint --source-dir "${ROOT}" --force >/dev/null
+
 note "e2e: install from local checkout into temp bin"
 install_dir="${tmp}/bin"
 mkdir -p "${install_dir}"

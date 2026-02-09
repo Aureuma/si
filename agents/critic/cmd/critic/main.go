@@ -38,7 +38,6 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 	dyad := envOr("DYAD_NAME", "unknown")
 	member := envOr("DYAD_MEMBER", "critic")
 	role := envOr("ROLE", "critic")
-	dept := envOr("DEPARTMENT", "unknown")
 	model := envOr("CODEX_MODEL", "gpt-5.2-codex")
 	effort := envOr("CODEX_REASONING_EFFORT", "medium")
 
@@ -58,7 +57,6 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 		"__DYAD_NAME__":              escapeTemplateValue(dyad),
 		"__DYAD_MEMBER__":            escapeTemplateValue(member),
 		"__ROLE__":                   escapeTemplateValue(role),
-		"__DEPARTMENT__":             escapeTemplateValue(dept),
 		"__INITIALIZED_UTC__":        escapeTemplateValue(now),
 	}
 
@@ -94,7 +92,6 @@ network_access = true
 dyad = "__DYAD_NAME__"
 member = "__DYAD_MEMBER__"
 role = "__ROLE__"
-department = "__DEPARTMENT__"
 initialized_utc = "__INITIALIZED_UTC__"
 `
 

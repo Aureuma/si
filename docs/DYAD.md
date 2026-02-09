@@ -4,8 +4,12 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 
 - starts (or recovers) an interactive Codex session for the critic and the actor inside `tmux`
 - sends prompts via `tmux send-keys`
-- waits for a delimited work report between `<<WORK_REPORT_BEGIN>>` and `<<WORK_REPORT_END>>`
+- waits for a delimited work report between `<<WORK_REPORT_BEGIN>>` and `<<WORK_REPORT_END>>` (and has a tolerant fallback for Codex-native output)
 - persists artifacts under `.si/dyad/<dyad>/reports/` in the workspace
+
+Dyads also share a task queue file:
+
+- `/workspace/TASK_BOARD.md` (host path: `TASK_BOARD.md`)
 
 ## Requirements
 
@@ -31,7 +35,7 @@ If the last persisted critic report contains `Continue Loop: no`, the dyad loop 
 Spawn a dyad:
 
 ```bash
-si dyad spawn <name> [role] [department]
+si dyad spawn <name> [role]
 ```
 
 Check status:
@@ -74,12 +78,25 @@ docker exec -it si-critic-<dyad> tmux attach -t si-dyad-<dyad>-critic
 
 The critic loop is designed to drive **interactive** Codex sessions in `tmux` (not `codex exec`).
 
-By default, it enforces **strict** work-report parsing:
+By default, it uses **tolerant** work-report parsing to work with real Codex output (which can omit explicit markers even when the content is correct). You can force strict parsing:
 
-- `DYAD_LOOP_STRICT_REPORT=1` (default)
+- `DYAD_LOOP_STRICT_REPORT=1`
 - reports must be delimited by the markers above
-- reports must include the expected section headers (actor: `Summary/Changes/Validation/Open Questions/Next Step for Critic`; critic: `Assessment/Risks/Required Fixes/Verification Steps/Next Actor Prompt/Continue Loop`)
+- actor reports must include the expected section headers (`Summary/Changes/Validation/Open Questions/Next Step for Critic`)
+- critic output is treated as a free-form message to the actor (must be non-empty and not Codex UI chrome)
 - if Codex returns to a ready prompt without a delimited report, the turn fails fast and retries
+
+The loop is designed to be critic-initiated/critic-driven:
+
+- the actor only receives the critic's generated message (verbatim)
+- the critic only receives the actor's work report (no injected template per turn)
+
+## tmux Titles
+
+Dyad tmux windows/panes are labeled with emojis:
+
+- `🪢 <dyad> 🛩️ actor`
+- `🪢 <dyad> 🧠 critic`
 
 To override the interactive command used to start Codex (mainly for offline testing), set `DYAD_CODEX_START_CMD`. It rejects `codex exec` to keep dyads interactive-only.
 
