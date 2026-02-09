@@ -8,7 +8,7 @@
 - `tools/si-image`: Unified Docker image for Codex containers and dyad actor/critic runtime.
 
 ## Quickstart (Docker)
-Requires Docker Engine.
+Requires Docker Engine. (Go 1.25+ is only needed if you build the `si` binary on the host instead of via Docker.)
 
 Build the CLI and runtime image:
 
@@ -60,7 +60,7 @@ Scope to a module or keep CI green while reviewing findings:
 - Spawn a dyad (actor+critic):
 
 ```bash
-./si dyad spawn <name> [role] [department] --profile <profile>
+./si dyad spawn <name> [role] --profile <profile>
 ```
 
 - Teardown a dyad:

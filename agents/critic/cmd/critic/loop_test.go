@@ -20,11 +20,12 @@ type fakeTurnExecutor struct {
 func (f *fakeTurnExecutor) ActorTurn(_ context.Context, prompt string) (string, error) {
 	f.actorPrompts = append(f.actorPrompts, prompt)
 	turn := len(f.actorPrompts)
-	if turn > 1 {
-		want := fmt.Sprintf("CRITIC REPORT TURN %d", turn-1)
-		if !strings.Contains(prompt, want) {
-			return "", fmt.Errorf("actor prompt missing previous critic report %q", want)
-		}
+	want := fmt.Sprintf("CRITIC MESSAGE TURN %d", turn)
+	if strings.TrimSpace(prompt) != want {
+		return "", fmt.Errorf("actor prompt=%q want %q", prompt, want)
+	}
+	if strings.Contains(prompt, "You are the ACTOR") {
+		return "", fmt.Errorf("actor prompt unexpectedly contains template text")
 	}
 	report := fmt.Sprintf(`Summary:
 - ACTOR REPORT TURN %d
@@ -41,32 +42,33 @@ Next Step for Critic:
 
 func (f *fakeTurnExecutor) CriticTurn(_ context.Context, prompt string) (string, error) {
 	f.criticPrompts = append(f.criticPrompts, prompt)
-	turn := len(f.criticPrompts)
+	turn := len(f.criticPrompts) - 1 // seed is turn 0
+
+	// Seed prompt: critic is initialized and must emit the first actor message.
+	if strings.Contains(prompt, "How the loop works (hard requirements):") {
+		if strings.Contains(prompt, "ACTOR REPORT TURN") {
+			return "", fmt.Errorf("seed critic prompt should not contain actor report")
+		}
+		return reportBeginMarker + "\nCRITIC MESSAGE TURN 1\n" + reportEndMarker, nil
+	}
+
+	// Per loop requirement: critic receives ONLY the actor report.
 	want := fmt.Sprintf("ACTOR REPORT TURN %d", turn)
 	if !strings.Contains(prompt, want) {
 		return "", fmt.Errorf("critic prompt missing actor report %q", want)
 	}
-	report := fmt.Sprintf(`Assessment:
-- CRITIC REPORT TURN %d
-Risks:
-- none
-Required Fixes:
-- none
-Verification Steps:
-- none
-Next Actor Prompt:
-- proceed
-Continue Loop: yes`, turn)
-	return reportBeginMarker + "\n" + report + "\n" + reportEndMarker, nil
+	if strings.Contains(prompt, "Objective:") || strings.Contains(prompt, "You are the CRITIC") {
+		return "", fmt.Errorf("critic prompt unexpectedly contains template text")
+	}
+
+	next := fmt.Sprintf("CRITIC MESSAGE TURN %d", turn+1)
+	return reportBeginMarker + "\n" + next + "\n" + reportEndMarker, nil
 }
 
-func TestExtractWorkReport(t *testing.T) {
+func TestExtractDelimitedWorkReport(t *testing.T) {
 	input := "noise\n" + reportBeginMarker + "\nhello\nworld\n" + reportEndMarker + "\nextra"
-	if got := extractWorkReport(input); got != "hello\nworld" {
+	if got := extractDelimitedWorkReport(input); got != "hello\nworld" {
 		t.Fatalf("unexpected report parse: %q", got)
-	}
-	if got := extractWorkReport("  plain output  "); got != "plain output" {
-		t.Fatalf("expected fallback plain output, got %q", got)
 	}
 }
 
@@ -92,8 +94,8 @@ func TestRunTurnLoopMultiTurnClosedFeedback(t *testing.T) {
 	if err := runTurnLoop(context.Background(), cfg, exec, logger); err != nil {
 		t.Fatalf("runTurnLoop: %v", err)
 	}
-	if len(exec.actorPrompts) != 3 || len(exec.criticPrompts) != 3 {
-		t.Fatalf("unexpected turn counts actor=%d critic=%d", len(exec.actorPrompts), len(exec.criticPrompts))
+	if len(exec.actorPrompts) != 3 || len(exec.criticPrompts) != 4 {
+		t.Fatalf("unexpected turn counts actor=%d critic=%d (seed adds 1 critic turn)", len(exec.actorPrompts), len(exec.criticPrompts))
 	}
 	state, err := loadLoopState(filepath.Join(tmp, "loop-state.json"))
 	if err != nil {
@@ -105,7 +107,7 @@ func TestRunTurnLoopMultiTurnClosedFeedback(t *testing.T) {
 	if !strings.Contains(state.LastActorReport, "ACTOR REPORT TURN 3") {
 		t.Fatalf("unexpected last actor report: %q", state.LastActorReport)
 	}
-	if !strings.Contains(state.LastCriticReport, "CRITIC REPORT TURN 3") {
+	if !strings.Contains(state.LastCriticReport, "CRITIC MESSAGE TURN 4") {
 		t.Fatalf("unexpected last critic report: %q", state.LastCriticReport)
 	}
 	for i := 1; i <= 3; i++ {
@@ -133,13 +135,13 @@ func TestCriticRequestsStop(t *testing.T) {
 }
 
 func TestReportPlaceholderDetectionRequiresSections(t *testing.T) {
-	if !actorReportLooksPlaceholder("Summary:") {
+	if !actorReportLooksPlaceholderWithMode("Summary:", true) {
 		t.Fatalf("expected actor report with only Summary to be placeholder")
 	}
-	if !criticReportLooksPlaceholder("Assessment:") {
+	if !criticReportLooksPlaceholderWithMode("Assessment:", true) {
 		t.Fatalf("expected critic report with only Assessment to be placeholder")
 	}
-	if actorReportLooksPlaceholder(`Summary:
+	if actorReportLooksPlaceholderWithMode(`Summary:
 - ok
 Changes:
 - none
@@ -148,10 +150,10 @@ Validation:
 Open Questions:
 - none
 Next Step for Critic:
-- proceed`) {
+- proceed`, true) {
 		t.Fatalf("did not expect complete actor report to be placeholder")
 	}
-	if criticReportLooksPlaceholder(`Assessment:
+	if criticReportLooksPlaceholderWithMode(`Assessment:
 - ok
 Risks:
 - none
@@ -161,7 +163,7 @@ Verification Steps:
 - none
 Next Actor Prompt:
 - proceed
-Continue Loop: yes`) {
+Continue Loop: yes`, true) {
 		t.Fatalf("did not expect complete critic report to be placeholder")
 	}
 }
@@ -172,17 +174,18 @@ type fakeSeedStopExecutor struct {
 
 func (f *fakeSeedStopExecutor) ActorTurn(_ context.Context, prompt string) (string, error) {
 	f.actorTurns++
-	if !strings.Contains(prompt, "CRITIC REPORT TURN 0") {
-		return "", fmt.Errorf("actor prompt missing seed critic report")
+	if strings.TrimSpace(prompt) != "proceed" {
+		return "", fmt.Errorf("actor prompt=%q want %q", prompt, "proceed")
 	}
 	return reportBeginMarker + "\nSummary:\n- ACTOR REPORT TURN 1\nChanges:\n- none\nValidation:\n- none\nOpen Questions:\n- none\nNext Step for Critic:\n- proceed\n" + reportEndMarker, nil
 }
 
 func (f *fakeSeedStopExecutor) CriticTurn(_ context.Context, prompt string) (string, error) {
-	if strings.Contains(prompt, "Seed critic message") {
-		return reportBeginMarker + "\nAssessment:\n- CRITIC REPORT TURN 0\nRisks:\n- none\nRequired Fixes:\n- none\nVerification Steps:\n- none\nNext Actor Prompt:\n- proceed\nContinue Loop: yes\n" + reportEndMarker, nil
+	// Seed prompt includes the user seed block.
+	if strings.Contains(prompt, "User seed:") && strings.Contains(prompt, "Seed critic message") {
+		return reportBeginMarker + "\nproceed\n" + reportEndMarker, nil
 	}
-	return reportBeginMarker + "\nAssessment:\n- CRITIC REPORT TURN 1\nRisks:\n- none\nRequired Fixes:\n- none\nVerification Steps:\n- none\nNext Actor Prompt:\n- proceed\nContinue Loop: no\n" + reportEndMarker, nil
+	return reportBeginMarker + "\nContinue Loop: no\n" + reportEndMarker, nil
 }
 
 func TestRunTurnLoopSeedAndCriticStop(t *testing.T) {

@@ -27,3 +27,4 @@ bin/codex-stdout-parser -command "codex" -prompt "help"
 - The parser emits one JSON object per turn on stdout.
 - ANSI escape sequences are stripped by default; use `-strip-ansi=false` to keep them.
 - `-prompt-regex` and `-end-regex` control turn boundaries.
+- `-flush-on-eof=false` disables emitting a final report at EOF; use `-eof-ready` to mark EOF as ready in single-command runs.

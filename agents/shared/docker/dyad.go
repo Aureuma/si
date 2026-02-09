@@ -22,7 +22,6 @@ const (
 	LabelDyad      = "si.dyad"
 	LabelMember    = "si.member"
 	LabelRole      = "si.role"
-	LabelDept      = "si.department"
 )
 
 const DyadAppLabel = "si-dyad"
@@ -30,7 +29,6 @@ const DyadAppLabel = "si-dyad"
 type DyadOptions struct {
 	Dyad              string
 	Role              string
-	Department        string
 	ActorImage        string
 	CriticImage       string
 	CodexModel        string
@@ -210,9 +208,6 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	if strings.TrimSpace(opts.Role) == "" {
 		opts.Role = "generic"
 	}
-	if strings.TrimSpace(opts.Department) == "" {
-		opts.Department = opts.Role
-	}
 	if strings.TrimSpace(opts.ActorImage) == "" || strings.TrimSpace(opts.CriticImage) == "" {
 		return ContainerSpec{}, ContainerSpec{}, errors.New("actor and critic images required")
 	}
@@ -233,7 +228,6 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		LabelApp:  DyadAppLabel,
 		LabelDyad: opts.Dyad,
 		LabelRole: opts.Role,
-		LabelDept: opts.Department,
 	}
 
 	actorLabels := cloneLabels(labels)
@@ -366,7 +360,6 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 	termTitle := dyadTermTitle(opts.Dyad, member)
 	env := []string{
 		"ROLE=" + opts.Role,
-		"DEPARTMENT=" + opts.Department,
 		"DYAD_NAME=" + opts.Dyad,
 		"DYAD_MEMBER=" + member,
 		"CODEX_INIT_FORCE=1",

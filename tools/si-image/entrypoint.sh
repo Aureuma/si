@@ -51,6 +51,9 @@ if [[ "$(id -u)" -eq 0 ]]; then
   else
     chown -R si:si /home/si /workspace 2>/dev/null || true
   fi
+  # Avoid "dubious ownership" errors in bind-mounted workspaces.
+  git config --global --add safe.directory /workspace >/dev/null 2>&1 || true
+  su -s /bin/bash si -c 'git config --global --add safe.directory /workspace >/dev/null 2>&1 || true' || true
 fi
 
 if [[ -n "${SI_REPO:-}" ]]; then

@@ -205,3 +205,44 @@ func TestParserFlushEOF_Ready(t *testing.T) {
 		t.Fatalf("unexpected ready status: %+v", events[0])
 	}
 }
+
+func TestParserFlushEOF_Disabled(t *testing.T) {
+	promptRe := regexp.MustCompile("^$")
+	p := newParser(promptRe, nil, nil, nil, "block", "", true, false, false, true, false, 0, "")
+
+	raw := captureStdout(t, func() {
+		p.handleLine("hello")
+		p.flushEOF()
+	})
+
+	if strings.TrimSpace(raw) != "" {
+		t.Fatalf("expected no output when flush-on-eof disabled, got %q", raw)
+	}
+}
+
+func TestParserLastLineMode(t *testing.T) {
+	promptRe := regexp.MustCompile("^$")
+	endRe := regexp.MustCompile("^DONE$")
+	p := newParser(promptRe, nil, nil, endRe, "last-line", "", true, true, false, true, false, 0, "")
+
+	raw := captureStdout(t, func() {
+		p.handleLine("first")
+		p.handleLine("second")
+		p.handleLine("DONE")
+	})
+
+	events := parseJSONOutputs(t, raw)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 output, got %d: %q", len(events), raw)
+	}
+	if events[0].FinalReport != "second" {
+		t.Fatalf("final report = %q, want last line", events[0].FinalReport)
+	}
+}
+
+func TestReadAgentMessages_MissingFile(t *testing.T) {
+	_, err := readAgentMessages(filepath.Join(t.TempDir(), "missing.jsonl"))
+	if err == nil {
+		t.Fatal("expected error for missing session log file")
+	}
+}

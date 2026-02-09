@@ -68,10 +68,8 @@ func cmdDyad(args []string) {
 func cmdDyadSpawn(args []string) {
 	workspaceSet := flagProvided(args, "workspace")
 	roleProvided := flagProvided(args, "role")
-	deptProvided := flagProvided(args, "department")
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
-	deptFlag := fs.String("department", "", "dyad department")
 	actorImage := fs.String("actor-image", envOr("ACTOR_IMAGE", "aureuma/si:local"), "actor image")
 	criticImage := fs.String("critic-image", envOr("CRITIC_IMAGE", "aureuma/si:local"), "critic image")
 	codexModel := fs.String("codex-model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
@@ -146,7 +144,7 @@ func cmdDyadSpawn(args []string) {
 	}
 	if name == "" {
 		if !isInteractiveTerminal() {
-			printUsage("usage: si dyad spawn <name> [role] [department] [--profile <profile>]")
+			printUsage("usage: si dyad spawn <name> [role] [--profile <profile>]")
 			return
 		}
 		var ok bool
@@ -175,25 +173,6 @@ func cmdDyadSpawn(args []string) {
 	}
 	if roleProvided {
 		if err := validateDyadSpawnOptionValue("role", role); err != nil {
-			fatal(err)
-		}
-	}
-	dept := strings.TrimSpace(*deptFlag)
-	if dept == "" && fs.NArg() > 1 {
-		dept = fs.Arg(1)
-	}
-	if dept == "" && !deptProvided && isInteractiveTerminal() {
-		selected, ok := promptWithDefault("Department:", role)
-		if !ok {
-			return
-		}
-		dept = strings.TrimSpace(selected)
-	}
-	if dept == "" {
-		dept = role
-	}
-	if deptProvided {
-		if err := validateDyadSpawnOptionValue("department", dept); err != nil {
 			fatal(err)
 		}
 	}
@@ -259,7 +238,6 @@ func cmdDyadSpawn(args []string) {
 	opts := shared.DyadOptions{
 		Dyad:              name,
 		Role:              role,
-		Department:        dept,
 		ActorImage:        *actorImage,
 		CriticImage:       *criticImage,
 		CodexModel:        *codexModel,
@@ -303,7 +281,7 @@ func cmdDyadSpawn(args []string) {
 		seedGitIdentity(ctx, client, actorID, "root", "/root", identity)
 		seedGitIdentity(ctx, client, criticID, "root", "/root", identity)
 	}
-	successf("dyad %s ready (role=%s dept=%s)", name, role, dept)
+	successf("dyad %s ready (role=%s)", name, role)
 }
 
 func cmdDyadPeek(args []string) {

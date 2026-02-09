@@ -19,7 +19,6 @@ import (
 type dyadRow struct {
 	Dyad   string
 	Role   string
-	Dept   string
 	Actor  string
 	Critic string
 }
@@ -247,7 +246,6 @@ func buildDyadRows(containers []types.Container) []dyadRow {
 			item = &dyadRow{
 				Dyad: dyad,
 				Role: strings.TrimSpace(c.Labels[shared.LabelRole]),
-				Dept: strings.TrimSpace(c.Labels[shared.LabelDept]),
 			}
 			rows[dyad] = item
 		}
@@ -273,27 +271,24 @@ func buildDyadRows(containers []types.Container) []dyadRow {
 }
 
 func printDyadRows(rows []dyadRow) {
-	widths := map[string]int{"dyad": 4, "role": 4, "dept": 4, "actor": 5, "critic": 6}
+	widths := map[string]int{"dyad": 4, "role": 4, "actor": 5, "critic": 6}
 	for _, row := range rows {
 		widths["dyad"] = max(widths["dyad"], len(row.Dyad))
 		widths["role"] = max(widths["role"], len(row.Role))
-		widths["dept"] = max(widths["dept"], len(row.Dept))
 		widths["actor"] = max(widths["actor"], len(row.Actor))
 		widths["critic"] = max(widths["critic"], len(row.Critic))
 	}
 
-	fmt.Printf("%s  %s  %s  %s  %s\n",
+	fmt.Printf("%s  %s  %s  %s\n",
 		padRightANSI(styleHeading("DYAD"), widths["dyad"]),
 		padRightANSI(styleHeading("ROLE"), widths["role"]),
-		padRightANSI(styleHeading("DEPT"), widths["dept"]),
 		padRightANSI(styleHeading("ACTOR"), widths["actor"]),
 		padRightANSI(styleHeading("CRITIC"), widths["critic"]),
 	)
 	for _, row := range rows {
-		fmt.Printf("%s  %s  %s  %s  %s\n",
+		fmt.Printf("%s  %s  %s  %s\n",
 			padRightANSI(row.Dyad, widths["dyad"]),
 			padRightANSI(row.Role, widths["role"]),
-			padRightANSI(row.Dept, widths["dept"]),
 			padRightANSI(styleStatus(row.Actor), widths["actor"]),
 			padRightANSI(styleStatus(row.Critic), widths["critic"]),
 		)

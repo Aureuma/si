@@ -14,10 +14,9 @@ func validateDyadSpawnOptionValue(flagName, value string) error {
 	if value == "" {
 		return fmt.Errorf("missing -%s value", flagName)
 	}
-	// Common footgun: `--role --department engineering` -> role becomes `--department`.
+	// Common footgun: `--role --profile foo` -> role becomes `--profile`.
 	if strings.HasPrefix(value, "-") && value != "-" {
 		return fmt.Errorf("invalid -%s value %q (looks like another flag)", flagName, value)
 	}
 	return nil
 }
-

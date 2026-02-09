@@ -67,9 +67,8 @@ dyad:
   Running si dyad with no subcommand opens an interactive command picker.
   si dyad help prints dyad-only usage.
 
-  si dyad spawn <name> [role] [department]
+  si dyad spawn <name> [role]
     --role <role>
-    --department <dept>
     --profile <profile>
     --skip-auth / --skip-auth=false
     --actor-image <image>
@@ -92,7 +91,7 @@ dyad:
   si dyad list                    (no flags)
   si dyad remove <name>           (aliases: teardown, destroy, rm, delete)
   si dyad remove --all
-  si dyad recreate <name> [role] [department] [--profile <profile>] [--skip-auth]
+  si dyad recreate <name> [role] [--profile <profile>] [--skip-auth]
   si dyad status <name>
   si dyad peek [--member actor|critic|both] [--detached] [--session <name>] <dyad>
   si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>

@@ -39,12 +39,14 @@ func main() {
 		}
 	}
 
+	// Avoid "dubious ownership" errors when running as root in a bind-mounted workspace.
+	ensureGitSafeDirectory("/workspace")
+
 	if !quiet {
-		fmt.Printf("codex-init ok (dyad=%s member=%s role=%s dept=%s)\n",
+		fmt.Printf("codex-init ok (dyad=%s member=%s role=%s)\n",
 			envOr("DYAD_NAME", "unknown"),
 			envOr("DYAD_MEMBER", "unknown"),
 			envOr("ROLE", "unknown"),
-			envOr("DEPARTMENT", "unknown"),
 		)
 	}
 
@@ -60,6 +62,15 @@ func main() {
 			fatal(err, quiet)
 		}
 	}
+}
+
+func ensureGitSafeDirectory(path string) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return
+	}
+	// Best-effort; ignore errors if git isn't available or config can't be written.
+	_ = exec.Command("git", "config", "--global", "--add", "safe.directory", path).Run()
 }
 
 func parseArgs(args []string) (bool, []string) {
@@ -86,7 +97,6 @@ func writeConfig(path, templatePath string) error {
 	dyad := envOr("DYAD_NAME", "unknown")
 	member := envOr("DYAD_MEMBER", "unknown")
 	role := envOr("ROLE", "unknown")
-	dept := envOr("DEPARTMENT", "unknown")
 
 	var content []byte
 	if templatePath != "" {
@@ -97,13 +107,12 @@ func writeConfig(path, templatePath string) error {
 				"__DYAD_NAME__":              dyad,
 				"__DYAD_MEMBER__":            member,
 				"__ROLE__":                   role,
-				"__DEPARTMENT__":             dept,
 				"__INITIALIZED_UTC__":        now,
 			})
 		}
 	}
 	if len(content) == 0 {
-		content = []byte(defaultConfig(model, effort, dyad, member, role, dept, now))
+		content = []byte(defaultConfig(model, effort, dyad, member, role, now))
 	}
 
 	tmp, err := os.CreateTemp(filepath.Dir(path), "codex-config-*.toml")
@@ -144,8 +153,8 @@ func escapeValue(value string) string {
 	return value
 }
 
-func defaultConfig(model, effort, dyad, member, role, dept, now string) string {
-return fmt.Sprintf(`# managed by si-codex-init
+func defaultConfig(model, effort, dyad, member, role, now string) string {
+	return fmt.Sprintf(`# managed by si-codex-init
 #
 # Shared Codex defaults for si dyads.
 
@@ -163,9 +172,8 @@ network_access = true
 dyad = "%s"
 member = "%s"
 role = "%s"
-department = "%s"
 initialized_utc = "%s"
-`, escapeValue(model), escapeValue(effort), escapeValue(dyad), escapeValue(member), escapeValue(role), escapeValue(dept), escapeValue(now))
+`, escapeValue(model), escapeValue(effort), escapeValue(dyad), escapeValue(member), escapeValue(role), escapeValue(now))
 }
 
 func envOr(key, def string) string {
