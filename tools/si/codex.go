@@ -267,17 +267,20 @@ func cmdCodexSpawn(args []string) {
 	if strings.TrimSpace(*flags.workspaceHost) == "" {
 		*flags.workspaceHost = mustRepoRoot()
 	}
-
-	// Always mount the host workspace at /workspace (stable path used across si subcommands and tmux attach).
-	// Optionally also mount it under /home/si/<rel> when the workspace is inside the host user's home dir.
-	// This keeps paths convenient inside the container without breaking tooling that assumes /workspace exists.
-	workspaceTargetPrimary := "/workspace"
-	workspaceTargetSecondary, hasSecondary := shared.InferWorkspaceTarget(*flags.workspaceHost)
-	if !workdirSet && strings.TrimSpace(*flags.workdir) == "" {
-		*flags.workdir = workspaceTargetPrimary
+	if abs, err := filepath.Abs(strings.TrimSpace(*flags.workspaceHost)); err == nil && strings.TrimSpace(abs) != "" {
+		*flags.workspaceHost = abs
 	}
-	if !workdirSet && *flags.workdir == "/workspace" {
-		*flags.workdir = workspaceTargetPrimary
+
+	// Always mount the host workspace at /workspace (stable) and also mirror it at the same absolute path
+	// as the host (e.g. /home/shawn/Development/si). Default the container working dir to the mirrored path
+	// so `si run` and `si run --tmux` land in the expected directory.
+	workspaceTargetPrimary := "/workspace"
+	workspaceTargetMirror := filepath.ToSlash(strings.TrimSpace(*flags.workspaceHost))
+	if workspaceTargetMirror == "" || !strings.HasPrefix(workspaceTargetMirror, "/") {
+		workspaceTargetMirror = workspaceTargetPrimary
+	}
+	if !workdirSet && (strings.TrimSpace(*flags.workdir) == "" || strings.TrimSpace(*flags.workdir) == "/workspace") {
+		*flags.workdir = workspaceTargetMirror
 	}
 
 	client, err := shared.NewClient()
@@ -376,6 +379,9 @@ func cmdCodexSpawn(args []string) {
 	env := []string{
 		"HOME=/home/si",
 		"CODEX_HOME=/home/si/.codex",
+		"SI_WORKSPACE_PRIMARY=" + workspaceTargetPrimary,
+		"SI_WORKSPACE_MIRROR=" + workspaceTargetMirror,
+		"SI_WORKSPACE_HOST=" + strings.TrimSpace(*flags.workspaceHost),
 	}
 	env = append(env, hostUserEnv()...)
 	if strings.TrimSpace(*flags.repo) != "" {
@@ -415,8 +421,8 @@ func cmdCodexSpawn(args []string) {
 		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
 		{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetPrimary},
 	}
-	if hasSecondary && workspaceTargetSecondary != "" && workspaceTargetSecondary != workspaceTargetPrimary {
-		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetSecondary})
+	if workspaceTargetMirror != "" && workspaceTargetMirror != workspaceTargetPrimary {
+		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetMirror})
 	}
 	if *flags.dockerSocket {
 		if socketMount, ok := shared.DockerSocketMount(); ok {
@@ -1113,8 +1119,8 @@ func isTmuxPaneDeadOutput(out string) bool {
 }
 
 func buildCodexTmuxCommand(containerName string) string {
-	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox; status=$?; printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; exec bash -il"
-	base := fmt.Sprintf("docker exec -it -w /workspace %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
+	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox; status=$?; printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; exec bash -il"
+	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
 
@@ -1200,6 +1206,18 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 		"CODEX_HOME=/root/.codex",
 		"SI_AUTOPOIETIC=1",
 	}
+	workspaceMirror := ""
+	if strings.TrimSpace(workspaceSource) != "" {
+		workspaceMirror = filepath.ToSlash(strings.TrimSpace(workspaceSource))
+	}
+	if workspaceMirror == "" || !strings.HasPrefix(workspaceMirror, "/") {
+		workspaceMirror = "/workspace"
+	}
+	env = append(env,
+		"SI_WORKSPACE_PRIMARY=/workspace",
+		"SI_WORKSPACE_MIRROR="+workspaceMirror,
+		"SI_WORKSPACE_HOST="+strings.TrimSpace(workspaceSource),
+	)
 	if model := envValue(actorInfo.Config.Env, "CODEX_MODEL"); model != "" {
 		env = append(env, "CODEX_MODEL="+model)
 	}
@@ -1209,7 +1227,7 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 
 	cfg := &container.Config{
 		Image:      image,
-		WorkingDir: "/workspace",
+		WorkingDir: workspaceMirror,
 		Env:        filterEnv(env),
 		Labels:     labels,
 		Entrypoint: []string{"tini", "-s", "--"},
@@ -1221,8 +1239,8 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 	}
 	if workspaceSource != "" {
 		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: workspaceSource, Target: "/workspace"})
-		if target, ok := shared.InferWorkspaceTarget(workspaceSource); ok && target != "/workspace" {
-			mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: workspaceSource, Target: target})
+		if workspaceMirror != "" && workspaceMirror != "/workspace" {
+			mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: workspaceSource, Target: workspaceMirror})
 		}
 	}
 	if configsSource != "" {
