@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 )
 
 func TestAutopoieticContainerName(t *testing.T) {
@@ -110,6 +111,27 @@ func TestAutopoieticWorkspaceSource(t *testing.T) {
 	}
 }
 
+func TestAutopoieticWorkspaceSourceFallbackBind(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "bind",
+				Source:      "/var/run/docker.sock",
+				Destination: "/var/run/docker.sock",
+			},
+			{
+				Type:        "bind",
+				Source:      "/home/ubuntu/Development/si",
+				Destination: "/home/si/Development/si",
+			},
+		},
+	}
+	got := autopoieticWorkspaceSource(info)
+	if got != "/home/ubuntu/Development/si" {
+		t.Fatalf("unexpected workspace fallback source %q", got)
+	}
+}
+
 func TestEnvValue(t *testing.T) {
 	env := []string{"CODEX_MODEL=gpt-5.2-codex", "CODEX_REASONING_EFFORT=high"}
 	if got := envValue(env, "CODEX_MODEL"); got != "gpt-5.2-codex" {
@@ -132,5 +154,34 @@ func TestCodexAuthVolumeFromContainerInfo(t *testing.T) {
 	}
 	if got := codexAuthVolumeFromContainerInfo(info); got != "si-codex-america" {
 		t.Fatalf("unexpected auth volume %q", got)
+	}
+}
+
+func TestCodexContainerConfigTargets(t *testing.T) {
+	targets := codexContainerConfigTargets()
+	if len(targets) != 2 {
+		t.Fatalf("unexpected config target count: %d", len(targets))
+	}
+	if targets[0].Path != "/home/si/.codex/config.toml" || targets[0].Owner != "si:si" {
+		t.Fatalf("unexpected first target: %+v", targets[0])
+	}
+	if targets[1].Path != "/root/.codex/config.toml" || targets[1].Owner != "root:root" {
+		t.Fatalf("unexpected second target: %+v", targets[1])
+	}
+}
+
+func TestAutopoieticNeedsRecreate(t *testing.T) {
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			Env: []string{"CODEX_INIT_FORCE=1"},
+		},
+	}
+	if !autopoieticNeedsRecreate(info) {
+		t.Fatalf("expected legacy autopoietic config to require recreate")
+	}
+
+	info.Config.Env = []string{"CODEX_INIT_FORCE=0"}
+	if autopoieticNeedsRecreate(info) {
+		t.Fatalf("did not expect CODEX_INIT_FORCE=0 to require recreate")
 	}
 }

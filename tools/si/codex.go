@@ -731,6 +731,10 @@ func cmdCodexExec(args []string) {
 			fatal(fmt.Errorf("codex container %s not found", containerName))
 		}
 
+		if strings.TrimSpace(containerID) != "" {
+			seedCodexConfig(ctx, client, containerID, false)
+		}
+
 		if *autopoietic {
 			if strings.TrimSpace(containerID) == "" || containerInfo == nil {
 				fatal(fmt.Errorf("codex container %s not found", containerName))
@@ -1110,12 +1114,20 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 	if id, info, err := client.ContainerByName(ctx, autopoName); err != nil {
 		return "", err
 	} else if id != "" {
-		if info != nil && info.State != nil && !info.State.Running {
-			if err := client.StartContainer(ctx, id); err != nil {
+		if autopoieticNeedsRecreate(info) {
+			warnf("autopoietic companion %s uses legacy init settings; recreating", autopoName)
+			if err := client.RemoveContainer(ctx, id, true); err != nil {
 				return "", err
 			}
+		} else {
+			if info != nil && info.State != nil && !info.State.Running {
+				if err := client.StartContainer(ctx, id); err != nil {
+					return "", err
+				}
+			}
+			seedCodexConfig(ctx, client, id, false)
+			return autopoName, nil
 		}
-		return autopoName, nil
 	}
 
 	image := strings.TrimSpace(envOr("CRITIC_IMAGE", ""))
@@ -1164,7 +1176,6 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 		"DYAD_NAME=" + slug,
 		"DYAD_MEMBER=critic",
 		"ACTOR_CONTAINER=" + codexContainerName,
-		"CODEX_INIT_FORCE=1",
 		"HOME=/root",
 		"CODEX_HOME=/root/.codex",
 		"SI_AUTOPOIETIC=1",
@@ -1222,6 +1233,7 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 	if err := client.StartContainer(ctx, id); err != nil {
 		return "", err
 	}
+	seedCodexConfig(ctx, client, id, false)
 	if profile != nil {
 		seedDyadProfileAuth(ctx, client, id, *profile)
 	}
@@ -1229,6 +1241,24 @@ func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, code
 		seedGitIdentity(ctx, client, id, "root", "/root", identity)
 	}
 	return autopoName, nil
+}
+
+func autopoieticNeedsRecreate(info *types.ContainerJSON) bool {
+	if info == nil || info.Config == nil {
+		return false
+	}
+	for _, item := range info.Config.Env {
+		item = strings.TrimSpace(item)
+		if !strings.HasPrefix(item, "CODEX_INIT_FORCE=") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(item, "CODEX_INIT_FORCE="))
+		if value == "" || value == "0" || strings.EqualFold(value, "false") {
+			return false
+		}
+		return true
+	}
+	return false
 }
 
 func autopoieticNetworkName(actorInfo *types.ContainerJSON) string {
@@ -1256,16 +1286,27 @@ func autopoieticWorkspaceSource(actorInfo *types.ContainerJSON) string {
 	if actorInfo == nil {
 		return ""
 	}
+	fallback := ""
 	for _, point := range actorInfo.Mounts {
-		dest := strings.TrimSpace(point.Destination)
-		if dest != "/workspace" {
+		if !strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
-			return strings.TrimSpace(point.Source)
+		source := strings.TrimSpace(point.Source)
+		if source == "" {
+			continue
+		}
+		dest := strings.TrimSpace(point.Destination)
+		if dest == "/workspace" {
+			return source
+		}
+		if dest == "/var/run/docker.sock" || strings.HasPrefix(dest, "/home/si/.codex") || strings.HasPrefix(dest, "/root/.codex") || strings.HasPrefix(dest, "/home/si/.config/gh") {
+			continue
+		}
+		if fallback == "" {
+			fallback = source
 		}
 	}
-	return ""
+	return fallback
 }
 
 func autopoieticCodexVolume(actorInfo *types.ContainerJSON, slug string) string {
@@ -1664,13 +1705,30 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 		warnf("codex config copy skipped: %v", err)
 		return
 	}
-	const destPath = "/home/si/.codex/config.toml"
-	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
-	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
-		warnf("codex config copy failed: %v", err)
-		return
+	copied := false
+	for _, target := range codexContainerConfigTargets() {
+		_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(target.Path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+		if err := client.CopyFileToContainer(ctx, containerID, target.Path, data, 0o600); err != nil {
+			continue
+		}
+		copied = true
+		_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 	}
-	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	if !copied {
+		warnf("codex config copy failed for container %s", strings.TrimSpace(containerID))
+	}
+}
+
+type codexConfigTarget struct {
+	Path  string
+	Owner string
+}
+
+func codexContainerConfigTargets() []codexConfigTarget {
+	return []codexConfigTarget{
+		{Path: "/home/si/.codex/config.toml", Owner: "si:si"},
+		{Path: "/root/.codex/config.toml", Owner: "root:root"},
+	}
 }
 
 func seedCodexAuth(ctx context.Context, client *shared.Client, containerID string, cleanSlate bool, profile codexProfile) {
