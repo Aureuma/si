@@ -1154,11 +1154,24 @@ func attachCodexTmuxPane(containerName string) error {
 			_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
 		}
 	}
+	// If the session exists but was created from a different host cwd, recreate it so the pane
+	// always starts in the caller's current directory in tmux mode.
+	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+		if _, err := tmuxOutput(ctx, "has-session", "-t", session); err == nil {
+			out, optErr := tmuxOutput(ctx, "show-options", "-v", "-t", session, "@si_codex_host_cwd")
+			if optErr != nil || strings.TrimSpace(out) != hostCwd {
+				_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
+			}
+		}
+	}
 	if _, err := tmuxOutput(ctx, "has-session", "-t", session); err != nil {
 		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 			return err
 		}
 		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
+		if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
+		}
 	}
 	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
 	if out, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
@@ -1168,6 +1181,9 @@ func attachCodexTmuxPane(containerName string) error {
 		}
 		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
 		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
+		if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
+		}
 	}
 	tmuxCmd := exec.Command("tmux", "attach-session", "-t", session)
 	tmuxCmd.Stdout = os.Stdout
