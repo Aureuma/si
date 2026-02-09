@@ -44,12 +44,12 @@ if [[ "$(id -u)" -eq 0 ]]; then
   apply_host_ids
   if [[ -n "${SI_HOST_UID:-}" && -n "${SI_HOST_GID:-}" ]]; then
     if [[ "$(id -u si 2>/dev/null || true)" == "${SI_HOST_UID}" && "$(id -g si 2>/dev/null || true)" == "${SI_HOST_GID}" ]]; then
-      chown -R si:si /home/si /workspace || true
+      chown -R si:si /home/si /workspace 2>/dev/null || true
     else
-      chown -R si:si /home/si || true
+      chown -R si:si /home/si 2>/dev/null || true
     fi
   else
-    chown -R si:si /home/si /workspace || true
+    chown -R si:si /home/si /workspace 2>/dev/null || true
   fi
 fi
 

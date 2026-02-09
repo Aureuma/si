@@ -288,6 +288,8 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
 		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 	}
+	// Allow `si status` inside dyad containers to reflect host Codex profiles/auth.
+	actorMounts = append(actorMounts, HostSiCodexProfileMounts("/root")...)
 	if hasSocket {
 		actorMounts = append(actorMounts, socketMount)
 	}
@@ -319,6 +321,8 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 		{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
 	}
+	// Allow `si status` inside dyad containers to reflect host Codex profiles/auth.
+	criticMounts = append(criticMounts, HostSiCodexProfileMounts("/root")...)
 	if hasSocket {
 		criticMounts = append(criticMounts, socketMount)
 	}
