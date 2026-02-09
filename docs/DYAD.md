@@ -14,6 +14,15 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 - A logged-in `si login` profile for real Codex runs (or use the offline fake Codex flow below)
 - If Docker is root-only on your host, run `si dyad ...` as root and set `SI_HOST_UID`/`SI_HOST_GID` so artifacts are owned by your user.
 
+## Loop Control Files
+
+Dyad loops are controlled via files under `.si/dyad/<dyad>/`:
+
+- `.si/dyad/<dyad>/control.pause`: pause the loop (polls every `DYAD_LOOP_PAUSE_POLL_SECONDS`, default 5s)
+- `.si/dyad/<dyad>/control.stop`: stop the loop cleanly
+
+If the last persisted critic report contains `Continue Loop: no`, the dyad loop will also remain stopped across restarts/recreates.
+
 ## Spawn + Inspect
 
 Spawn a dyad:

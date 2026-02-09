@@ -154,6 +154,12 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 			}
 		}
 	}
+	// If the dyad previously converged and the critic asked to stop, honor that across restarts.
+	// This prevents "recreate" or container restarts from spinning up a new turn after the loop ended.
+	if criticRequestsStop(state.LastCriticReport) {
+		logger.Printf("dyad loop already stopped by prior critic report at turn %d", state.Turn)
+		return nil
+	}
 	turn := state.Turn + 1
 	failures := 0
 	pausedNotified := false
