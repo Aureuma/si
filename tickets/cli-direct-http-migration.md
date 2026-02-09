@@ -67,7 +67,7 @@ Tasks
   - retry disabled for non-replayable bodies unless explicitly supported
 
 ### WS-3: Google OAuth Device Flow -> apibridge
-Status: `pending`
+Status: `done`
 
 Tasks
 - Replace `http.NewRequestWithContext`/`Do` for:
