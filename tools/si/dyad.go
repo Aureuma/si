@@ -388,6 +388,10 @@ func cmdDyadPeek(args []string) {
 		fatal(err)
 	}
 	_, _ = exec.Command("tmux", "set-option", "-t", peekSession, "remain-on-exit", "off").Output()
+	// Make pane titles visible and consistent.
+	_ = exec.Command("tmux", "rename-window", "-t", peekSession+":0", dyadPeekWindowTitle(dyad)).Run()
+	_ = exec.Command("tmux", "set-option", "-t", peekSession, "pane-border-status", "top").Run()
+	_ = exec.Command("tmux", "set-option", "-t", peekSession, "pane-border-format", "#{pane_title}").Run()
 
 	if memberVal == "both" {
 		if err := exec.Command("tmux", "split-window", "-h", "-t", peekSession+":0", "bash", "-lc", criticCmd).Run(); err != nil {
@@ -395,6 +399,16 @@ func cmdDyadPeek(args []string) {
 			fatal(err)
 		}
 		_, _ = exec.Command("tmux", "select-layout", "-t", peekSession, "even-horizontal").Output()
+	}
+	// Name panes so the user can immediately tell which dyad member they're driving.
+	switch memberVal {
+	case "actor":
+		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor")).Run()
+	case "critic":
+		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "critic")).Run()
+	default:
+		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor")).Run()
+		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.1", "-T", dyadPeekPaneTitle(dyad, "critic")).Run()
 	}
 
 	if *detached {
@@ -410,6 +424,29 @@ func cmdDyadPeek(args []string) {
 	tmuxCmd.Stdin = os.Stdin
 	if err := tmuxCmd.Run(); err != nil {
 		fatal(err)
+	}
+}
+
+func dyadPeekWindowTitle(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		dyad = "unknown"
+	}
+	return "🪢 " + dyad
+}
+
+func dyadPeekPaneTitle(dyad string, member string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		dyad = "unknown"
+	}
+	switch strings.ToLower(strings.TrimSpace(member)) {
+	case "actor":
+		return "🪢 " + dyad + " 🛩️ actor"
+	case "critic":
+		return "🪢 " + dyad + " 🧠 critic"
+	default:
+		return "🪢 " + dyad
 	}
 }
 

@@ -34,6 +34,16 @@ Run all module tests from repo root:
 ./tools/test.sh
 ```
 
+Run `./tools/test.sh --help` for a quick usage reminder.
+Run `./tools/test.sh --list` to print the module list without running tests.
+Note: `go test ./...` from the repo root will fail because the root is not a Go module.
+
+Run the installer smoke tests:
+
+```bash
+./tools/test-install-si.sh
+```
+
 Run static analysis across go.work modules:
 
 ```bash
