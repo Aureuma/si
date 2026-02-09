@@ -12,9 +12,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Changed
-- Merged `si image build` and `si self build` under `si build`:
-  - `si build image`
-  - `si build self` (plus `si build self upgrade` / `si build self run`)
+- Moved build-related commands under `si build`:
+  - `si image build` -> `si build image`
+  - `si self build` -> `si build self`
+  - `si self upgrade` -> `si build self upgrade`
+  - `si self run` -> `si build self run`
+- Removed the top-level `si image` and `si self` command surfaces.
 
 ## [v0.44.0] - 2026-02-08
 ### Added
@@ -23,7 +26,7 @@ All notable changes to this project will be documented in this file.
 - Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) plus raw API access.
 - Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`), session lifecycle helpers, and raw API access.
 - Added `si google youtube` command family with API key + OAuth device-flow auth, broad resource coverage, and raw API access.
-- Added `si build self` commands to build/upgrade/run `si` from a repo checkout (`si build self`, `si build self upgrade`, `si build self run`).
+- Added `si self` commands to build/upgrade/run `si` from a repo checkout (`si self build`, `si self upgrade`, `si self run`).
 - Added `tools/install-si.sh` installer for macOS and Linux, plus `tools/test-install-si.sh` for installer e2e coverage.
 - Added dedicated command guides: `docs/VAULT.md`, `docs/GITHUB.md`, `docs/CLOUDFLARE.md`, `docs/GOOGLE_PLACES.md`, and `docs/GOOGLE_YOUTUBE.md`.
 
