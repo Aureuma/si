@@ -259,8 +259,9 @@ func buildNoMcpConfig(model, effort string) string {
 model = "%s"
 model_reasoning_effort = "%s"
 
-[features]
-web_search_request = false
+# Codex deprecated [features].web_search_request; configure web search at the top level.
+# Values: "live" | "cached" | "disabled"
+web_search = "disabled"
 
 [sandbox_workspace_write]
 network_access = true

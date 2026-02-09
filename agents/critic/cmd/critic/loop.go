@@ -74,6 +74,7 @@ type codexTurnExecutor struct {
 }
 
 var errCriticRequestedStop = errors.New("critic requested loop stop")
+var errCodexAuthRequired = errors.New("codex authentication required")
 
 func runCriticLoop(ctx context.Context, logger *log.Logger) error {
 	cfg := loadLoopConfig()
@@ -132,6 +133,10 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 			return raw, report, nil
 		})
 		if err != nil {
+			if errors.Is(err, errCodexAuthRequired) {
+				logger.Printf("dyad seed halted (codex auth required): %v", err)
+				return nil
+			}
 			state.LastCriticReport = fallbackCriticFeedback(cfg)
 			state.UpdatedAt = time.Now().UTC()
 			if saveErr := saveLoopState(statePath, state); saveErr != nil {
@@ -196,6 +201,10 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 					logger.Printf("dyad state save warning: %v", err)
 				}
 				logger.Printf("dyad loop stopped by critic at turn %d", turn)
+				return nil
+			}
+			if errors.Is(err, errCodexAuthRequired) {
+				logger.Printf("dyad loop halted (codex auth required): %v", err)
 				return nil
 			}
 			failures++
@@ -451,6 +460,15 @@ func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRu
 			lastOutput = output
 		}
 		clean := stripANSI(output)
+		if codexAuthRequired(clean) {
+			if strings.TrimSpace(lastOutput) == "" {
+				lastOutput = output
+			}
+			if strings.TrimSpace(lastOutput) == "" {
+				lastOutput = clean
+			}
+			return lastOutput, fmt.Errorf("%w: codex is prompting for sign-in; authenticate via `si login` or `si dyad peek` and complete the login flow", errCodexAuthRequired)
+		}
 		if codexPromptReady(clean, e.promptLines, e.allowMcp) {
 			return output, nil
 		}
@@ -827,6 +845,18 @@ func codexPromptReady(output string, promptLines int, allowMcpStartup bool) bool
 		}
 	}
 	return false
+}
+
+func codexAuthRequired(output string) bool {
+	lower := strings.ToLower(output)
+	// Codex CLI shows this onboarding screen when no auth is present.
+	if !strings.Contains(lower, "welcome to codex") {
+		return false
+	}
+	return strings.Contains(lower, "sign in with chatgpt") ||
+		strings.Contains(lower, "device code") ||
+		strings.Contains(lower, "provide your own api key") ||
+		strings.Contains(lower, "connect an api key")
 }
 
 type promptSegment struct {

@@ -233,6 +233,18 @@ func TestIsBoolLiteral(t *testing.T) {
 	}
 }
 
+func TestValidateDyadSpawnOptionValue(t *testing.T) {
+	if err := validateDyadSpawnOptionValue("role", "infra"); err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if err := validateDyadSpawnOptionValue("role", ""); err == nil {
+		t.Fatalf("expected missing value error")
+	}
+	if err := validateDyadSpawnOptionValue("role", "--department"); err == nil {
+		t.Fatalf("expected flag-like value error")
+	}
+}
+
 func TestDyadProfileArg(t *testing.T) {
 	if value, ok := dyadProfileArg([]string{"--profile", "berylla"}); !ok || value != "berylla" {
 		t.Fatalf("expected --profile value, got ok=%v value=%q", ok, value)

@@ -6,8 +6,9 @@
 model = "__CODEX_MODEL__"
 model_reasoning_effort = "__CODEX_REASONING_EFFORT__"
 
-[features]
-web_search_request = true
+# Codex deprecated `[features].web_search_request`; configure web search at the top level.
+# Values: "live" | "cached" | "disabled"
+web_search = "live"
 
 [sandbox_workspace_write]
 network_access = true
