@@ -47,6 +47,8 @@ To "peek" into the running interactive Codex sessions (even mid-turn):
 si dyad peek <name>
 ```
 
+Note: host `tmux` sessions are per-user. If you run `si dyad peek` under `sudo`, you'll need to attach/list those sessions as the same user.
+
 Flags:
 
 - `--member actor|critic|both` (default `both`)
@@ -73,6 +75,7 @@ By default, it enforces **strict** work-report parsing:
 
 - `DYAD_LOOP_STRICT_REPORT=1` (default)
 - reports must be delimited by the markers above
+- reports must include the expected section headers (actor: `Summary/Changes/Validation/Open Questions/Next Step for Critic`; critic: `Assessment/Risks/Required Fixes/Verification Steps/Next Actor Prompt/Continue Loop`)
 - if Codex returns to a ready prompt without a delimited report, the turn fails fast and retries
 
 To override the interactive command used to start Codex (mainly for offline testing), set `DYAD_CODEX_START_CMD`. It rejects `codex exec` to keep dyads interactive-only.
