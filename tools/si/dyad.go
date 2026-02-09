@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	shared "si/agents/shared/docker"
@@ -257,6 +258,19 @@ func cmdDyadSpawn(args []string) {
 		ForwardPorts:      *forwardPorts,
 		Network:           shared.DefaultNetwork,
 		DockerSocket:      *dockerSocket,
+		LoopEnabled:       dyadLoopEnabledSetting(settings),
+		LoopGoal:          dyadLoopStringSetting("DYAD_LOOP_GOAL", settings.Dyad.Loop.Goal),
+		LoopSeedPrompt:    dyadLoopStringSetting("DYAD_LOOP_SEED_CRITIC_PROMPT", settings.Dyad.Loop.SeedCriticPrompt),
+		LoopMaxTurns:      dyadLoopIntSetting("DYAD_LOOP_MAX_TURNS", settings.Dyad.Loop.MaxTurns),
+		LoopSleepSeconds:  dyadLoopIntSetting("DYAD_LOOP_SLEEP_SECONDS", settings.Dyad.Loop.SleepSeconds),
+		LoopStartupDelay:  dyadLoopIntSetting("DYAD_LOOP_STARTUP_DELAY_SECONDS", settings.Dyad.Loop.StartupDelaySeconds),
+		LoopTurnTimeout:   dyadLoopIntSetting("DYAD_LOOP_TURN_TIMEOUT_SECONDS", settings.Dyad.Loop.TurnTimeoutSeconds),
+		LoopRetryMax:      dyadLoopIntSetting("DYAD_LOOP_RETRY_MAX", settings.Dyad.Loop.RetryMax),
+		LoopRetryBase:     dyadLoopIntSetting("DYAD_LOOP_RETRY_BASE_SECONDS", settings.Dyad.Loop.RetryBaseSeconds),
+		LoopPromptLines:   dyadLoopIntSetting("DYAD_LOOP_PROMPT_LINES", settings.Dyad.Loop.PromptLines),
+		LoopAllowMCP:      dyadLoopAllowMCPSetting(settings),
+		LoopTmuxCapture:   dyadLoopStringSetting("DYAD_LOOP_TMUX_CAPTURE", settings.Dyad.Loop.TmuxCapture),
+		LoopPausePoll:     dyadLoopIntSetting("DYAD_LOOP_PAUSE_POLL_SECONDS", settings.Dyad.Loop.PausePollSeconds),
 	}
 
 	actorID, criticID, err := client.EnsureDyad(ctx, opts)
@@ -284,6 +298,55 @@ func defaultEffort(role string) (string, string) {
 		return "medium", "high"
 	default:
 		return "medium", "medium"
+	}
+}
+
+func dyadLoopEnabledSetting(settings Settings) *bool {
+	if val, ok := dyadLoopBoolEnv("DYAD_LOOP_ENABLED"); ok {
+		return boolPtr(val)
+	}
+	return settings.Dyad.Loop.Enabled
+}
+
+func dyadLoopAllowMCPSetting(settings Settings) *bool {
+	if val, ok := dyadLoopBoolEnv("DYAD_LOOP_ALLOW_MCP_STARTUP"); ok {
+		return boolPtr(val)
+	}
+	return settings.Dyad.Loop.AllowMCPStartup
+}
+
+func dyadLoopStringSetting(envKey string, fallback string) string {
+	val := strings.TrimSpace(os.Getenv(strings.TrimSpace(envKey)))
+	if val != "" {
+		return val
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func dyadLoopIntSetting(envKey string, fallback int) int {
+	val := strings.TrimSpace(os.Getenv(strings.TrimSpace(envKey)))
+	if val == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func dyadLoopBoolEnv(envKey string) (bool, bool) {
+	val := strings.TrimSpace(strings.ToLower(os.Getenv(strings.TrimSpace(envKey))))
+	if val == "" {
+		return false, false
+	}
+	switch val {
+	case "1", "true", "yes", "on":
+		return true, true
+	case "0", "false", "no", "off":
+		return false, true
+	default:
+		return false, false
 	}
 }
 

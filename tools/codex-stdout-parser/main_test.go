@@ -121,3 +121,87 @@ func TestReadAgentMessagesSkipsNoise(t *testing.T) {
 		t.Fatalf("unexpected messages: %#v", msgs)
 	}
 }
+
+func TestStripANSI_RemovesCSIAndOSC(t *testing.T) {
+	input := "\x1b[31mred\x1b[0m plain \x1b]0;title\x07done"
+	got := stripANSI(input)
+	want := "red plain done"
+	if got != want {
+		t.Fatalf("stripANSI(%q) = %q, want %q", input, got, want)
+	}
+}
+
+func TestDecodeEscapes_UnquotesAndPreservesEscapes(t *testing.T) {
+	got := decodeEscapes(`\r\n`)
+	if got != "\r\n" {
+		t.Fatalf("decodeEscapes(\\\\r\\\\n) = %q, want CRLF", got)
+	}
+}
+
+func TestDecodeEscapes_QuotedInput(t *testing.T) {
+	got := decodeEscapes(`"tab:\t"`)
+	if got != "tab:\t" {
+		t.Fatalf("decodeEscapes quoted = %q, want tab escape", got)
+	}
+}
+
+func TestDecodeEscapes_Invalid(t *testing.T) {
+	input := `\q`
+	got := decodeEscapes(input)
+	if got != input {
+		t.Fatalf("decodeEscapes invalid = %q, want %q", got, input)
+	}
+}
+
+func TestDecodeEscapes_Empty(t *testing.T) {
+	got := decodeEscapes("   ")
+	if got != "" {
+		t.Fatalf("decodeEscapes empty = %q, want empty string", got)
+	}
+}
+
+func TestStripANSI_PreservesIncompleteEscape(t *testing.T) {
+	input := "start\x1b[end"
+	got := stripANSI(input)
+	want := "startnd"
+	if got != want {
+		t.Fatalf("stripANSI incomplete = %q, want %q", got, want)
+	}
+}
+
+func TestParserFlushEOF_Default(t *testing.T) {
+	promptRe := regexp.MustCompile("^$")
+	p := newParser(promptRe, nil, nil, nil, "block", "", true, true, false, true, false, 0, "")
+
+	raw := captureStdout(t, func() {
+		p.handleLine("hello")
+		p.flushEOF()
+	})
+	events := parseJSONOutputs(t, raw)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 output, got %d: %q", len(events), raw)
+	}
+	if events[0].Status != "eof" || events[0].ReadyForPrompt {
+		t.Fatalf("unexpected eof status: %+v", events[0])
+	}
+	if events[0].FinalReport != "hello" {
+		t.Fatalf("final report = %q", events[0].FinalReport)
+	}
+}
+
+func TestParserFlushEOF_Ready(t *testing.T) {
+	promptRe := regexp.MustCompile("^$")
+	p := newParser(promptRe, nil, nil, nil, "block", "", true, true, true, true, false, 0, "")
+
+	raw := captureStdout(t, func() {
+		p.handleLine("hello")
+		p.flushEOF()
+	})
+	events := parseJSONOutputs(t, raw)
+	if len(events) != 1 {
+		t.Fatalf("expected 1 output, got %d: %q", len(events), raw)
+	}
+	if events[0].Status != "turn_complete_exit" || !events[0].ReadyForPrompt {
+		t.Fatalf("unexpected ready status: %+v", events[0])
+	}
+}
