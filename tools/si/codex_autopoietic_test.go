@@ -60,6 +60,9 @@ func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected tmux command to use codex bypass flag, got: %s", cmd)
 	}
+	if !strings.Contains(cmd, "exec bash -il") {
+		t.Fatalf("expected tmux command to keep pane alive with interactive shell, got: %s", cmd)
+	}
 	if !strings.Contains(cmd, "sudo -n") {
 		t.Fatalf("expected tmux command to keep sudo fallback, got: %s", cmd)
 	}
@@ -69,6 +72,15 @@ func TestBuildTmuxCodexCommandUsesBypassFlag(t *testing.T) {
 	cmd := buildTmuxCodexCommand("abc123")
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected report/status tmux command to use codex bypass flag, got: %s", cmd)
+	}
+}
+
+func TestIsTmuxPaneDeadOutput(t *testing.T) {
+	if !isTmuxPaneDeadOutput("1\n") {
+		t.Fatalf("expected pane_dead output to be true")
+	}
+	if isTmuxPaneDeadOutput("0\n") {
+		t.Fatalf("expected pane_dead output to be false")
 	}
 }
 
