@@ -113,6 +113,10 @@ Device identities are age X25519 private keys. Resolution order:
 
 Settings are configured in `~/.si/settings.toml` under `[vault]`.
 
+Key file security:
+- when using file backend, `si` requires the key file to be `0600` and not a symlink
+- override (not recommended): `SI_VAULT_ALLOW_INSECURE_KEY_FILE=1`
+
 ## Audit Log
 
 Default audit log:
@@ -127,5 +131,6 @@ Audit logs never include secret values.
 
 - `--reveal` prints a secret to stdout. Use sparingly.
 - Prefer `--stdin` for `set` to avoid shell history.
+- `si vault run` and `si vault docker exec` refuse to proceed if plaintext keys exist unless you pass `--allow-plaintext`.
 - `docker exec` env injection is per-exec; values are still transmitted to the Docker daemon. Treat remote Docker as highly privileged.
 - `si vault docker exec` refuses insecure `DOCKER_HOST` by default; override with `--allow-insecure-docker-host` only if you understand the risk.

@@ -24,6 +24,23 @@ func IsEncryptedValueV1(value string) bool {
 	return strings.HasPrefix(strings.TrimSpace(value), EncryptedValuePrefixV1)
 }
 
+func ValidateEncryptedValueV1(ciphertext string) error {
+	ciphertext = strings.TrimSpace(ciphertext)
+	if !strings.HasPrefix(ciphertext, EncryptedValuePrefixV1) {
+		return fmt.Errorf("value is not %s ciphertext", EncryptedValuePrefixV1)
+	}
+	payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV1)
+	raw, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		return fmt.Errorf("invalid ciphertext payload: %w", err)
+	}
+	const ageMagic = "age-encryption.org/v1"
+	if len(raw) < len(ageMagic) || string(raw[:len(ageMagic)]) != ageMagic {
+		return fmt.Errorf("invalid ciphertext payload: not age format")
+	}
+	return nil
+}
+
 func ParseRecipientsFromDotenv(f DotenvFile) []string {
 	out := []string{}
 	for _, line := range f.Lines {
@@ -113,6 +130,10 @@ func DecryptStringV1(ciphertext string, identity *age.X25519Identity) (string, e
 	raw, err := base64.RawURLEncoding.DecodeString(payload)
 	if err != nil {
 		return "", fmt.Errorf("invalid ciphertext payload: %w", err)
+	}
+	const ageMagic = "age-encryption.org/v1"
+	if len(raw) < len(ageMagic) || string(raw[:len(ageMagic)]) != ageMagic {
+		return "", fmt.Errorf("invalid ciphertext payload: not age format")
 	}
 	r, err := age.Decrypt(bytes.NewReader(raw), identity)
 	if err != nil {

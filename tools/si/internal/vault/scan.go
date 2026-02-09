@@ -24,6 +24,9 @@ func ScanDotenvEncryption(doc DotenvFile) (DotenvEncryptionScan, error) {
 			continue
 		}
 		if IsEncryptedValueV1(val) {
+			if err := ValidateEncryptedValueV1(val); err != nil {
+				return DotenvEncryptionScan{}, err
+			}
 			scan.EncryptedKeys = append(scan.EncryptedKeys, assign.Key)
 			continue
 		}
@@ -31,4 +34,3 @@ func ScanDotenvEncryption(doc DotenvFile) (DotenvEncryptionScan, error) {
 	}
 	return scan, nil
 }
-

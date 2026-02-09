@@ -20,6 +20,7 @@ func cmdVaultDockerExec(args []string) {
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	allowInsecure := fs.Bool("allow-insecure-docker-host", false, "allow injecting secrets over an insecure remote DOCKER_HOST")
+	allowPlaintext := fs.Bool("allow-plaintext", false, "allow injecting even if plaintext keys exist (not recommended)")
 	fs.Parse(args)
 
 	rest := fs.Args()
@@ -55,6 +56,13 @@ func cmdVaultDockerExec(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	if len(dec.PlaintextKeys) > 0 {
+		sort.Strings(dec.PlaintextKeys)
+		if !*allowPlaintext {
+			fatal(fmt.Errorf("vault file contains plaintext keys: %s (run `si vault encrypt` or pass --allow-plaintext)", strings.Join(dec.PlaintextKeys, ", ")))
+		}
+		warnf("vault file contains plaintext keys (allowed): %s", strings.Join(dec.PlaintextKeys, ", "))
+	}
 	keys := make([]string, 0, len(dec.Values))
 	for k := range dec.Values {
 		keys = append(keys, k)
@@ -65,7 +73,7 @@ func cmdVaultDockerExec(args []string) {
 		"container":    strings.TrimSpace(*container),
 		"cmd0":         rest[0],
 		"argsLen":      len(rest) - 1,
-		"keys":         keys,
+		"keysCount":    len(keys),
 		"remoteDocker": func() bool { insecure, _ := isInsecureDockerHost(); return insecure }(),
 	})
 
