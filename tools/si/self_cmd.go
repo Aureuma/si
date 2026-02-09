@@ -121,7 +121,7 @@ func cmdSelfRun(args []string) {
 	if err != nil {
 		fatal(fmt.Errorf("go executable not found: %s", strings.TrimSpace(*goBin)))
 	}
-	runArgs := []string{"run", "./tools/si"}
+	runArgs := []string{"run", "-buildvcs=false", "./tools/si"}
 	runArgs = append(runArgs, forward...)
 	cmd := exec.Command(goPath, runArgs...)
 	cmd.Dir = root
@@ -176,7 +176,7 @@ func selfBuildBinary(root string, output string, goBin string, quiet bool) error
 	tmp := filepath.Join(dir, fmt.Sprintf(".si-build-%d-%d", os.Getpid(), time.Now().UnixNano()))
 	defer os.Remove(tmp)
 
-	buildArgs := []string{"build", "-o", tmp, "./tools/si"}
+	buildArgs := []string{"build", "-buildvcs=false", "-o", tmp, "./tools/si"}
 	if !quiet {
 		infof("running: %s %s", goPath, strings.Join(buildArgs, " "))
 	}

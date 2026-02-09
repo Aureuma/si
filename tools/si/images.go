@@ -67,6 +67,8 @@ func runDockerBuild(spec imageBuildSpec) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	// `--secret` requires BuildKit; enable it explicitly so builds don't depend on daemon defaults.
+	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=1")
 	return cmd.Run()
 }
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -374,6 +375,16 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 	}
 	uid := os.Getuid()
 	gid := os.Getgid()
+	if raw := strings.TrimSpace(os.Getenv("SI_HOST_UID")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			uid = parsed
+		}
+	}
+	if raw := strings.TrimSpace(os.Getenv("SI_HOST_GID")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil {
+			gid = parsed
+		}
+	}
 	if uid > 0 && gid > 0 {
 		env = append(env, fmt.Sprintf("SI_HOST_UID=%d", uid))
 		env = append(env, fmt.Sprintf("SI_HOST_GID=%d", gid))
@@ -392,6 +403,10 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 		env = appendOptionalBoolEnv(env, "DYAD_LOOP_ALLOW_MCP_STARTUP", opts.LoopAllowMCP)
 		env = appendOptionalEnv(env, "DYAD_LOOP_TMUX_CAPTURE", opts.LoopTmuxCapture)
 		env = appendOptionalIntEnv(env, "DYAD_LOOP_PAUSE_POLL_SECONDS", opts.LoopPausePoll)
+		// Host overrides (useful for offline testing and hard enforcement tweaks).
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_STRICT_REPORT")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_TMUX_CAPTURE_LINES")
+		env = appendHostEnvIfSet(env, "DYAD_CODEX_START_CMD")
 		env = appendHostEnvIfSet(env, "DYAD_STATE_DIR")
 	}
 	return env

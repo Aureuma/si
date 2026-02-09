@@ -40,7 +40,7 @@ Usage:
   si version | --version | -v
 
 Core:
-  si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
+  si dyad spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|object|raw|report|sync>
@@ -70,6 +70,7 @@ dyad:
     --role <role>
     --department <dept>
     --profile <profile>
+    --skip-auth / --skip-auth=false
     --actor-image <image>
     --critic-image <image>
     --codex-model <model>
@@ -91,6 +92,7 @@ dyad:
   si dyad remove <name>           (aliases: teardown, destroy, rm, delete)
   si dyad recreate <name> [role] [department] [--profile <profile>]
   si dyad status <name>
+  si dyad peek [--member actor|critic|both] [--detached] [--session <name>] <dyad>
   si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>
   si dyad run  [--member actor|critic] [--tty] <dyad> -- <cmd...>   (alias)
     --member <actor|critic>
