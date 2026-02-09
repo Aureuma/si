@@ -176,6 +176,8 @@ Run/attach workflows:
 ./si run <container-or-profile> --tmux
 ```
 
+Note: the legacy `--autopoietic` companion mode has been removed in favor of dyads (`./si dyad spawn ...`), while `--tmux` remains supported.
+
 ## Warmup
 `si` can auto-bootstrap weekly usage timers for logged-in Codex profiles:
 
