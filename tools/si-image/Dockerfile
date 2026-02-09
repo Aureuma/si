@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/critic ./cmd/criti
 FROM node:22-bookworm
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends ca-certificates curl gnupg gh git socat tini \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg gh git socat tini tmux \
     && install -m 0755 -d /etc/apt/keyrings \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
     && chmod a+r /etc/apt/keyrings/docker.gpg \
