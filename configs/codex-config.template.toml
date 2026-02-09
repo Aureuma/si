@@ -17,5 +17,4 @@ network_access = true
 dyad = "__DYAD_NAME__"
 member = "__DYAD_MEMBER__"
 role = "__ROLE__"
-department = "__DEPARTMENT__"
 initialized_utc = "__INITIALIZED_UTC__"
