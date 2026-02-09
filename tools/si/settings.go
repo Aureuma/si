@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -471,7 +472,9 @@ func applySettingsDefaults(settings *Settings) {
 func loadSettings() (Settings, error) {
 	path, err := settingsPath()
 	if err != nil {
-		return defaultSettings(), err
+		settings := defaultSettings()
+		applySettingsDefaults(&settings)
+		return settings, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -481,11 +484,15 @@ func loadSettings() (Settings, error) {
 			_ = saveSettings(settings)
 			return settings, nil
 		}
-		return defaultSettings(), err
+		settings := defaultSettings()
+		applySettingsDefaults(&settings)
+		return settings, fmt.Errorf("read settings %s: %w", path, err)
 	}
 	settings := defaultSettings()
 	if err := toml.Unmarshal(data, &settings); err != nil {
-		return defaultSettings(), err
+		fallback := defaultSettings()
+		applySettingsDefaults(&fallback)
+		return fallback, fmt.Errorf("parse settings %s: %w", path, err)
 	}
 	applySettingsDefaults(&settings)
 	return settings, nil
@@ -495,7 +502,9 @@ func loadSettingsOrDefault() Settings {
 	settings, err := loadSettings()
 	if err != nil {
 		warnf("settings load failed: %v", err)
-		return defaultSettings()
+		fallback := defaultSettings()
+		applySettingsDefaults(&fallback)
+		return fallback
 	}
 	return settings
 }
