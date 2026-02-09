@@ -558,16 +558,19 @@ func cmdDyadRecreate(args []string) {
 	if !hasProfileArg {
 		profileArg = ""
 	}
-	profile, err := resolveDyadSpawnProfile(profileArg)
-	if err != nil {
-		fatal(err)
-	}
-	if profile == nil {
-		return
-	}
-	status := codexProfileAuthStatus(*profile)
-	if !status.Exists {
-		fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", profile.ID, profile.ID))
+	skipAuth := dyadSkipAuthArg(args[1:])
+	if !skipAuth {
+		resolved, err := resolveDyadSpawnProfile(profileArg)
+		if err != nil {
+			fatal(err)
+		}
+		if resolved == nil {
+			return
+		}
+		status := codexProfileAuthStatus(*resolved)
+		if !status.Exists {
+			fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", resolved.ID, resolved.ID))
+		}
 	}
 	client, err := shared.NewClient()
 	if err != nil {
@@ -576,6 +579,35 @@ func cmdDyadRecreate(args []string) {
 	defer client.Close()
 	_ = client.RemoveDyad(context.Background(), name, true)
 	cmdDyadSpawn(args)
+}
+
+func dyadSkipAuthArg(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		raw := strings.TrimSpace(args[i])
+		if raw == "" {
+			continue
+		}
+		if raw == "--skip-auth" {
+			return true
+		}
+		if strings.HasPrefix(raw, "--skip-auth=") {
+			val := strings.TrimSpace(strings.TrimPrefix(raw, "--skip-auth="))
+			if !isBoolLiteral(val) {
+				continue
+			}
+			val = strings.ToLower(strings.TrimSpace(val))
+			return val == "1" || val == "true" || val == "t"
+		}
+		if raw == "--skip-auth" && i+1 < len(args) {
+			val := strings.TrimSpace(args[i+1])
+			if !isBoolLiteral(val) {
+				continue
+			}
+			val = strings.ToLower(strings.TrimSpace(val))
+			return val == "1" || val == "true" || val == "t"
+		}
+	}
+	return false
 }
 
 func cmdDyadStatus(args []string) {

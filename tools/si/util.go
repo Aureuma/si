@@ -90,7 +90,7 @@ dyad:
 
   si dyad list                    (no flags)
   si dyad remove <name>           (aliases: teardown, destroy, rm, delete)
-  si dyad recreate <name> [role] [department] [--profile <profile>]
+  si dyad recreate <name> [role] [department] [--profile <profile>] [--skip-auth]
   si dyad status <name>
   si dyad peek [--member actor|critic|both] [--detached] [--session <name>] <dyad>
   si dyad exec [--member actor|critic] [--tty] <dyad> -- <cmd...>
