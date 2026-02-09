@@ -81,6 +81,25 @@ By default, dyad spawn uses the active/default profile when available, or lets y
 If no logged-in profile is available, run `si login` first.
 By default, dyads mount the current directory; when run from the repo root they share the repo workspace. Use `--workspace` to override.
 
+### Dyad closed-loop (critic ↔ actor)
+- The critic now runs an automatic turn loop by default when spawned as a dyad member.
+- Each turn:
+  - critic runs an actor turn (`docker exec` into actor, parse actor work report)
+  - critic runs a critic turn (review actor report, produce next instructions)
+  - critic feeds the generated critic report back into the next actor turn
+- Loop artifacts are written to `.si/dyad/<dyad>/reports` and state to `.si/dyad/<dyad>/loop-state.json`.
+
+Useful environment knobs (set before `si dyad spawn`):
+- `DYAD_LOOP_ENABLED` (`1|0`)
+- `DYAD_LOOP_MAX_TURNS` (`0` = infinite)
+- `DYAD_LOOP_SLEEP_SECONDS`
+- `DYAD_LOOP_STARTUP_DELAY_SECONDS`
+- `DYAD_LOOP_TURN_TIMEOUT_SECONDS`
+- `DYAD_LOOP_RETRY_MAX`
+- `DYAD_LOOP_RETRY_BASE_SECONDS`
+- `DYAD_LOOP_GOAL`
+- `DYAD_LOOP_CODEX_COMMAND` (for custom/fake codex runner in testing)
+
 ## Codex containers (on-demand)
 Spawn standalone Codex containers with isolated auth:
 

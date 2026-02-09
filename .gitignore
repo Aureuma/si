@@ -20,3 +20,4 @@ data/
 !data/infra-broker/.gitkeep
 .artifacts/
 /si
+.si/
