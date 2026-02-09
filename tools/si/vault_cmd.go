@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-const vaultUsageText = "usage: si vault <init|status|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
+const vaultUsageText = "usage: si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
 
 func cmdVault(args []string) {
 	if len(args) == 0 {
@@ -18,6 +18,10 @@ func cmdVault(args []string) {
 		cmdVaultInit(rest)
 	case "status":
 		cmdVaultStatus(rest)
+	case "check":
+		cmdVaultCheck(rest)
+	case "hooks", "hook":
+		cmdVaultHooks(rest)
 	case "fmt":
 		cmdVaultFmt(rest)
 	case "encrypt":
