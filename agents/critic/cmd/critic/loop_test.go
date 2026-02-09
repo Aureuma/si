@@ -352,3 +352,25 @@ func TestRunTurnLoopControlStopFile(t *testing.T) {
 type ioDiscard struct{}
 
 func (ioDiscard) Write(p []byte) (int, error) { return len(p), nil }
+
+func TestCodexAuthRequired(t *testing.T) {
+	sample := `
+Welcome to Codex, OpenAI's command-line coding agent
+
+Sign in with ChatGPT to use Codex as part of your paid plan
+or connect an API key for usage-based billing
+
+1. Sign in with ChatGPT
+2. Sign in with Device Code
+3. Provide your own API key
+`
+	if !codexAuthRequired(sample) {
+		t.Fatalf("expected auth required to be detected")
+	}
+	if codexAuthRequired("› Hello\n<<WORK_REPORT_BEGIN>>\nSummary: ok\n<<WORK_REPORT_END>>\n") {
+		t.Fatalf("did not expect auth required on normal prompt output")
+	}
+	if codexAuthRequired("Welcome to Codex\n(no auth text)") {
+		t.Fatalf("did not expect auth required without auth options")
+	}
+}
