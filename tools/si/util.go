@@ -42,7 +42,7 @@ Usage:
 Core:
   si dyad spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
-  si vault <init|status|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
+  si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|object|raw|report|sync>
   si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
@@ -251,8 +251,10 @@ vault:
     --vault-dir <path>          (default: vault; resolved relative to git root)
     --env <name>                (default: dev; maps to .env.<env>)
 
-  si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>] [--key-backend <keyring|file>] [--key-file <path>]
+  si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>] [--hooks] [--key-backend <keyring|file>] [--key-file <path>]
   si vault status [--file <path>] [--vault-dir <path>] [--env <name>]
+  si vault check [--file <path>] [--vault-dir <path>] [--env <name>] [--staged] [--all]
+  si vault hooks install|status|uninstall [--vault-dir <path>] [--force]
   si vault fmt [--file <path>] [--vault-dir <path>] [--env <name>] [--all] [--check]
   si vault encrypt [--file <path>] [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]
   si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--env <name>] [--section <name>] [--stdin] [--format]

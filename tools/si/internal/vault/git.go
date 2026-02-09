@@ -31,6 +31,62 @@ func GitRoot(dir string) (string, error) {
 	return filepath.Clean(root), nil
 }
 
+func GitHooksDir(repoDir string) (string, error) {
+	repoDir = strings.TrimSpace(repoDir)
+	if repoDir == "" {
+		return "", fmt.Errorf("repo dir required")
+	}
+	cmd := exec.Command("git", "rev-parse", "--git-path", "hooks")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	hooks := strings.TrimSpace(string(out))
+	if hooks == "" {
+		return "", fmt.Errorf("hooks dir not found")
+	}
+	// rev-parse returns a path relative to repoDir in some setups.
+	if !filepath.IsAbs(hooks) {
+		hooks = filepath.Join(repoDir, hooks)
+	}
+	return filepath.Clean(hooks), nil
+}
+
+func GitStagedFiles(repoDir string) ([]string, error) {
+	repoDir = strings.TrimSpace(repoDir)
+	if repoDir == "" {
+		return nil, fmt.Errorf("repo dir required")
+	}
+	cmd := exec.Command("git", "diff", "--cached", "--name-only", "--diff-filter=ACMR")
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
+	paths := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		paths = append(paths, filepath.ToSlash(line))
+	}
+	return paths, nil
+}
+
+func GitShowIndexFile(repoDir, path string) ([]byte, error) {
+	repoDir = strings.TrimSpace(repoDir)
+	path = strings.TrimSpace(path)
+	if repoDir == "" || path == "" {
+		return nil, fmt.Errorf("repo dir and path required")
+	}
+	cmd := exec.Command("git", "show", ":"+path)
+	cmd.Dir = repoDir
+	return cmd.Output()
+}
+
 func GitSubmoduleAdd(repoRoot, url, path string) error {
 	repoRoot = strings.TrimSpace(repoRoot)
 	url = strings.TrimSpace(url)
