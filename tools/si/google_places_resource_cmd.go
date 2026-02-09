@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"si/tools/si/internal/apibridge"
 	"si/tools/si/internal/googleplacesbridge"
 )
 
@@ -592,55 +592,52 @@ func cmdGooglePlacesPhotoDownload(args []string) {
 }
 
 func downloadGooglePlacePhoto(ctx context.Context, runtime googlePlacesRuntimeContext, path string, maxWidth int, maxHeight int, params map[string]string, output string) (int64, string, error) {
-	endpoint, err := url.Parse(strings.TrimRight(runtime.BaseURL, "/") + path)
-	if err != nil {
-		return 0, "", err
-	}
-	q := endpoint.Query()
+	q := map[string]string{}
 	for key, value := range params {
 		key = strings.TrimSpace(key)
 		if key == "" {
 			continue
 		}
-		q.Set(key, strings.TrimSpace(value))
+		q[key] = strings.TrimSpace(value)
 	}
 	if maxWidth > 0 {
-		q.Set("maxWidthPx", strconv.Itoa(maxWidth))
+		q["maxWidthPx"] = strconv.Itoa(maxWidth)
 	}
 	if maxHeight > 0 {
-		q.Set("maxHeightPx", strconv.Itoa(maxHeight))
+		q["maxHeightPx"] = strconv.Itoa(maxHeight)
 	}
-	endpoint.RawQuery = q.Encode()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	client, err := apibridge.NewClient(apibridge.Config{
+		Component:  "google-places-cli",
+		BaseURL:    strings.TrimSpace(runtime.BaseURL),
+		UserAgent:  "si-google-places/1.0",
+		Timeout:    60 * time.Second,
+		MaxRetries: 0,
+	})
 	if err != nil {
 		return 0, "", err
 	}
-	req.Header.Set("X-Goog-Api-Key", strings.TrimSpace(runtime.APIKey))
-	req.Header.Set("User-Agent", "si-google-places/1.0")
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	resp, err := httpClient.Do(req)
+	resp, err := client.Do(ctx, apibridge.Request{
+		Method: http.MethodGet,
+		Path:   path,
+		Params: q,
+		Headers: map[string]string{
+			"X-Goog-Api-Key": strings.TrimSpace(runtime.APIKey),
+		},
+	})
 	if err != nil {
 		return 0, "", err
 	}
-	defer resp.Body.Close()
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return 0, "", googleplacesbridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(body))
+		return 0, "", googleplacesbridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 	}
 
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, "", err
-	}
 	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 		return 0, "", err
 	}
-	if err := os.WriteFile(output, content, 0o600); err != nil {
+	if err := os.WriteFile(output, resp.Body, 0o600); err != nil {
 		return 0, "", err
 	}
-	return int64(len(content)), strings.TrimSpace(resp.Header.Get("Content-Type")), nil
+	return int64(len(resp.Body)), strings.TrimSpace(resp.Headers.Get("Content-Type")), nil
 }
 
 func cmdGooglePlacesTypes(args []string) {
