@@ -11,6 +11,8 @@ Rules (human + dyad):
 ## Backlog
 
 - [ ] T-002 Add/adjust a small repo test/doc improvement identified by the critic. Status: TODO
+- [ ] T-003 DYAD-001 Fix host settings bind mount inside dyad/codex containers. Status: TODO
+- [ ] T-004 DYAD-002 Add offline dyad e2e smoke docs. Status: TODO
 
 ## Doing
 
