@@ -15,6 +15,7 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
   - If Codex launches the "Welcome to Codex" sign-in screen, the dyad loop will halt and log an auth-required message.
     Use `si dyad peek <dyad>` to complete login inside the running `tmux` session, then restart the dyad loop.
 - If Docker is root-only on your host, run `si dyad ...` as root and set `SI_HOST_UID`/`SI_HOST_GID` so artifacts are owned by your user.
+- The `si` CLI is installed inside dyad containers (same image as Codex containers), so you can run `si vault ...` or other `si` subcommands via `si dyad exec`.
 
 ## Loop Control Files
 
