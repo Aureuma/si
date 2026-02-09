@@ -38,4 +38,3 @@ func TestJSONLLogger_WritesOneLine(t *testing.T) {
 		t.Fatalf("expected exactly 1 line")
 	}
 }
-
