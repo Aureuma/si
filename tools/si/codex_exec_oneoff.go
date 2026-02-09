@@ -120,6 +120,8 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	if strings.TrimSpace(opts.WorkspaceHost) != "" {
 		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"})
 	}
+	// Make host Codex profile registry + auth cache visible to `si` inside the container.
+	mounts = append(mounts, shared.HostSiCodexProfileMounts("/home/si")...)
 	if configHostDir != "" && configTargetDir != "" {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,

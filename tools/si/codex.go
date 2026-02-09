@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -28,9 +28,9 @@ import (
 )
 
 const (
-	codexLabelKey            = "si.component"
-	codexLabelValue          = "codex"
-	codexTmuxSessionPrefix   = "si-codex-pane-"
+	codexLabelKey          = "si.component"
+	codexLabelValue        = "codex"
+	codexTmuxSessionPrefix = "si-codex-pane-"
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -438,6 +438,9 @@ func cmdCodexSpawn(args []string) {
 		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
 		{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetPrimary},
 	}
+	// Allow `si status` (and related profile-aware commands) to see the host's
+	// Codex profile registry + cached auth while running inside containers.
+	mounts = append(mounts, shared.HostSiCodexProfileMounts("/home/si")...)
 	if workspaceTargetMirror != "" && workspaceTargetMirror != workspaceTargetPrimary {
 		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetMirror})
 	}
