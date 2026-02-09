@@ -2,8 +2,11 @@ package apibridge
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -192,5 +195,103 @@ func TestClient_Do_BuildRequestJSONMarshalError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatalf("expected error")
+	}
+}
+
+func TestClient_Do_BodyBytes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if string(body) != "abc" {
+			t.Fatalf("unexpected body: %q", string(body))
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/octet-stream" {
+			t.Fatalf("unexpected content-type: %q", got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Config{BaseURL: srv.URL})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = c.Do(context.Background(), Request{
+		Method:      http.MethodPost,
+		Path:        "/upload",
+		BodyBytes:   []byte("abc"),
+		ContentType: "application/octet-stream",
+	})
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+}
+
+func TestClient_Do_BodyReaderWithRetriesFails(t *testing.T) {
+	c, err := NewClient(Config{BaseURL: "https://example.com", MaxRetries: 1})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = c.Do(context.Background(), Request{
+		Method:     http.MethodPost,
+		Path:       "/x",
+		BodyReader: strings.NewReader("hello"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "not replayable") {
+		t.Fatalf("expected not replayable error, got %v", err)
+	}
+}
+
+func TestClient_Do_BodyFactoryReplaysForRetry(t *testing.T) {
+	var calls atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		body, _ := io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if string(body) != fmt.Sprintf("attempt-%d", n) {
+			t.Fatalf("unexpected body on call %d: %q", n, string(body))
+		}
+		if n == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(srv.Close)
+
+	c, err := NewClient(Config{
+		BaseURL:    srv.URL,
+		MaxRetries: 1,
+		RetryDecider: func(ctx context.Context, attempt int, req Request, resp *http.Response, body []byte, callErr error) RetryDecision {
+			_ = ctx
+			_ = req
+			_ = body
+			if callErr != nil || resp == nil {
+				return RetryDecision{}
+			}
+			if resp.StatusCode == http.StatusTooManyRequests && attempt == 1 {
+				return RetryDecision{Retry: true, Wait: 0}
+			}
+			return RetryDecision{}
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, err = c.Do(context.Background(), Request{
+		Method: http.MethodPost,
+		Path:   "/x",
+		BodyFactory: func(attempt int) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader(fmt.Sprintf("attempt-%d", attempt))), nil
+		},
+		ContentType: "text/plain",
+	})
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("expected 2 calls, got %d", got)
 	}
 }

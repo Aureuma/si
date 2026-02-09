@@ -72,10 +72,13 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 	if attempts < 1 {
 		attempts = 1
 	}
+	if attempts > 1 && req.BodyFactory == nil && req.BodyReader != nil {
+		return Response{}, fmt.Errorf("request body is not replayable; disable retries or provide BodyFactory")
+	}
 
 	var lastErr error
 	for attempt := 1; attempt <= attempts; attempt++ {
-		httpReq, err := c.buildRequest(ctx, method, endpoint, req)
+		httpReq, err := c.buildRequest(ctx, method, endpoint, req, attempt)
 		if err != nil {
 			return Response{}, err
 		}
@@ -146,9 +149,24 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 	return Response{}, lastErr
 }
 
-func (c *Client) buildRequest(ctx context.Context, method string, endpoint string, req Request) (*http.Request, error) {
+func (c *Client) buildRequest(ctx context.Context, method string, endpoint string, req Request, attempt int) (*http.Request, error) {
 	bodyReader := io.Reader(nil)
-	if strings.TrimSpace(req.RawBody) != "" {
+	closeBody := func() {}
+	if req.BodyFactory != nil {
+		rc, err := req.BodyFactory(attempt)
+		if err != nil {
+			return nil, err
+		}
+		if rc == nil {
+			return nil, fmt.Errorf("BodyFactory returned nil body")
+		}
+		bodyReader = rc
+		closeBody = func() { _ = rc.Close() }
+	} else if req.BodyReader != nil {
+		bodyReader = req.BodyReader
+	} else if len(req.BodyBytes) > 0 {
+		bodyReader = bytes.NewReader(req.BodyBytes)
+	} else if strings.TrimSpace(req.RawBody) != "" {
 		bodyReader = strings.NewReader(req.RawBody)
 	} else if req.JSONBody != nil {
 		raw, err := json.Marshal(req.JSONBody)
@@ -159,6 +177,7 @@ func (c *Client) buildRequest(ctx context.Context, method string, endpoint strin
 	}
 	httpReq, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
 	if err != nil {
+		closeBody()
 		return nil, err
 	}
 	if ua := strings.TrimSpace(c.cfg.UserAgent); ua != "" {
@@ -173,10 +192,12 @@ func (c *Client) buildRequest(ctx context.Context, method string, endpoint strin
 	}
 	if bodyReader != nil {
 		contentType := strings.TrimSpace(req.ContentType)
-		if contentType == "" {
+		if contentType == "" && (req.JSONBody != nil || strings.TrimSpace(req.RawBody) != "") {
 			contentType = "application/json"
 		}
-		httpReq.Header.Set("Content-Type", contentType)
+		if contentType != "" {
+			httpReq.Header.Set("Content-Type", contentType)
+		}
 	}
 	return httpReq, nil
 }
