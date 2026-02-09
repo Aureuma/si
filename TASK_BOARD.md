@@ -10,12 +10,13 @@ Rules (human + dyad):
 
 ## Backlog
 
-- [ ] T-001 Verify dyad can read `si vault` safely (run `si vault status` and `si vault list`; do not print secret values). Status: TODO
 - [ ] T-002 Add/adjust a small repo test/doc improvement identified by the critic. Status: TODO
 
 ## Doing
 
 ## Done
+
+- [x] T-001 Verify dyad can read `si vault` safely (run `si vault status` and `si vault list`; do not print secret values). Status: DONE (2026-02-09)
 
 ## Turn Log
 
