@@ -33,6 +33,7 @@ var dyadActions = []dyadAction{
 	{Name: "spawn", Description: "create actor+critic dyad"},
 	{Name: "list", Description: "list dyads"},
 	{Name: "status", Description: "show dyad status"},
+	{Name: "peek", Description: "peek into actor+critic tmux sessions"},
 	{Name: "exec", Description: "run command in dyad (alias: run)"},
 	{Name: "logs", Description: "show dyad logs"},
 	{Name: "start", Description: "start dyad containers"},

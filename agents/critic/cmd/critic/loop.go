@@ -40,6 +40,9 @@ type loopConfig struct {
 	PromptLines      int
 	AllowMcpStartup  bool
 	CaptureMode      string
+	CaptureLines     int
+	StrictReport     bool
+	CodexStartCmd    string
 	PausePoll        time.Duration
 }
 
@@ -62,6 +65,9 @@ type codexTurnExecutor struct {
 	promptLines    int
 	allowMcp       bool
 	captureMode    string
+	captureLines   int
+	strictReport   bool
+	startCmd       string
 	readyTimeout   time.Duration
 	turnTimeout    time.Duration
 	pollInterval   time.Duration
@@ -116,7 +122,10 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 			if err != nil {
 				return "", "", err
 			}
-			report := extractWorkReport(raw)
+			report := extractDelimitedWorkReport(raw)
+			if report == "" && !cfg.StrictReport {
+				report = extractWorkReport(raw)
+			}
 			if report == "" || criticReportLooksPlaceholder(report) {
 				return raw, "", errors.New("seed critic output missing report")
 			}
@@ -220,7 +229,10 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 		if err != nil {
 			return "", "", err
 		}
-		report := extractWorkReport(raw)
+		report := extractDelimitedWorkReport(raw)
+		if report == "" && !cfg.StrictReport {
+			report = extractWorkReport(raw)
+		}
 		if report == "" || actorReportLooksPlaceholder(report) {
 			return raw, "", errors.New("actor output missing report")
 		}
@@ -239,7 +251,10 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 		if err != nil {
 			return "", "", err
 		}
-		report := extractWorkReport(raw)
+		report := extractDelimitedWorkReport(raw)
+		if report == "" && !cfg.StrictReport {
+			report = extractWorkReport(raw)
+		}
 		if report == "" || criticReportLooksPlaceholder(report) {
 			return raw, "", errors.New("critic output missing report")
 		}
@@ -295,6 +310,10 @@ func runWithRetries(ctx context.Context, cfg loopConfig, label string, fn func(c
 
 func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecutor, error) {
 	sessionSuffix := sanitizeSessionName(cfg.DyadName)
+	startCmd, err := interactiveCodexCommand(cfg.CodexStartCmd)
+	if err != nil {
+		return codexTurnExecutor{}, err
+	}
 	exec := codexTurnExecutor{
 		actorContainer: cfg.ActorContainer,
 		actorSession:   fmt.Sprintf("si-dyad-%s-actor", sessionSuffix),
@@ -302,6 +321,9 @@ func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecuto
 		promptLines:    cfg.PromptLines,
 		allowMcp:       cfg.AllowMcpStartup,
 		captureMode:    cfg.CaptureMode,
+		captureLines:   cfg.CaptureLines,
+		strictReport:   cfg.StrictReport,
+		startCmd:       startCmd,
 		readyTimeout:   cfg.TurnTimeout / 3,
 		turnTimeout:    cfg.TurnTimeout,
 		pollInterval:   350 * time.Millisecond,
@@ -311,6 +333,15 @@ func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecuto
 	}
 	if exec.captureMode != "main" && exec.captureMode != "alt" {
 		exec.captureMode = "main"
+	}
+	if exec.captureLines <= 0 {
+		exec.captureLines = 8000
+	}
+	if exec.captureLines < 500 {
+		exec.captureLines = 500
+	}
+	if exec.captureLines > 50000 {
+		exec.captureLines = 50000
 	}
 	if exec.readyTimeout <= 0 {
 		exec.readyTimeout = 30 * time.Second
@@ -333,7 +364,7 @@ func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string
 		return "", err
 	}
 	runner := tmuxRunner{Prefix: []string{"docker", "exec", e.actorContainer}}
-	out, err := e.runTurn(ctx, runner, e.actorSession, interactiveCodexCommand(), prompt, "actor")
+	out, err := e.runTurn(ctx, runner, e.actorSession, e.startCmd, prompt, "actor")
 	if err != nil {
 		e.recoverSession(e.actorSession, runner, err)
 	}
@@ -342,7 +373,7 @@ func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string
 
 func (e codexTurnExecutor) CriticTurn(ctx context.Context, prompt string) (string, error) {
 	runner := tmuxRunner{}
-	out, err := e.runTurn(ctx, runner, e.criticSession, interactiveCodexCommand(), prompt, "critic")
+	out, err := e.runTurn(ctx, runner, e.criticSession, e.startCmd, prompt, "critic")
 	if err != nil {
 		e.recoverSession(e.criticSession, runner, err)
 	}
@@ -355,11 +386,7 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 		return "", err
 	}
 	cleanReady := stripANSI(readyOutput)
-	segments := parsePromptSegmentsDual(cleanReady, readyOutput)
-	baselineSegments := len(segments)
-	if baselineSegments < 1 {
-		baselineSegments = 1
-	}
+	baselineReportEnd := strings.LastIndex(cleanReady, reportEndMarker)
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-u"); err != nil {
 		return "", err
 	}
@@ -373,7 +400,7 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-m"); err != nil {
 		return "", err
 	}
-	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineSegments, role)
+	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineReportEnd, role)
 }
 
 func (e codexTurnExecutor) recoverSession(session string, runner tmuxRunner, cause error) {
@@ -409,7 +436,7 @@ func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner 
 }
 
 func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRunner, target string) (string, error) {
-	captureOpts := statusOptions{CaptureMode: e.captureMode}
+	captureOpts := statusOptions{CaptureMode: e.captureMode, CaptureLines: e.captureLines}
 	deadline := time.Now().Add(e.readyTimeout)
 	var lastOutput string
 	for time.Now().Before(deadline) {
@@ -431,61 +458,74 @@ func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRu
 	return lastOutput, errors.New("timeout waiting for codex prompt")
 }
 
-func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineSegments int, role string) (string, error) {
-	captureOpts := statusOptions{CaptureMode: e.captureMode}
+func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineReportEnd int, role string) (string, error) {
+	captureOpts := statusOptions{CaptureMode: e.captureMode, CaptureLines: e.captureLines}
 	deadline := time.Now().Add(e.turnTimeout)
 	var lastOutput string
 	submitAttempts := 1
 	lastSubmit := time.Now()
-	startIndex := baselineSegments - 1
-	if startIndex < 0 {
-		startIndex = 0
-	}
 	for time.Now().Before(deadline) {
 		output, err := tmuxCapture(ctx, runner, target, captureOpts)
 		if err == nil && strings.TrimSpace(output) != "" {
 			lastOutput = output
 		}
 		clean := stripANSI(output)
-		segments := parsePromptSegmentsDual(clean, output)
-		if len(segments) <= startIndex {
-			if err := sleepContext(ctx, e.pollInterval); err != nil {
-				return "", err
-			}
-			continue
-		}
-		foundReport := ""
-		lastCompleted := len(segments) - 1
-		for i := lastCompleted; i >= startIndex; i-- {
-			seg := segments[i]
-			report := extractDelimitedWorkReport(strings.Join(seg.Lines, "\n"))
-			if report == "" {
-				report = extractReportLinesFromLines(seg.Raw, seg.Lines, false)
-			}
-			if strings.TrimSpace(report) == "" {
-				continue
-			}
+		promptReady := codexPromptReady(clean, e.promptLines, e.allowMcp)
+
+		report, ok := extractDelimitedWorkReportAfter(clean, baselineReportEnd)
+		if ok {
 			report = strings.TrimSpace(report)
 			if role == "actor" && actorReportLooksPlaceholder(report) {
-				continue
+				ok = false
 			}
 			if role == "critic" && criticReportLooksPlaceholder(report) {
-				continue
+				ok = false
 			}
-			if i < len(segments)-1 || codexPromptReady(clean, e.promptLines, e.allowMcp) {
-				foundReport = report
+		}
+		if !ok && !e.strictReport {
+			// Legacy fallback: try to scrape a bullet-style report from the most recent prompt segment.
+			segments := parsePromptSegmentsDual(clean, output)
+			for i := len(segments) - 1; i >= 0; i-- {
+				seg := segments[i]
+				candidate := strings.TrimSpace(extractReportLinesFromLines(seg.Raw, seg.Lines, false))
+				if candidate == "" {
+					continue
+				}
+				if role == "actor" && actorReportLooksPlaceholder(candidate) {
+					continue
+				}
+				if role == "critic" && criticReportLooksPlaceholder(candidate) {
+					continue
+				}
+				report = candidate
+				ok = true
 				break
 			}
 		}
-		if foundReport != "" {
+
+		if ok && report != "" {
+			// If we didn't get a delimited report from the captured output (legacy mode), normalize by appending one.
+			if e.strictReport || strings.Contains(clean, reportBeginMarker) {
+				return output, nil
+			}
 			normalizedOutput := strings.TrimSpace(output)
 			if normalizedOutput != "" {
 				normalizedOutput += "\n"
 			}
-			normalizedOutput += reportBeginMarker + "\n" + foundReport + "\n" + reportEndMarker
+			normalizedOutput += reportBeginMarker + "\n" + report + "\n" + reportEndMarker
 			return normalizedOutput, nil
 		}
-		if codexPromptReady(clean, e.promptLines, e.allowMcp) {
+
+		if promptReady {
+			if e.strictReport {
+				if strings.TrimSpace(lastOutput) == "" {
+					lastOutput = output
+				}
+				if strings.TrimSpace(lastOutput) == "" {
+					return "", errors.New("codex prompt ready but missing work report markers")
+				}
+				return lastOutput, errors.New("codex prompt ready but missing work report markers")
+			}
 			if submitAttempts < 2 && time.Since(lastSubmit) > 4*time.Second {
 				_ = tmuxSendKeys(ctx, runner, target, "C-m")
 				submitAttempts++
@@ -507,7 +547,8 @@ type tmuxRunner struct {
 }
 
 type statusOptions struct {
-	CaptureMode string
+	CaptureMode  string
+	CaptureLines int
 }
 
 func (r tmuxRunner) Output(ctx context.Context, args ...string) (string, error) {
@@ -621,8 +662,16 @@ func readLoopControl(stateDir string) (stop bool, pause bool) {
 	return stopErr == nil, pauseErr == nil
 }
 
-func interactiveCodexCommand() string {
-	return strings.TrimSpace("export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/root CODEX_HOME=/root/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox")
+func interactiveCodexCommand(custom string) (string, error) {
+	custom = strings.TrimSpace(custom)
+	if custom != "" {
+		lower := strings.ToLower(custom)
+		if strings.Contains(lower, "codex exec") || strings.Contains(lower, "codex-exec") {
+			return "", errors.New("DYAD_CODEX_START_CMD must not use `codex exec`; dyads require interactive Codex")
+		}
+		return custom, nil
+	}
+	return strings.TrimSpace("export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/root CODEX_HOME=/root/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox"), nil
 }
 
 func normalizeInteractivePrompt(prompt string) string {
@@ -650,11 +699,15 @@ func tmuxSendLiteral(ctx context.Context, runner tmuxRunner, target, text string
 }
 
 func tmuxCapture(ctx context.Context, runner tmuxRunner, target string, opts statusOptions) (string, error) {
+	start := "-"
+	if opts.CaptureLines > 0 {
+		start = fmt.Sprintf("-%d", opts.CaptureLines)
+	}
 	switch opts.CaptureMode {
 	case "alt":
-		return runner.Output(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-", "-a", "-q")
+		return runner.Output(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", start, "-a", "-q")
 	case "main":
-		return runner.Output(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
+		return runner.Output(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", start)
 	default:
 		return "", fmt.Errorf("unsupported tmux capture mode: %s", opts.CaptureMode)
 	}
@@ -697,7 +750,11 @@ func codexPromptReady(output string, promptLines int, allowMcpStartup bool) bool
 		}
 		seen++
 		if strings.HasPrefix(line, "›") {
-			return true
+			// Treat Codex as "ready" only when the prompt is empty (no user input on the prompt line).
+			rest := strings.TrimSpace(strings.TrimPrefix(line, "›"))
+			if rest == "" {
+				return true
+			}
 		}
 	}
 	return false
@@ -871,6 +928,26 @@ func extractDelimitedWorkReport(output string) string {
 		}
 	}
 	return ""
+}
+
+func extractDelimitedWorkReportAfter(output string, afterEnd int) (string, bool) {
+	clean := strings.TrimSpace(strings.ReplaceAll(output, "\r\n", "\n"))
+	if clean == "" {
+		return "", false
+	}
+	end := strings.LastIndex(clean, reportEndMarker)
+	if end < 0 || end <= afterEnd {
+		return "", false
+	}
+	start := strings.LastIndex(clean[:end], reportBeginMarker)
+	if start < 0 || start <= afterEnd {
+		return "", false
+	}
+	body := strings.TrimSpace(clean[start+len(reportBeginMarker) : end])
+	if body == "" {
+		return "", false
+	}
+	return body, true
 }
 
 var (
@@ -1122,6 +1199,9 @@ func loadLoopConfig() loopConfig {
 		PromptLines:      envInt("DYAD_LOOP_PROMPT_LINES", 3),
 		AllowMcpStartup:  envBool("DYAD_LOOP_ALLOW_MCP_STARTUP", false),
 		CaptureMode:      strings.TrimSpace(strings.ToLower(envOr("DYAD_LOOP_TMUX_CAPTURE", "main"))),
+		CaptureLines:     envInt("DYAD_LOOP_TMUX_CAPTURE_LINES", 8000),
+		StrictReport:     envBool("DYAD_LOOP_STRICT_REPORT", true),
+		CodexStartCmd:    strings.TrimSpace(os.Getenv("DYAD_CODEX_START_CMD")),
 		PausePoll:        envDurationSeconds("DYAD_LOOP_PAUSE_POLL_SECONDS", 5),
 	}
 }
