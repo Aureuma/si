@@ -1,6 +1,6 @@
 # CLI Direct HTTP Migration (Move Remaining net/http Call Sites to apibridge)
 
-Status: `in progress`
+Status: `done`
 
 ## Goal
 Remove remaining direct `net/http` request construction and bespoke URL helpers in CLI command codepaths, so all external HTTP requests go through `tools/si/internal/apibridge` (or a first-class `internal/*bridge` wrapper when appropriate).
@@ -95,7 +95,7 @@ Tasks
 - Add unit tests where feasible.
 
 ### WS-6: Cleanup + Verification
-Status: `pending`
+Status: `done`
 
 Tasks
 - Ensure no remaining `http.NewRequestWithContext` / `http.Client.Do` in CLI codepaths for the scoped files.
@@ -103,6 +103,12 @@ Tasks
   - `./tools/test.sh`
   - `./tools/test-install-si.sh`
   - `./si analyze --module tools/si`
+
+Results
+- No remaining direct `http.NewRequestWithContext` call sites in the scoped CLI files.
+- `./tools/test.sh` passed.
+- `./tools/test-install-si.sh` passed.
+- `./si analyze --module tools/si` passed.
 
 ## Current Status Snapshot
 - Completed earlier:
