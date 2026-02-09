@@ -40,6 +40,7 @@ type loopConfig struct {
 	PromptLines      int
 	AllowMcpStartup  bool
 	CaptureMode      string
+	PausePoll        time.Duration
 }
 
 type loopState struct {
@@ -140,7 +141,30 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 	}
 	turn := state.Turn + 1
 	failures := 0
+	pausedNotified := false
 	for ctx.Err() == nil {
+		stopRequestedByControl, pauseRequestedByControl := readLoopControl(cfg.StateDir)
+		if stopRequestedByControl {
+			logger.Printf("dyad loop stop requested by control file")
+			return nil
+		}
+		if pauseRequestedByControl {
+			if !pausedNotified {
+				logger.Printf("dyad loop paused by control file")
+				pausedNotified = true
+			}
+			pauseFor := cfg.PausePoll
+			if pauseFor <= 0 {
+				pauseFor = 5 * time.Second
+			}
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(pauseFor):
+			}
+			continue
+		}
+		pausedNotified = false
 		if cfg.MaxTurns > 0 && turn > cfg.MaxTurns {
 			return nil
 		}
@@ -299,13 +323,24 @@ func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecuto
 }
 
 func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string, error) {
+	if err := ensureActorContainerRunning(ctx, e.actorContainer); err != nil {
+		return "", err
+	}
 	runner := tmuxRunner{Prefix: []string{"docker", "exec", e.actorContainer}}
-	return e.runTurn(ctx, runner, e.actorSession, interactiveCodexCommand(), prompt)
+	out, err := e.runTurn(ctx, runner, e.actorSession, interactiveCodexCommand(), prompt)
+	if err != nil {
+		e.recoverSession(e.actorSession, runner, err)
+	}
+	return out, err
 }
 
 func (e codexTurnExecutor) CriticTurn(ctx context.Context, prompt string) (string, error) {
 	runner := tmuxRunner{}
-	return e.runTurn(ctx, runner, e.criticSession, interactiveCodexCommand(), prompt)
+	out, err := e.runTurn(ctx, runner, e.criticSession, interactiveCodexCommand(), prompt)
+	if err != nil {
+		e.recoverSession(e.criticSession, runner, err)
+	}
+	return out, err
 }
 
 func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, session string, startCmd string, prompt string) (string, error) {
@@ -333,6 +368,15 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 		return "", err
 	}
 	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineSegments)
+}
+
+func (e codexTurnExecutor) recoverSession(session string, runner tmuxRunner, cause error) {
+	if !isRecoverableTurnErr(cause) {
+		return
+	}
+	recoverCtx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	_, _ = runner.Output(recoverCtx, "kill-session", "-t", session)
 }
 
 func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner tmuxRunner, session, startCmd string) (string, string, error) {
@@ -492,6 +536,76 @@ func runCommand(ctx context.Context, name string, args ...string) (string, error
 		out = strings.TrimSpace(strings.TrimSpace(out + "\n" + errText))
 	}
 	return out, nil
+}
+
+func ensureActorContainerRunning(ctx context.Context, container string) error {
+	container = strings.TrimSpace(container)
+	if container == "" {
+		return errors.New("actor container required")
+	}
+	out, err := runCommand(ctx, "docker", "inspect", "-f", "{{.State.Running}}", container)
+	if err == nil && isTrueString(out) {
+		return nil
+	}
+	if _, startErr := runCommand(ctx, "docker", "start", container); startErr != nil {
+		if err != nil {
+			return fmt.Errorf("actor not running (%v) and start failed: %w", err, startErr)
+		}
+		return fmt.Errorf("start actor container: %w", startErr)
+	}
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		runningOut, inspectErr := runCommand(ctx, "docker", "inspect", "-f", "{{.State.Running}}", container)
+		if inspectErr == nil && isTrueString(runningOut) {
+			return nil
+		}
+		if err := sleepContext(ctx, 250*time.Millisecond); err != nil {
+			return err
+		}
+	}
+	return fmt.Errorf("actor container %s did not reach running state after restart", container)
+}
+
+func isTrueString(raw string) bool {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	return raw == "true" || raw == "1" || raw == "yes"
+}
+
+func isRecoverableTurnErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "timeout waiting for codex"):
+		return true
+	case strings.Contains(msg, "context deadline exceeded"):
+		return true
+	case strings.Contains(msg, "tmux"):
+		return true
+	case strings.Contains(msg, "pane"):
+		return true
+	case strings.Contains(msg, "session"):
+		return true
+	case strings.Contains(msg, "no such container"):
+		return true
+	case strings.Contains(msg, "is not running"):
+		return true
+	default:
+		return false
+	}
+}
+
+func readLoopControl(stateDir string) (stop bool, pause bool) {
+	stateDir = strings.TrimSpace(stateDir)
+	if stateDir == "" {
+		return false, false
+	}
+	stopPath := filepath.Join(stateDir, "control.stop")
+	pausePath := filepath.Join(stateDir, "control.pause")
+	_, stopErr := os.Stat(stopPath)
+	_, pauseErr := os.Stat(pausePath)
+	return stopErr == nil, pauseErr == nil
 }
 
 func interactiveCodexCommand() string {
@@ -947,6 +1061,7 @@ func loadLoopConfig() loopConfig {
 		PromptLines:      envInt("DYAD_LOOP_PROMPT_LINES", 3),
 		AllowMcpStartup:  envBool("DYAD_LOOP_ALLOW_MCP_STARTUP", false),
 		CaptureMode:      strings.TrimSpace(strings.ToLower(envOr("DYAD_LOOP_TMUX_CAPTURE", "main"))),
+		PausePoll:        envDurationSeconds("DYAD_LOOP_PAUSE_POLL_SECONDS", 5),
 	}
 }
 
