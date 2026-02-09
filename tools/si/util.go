@@ -20,7 +20,7 @@ func usage() {
 Holistic CLI for si. This help includes all commands, flags, and core features.
 
 Features:
-  - Dyads: spawn paired actor/critic containers, exec into them, manage logs.
+  - Dyads: spawn paired actor/critic containers with a critic-driven closed loop, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
   - Vault: encrypted secrets stored in a pinned submodule; format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.

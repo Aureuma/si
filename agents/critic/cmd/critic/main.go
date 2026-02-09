@@ -1,19 +1,27 @@
 package main
 
 import (
+	"context"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
 func main() {
 	logger := log.New(os.Stdout, "critic ", log.LstdFlags|log.LUTC)
 	ensureCodexBaseConfig(logger)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := runCriticLoop(ctx, logger); err != nil {
+		logger.Printf("critic loop error: %v", err)
+	}
 	logger.Printf("critic idle")
-	for {
-		time.Sleep(30 * time.Second)
+	for ctx.Err() == nil {
+		time.Sleep(10 * time.Second)
 	}
 }
 

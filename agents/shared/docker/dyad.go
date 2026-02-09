@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -358,6 +359,24 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 	if effort != "" {
 		env = append(env, "CODEX_REASONING_EFFORT="+effort)
 	}
+	uid := os.Getuid()
+	gid := os.Getgid()
+	if uid > 0 && gid > 0 {
+		env = append(env, fmt.Sprintf("SI_HOST_UID=%d", uid))
+		env = append(env, fmt.Sprintf("SI_HOST_GID=%d", gid))
+	}
+	if member == "critic" {
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_ENABLED")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_GOAL")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_MAX_TURNS")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_SLEEP_SECONDS")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_STARTUP_DELAY_SECONDS")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_TURN_TIMEOUT_SECONDS")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_RETRY_MAX")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_RETRY_BASE_SECONDS")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_CODEX_COMMAND")
+		env = appendHostEnvIfSet(env, "DYAD_STATE_DIR")
+	}
 	return env
 }
 
@@ -366,6 +385,14 @@ func appendOptionalEnv(env []string, key, val string) []string {
 		return env
 	}
 	return append(env, key+"="+strings.TrimSpace(val))
+}
+
+func appendHostEnvIfSet(env []string, key string) []string {
+	val := strings.TrimSpace(os.Getenv(strings.TrimSpace(key)))
+	if val == "" {
+		return env
+	}
+	return append(env, key+"="+val)
 }
 
 func cloneLabels(labels map[string]string) map[string]string {
