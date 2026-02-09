@@ -84,8 +84,8 @@ By default, dyads mount the current directory; when run from the repo root they 
 ### Dyad closed-loop (critic ↔ actor)
 - The critic now runs an automatic turn loop by default when spawned as a dyad member.
 - Each turn:
-  - critic runs an actor turn (`docker exec` into actor, parse actor work report)
-  - critic runs a critic turn (review actor report, produce next instructions)
+  - critic sends prompt to actor Codex interactive session (tmux in actor container), parses actor work report
+  - critic sends prompt to critic Codex interactive session (tmux in critic container), produces next instructions
   - critic feeds the generated critic report back into the next actor turn
 - Loop artifacts are written to `.si/dyad/<dyad>/reports` and state to `.si/dyad/<dyad>/loop-state.json`.
 
@@ -99,7 +99,9 @@ Useful environment knobs (set before `si dyad spawn`):
 - `DYAD_LOOP_RETRY_BASE_SECONDS`
 - `DYAD_LOOP_GOAL`
 - `DYAD_LOOP_SEED_CRITIC_PROMPT` (bootstrap turn-0 critic instruction)
-- `DYAD_LOOP_CODEX_COMMAND` (for custom/fake codex runner in testing)
+- `DYAD_LOOP_PROMPT_LINES` (prompt readiness detector window)
+- `DYAD_LOOP_ALLOW_MCP_STARTUP` (`1|0`)
+- `DYAD_LOOP_TMUX_CAPTURE` (`main|alt`)
 
 Stop behavior:
 - Loop runs continuously by default.
