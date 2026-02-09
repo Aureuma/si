@@ -34,7 +34,7 @@ Notes
 - For large uploads we may set `MaxRetries=0` to keep behavior predictable unless a replay factory exists.
 
 ### WS-1: Google Places CLI Download Path -> apibridge
-Status: `pending`
+Status: `done`
 
 Tasks
 - Replace direct `http.NewRequestWithContext` + `http.Client.Do` in the download helper with apibridge client calls.
