@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM golang:1.25-bookworm AS codex-stdout-parser-build
 WORKDIR /src/tools/codex-stdout-parser
 COPY tools/codex-stdout-parser/go.mod tools/codex-stdout-parser/go.sum ./
@@ -61,6 +63,16 @@ RUN printf '%s\n' 'alias codex="codex --dangerously-bypass-approvals-and-sandbox
     && printf '\n%s\n' '[ -f /etc/profile.d/si-term-title.sh ] && . /etc/profile.d/si-term-title.sh' >> /home/si/.bashrc \
     && printf '\n%s\n' '[ -f /etc/profile.d/si-term-title.sh ] && . /etc/profile.d/si-term-title.sh' >> /etc/bash.bashrc \
     && chown si:si /home/si/.bashrc
+
+RUN --mount=type=secret,id=si_host_codex_config,required=false \
+    mkdir -p /home/si/.codex /root/.codex \
+    && if [ -s /run/secrets/si_host_codex_config ]; then \
+         cp /run/secrets/si_host_codex_config /home/si/.codex/config.toml \
+         && cp /run/secrets/si_host_codex_config /root/.codex/config.toml \
+         && chown si:si /home/si/.codex/config.toml \
+         && chown root:root /root/.codex/config.toml \
+         && chmod 0600 /home/si/.codex/config.toml /root/.codex/config.toml; \
+       fi
 
 COPY tools/si-image/entrypoint.sh /usr/local/bin/si-entrypoint
 RUN chmod +x /usr/local/bin/si-entrypoint
