@@ -533,10 +533,56 @@ func cmdDyadList(args []string) {
 }
 
 func cmdDyadRemove(args []string) {
+	fs := flag.NewFlagSet("dyad remove", flag.ExitOnError)
+	all := fs.Bool("all", false, "remove all dyads (prompts for confirmation)")
+	_ = fs.Parse(args)
 	name := ""
-	if len(args) > 0 {
-		name = strings.TrimSpace(args[0])
+	if fs.NArg() > 0 {
+		name = strings.TrimSpace(fs.Arg(0))
 	}
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+	if *all {
+		if name != "" || fs.NArg() > 0 {
+			printUsage("usage: si dyad remove [--all] <name>")
+			return
+		}
+		containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
+		if err != nil {
+			fatal(err)
+		}
+		rows := buildDyadRows(containers)
+		if len(rows) == 0 {
+			infof("no dyads found")
+			return
+		}
+		names := make([]string, 0, len(rows))
+		for _, row := range rows {
+			if strings.TrimSpace(row.Dyad) != "" {
+				names = append(names, row.Dyad)
+			}
+		}
+		confirmed, ok := confirmYN(fmt.Sprintf("Remove ALL dyads (%d): %s?", len(names), strings.Join(names, ", ")), false)
+		if !ok || !confirmed {
+			infof("canceled")
+			return
+		}
+		removed := 0
+		for _, dyad := range names {
+			if err := client.RemoveDyad(ctx, dyad, true); err != nil {
+				warnf("remove dyad %s failed: %v", dyad, err)
+				continue
+			}
+			removed++
+		}
+		successf("removed %d dyads", removed)
+		return
+	}
+
 	if name == "" {
 		selected, ok := selectDyadName("remove")
 		if !ok {
@@ -544,12 +590,7 @@ func cmdDyadRemove(args []string) {
 		}
 		name = selected
 	}
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
-	if err := client.RemoveDyad(context.Background(), name, true); err != nil {
+	if err := client.RemoveDyad(ctx, name, true); err != nil {
 		fatal(err)
 	}
 	successf("dyad %s removed", name)
