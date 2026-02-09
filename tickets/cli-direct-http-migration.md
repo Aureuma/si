@@ -17,7 +17,7 @@ This is a follow-on to `tickets/api-bridge-refactor-plan.md` (which is complete)
 ## Workstreams
 
 ### WS-0: apibridge Prereqs (Streaming + Non-Replayable Bodies)
-Status: `pending`
+Status: `done`
 
 Tasks
 - Add support for non-string request bodies:
@@ -111,4 +111,3 @@ Tasks
   - Provider retries honoring `Retry-After`.
   - GitHub App auth provider now uses apibridge.
 - Remaining work: WS-0..WS-6 above.
-

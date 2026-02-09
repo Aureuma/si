@@ -2,6 +2,7 @@ package apibridge
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"time"
 )
@@ -18,6 +19,9 @@ type Request struct {
 	Params      map[string]string // Query params added to URL.
 	Headers     map[string]string
 	RawBody     string
+	BodyBytes   []byte
+	BodyReader  io.Reader
+	BodyFactory func(attempt int) (io.ReadCloser, error)
 	JSONBody    any
 	ContentType string
 
@@ -46,7 +50,7 @@ type RetryDecision struct {
 type RetryDecider func(ctx context.Context, attempt int, req Request, resp *http.Response, body []byte, callErr error) RetryDecision
 
 type Config struct {
-	Component string
+	Component  string
 	BaseURL    string
 	UserAgent  string
 	Timeout    time.Duration
