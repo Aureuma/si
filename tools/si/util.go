@@ -48,12 +48,13 @@ Core:
   si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
   si google <places|youtube>
-  si self <build|upgrade|run>
+  si build <image|self>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
 Build:
-  si image build                  (builds aureuma/si:local; no extra args)
+  si build image                  (builds aureuma/si:local; no extra args)
+  si build self                   (builds ./si by default; see "build" below)
 
 Profiles:
   si status [profile]      (codex profiles)
@@ -206,8 +207,15 @@ codex:
   Legacy compatibility:
     si warmup [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 
-image:
-  si image build                  (builds aureuma/si:local; no extra args)
+build:
+  si build image                  (builds aureuma/si:local; no extra args)
+  si build self [--repo <path>] [--output <path>]
+  si build self upgrade [--repo <path>] [--install-path <path>]
+  si build self run [--repo <path>] [--] [si args...]
+
+  Typical workflows:
+    Stable use: build/install once, then run that binary and call si build self upgrade when you want to upgrade.
+    Active dev: run si build self --output ./si or si build self run -- <args...> from your checkout.
 
 persona:
   si persona <name>
@@ -356,15 +364,6 @@ google:
   Environment policy:
     CLI uses prod, staging, and dev context labels.
     test is intentionally not used; map sandbox workflows to staging/dev context.
-
-self:
-  si self build [--repo <path>] [--output <path>]
-  si self upgrade [--repo <path>] [--install-path <path>]
-  si self run [--repo <path>] [--] [si args...]
-
-  Typical workflows:
-    Stable use: build/install once, then run that binary and call si self upgrade when you want to upgrade.
-    Active dev: run si self build --output ./si or si self run -- <args...> from your checkout.
 
 Environment defaults (selected)
 -------------------------------

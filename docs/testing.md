@@ -44,5 +44,5 @@ Scope it to the CLI module when iterating locally:
 The canonical local image build command is:
 
 ```bash
-./si image build
+./si build image
 ```

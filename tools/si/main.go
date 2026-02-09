@@ -32,14 +32,12 @@ func main() {
 		cmdCloudflare(args)
 	case "google":
 		cmdGoogle(args)
-	case "self":
-		cmdSelf(args)
 	case "docker":
 		cmdDocker(args)
 	case "dyad":
 		cmdDyad(args)
-	case "image":
-		cmdImage(args)
+	case "build":
+		cmdBuild(args)
 	case "persona":
 		cmdPersona(args)
 	case "skill":

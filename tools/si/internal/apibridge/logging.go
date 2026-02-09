@@ -46,4 +46,3 @@ func (l *JSONLLogger) Log(event map[string]any) {
 	_, _ = file.Write(data)
 	_ = file.Close()
 }
-

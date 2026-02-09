@@ -64,12 +64,12 @@ func cmdVaultRun(args []string) {
 	}
 	sort.Strings(keys)
 	vaultAuditEvent(settings, target, "run", map[string]any{
-		"envFile":       target.File,
-		"cmd0":          rest[0],
-		"argsLen":       len(rest) - 1,
-		"keysCount":     len(keys),
-		"decryptCount":  len(dec.DecryptedKeys),
-		"plainCount":    len(dec.PlaintextKeys),
+		"envFile":      target.File,
+		"cmd0":         rest[0],
+		"argsLen":      len(rest) - 1,
+		"keysCount":    len(keys),
+		"decryptCount": len(dec.DecryptedKeys),
+		"plainCount":   len(dec.PlaintextKeys),
 	})
 
 	cmd := exec.CommandContext(context.Background(), rest[0], rest[1:]...)

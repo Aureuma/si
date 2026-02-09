@@ -58,4 +58,3 @@ var Specs = map[ID]Spec{
 		RequestIDHeaders: []string{"X-Google-Request-Id", "X-Request-Id"},
 	},
 }
-

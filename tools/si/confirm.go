@@ -43,4 +43,3 @@ func confirmYN(prompt string, defaultYes bool) (bool, bool) {
 		}
 	}
 }
-

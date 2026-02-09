@@ -55,7 +55,6 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 
 - `si version` matches expected build (if your distribution embeds a version).
 - Smoke test:
-  - `si image build`
+  - `si build image`
   - `si dyad spawn <name> --skip-auth`
   - `si dyad status <name>`
-

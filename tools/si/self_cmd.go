@@ -10,28 +10,6 @@ import (
 	"time"
 )
 
-const selfUsageText = "usage: si self <build|upgrade|run>"
-
-func cmdSelf(args []string) {
-	if len(args) == 0 {
-		printUsage(selfUsageText)
-		return
-	}
-	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "build":
-		cmdSelfBuild(args[1:])
-	case "upgrade":
-		cmdSelfUpgrade(args[1:])
-	case "run":
-		cmdSelfRun(args[1:])
-	case "help", "-h", "--help":
-		printUsage(selfUsageText)
-	default:
-		printUnknown("self", args[0])
-		printUsage(selfUsageText)
-	}
-}
-
 func cmdSelfBuild(args []string) {
 	fs := flag.NewFlagSet("self build", flag.ExitOnError)
 	repo := fs.String("repo", "", "path inside si repo checkout")
@@ -40,7 +18,7 @@ func cmdSelfBuild(args []string) {
 	quiet := fs.Bool("quiet", false, "suppress go build command echo")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si self build [--repo <path>] [--output <path>] [--go-bin <path>] [--quiet]")
+		printUsage("usage: si build self [--repo <path>] [--output <path>] [--go-bin <path>] [--quiet]")
 		return
 	}
 	root, err := resolveSelfRepoRoot(*repo)
@@ -71,7 +49,7 @@ func cmdSelfUpgrade(args []string) {
 	quiet := fs.Bool("quiet", false, "suppress go build command echo")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si self upgrade [--repo <path>] [--install-path <path>] [--go-bin <path>] [--quiet]")
+		printUsage("usage: si build self upgrade [--repo <path>] [--install-path <path>] [--go-bin <path>] [--quiet]")
 		return
 	}
 	root, err := resolveSelfRepoRoot(*repo)

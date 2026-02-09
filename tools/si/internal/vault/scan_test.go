@@ -21,4 +21,3 @@ func TestValidateEncryptedValueV1RejectsNonAgePayload(t *testing.T) {
 		t.Fatalf("expected non-age payload to be rejected")
 	}
 }
-

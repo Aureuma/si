@@ -124,11 +124,11 @@ func TestClientDo_UseUploadUsesUploadBaseURL(t *testing.T) {
 	defer upload.Close()
 
 	client, err := NewClient(ClientConfig{
-		AuthMode:       AuthModeAPIKey,
-		APIKey:         "api-key-1",
-		BaseURL:        base.URL,
-		UploadBaseURL:  upload.URL,
-		MaxRetries:     0,
+		AuthMode:      AuthModeAPIKey,
+		APIKey:        "api-key-1",
+		BaseURL:       base.URL,
+		UploadBaseURL: upload.URL,
+		MaxRetries:    0,
 	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)

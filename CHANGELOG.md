@@ -10,6 +10,12 @@ All notable changes to this project will be documented in this file.
 - Pre-1.0: bump the minor version for feature sets; use patch releases for fixes.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
+## [Unreleased]
+### Changed
+- Merged `si image build` and `si self build` under `si build`:
+  - `si build image`
+  - `si build self` (plus `si build self upgrade` / `si build self run`)
+
 ## [v0.44.0] - 2026-02-08
 ### Added
 - Added `si vault` git-based encrypted credentials management (age recipients, TOFU trust store, formatter, audit log, and Docker-friendly runtime injection).
@@ -17,7 +23,7 @@ All notable changes to this project will be documented in this file.
 - Added `si cloudflare` command family with token-auth context management (`auth`, `context`, `doctor`) plus raw API access.
 - Added `si google places` command family with API-key auth/context flows (`auth`, `context`, `doctor`), session lifecycle helpers, and raw API access.
 - Added `si google youtube` command family with API key + OAuth device-flow auth, broad resource coverage, and raw API access.
-- Added `si self` commands to build/upgrade/run `si` from a repo checkout (`si self build`, `si self upgrade`, `si self run`).
+- Added `si build self` commands to build/upgrade/run `si` from a repo checkout (`si build self`, `si build self upgrade`, `si build self run`).
 - Added `tools/install-si.sh` installer for macOS and Linux, plus `tools/test-install-si.sh` for installer e2e coverage.
 - Added dedicated command guides: `docs/VAULT.md`, `docs/GITHUB.md`, `docs/CLOUDFLARE.md`, `docs/GOOGLE_PLACES.md`, and `docs/GOOGLE_YOUTUBE.md`.
 

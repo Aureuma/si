@@ -76,4 +76,3 @@ func DefaultRetryDecider(ctx context.Context, attempt int, req Request, resp *ht
 	}
 	return RetryDecision{}
 }
-
