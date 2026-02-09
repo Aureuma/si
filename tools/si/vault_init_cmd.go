@@ -17,6 +17,7 @@ func cmdVaultInit(args []string) {
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	ignoreDirty := fs.Bool("ignore-dirty", true, "set ignore=dirty for the vault submodule in .gitmodules")
+	installHooks := fs.Bool("hooks", true, "install git pre-commit hook to block plaintext dotenv commits (best effort)")
 	keyBackend := fs.String("key-backend", "", "override key backend: keyring or file")
 	keyFile := fs.String("key-file", "", "override key file path (for key-backend=file)")
 	fs.Parse(args)
@@ -161,5 +162,20 @@ func cmdVaultInit(args []string) {
 		fmt.Printf("key:       created (%s)\n", identityInfo.Source)
 	} else {
 		fmt.Printf("key:       ok (%s)\n", identityInfo.Source)
+	}
+	if *installHooks {
+		// Best-effort: hooks are local-only, but they prevent accidental plaintext commits during day-to-day work.
+		if hooksDir, err := vault.GitHooksDir(target.VaultDir); err == nil {
+			hookPath := filepath.Join(hooksDir, "pre-commit")
+			exe, _ := os.Executable()
+			script := renderVaultPreCommitHook(exe)
+			if err := writeHookFile(hookPath, script, false); err != nil {
+				warnf("hooks: not installed (%v) (run `si vault hooks install --force`)", err)
+			} else {
+				fmt.Printf("hooks:     installed (%s)\n", filepath.Clean(hookPath))
+			}
+		} else {
+			warnf("hooks: not installed (%v) (run `si vault hooks install`)", err)
+		}
 	}
 }
