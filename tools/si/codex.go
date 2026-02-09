@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -282,6 +284,7 @@ func cmdCodexSpawn(args []string) {
 	if !workdirSet && (strings.TrimSpace(*flags.workdir) == "" || strings.TrimSpace(*flags.workdir) == "/workspace") {
 		*flags.workdir = workspaceTargetMirror
 	}
+	desiredWorkspaceHost := filepath.Clean(strings.TrimSpace(*flags.workspaceHost))
 
 	client, err := shared.NewClient()
 	if err != nil {
@@ -317,13 +320,22 @@ func cmdCodexSpawn(args []string) {
 						fatal(err)
 					}
 				}
-				if !*flags.cleanSlate {
-					if identity, ok := hostGitIdentity(); ok {
-						seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+				// Ensure workspace mounts reflect the current host directory. If not, recreate.
+				if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror) {
+					warnf("codex container %s workspace differs from %s; recreating", choice.Name, desiredWorkspaceHost)
+					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
+						fatal(err)
 					}
+					// Fall through to create a new container below.
+				} else {
+					if !*flags.cleanSlate {
+						if identity, ok := hostGitIdentity(); ok {
+							seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+						}
+					}
+					infof("codex container %s already exists for profile %s", choice.Name, profile.ID)
+					return
 				}
-				infof("codex container %s already exists for profile %s", choice.Name, profile.ID)
-				return
 			}
 		}
 	}
@@ -344,13 +356,21 @@ func cmdCodexSpawn(args []string) {
 				fatal(err)
 			}
 		}
-		if !*flags.cleanSlate {
-			if identity, ok := hostGitIdentity(); ok {
-				seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+		// Ensure workspace mounts reflect the current host directory. If not, recreate.
+		if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror) {
+			warnf("codex container %s workspace differs from %s; recreating", containerName, desiredWorkspaceHost)
+			if err := client.RemoveContainer(ctx, existingID, true); err != nil {
+				fatal(err)
 			}
+		} else {
+			if !*flags.cleanSlate {
+				if identity, ok := hostGitIdentity(); ok {
+					seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
+				}
+			}
+			infof("codex container %s already exists", containerName)
+			return
 		}
-		infof("codex container %s already exists", containerName)
-		return
 	}
 
 	if strings.TrimSpace(*flags.networkName) != "" {
@@ -778,22 +798,44 @@ EOF
 printf '\033]0;%%s\007' "${SI_TERM_TITLE:-}"
 exec bash --rcfile "$rc" -i`, rc)}
 	}
-	execArgs := []string{"exec"}
-	if term.IsTerminal(int(os.Stdin.Fd())) {
-		execArgs = append(execArgs, "-it")
-	} else {
-		execArgs = append(execArgs, "-i")
+	hostCwd := ""
+	if cwd, err := os.Getwd(); err == nil {
+		hostCwd = filepath.ToSlash(strings.TrimSpace(cwd))
 	}
-	execArgs = append(execArgs, "-e", "SI_TERM_TITLE="+name)
+	baseArgs := []string{"exec"}
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		baseArgs = append(baseArgs, "-it")
+	} else {
+		baseArgs = append(baseArgs, "-i")
+	}
+	baseArgs = append(baseArgs, "-e", "SI_TERM_TITLE="+name)
 	if profileID != "" {
-		execArgs = append(execArgs, "-e", "SI_CODEX_PROFILE_ID="+profileID)
+		baseArgs = append(baseArgs, "-e", "SI_CODEX_PROFILE_ID="+profileID)
 	}
 	if profileName != "" {
-		execArgs = append(execArgs, "-e", "SI_CODEX_PROFILE_NAME="+profileName)
+		baseArgs = append(baseArgs, "-e", "SI_CODEX_PROFILE_NAME="+profileName)
+	}
+	execArgs := make([]string, 0, len(baseArgs)+2+len(cmd))
+	execArgs = append(execArgs, baseArgs...)
+	usedWorkdir := false
+	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+		execArgs = append(execArgs, "-w", hostCwd)
+		usedWorkdir = true
 	}
 	execArgs = append(execArgs, containerName)
 	execArgs = append(execArgs, cmd...)
 	if err := execDockerCLI(execArgs...); err != nil {
+		// If the host cwd isn't mapped inside the container (e.g. old container mounts),
+		// retry without forcing the working directory.
+		if usedWorkdir {
+			retryArgs := make([]string, 0, len(baseArgs)+1+len(cmd))
+			retryArgs = append(retryArgs, baseArgs...)
+			retryArgs = append(retryArgs, containerName)
+			retryArgs = append(retryArgs, cmd...)
+			if retryErr := execDockerCLI(retryArgs...); retryErr == nil {
+				return
+			}
+		}
 		fatal(err)
 	}
 }
@@ -1093,11 +1135,30 @@ func attachCodexTmuxPane(containerName string) error {
 	target := session + ":0.0"
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
-	cmd := buildCodexTmuxCommand(containerName)
+	hostCwd := ""
+	if cwd, err := os.Getwd(); err == nil {
+		hostCwd = filepath.ToSlash(strings.TrimSpace(cwd))
+	}
+	cmd := buildCodexTmuxCommand(containerName, hostCwd)
+	// Hash a stable "shape" of the command so we don't thrash sessions just because the user attached
+	// from a different host subdirectory.
+	cmdHashShape := buildCodexTmuxCommand(containerName, "__SI_HOST_CWD__")
+	cmdHash := sha256.Sum256([]byte(cmdHashShape))
+	cmdHashHex := hex.EncodeToString(cmdHash[:])
+
+	// If a tmux session already exists but was created with a different command, recreate it to
+	// ensure we land in the intended directory (and pick up newer spawn/mount behavior).
+	if _, err := tmuxOutput(ctx, "has-session", "-t", session); err == nil {
+		out, optErr := tmuxOutput(ctx, "show-options", "-v", "-t", session, "@si_codex_cmd_sha")
+		if optErr != nil || strings.TrimSpace(out) != cmdHashHex {
+			_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
+		}
+	}
 	if _, err := tmuxOutput(ctx, "has-session", "-t", session); err != nil {
 		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 			return err
 		}
+		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
 	}
 	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
 	if out, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
@@ -1106,6 +1167,7 @@ func attachCodexTmuxPane(containerName string) error {
 			return err
 		}
 		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
 	}
 	tmuxCmd := exec.Command("tmux", "attach-session", "-t", session)
 	tmuxCmd.Stdout = os.Stdout
@@ -1118,8 +1180,18 @@ func isTmuxPaneDeadOutput(out string) bool {
 	return strings.TrimSpace(out) == "1"
 }
 
-func buildCodexTmuxCommand(containerName string) string {
-	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox; status=$?; printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; exec bash -il"
+func buildCodexTmuxCommand(containerName string, hostCwd string) string {
+	hostCwd = strings.TrimSpace(hostCwd)
+	cdHost := ""
+	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+		cdHost = fmt.Sprintf("cd %s 2>/dev/null || ", shellSingleQuote(hostCwd))
+	}
+	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; " +
+		cdHost +
+		"cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; " +
+		"codex --dangerously-bypass-approvals-and-sandbox; status=$?; " +
+		"printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; " +
+		"exec bash -il"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
@@ -1365,6 +1437,53 @@ func autopoieticCodexVolume(actorInfo *types.ContainerJSON, slug string) string 
 		return "si-codex-default"
 	}
 	return "si-codex-" + strings.TrimSpace(slug)
+}
+
+func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirrorTarget string) bool {
+	if info == nil {
+		return false
+	}
+	desiredHost = filepath.Clean(strings.TrimSpace(desiredHost))
+	mirrorTarget = filepath.ToSlash(strings.TrimSpace(mirrorTarget))
+	if desiredHost == "" {
+		return false
+	}
+	if mirrorTarget == "" || !strings.HasPrefix(mirrorTarget, "/") {
+		mirrorTarget = "/workspace"
+	}
+
+	hasWorkspace := false
+	hasMirror := mirrorTarget == "/workspace"
+	for _, m := range info.Mounts {
+		if strings.TrimSpace(string(m.Type)) != "bind" {
+			continue
+		}
+		src := filepath.Clean(strings.TrimSpace(m.Source))
+		dest := filepath.ToSlash(strings.TrimSpace(m.Destination))
+		if dest == "/workspace" && src == desiredHost {
+			hasWorkspace = true
+		}
+		if mirrorTarget != "/workspace" && dest == mirrorTarget && src == desiredHost {
+			hasMirror = true
+		}
+	}
+	if !hasWorkspace || !hasMirror {
+		return false
+	}
+	if info.Config == nil {
+		return false
+	}
+	wd := filepath.ToSlash(strings.TrimSpace(info.Config.WorkingDir))
+	if wd != "" && wd != mirrorTarget {
+		return false
+	}
+	if envValue(info.Config.Env, "SI_WORKSPACE_MIRROR") != mirrorTarget {
+		return false
+	}
+	if envValue(info.Config.Env, "SI_WORKSPACE_HOST") != desiredHost {
+		return false
+	}
+	return true
 }
 
 func envValue(env []string, key string) string {
