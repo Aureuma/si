@@ -91,14 +91,22 @@ By default, dyads mount the current directory; when run from the repo root they 
 
 Useful environment knobs (set before `si dyad spawn`):
 - `DYAD_LOOP_ENABLED` (`1|0`)
-- `DYAD_LOOP_MAX_TURNS` (`0` = infinite)
+- `DYAD_LOOP_MAX_TURNS` (`0` = infinite; default)
 - `DYAD_LOOP_SLEEP_SECONDS`
 - `DYAD_LOOP_STARTUP_DELAY_SECONDS`
 - `DYAD_LOOP_TURN_TIMEOUT_SECONDS`
 - `DYAD_LOOP_RETRY_MAX`
 - `DYAD_LOOP_RETRY_BASE_SECONDS`
 - `DYAD_LOOP_GOAL`
+- `DYAD_LOOP_SEED_CRITIC_PROMPT` (bootstrap turn-0 critic instruction)
 - `DYAD_LOOP_CODEX_COMMAND` (for custom/fake codex runner in testing)
+
+Stop behavior:
+- Loop runs continuously by default.
+- Critic can stop the loop by emitting one of:
+  - `Continue Loop: no`
+  - `Stop Loop: yes`
+  - `#STOP_LOOP`
 
 ## Codex containers (on-demand)
 Spawn standalone Codex containers with isolated auth:
