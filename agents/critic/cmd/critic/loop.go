@@ -340,15 +340,7 @@ func appendTaskBoardTurnLog(taskBoardPath string, dyad string, turn int, actorRe
 	if dyad == "" {
 		dyad = "unknown"
 	}
-	summary := ""
-	for _, line := range strings.Split(strings.ReplaceAll(actorReport, "\r\n", "\n"), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		summary = line
-		break
-	}
+	summary := extractActorReportSummary(actorReport)
 	if len(summary) > 140 {
 		summary = summary[:140] + "..."
 	}
@@ -364,6 +356,46 @@ func appendTaskBoardTurnLog(taskBoardPath string, dyad string, turn int, actorRe
 	}
 	maybeApplyHostOwnership(taskBoardPath)
 	return nil
+}
+
+func extractActorReportSummary(actorReport string) string {
+	// Prefer the first bullet under "Summary:" so task-board logs remain meaningful
+	// even when the report's first line is just the section header.
+	lines := strings.Split(strings.ReplaceAll(actorReport, "\r\n", "\n"), "\n")
+	inSummary := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		lower := strings.ToLower(line)
+		if strings.HasPrefix(lower, "summary:") {
+			inSummary = true
+			continue
+		}
+		if inSummary {
+			// Stop at the next section header.
+			if strings.HasSuffix(line, ":") && !strings.HasPrefix(line, "-") {
+				break
+			}
+			if strings.HasPrefix(line, "-") {
+				return strings.TrimSpace(strings.TrimPrefix(line, "-"))
+			}
+			return line
+		}
+	}
+	// Fallback: first non-empty, non-header line.
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasSuffix(line, ":") && !strings.HasPrefix(line, "-") {
+			continue
+		}
+		return strings.TrimSpace(strings.TrimPrefix(line, "-"))
+	}
+	return ""
 }
 
 func runWithRetries(ctx context.Context, cfg loopConfig, label string, fn func(context.Context) (string, string, error)) (string, string, error) {
@@ -1294,20 +1326,24 @@ You are the CRITIC for the dyad "🪢 %s".
 
 Goal: %s
 
-How the loop works (hard requirements):
-- Your output will be sent verbatim to the actor as the next prompt.
-- After this seed, you will receive ONLY the actor's work report as your input (no templates). Do not ask for additional context; infer from the report + repo state.
-- Keep your messages to the actor concise; if instructions get long, reference /workspace/DYAD_PROTOCOL.md instead of pasting templates.
+Hard rules:
+- You initiate: write the first message to the actor now.
+- After this seed, your input will be ONLY the actor's work report (no templates).
+- Your output will be sent verbatim to the actor.
+- Keep it short; refer to /workspace/DYAD_PROTOCOL.md for the exact actor report format.
 
 Task board:
-- Read tasks from /workspace/TASK_BOARD.md.
-- Tell the actor to pick ONE task and update TASK_BOARD.md every turn (status + short log).
-
-Actor work report requirements:
-- Tell the actor to follow /workspace/DYAD_PROTOCOL.md exactly (including the ⏰ Finished At (UTC) line).
+- Use /workspace/TASK_BOARD.md as the queue.
+- Tell the actor to pick ONE task, move it to Doing, and update TASK_BOARD.md each turn.
 
 Vault:
 - The actor may use `+"`si vault`"+` as needed; never print secret values.
+
+Output requirement:
+- Output ONLY the next actor message, delimited as:
+  <<WORK_REPORT_BEGIN>>
+  <message to actor>
+  <<WORK_REPORT_END>>
 %s
 Now: write the first message to the actor to start useful work from TASK_BOARD.md.
 `, cfg.DyadName, cfg.Goal, seedBlock))
