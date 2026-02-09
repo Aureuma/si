@@ -77,12 +77,16 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			if resp == nil || !apibridge.IsSafeMethod(req.Method) {
 				return apibridge.RetryDecision{}
 			}
+			wait := apibridge.BackoffDelay(attempt)
+			if d, ok := apibridge.RetryAfterDelay(resp.Header); ok {
+				wait = d
+			}
 			switch resp.StatusCode {
 			case http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
-				return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				return apibridge.RetryDecision{Retry: true, Wait: wait}
 			default:
 				if resp.StatusCode >= 500 {
-					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+					return apibridge.RetryDecision{Retry: true, Wait: wait}
 				}
 				return apibridge.RetryDecision{}
 			}
