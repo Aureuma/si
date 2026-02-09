@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 
 	shared "si/agents/shared/docker"
 )
 
-const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|exec|run|logs|start|stop|restart|cleanup>"
+const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup>"
 
 func cmdDyad(args []string) {
 	if len(args) > 0 {
@@ -45,6 +46,8 @@ func cmdDyad(args []string) {
 		cmdDyadRecreate(args[1:])
 	case "status":
 		cmdDyadStatus(args[1:])
+	case "peek":
+		cmdDyadPeek(args[1:])
 	case "exec":
 		cmdDyadExec(args[1:])
 	case "logs":
@@ -85,6 +88,7 @@ func cmdDyadSpawn(args []string) {
 	forwardPorts := fs.String("forward-ports", envOr("SI_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
 	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in dyad containers")
 	profileKey := fs.String("profile", "", "codex profile name/email/id")
+	skipAuth := fs.Bool("skip-auth", false, "skip codex profile auth requirement (for offline/testing use)")
 	nameArg, filtered := splitDyadSpawnArgs(args)
 	fs.Parse(filtered)
 	settings := loadSettingsOrDefault()
@@ -227,16 +231,20 @@ func cmdDyadSpawn(args []string) {
 	defer client.Close()
 
 	ctx := context.Background()
-	profile, err := resolveDyadSpawnProfile(strings.TrimSpace(*profileKey))
-	if err != nil {
-		fatal(err)
-	}
-	if profile == nil {
-		return
-	}
-	status := codexProfileAuthStatus(*profile)
-	if !status.Exists {
-		fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", profile.ID, profile.ID))
+	var profile *codexProfile
+	if !*skipAuth {
+		resolved, err := resolveDyadSpawnProfile(strings.TrimSpace(*profileKey))
+		if err != nil {
+			fatal(err)
+		}
+		if resolved == nil {
+			return
+		}
+		status := codexProfileAuthStatus(*resolved)
+		if !status.Exists {
+			fatal(fmt.Errorf("profile %s is not logged in; run `si login %s` first", resolved.ID, resolved.ID))
+		}
+		profile = resolved
 	}
 	opts := shared.DyadOptions{
 		Dyad:              name,
@@ -286,6 +294,147 @@ func cmdDyadSpawn(args []string) {
 		seedGitIdentity(ctx, client, criticID, "root", "/root", identity)
 	}
 	successf("dyad %s ready (role=%s dept=%s)", name, role, dept)
+}
+
+func cmdDyadPeek(args []string) {
+	fs := flag.NewFlagSet("dyad peek", flag.ExitOnError)
+	member := fs.String("member", "both", "actor, critic, or both")
+	detached := fs.Bool("detached", false, "create host tmux session but do not attach")
+	hostSession := fs.String("session", "", "host tmux session name (default: si-dyad-peek-<dyad>)")
+	fs.Parse(args)
+
+	dyad := ""
+	if fs.NArg() > 0 {
+		dyad = strings.TrimSpace(fs.Arg(0))
+	}
+	if dyad == "" {
+		selected, ok := selectDyadName("peek")
+		if !ok {
+			return
+		}
+		dyad = selected
+	}
+
+	memberVal := strings.ToLower(strings.TrimSpace(*member))
+	if memberVal == "" {
+		memberVal = "both"
+	}
+	switch memberVal {
+	case "both", "actor", "critic":
+	default:
+		fatal(fmt.Errorf("invalid member %q (expected actor, critic, or both)", memberVal))
+	}
+
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+
+	actorContainer := shared.DyadContainerName(dyad, "actor")
+	criticContainer := shared.DyadContainerName(dyad, "critic")
+	actorID, _, err := client.ContainerByName(ctx, actorContainer)
+	if err != nil {
+		fatal(err)
+	}
+	criticID, _, err := client.ContainerByName(ctx, criticContainer)
+	if err != nil {
+		fatal(err)
+	}
+	if actorID == "" && criticID == "" {
+		fatal(fmt.Errorf("dyad not found: %s", dyad))
+	}
+
+	suffix := sanitizeDyadTmuxSuffix(dyad)
+	actorSession := fmt.Sprintf("si-dyad-%s-actor", suffix)
+	criticSession := fmt.Sprintf("si-dyad-%s-critic", suffix)
+
+	peekSession := strings.TrimSpace(*hostSession)
+	if peekSession == "" {
+		peekSession = fmt.Sprintf("si-dyad-peek-%s", suffix)
+	}
+
+	if _, err := exec.LookPath("tmux"); err != nil {
+		fatal(fmt.Errorf("tmux not found in PATH: %w", err))
+	}
+
+	actorCmd := dyadPeekAttachCmd(actorContainer, actorSession)
+	criticCmd := dyadPeekAttachCmd(criticContainer, criticSession)
+
+	// Always create (or replace) the host peek session for predictable behavior.
+	_ = exec.Command("tmux", "kill-session", "-t", peekSession).Run()
+
+	var first string
+	switch memberVal {
+	case "actor":
+		first = actorCmd
+	case "critic":
+		first = criticCmd
+	default:
+		first = actorCmd
+	}
+	if err := exec.Command("tmux", "new-session", "-d", "-s", peekSession, "bash", "-lc", first).Run(); err != nil {
+		fatal(err)
+	}
+	_, _ = exec.Command("tmux", "set-option", "-t", peekSession, "remain-on-exit", "off").Output()
+
+	if memberVal == "both" {
+		if err := exec.Command("tmux", "split-window", "-h", "-t", peekSession+":0", "bash", "-lc", criticCmd).Run(); err != nil {
+			_ = exec.Command("tmux", "kill-session", "-t", peekSession).Run()
+			fatal(err)
+		}
+		_, _ = exec.Command("tmux", "select-layout", "-t", peekSession, "even-horizontal").Output()
+	}
+
+	if *detached {
+		successf("dyad peek session ready: %s", peekSession)
+		return
+	}
+	if !isInteractiveTerminal() {
+		fatal(errors.New("dyad peek requires an interactive terminal (or use --detached)"))
+	}
+	tmuxCmd := exec.Command("tmux", "attach-session", "-t", peekSession)
+	tmuxCmd.Stdout = os.Stdout
+	tmuxCmd.Stderr = os.Stderr
+	tmuxCmd.Stdin = os.Stdin
+	if err := tmuxCmd.Run(); err != nil {
+		fatal(err)
+	}
+}
+
+func dyadPeekAttachCmd(container, session string) string {
+	// Keep the command shell-parseable but safe: dyad/container/session names are slug-validated.
+	container = strings.TrimSpace(container)
+	session = strings.TrimSpace(session)
+	if container == "" || session == "" {
+		return "echo missing dyad peek target; sleep 3"
+	}
+	return strings.TrimSpace(fmt.Sprintf(`
+set -e
+while ! docker exec %s tmux has-session -t %s >/dev/null 2>&1; do
+  sleep 0.2
+done
+exec docker exec -it %s tmux attach -t %s
+`, container, session, container, session))
+}
+
+func sanitizeDyadTmuxSuffix(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return "unknown"
+	}
+	var b strings.Builder
+	for _, r := range raw {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "unknown"
+	}
+	return out
 }
 
 func defaultEffort(role string) (string, string) {
