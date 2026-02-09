@@ -49,6 +49,23 @@ si vault run --env dev -- ./your-command --args
 si vault docker exec --container <name-or-id> --env dev -- ./your-command --args
 ```
 
+## Prevent Plaintext Commits (Git Hooks)
+
+`si vault init` installs a best-effort local `pre-commit` hook inside the vault repo to block committing dotenv files that contain plaintext values.
+
+You can also manage hooks explicitly:
+```bash
+si vault hooks install --vault-dir vault
+si vault hooks status --vault-dir vault
+si vault hooks uninstall --vault-dir vault
+```
+
+The hook runs `si vault check --staged --all --vault-dir .` inside the vault repo.
+
+Notes:
+- Git hooks are local-only and can be bypassed with `git commit --no-verify`.
+- For stronger enforcement, add a CI check in the vault repo that fails if any `.env*` file contains plaintext values.
+
 ## Multi-Environment Files
 
 `--env <name>` maps to `.env.<name>` inside the vault dir, for example:
@@ -112,4 +129,3 @@ Audit logs never include secret values.
 - Prefer `--stdin` for `set` to avoid shell history.
 - `docker exec` env injection is per-exec; values are still transmitted to the Docker daemon. Treat remote Docker as highly privileged.
 - `si vault docker exec` refuses insecure `DOCKER_HOST` by default; override with `--allow-insecure-docker-host` only if you understand the risk.
-
