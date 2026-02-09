@@ -30,10 +30,7 @@ import (
 const (
 	codexLabelKey            = "si.component"
 	codexLabelValue          = "codex"
-	autopoieticLabelValue    = "autopoietic"
-	autopoieticForLabelKey   = "si.autopoietic.for"
 	codexTmuxSessionPrefix   = "si-codex-pane-"
-	autopoieticContainerPref = "si-autopoietic-"
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -639,9 +636,11 @@ func cmdCodexList(args []string) {
 }
 
 func cmdCodexExec(args []string) {
+	if flagProvided(args, "autopoietic") {
+		fatal(fmt.Errorf("--autopoietic has been removed; dyads now provide the paired actor/critic workflow (use `si dyad ...`). You can still use `si run <name> --tmux` to attach to a codex container"))
+	}
 	fs := flag.NewFlagSet("exec", flag.ExitOnError)
 	oneOff := fs.Bool("one-off", false, "run a one-off codex exec in an isolated container")
-	autopoietic := fs.Bool("autopoietic", false, "ensure autopoietic companion for existing container mode")
 	tmuxAttach := fs.Bool("tmux", false, "attach to codex tmux pane for existing container mode")
 	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
@@ -674,8 +673,8 @@ func cmdCodexExec(args []string) {
 	}
 
 	if *oneOff || prompt != "" || *outputOnly || *noMcp {
-		if *autopoietic || *tmuxAttach {
-			fatal(fmt.Errorf("--autopoietic and --tmux are only supported in existing container mode"))
+		if *tmuxAttach {
+			fatal(fmt.Errorf("--tmux is only supported in existing container mode"))
 		}
 		if prompt == "" && len(rest) > 0 {
 			prompt = strings.Join(rest, " ")
@@ -716,7 +715,7 @@ func cmdCodexExec(args []string) {
 		return
 	}
 
-	rest = consumeRunContainerModeFlags(rest, autopoietic, tmuxAttach)
+	rest = consumeRunContainerModeFlags(rest, tmuxAttach)
 	if len(rest) < 1 {
 		name, ok := selectCodexContainer("run", true)
 		if !ok {
@@ -733,52 +732,36 @@ func cmdCodexExec(args []string) {
 
 	profileID := ""
 	profileName := ""
-	var profileRef *codexProfile
 	var containerID string
-	var containerInfo *types.ContainerJSON
 	client, clientErr := shared.NewClient()
 	if clientErr == nil {
 		defer client.Close()
 		ctx := context.Background()
 		id, info, err := client.ContainerByName(ctx, containerName)
 		if err != nil {
-			if *autopoietic || *tmuxAttach {
+			if *tmuxAttach {
 				fatal(err)
 			}
 		} else if id != "" {
 			containerID = id
-			containerInfo = info
 			if info != nil && info.Config != nil {
 				profileID = strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
 			}
 			if profileID != "" {
 				if prof, ok := codexProfileByKey(profileID); ok {
 					profileName = prof.Name
-					tmp := prof
-					profileRef = &tmp
 				} else {
 					profileName = profileID
 				}
 			}
-		} else if *autopoietic || *tmuxAttach {
+		} else if *tmuxAttach {
 			fatal(fmt.Errorf("codex container %s not found", containerName))
 		}
 
 		if strings.TrimSpace(containerID) != "" {
 			seedCodexConfig(ctx, client, containerID, false)
 		}
-
-		if *autopoietic {
-			if strings.TrimSpace(containerID) == "" || containerInfo == nil {
-				fatal(fmt.Errorf("codex container %s not found", containerName))
-			}
-			autopoName, err := ensureAutopoieticCompanion(ctx, client, containerName, containerInfo, profileRef)
-			if err != nil {
-				fatal(err)
-			}
-			infof("autopoietic companion %s ready for %s", autopoName, containerName)
-		}
-	} else if *autopoietic || *tmuxAttach {
+	} else if *tmuxAttach {
 		fatal(fmt.Errorf("docker client unavailable: %w", clientErr))
 	}
 
@@ -1072,14 +1055,6 @@ func codexImageDisplay(image string) string {
 	return image
 }
 
-func autopoieticContainerName(codexContainerName string) string {
-	slug := codexContainerSlug(codexContainerName)
-	if slug == "" {
-		slug = strings.TrimSpace(codexContainerName)
-	}
-	return autopoieticContainerPref + slug
-}
-
 func validateRunTmuxArgs(tmux bool, cmd []string) error {
 	if tmux && len(cmd) > 0 {
 		return fmt.Errorf("--tmux cannot be combined with a custom command")
@@ -1087,7 +1062,7 @@ func validateRunTmuxArgs(tmux bool, cmd []string) error {
 	return nil
 }
 
-func consumeRunContainerModeFlags(args []string, autopoietic, tmuxAttach *bool) []string {
+func consumeRunContainerModeFlags(args []string, tmuxAttach *bool) []string {
 	if len(args) == 0 {
 		return args
 	}
@@ -1100,10 +1075,6 @@ func consumeRunContainerModeFlags(args []string, autopoietic, tmuxAttach *bool) 
 			continue
 		}
 		switch strings.TrimSpace(arg) {
-		case "--autopoietic":
-			if autopoietic != nil {
-				*autopoietic = true
-			}
 		case "--tmux":
 			if tmuxAttach != nil {
 				*tmuxAttach = true
@@ -1210,249 +1181,6 @@ func buildCodexTmuxCommand(containerName string, hostCwd string) string {
 		"exec bash -il"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
-}
-
-func ensureAutopoieticCompanion(ctx context.Context, client *shared.Client, codexContainerName string, actorInfo *types.ContainerJSON, profile *codexProfile) (string, error) {
-	if client == nil {
-		return "", errors.New("docker client required")
-	}
-	if actorInfo == nil || actorInfo.Config == nil {
-		return "", errors.New("codex container info required")
-	}
-	codexContainerName = strings.TrimSpace(codexContainerName)
-	if codexContainerName == "" {
-		return "", errors.New("codex container required")
-	}
-
-	autopoName := autopoieticContainerName(codexContainerName)
-	if id, info, err := client.ContainerByName(ctx, autopoName); err != nil {
-		return "", err
-	} else if id != "" {
-		if autopoieticNeedsRecreate(info) {
-			warnf("autopoietic companion %s uses legacy init settings; recreating", autopoName)
-			if err := client.RemoveContainer(ctx, id, true); err != nil {
-				return "", err
-			}
-		} else {
-			if info != nil && info.State != nil && !info.State.Running {
-				if err := client.StartContainer(ctx, id); err != nil {
-					return "", err
-				}
-			}
-			seedCodexConfig(ctx, client, id, false)
-			return autopoName, nil
-		}
-	}
-
-	image := strings.TrimSpace(envOr("CRITIC_IMAGE", ""))
-	if image == "" {
-		settings := loadSettingsOrDefault()
-		image = strings.TrimSpace(settings.Dyad.CriticImage)
-	}
-	if image == "" {
-		image = strings.TrimSpace(actorInfo.Config.Image)
-	}
-	if image == "" {
-		image = strings.TrimSpace(envOr("SI_CODEX_IMAGE", "aureuma/si:local"))
-	}
-
-	networkName := autopoieticNetworkName(actorInfo)
-	if networkName != "" {
-		_, _ = client.EnsureNetwork(ctx, networkName, nil)
-	}
-
-	slug := codexContainerSlug(codexContainerName)
-	if slug == "" {
-		slug = strings.TrimSpace(codexContainerName)
-	}
-	codexVol := autopoieticCodexVolume(actorInfo, slug)
-	workspaceSource := autopoieticWorkspaceSource(actorInfo)
-	configsSource := ""
-	if workspaceSource != "" {
-		if resolved, err := resolveConfigsHost(workspaceSource); err == nil {
-			configsSource = resolved
-		}
-	}
-
-	labels := map[string]string{
-		codexLabelKey:          autopoieticLabelValue,
-		autopoieticForLabelKey: codexContainerName,
-		"si.name":              slug,
-		"si.mode":              "autopoietic",
-	}
-	if profile != nil {
-		labels[codexProfileLabelKey] = profile.ID
-	}
-
-	env := []string{
-		"ROLE=autopoietic",
-		"DEPARTMENT=autopoietic",
-		"DYAD_NAME=" + slug,
-		"DYAD_MEMBER=critic",
-		"ACTOR_CONTAINER=" + codexContainerName,
-		"HOME=/root",
-		"CODEX_HOME=/root/.codex",
-		"SI_AUTOPOIETIC=1",
-	}
-	workspaceMirror := ""
-	if strings.TrimSpace(workspaceSource) != "" {
-		workspaceMirror = filepath.ToSlash(strings.TrimSpace(workspaceSource))
-	}
-	if workspaceMirror == "" || !strings.HasPrefix(workspaceMirror, "/") {
-		workspaceMirror = "/workspace"
-	}
-	env = append(env,
-		"SI_WORKSPACE_PRIMARY=/workspace",
-		"SI_WORKSPACE_MIRROR="+workspaceMirror,
-		"SI_WORKSPACE_HOST="+strings.TrimSpace(workspaceSource),
-	)
-	if model := envValue(actorInfo.Config.Env, "CODEX_MODEL"); model != "" {
-		env = append(env, "CODEX_MODEL="+model)
-	}
-	if effort := envValue(actorInfo.Config.Env, "CODEX_REASONING_EFFORT"); effort != "" {
-		env = append(env, "CODEX_REASONING_EFFORT="+effort)
-	}
-
-	cfg := &container.Config{
-		Image:      image,
-		WorkingDir: workspaceMirror,
-		Env:        filterEnv(env),
-		Labels:     labels,
-		Entrypoint: []string{"tini", "-s", "--"},
-		Cmd:        []string{"critic"},
-		User:       "root",
-	}
-	mounts := []mount.Mount{
-		{Type: mount.TypeVolume, Source: codexVol, Target: "/root/.codex"},
-	}
-	if workspaceSource != "" {
-		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: workspaceSource, Target: "/workspace"})
-		if workspaceMirror != "" && workspaceMirror != "/workspace" {
-			mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: workspaceSource, Target: workspaceMirror})
-		}
-	}
-	if configsSource != "" {
-		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: configsSource, Target: "/configs", ReadOnly: true})
-	}
-	socketMount, ok := shared.DockerSocketMount()
-	if !ok {
-		return "", errors.New("autopoietic mode requires a host Docker socket mount")
-	}
-	mounts = append(mounts, socketMount)
-
-	hostCfg := &container.HostConfig{
-		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-		Mounts:        mounts,
-	}
-	netCfg := &network.NetworkingConfig{}
-	if networkName != "" {
-		netCfg = &network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				networkName: {Aliases: []string{autopoName}},
-			},
-		}
-	}
-	id, err := client.CreateContainer(ctx, cfg, hostCfg, netCfg, autopoName)
-	if err != nil {
-		return "", err
-	}
-	if err := client.StartContainer(ctx, id); err != nil {
-		return "", err
-	}
-	seedCodexConfig(ctx, client, id, false)
-	if profile != nil {
-		seedDyadProfileAuth(ctx, client, id, *profile)
-	}
-	if identity, ok := hostGitIdentity(); ok {
-		seedGitIdentity(ctx, client, id, "root", "/root", identity)
-	}
-	return autopoName, nil
-}
-
-func autopoieticNeedsRecreate(info *types.ContainerJSON) bool {
-	if info == nil || info.Config == nil {
-		return false
-	}
-	for _, item := range info.Config.Env {
-		item = strings.TrimSpace(item)
-		if !strings.HasPrefix(item, "CODEX_INIT_FORCE=") {
-			continue
-		}
-		value := strings.TrimSpace(strings.TrimPrefix(item, "CODEX_INIT_FORCE="))
-		if value == "" || value == "0" || strings.EqualFold(value, "false") {
-			return false
-		}
-		return true
-	}
-	return false
-}
-
-func autopoieticNetworkName(actorInfo *types.ContainerJSON) string {
-	if actorInfo == nil || actorInfo.NetworkSettings == nil {
-		return shared.DefaultNetwork
-	}
-	if len(actorInfo.NetworkSettings.Networks) == 0 {
-		return shared.DefaultNetwork
-	}
-	keys := make([]string, 0, len(actorInfo.NetworkSettings.Networks))
-	for key := range actorInfo.NetworkSettings.Networks {
-		key = strings.TrimSpace(key)
-		if key != "" {
-			keys = append(keys, key)
-		}
-	}
-	if len(keys) == 0 {
-		return shared.DefaultNetwork
-	}
-	sort.Strings(keys)
-	return keys[0]
-}
-
-func autopoieticWorkspaceSource(actorInfo *types.ContainerJSON) string {
-	if actorInfo == nil {
-		return ""
-	}
-	fallback := ""
-	for _, point := range actorInfo.Mounts {
-		if !strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
-			continue
-		}
-		source := strings.TrimSpace(point.Source)
-		if source == "" {
-			continue
-		}
-		dest := strings.TrimSpace(point.Destination)
-		if dest == "/workspace" {
-			return source
-		}
-		if dest == "/var/run/docker.sock" || strings.HasPrefix(dest, "/home/si/.codex") || strings.HasPrefix(dest, "/root/.codex") || strings.HasPrefix(dest, "/home/si/.config/gh") {
-			continue
-		}
-		if fallback == "" {
-			fallback = source
-		}
-	}
-	return fallback
-}
-
-func autopoieticCodexVolume(actorInfo *types.ContainerJSON, slug string) string {
-	if actorInfo != nil {
-		for _, point := range actorInfo.Mounts {
-			dest := strings.TrimSpace(point.Destination)
-			if dest != "/home/si/.codex" && dest != "/root/.codex" {
-				continue
-			}
-			if strings.EqualFold(strings.TrimSpace(string(point.Type)), "volume") {
-				if name := strings.TrimSpace(point.Name); name != "" {
-					return name
-				}
-			}
-		}
-	}
-	if strings.TrimSpace(slug) == "" {
-		return "si-codex-default"
-	}
-	return "si-codex-" + strings.TrimSpace(slug)
 }
 
 func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirrorTarget string) bool {
@@ -1790,14 +1518,6 @@ func cmdCodexRemove(args []string) {
 	}
 	if err := client.RemoveContainer(ctx, id, true); err != nil {
 		fatal(err)
-	}
-	autopoName := autopoieticContainerName(containerName)
-	if autopoID, _, err := client.ContainerByName(ctx, autopoName); err != nil {
-		warnf("autopoietic companion lookup failed: %v", err)
-	} else if autopoID != "" {
-		if err := client.RemoveContainer(ctx, autopoID, true); err != nil {
-			warnf("autopoietic companion remove failed: %v", err)
-		}
 	}
 	if *removeVolumes {
 		codexVol := "si-codex-" + name
