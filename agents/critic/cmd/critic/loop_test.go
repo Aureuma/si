@@ -174,6 +174,42 @@ func TestRunTurnLoopSeedAndCriticStop(t *testing.T) {
 	}
 }
 
+func TestRunTurnLoopHonorsPriorCriticStopOnRestart(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "reports"), 0o700); err != nil {
+		t.Fatalf("mkdir reports: %v", err)
+	}
+	// Persist a stopped state as if a prior run converged.
+	statePath := filepath.Join(tmp, "loop-state.json")
+	if err := saveLoopState(statePath, loopState{
+		Turn:             7,
+		LastCriticReport: "Assessment: done\nContinue Loop: no\n",
+		UpdatedAt:        time.Now().UTC(),
+	}); err != nil {
+		t.Fatalf("saveLoopState: %v", err)
+	}
+	cfg := loopConfig{
+		Enabled:       true,
+		DyadName:      "restartstop",
+		Goal:          "test",
+		StateDir:      tmp,
+		SleepInterval: 0,
+		StartupDelay:  0,
+		TurnTimeout:   2 * time.Second,
+		MaxTurns:      0,
+		RetryMax:      1,
+		RetryBase:     time.Millisecond,
+	}
+	exec := &countingExecutor{}
+	logger := log.New(ioDiscard{}, "", 0)
+	if err := runTurnLoop(context.Background(), cfg, exec, logger); err != nil {
+		t.Fatalf("runTurnLoop: %v", err)
+	}
+	if exec.actorTurns != 0 || exec.criticTurns != 0 {
+		t.Fatalf("expected zero turns after prior stop, got actor=%d critic=%d", exec.actorTurns, exec.criticTurns)
+	}
+}
+
 func TestReadLoopControl(t *testing.T) {
 	tmp := t.TempDir()
 	stop, pause := readLoopControl(tmp)
