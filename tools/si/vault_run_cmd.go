@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"sort"
@@ -17,6 +18,7 @@ func cmdVaultRun(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
+	allowPlaintext := fs.Bool("allow-plaintext", false, "allow running even if plaintext keys exist (not recommended)")
 	fs.Parse(args)
 
 	rest := fs.Args()
@@ -50,7 +52,10 @@ func cmdVaultRun(args []string) {
 	}
 	if len(dec.PlaintextKeys) > 0 {
 		sort.Strings(dec.PlaintextKeys)
-		warnf("vault file contains plaintext keys: %s (consider `si vault encrypt`)", strings.Join(dec.PlaintextKeys, ", "))
+		if !*allowPlaintext {
+			fatal(fmt.Errorf("vault file contains plaintext keys: %s (run `si vault encrypt` or pass --allow-plaintext)", strings.Join(dec.PlaintextKeys, ", ")))
+		}
+		warnf("vault file contains plaintext keys (allowed): %s", strings.Join(dec.PlaintextKeys, ", "))
 	}
 
 	keys := make([]string, 0, len(dec.Values))
@@ -62,9 +67,9 @@ func cmdVaultRun(args []string) {
 		"envFile":       target.File,
 		"cmd0":          rest[0],
 		"argsLen":       len(rest) - 1,
-		"keys":          keys,
-		"decryptedKeys": dec.DecryptedKeys,
-		"plaintextKeys": dec.PlaintextKeys,
+		"keysCount":     len(keys),
+		"decryptCount":  len(dec.DecryptedKeys),
+		"plainCount":    len(dec.PlaintextKeys),
 	})
 
 	cmd := exec.CommandContext(context.Background(), rest[0], rest[1:]...)
