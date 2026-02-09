@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -34,8 +36,10 @@ type loopConfig struct {
 	MaxTurns         int
 	RetryMax         int
 	RetryBase        time.Duration
-	CodexCommand     string
 	SeedCriticPrompt string
+	PromptLines      int
+	AllowMcpStartup  bool
+	CaptureMode      string
 }
 
 type loopState struct {
@@ -52,7 +56,14 @@ type turnExecutor interface {
 
 type codexTurnExecutor struct {
 	actorContainer string
-	codexCommand   string
+	actorSession   string
+	criticSession  string
+	promptLines    int
+	allowMcp       bool
+	captureMode    string
+	readyTimeout   time.Duration
+	turnTimeout    time.Duration
+	pollInterval   time.Duration
 }
 
 var errCriticRequestedStop = errors.New("critic requested loop stop")
@@ -85,9 +96,9 @@ func runCriticLoop(ctx context.Context, logger *log.Logger) error {
 	if _, err := runCommand(ctx, "docker", "inspect", cfg.ActorContainer); err != nil {
 		return fmt.Errorf("actor container preflight failed: %w", err)
 	}
-	executor := codexTurnExecutor{
-		actorContainer: cfg.ActorContainer,
-		codexCommand:   cfg.CodexCommand,
+	executor, err := newCodexTurnExecutor(ctx, cfg)
+	if err != nil {
+		return err
 	}
 	return runTurnLoop(ctx, cfg, executor, logger)
 }
@@ -252,41 +263,519 @@ func runWithRetries(ctx context.Context, cfg loopConfig, label string, fn func(c
 	return raw, report, fmt.Errorf("%s turn failed after retries: %w", label, lastErr)
 }
 
-func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string, error) {
-	cmd := []string{
-		"exec", "-i", e.actorContainer, "bash", "-lc",
-		codexExecShellScript(e.codexCommand, prompt),
+func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecutor, error) {
+	sessionSuffix := sanitizeSessionName(cfg.DyadName)
+	exec := codexTurnExecutor{
+		actorContainer: cfg.ActorContainer,
+		actorSession:   fmt.Sprintf("si-dyad-%s-actor", sessionSuffix),
+		criticSession:  fmt.Sprintf("si-dyad-%s-critic", sessionSuffix),
+		promptLines:    cfg.PromptLines,
+		allowMcp:       cfg.AllowMcpStartup,
+		captureMode:    cfg.CaptureMode,
+		readyTimeout:   cfg.TurnTimeout / 3,
+		turnTimeout:    cfg.TurnTimeout,
+		pollInterval:   350 * time.Millisecond,
 	}
-	return runCommand(ctx, "docker", cmd...)
+	if exec.promptLines <= 0 {
+		exec.promptLines = 3
+	}
+	if exec.captureMode != "main" && exec.captureMode != "alt" {
+		exec.captureMode = "main"
+	}
+	if exec.readyTimeout <= 0 {
+		exec.readyTimeout = 30 * time.Second
+	}
+	if exec.pollInterval <= 0 {
+		exec.pollInterval = 350 * time.Millisecond
+	}
+
+	if _, err := runCommand(ctx, "tmux", "-V"); err != nil {
+		return codexTurnExecutor{}, fmt.Errorf("tmux preflight failed in critic container: %w", err)
+	}
+	if _, err := runCommand(ctx, "docker", "exec", cfg.ActorContainer, "tmux", "-V"); err != nil {
+		return codexTurnExecutor{}, fmt.Errorf("tmux preflight failed in actor container: %w", err)
+	}
+	return exec, nil
+}
+
+func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string, error) {
+	runner := tmuxRunner{Prefix: []string{"docker", "exec", e.actorContainer}}
+	return e.runTurn(ctx, runner, e.actorSession, interactiveCodexCommand(), prompt)
 }
 
 func (e codexTurnExecutor) CriticTurn(ctx context.Context, prompt string) (string, error) {
-	return runCommand(ctx, "bash", "-lc", codexExecShellScript(e.codexCommand, prompt))
+	runner := tmuxRunner{}
+	return e.runTurn(ctx, runner, e.criticSession, interactiveCodexCommand(), prompt)
+}
+
+func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, session string, startCmd string, prompt string) (string, error) {
+	paneTarget, readyOutput, err := e.ensureInteractiveSession(ctx, runner, session, startCmd)
+	if err != nil {
+		return "", err
+	}
+	cleanReady := stripANSI(readyOutput)
+	segments := parsePromptSegmentsDual(cleanReady, readyOutput)
+	baselineSegments := len(segments)
+	if baselineSegments < 1 {
+		baselineSegments = 1
+	}
+	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-u"); err != nil {
+		return "", err
+	}
+	normalizedPrompt := normalizeInteractivePrompt(prompt)
+	if err := tmuxSendLiteral(ctx, runner, paneTarget, normalizedPrompt); err != nil {
+		return "", err
+	}
+	if err := sleepContext(ctx, 150*time.Millisecond); err != nil {
+		return "", err
+	}
+	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-m"); err != nil {
+		return "", err
+	}
+	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineSegments)
+}
+
+func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner tmuxRunner, session, startCmd string) (string, string, error) {
+	paneTarget := session + ":0.0"
+	if _, err := runner.Output(ctx, "has-session", "-t", session); err != nil {
+		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "bash", "-lc", startCmd); err != nil {
+			return "", "", err
+		}
+	}
+	_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	if out, err := runner.Output(ctx, "display-message", "-p", "-t", paneTarget, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
+		_, _ = runner.Output(ctx, "kill-session", "-t", session)
+		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "bash", "-lc", startCmd); err != nil {
+			return "", "", err
+		}
+		_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	}
+	_, _ = runner.Output(ctx, "resize-pane", "-t", paneTarget, "-x", "160", "-y", "60")
+	output, err := e.waitForPromptReady(ctx, runner, paneTarget)
+	if err != nil {
+		return "", "", err
+	}
+	return paneTarget, output, nil
+}
+
+func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRunner, target string) (string, error) {
+	captureOpts := statusOptions{CaptureMode: e.captureMode}
+	deadline := time.Now().Add(e.readyTimeout)
+	var lastOutput string
+	for time.Now().Before(deadline) {
+		output, err := tmuxCapture(ctx, runner, target, captureOpts)
+		if err == nil && strings.TrimSpace(output) != "" {
+			lastOutput = output
+		}
+		clean := stripANSI(output)
+		if codexPromptReady(clean, e.promptLines, e.allowMcp) {
+			return output, nil
+		}
+		if err := sleepContext(ctx, e.pollInterval); err != nil {
+			return "", err
+		}
+	}
+	if lastOutput == "" {
+		return "", errors.New("timeout waiting for codex prompt")
+	}
+	return lastOutput, errors.New("timeout waiting for codex prompt")
+}
+
+func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineSegments int) (string, error) {
+	captureOpts := statusOptions{CaptureMode: e.captureMode}
+	deadline := time.Now().Add(e.turnTimeout)
+	var lastOutput string
+	submitAttempts := 1
+	lastSubmit := time.Now()
+	startIndex := baselineSegments - 1
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	for time.Now().Before(deadline) {
+		output, err := tmuxCapture(ctx, runner, target, captureOpts)
+		if err == nil && strings.TrimSpace(output) != "" {
+			lastOutput = output
+		}
+		clean := stripANSI(output)
+		segments := parsePromptSegmentsDual(clean, output)
+		if len(segments) <= startIndex {
+			if err := sleepContext(ctx, e.pollInterval); err != nil {
+				return "", err
+			}
+			continue
+		}
+		foundReport := ""
+		lastCompleted := len(segments) - 1
+		for i := lastCompleted; i >= startIndex; i-- {
+			seg := segments[i]
+			report := extractDelimitedWorkReport(strings.Join(seg.Lines, "\n"))
+			if report == "" {
+				report = extractReportLinesFromLines(seg.Raw, seg.Lines, false)
+			}
+			if strings.TrimSpace(report) == "" {
+				continue
+			}
+			if i < len(segments)-1 || codexPromptReady(clean, e.promptLines, e.allowMcp) {
+				foundReport = strings.TrimSpace(report)
+				break
+			}
+		}
+		if foundReport != "" {
+			normalizedOutput := strings.TrimSpace(output)
+			if normalizedOutput != "" {
+				normalizedOutput += "\n"
+			}
+			normalizedOutput += reportBeginMarker + "\n" + foundReport + "\n" + reportEndMarker
+			return normalizedOutput, nil
+		}
+		if codexPromptReady(clean, e.promptLines, e.allowMcp) {
+			if submitAttempts < 2 && time.Since(lastSubmit) > 4*time.Second {
+				_ = tmuxSendKeys(ctx, runner, target, "C-m")
+				submitAttempts++
+				lastSubmit = time.Now()
+			}
+		}
+		if err := sleepContext(ctx, e.pollInterval); err != nil {
+			return "", err
+		}
+	}
+	if lastOutput == "" {
+		return "", errors.New("timeout waiting for codex report")
+	}
+	return lastOutput, errors.New("timeout waiting for codex report")
+}
+
+type tmuxRunner struct {
+	Prefix []string
+}
+
+type statusOptions struct {
+	CaptureMode string
+}
+
+func (r tmuxRunner) Output(ctx context.Context, args ...string) (string, error) {
+	if len(args) == 0 {
+		return "", errors.New("tmux args required")
+	}
+	if len(r.Prefix) == 0 {
+		return runCommand(ctx, "tmux", args...)
+	}
+	cmdArgs := make([]string, 0, len(r.Prefix)-1+1+len(args))
+	cmdArgs = append(cmdArgs, r.Prefix[1:]...)
+	cmdArgs = append(cmdArgs, "tmux")
+	cmdArgs = append(cmdArgs, args...)
+	return runCommand(ctx, r.Prefix[0], cmdArgs...)
 }
 
 func runCommand(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	out, err := cmd.CombinedOutput()
-	text := strings.TrimSpace(string(out))
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	out := strings.TrimSpace(stdout.String())
 	if err != nil {
-		if text != "" {
-			return text, fmt.Errorf("%w: %s", err, text)
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			if out != "" {
+				return out, fmt.Errorf("%w: %s: %s", err, msg, out)
+			}
+			return out, fmt.Errorf("%w: %s", err, msg)
 		}
-		return text, err
+		if out != "" {
+			return out, fmt.Errorf("%w: %s", err, out)
+		}
+		return out, err
 	}
-	return text, nil
+	if errText := strings.TrimSpace(stderr.String()); errText != "" {
+		out = strings.TrimSpace(strings.TrimSpace(out + "\n" + errText))
+	}
+	return out, nil
 }
 
-func codexExecShellScript(codexCommand string, prompt string) string {
-	codexCommand = strings.TrimSpace(codexCommand)
-	if codexCommand == "" {
-		codexCommand = "codex --dangerously-bypass-approvals-and-sandbox exec"
+func interactiveCodexCommand() string {
+	return strings.TrimSpace("export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/root CODEX_HOME=/root/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox")
+}
+
+func normalizeInteractivePrompt(prompt string) string {
+	prompt = strings.ReplaceAll(prompt, "\r\n", "\n")
+	prompt = strings.ReplaceAll(prompt, "\r", "\n")
+	prompt = strings.Join(strings.Fields(prompt), " ")
+	return strings.TrimSpace(prompt)
+}
+
+func tmuxSendKeys(ctx context.Context, runner tmuxRunner, target string, keys ...string) error {
+	if len(keys) == 0 {
+		return nil
 	}
-	return fmt.Sprintf(
-		"export TERM=xterm-256color COLORTERM=truecolor HOME=/root CODEX_HOME=/root/.codex; cd /workspace 2>/dev/null || true; %s %s",
-		codexCommand,
-		shellSingleQuote(prompt),
-	)
+	args := append([]string{"send-keys", "-t", target}, keys...)
+	_, err := runner.Output(ctx, args...)
+	return err
+}
+
+func tmuxSendLiteral(ctx context.Context, runner tmuxRunner, target, text string) error {
+	if strings.TrimSpace(text) == "" {
+		return nil
+	}
+	_, err := runner.Output(ctx, "send-keys", "-t", target, "-l", text)
+	return err
+}
+
+func tmuxCapture(ctx context.Context, runner tmuxRunner, target string, opts statusOptions) (string, error) {
+	switch opts.CaptureMode {
+	case "alt":
+		return runner.Output(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-", "-a", "-q")
+	case "main":
+		return runner.Output(ctx, "capture-pane", "-t", target, "-p", "-J", "-S", "-")
+	default:
+		return "", fmt.Errorf("unsupported tmux capture mode: %s", opts.CaptureMode)
+	}
+}
+
+func sanitizeSessionName(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return "unknown"
+	}
+	var b strings.Builder
+	for _, r := range raw {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return "unknown"
+	}
+	return out
+}
+
+func codexPromptReady(output string, promptLines int, allowMcpStartup bool) bool {
+	lower := strings.ToLower(output)
+	if !allowMcpStartup {
+		if strings.Contains(lower, "starting mcp") || strings.Contains(lower, "mcp startup") {
+			return false
+		}
+	}
+	lines := strings.Split(output, "\n")
+	if promptLines <= 0 {
+		promptLines = 3
+	}
+	seen := 0
+	for i := len(lines) - 1; i >= 0 && seen < promptLines*4; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		seen++
+		if strings.HasPrefix(line, "›") {
+			return true
+		}
+	}
+	return false
+}
+
+type promptSegment struct {
+	Prompt string
+	Lines  []string
+	Raw    []string
+}
+
+func parsePromptSegmentsDual(clean, raw string) []promptSegment {
+	cleanLines := strings.Split(clean, "\n")
+	rawLines := strings.Split(raw, "\n")
+	if len(rawLines) < len(cleanLines) {
+		pad := make([]string, len(cleanLines)-len(rawLines))
+		rawLines = append(rawLines, pad...)
+	}
+	if len(cleanLines) < len(rawLines) {
+		pad := make([]string, len(rawLines)-len(cleanLines))
+		cleanLines = append(cleanLines, pad...)
+	}
+	segments := make([]promptSegment, 0, 8)
+	var current *promptSegment
+	for i, line := range cleanLines {
+		rawLine := rawLines[i]
+		trimmed := strings.TrimLeft(line, " ")
+		if strings.HasPrefix(trimmed, "›") {
+			if current != nil {
+				segments = append(segments, *current)
+			}
+			prompt := strings.TrimSpace(strings.TrimPrefix(trimmed, "›"))
+			current = &promptSegment{Prompt: prompt}
+			continue
+		}
+		if current != nil {
+			current.Lines = append(current.Lines, line)
+			current.Raw = append(current.Raw, rawLine)
+		}
+	}
+	if current != nil {
+		segments = append(segments, *current)
+	}
+	return segments
+}
+
+func extractReportLinesFromLines(rawLines, cleanLines []string, ansi bool) string {
+	max := len(cleanLines)
+	if len(rawLines) < max {
+		max = len(rawLines)
+	}
+	type block struct {
+		raw   []string
+		clean []string
+	}
+	var blocks []block
+	var current block
+	inReport := false
+	workedLineRaw := ""
+	workedLineClean := ""
+	for i := 0; i < max; i++ {
+		raw := strings.TrimRight(rawLines[i], " \t")
+		clean := strings.TrimRight(cleanLines[i], " \t")
+		cleanCore := strings.TrimLeft(clean, " ")
+		if strings.Contains(strings.ToLower(cleanCore), "worked for") {
+			workedLineRaw = raw
+			workedLineClean = clean
+		}
+		if strings.HasPrefix(cleanCore, "• ") {
+			inReport = true
+			current.raw = append(current.raw, raw)
+			current.clean = append(current.clean, clean)
+			continue
+		}
+		if !inReport {
+			continue
+		}
+		if strings.TrimSpace(clean) == "" {
+			if len(current.raw) > 0 {
+				blocks = append(blocks, current)
+				current = block{}
+			}
+			inReport = false
+			continue
+		}
+		if strings.HasPrefix(clean, "  ") {
+			current.raw = append(current.raw, raw)
+			current.clean = append(current.clean, clean)
+			continue
+		}
+		core := strings.TrimSpace(clean)
+		if strings.HasPrefix(core, "⚠") || strings.HasPrefix(core, "Tip:") || strings.HasPrefix(core, "›") {
+			if len(current.raw) > 0 {
+				blocks = append(blocks, current)
+			}
+			current = block{}
+			break
+		}
+		if strings.HasPrefix(core, "• Starting MCP") || strings.HasPrefix(core, "• Starting") {
+			if len(current.raw) > 0 {
+				blocks = append(blocks, current)
+			}
+			current = block{}
+			break
+		}
+		current.raw = append(current.raw, raw)
+		current.clean = append(current.clean, clean)
+	}
+	if len(current.raw) > 0 {
+		blocks = append(blocks, current)
+	}
+	for i := len(blocks) - 1; i >= 0; i-- {
+		block := blocks[i]
+		if len(block.raw) == 0 {
+			continue
+		}
+		if isTransientReport(block.clean) {
+			continue
+		}
+		out := block.clean
+		workedLine := workedLineClean
+		if ansi {
+			out = block.raw
+			workedLine = workedLineRaw
+		}
+		for len(out) > 0 && strings.TrimSpace(out[len(out)-1]) == "" {
+			out = out[:len(out)-1]
+		}
+		if workedLine != "" && !containsLine(out, workedLine) {
+			out = append(out, workedLine)
+		}
+		return strings.Join(out, "\n")
+	}
+	return ""
+}
+
+func isTransientReport(lines []string) bool {
+	if len(lines) == 0 {
+		return true
+	}
+	head := strings.TrimSpace(lines[0])
+	if strings.HasPrefix(head, "• Working") || strings.Contains(head, "esc to interrupt") {
+		return true
+	}
+	if strings.HasPrefix(head, "• Starting MCP") {
+		return true
+	}
+	return false
+}
+
+func containsLine(lines []string, needle string) bool {
+	for _, line := range lines {
+		if line == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func extractDelimitedWorkReport(output string) string {
+	clean := strings.TrimSpace(strings.ReplaceAll(output, "\r\n", "\n"))
+	if clean == "" {
+		return ""
+	}
+	start := strings.LastIndex(clean, reportBeginMarker)
+	end := strings.LastIndex(clean, reportEndMarker)
+	if start >= 0 && end > start {
+		body := strings.TrimSpace(clean[start+len(reportBeginMarker) : end])
+		if body != "" {
+			return body
+		}
+	}
+	return ""
+}
+
+var (
+	ansiCSI = regexp.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]`)
+	ansiOSC = regexp.MustCompile(`\x1b\][^\x07]*(\x07|\x1b\\)`)
+)
+
+func stripANSI(s string) string {
+	if s == "" {
+		return s
+	}
+	out := ansiCSI.ReplaceAllString(s, "")
+	return ansiOSC.ReplaceAllString(out, "")
+}
+
+func isTmuxPaneDeadOutput(out string) bool {
+	out = strings.TrimSpace(out)
+	return out == "1" || strings.EqualFold(out, "true") || strings.EqualFold(out, "yes")
+}
+
+func sleepContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }
 
 func buildActorPrompt(cfg loopConfig, turn int, criticFeedback string) string {
@@ -454,8 +943,10 @@ func loadLoopConfig() loopConfig {
 		MaxTurns:         envInt("DYAD_LOOP_MAX_TURNS", 0),
 		RetryMax:         envInt("DYAD_LOOP_RETRY_MAX", 3),
 		RetryBase:        envDurationSeconds("DYAD_LOOP_RETRY_BASE_SECONDS", 2),
-		CodexCommand:     envOr("DYAD_LOOP_CODEX_COMMAND", "codex --dangerously-bypass-approvals-and-sandbox exec"),
 		SeedCriticPrompt: strings.TrimSpace(os.Getenv("DYAD_LOOP_SEED_CRITIC_PROMPT")),
+		PromptLines:      envInt("DYAD_LOOP_PROMPT_LINES", 3),
+		AllowMcpStartup:  envBool("DYAD_LOOP_ALLOW_MCP_STARTUP", false),
+		CaptureMode:      strings.TrimSpace(strings.ToLower(envOr("DYAD_LOOP_TMUX_CAPTURE", "main"))),
 	}
 }
 
@@ -508,13 +999,6 @@ func retryBackoff(base time.Duration, attempt int) time.Duration {
 		return max
 	}
 	return d
-}
-
-func shellSingleQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
 func criticRequestsStop(report string) bool {
