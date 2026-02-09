@@ -8,19 +8,6 @@ import (
 	"strings"
 )
 
-func cmdImage(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si image <build>")
-		return
-	}
-	switch args[0] {
-	case "build":
-		cmdImageBuild(args[1:])
-	default:
-		printUnknown("image", args[0])
-	}
-}
-
 type imageBuildSpec struct {
 	tag        string
 	contextDir string
@@ -29,9 +16,9 @@ type imageBuildSpec struct {
 	secrets    []string
 }
 
-func cmdImageBuild(args []string) {
+func cmdBuildImage(args []string) {
 	if len(args) != 0 {
-		printUsage("usage: si image build")
+		printUsage("usage: si build image")
 		return
 	}
 	root := mustRepoRoot()

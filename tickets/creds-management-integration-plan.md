@@ -695,7 +695,7 @@ Deliverables:
 ## WS-08 Docker Build Secrets
 
 Deliverables:
-1. Extend `si image build` to accept `--secret <KEY>` and pass BuildKit secrets appropriately.
+1. Extend `si build image` to accept `--secret <KEY>` and pass BuildKit secrets appropriately.
 2. Provide documentation snippet:
    - `RUN --mount=type=secret,id=KEY ...`
 

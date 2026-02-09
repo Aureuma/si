@@ -40,4 +40,3 @@ func TestLoadIdentityFromFileRejectsInsecurePermissions(t *testing.T) {
 		t.Fatalf("expected permission error")
 	}
 }
-

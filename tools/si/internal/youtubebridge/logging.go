@@ -7,4 +7,3 @@ type JSONLLogger = apibridge.JSONLLogger
 func NewJSONLLogger(path string) *JSONLLogger {
 	return apibridge.NewJSONLLogger(path)
 }
-

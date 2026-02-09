@@ -476,12 +476,12 @@ func buildAppServerInput() []byte {
 			ID:      appServerInitID,
 			Method:  "initialize",
 			Params: map[string]interface{}{
-					"clientInfo": map[string]string{
-						"name":    "si",
-						"version": "0.44.0",
-					},
+				"clientInfo": map[string]string{
+					"name":    "si",
+					"version": "0.44.0",
 				},
 			},
+		},
 		{
 			JSONRPC: "2.0",
 			ID:      appServerRateLimitsID,
