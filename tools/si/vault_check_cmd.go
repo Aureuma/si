@@ -116,7 +116,7 @@ func cmdVaultCheck(args []string) {
 		doc := vault.ParseDotenv(data)
 		scan, err := vault.ScanDotenvEncryption(doc)
 		if err != nil {
-			fatal(fmt.Errorf("%s: %w", display, err))
+			fatal(fmt.Errorf("%s: invalid vault dotenv (%w)", display, err))
 		}
 		if len(scan.PlaintextKeys) > 0 {
 			keys := append([]string(nil), scan.PlaintextKeys...)
@@ -204,4 +204,3 @@ func listVaultDotenvFiles(vaultDir string, includeExamples bool) ([]string, erro
 	sort.Strings(out)
 	return out, nil
 }
-

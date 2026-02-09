@@ -177,6 +177,9 @@ func ensureIdentityFile(cfg KeyConfig, id *age.X25519Identity) (*IdentityInfo, b
 }
 
 func loadIdentityFromFile(path string) (*age.X25519Identity, error) {
+	if err := ensureSecureKeyFile(path); err != nil {
+		return nil, err
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -191,6 +194,28 @@ func loadIdentityFromFile(path string) (*age.X25519Identity, error) {
 		}
 	}
 	return nil, fmt.Errorf("no AGE-SECRET-KEY found in %s", filepath.Clean(path))
+}
+
+func ensureSecureKeyFile(path string) error {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return fmt.Errorf("key file path required")
+	}
+	if strings.TrimSpace(os.Getenv("SI_VAULT_ALLOW_INSECURE_KEY_FILE")) != "" {
+		return nil
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("insecure key file (%s): symlinks are not allowed (set SI_VAULT_ALLOW_INSECURE_KEY_FILE=1 to override)", filepath.Clean(path))
+	}
+	perm := info.Mode().Perm()
+	if perm&0o077 != 0 {
+		return fmt.Errorf("insecure key file permissions (%s): expected 0600, got %04o (chmod 600 %s)", filepath.Clean(path), perm, filepath.Clean(path))
+	}
+	return nil
 }
 
 func saveIdentityToFile(path string, secret string) error {

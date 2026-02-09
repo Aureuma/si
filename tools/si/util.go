@@ -261,8 +261,8 @@ vault:
   si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--env <name>] [--format]
   si vault get <KEY> [--file <path>] [--vault-dir <path>] [--env <name>] [--reveal]
   si vault list [--file <path>] [--vault-dir <path>] [--env <name>]
-  si vault run [--file <path>] [--vault-dir <path>] [--env <name>] -- <cmd...>
-  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--env <name>] [--allow-insecure-docker-host] -- <cmd...>
+  si vault run [--file <path>] [--vault-dir <path>] [--env <name>] [--allow-plaintext] -- <cmd...>
+  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--env <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
   si vault trust status|accept|forget [--file <path>] [--vault-dir <path>] [--env <name>]
   si vault recipients list|add|remove [--file <path>] [--vault-dir <path>] [--env <name>]
 
