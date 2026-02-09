@@ -201,4 +201,3 @@ func writeHookFile(path string, contents string, force bool) error {
 	}
 	return nil
 }
-

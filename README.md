@@ -14,11 +14,11 @@ Build the CLI and runtime image:
 
 ```bash
 go build -o si ./tools/si
-./si image build
+./si build image
 ```
 
 This builds the unified image `aureuma/si:local` used by dyads and codex containers.
-`si image build` is the only image-build command surface.
+`si build image` is the only image-build command surface.
 The unified image includes the `si` CLI inside the container so you can run `si vault ...` (and other `si` subcommands)
 from within dyad/codex containers when needed.
 
@@ -163,7 +163,7 @@ Stop behavior:
 Spawn standalone Codex containers with isolated auth:
 
 ```bash
-./si image build
+./si build image
 ./si spawn --profile america --repo Org/Repo --gh-pat <token>
 ```
 
@@ -395,13 +395,13 @@ Build or upgrade the `si` binary from the repo itself:
 ./tools/install-si.sh
 
 # dev checkout build
-./si self build --output ./si
+./si build self --output ./si
 
 # explicit stable upgrade of installed binary
-si self upgrade
+si build self upgrade
 
 # run current checkout without rebuilding a binary artifact
-si self run -- version
+si build self run -- version
 ```
 
 ## Codex CLI login flow (pattern)
