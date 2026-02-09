@@ -61,6 +61,48 @@ func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
 	}
 }
 
+func TestContainerCwdForHostCwdExactMatch(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/home/ubuntu/Development/si", Destination: "/workspace"},
+		},
+	}
+	got, ok := containerCwdForHostCwd(info, "/home/ubuntu/Development/si")
+	if !ok {
+		t.Fatalf("expected mapping to succeed")
+	}
+	if got != "/workspace" {
+		t.Fatalf("unexpected container cwd: %q", got)
+	}
+}
+
+func TestContainerCwdForHostCwdLongestPrefixWins(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/home/ubuntu", Destination: "/mnt/ubuntu"},
+			{Type: "bind", Source: "/home/ubuntu/Development/si", Destination: "/workspace"},
+		},
+	}
+	got, ok := containerCwdForHostCwd(info, "/home/ubuntu/Development/si/tools/si")
+	if !ok {
+		t.Fatalf("expected mapping to succeed")
+	}
+	if got != "/workspace/tools/si" {
+		t.Fatalf("unexpected container cwd: %q", got)
+	}
+}
+
+func TestContainerCwdForHostCwdNoMatch(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/opt/project", Destination: "/workspace"},
+		},
+	}
+	if got, ok := containerCwdForHostCwd(info, "/home/ubuntu/Development/si"); ok || got != "" {
+		t.Fatalf("expected mapping to fail, got ok=%v cwd=%q", ok, got)
+	}
+}
+
 func TestBuildTmuxCodexCommandUsesBypassFlag(t *testing.T) {
 	cmd := buildTmuxCodexCommand("abc123")
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {

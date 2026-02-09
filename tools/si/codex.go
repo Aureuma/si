@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -736,6 +737,7 @@ func cmdCodexExec(args []string) {
 	profileID := ""
 	profileName := ""
 	var containerID string
+	var containerInfo *types.ContainerJSON
 	client, clientErr := shared.NewClient()
 	if clientErr == nil {
 		defer client.Close()
@@ -747,6 +749,7 @@ func cmdCodexExec(args []string) {
 			}
 		} else if id != "" {
 			containerID = id
+			containerInfo = info
 			if info != nil && info.Config != nil {
 				profileID = strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
 			}
@@ -805,7 +808,13 @@ exec bash --rcfile "$rc" -i`, rc)}
 	execArgs = append(execArgs, baseArgs...)
 	usedWorkdir := false
 	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
-		execArgs = append(execArgs, "-w", hostCwd)
+		wd := hostCwd
+		if containerInfo != nil {
+			if mapped, ok := containerCwdForHostCwd(containerInfo, hostCwd); ok {
+				wd = mapped
+			}
+		}
+		execArgs = append(execArgs, "-w", wd)
 		usedWorkdir = true
 	}
 	execArgs = append(execArgs, containerName)
@@ -1113,10 +1122,24 @@ func attachCodexTmuxPane(containerName string) error {
 	if cwd, err := os.Getwd(); err == nil {
 		hostCwd = filepath.ToSlash(strings.TrimSpace(cwd))
 	}
-	cmd := buildCodexTmuxCommand(containerName, hostCwd)
+	startDir := hostCwd
+	// Map the host cwd onto the container's bind mounts so `si run --tmux` works even for older
+	// containers that don't mirror the host absolute path (for example: mount at /home/si/Development/si).
+	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+		if client, err := shared.NewClient(); err == nil {
+			defer client.Close()
+			_, info, err := client.ContainerByName(ctx, containerName)
+			if err == nil {
+				if mapped, ok := containerCwdForHostCwd(info, hostCwd); ok {
+					startDir = mapped
+				}
+			}
+		}
+	}
+	cmd := buildCodexTmuxCommand(containerName, startDir)
 	// Hash a stable "shape" of the command so we don't thrash sessions just because the user attached
 	// from a different host subdirectory.
-	cmdHashShape := buildCodexTmuxCommand(containerName, "__SI_HOST_CWD__")
+	cmdHashShape := buildCodexTmuxCommand(containerName, "__SI_START_DIR__")
 	cmdHash := sha256.Sum256([]byte(cmdHashShape))
 	cmdHashHex := hex.EncodeToString(cmdHash[:])
 
@@ -1186,19 +1209,90 @@ func isTmuxPaneDeadOutput(out string) bool {
 }
 
 func buildCodexTmuxCommand(containerName string, hostCwd string) string {
-	hostCwd = strings.TrimSpace(hostCwd)
-	cdHost := ""
-	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
-		cdHost = fmt.Sprintf("cd %s 2>/dev/null || ", shellSingleQuote(hostCwd))
+	startDir := strings.TrimSpace(hostCwd)
+	cdStart := ""
+	if startDir != "" && strings.HasPrefix(startDir, "/") {
+		cdStart = fmt.Sprintf("cd %s 2>/dev/null || ", shellSingleQuote(startDir))
 	}
 	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; " +
-		cdHost +
+		cdStart +
 		"cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; " +
 		"codex --dangerously-bypass-approvals-and-sandbox; status=$?; " +
 		"printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; " +
 		"exec bash -il"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
+}
+
+func containerCwdForHostCwd(info *types.ContainerJSON, hostCwd string) (string, bool) {
+	if info == nil {
+		return "", false
+	}
+	hostCwd = filepath.Clean(strings.TrimSpace(hostCwd))
+	if hostCwd == "" || !strings.HasPrefix(hostCwd, "/") {
+		return "", false
+	}
+
+	// If the user is in a symlinked directory, try the physical path too so we can match Docker's mount source.
+	hostCwdEval := hostCwd
+	if eval, err := filepath.EvalSymlinks(hostCwd); err == nil {
+		eval = filepath.Clean(strings.TrimSpace(eval))
+		if eval != "" && strings.HasPrefix(eval, "/") {
+			hostCwdEval = eval
+		}
+	}
+
+	bestSrcLen := -1
+	bestDest := ""
+	bestRel := ""
+
+	tryMatch := func(cwd, src, dest string) {
+		if src == "" || dest == "" {
+			return
+		}
+		if !strings.HasPrefix(src, "/") {
+			return
+		}
+		if cwd != src && !strings.HasPrefix(cwd, src+string(os.PathSeparator)) {
+			return
+		}
+		rel, err := filepath.Rel(src, cwd)
+		if err != nil {
+			return
+		}
+		rel = filepath.Clean(strings.TrimSpace(rel))
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return
+		}
+		if len(src) > bestSrcLen {
+			bestSrcLen = len(src)
+			bestDest = dest
+			bestRel = rel
+		}
+	}
+
+	for _, m := range info.Mounts {
+		if strings.TrimSpace(string(m.Type)) != "bind" {
+			continue
+		}
+		src := filepath.Clean(strings.TrimSpace(m.Source))
+		dest := filepath.ToSlash(strings.TrimSpace(m.Destination))
+		if dest == "" || !strings.HasPrefix(dest, "/") {
+			continue
+		}
+		tryMatch(hostCwd, src, dest)
+		if hostCwdEval != hostCwd {
+			tryMatch(hostCwdEval, src, dest)
+		}
+	}
+
+	if bestSrcLen < 0 || bestDest == "" {
+		return "", false
+	}
+	if bestRel == "" || bestRel == "." {
+		return bestDest, true
+	}
+	return path.Join(bestDest, filepath.ToSlash(bestRel)), true
 }
 
 func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirrorTarget string) bool {
