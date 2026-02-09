@@ -112,6 +112,7 @@ func TestClientDo_RetriesAndReauthsPerAttempt(t *testing.T) {
 			t.Fatalf("call=%d unexpected auth header: got %q want %q", n, got, want)
 		}
 		if n == 1 {
+			w.Header().Set("Retry-After", "0")
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]any{"message": "rate limited"})
 			return

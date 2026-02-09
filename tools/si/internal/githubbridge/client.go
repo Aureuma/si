@@ -80,20 +80,24 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			}
 			statusCode := resp.StatusCode
 			// Preserve existing retry semantics (ignore Retry-After for now).
+			wait := apibridge.BackoffDelay(attempt)
+			if d, ok := apibridge.RetryAfterDelay(resp.Header); ok {
+				wait = d
+			}
 			if statusCode == http.StatusTooManyRequests || statusCode == http.StatusBadGateway || statusCode == http.StatusServiceUnavailable || statusCode == http.StatusGatewayTimeout {
-				return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				return apibridge.RetryDecision{Retry: true, Wait: wait}
 			}
 			if statusCode == http.StatusForbidden {
 				if strings.TrimSpace(resp.Header.Get("X-RateLimit-Remaining")) == "0" {
-					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+					return apibridge.RetryDecision{Retry: true, Wait: wait}
 				}
 				lower := strings.ToLower(string(body))
 				if strings.Contains(lower, "secondary rate limit") || strings.Contains(lower, "abuse") {
-					return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+					return apibridge.RetryDecision{Retry: true, Wait: wait}
 				}
 			}
 			if statusCode >= 500 {
-				return apibridge.RetryDecision{Retry: true, Wait: apibridge.BackoffDelay(attempt)}
+				return apibridge.RetryDecision{Retry: true, Wait: wait}
 			}
 			return apibridge.RetryDecision{}
 		},
