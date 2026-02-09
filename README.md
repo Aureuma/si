@@ -88,6 +88,10 @@ By default, dyads mount the current directory; when run from the repo root they 
   - critic sends prompt to critic Codex interactive session (tmux in critic container), produces next instructions
   - critic feeds the generated critic report back into the next actor turn
 - Loop artifacts are written to `.si/dyad/<dyad>/reports` and state to `.si/dyad/<dyad>/loop-state.json`.
+- Loop is lightweight-resilient:
+  - actor container is auto-started if it was stopped
+  - actor/critic tmux sessions are recreated on recoverable turn failures/timeouts
+  - retry/backoff remains bounded by existing loop retry settings
 
 Useful environment knobs (set before `si dyad spawn`):
 - `DYAD_LOOP_ENABLED` (`1|0`)
@@ -102,6 +106,12 @@ Useful environment knobs (set before `si dyad spawn`):
 - `DYAD_LOOP_PROMPT_LINES` (prompt readiness detector window)
 - `DYAD_LOOP_ALLOW_MCP_STARTUP` (`1|0`)
 - `DYAD_LOOP_TMUX_CAPTURE` (`main|alt`)
+- `DYAD_LOOP_PAUSE_POLL_SECONDS` (poll interval while paused via control file)
+
+Runtime control files (optional):
+- `touch .si/dyad/<dyad>/control.pause` to pause the loop
+- `rm .si/dyad/<dyad>/control.pause` to resume
+- `touch .si/dyad/<dyad>/control.stop` to stop loop gracefully
 
 Stop behavior:
 - Loop runs continuously by default.
