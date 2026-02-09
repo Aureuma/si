@@ -13,6 +13,19 @@ Use the repo test runner from the root:
 
 That script runs `go test` across the workspace modules listed in `go.work`.
 Make sure the Go toolchain is installed and on your `PATH` before running tests.
+The script expects to be run from the repo root so it can find `go.work` and will
+error with a short message if prerequisites are missing.
+Use `./tools/test.sh --help` for a quick usage reminder.
+Use `./tools/test.sh --list` to print the module list without running tests.
+
+## Installer smoke tests
+To validate the `si` installer script end-to-end, run:
+
+```bash
+./tools/test-install-si.sh
+```
+
+Use `./tools/test-install-si.sh --help` for a quick usage reminder.
 
 ## Static analysis
 Run static analysis from the repo root:

@@ -62,6 +62,7 @@ type codexTurnExecutor struct {
 	actorContainer string
 	actorSession   string
 	criticSession  string
+	dyadName       string
 	promptLines    int
 	allowMcp       bool
 	captureMode    string
@@ -333,6 +334,7 @@ func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecuto
 		actorContainer: cfg.ActorContainer,
 		actorSession:   fmt.Sprintf("si-dyad-%s-actor", sessionSuffix),
 		criticSession:  fmt.Sprintf("si-dyad-%s-critic", sessionSuffix),
+		dyadName:       cfg.DyadName,
 		promptLines:    cfg.PromptLines,
 		allowMcp:       cfg.AllowMcpStartup,
 		captureMode:    cfg.CaptureMode,
@@ -368,6 +370,9 @@ func newCodexTurnExecutor(ctx context.Context, cfg loopConfig) (codexTurnExecuto
 	if _, err := runCommand(ctx, "tmux", "-V"); err != nil {
 		return codexTurnExecutor{}, fmt.Errorf("tmux preflight failed in critic container: %w", err)
 	}
+	if err := ensureActorContainerRunning(ctx, cfg.ActorContainer); err != nil {
+		return codexTurnExecutor{}, err
+	}
 	if _, err := runCommand(ctx, "docker", "exec", cfg.ActorContainer, "tmux", "-V"); err != nil {
 		return codexTurnExecutor{}, fmt.Errorf("tmux preflight failed in actor container: %w", err)
 	}
@@ -396,12 +401,19 @@ func (e codexTurnExecutor) CriticTurn(ctx context.Context, prompt string) (strin
 }
 
 func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, session string, startCmd string, prompt string, role string) (string, error) {
-	paneTarget, readyOutput, err := e.ensureInteractiveSession(ctx, runner, session, startCmd)
+	paneTarget, readyOutput, err := e.ensureInteractiveSession(ctx, runner, session, startCmd, role)
 	if err != nil {
 		return "", err
 	}
 	cleanReady := stripANSI(readyOutput)
+	// Baseline against a stable capture: when using tail capture (`capture-pane -S -N`),
+	// byte offsets from one capture cannot be compared to another because the window
+	// shifts as output grows. We keep a baseline end-marker index from a full-history
+	// capture and only use it as a fallback when we cannot anchor on the echoed input.
 	baselineReportEnd := strings.LastIndex(cleanReady, reportEndMarker)
+	if baselineOut, capErr := tmuxCapture(ctx, runner, paneTarget, statusOptions{CaptureMode: e.captureMode, CaptureLines: 0}); capErr == nil {
+		baselineReportEnd = strings.LastIndex(stripANSI(baselineOut), reportEndMarker)
+	}
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-u"); err != nil {
 		return "", err
 	}
@@ -427,20 +439,25 @@ func (e codexTurnExecutor) recoverSession(session string, runner tmuxRunner, cau
 	_, _ = runner.Output(recoverCtx, "kill-session", "-t", session)
 }
 
-func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner tmuxRunner, session, startCmd string) (string, string, error) {
+func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner tmuxRunner, session, startCmd string, role string) (string, string, error) {
 	paneTarget := session + ":0.0"
+	windowName := dyadTmuxWindowName(e.dyadName, role)
 	if _, err := runner.Output(ctx, "has-session", "-t", session); err != nil {
-		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "bash", "-lc", startCmd); err != nil {
+		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "-n", windowName, "bash", "-lc", startCmd); err != nil {
 			return "", "", err
 		}
 	}
 	_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	_, _ = runner.Output(ctx, "rename-window", "-t", session+":0", windowName)
+	_, _ = runner.Output(ctx, "select-pane", "-t", paneTarget, "-T", windowName)
 	if out, err := runner.Output(ctx, "display-message", "-p", "-t", paneTarget, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
 		_, _ = runner.Output(ctx, "kill-session", "-t", session)
-		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "bash", "-lc", startCmd); err != nil {
+		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "-n", windowName, "bash", "-lc", startCmd); err != nil {
 			return "", "", err
 		}
 		_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+		_, _ = runner.Output(ctx, "rename-window", "-t", session+":0", windowName)
+		_, _ = runner.Output(ctx, "select-pane", "-t", paneTarget, "-T", windowName)
 	}
 	_, _ = runner.Output(ctx, "resize-pane", "-t", paneTarget, "-x", "160", "-y", "60")
 	output, err := e.waitForPromptReady(ctx, runner, paneTarget)
@@ -448,6 +465,21 @@ func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner 
 		return "", "", err
 	}
 	return paneTarget, output, nil
+}
+
+func dyadTmuxWindowName(dyad string, role string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		dyad = "unknown"
+	}
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "actor":
+		return "🪢 " + dyad + " 🛩️ actor"
+	case "critic":
+		return "🪢 " + dyad + " 🧠 critic"
+	default:
+		return "🪢 " + dyad
+	}
 }
 
 func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRunner, target string) (string, error) {
@@ -488,6 +520,11 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 	var lastOutput string
 	submitAttempts := 1
 	lastSubmit := time.Now()
+	sentPrompt = strings.TrimSpace(sentPrompt)
+	sig := sentPrompt
+	if len(sig) > 64 {
+		sig = sig[:64]
+	}
 	for time.Now().Before(deadline) {
 		output, err := tmuxCapture(ctx, runner, target, captureOpts)
 		if err == nil && strings.TrimSpace(output) != "" {
@@ -497,14 +534,39 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 		promptReady := codexPromptReady(clean, e.promptLines, e.allowMcp)
 		promptLine, hasPromptLine := lastCodexPromptLine(clean, e.promptLines)
 
-		report, ok := extractDelimitedWorkReportAfter(clean, baselineReportEnd)
+		// Primary: anchor parsing to the echoed input line (or a short signature of it),
+		// then extract the first delimited work report that appears after that anchor.
+		after := -1
+		if sig != "" {
+			after = strings.LastIndex(clean, sig)
+		}
+		report, ok := extractDelimitedWorkReportAfter(clean, after)
+		reportWasDelimited := ok
 		if ok {
-			report = strings.TrimSpace(report)
 			if role == "actor" && actorReportLooksPlaceholder(report) {
 				ok = false
 			}
 			if role == "critic" && criticReportLooksPlaceholder(report) {
 				ok = false
+			}
+		}
+		// Fallback: if we can't find the echoed prompt (e.g. Codex shows `[Pasted Content ...]`),
+		// fall back to a stable full-history capture and look for a report after the prior end marker.
+		if !ok && after < 0 && baselineReportEnd >= 0 {
+			fullOut, fullErr := tmuxCapture(ctx, runner, target, statusOptions{CaptureMode: e.captureMode, CaptureLines: 0})
+			if fullErr == nil && strings.TrimSpace(fullOut) != "" {
+				fullClean := stripANSI(fullOut)
+				if tmpReport, tmpOk := extractDelimitedWorkReportAfter(fullClean, baselineReportEnd); tmpOk {
+					tmpReport = strings.TrimSpace(tmpReport)
+					if tmpReport != "" {
+						if role == "actor" && !actorReportLooksPlaceholder(tmpReport) {
+							return fullOut, nil
+						}
+						if role == "critic" && !criticReportLooksPlaceholder(tmpReport) {
+							return fullOut, nil
+						}
+					}
+				}
 			}
 		}
 		if !ok && !e.strictReport {
@@ -513,6 +575,25 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 			for i := len(segments) - 1; i >= 0; i-- {
 				seg := segments[i]
 				candidate := strings.TrimSpace(extractReportLinesFromLines(seg.Raw, seg.Lines, false))
+				if candidate == "" {
+					// Non-strict mode should also tolerate plain-text section reports (e.g. tests/fake-codex).
+					// Use the whole segment body as the candidate report and rely on placeholder detection
+					// to filter out incomplete output.
+					candidate = strings.TrimSpace(strings.Join(seg.Lines, "\n"))
+					if candidate != "" {
+						lines := strings.Split(candidate, "\n")
+						for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+							lines = lines[1:]
+						}
+						for len(lines) > 0 && strings.EqualFold(strings.TrimSpace(lines[0]), "ok") {
+							lines = lines[1:]
+							for len(lines) > 0 && strings.TrimSpace(lines[0]) == "" {
+								lines = lines[1:]
+							}
+						}
+						candidate = strings.TrimSpace(strings.Join(lines, "\n"))
+					}
+				}
 				if candidate == "" {
 					continue
 				}
@@ -524,13 +605,19 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 				}
 				report = candidate
 				ok = true
+				reportWasDelimited = false
 				break
 			}
 		}
 
 		if ok && report != "" {
-			// If we didn't get a delimited report from the captured output (legacy mode), normalize by appending one.
-			if e.strictReport || strings.Contains(clean, reportBeginMarker) {
+			// If we have an actual delimited report in the captured output, return it as-is.
+			// Otherwise normalize by appending markers around the extracted report.
+			//
+			// Note: the echoed input prompt can itself contain the marker strings (the loop prompts
+			// instruct the model to output them). So we must not treat `strings.Contains(clean, reportBeginMarker)`
+			// as proof we received a delimited report.
+			if reportWasDelimited {
 				return output, nil
 			}
 			normalizedOutput := strings.TrimSpace(output)
