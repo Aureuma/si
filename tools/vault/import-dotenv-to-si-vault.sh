@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Import dotenvx-managed .env files into si vault (without printing secret values).
+Import plaintext .env files into si vault (no dotenvx).
 
 Defaults:
   --src ../viva
@@ -11,15 +11,16 @@ Defaults:
   --identity-file $SI_VAULT_IDENTITY_FILE or ~/.si/vault/keys/age.key
 
 Examples:
-  tools/vault/import-dotenvx-to-si-vault.sh --src ../viva
-  tools/vault/import-dotenvx-to-si-vault.sh --src ../viva --section viva-dev
-  tools/vault/import-dotenvx-to-si-vault.sh --src ../viva --dry-run
+  tools/vault/import-dotenv-to-si-vault.sh --src ../viva
+  tools/vault/import-dotenv-to-si-vault.sh --src ../viva --section viva-dev
+  tools/vault/import-dotenv-to-si-vault.sh --src ../viva --dry-run
 
 Notes:
+  - This reads plaintext .env files. Use for migration/bootstrap only.
   - Target env is inferred per file:
       *.prod*|*.production* -> prod
       otherwise            -> dev
-  - Requires: node (for npx), python3, and the si binary on PATH.
+  - Requires: python3 and the si binary on PATH.
 EOF
 }
 
@@ -79,18 +80,6 @@ if [[ ! -f "$identity_file" ]]; then
   exit 1
 fi
 
-dotenvx=(npx -y @dotenvx/dotenvx)
-
-dotenvx_keys=()
-if [[ -f "$src/.env.keys" ]]; then
-  dotenvx_keys=(-fk "$src/.env.keys")
-fi
-
-dotenvx_vault=()
-if [[ -f "$src/.env.vault" ]]; then
-  dotenvx_vault=(-fv "$src/.env.vault")
-fi
-
 mapfile -t env_files < <(
   find "$src" -maxdepth 1 -type f -name '.env*' \
     ! -name '.env.keys' \
@@ -121,50 +110,61 @@ for f in "${env_files[@]}"; do
 
   echo "import: $f -> si vault env=$target_env section=$section"
 
-  # Use dotenvx to parse+decrypt; force file values to win over any machine env vars.
-  # IMPORTANT: do not print values.
-  json="$("${dotenvx[@]}" get \
-    -f "$f" \
-    --overload \
-    --format json \
-    --strict \
-    "${dotenvx_keys[@]}" \
-    "${dotenvx_vault[@]}")"
-
-  py="$(cat <<'PY'
-import json
+  python3 - "$f" "$target_env" "$section" "$identity_file" "$dry_run" <<'PY'
 import os
+import re
 import subprocess
 import sys
 
-target_env = sys.argv[1]
-section = sys.argv[2]
-identity_file = sys.argv[3]
-dry_run = sys.argv[4] == "1"
+path = sys.argv[1]
+target_env = sys.argv[2]
+section = sys.argv[3]
+identity_file = sys.argv[4]
+dry_run = sys.argv[5] == "1"
 
-data = json.load(sys.stdin)
-if not isinstance(data, dict):
-  raise SystemExit("dotenvx output was not a JSON object")
+key_re = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+def parse_dotenv_lines(text: str):
+  out = {}
+  for raw in text.splitlines():
+    line = raw.strip()
+    if not line or line.startswith("#"):
+      continue
+    if line.startswith("export "):
+      line = line[len("export "):].lstrip()
+    if "=" not in line:
+      continue
+    k, v = line.split("=", 1)
+    k = k.strip()
+    v = v.strip()
+    if not key_re.match(k):
+      continue
+    # Basic quote handling. This is intentionally conservative (migration helper).
+    if len(v) >= 2 and ((v[0] == v[-1] == '"') or (v[0] == v[-1] == "'")):
+      q = v[0]
+      v = v[1:-1]
+      if q == '"':
+        v = v.encode("utf-8").decode("unicode_escape")
+    out[k] = v
+  return out
+
+with open(path, "r", encoding="utf-8", errors="replace") as f:
+  data = parse_dotenv_lines(f.read())
 
 env = os.environ.copy()
 env["SI_VAULT_IDENTITY_FILE"] = identity_file
 
 for key in sorted(data.keys()):
   val = data[key]
-  if val is None:
-    continue
-
   if dry_run:
     print(f"dry-run: {target_env}:{section}:{key}")
     continue
 
-  # Put flags before the positional key to match Go's flag parsing rules.
   cmd = ["si", "vault", "set", "--stdin", "--env", target_env, "--format"]
   if section:
     cmd += ["--section", section]
   cmd += [key]
 
-  # Send value via stdin to avoid shell history / argv leaks.
   p = subprocess.run(
     cmd,
     input=str(val).encode("utf-8"),
@@ -178,7 +178,5 @@ for key in sorted(data.keys()):
 
   print(f"imported: {target_env}:{section}:{key}")
 PY
-)"
-
-  python3 -c "$py" "$target_env" "$section" "$identity_file" "$dry_run" <<<"$json"
 done
+
