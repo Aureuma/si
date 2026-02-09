@@ -11,7 +11,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"si/tools/si/internal/apibridge"
 	"si/tools/si/internal/youtubebridge"
 )
 
@@ -2212,53 +2212,89 @@ func googleYouTubeUploadVideo(ctx context.Context, runtime googleYouTubeRuntimeC
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	initURL, err := resolveGoogleYouTubeURL(runtime.UploadBaseURL, "/youtube/v3/videos", map[string]string{"uploadType": "resumable", "part": part})
+	initURL, err := apibridge.JoinURL(runtime.UploadBaseURL, "/youtube/v3/videos", map[string]string{"uploadType": "resumable", "part": part})
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	initReq, err := http.NewRequestWithContext(ctx, http.MethodPost, initURL, bytes.NewReader(metaRaw))
+	initClient, err := newGoogleYouTubeHTTPClient(runtime.UploadBaseURL, 90*time.Second)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	initReq.Header.Set("Content-Type", "application/json")
-	initReq.Header.Set("X-Upload-Content-Length", strconv.Itoa(len(videoBytes)))
-	initReq.Header.Set("X-Upload-Content-Type", detectContentTypeByPath(filePath, "application/octet-stream"))
-	if err := googleYouTubeApplyAuth(runtime, initReq); err != nil {
-		return youtubebridge.Response{}, err
-	}
-	resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(initReq)
+	initResp, err := initClient.Do(ctx, apibridge.Request{
+		Method:      http.MethodPost,
+		URL:         initURL,
+		BodyBytes:   metaRaw,
+		ContentType: "application/json",
+		Headers: map[string]string{
+			"Accept":                  "application/json",
+			"X-Upload-Content-Length": strconv.Itoa(len(videoBytes)),
+			"X-Upload-Content-Type":   detectContentTypeByPath(filePath, "application/octet-stream"),
+		},
+		Prepare: func(ctx context.Context, _ int, httpReq *http.Request) error {
+			_ = ctx
+			return googleYouTubeApplyAuth(runtime, httpReq)
+		},
+	})
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	initBody, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(initBody))
+	if initResp.StatusCode < 200 || initResp.StatusCode >= 300 {
+		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(initResp.StatusCode, initResp.Headers, string(initResp.Body))
 	}
-	location := strings.TrimSpace(resp.Header.Get("Location"))
+	location := strings.TrimSpace(initResp.Headers.Get("Location"))
 	if location == "" {
 		return youtubebridge.Response{}, fmt.Errorf("resumable upload did not return location header")
 	}
-	uploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, location, bytes.NewReader(videoBytes))
+
+	uploadClient, err := newGoogleYouTubeHTTPClient(runtime.UploadBaseURL, 20*time.Minute)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	uploadReq.Header.Set("Content-Type", detectContentTypeByPath(filePath, "application/octet-stream"))
-	uploadReq.Header.Set("Content-Length", strconv.Itoa(len(videoBytes)))
-	uploadReq.Header.Set("User-Agent", "si-youtube/1.0")
-	if err := googleYouTubeApplyAuth(runtime, uploadReq); err != nil {
-		return youtubebridge.Response{}, err
-	}
-	uploadResp, err := (&http.Client{Timeout: 20 * time.Minute}).Do(uploadReq)
+	uploadResp, err := uploadClient.Do(ctx, apibridge.Request{
+		Method:      http.MethodPut,
+		URL:         location,
+		BodyBytes:   videoBytes,
+		ContentType: detectContentTypeByPath(filePath, "application/octet-stream"),
+		Headers: map[string]string{
+			"Accept":         "application/json",
+			"Content-Length": strconv.Itoa(len(videoBytes)),
+		},
+		Prepare: func(ctx context.Context, _ int, httpReq *http.Request) error {
+			_ = ctx
+			return googleYouTubeApplyAuth(runtime, httpReq)
+		},
+	})
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	uploadBody, _ := io.ReadAll(uploadResp.Body)
-	_ = uploadResp.Body.Close()
 	if uploadResp.StatusCode < 200 || uploadResp.StatusCode >= 300 {
-		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(uploadResp.StatusCode, uploadResp.Header, string(uploadBody))
+		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(uploadResp.StatusCode, uploadResp.Headers, string(uploadResp.Body))
 	}
-	return normalizeGoogleYouTubeHTTPResponse(uploadResp.StatusCode, uploadResp.Status, uploadResp.Header, string(uploadBody)), nil
+	return normalizeGoogleYouTubeHTTPResponse(uploadResp.StatusCode, uploadResp.Status, uploadResp.Headers, string(uploadResp.Body)), nil
+}
+
+func newGoogleYouTubeHTTPClient(baseURL string, timeout time.Duration) (*apibridge.Client, error) {
+	if timeout <= 0 {
+		timeout = 90 * time.Second
+	}
+	return apibridge.NewClient(apibridge.Config{
+		Component:   "google-youtube-cli",
+		BaseURL:     strings.TrimSpace(baseURL),
+		UserAgent:   "si-youtube/1.0",
+		Timeout:     timeout,
+		MaxRetries:  0,
+		Redact:      youtubebridge.RedactSensitive,
+		SanitizeURL: apibridge.StripQuery,
+		RequestIDFromHeaders: func(h http.Header) string {
+			if h == nil {
+				return ""
+			}
+			if v := strings.TrimSpace(h.Get("X-Google-Request-Id")); v != "" {
+				return v
+			}
+			return strings.TrimSpace(h.Get("X-Request-Id"))
+		},
+	})
 }
 
 func googleYouTubeMultipartUpload(ctx context.Context, runtime googleYouTubeRuntimeContext, path string, part string, filePath string, contentType string, metadata map[string]any) (youtubebridge.Response, error) {
@@ -2293,29 +2329,34 @@ func googleYouTubeMultipartUpload(ctx context.Context, runtime googleYouTubeRunt
 	if err := writer.Close(); err != nil {
 		return youtubebridge.Response{}, err
 	}
-	endpoint, err := resolveGoogleYouTubeURL(runtime.UploadBaseURL, path, map[string]string{"uploadType": "multipart", "part": part})
+	endpoint, err := apibridge.JoinURL(runtime.UploadBaseURL, path, map[string]string{"uploadType": "multipart", "part": part})
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body.Bytes()))
+	client, err := newGoogleYouTubeHTTPClient(runtime.UploadBaseURL, 10*time.Minute)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Header.Set("User-Agent", "si-youtube/1.0")
-	if err := googleYouTubeApplyAuth(runtime, req); err != nil {
-		return youtubebridge.Response{}, err
-	}
-	resp, err := (&http.Client{Timeout: 10 * time.Minute}).Do(req)
+	resp, err := client.Do(ctx, apibridge.Request{
+		Method:      http.MethodPost,
+		URL:         endpoint,
+		BodyBytes:   body.Bytes(),
+		ContentType: writer.FormDataContentType(),
+		Headers: map[string]string{
+			"Accept": "application/json",
+		},
+		Prepare: func(ctx context.Context, _ int, httpReq *http.Request) error {
+			_ = ctx
+			return googleYouTubeApplyAuth(runtime, httpReq)
+		},
+	})
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	respBody, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(respBody))
+		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 	}
-	return normalizeGoogleYouTubeHTTPResponse(resp.StatusCode, resp.Status, resp.Header, string(respBody)), nil
+	return normalizeGoogleYouTubeHTTPResponse(resp.StatusCode, resp.Status, resp.Headers, string(resp.Body)), nil
 }
 
 func googleYouTubeMediaUpload(ctx context.Context, runtime googleYouTubeRuntimeContext, path string, query map[string]string, filePath string, contentType string) (youtubebridge.Response, error) {
@@ -2327,109 +2368,70 @@ func googleYouTubeMediaUpload(ctx context.Context, runtime googleYouTubeRuntimeC
 	for key, value := range query {
 		q[key] = value
 	}
-	endpoint, err := resolveGoogleYouTubeURL(runtime.UploadBaseURL, path, q)
+	endpoint, err := apibridge.JoinURL(runtime.UploadBaseURL, path, q)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(fileBytes))
+	client, err := newGoogleYouTubeHTTPClient(runtime.UploadBaseURL, 5*time.Minute)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	req.Header.Set("Content-Type", detectContentTypeByPath(filePath, contentType))
-	req.Header.Set("Content-Length", strconv.Itoa(len(fileBytes)))
-	req.Header.Set("User-Agent", "si-youtube/1.0")
-	if err := googleYouTubeApplyAuth(runtime, req); err != nil {
-		return youtubebridge.Response{}, err
-	}
-	resp, err := (&http.Client{Timeout: 5 * time.Minute}).Do(req)
+	resp, err := client.Do(ctx, apibridge.Request{
+		Method:      http.MethodPost,
+		URL:         endpoint,
+		BodyBytes:   fileBytes,
+		ContentType: detectContentTypeByPath(filePath, contentType),
+		Headers: map[string]string{
+			"Accept":         "application/json",
+			"Content-Length": strconv.Itoa(len(fileBytes)),
+		},
+		Prepare: func(ctx context.Context, _ int, httpReq *http.Request) error {
+			_ = ctx
+			return googleYouTubeApplyAuth(runtime, httpReq)
+		},
+	})
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
-	respBody, _ := io.ReadAll(resp.Body)
-	_ = resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(respBody))
+		return youtubebridge.Response{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 	}
-	return normalizeGoogleYouTubeHTTPResponse(resp.StatusCode, resp.Status, resp.Header, string(respBody)), nil
+	return normalizeGoogleYouTubeHTTPResponse(resp.StatusCode, resp.Status, resp.Headers, string(resp.Body)), nil
 }
 
 func googleYouTubeDownloadMedia(ctx context.Context, runtime googleYouTubeRuntimeContext, path string, query map[string]string, output string) (int64, string, error) {
-	endpoint, err := resolveGoogleYouTubeURL(runtime.BaseURL, path, query)
+	endpoint, err := apibridge.JoinURL(runtime.BaseURL, path, query)
 	if err != nil {
 		return 0, "", err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	client, err := newGoogleYouTubeHTTPClient(runtime.BaseURL, 90*time.Second)
 	if err != nil {
 		return 0, "", err
 	}
-	req.Header.Set("Accept", "*/*")
-	req.Header.Set("User-Agent", "si-youtube/1.0")
-	if err := googleYouTubeApplyAuth(runtime, req); err != nil {
-		return 0, "", err
-	}
-	resp, err := (&http.Client{Timeout: 90 * time.Second}).Do(req)
+	resp, err := client.Do(ctx, apibridge.Request{
+		Method: http.MethodGet,
+		URL:    endpoint,
+		Headers: map[string]string{
+			"Accept": "*/*",
+		},
+		Prepare: func(ctx context.Context, _ int, httpReq *http.Request) error {
+			_ = ctx
+			return googleYouTubeApplyAuth(runtime, httpReq)
+		},
+	})
 	if err != nil {
 		return 0, "", err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
-		return 0, "", youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(body))
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, "", err
+		return 0, "", youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 	}
 	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 		return 0, "", err
 	}
-	if err := os.WriteFile(output, data, 0o600); err != nil {
+	if err := os.WriteFile(output, resp.Body, 0o600); err != nil {
 		return 0, "", err
 	}
-	return int64(len(data)), strings.TrimSpace(resp.Header.Get("Content-Type")), nil
-}
-
-func resolveGoogleYouTubeURL(baseURL string, rawPath string, params map[string]string) (string, error) {
-	rawPath = strings.TrimSpace(rawPath)
-	if rawPath == "" {
-		return "", fmt.Errorf("path is required")
-	}
-	if strings.HasPrefix(rawPath, "http://") || strings.HasPrefix(rawPath, "https://") {
-		u, err := url.Parse(rawPath)
-		if err != nil {
-			return "", err
-		}
-		q := u.Query()
-		for key, value := range params {
-			if strings.TrimSpace(key) == "" {
-				continue
-			}
-			q.Set(strings.TrimSpace(key), strings.TrimSpace(value))
-		}
-		u.RawQuery = q.Encode()
-		return u.String(), nil
-	}
-	if !strings.HasPrefix(rawPath, "/") {
-		rawPath = "/" + rawPath
-	}
-	base, err := url.Parse(strings.TrimSpace(baseURL))
-	if err != nil {
-		return "", err
-	}
-	rel, err := url.Parse(rawPath)
-	if err != nil {
-		return "", err
-	}
-	u := base.ResolveReference(rel)
-	q := u.Query()
-	for key, value := range params {
-		if strings.TrimSpace(key) == "" {
-			continue
-		}
-		q.Set(strings.TrimSpace(key), strings.TrimSpace(value))
-	}
-	u.RawQuery = q.Encode()
-	return u.String(), nil
+	return int64(len(resp.Body)), strings.TrimSpace(resp.Headers.Get("Content-Type")), nil
 }
 
 func googleYouTubeApplyAuth(runtime googleYouTubeRuntimeContext, req *http.Request) error {
