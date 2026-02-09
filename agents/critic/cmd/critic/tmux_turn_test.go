@@ -139,16 +139,32 @@ while IFS= read -r line; do
     echo "ok"
   fi
   echo "<<WORK_REPORT_BEGIN>>"
-  echo "Summary:"
-  echo "- prompt_len: ${#line}"
-  echo "Changes:"
-  echo "- none"
-  echo "Validation:"
-  echo "- none"
-  echo "Open Questions:"
-  echo "- none"
-  echo "Next Step for Critic:"
-  echo "- proceed"
+  if [[ "${line}" == *"LONG_OUTPUT"* ]]; then
+    # Critic-format report (required by dyad loop).
+    echo "Assessment:"
+    echo "- prompt_len: ${#line}"
+    echo "Risks:"
+    echo "- none"
+    echo "Required Fixes:"
+    echo "- none"
+    echo "Verification Steps:"
+    echo "- none"
+    echo "Next Actor Prompt:"
+    echo "- proceed"
+    echo "Continue Loop: yes"
+  else
+    # Actor-format report (required by dyad loop).
+    echo "Summary:"
+    echo "- prompt_len: ${#line}"
+    echo "Changes:"
+    echo "- none"
+    echo "Validation:"
+    echo "- none"
+    echo "Open Questions:"
+    echo "- none"
+    echo "Next Step for Critic:"
+    echo "- proceed"
+  fi
   echo "<<WORK_REPORT_END>>"
   printf "› "
 done
