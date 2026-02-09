@@ -87,7 +87,7 @@ Tasks
 - Ensure error output remains user-friendly.
 
 ### WS-5: Codex Profile Status HTTP Calls -> apibridge
-Status: `pending`
+Status: `done`
 
 Tasks
 - Replace direct HTTP calls with apibridge.
