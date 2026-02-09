@@ -36,6 +36,29 @@ func ResolveURL(baseURL string, path string, params map[string]string) (string, 
 	return u.String(), nil
 }
 
+// JoinURL appends path segments to baseURL without discarding any existing base path.
+//
+// This differs from ResolveURL's RFC3986 ResolveReference semantics when the input path
+// begins with "/": JoinURL treats it as a path segment to append. This is useful for
+// APIs that use base paths like "/upload" where callers want "/upload/<resource>".
+func JoinURL(baseURL string, path string, params map[string]string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("request path is required")
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return ResolveURL(baseURL, path, params)
+	}
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", err
+	}
+	trimmed := strings.TrimLeft(path, "/")
+	base.Path = strings.TrimRight(base.Path, "/") + "/" + trimmed
+	addQuery(base, params)
+	return base.String(), nil
+}
+
 func StripQuery(raw string) string {
 	if strings.TrimSpace(raw) == "" {
 		return raw
@@ -67,4 +90,3 @@ func addQuery(u *url.URL, params map[string]string) {
 	}
 	u.RawQuery = q.Encode()
 }
-

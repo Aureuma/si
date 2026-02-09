@@ -26,9 +26,19 @@ func TestResolveURL_Absolute(t *testing.T) {
 	}
 }
 
+func TestJoinURL_AppendsToBasePath(t *testing.T) {
+	u, err := JoinURL("https://www.googleapis.com/upload", "/youtube/v3/videos", map[string]string{"uploadType": "resumable"})
+	if err != nil {
+		t.Fatalf("JoinURL: %v", err)
+	}
+	want := "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable"
+	if u != want {
+		t.Fatalf("got %q want %q", u, want)
+	}
+}
+
 func TestStripQuery(t *testing.T) {
 	if got := StripQuery("https://x.test/a?b=1&c=2"); got != "https://x.test/a" {
 		t.Fatalf("got %q", got)
 	}
 }
-
