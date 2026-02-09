@@ -33,6 +33,7 @@ Features:
   - Static analysis: run go vet + golangci-lint across go.work modules.
   - Image build for local dev.
   - Docker passthrough for raw docker CLI calls.
+  - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
 Usage:
   si <command> [args...]

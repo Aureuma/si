@@ -1,4 +1,4 @@
-# si Substrate
+# si
 
 `si` is an AI-first substrate for orchestrating multiple coding agents (Dyads) and Codex containers on vanilla Docker.
 
@@ -19,6 +19,8 @@ go build -o si ./tools/si
 
 This builds the unified image `aureuma/si:local` used by dyads and codex containers.
 `si image build` is the only image-build command surface.
+The unified image includes the `si` CLI inside the container so you can run `si vault ...` (and other `si` subcommands)
+from within dyad/codex containers when needed.
 
 ## Vault (Secrets)
 `si vault` manages encrypted `.env.<env>` files stored in a pinned vault submodule and injects secrets into local processes or `docker exec` at runtime.
@@ -61,6 +63,12 @@ Scope to a module or keep CI green while reviewing findings:
 
 ```bash
 ./si dyad exec --member actor <dyad> -- bash
+```
+
+Because the dyad containers include `si`, you can also run vault/status style commands from inside the container:
+
+```bash
+./si dyad exec --member actor <dyad> -- si vault status --env dev
 ```
 
 - Stop/start dyad containers:
