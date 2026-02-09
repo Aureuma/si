@@ -108,6 +108,27 @@ Useful environment knobs (set before `si dyad spawn`):
 - `DYAD_LOOP_TMUX_CAPTURE` (`main|alt`)
 - `DYAD_LOOP_PAUSE_POLL_SECONDS` (poll interval while paused via control file)
 
+Preferred persistent config:
+- Set dyad loop defaults in `~/.si/settings.toml` under `[dyad.loop]`.
+- `si dyad spawn` loads these settings and forwards them to the critic loop.
+- Environment variables above still work as one-off overrides.
+
+Example:
+```toml
+[dyad.loop]
+goal = "Continuously improve implementation quality in the current repo."
+seed_critic_prompt = "Start with one concrete improvement task for the actor and require a work report."
+max_turns = 0
+sleep_seconds = 3
+startup_delay_seconds = 2
+turn_timeout_seconds = 900
+retry_max = 3
+retry_base_seconds = 2
+prompt_lines = 3
+tmux_capture = "main"
+pause_poll_seconds = 5
+```
+
 Runtime control files (optional):
 - `touch .si/dyad/<dyad>/control.pause` to pause the loop
 - `rm .si/dyad/<dyad>/control.pause` to resume

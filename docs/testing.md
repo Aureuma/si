@@ -12,6 +12,7 @@ Use the repo test runner from the root:
 ```
 
 That script runs `go test` across the workspace modules listed in `go.work`.
+Make sure the Go toolchain is installed and on your `PATH` before running tests.
 
 ## Static analysis
 Run static analysis from the repo root:
