@@ -91,6 +91,7 @@ dyad:
 
   si dyad list                    (no flags)
   si dyad remove <name>           (aliases: teardown, destroy, rm, delete)
+  si dyad remove --all
   si dyad recreate <name> [role] [department] [--profile <profile>] [--skip-auth]
   si dyad status <name>
   si dyad peek [--member actor|critic|both] [--detached] [--session <name>] <dyad>
@@ -194,6 +195,7 @@ codex:
   si tail <name> [--tail N]
   si clone <name> <Org/Repo> [--gh-pat TOKEN]
   si remove <name> [--volumes]
+  si remove --all [--volumes]
   si stop <name>
   si start <name>
 

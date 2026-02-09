@@ -1490,8 +1490,67 @@ func cmdCodexClone(args []string) {
 func cmdCodexRemove(args []string) {
 	fs := flag.NewFlagSet("remove", flag.ExitOnError)
 	removeVolumes := fs.Bool("volumes", false, "remove codex/gh volumes too")
+	all := fs.Bool("all", false, "remove all codex containers (prompts for confirmation)")
 	_ = fs.Parse(args)
 	name := ""
+	if *all {
+		if fs.NArg() > 0 {
+			printUsage("usage: si remove [--all] [--volumes] [name]")
+			return
+		}
+		client, err := shared.NewClient()
+		if err != nil {
+			fatal(err)
+		}
+		defer client.Close()
+		ctx := context.Background()
+		containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+		if err != nil {
+			fatal(err)
+		}
+		if len(containers) == 0 {
+			fmt.Println(styleDim("no codex containers found"))
+			return
+		}
+		names := make([]string, 0, len(containers))
+		for _, c := range containers {
+			n := strings.TrimPrefix(c.Names[0], "/")
+			if strings.TrimSpace(n) != "" {
+				names = append(names, n)
+			}
+		}
+		sort.Strings(names)
+		confirmed, ok := confirmYN(fmt.Sprintf("Remove ALL codex containers (%d): %s?", len(names), strings.Join(names, ", ")), false)
+		if !ok || !confirmed {
+			infof("canceled")
+			return
+		}
+		removed := 0
+		for _, c := range containers {
+			if err := client.RemoveContainer(ctx, c.ID, true); err != nil {
+				warnf("remove container %s failed: %v", strings.TrimPrefix(c.Names[0], "/"), err)
+				continue
+			}
+			removed++
+			if *removeVolumes {
+				slug := codexContainerSlug(strings.TrimPrefix(c.Names[0], "/"))
+				if strings.TrimSpace(slug) == "" {
+					continue
+				}
+				codexVol := "si-codex-" + slug
+				ghVol := "si-gh-" + slug
+				if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
+					warnf("codex volume remove failed: %v", err)
+				}
+				if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
+					warnf("gh volume remove failed: %v", err)
+				}
+			}
+		}
+		successf("removed %d codex containers", removed)
+		return
+	}
+
 	if fs.NArg() < 1 {
 		selectedName, ok := selectCodexContainerFromList("remove")
 		if !ok {
@@ -1520,8 +1579,9 @@ func cmdCodexRemove(args []string) {
 		fatal(err)
 	}
 	if *removeVolumes {
-		codexVol := "si-codex-" + name
-		ghVol := "si-gh-" + name
+		slug := codexContainerSlug(containerName)
+		codexVol := "si-codex-" + slug
+		ghVol := "si-gh-" + slug
 		if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
 			warnf("codex volume remove failed: %v", err)
 		}
