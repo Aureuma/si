@@ -186,10 +186,7 @@ codex:
     Run in existing container:
       si run [name]
       si run [name] --tmux
-      si run [name] --autopoietic
-      si run [name] --autopoietic --tmux
       si run <name> <command>
-      --autopoietic
       --tmux
 
   si logs <name> [--tail N]

@@ -174,9 +174,6 @@ Run/attach workflows:
 
 # attach to persistent codex tmux pane
 ./si run <container-or-profile> --tmux
-
-# ensure autopoietic companion sidecar, then attach tmux codex pane
-./si run <container-or-profile> --autopoietic --tmux
 ```
 
 ## Warmup

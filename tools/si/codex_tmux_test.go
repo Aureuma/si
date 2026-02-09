@@ -5,15 +5,7 @@ import (
 	"testing"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 )
-
-func TestAutopoieticContainerName(t *testing.T) {
-	got := autopoieticContainerName("si-codex-berylla")
-	if got != "si-autopoietic-berylla" {
-		t.Fatalf("unexpected autopoietic container name %q", got)
-	}
-}
 
 func TestCodexTmuxSessionName(t *testing.T) {
 	got := codexTmuxSessionName("si-codex-einsteina")
@@ -32,11 +24,10 @@ func TestValidateRunTmuxArgs(t *testing.T) {
 }
 
 func TestConsumeRunContainerModeFlags(t *testing.T) {
-	autopo := false
 	tmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "--autopoietic", "--tmux", "bash"}, &autopo, &tmux)
-	if !autopo || !tmux {
-		t.Fatalf("expected both flags to be enabled")
+	args := consumeRunContainerModeFlags([]string{"berylla", "--tmux", "bash"}, &tmux)
+	if !tmux {
+		t.Fatalf("expected tmux to be enabled")
 	}
 	if len(args) != 2 || args[0] != "berylla" || args[1] != "bash" {
 		t.Fatalf("unexpected args after consume: %v", args)
@@ -44,11 +35,10 @@ func TestConsumeRunContainerModeFlags(t *testing.T) {
 }
 
 func TestConsumeRunContainerModeFlagsStopsAtCommand(t *testing.T) {
-	autopo := false
 	tmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "printf", "%s\n", "--tmux"}, &autopo, &tmux)
-	if autopo || tmux {
-		t.Fatalf("expected mode flags to remain false once command args begin")
+	args := consumeRunContainerModeFlags([]string{"berylla", "printf", "%s\n", "--tmux"}, &tmux)
+	if tmux {
+		t.Fatalf("expected tmux flag to remain false once command args begin")
 	}
 	if len(args) != 4 || args[0] != "berylla" || args[1] != "printf" || args[3] != "--tmux" {
 		t.Fatalf("unexpected args after consume: %v", args)
@@ -87,66 +77,6 @@ func TestIsTmuxPaneDeadOutput(t *testing.T) {
 	}
 }
 
-func TestAutopoieticCodexVolumePrefersActorMount(t *testing.T) {
-	info := &types.ContainerJSON{
-		Mounts: []types.MountPoint{
-			{
-				Type:        "volume",
-				Name:        "si-codex-cadma",
-				Destination: "/home/si/.codex",
-			},
-		},
-	}
-	got := autopoieticCodexVolume(info, "cadma")
-	if got != "si-codex-cadma" {
-		t.Fatalf("unexpected codex volume %q", got)
-	}
-}
-
-func TestAutopoieticCodexVolumeFallback(t *testing.T) {
-	got := autopoieticCodexVolume(nil, "gadolina")
-	if got != "si-codex-gadolina" {
-		t.Fatalf("unexpected fallback codex volume %q", got)
-	}
-}
-
-func TestAutopoieticWorkspaceSource(t *testing.T) {
-	info := &types.ContainerJSON{
-		Mounts: []types.MountPoint{
-			{
-				Type:        "bind",
-				Source:      "/home/ubuntu/Development/si",
-				Destination: "/workspace",
-			},
-		},
-	}
-	got := autopoieticWorkspaceSource(info)
-	if got != "/home/ubuntu/Development/si" {
-		t.Fatalf("unexpected workspace source %q", got)
-	}
-}
-
-func TestAutopoieticWorkspaceSourceFallbackBind(t *testing.T) {
-	info := &types.ContainerJSON{
-		Mounts: []types.MountPoint{
-			{
-				Type:        "bind",
-				Source:      "/var/run/docker.sock",
-				Destination: "/var/run/docker.sock",
-			},
-			{
-				Type:        "bind",
-				Source:      "/home/ubuntu/Development/si",
-				Destination: "/home/si/Development/si",
-			},
-		},
-	}
-	got := autopoieticWorkspaceSource(info)
-	if got != "/home/ubuntu/Development/si" {
-		t.Fatalf("unexpected workspace fallback source %q", got)
-	}
-}
-
 func TestEnvValue(t *testing.T) {
 	env := []string{"CODEX_MODEL=gpt-5.2-codex", "CODEX_REASONING_EFFORT=high"}
 	if got := envValue(env, "CODEX_MODEL"); got != "gpt-5.2-codex" {
@@ -182,21 +112,5 @@ func TestCodexContainerConfigTargets(t *testing.T) {
 	}
 	if targets[1].Path != "/root/.codex/config.toml" || targets[1].Owner != "root:root" {
 		t.Fatalf("unexpected second target: %+v", targets[1])
-	}
-}
-
-func TestAutopoieticNeedsRecreate(t *testing.T) {
-	info := &types.ContainerJSON{
-		Config: &container.Config{
-			Env: []string{"CODEX_INIT_FORCE=1"},
-		},
-	}
-	if !autopoieticNeedsRecreate(info) {
-		t.Fatalf("expected legacy autopoietic config to require recreate")
-	}
-
-	info.Config.Env = []string{"CODEX_INIT_FORCE=0"}
-	if autopoieticNeedsRecreate(info) {
-		t.Fatalf("did not expect CODEX_INIT_FORCE=0 to require recreate")
 	}
 }
