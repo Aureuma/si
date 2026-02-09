@@ -47,7 +47,7 @@ Tasks
   - non-2xx error handling path
 
 ### WS-2: YouTube CLI Upload/Download Paths -> apibridge
-Status: `pending`
+Status: `done`
 
 Tasks
 - Replace direct net/http flows in:
