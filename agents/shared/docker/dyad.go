@@ -368,6 +368,7 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 	if member == "critic" {
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_ENABLED")
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_GOAL")
+		env = appendHostEnvIfSet(env, "DYAD_LOOP_SEED_CRITIC_PROMPT")
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_MAX_TURNS")
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_SLEEP_SECONDS")
 		env = appendHostEnvIfSet(env, "DYAD_LOOP_STARTUP_DELAY_SECONDS")

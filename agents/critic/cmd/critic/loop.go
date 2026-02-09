@@ -21,20 +21,21 @@ const (
 )
 
 type loopConfig struct {
-	Enabled        bool
-	DyadName       string
-	Role           string
-	Department     string
-	ActorContainer string
-	Goal           string
-	StateDir       string
-	SleepInterval  time.Duration
-	StartupDelay   time.Duration
-	TurnTimeout    time.Duration
-	MaxTurns       int
-	RetryMax       int
-	RetryBase      time.Duration
-	CodexCommand   string
+	Enabled          bool
+	DyadName         string
+	Role             string
+	Department       string
+	ActorContainer   string
+	Goal             string
+	StateDir         string
+	SleepInterval    time.Duration
+	StartupDelay     time.Duration
+	TurnTimeout      time.Duration
+	MaxTurns         int
+	RetryMax         int
+	RetryBase        time.Duration
+	CodexCommand     string
+	SeedCriticPrompt string
 }
 
 type loopState struct {
@@ -53,6 +54,8 @@ type codexTurnExecutor struct {
 	actorContainer string
 	codexCommand   string
 }
+
+var errCriticRequestedStop = errors.New("critic requested loop stop")
 
 func runCriticLoop(ctx context.Context, logger *log.Logger) error {
 	cfg := loadLoopConfig()
@@ -95,13 +98,50 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 	if err != nil {
 		return err
 	}
+	if strings.TrimSpace(state.LastCriticReport) == "" && strings.TrimSpace(cfg.SeedCriticPrompt) != "" {
+		seedRaw, seedReport, err := runWithRetries(ctx, cfg, "critic-seed", func(stepCtx context.Context) (string, string, error) {
+			raw, err := executor.CriticTurn(stepCtx, strings.TrimSpace(cfg.SeedCriticPrompt))
+			if err != nil {
+				return "", "", err
+			}
+			report := extractWorkReport(raw)
+			if report == "" {
+				return raw, "", errors.New("seed critic output missing report")
+			}
+			return raw, report, nil
+		})
+		if err != nil {
+			return err
+		}
+		if err := writeTurnArtifacts(cfg.StateDir, 0, "critic", strings.TrimSpace(cfg.SeedCriticPrompt), seedRaw, seedReport); err != nil {
+			logger.Printf("seed critic artifact warning: %v", err)
+		}
+		state.LastCriticReport = seedReport
+		state.UpdatedAt = time.Now().UTC()
+		if err := saveLoopState(statePath, state); err != nil {
+			logger.Printf("dyad seed state save warning: %v", err)
+		}
+		logger.Printf("dyad seed critic report initialized")
+		if criticRequestsStop(seedReport) {
+			logger.Printf("dyad loop stop requested by critic seed report")
+			return nil
+		}
+	}
 	turn := state.Turn + 1
 	failures := 0
 	for ctx.Err() == nil {
 		if cfg.MaxTurns > 0 && turn > cfg.MaxTurns {
 			return nil
 		}
-		if err := runSingleTurn(ctx, cfg, turn, &state, executor, logger); err != nil {
+		stopRequested, err := runSingleTurn(ctx, cfg, turn, &state, executor, logger)
+		if err != nil {
+			if errors.Is(err, errCriticRequestedStop) {
+				if err := saveLoopState(statePath, state); err != nil {
+					logger.Printf("dyad state save warning: %v", err)
+				}
+				logger.Printf("dyad loop stopped by critic at turn %d", turn)
+				return nil
+			}
 			failures++
 			backoff := retryBackoff(cfg.RetryBase, failures)
 			logger.Printf("dyad turn %d failed: %v (backoff %s)", turn, err, backoff)
@@ -114,6 +154,10 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 		}
 		if err := saveLoopState(statePath, state); err != nil {
 			logger.Printf("dyad state save warning: %v", err)
+		}
+		if stopRequested {
+			logger.Printf("dyad loop stopped by critic at turn %d", turn)
+			return nil
 		}
 		failures = 0
 		turn++
@@ -128,7 +172,7 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 	return nil
 }
 
-func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopState, executor turnExecutor, logger *log.Logger) error {
+func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopState, executor turnExecutor, logger *log.Logger) (bool, error) {
 	actorPrompt := buildActorPrompt(cfg, turn, state.LastCriticReport)
 	actorRaw, actorReport, err := runWithRetries(ctx, cfg, "actor", func(stepCtx context.Context) (string, string, error) {
 		raw, err := executor.ActorTurn(stepCtx, actorPrompt)
@@ -142,7 +186,7 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 		return raw, report, nil
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := writeTurnArtifacts(cfg.StateDir, turn, "actor", actorPrompt, actorRaw, actorReport); err != nil {
 		logger.Printf("actor artifact warning: %v", err)
@@ -161,7 +205,7 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 		return raw, report, nil
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := writeTurnArtifacts(cfg.StateDir, turn, "critic", criticPrompt, criticRaw, criticReport); err != nil {
 		logger.Printf("critic artifact warning: %v", err)
@@ -172,7 +216,10 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 	state.LastCriticReport = criticReport
 	state.UpdatedAt = time.Now().UTC()
 	logger.Printf("dyad turn %d complete", turn)
-	return nil
+	if criticRequestsStop(criticReport) {
+		return true, errCriticRequestedStop
+	}
+	return false, nil
 }
 
 func runWithRetries(ctx context.Context, cfg loopConfig, label string, fn func(context.Context) (string, string, error)) (string, string, error) {
@@ -289,6 +336,7 @@ Risks:
 Required Fixes:
 Verification Steps:
 Next Actor Prompt:
+Continue Loop: yes|no
 %s
 `, cfg.DyadName, turn, cfg.Goal, lastCriticReport, actorReport, reportBeginMarker, reportEndMarker))
 }
@@ -393,20 +441,21 @@ func loadLoopConfig() loopConfig {
 		goal = "Continuously improve the task outcome through actor execution and critic review."
 	}
 	return loopConfig{
-		Enabled:        enabled,
-		DyadName:       dyad,
-		Role:           envOr("ROLE", "critic"),
-		Department:     envOr("DEPARTMENT", "unknown"),
-		ActorContainer: strings.TrimSpace(os.Getenv("ACTOR_CONTAINER")),
-		Goal:           goal,
-		StateDir:       stateDir,
-		SleepInterval:  envDurationSeconds("DYAD_LOOP_SLEEP_SECONDS", 20),
-		StartupDelay:   envDurationSeconds("DYAD_LOOP_STARTUP_DELAY_SECONDS", 2),
-		TurnTimeout:    envDurationSeconds("DYAD_LOOP_TURN_TIMEOUT_SECONDS", 900),
-		MaxTurns:       envInt("DYAD_LOOP_MAX_TURNS", 0),
-		RetryMax:       envInt("DYAD_LOOP_RETRY_MAX", 3),
-		RetryBase:      envDurationSeconds("DYAD_LOOP_RETRY_BASE_SECONDS", 2),
-		CodexCommand:   envOr("DYAD_LOOP_CODEX_COMMAND", "codex --dangerously-bypass-approvals-and-sandbox exec"),
+		Enabled:          enabled,
+		DyadName:         dyad,
+		Role:             envOr("ROLE", "critic"),
+		Department:       envOr("DEPARTMENT", "unknown"),
+		ActorContainer:   strings.TrimSpace(os.Getenv("ACTOR_CONTAINER")),
+		Goal:             goal,
+		StateDir:         stateDir,
+		SleepInterval:    envDurationSeconds("DYAD_LOOP_SLEEP_SECONDS", 20),
+		StartupDelay:     envDurationSeconds("DYAD_LOOP_STARTUP_DELAY_SECONDS", 2),
+		TurnTimeout:      envDurationSeconds("DYAD_LOOP_TURN_TIMEOUT_SECONDS", 900),
+		MaxTurns:         envInt("DYAD_LOOP_MAX_TURNS", 0),
+		RetryMax:         envInt("DYAD_LOOP_RETRY_MAX", 3),
+		RetryBase:        envDurationSeconds("DYAD_LOOP_RETRY_BASE_SECONDS", 2),
+		CodexCommand:     envOr("DYAD_LOOP_CODEX_COMMAND", "codex --dangerously-bypass-approvals-and-sandbox exec"),
+		SeedCriticPrompt: strings.TrimSpace(os.Getenv("DYAD_LOOP_SEED_CRITIC_PROMPT")),
 	}
 }
 
@@ -466,6 +515,23 @@ func shellSingleQuote(s string) string {
 		return "''"
 	}
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+func criticRequestsStop(report string) bool {
+	lines := strings.Split(strings.ToLower(strings.TrimSpace(report)), "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, "continue loop: no") || strings.Contains(line, "continue_loop=no") || strings.Contains(line, "loop_continue=false") {
+			return true
+		}
+		if strings.Contains(line, "stop loop: yes") || strings.Contains(line, "stop_loop=true") || strings.Contains(line, "#stop_loop") {
+			return true
+		}
+	}
+	return false
 }
 
 func maybeApplyHostOwnership(path string) {
