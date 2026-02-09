@@ -406,7 +406,7 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-m"); err != nil {
 		return "", err
 	}
-	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineReportEnd, role)
+	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineReportEnd, role, normalizedPrompt)
 }
 
 func (e codexTurnExecutor) recoverSession(session string, runner tmuxRunner, cause error) {
@@ -464,7 +464,7 @@ func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRu
 	return lastOutput, errors.New("timeout waiting for codex prompt")
 }
 
-func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineReportEnd int, role string) (string, error) {
+func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineReportEnd int, role string, sentPrompt string) (string, error) {
 	captureOpts := statusOptions{CaptureMode: e.captureMode, CaptureLines: e.captureLines}
 	deadline := time.Now().Add(e.turnTimeout)
 	var lastOutput string
@@ -477,6 +477,7 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 		}
 		clean := stripANSI(output)
 		promptReady := codexPromptReady(clean, e.promptLines, e.allowMcp)
+		promptLine, hasPromptLine := lastCodexPromptLine(clean, e.promptLines)
 
 		report, ok := extractDelimitedWorkReportAfter(clean, baselineReportEnd)
 		if ok {
@@ -523,9 +524,27 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 		}
 
 		if promptReady {
+			// If the prompt line still looks like the just-entered input (e.g. `› LONG_OUTPUT` or
+			// `› [Pasted Content ...]`), don't treat that as completion. Keep waiting for output.
+			if hasPromptLine && codexPromptLineLooksLikeEcho(promptLine, sentPrompt) {
+				if err := sleepContext(ctx, e.pollInterval); err != nil {
+					return "", err
+				}
+				continue
+			}
 			if e.strictReport {
 				// Avoid false positives immediately after submitting input (the prompt line can still be visible briefly).
 				if time.Since(lastSubmit) <= 2*time.Second {
+					if err := sleepContext(ctx, e.pollInterval); err != nil {
+						return "", err
+					}
+					continue
+				}
+				// Sometimes Codex leaves the input line visible without actually submitting it. Nudge once.
+				if submitAttempts < 2 && time.Since(lastSubmit) > 4*time.Second {
+					_ = tmuxSendKeys(ctx, runner, target, "C-m")
+					submitAttempts++
+					lastSubmit = time.Now()
 					if err := sleepContext(ctx, e.pollInterval); err != nil {
 						return "", err
 					}
@@ -553,6 +572,46 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 		return "", errors.New("timeout waiting for codex report")
 	}
 	return lastOutput, errors.New("timeout waiting for codex report")
+}
+
+func lastCodexPromptLine(output string, promptLines int) (string, bool) {
+	lines := strings.Split(output, "\n")
+	if promptLines <= 0 {
+		promptLines = 3
+	}
+	seen := 0
+	for i := len(lines) - 1; i >= 0 && seen < promptLines*6; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		seen++
+		if strings.HasPrefix(line, "›") {
+			return line, true
+		}
+	}
+	return "", false
+}
+
+func codexPromptLineLooksLikeEcho(promptLine string, sentPrompt string) bool {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(promptLine), "›"))
+	if trimmed == "" {
+		return false
+	}
+	lower := strings.ToLower(trimmed)
+	if strings.Contains(lower, "[pasted content") {
+		return true
+	}
+	sentPrompt = strings.TrimSpace(sentPrompt)
+	if sentPrompt == "" {
+		return false
+	}
+	// Compare against a short prefix to avoid huge string comparisons.
+	sig := sentPrompt
+	if len(sig) > 32 {
+		sig = sig[:32]
+	}
+	return strings.Contains(trimmed, sig)
 }
 
 type tmuxRunner struct {
@@ -1286,6 +1345,15 @@ func criticRequestsStop(report string) bool {
 
 func actorReportLooksPlaceholder(report string) bool {
 	norm := normalizeReportText(report)
+	// Require the report to include the expected section headers. Without these, it is almost
+	// certainly a truncated, aborted, or placeholder response (and breaks downstream prompting).
+	if !strings.Contains(norm, "summary:") ||
+		!strings.Contains(norm, "changes:") ||
+		!strings.Contains(norm, "validation:") ||
+		!strings.Contains(norm, "open questions:") ||
+		!strings.Contains(norm, "next step for critic:") {
+		return true
+	}
 	if strings.Contains(norm, "summary: changes: validation: open questions: next step for critic:") {
 		return true
 	}
@@ -1306,6 +1374,25 @@ func actorReportLooksPlaceholder(report string) bool {
 
 func criticReportLooksPlaceholder(report string) bool {
 	norm := normalizeReportText(report)
+	// Require the report to include the expected section headers, including a concrete continue flag.
+	if !strings.Contains(norm, "assessment:") ||
+		!strings.Contains(norm, "risks:") ||
+		!strings.Contains(norm, "required fixes:") ||
+		!strings.Contains(norm, "verification steps:") ||
+		!strings.Contains(norm, "next actor prompt:") ||
+		!strings.Contains(norm, "continue loop:") {
+		return true
+	}
+	if strings.Contains(norm, "continue loop: yes|no") ||
+		strings.Contains(norm, "continue loop: <yes|no>") ||
+		strings.Contains(norm, "continue loop: - yes|no") {
+		return true
+	}
+	if !strings.Contains(norm, "continue loop: yes") && !strings.Contains(norm, "continue loop: no") &&
+		!strings.Contains(norm, "continue_loop=yes") && !strings.Contains(norm, "continue_loop=no") &&
+		!strings.Contains(norm, "loop_continue=true") && !strings.Contains(norm, "loop_continue=false") {
+		return true
+	}
 	if strings.Contains(norm, "assessment: risks: required fixes: verification steps: next actor prompt: continue loop: yes|no") {
 		return true
 	}

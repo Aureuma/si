@@ -26,7 +26,16 @@ func (f *fakeTurnExecutor) ActorTurn(_ context.Context, prompt string) (string, 
 			return "", fmt.Errorf("actor prompt missing previous critic report %q", want)
 		}
 	}
-	report := fmt.Sprintf("ACTOR REPORT TURN %d", turn)
+	report := fmt.Sprintf(`Summary:
+- ACTOR REPORT TURN %d
+Changes:
+- none
+Validation:
+- none
+Open Questions:
+- none
+Next Step for Critic:
+- proceed`, turn)
 	return "prefix\n" + reportBeginMarker + "\n" + report + "\n" + reportEndMarker + "\nsuffix", nil
 }
 
@@ -37,7 +46,17 @@ func (f *fakeTurnExecutor) CriticTurn(_ context.Context, prompt string) (string,
 	if !strings.Contains(prompt, want) {
 		return "", fmt.Errorf("critic prompt missing actor report %q", want)
 	}
-	report := fmt.Sprintf("CRITIC REPORT TURN %d", turn)
+	report := fmt.Sprintf(`Assessment:
+- CRITIC REPORT TURN %d
+Risks:
+- none
+Required Fixes:
+- none
+Verification Steps:
+- none
+Next Actor Prompt:
+- proceed
+Continue Loop: yes`, turn)
 	return reportBeginMarker + "\n" + report + "\n" + reportEndMarker, nil
 }
 
@@ -83,10 +102,10 @@ func TestRunTurnLoopMultiTurnClosedFeedback(t *testing.T) {
 	if state.Turn != 3 {
 		t.Fatalf("expected state turn 3, got %d", state.Turn)
 	}
-	if state.LastActorReport != "ACTOR REPORT TURN 3" {
+	if !strings.Contains(state.LastActorReport, "ACTOR REPORT TURN 3") {
 		t.Fatalf("unexpected last actor report: %q", state.LastActorReport)
 	}
-	if state.LastCriticReport != "CRITIC REPORT TURN 3" {
+	if !strings.Contains(state.LastCriticReport, "CRITIC REPORT TURN 3") {
 		t.Fatalf("unexpected last critic report: %q", state.LastCriticReport)
 	}
 	for i := 1; i <= 3; i++ {
@@ -113,6 +132,40 @@ func TestCriticRequestsStop(t *testing.T) {
 	}
 }
 
+func TestReportPlaceholderDetectionRequiresSections(t *testing.T) {
+	if !actorReportLooksPlaceholder("Summary:") {
+		t.Fatalf("expected actor report with only Summary to be placeholder")
+	}
+	if !criticReportLooksPlaceholder("Assessment:") {
+		t.Fatalf("expected critic report with only Assessment to be placeholder")
+	}
+	if actorReportLooksPlaceholder(`Summary:
+- ok
+Changes:
+- none
+Validation:
+- none
+Open Questions:
+- none
+Next Step for Critic:
+- proceed`) {
+		t.Fatalf("did not expect complete actor report to be placeholder")
+	}
+	if criticReportLooksPlaceholder(`Assessment:
+- ok
+Risks:
+- none
+Required Fixes:
+- none
+Verification Steps:
+- none
+Next Actor Prompt:
+- proceed
+Continue Loop: yes`) {
+		t.Fatalf("did not expect complete critic report to be placeholder")
+	}
+}
+
 type fakeSeedStopExecutor struct {
 	actorTurns int
 }
@@ -122,14 +175,14 @@ func (f *fakeSeedStopExecutor) ActorTurn(_ context.Context, prompt string) (stri
 	if !strings.Contains(prompt, "CRITIC REPORT TURN 0") {
 		return "", fmt.Errorf("actor prompt missing seed critic report")
 	}
-	return reportBeginMarker + "\nACTOR REPORT TURN 1\n" + reportEndMarker, nil
+	return reportBeginMarker + "\nSummary:\n- ACTOR REPORT TURN 1\nChanges:\n- none\nValidation:\n- none\nOpen Questions:\n- none\nNext Step for Critic:\n- proceed\n" + reportEndMarker, nil
 }
 
 func (f *fakeSeedStopExecutor) CriticTurn(_ context.Context, prompt string) (string, error) {
 	if strings.Contains(prompt, "Seed critic message") {
-		return reportBeginMarker + "\nCRITIC REPORT TURN 0\nContinue Loop: yes\n" + reportEndMarker, nil
+		return reportBeginMarker + "\nAssessment:\n- CRITIC REPORT TURN 0\nRisks:\n- none\nRequired Fixes:\n- none\nVerification Steps:\n- none\nNext Actor Prompt:\n- proceed\nContinue Loop: yes\n" + reportEndMarker, nil
 	}
-	return reportBeginMarker + "\nCRITIC REPORT TURN 1\nContinue Loop: no\n" + reportEndMarker, nil
+	return reportBeginMarker + "\nAssessment:\n- CRITIC REPORT TURN 1\nRisks:\n- none\nRequired Fixes:\n- none\nVerification Steps:\n- none\nNext Actor Prompt:\n- proceed\nContinue Loop: no\n" + reportEndMarker, nil
 }
 
 func TestRunTurnLoopSeedAndCriticStop(t *testing.T) {
@@ -257,12 +310,12 @@ type countingExecutor struct {
 
 func (c *countingExecutor) ActorTurn(_ context.Context, _ string) (string, error) {
 	c.actorTurns++
-	return reportBeginMarker + "\nACTOR\n" + reportEndMarker, nil
+	return reportBeginMarker + "\nSummary:\n- ACTOR\nChanges:\n- none\nValidation:\n- none\nOpen Questions:\n- none\nNext Step for Critic:\n- proceed\n" + reportEndMarker, nil
 }
 
 func (c *countingExecutor) CriticTurn(_ context.Context, _ string) (string, error) {
 	c.criticTurns++
-	return reportBeginMarker + "\nCRITIC\nContinue Loop: yes\n" + reportEndMarker, nil
+	return reportBeginMarker + "\nAssessment:\n- CRITIC\nRisks:\n- none\nRequired Fixes:\n- none\nVerification Steps:\n- none\nNext Actor Prompt:\n- proceed\nContinue Loop: yes\n" + reportEndMarker, nil
 }
 
 func TestRunTurnLoopControlStopFile(t *testing.T) {
