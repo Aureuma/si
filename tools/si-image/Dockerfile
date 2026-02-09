@@ -22,6 +22,14 @@ RUN go mod download
 RUN go mod tidy
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/critic ./cmd/critic
 
+FROM golang:1.25-bookworm AS si-build
+WORKDIR /src/tools/si
+COPY tools/si/go.mod tools/si/go.sum ./
+COPY agents/shared /src/agents/shared
+COPY tools/si ./
+RUN go mod download
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/si .
+
 FROM node:22-bookworm
 
 RUN apt-get update -y \
@@ -80,6 +88,7 @@ RUN chmod +x /usr/local/bin/si-entrypoint
 COPY --from=codex-stdout-parser-build /out/codex-stdout-parser /usr/local/bin/codex-stdout-parser
 COPY --from=codex-init-build /out/si-codex-init /usr/local/bin/si-codex-init
 COPY --from=critic-build /out/critic /usr/local/bin/critic
+COPY --from=si-build /out/si /usr/local/bin/si
 
 ENTRYPOINT ["tini", "-s", "--", "/usr/local/bin/si-entrypoint"]
 CMD ["bash", "-lc", "sleep infinity"]
