@@ -518,6 +518,13 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 
 		if promptReady {
 			if e.strictReport {
+				// Avoid false positives immediately after submitting input (the prompt line can still be visible briefly).
+				if time.Since(lastSubmit) <= 2*time.Second {
+					if err := sleepContext(ctx, e.pollInterval); err != nil {
+						return "", err
+					}
+					continue
+				}
 				if strings.TrimSpace(lastOutput) == "" {
 					lastOutput = output
 				}
@@ -750,11 +757,8 @@ func codexPromptReady(output string, promptLines int, allowMcpStartup bool) bool
 		}
 		seen++
 		if strings.HasPrefix(line, "›") {
-			// Treat Codex as "ready" only when the prompt is empty (no user input on the prompt line).
-			rest := strings.TrimSpace(strings.TrimPrefix(line, "›"))
-			if rest == "" {
-				return true
-			}
+			// Codex can render a prefilled suggestion on the prompt line; treat any visible prompt as ready.
+			return true
 		}
 	}
 	return false
