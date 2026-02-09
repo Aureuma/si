@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 const vaultUsageText = "usage: si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
 
@@ -45,6 +48,7 @@ func cmdVault(args []string) {
 	default:
 		printUnknown("vault", cmd)
 		printUsage(vaultUsageText)
+		os.Exit(1)
 	}
 }
 
@@ -61,5 +65,6 @@ func cmdVaultDocker(args []string) {
 	default:
 		printUnknown("vault docker", cmd)
 		printUsage("usage: si vault docker <exec>")
+		os.Exit(1)
 	}
 }
