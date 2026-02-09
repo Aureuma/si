@@ -1077,13 +1077,22 @@ func attachCodexTmuxPane(containerName string) error {
 		return err
 	}
 	session := codexTmuxSessionName(containerName)
+	target := session + ":0.0"
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
+	cmd := buildCodexTmuxCommand(containerName)
 	if _, err := tmuxOutput(ctx, "has-session", "-t", session); err != nil {
-		cmd := buildCodexTmuxCommand(containerName)
 		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 			return err
 		}
+	}
+	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	if out, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
+		_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
+		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
+			return err
+		}
+		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
 	}
 	tmuxCmd := exec.Command("tmux", "attach-session", "-t", session)
 	tmuxCmd.Stdout = os.Stdout
@@ -1092,8 +1101,12 @@ func attachCodexTmuxPane(containerName string) error {
 	return tmuxCmd.Run()
 }
 
+func isTmuxPaneDeadOutput(out string) bool {
+	return strings.TrimSpace(out) == "1"
+}
+
 func buildCodexTmuxCommand(containerName string) string {
-	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox"
+	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; cd /workspace 2>/dev/null || true; codex --dangerously-bypass-approvals-and-sandbox; status=$?; printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; exec bash -il"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
