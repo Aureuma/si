@@ -80,7 +80,7 @@ Tasks
   - slow_down backoff logic
 
 ### WS-4: YouTube Auth Revoke -> apibridge
-Status: `pending`
+Status: `done`
 
 Tasks
 - Replace revoke call to use apibridge.
