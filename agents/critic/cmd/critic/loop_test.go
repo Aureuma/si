@@ -45,7 +45,7 @@ func (f *fakeTurnExecutor) CriticTurn(_ context.Context, prompt string) (string,
 	turn := len(f.criticPrompts) - 1 // seed is turn 0
 
 	// Seed prompt: critic is initialized and must emit the first actor message.
-	if strings.Contains(prompt, "How the loop works (hard requirements):") {
+	if strings.Contains(prompt, "You are the CRITIC for the dyad") && strings.Contains(prompt, "Now: write the first message to the actor") {
 		if strings.Contains(prompt, "ACTOR REPORT TURN") {
 			return "", fmt.Errorf("seed critic prompt should not contain actor report")
 		}

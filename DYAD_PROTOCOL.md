@@ -44,3 +44,9 @@ Notes:
 - Use `si vault` to read secrets if needed.
 - Never print secret values into logs or reports.
 
+## Loop Controls (Recovery)
+
+The critic loop watches control files under `/workspace/.si/dyad/<dyad>/`:
+
+- `control.pause`: pause the loop (polls periodically).
+- `control.stop`: stop the loop (persists across restarts).

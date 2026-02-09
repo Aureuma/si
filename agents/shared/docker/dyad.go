@@ -448,7 +448,9 @@ func appendOptionalEnv(env []string, key, val string) []string {
 }
 
 func appendOptionalIntEnv(env []string, key string, val int) []string {
-	if strings.TrimSpace(key) == "" || val <= 0 {
+	// Dyad loop settings treat 0 as a meaningful value (e.g. no sleep, no startup delay).
+	// Negative values are treated as "unset".
+	if strings.TrimSpace(key) == "" || val < 0 {
 		return env
 	}
 	return append(env, fmt.Sprintf("%s=%d", key, val))
