@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"si/tools/si/internal/apibridge"
 	"si/tools/si/internal/youtubebridge"
 )
 
@@ -542,23 +542,34 @@ func revokeGoogleOAuthToken(ctx context.Context, token string) error {
 	}
 	form := url.Values{}
 	form.Set("token", token)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/revoke", strings.NewReader(form.Encode()))
+	client, err := apibridge.NewClient(apibridge.Config{
+		Component:   "google-youtube-auth",
+		BaseURL:     "https://oauth2.googleapis.com",
+		UserAgent:   "si-google-oauth/1.0",
+		Timeout:     20 * time.Second,
+		MaxRetries:  0,
+		SanitizeURL: apibridge.StripQuery,
+		Redact:      youtubebridge.RedactSensitive,
+	})
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: 20 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := client.Do(ctx, apibridge.Request{
+		Method:      http.MethodPost,
+		Path:        "/revoke",
+		RawBody:     form.Encode(),
+		ContentType: "application/x-www-form-urlencoded",
+		Headers: map[string]string{
+			"Accept": "application/json",
+		},
+	})
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
-	body, _ := io.ReadAll(resp.Body)
-	return youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(body))
+	return youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 }
 
 func firstNonEmpty(values ...string) string {
