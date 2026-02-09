@@ -56,7 +56,7 @@ func TestConsumeRunContainerModeFlagsStopsAtCommand(t *testing.T) {
 }
 
 func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
-	cmd := buildCodexTmuxCommand("si-codex-berylla")
+	cmd := buildCodexTmuxCommand("si-codex-berylla", "/home/ubuntu/Development/si")
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected tmux command to use codex bypass flag, got: %s", cmd)
 	}
@@ -65,6 +65,9 @@ func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
 	}
 	if !strings.Contains(cmd, "sudo -n") {
 		t.Fatalf("expected tmux command to keep sudo fallback, got: %s", cmd)
+	}
+	if !strings.Contains(cmd, "/home/ubuntu/Development/si") {
+		t.Fatalf("expected tmux command to cd to host cwd, got: %s", cmd)
 	}
 }
 
