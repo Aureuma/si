@@ -152,8 +152,9 @@ return fmt.Sprintf(`# managed by si-codex-init
 model = "%s"
 model_reasoning_effort = "%s"
 
-[features]
-web_search_request = true
+# Codex deprecated [features].web_search_request; configure web search at the top level.
+# Values: "live" | "cached" | "disabled"
+web_search = "live"
 
 [sandbox_workspace_write]
 network_access = true

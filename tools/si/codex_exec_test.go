@@ -54,8 +54,8 @@ func TestBuildNoMcpConfig(t *testing.T) {
 	if strings.Contains(cfg, "[mcp]") {
 		t.Fatalf("config should not include MCP section: %q", cfg)
 	}
-	if !strings.Contains(cfg, "web_search_request = false") {
-		t.Fatalf("expected web_search_request=false: %q", cfg)
+	if !strings.Contains(cfg, "web_search = \"disabled\"") {
+		t.Fatalf("expected web_search=disabled: %q", cfg)
 	}
 }
 

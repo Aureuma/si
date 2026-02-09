@@ -12,6 +12,8 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 - Docker available on the host
 - `tmux` installed in both containers (included in `aureuma/si:local`)
 - A logged-in `si login` profile for real Codex runs (or use the offline fake Codex flow below)
+  - If Codex launches the "Welcome to Codex" sign-in screen, the dyad loop will halt and log an auth-required message.
+    Use `si dyad peek <dyad>` to complete login inside the running `tmux` session, then restart the dyad loop.
 - If Docker is root-only on your host, run `si dyad ...` as root and set `SI_HOST_UID`/`SI_HOST_GID` so artifacts are owned by your user.
 
 ## Loop Control Files

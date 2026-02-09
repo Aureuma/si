@@ -173,6 +173,11 @@ func cmdDyadSpawn(args []string) {
 	if role == "" {
 		role = "generic"
 	}
+	if roleProvided {
+		if err := validateDyadSpawnOptionValue("role", role); err != nil {
+			fatal(err)
+		}
+	}
 	dept := strings.TrimSpace(*deptFlag)
 	if dept == "" && fs.NArg() > 1 {
 		dept = fs.Arg(1)
@@ -186,6 +191,11 @@ func cmdDyadSpawn(args []string) {
 	}
 	if dept == "" {
 		dept = role
+	}
+	if deptProvided {
+		if err := validateDyadSpawnOptionValue("department", dept); err != nil {
+			fatal(err)
+		}
 	}
 
 	roleLower := strings.ToLower(role)
