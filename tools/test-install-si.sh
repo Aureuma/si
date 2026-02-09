@@ -4,6 +4,31 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALLER="${ROOT}/tools/install-si.sh"
 
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+Usage: ./tools/test-install-si.sh
+
+Runs installer smoke tests against tools/install-si.sh.
+EOF
+  exit 0
+fi
+
+if [[ "$#" -gt 0 ]]; then
+  echo "unexpected arguments: $*" >&2
+  echo "Run ./tools/test-install-si.sh --help for usage." >&2
+  exit 1
+fi
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "FAIL: git is required to run installer tests" >&2
+  exit 1
+fi
+
+if [[ ! -f "${INSTALLER}" ]]; then
+  echo "FAIL: installer not found at ${INSTALLER}" >&2
+  exit 1
+fi
+
 fail() {
   echo "FAIL: $*" >&2
   exit 1

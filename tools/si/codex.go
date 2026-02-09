@@ -1156,11 +1156,26 @@ func attachCodexTmuxPane(containerName string) error {
 			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
 		}
 	}
+	tmuxTryLabelCodexPane(ctx, session, target, containerName)
 	tmuxCmd := exec.Command("tmux", "attach-session", "-t", session)
 	tmuxCmd.Stdout = os.Stdout
 	tmuxCmd.Stderr = os.Stderr
 	tmuxCmd.Stdin = os.Stdin
 	return tmuxCmd.Run()
+}
+
+func tmuxTryLabelCodexPane(ctx context.Context, session string, target string, containerName string) {
+	title := strings.TrimSpace(containerName)
+	if title == "" {
+		title = "codex"
+	}
+	// Prefer a readable window name and a visible pane title.
+	title = "🧠 " + title
+	_, _ = tmuxOutput(ctx, "rename-window", "-t", session+":0", title)
+	_, _ = tmuxOutput(ctx, "select-pane", "-t", target, "-T", title)
+	// Show titles in borders; session-scoped so it won't affect other tmux sessions.
+	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "pane-border-status", "top")
+	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "pane-border-format", "#{pane_title}")
 }
 
 func isTmuxPaneDeadOutput(out string) bool {

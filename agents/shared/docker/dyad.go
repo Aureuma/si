@@ -359,12 +359,17 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 }
 
 func buildDyadEnv(opts DyadOptions, member, effort string) []string {
+	termTitle := dyadTermTitle(opts.Dyad, member)
 	env := []string{
 		"ROLE=" + opts.Role,
 		"DEPARTMENT=" + opts.Department,
 		"DYAD_NAME=" + opts.Dyad,
 		"DYAD_MEMBER=" + member,
 		"CODEX_INIT_FORCE=1",
+		"SI_TERM_TITLE=" + termTitle,
+		// Ensure tmux + shell render Unicode (emoji) reliably.
+		"LANG=C.UTF-8",
+		"LC_ALL=C.UTF-8",
 	}
 	model := strings.TrimSpace(opts.CodexModel)
 	if model != "" {
@@ -421,6 +426,21 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 		env = appendHostEnvIfSet(env, key)
 	}
 	return env
+}
+
+func dyadTermTitle(dyad string, member string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		dyad = "unknown"
+	}
+	switch strings.ToLower(strings.TrimSpace(member)) {
+	case "actor":
+		return "🪢 " + dyad + " 🛩️ actor"
+	case "critic":
+		return "🪢 " + dyad + " 🧠 critic"
+	default:
+		return "🪢 " + dyad
+	}
 }
 
 func appendOptionalEnv(env []string, key, val string) []string {
