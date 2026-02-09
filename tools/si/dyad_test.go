@@ -128,7 +128,6 @@ func TestSplitDyadSpawnArgsKeepsFlagsParsable(t *testing.T) {
 func TestSplitDyadSpawnArgsFlagsBeforeName(t *testing.T) {
 	name, filtered := splitDyadSpawnArgs([]string{
 		"--role", "infra",
-		"--department", "platform",
 		"demo",
 		"--docker-socket",
 	})
@@ -137,7 +136,6 @@ func TestSplitDyadSpawnArgsFlagsBeforeName(t *testing.T) {
 	}
 	want := []string{
 		"--role", "infra",
-		"--department", "platform",
 		"--docker-socket",
 	}
 	if len(filtered) != len(want) {
@@ -153,14 +151,12 @@ func TestSplitDyadSpawnArgsFlagsBeforeName(t *testing.T) {
 func TestSplitDyadSpawnArgsNoName(t *testing.T) {
 	name, filtered := splitDyadSpawnArgs([]string{
 		"--role", "research",
-		"--department", "ai",
 	})
 	if name != "" {
 		t.Fatalf("expected empty name, got %q", name)
 	}
 	want := []string{
 		"--role", "research",
-		"--department", "ai",
 	}
 	if len(filtered) != len(want) {
 		t.Fatalf("unexpected filtered len=%d want=%d (%v)", len(filtered), len(want), filtered)
@@ -240,7 +236,7 @@ func TestValidateDyadSpawnOptionValue(t *testing.T) {
 	if err := validateDyadSpawnOptionValue("role", ""); err == nil {
 		t.Fatalf("expected missing value error")
 	}
-	if err := validateDyadSpawnOptionValue("role", "--department"); err == nil {
+	if err := validateDyadSpawnOptionValue("role", "--profile"); err == nil {
 		t.Fatalf("expected flag-like value error")
 	}
 }
@@ -263,7 +259,6 @@ func TestBuildDyadRowsAggregatesAndSorts(t *testing.T) {
 			Labels: map[string]string{
 				shared.LabelDyad:   "beta",
 				shared.LabelRole:   "research",
-				shared.LabelDept:   "ai",
 				shared.LabelMember: "critic",
 			},
 			State: "running",
@@ -272,7 +267,6 @@ func TestBuildDyadRowsAggregatesAndSorts(t *testing.T) {
 			Labels: map[string]string{
 				shared.LabelDyad:   "alpha",
 				shared.LabelRole:   "infra",
-				shared.LabelDept:   "platform",
 				shared.LabelMember: "actor",
 			},
 			State: "running",
@@ -306,13 +300,13 @@ func TestBuildDyadRowsAggregatesAndSorts(t *testing.T) {
 	if rows[0].Dyad != "alpha" || rows[1].Dyad != "beta" {
 		t.Fatalf("expected sorted rows by dyad name, got %+v", rows)
 	}
-	if rows[0].Role != "infra" || rows[0].Dept != "platform" {
+	if rows[0].Role != "infra" {
 		t.Fatalf("unexpected alpha metadata: %+v", rows[0])
 	}
 	if rows[0].Actor != "running" || rows[0].Critic != "exited" {
 		t.Fatalf("unexpected alpha member states: %+v", rows[0])
 	}
-	if rows[1].Role != "research" || rows[1].Dept != "ai" {
+	if rows[1].Role != "research" {
 		t.Fatalf("unexpected beta metadata: %+v", rows[1])
 	}
 	if rows[1].Actor != "paused" || rows[1].Critic != "running" {
@@ -326,7 +320,6 @@ func TestBuildDyadRowsUnknownMemberIgnored(t *testing.T) {
 			Labels: map[string]string{
 				shared.LabelDyad:   "alpha",
 				shared.LabelRole:   "infra",
-				shared.LabelDept:   "platform",
 				shared.LabelMember: "observer",
 			},
 			State: "running",

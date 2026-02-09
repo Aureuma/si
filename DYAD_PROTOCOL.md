@@ -1,0 +1,46 @@
+# 🪢 Dyad Protocol
+
+This file defines the dyad loop contract between the critic and the actor.
+
+Inside dyad containers, the repo is mounted at `/workspace`.
+
+## Roles
+
+- `🧠 critic`: reviews the actor's work report and sends the next instructions to the actor.
+- `🛩️ actor`: performs one small, safe work iteration per turn and reports back.
+
+## Task Source
+
+- Primary queue: `/workspace/TASK_BOARD.md`
+- The actor should pick exactly one task at a time and keep it moving.
+
+## Actor Output (Required)
+
+The actor must respond with **only** this delimited work report format:
+
+```
+<<WORK_REPORT_BEGIN>>
+Summary:
+- ...
+Changes:
+- ...
+Validation:
+- ...
+Open Questions:
+- ...
+Next Step for Critic:
+- ...
+⏰ Finished At (UTC): <ISO8601 timestamp>
+<<WORK_REPORT_END>>
+```
+
+Notes:
+- Keep bullets single-level (no nested bullets).
+- If you run commands, include the command names and the key results in `Validation:`.
+- If you touched tasks, update `/workspace/TASK_BOARD.md` and mention it in `Changes:`.
+
+## Secrets / Vault
+
+- Use `si vault` to read secrets if needed.
+- Never print secret values into logs or reports.
+

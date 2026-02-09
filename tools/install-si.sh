@@ -39,6 +39,7 @@ Flags:
   --tmp-dir <dir>         Temporary working directory (default: mktemp)
   --dry-run               Print actions without changing anything
   --quiet                 Reduce output
+  --no-path-hint          Skip PATH guidance after install
   -h, --help              Show this help
 
 Notes:
