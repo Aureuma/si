@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -38,6 +37,7 @@ type AppProvider struct {
 	cfg        AppProviderConfig
 	key        *rsa.PrivateKey
 	httpClient *http.Client
+	api        *apibridge.Client
 	mu         sync.Mutex
 	cached     Token
 }
@@ -55,13 +55,36 @@ func NewAppProvider(cfg AppProviderConfig) (*AppProvider, error) {
 		return nil, err
 	}
 	if strings.TrimSpace(cfg.BaseURL) == "" {
-		cfg.BaseURL = "https://api.github.com"
+		cfg.BaseURL = providers.Specs[providers.GitHub].BaseURL
 	}
 	client := cfg.HTTPClient
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &AppProvider{cfg: cfg, key: key, httpClient: client}, nil
+	spec := providers.Specs[providers.GitHub]
+	api, err := apibridge.NewClient(apibridge.Config{
+		Component:  "githubbridge-auth",
+		BaseURL:    cfg.BaseURL,
+		UserAgent:  spec.UserAgent,
+		MaxRetries: 0,
+		HTTPClient: client,
+		Redact:     RedactSensitive,
+		RequestIDFromHeaders: func(h http.Header) string {
+			if h == nil {
+				return ""
+			}
+			for _, k := range spec.RequestIDHeaders {
+				if v := strings.TrimSpace(h.Get(k)); v != "" {
+					return v
+				}
+			}
+			return ""
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &AppProvider{cfg: cfg, key: key, httpClient: client, api: api}, nil
 }
 
 func (p *AppProvider) Mode() AuthMode {
@@ -159,35 +182,32 @@ func (p *AppProvider) signedJWT(now time.Time) (string, error) {
 }
 
 func (p *AppProvider) exchangeInstallationToken(ctx context.Context, installationID int64, jwtToken string) (Token, error) {
-	u, err := apibridge.ResolveURL(p.cfg.BaseURL, fmt.Sprintf("/app/installations/%d/access_tokens", installationID), nil)
-	if err != nil {
-		return Token{}, err
-	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, u, nil)
-	if err != nil {
-		return Token{}, err
-	}
-	httpReq.Header.Set("Authorization", "Bearer "+jwtToken)
 	spec := providers.Specs[providers.GitHub]
-	httpReq.Header.Set("Accept", spec.Accept)
-	for k, v := range spec.DefaultHeaders {
-		httpReq.Header.Set(k, v)
+	headers := map[string]string{
+		"Authorization": "Bearer " + jwtToken,
+		"Accept":        spec.Accept,
 	}
-	resp, err := p.httpClient.Do(httpReq)
+	for k, v := range spec.DefaultHeaders {
+		headers[k] = v
+	}
+
+	apiResp, err := p.api.Do(ctx, apibridge.Request{
+		Method:  http.MethodPost,
+		Path:    fmt.Sprintf("/app/installations/%d/access_tokens", installationID),
+		Headers: headers,
+	})
 	if err != nil {
 		return Token{}, err
 	}
-	defer resp.Body.Close()
-	bodyBytes, _ := io.ReadAll(resp.Body)
-	body := strings.TrimSpace(string(bodyBytes))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return Token{}, NormalizeHTTPError(resp.StatusCode, resp.Header, body)
+	body := strings.TrimSpace(string(apiResp.Body))
+	if apiResp.StatusCode < 200 || apiResp.StatusCode >= 300 {
+		return Token{}, NormalizeHTTPError(apiResp.StatusCode, apiResp.Headers, body)
 	}
 	var payload struct {
 		Token     string `json:"token"`
 		ExpiresAt string `json:"expires_at"`
 	}
-	if err := json.Unmarshal(bodyBytes, &payload); err != nil {
+	if err := json.Unmarshal(apiResp.Body, &payload); err != nil {
 		return Token{}, fmt.Errorf("decode installation token response: %w", err)
 	}
 	if strings.TrimSpace(payload.Token) == "" {
@@ -213,33 +233,30 @@ func (p *AppProvider) lookupInstallationID(ctx context.Context, owner string, re
 		)
 	}
 	for _, path := range try {
-		u, urlErr := apibridge.ResolveURL(p.cfg.BaseURL, path, nil)
-		if urlErr != nil {
+		spec := providers.Specs[providers.GitHub]
+		headers := map[string]string{
+			"Authorization": "Bearer " + jwtToken,
+			"Accept":        spec.Accept,
+		}
+		for k, v := range spec.DefaultHeaders {
+			headers[k] = v
+		}
+
+		apiResp, callErr := p.api.Do(ctx, apibridge.Request{
+			Method:  http.MethodGet,
+			Path:    path,
+			Headers: headers,
+		})
+		if callErr != nil {
 			continue
 		}
-		httpReq, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if reqErr != nil {
-			continue
-		}
-			httpReq.Header.Set("Authorization", "Bearer "+jwtToken)
-			spec := providers.Specs[providers.GitHub]
-			httpReq.Header.Set("Accept", spec.Accept)
-			for k, v := range spec.DefaultHeaders {
-				httpReq.Header.Set(k, v)
-			}
-			resp, callErr := p.httpClient.Do(httpReq)
-			if callErr != nil {
-				continue
-			}
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		if apiResp.StatusCode < 200 || apiResp.StatusCode >= 300 {
 			continue
 		}
 		var payload struct {
 			ID int64 `json:"id"`
 		}
-		if json.Unmarshal(bodyBytes, &payload) != nil {
+		if json.Unmarshal(apiResp.Body, &payload) != nil {
 			continue
 		}
 		if payload.ID > 0 {
