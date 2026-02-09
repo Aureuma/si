@@ -1,0 +1,139 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestLoadSettingsCreatesDefaultWhenMissing(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	got, err := loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings() unexpected err: %v", err)
+	}
+	// Spot-check defaults are applied.
+	if got.SchemaVersion != 1 {
+		t.Fatalf("expected schema_version=1, got %d", got.SchemaVersion)
+	}
+	if got.Dyad.Loop.SleepSeconds != 3 {
+		t.Fatalf("expected dyad.loop.sleep_seconds default=3, got %d", got.Dyad.Loop.SleepSeconds)
+	}
+	if got.Dyad.Loop.TurnTimeoutSeconds != 900 {
+		t.Fatalf("expected dyad.loop.turn_timeout_seconds default=900, got %d", got.Dyad.Loop.TurnTimeoutSeconds)
+	}
+	if got.Dyad.Loop.TmuxCapture != "main" {
+		t.Fatalf("expected dyad.loop.tmux_capture default=main, got %q", got.Dyad.Loop.TmuxCapture)
+	}
+
+	path, err := settingsPath()
+	if err != nil {
+		t.Fatalf("settingsPath: %v", err)
+	}
+	if _, statErr := os.Stat(path); statErr != nil {
+		t.Fatalf("expected settings file to be created at %s: %v", path, statErr)
+	}
+	data, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatalf("read settings file: %v", readErr)
+	}
+	if !strings.Contains(string(data), "schema_version") {
+		t.Fatalf("expected settings file to contain schema_version, got:\n%s", string(data))
+	}
+}
+
+func TestLoadSettingsInvalidTomlReturnsDefaultsAndError(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	path := filepath.Join(tmp, ".si", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("dyad = { loop = [ }"), 0o600); err != nil {
+		t.Fatalf("write invalid toml: %v", err)
+	}
+
+	got, err := loadSettings()
+	if err == nil {
+		t.Fatalf("expected parse error")
+	}
+	// The important part: we still return a usable defaults object.
+	if got.SchemaVersion != 1 {
+		t.Fatalf("expected schema_version=1, got %d", got.SchemaVersion)
+	}
+	if got.Dyad.Loop.SleepSeconds != 3 {
+		t.Fatalf("expected dyad.loop.sleep_seconds default=3, got %d", got.Dyad.Loop.SleepSeconds)
+	}
+	if got.Dyad.Loop.TurnTimeoutSeconds != 900 {
+		t.Fatalf("expected dyad.loop.turn_timeout_seconds default=900, got %d", got.Dyad.Loop.TurnTimeoutSeconds)
+	}
+	if got.Dyad.Loop.TmuxCapture != "main" {
+		t.Fatalf("expected dyad.loop.tmux_capture default=main, got %q", got.Dyad.Loop.TmuxCapture)
+	}
+	if !strings.Contains(err.Error(), "settings.toml") {
+		t.Fatalf("expected error to include settings path, got: %v", err)
+	}
+}
+
+func TestLoadSettingsClampsBadValues(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	path := filepath.Join(tmp, ".si", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Intentionally bad values that should be clamped/defaulted.
+	content := `
+[dyad.loop]
+sleep_seconds = 0
+startup_delay_seconds = -1
+turn_timeout_seconds = 0
+retry_max = 0
+retry_base_seconds = 0
+prompt_lines = 0
+pause_poll_seconds = 0
+tmux_capture = "weird"
+max_turns = -5
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got, err := loadSettings()
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got.Dyad.Loop.SleepSeconds != 3 {
+		t.Fatalf("expected sleep_seconds=3 default, got %d", got.Dyad.Loop.SleepSeconds)
+	}
+	if got.Dyad.Loop.StartupDelaySeconds != 2 {
+		t.Fatalf("expected startup_delay_seconds=2 default, got %d", got.Dyad.Loop.StartupDelaySeconds)
+	}
+	if got.Dyad.Loop.TurnTimeoutSeconds != 900 {
+		t.Fatalf("expected turn_timeout_seconds=900 default, got %d", got.Dyad.Loop.TurnTimeoutSeconds)
+	}
+	if got.Dyad.Loop.RetryMax != 3 {
+		t.Fatalf("expected retry_max=3 default, got %d", got.Dyad.Loop.RetryMax)
+	}
+	if got.Dyad.Loop.RetryBaseSeconds != 2 {
+		t.Fatalf("expected retry_base_seconds=2 default, got %d", got.Dyad.Loop.RetryBaseSeconds)
+	}
+	if got.Dyad.Loop.PromptLines != 3 {
+		t.Fatalf("expected prompt_lines=3 default, got %d", got.Dyad.Loop.PromptLines)
+	}
+	if got.Dyad.Loop.PausePollSeconds != 5 {
+		t.Fatalf("expected pause_poll_seconds=5 default, got %d", got.Dyad.Loop.PausePollSeconds)
+	}
+	if got.Dyad.Loop.TmuxCapture != "main" {
+		t.Fatalf("expected tmux_capture=main default, got %q", got.Dyad.Loop.TmuxCapture)
+	}
+	if got.Dyad.Loop.MaxTurns != 0 {
+		t.Fatalf("expected max_turns=0 clamp, got %d", got.Dyad.Loop.MaxTurns)
+	}
+}
+
