@@ -49,6 +49,18 @@ si vault run --env dev -- ./your-command --args
 si vault docker exec --container <name-or-id> --env dev -- ./your-command --args
 ```
 
+## Dyads + Codex Containers
+
+Dyad and Codex containers are built from the same unified image (`aureuma/si:local`) which includes `/usr/local/bin/si`.
+That means you can run read-only vault commands (like `si vault status`) from inside a dyad container via `si dyad exec`.
+
+For secret injection, prefer running from the host:
+
+```bash
+# Inject decrypted env for that exec only (decrypt happens on the host).
+si vault docker exec --container si-actor-<dyad> --env dev -- ./your-command --args
+```
+
 ## Prevent Plaintext Commits (Git Hooks)
 
 `si vault init` installs a best-effort local `pre-commit` hook inside the vault repo to block committing dotenv files that contain plaintext values.
