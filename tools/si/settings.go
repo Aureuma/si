@@ -75,21 +75,38 @@ type CodexProfileEntry struct {
 }
 
 type DyadSettings struct {
-	ActorImage        string `toml:"actor_image,omitempty"`
-	CriticImage       string `toml:"critic_image,omitempty"`
-	CodexModel        string `toml:"codex_model,omitempty"`
-	CodexEffortActor  string `toml:"codex_effort_actor,omitempty"`
-	CodexEffortCritic string `toml:"codex_effort_critic,omitempty"`
-	CodexModelLow     string `toml:"codex_model_low,omitempty"`
-	CodexModelMedium  string `toml:"codex_model_medium,omitempty"`
-	CodexModelHigh    string `toml:"codex_model_high,omitempty"`
-	CodexEffortLow    string `toml:"codex_effort_low,omitempty"`
-	CodexEffortMedium string `toml:"codex_effort_medium,omitempty"`
-	CodexEffortHigh   string `toml:"codex_effort_high,omitempty"`
-	Workspace         string `toml:"workspace,omitempty"`
-	Configs           string `toml:"configs,omitempty"`
-	ForwardPorts      string `toml:"forward_ports,omitempty"`
-	DockerSocket      *bool  `toml:"docker_socket,omitempty"`
+	ActorImage        string           `toml:"actor_image,omitempty"`
+	CriticImage       string           `toml:"critic_image,omitempty"`
+	CodexModel        string           `toml:"codex_model,omitempty"`
+	CodexEffortActor  string           `toml:"codex_effort_actor,omitempty"`
+	CodexEffortCritic string           `toml:"codex_effort_critic,omitempty"`
+	CodexModelLow     string           `toml:"codex_model_low,omitempty"`
+	CodexModelMedium  string           `toml:"codex_model_medium,omitempty"`
+	CodexModelHigh    string           `toml:"codex_model_high,omitempty"`
+	CodexEffortLow    string           `toml:"codex_effort_low,omitempty"`
+	CodexEffortMedium string           `toml:"codex_effort_medium,omitempty"`
+	CodexEffortHigh   string           `toml:"codex_effort_high,omitempty"`
+	Workspace         string           `toml:"workspace,omitempty"`
+	Configs           string           `toml:"configs,omitempty"`
+	ForwardPorts      string           `toml:"forward_ports,omitempty"`
+	DockerSocket      *bool            `toml:"docker_socket,omitempty"`
+	Loop              DyadLoopSettings `toml:"loop,omitempty"`
+}
+
+type DyadLoopSettings struct {
+	Enabled             *bool  `toml:"enabled,omitempty"`
+	Goal                string `toml:"goal,omitempty"`
+	SeedCriticPrompt    string `toml:"seed_critic_prompt,omitempty"`
+	MaxTurns            int    `toml:"max_turns,omitempty"`
+	SleepSeconds        int    `toml:"sleep_seconds,omitempty"`
+	StartupDelaySeconds int    `toml:"startup_delay_seconds,omitempty"`
+	TurnTimeoutSeconds  int    `toml:"turn_timeout_seconds,omitempty"`
+	RetryMax            int    `toml:"retry_max,omitempty"`
+	RetryBaseSeconds    int    `toml:"retry_base_seconds,omitempty"`
+	PromptLines         int    `toml:"prompt_lines,omitempty"`
+	AllowMCPStartup     *bool  `toml:"allow_mcp_startup,omitempty"`
+	TmuxCapture         string `toml:"tmux_capture,omitempty"`
+	PausePollSeconds    int    `toml:"pause_poll_seconds,omitempty"`
 }
 
 type VaultSettings struct {
@@ -351,6 +368,42 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	if settings.Vault.KeyFile == "" {
 		settings.Vault.KeyFile = "~/.si/vault/keys/age.key"
+	}
+	settings.Dyad.Loop.TmuxCapture = strings.ToLower(strings.TrimSpace(settings.Dyad.Loop.TmuxCapture))
+	switch settings.Dyad.Loop.TmuxCapture {
+	case "", "main", "alt":
+	default:
+		settings.Dyad.Loop.TmuxCapture = "main"
+	}
+	if settings.Dyad.Loop.TmuxCapture == "" {
+		settings.Dyad.Loop.TmuxCapture = "main"
+	}
+	if settings.Dyad.Loop.MaxTurns < 0 {
+		settings.Dyad.Loop.MaxTurns = 0
+	}
+	if strings.TrimSpace(settings.Dyad.Loop.Goal) == "" {
+		settings.Dyad.Loop.Goal = "Continuously improve the task outcome through actor execution and critic review."
+	}
+	if settings.Dyad.Loop.SleepSeconds <= 0 {
+		settings.Dyad.Loop.SleepSeconds = 3
+	}
+	if settings.Dyad.Loop.StartupDelaySeconds <= 0 {
+		settings.Dyad.Loop.StartupDelaySeconds = 2
+	}
+	if settings.Dyad.Loop.TurnTimeoutSeconds <= 0 {
+		settings.Dyad.Loop.TurnTimeoutSeconds = 900
+	}
+	if settings.Dyad.Loop.RetryMax <= 0 {
+		settings.Dyad.Loop.RetryMax = 3
+	}
+	if settings.Dyad.Loop.RetryBaseSeconds <= 0 {
+		settings.Dyad.Loop.RetryBaseSeconds = 2
+	}
+	if settings.Dyad.Loop.PromptLines <= 0 {
+		settings.Dyad.Loop.PromptLines = 3
+	}
+	if settings.Dyad.Loop.PausePollSeconds <= 0 {
+		settings.Dyad.Loop.PausePollSeconds = 5
 	}
 	settings.Stripe.DefaultEnv = normalizeStripeEnvironment(settings.Stripe.DefaultEnv)
 	if settings.Stripe.DefaultEnv == "" {

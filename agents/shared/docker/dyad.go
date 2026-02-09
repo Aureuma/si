@@ -47,6 +47,19 @@ type DyadOptions struct {
 	Network           string
 	ForwardPorts      string
 	DockerSocket      bool
+	LoopEnabled       *bool
+	LoopGoal          string
+	LoopSeedPrompt    string
+	LoopMaxTurns      int
+	LoopSleepSeconds  int
+	LoopStartupDelay  int
+	LoopTurnTimeout   int
+	LoopRetryMax      int
+	LoopRetryBase     int
+	LoopPromptLines   int
+	LoopAllowMCP      *bool
+	LoopTmuxCapture   string
+	LoopPausePoll     int
 }
 
 type ContainerSpec struct {
@@ -366,15 +379,19 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 		env = append(env, fmt.Sprintf("SI_HOST_GID=%d", gid))
 	}
 	if member == "critic" {
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_ENABLED")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_GOAL")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_SEED_CRITIC_PROMPT")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_MAX_TURNS")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_SLEEP_SECONDS")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_STARTUP_DELAY_SECONDS")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_TURN_TIMEOUT_SECONDS")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_RETRY_MAX")
-		env = appendHostEnvIfSet(env, "DYAD_LOOP_RETRY_BASE_SECONDS")
+		env = appendOptionalBoolEnv(env, "DYAD_LOOP_ENABLED", opts.LoopEnabled)
+		env = appendOptionalEnv(env, "DYAD_LOOP_GOAL", opts.LoopGoal)
+		env = appendOptionalEnv(env, "DYAD_LOOP_SEED_CRITIC_PROMPT", opts.LoopSeedPrompt)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_MAX_TURNS", opts.LoopMaxTurns)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_SLEEP_SECONDS", opts.LoopSleepSeconds)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_STARTUP_DELAY_SECONDS", opts.LoopStartupDelay)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_TURN_TIMEOUT_SECONDS", opts.LoopTurnTimeout)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_RETRY_MAX", opts.LoopRetryMax)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_RETRY_BASE_SECONDS", opts.LoopRetryBase)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_PROMPT_LINES", opts.LoopPromptLines)
+		env = appendOptionalBoolEnv(env, "DYAD_LOOP_ALLOW_MCP_STARTUP", opts.LoopAllowMCP)
+		env = appendOptionalEnv(env, "DYAD_LOOP_TMUX_CAPTURE", opts.LoopTmuxCapture)
+		env = appendOptionalIntEnv(env, "DYAD_LOOP_PAUSE_POLL_SECONDS", opts.LoopPausePoll)
 		env = appendHostEnvIfSet(env, "DYAD_STATE_DIR")
 	}
 	return env
@@ -385,6 +402,23 @@ func appendOptionalEnv(env []string, key, val string) []string {
 		return env
 	}
 	return append(env, key+"="+strings.TrimSpace(val))
+}
+
+func appendOptionalIntEnv(env []string, key string, val int) []string {
+	if strings.TrimSpace(key) == "" || val <= 0 {
+		return env
+	}
+	return append(env, fmt.Sprintf("%s=%d", key, val))
+}
+
+func appendOptionalBoolEnv(env []string, key string, val *bool) []string {
+	if strings.TrimSpace(key) == "" || val == nil {
+		return env
+	}
+	if *val {
+		return append(env, key+"=1")
+	}
+	return append(env, key+"=0")
 }
 
 func appendHostEnvIfSet(env []string, key string) []string {

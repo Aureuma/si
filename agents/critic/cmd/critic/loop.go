@@ -112,31 +112,37 @@ func runTurnLoop(ctx context.Context, cfg loopConfig, executor turnExecutor, log
 	}
 	if strings.TrimSpace(state.LastCriticReport) == "" && strings.TrimSpace(cfg.SeedCriticPrompt) != "" {
 		seedRaw, seedReport, err := runWithRetries(ctx, cfg, "critic-seed", func(stepCtx context.Context) (string, string, error) {
-			raw, err := executor.CriticTurn(stepCtx, strings.TrimSpace(cfg.SeedCriticPrompt))
+			raw, err := executor.CriticTurn(stepCtx, buildSeedCriticPrompt(cfg))
 			if err != nil {
 				return "", "", err
 			}
 			report := extractWorkReport(raw)
-			if report == "" {
+			if report == "" || criticReportLooksPlaceholder(report) {
 				return raw, "", errors.New("seed critic output missing report")
 			}
 			return raw, report, nil
 		})
 		if err != nil {
-			return err
-		}
-		if err := writeTurnArtifacts(cfg.StateDir, 0, "critic", strings.TrimSpace(cfg.SeedCriticPrompt), seedRaw, seedReport); err != nil {
-			logger.Printf("seed critic artifact warning: %v", err)
-		}
-		state.LastCriticReport = seedReport
-		state.UpdatedAt = time.Now().UTC()
-		if err := saveLoopState(statePath, state); err != nil {
-			logger.Printf("dyad seed state save warning: %v", err)
-		}
-		logger.Printf("dyad seed critic report initialized")
-		if criticRequestsStop(seedReport) {
-			logger.Printf("dyad loop stop requested by critic seed report")
-			return nil
+			state.LastCriticReport = fallbackCriticFeedback(cfg)
+			state.UpdatedAt = time.Now().UTC()
+			if saveErr := saveLoopState(statePath, state); saveErr != nil {
+				logger.Printf("dyad seed fallback state save warning: %v", saveErr)
+			}
+			logger.Printf("dyad seed critic report failed: %v; using fallback guidance", err)
+		} else {
+			if err := writeTurnArtifacts(cfg.StateDir, 0, "critic", strings.TrimSpace(cfg.SeedCriticPrompt), seedRaw, seedReport); err != nil {
+				logger.Printf("seed critic artifact warning: %v", err)
+			}
+			state.LastCriticReport = seedReport
+			state.UpdatedAt = time.Now().UTC()
+			if err := saveLoopState(statePath, state); err != nil {
+				logger.Printf("dyad seed state save warning: %v", err)
+			}
+			logger.Printf("dyad seed critic report initialized")
+			if criticRequestsStop(seedReport) {
+				logger.Printf("dyad loop stop requested by critic seed report")
+				return nil
+			}
 		}
 	}
 	turn := state.Turn + 1
@@ -215,7 +221,7 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 			return "", "", err
 		}
 		report := extractWorkReport(raw)
-		if report == "" {
+		if report == "" || actorReportLooksPlaceholder(report) {
 			return raw, "", errors.New("actor output missing report")
 		}
 		return raw, report, nil
@@ -234,7 +240,7 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 			return "", "", err
 		}
 		report := extractWorkReport(raw)
-		if report == "" {
+		if report == "" || criticReportLooksPlaceholder(report) {
 			return raw, "", errors.New("critic output missing report")
 		}
 		return raw, report, nil
@@ -327,7 +333,7 @@ func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string
 		return "", err
 	}
 	runner := tmuxRunner{Prefix: []string{"docker", "exec", e.actorContainer}}
-	out, err := e.runTurn(ctx, runner, e.actorSession, interactiveCodexCommand(), prompt)
+	out, err := e.runTurn(ctx, runner, e.actorSession, interactiveCodexCommand(), prompt, "actor")
 	if err != nil {
 		e.recoverSession(e.actorSession, runner, err)
 	}
@@ -336,14 +342,14 @@ func (e codexTurnExecutor) ActorTurn(ctx context.Context, prompt string) (string
 
 func (e codexTurnExecutor) CriticTurn(ctx context.Context, prompt string) (string, error) {
 	runner := tmuxRunner{}
-	out, err := e.runTurn(ctx, runner, e.criticSession, interactiveCodexCommand(), prompt)
+	out, err := e.runTurn(ctx, runner, e.criticSession, interactiveCodexCommand(), prompt, "critic")
 	if err != nil {
 		e.recoverSession(e.criticSession, runner, err)
 	}
 	return out, err
 }
 
-func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, session string, startCmd string, prompt string) (string, error) {
+func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, session string, startCmd string, prompt string, role string) (string, error) {
 	paneTarget, readyOutput, err := e.ensureInteractiveSession(ctx, runner, session, startCmd)
 	if err != nil {
 		return "", err
@@ -367,7 +373,7 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-m"); err != nil {
 		return "", err
 	}
-	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineSegments)
+	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineSegments, role)
 }
 
 func (e codexTurnExecutor) recoverSession(session string, runner tmuxRunner, cause error) {
@@ -425,7 +431,7 @@ func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRu
 	return lastOutput, errors.New("timeout waiting for codex prompt")
 }
 
-func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineSegments int) (string, error) {
+func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineSegments int, role string) (string, error) {
 	captureOpts := statusOptions{CaptureMode: e.captureMode}
 	deadline := time.Now().Add(e.turnTimeout)
 	var lastOutput string
@@ -459,8 +465,15 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 			if strings.TrimSpace(report) == "" {
 				continue
 			}
+			report = strings.TrimSpace(report)
+			if role == "actor" && actorReportLooksPlaceholder(report) {
+				continue
+			}
+			if role == "critic" && criticReportLooksPlaceholder(report) {
+				continue
+			}
 			if i < len(segments)-1 || codexPromptReady(clean, e.promptLines, e.allowMcp) {
-				foundReport = strings.TrimSpace(report)
+				foundReport = report
 				break
 			}
 		}
@@ -908,10 +921,15 @@ Critic feedback to apply:
 Do one focused work iteration and output ONLY:
 %s
 Summary:
+- ...
 Changes:
+- ...
 Validation:
+- ...
 Open Questions:
+- ...
 Next Step for Critic:
+- ...
 %s
 `, cfg.DyadName, turn, cfg.Goal, criticFeedback, reportBeginMarker, reportEndMarker))
 }
@@ -935,13 +953,56 @@ Actor report to review:
 Produce a strict critique and the next actionable instructions for the actor. Output ONLY:
 %s
 Assessment:
+- ...
 Risks:
+- ...
 Required Fixes:
+- ...
 Verification Steps:
+- ...
 Next Actor Prompt:
-Continue Loop: yes|no
+- ...
+Continue Loop:
+- yes|no
 %s
 `, cfg.DyadName, turn, cfg.Goal, lastCriticReport, actorReport, reportBeginMarker, reportEndMarker))
+}
+
+func buildSeedCriticPrompt(cfg loopConfig) string {
+	seed := strings.TrimSpace(cfg.SeedCriticPrompt)
+	return strings.TrimSpace(fmt.Sprintf(`
+You are the CRITIC in dyad "%s". This is seed turn 0.
+
+Objective:
+%s
+
+Seed instruction from user:
+%s
+
+Output ONLY:
+%s
+Assessment:
+- ...
+Risks:
+- ...
+Required Fixes:
+- ...
+Verification Steps:
+- ...
+Next Actor Prompt:
+- ...
+Continue Loop:
+- yes|no
+%s
+`, cfg.DyadName, cfg.Goal, seed, reportBeginMarker, reportEndMarker))
+}
+
+func fallbackCriticFeedback(cfg loopConfig) string {
+	seed := strings.TrimSpace(cfg.SeedCriticPrompt)
+	if seed != "" {
+		return seed
+	}
+	return "Provide one concrete, low-risk task for the actor and require a substantive work report."
 }
 
 func extractWorkReport(output string) string {
@@ -1131,6 +1192,69 @@ func criticRequestsStop(report string) bool {
 		}
 	}
 	return false
+}
+
+func actorReportLooksPlaceholder(report string) bool {
+	norm := normalizeReportText(report)
+	if strings.Contains(norm, "summary: changes: validation: open questions: next step for critic:") {
+		return true
+	}
+	if strings.Contains(norm, "summary: - ...") && strings.Contains(norm, "changes: - ...") && strings.Contains(norm, "validation: - ...") {
+		return true
+	}
+	if strings.Contains(norm, "<at least") || strings.Contains(norm, "<specific") || strings.Contains(norm, "<what you") {
+		return true
+	}
+	if strings.Count(norm, "...") >= 2 && reportBulletCount(report) <= 2 {
+		return true
+	}
+	if strings.Contains(norm, "summary:") && strings.Contains(norm, "changes:") && reportBulletCount(report) < 2 {
+		return true
+	}
+	return false
+}
+
+func criticReportLooksPlaceholder(report string) bool {
+	norm := normalizeReportText(report)
+	if strings.Contains(norm, "assessment: risks: required fixes: verification steps: next actor prompt: continue loop: yes|no") {
+		return true
+	}
+	if strings.Contains(norm, "assessment: - ...") &&
+		strings.Contains(norm, "required fixes: - ...") &&
+		strings.Contains(norm, "verification steps: - ...") &&
+		strings.Contains(norm, "next actor prompt: - ...") {
+		return true
+	}
+	if strings.Contains(norm, "continue loop: <yes|no>") || strings.Contains(norm, "<clear actionable") || strings.Contains(norm, "<single concrete") {
+		return true
+	}
+	if strings.Count(norm, "...") >= 2 && reportBulletCount(report) <= 3 {
+		return true
+	}
+	if strings.Contains(norm, "assessment:") && strings.Contains(norm, "required fixes:") && reportBulletCount(report) < 3 {
+		return true
+	}
+	return false
+}
+
+func normalizeReportText(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	s = strings.Join(strings.Fields(s), " ")
+	return s
+}
+
+func reportBulletCount(report string) int {
+	lines := strings.Split(strings.ReplaceAll(report, "\r\n", "\n"), "\n")
+	count := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ") || strings.HasPrefix(trimmed, "• ") {
+			count++
+		}
+	}
+	return count
 }
 
 func maybeApplyHostOwnership(path string) {
