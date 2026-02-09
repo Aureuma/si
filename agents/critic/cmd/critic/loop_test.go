@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -170,6 +171,92 @@ func TestRunTurnLoopSeedAndCriticStop(t *testing.T) {
 	seedArtifact := filepath.Join(tmp, "reports", "turn-0000-critic.report.md")
 	if _, err := os.Stat(seedArtifact); err != nil {
 		t.Fatalf("missing seed critic artifact: %v", err)
+	}
+}
+
+func TestReadLoopControl(t *testing.T) {
+	tmp := t.TempDir()
+	stop, pause := readLoopControl(tmp)
+	if stop || pause {
+		t.Fatalf("expected no control flags by default, got stop=%v pause=%v", stop, pause)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "control.pause"), []byte("1\n"), 0o644); err != nil {
+		t.Fatalf("write pause control: %v", err)
+	}
+	stop, pause = readLoopControl(tmp)
+	if stop || !pause {
+		t.Fatalf("expected pause only, got stop=%v pause=%v", stop, pause)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "control.stop"), []byte("1\n"), 0o644); err != nil {
+		t.Fatalf("write stop control: %v", err)
+	}
+	stop, pause = readLoopControl(tmp)
+	if !stop || !pause {
+		t.Fatalf("expected stop+pause, got stop=%v pause=%v", stop, pause)
+	}
+}
+
+func TestRecoverableTurnErrors(t *testing.T) {
+	cases := []string{
+		"timeout waiting for codex report",
+		"context deadline exceeded",
+		"tmux: can't find session",
+		"no such container",
+		"container is not running",
+	}
+	for _, tc := range cases {
+		if !isRecoverableTurnErr(errors.New(tc)) {
+			t.Fatalf("expected recoverable for %q", tc)
+		}
+	}
+	if isRecoverableTurnErr(errors.New("unexpected parser mismatch")) {
+		t.Fatalf("did not expect arbitrary parser mismatch to be recoverable")
+	}
+}
+
+type countingExecutor struct {
+	actorTurns  int
+	criticTurns int
+}
+
+func (c *countingExecutor) ActorTurn(_ context.Context, _ string) (string, error) {
+	c.actorTurns++
+	return reportBeginMarker + "\nACTOR\n" + reportEndMarker, nil
+}
+
+func (c *countingExecutor) CriticTurn(_ context.Context, _ string) (string, error) {
+	c.criticTurns++
+	return reportBeginMarker + "\nCRITIC\nContinue Loop: yes\n" + reportEndMarker, nil
+}
+
+func TestRunTurnLoopControlStopFile(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tmp, "reports"), 0o700); err != nil {
+		t.Fatalf("mkdir reports: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, "control.stop"), []byte("1\n"), 0o644); err != nil {
+		t.Fatalf("write stop control: %v", err)
+	}
+	cfg := loopConfig{
+		Enabled:       true,
+		DyadName:      "controlstop",
+		Goal:          "test",
+		StateDir:      tmp,
+		SleepInterval: 0,
+		StartupDelay:  0,
+		TurnTimeout:   2 * time.Second,
+		MaxTurns:      3,
+		RetryMax:      1,
+		RetryBase:     time.Millisecond,
+		PausePoll:     100 * time.Millisecond,
+	}
+	exec := &countingExecutor{}
+	logger := log.New(ioDiscard{}, "", 0)
+	if err := runTurnLoop(context.Background(), cfg, exec, logger); err != nil {
+		t.Fatalf("runTurnLoop: %v", err)
+	}
+	if exec.actorTurns != 0 || exec.criticTurns != 0 {
+		t.Fatalf("expected zero turns under control.stop, got actor=%d critic=%d", exec.actorTurns, exec.criticTurns)
 	}
 }
 
