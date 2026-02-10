@@ -23,6 +23,11 @@ Vault repo (submodule checkout):
 
 From your host repo (a normal git repo):
 
+0. Ensure you have a device identity (this stores a private age identity in your OS secure store by default):
+```bash
+si vault keygen
+```
+
 1. Add/initialize the vault submodule and bootstrap the env file:
 ```bash
 si vault init --submodule-url <git-url-for-private-vault-repo>
@@ -122,9 +127,18 @@ Most mutating/decrypting commands require trust to be established.
 Device identities are age X25519 private keys. Resolution order:
 1. `SI_VAULT_IDENTITY` (or `SI_VAULT_PRIVATE_KEY`) (CI/ephemeral)
 2. `SI_VAULT_IDENTITY_FILE`
-3. OS keyring/keychain (when available)
-4. OS secure store (Keychain on macOS, Secret Service on Linux) (`vault.key_backend = "keyring"` or `"keychain"`)
-5. file backend (`vault.key_backend = "file"`, `vault.key_file = "~/.si/vault/keys/age.key"`)
+3. OS secure store (Keychain on macOS, Secret Service on Linux) (`vault.key_backend = "keyring"` or `"keychain"`)
+4. file backend (`vault.key_backend = "file"`, `vault.key_file = "~/.si/vault/keys/age.key"`)
+
+To generate a new identity:
+```bash
+si vault keygen
+```
+
+To intentionally rotate (replace) an existing identity:
+```bash
+si vault keygen --rotate
+```
 
 Settings are configured in `~/.si/settings.toml` under `[vault]`.
 
