@@ -14,6 +14,10 @@ func TestIntegrationRequestPathsUseAcquireAndFeedback(t *testing.T) {
 		"internal/stripebridge/client.go",
 		"internal/youtubebridge/client.go",
 		"social_contract.go",
+		"aws_cmd.go",
+		"gcp_cmd.go",
+		"oci_cmd.go",
+		"workos_cmd.go",
 	}
 	for _, path := range files {
 		raw, err := os.ReadFile(path)

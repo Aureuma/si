@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
 type ID string
@@ -25,6 +23,10 @@ const (
 	SocialInstagram ID = "social_instagram"
 	SocialX         ID = "social_x"
 	SocialLinkedIn  ID = "social_linkedin"
+	WorkOS          ID = "workos"
+	AWSIAM          ID = "aws_iam"
+	GCPServiceUsage ID = "gcp_serviceusage"
+	OCICore         ID = "oci_core"
 )
 
 type Spec struct {
@@ -166,6 +168,54 @@ var defaultSpecs = map[ID]Spec{
 		PublicProbePath:    "/v2/me",
 		PublicProbeMethod:  "GET",
 	},
+	WorkOS: {
+		BaseURL:            "https://api.workos.com",
+		APIVersion:         "v1",
+		UserAgent:          "si-workos/1.0",
+		Accept:             "application/json",
+		AuthStyle:          "bearer",
+		RequestIDHeaders:   []string{"X-Request-ID", "X-Request-Id"},
+		RateLimitPerSecond: 2.0,
+		RateLimitBurst:     4,
+		PublicProbePath:    "/organizations?limit=1",
+		PublicProbeMethod:  "GET",
+	},
+	AWSIAM: {
+		BaseURL:            "https://iam.amazonaws.com",
+		APIVersion:         "2010-05-08",
+		UserAgent:          "si-aws-iam/1.0",
+		Accept:             "application/xml",
+		AuthStyle:          "sigv4",
+		RequestIDHeaders:   []string{"x-amzn-RequestId", "x-amz-request-id"},
+		RateLimitPerSecond: 2.0,
+		RateLimitBurst:     4,
+		PublicProbePath:    "/",
+		PublicProbeMethod:  "GET",
+	},
+	GCPServiceUsage: {
+		BaseURL:            "https://serviceusage.googleapis.com",
+		APIVersion:         "v1",
+		UserAgent:          "si-gcp-serviceusage/1.0",
+		Accept:             "application/json",
+		AuthStyle:          "bearer",
+		RequestIDHeaders:   []string{"X-Request-Id", "X-Google-Request-Id"},
+		RateLimitPerSecond: 2.0,
+		RateLimitBurst:     4,
+		PublicProbePath:    "/v1/services?filter=state:ENABLED&pageSize=1",
+		PublicProbeMethod:  "GET",
+	},
+	OCICore: {
+		BaseURL:            "https://iaas.us-ashburn-1.oraclecloud.com",
+		APIVersion:         "20160918",
+		UserAgent:          "si-oci-core/1.0",
+		Accept:             "application/json",
+		AuthStyle:          "signature",
+		RequestIDHeaders:   []string{"opc-request-id"},
+		RateLimitPerSecond: 1.0,
+		RateLimitBurst:     2,
+		PublicProbePath:    "/20160918/instances",
+		PublicProbeMethod:  "GET",
+	},
 }
 
 var defaultCapabilities = map[ID]Capability{
@@ -223,6 +273,30 @@ var defaultCapabilities = map[ID]Capability{
 		SupportsIdempotency: false,
 		SupportsRaw:         true,
 	},
+	WorkOS: {
+		SupportsPagination:  true,
+		SupportsBulk:        false,
+		SupportsIdempotency: false,
+		SupportsRaw:         true,
+	},
+	AWSIAM: {
+		SupportsPagination:  true,
+		SupportsBulk:        false,
+		SupportsIdempotency: false,
+		SupportsRaw:         true,
+	},
+	GCPServiceUsage: {
+		SupportsPagination:  true,
+		SupportsBulk:        false,
+		SupportsIdempotency: false,
+		SupportsRaw:         true,
+	},
+	OCICore: {
+		SupportsPagination:  true,
+		SupportsBulk:        false,
+		SupportsIdempotency: false,
+		SupportsRaw:         true,
+	},
 }
 
 var apiVersionPolicies = []APIVersionPolicy{
@@ -235,6 +309,10 @@ var apiVersionPolicies = []APIVersionPolicy{
 	{Provider: SocialInstagram, Version: "v22.0", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: SocialX, Version: "2", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: SocialLinkedIn, Version: "v2", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: WorkOS, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: AWSIAM, Version: "2010-05-08", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: GCPServiceUsage, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: OCICore, Version: "20160918", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 }
 
 var providerCacheTTLs = map[ID]time.Duration{
@@ -246,6 +324,10 @@ var providerCacheTTLs = map[ID]time.Duration{
 	SocialInstagram: 3 * time.Second,
 	SocialX:         3 * time.Second,
 	SocialLinkedIn:  3 * time.Second,
+	WorkOS:          3 * time.Second,
+	AWSIAM:          3 * time.Second,
+	GCPServiceUsage: 3 * time.Second,
+	OCICore:         3 * time.Second,
 }
 
 var providerConcurrencyLimits = map[ID]int{
@@ -258,6 +340,10 @@ var providerConcurrencyLimits = map[ID]int{
 	SocialInstagram: 2,
 	SocialX:         2,
 	SocialLinkedIn:  2,
+	WorkOS:          2,
+	AWSIAM:          2,
+	GCPServiceUsage: 2,
+	OCICore:         2,
 }
 
 var providerCommandConcurrencyLimits = map[ID]int{
@@ -270,11 +356,15 @@ var providerCommandConcurrencyLimits = map[ID]int{
 	SocialInstagram: 1,
 	SocialX:         1,
 	SocialLinkedIn:  1,
+	WorkOS:          1,
+	AWSIAM:          1,
+	GCPServiceUsage: 1,
+	OCICore:         1,
 }
 
 var (
 	limiterMu sync.Mutex
-	limiters  = map[string]*rate.Limiter{}
+	limiters  = map[string]*adaptiveLimiter{}
 
 	concurrencyMu      sync.Mutex
 	providerSemaphores = map[string]chan struct{}{}
@@ -484,7 +574,7 @@ func FeedbackWithLatency(id ID, subject string, statusCode int, headers http.Hea
 
 func ResetRuntimeCounters() {
 	limiterMu.Lock()
-	limiters = map[string]*rate.Limiter{}
+	limiters = map[string]*adaptiveLimiter{}
 	limiterMu.Unlock()
 
 	concurrencyMu.Lock()
@@ -811,7 +901,7 @@ func updateMetrics(key string, statusCode int, latency time.Duration, now time.T
 	}
 }
 
-func limiterForKey(key string, spec Spec) *rate.Limiter {
+func limiterForKey(key string, spec Spec) *adaptiveLimiter {
 	limiterMu.Lock()
 	defer limiterMu.Unlock()
 	if existing, ok := limiters[key]; ok {
@@ -824,7 +914,7 @@ func limiterForKey(key string, spec Spec) *rate.Limiter {
 	if burst <= 0 {
 		burst = 1
 	}
-	limiter := rate.NewLimiter(rate.Limit(spec.RateLimitPerSecond), burst)
+	limiter := newAdaptiveLimiter(spec.RateLimitPerSecond, burst)
 	limiters[key] = limiter
 	return limiter
 }
@@ -844,7 +934,7 @@ func adaptLimiterRate(id ID, key string, statusCode int, headers http.Header, no
 		if next < 0.2 {
 			next = 0.2
 		}
-		limiter.SetLimitAt(now, rate.Limit(next))
+		limiter.SetLimitAt(now, next)
 		return
 	}
 	remaining, okRemaining := parseHeaderInt(headers,
@@ -878,7 +968,111 @@ func adaptLimiterRate(id ID, key string, statusCode int, headers http.Header, no
 	if target > max {
 		target = max
 	}
-	limiter.SetLimitAt(now, rate.Limit(target))
+	limiter.SetLimitAt(now, target)
+}
+
+type adaptiveLimiter struct {
+	mu    sync.Mutex
+	rate  float64
+	burst float64
+	last  time.Time
+	token float64
+}
+
+func newAdaptiveLimiter(ratePerSecond float64, burst int) *adaptiveLimiter {
+	if ratePerSecond <= 0 {
+		ratePerSecond = 0.2
+	}
+	if burst <= 0 {
+		burst = 1
+	}
+	now := time.Now().UTC()
+	return &adaptiveLimiter{
+		rate:  ratePerSecond,
+		burst: float64(burst),
+		last:  now,
+		token: float64(burst),
+	}
+}
+
+func (l *adaptiveLimiter) Limit() float64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.rate
+}
+
+func (l *adaptiveLimiter) SetLimitAt(now time.Time, next float64) {
+	if next <= 0 {
+		next = 0.2
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.refillLocked(now)
+	l.rate = next
+	if l.token > l.burst {
+		l.token = l.burst
+	}
+}
+
+func (l *adaptiveLimiter) Wait(ctx context.Context) error {
+	for {
+		delay := l.reserveDelay()
+		if delay <= 0 {
+			return nil
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (l *adaptiveLimiter) reserveDelay() time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := time.Now().UTC()
+	l.refillLocked(now)
+	if l.token >= 1 {
+		l.token -= 1
+		return 0
+	}
+	if l.rate <= 0 {
+		l.rate = 0.2
+	}
+	required := 1 - l.token
+	seconds := required / l.rate
+	if seconds <= 0 {
+		seconds = 0.001
+	}
+	wait := time.Duration(seconds * float64(time.Second))
+	if wait < time.Millisecond {
+		wait = time.Millisecond
+	}
+	return wait
+}
+
+func (l *adaptiveLimiter) refillLocked(now time.Time) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	if l.last.IsZero() {
+		l.last = now
+		return
+	}
+	if now.Before(l.last) {
+		now = l.last
+	}
+	elapsed := now.Sub(l.last).Seconds()
+	if elapsed > 0 {
+		l.token += elapsed * l.rate
+		if l.token > l.burst {
+			l.token = l.burst
+		}
+		l.last = now
+	}
 }
 
 func parseRetryAfter(headers http.Header, now time.Time) (time.Time, bool) {
@@ -986,6 +1180,14 @@ func normalizeID(raw string) ID {
 		return SocialX
 	case "social_linkedin", "linkedin":
 		return SocialLinkedIn
+	case "workos":
+		return WorkOS
+	case "aws", "aws_iam", "iam":
+		return AWSIAM
+	case "gcp", "gcp_serviceusage", "serviceusage":
+		return GCPServiceUsage
+	case "oci", "oracle", "oci_core":
+		return OCICore
 	default:
 		return ""
 	}

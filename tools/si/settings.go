@@ -22,6 +22,10 @@ type Settings struct {
 	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
 	Google        GoogleSettings     `toml:"google,omitempty"`
 	Social        SocialSettings     `toml:"social,omitempty"`
+	WorkOS        WorkOSSettings     `toml:"workos,omitempty"`
+	AWS           AWSSettings        `toml:"aws,omitempty"`
+	GCP           GCPSettings        `toml:"gcp,omitempty"`
+	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
 	Metadata      SettingsMetadata   `toml:"metadata,omitempty"`
@@ -272,6 +276,90 @@ type SocialAccountSetting struct {
 	XUsername               string `toml:"x_username,omitempty"`
 	LinkedInPersonURN       string `toml:"linkedin_person_urn,omitempty"`
 	LinkedInOrganizationURN string `toml:"linkedin_organization_urn,omitempty"`
+}
+
+type WorkOSSettings struct {
+	DefaultAccount        string                        `toml:"default_account,omitempty"`
+	DefaultEnv            string                        `toml:"default_env,omitempty"`
+	APIBaseURL            string                        `toml:"api_base_url,omitempty"`
+	DefaultOrganizationID string                        `toml:"default_organization_id,omitempty"`
+	LogFile               string                        `toml:"log_file,omitempty"`
+	Accounts              map[string]WorkOSAccountEntry `toml:"accounts,omitempty"`
+}
+
+type WorkOSAccountEntry struct {
+	Name             string `toml:"name,omitempty"`
+	VaultPrefix      string `toml:"vault_prefix,omitempty"`
+	APIBaseURL       string `toml:"api_base_url,omitempty"`
+	APIKeyEnv        string `toml:"api_key_env,omitempty"`
+	ProdAPIKeyEnv    string `toml:"prod_api_key_env,omitempty"`
+	StagingAPIKeyEnv string `toml:"staging_api_key_env,omitempty"`
+	DevAPIKeyEnv     string `toml:"dev_api_key_env,omitempty"`
+	ClientIDEnv      string `toml:"client_id_env,omitempty"`
+	OrganizationID   string `toml:"organization_id,omitempty"`
+}
+
+type AWSSettings struct {
+	DefaultAccount string                     `toml:"default_account,omitempty"`
+	DefaultRegion  string                     `toml:"default_region,omitempty"`
+	APIBaseURL     string                     `toml:"api_base_url,omitempty"`
+	LogFile        string                     `toml:"log_file,omitempty"`
+	Accounts       map[string]AWSAccountEntry `toml:"accounts,omitempty"`
+}
+
+type AWSAccountEntry struct {
+	Name               string `toml:"name,omitempty"`
+	VaultPrefix        string `toml:"vault_prefix,omitempty"`
+	Region             string `toml:"region,omitempty"`
+	AccessKeyIDEnv     string `toml:"access_key_id_env,omitempty"`
+	SecretAccessKeyEnv string `toml:"secret_access_key_env,omitempty"`
+	SessionTokenEnv    string `toml:"session_token_env,omitempty"`
+}
+
+type GCPSettings struct {
+	DefaultAccount string                     `toml:"default_account,omitempty"`
+	DefaultEnv     string                     `toml:"default_env,omitempty"`
+	APIBaseURL     string                     `toml:"api_base_url,omitempty"`
+	LogFile        string                     `toml:"log_file,omitempty"`
+	Accounts       map[string]GCPAccountEntry `toml:"accounts,omitempty"`
+}
+
+type GCPAccountEntry struct {
+	Name           string `toml:"name,omitempty"`
+	VaultPrefix    string `toml:"vault_prefix,omitempty"`
+	ProjectID      string `toml:"project_id,omitempty"`
+	ProjectIDEnv   string `toml:"project_id_env,omitempty"`
+	AccessTokenEnv string `toml:"access_token_env,omitempty"`
+	APIBaseURL     string `toml:"api_base_url,omitempty"`
+}
+
+type OCISettings struct {
+	DefaultAccount string                     `toml:"default_account,omitempty"`
+	Profile        string                     `toml:"profile,omitempty"`
+	ConfigFile     string                     `toml:"config_file,omitempty"`
+	Region         string                     `toml:"region,omitempty"`
+	APIBaseURL     string                     `toml:"api_base_url,omitempty"`
+	LogFile        string                     `toml:"log_file,omitempty"`
+	Accounts       map[string]OCIAccountEntry `toml:"accounts,omitempty"`
+}
+
+type OCIAccountEntry struct {
+	Name              string `toml:"name,omitempty"`
+	VaultPrefix       string `toml:"vault_prefix,omitempty"`
+	Profile           string `toml:"profile,omitempty"`
+	ConfigFile        string `toml:"config_file,omitempty"`
+	Region            string `toml:"region,omitempty"`
+	TenancyOCID       string `toml:"tenancy_ocid,omitempty"`
+	TenancyOCIDEnv    string `toml:"tenancy_ocid_env,omitempty"`
+	UserOCID          string `toml:"user_ocid,omitempty"`
+	UserOCIDEnv       string `toml:"user_ocid_env,omitempty"`
+	Fingerprint       string `toml:"fingerprint,omitempty"`
+	FingerprintEnv    string `toml:"fingerprint_env,omitempty"`
+	PrivateKeyPath    string `toml:"private_key_path,omitempty"`
+	PrivateKeyPathEnv string `toml:"private_key_path_env,omitempty"`
+	PassphraseEnv     string `toml:"passphrase_env,omitempty"`
+	CompartmentID     string `toml:"compartment_id,omitempty"`
+	CompartmentIDEnv  string `toml:"compartment_id_env,omitempty"`
 }
 
 type ShellSettings struct {
@@ -541,6 +629,64 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Social.LinkedIn.APIVersion = strings.TrimSpace(settings.Social.LinkedIn.APIVersion)
 	if settings.Social.LinkedIn.APIVersion == "" {
 		settings.Social.LinkedIn.APIVersion = firstNonEmpty(settings.Social.LinkedIn.APIVersion, linkedinSpec.APIVersion, "v2")
+	}
+	settings.WorkOS.DefaultEnv = normalizeWorkOSEnvironment(settings.WorkOS.DefaultEnv)
+	if settings.WorkOS.DefaultEnv == "" {
+		settings.WorkOS.DefaultEnv = "prod"
+	}
+	settings.WorkOS.DefaultAccount = strings.TrimSpace(settings.WorkOS.DefaultAccount)
+	settings.WorkOS.DefaultOrganizationID = strings.TrimSpace(settings.WorkOS.DefaultOrganizationID)
+	settings.WorkOS.APIBaseURL = strings.TrimSpace(settings.WorkOS.APIBaseURL)
+	if settings.WorkOS.APIBaseURL == "" {
+		workosSpec := providers.Resolve(providers.WorkOS)
+		settings.WorkOS.APIBaseURL = firstNonEmpty(workosSpec.BaseURL, "https://api.workos.com")
+	}
+	settings.AWS.DefaultAccount = strings.TrimSpace(settings.AWS.DefaultAccount)
+	settings.AWS.DefaultRegion = strings.TrimSpace(settings.AWS.DefaultRegion)
+	if settings.AWS.DefaultRegion == "" {
+		settings.AWS.DefaultRegion = "us-east-1"
+	}
+	settings.AWS.APIBaseURL = strings.TrimSpace(settings.AWS.APIBaseURL)
+	if settings.AWS.APIBaseURL == "" {
+		awsSpec := providers.Resolve(providers.AWSIAM)
+		settings.AWS.APIBaseURL = firstNonEmpty(awsSpec.BaseURL, "https://iam.amazonaws.com")
+	}
+	settings.GCP.DefaultAccount = strings.TrimSpace(settings.GCP.DefaultAccount)
+	settings.GCP.DefaultEnv = normalizeIntegrationEnvironment(settings.GCP.DefaultEnv)
+	if settings.GCP.DefaultEnv == "" {
+		settings.GCP.DefaultEnv = "prod"
+	}
+	settings.GCP.APIBaseURL = strings.TrimSpace(settings.GCP.APIBaseURL)
+	if settings.GCP.APIBaseURL == "" {
+		gcpSpec := providers.Resolve(providers.GCPServiceUsage)
+		settings.GCP.APIBaseURL = firstNonEmpty(gcpSpec.BaseURL, "https://serviceusage.googleapis.com")
+	}
+	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
+	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
+	if settings.OCI.Profile == "" {
+		settings.OCI.Profile = "DEFAULT"
+	}
+	settings.OCI.ConfigFile = strings.TrimSpace(settings.OCI.ConfigFile)
+	if settings.OCI.ConfigFile == "" {
+		settings.OCI.ConfigFile = "~/.oci/config"
+	}
+	settings.OCI.Region = strings.TrimSpace(settings.OCI.Region)
+	if settings.OCI.Region == "" {
+		settings.OCI.Region = "us-ashburn-1"
+	}
+	settings.OCI.APIBaseURL = strings.TrimSpace(settings.OCI.APIBaseURL)
+	if settings.OCI.APIBaseURL == "" {
+		settings.OCI.APIBaseURL = "https://iaas." + settings.OCI.Region + ".oraclecloud.com"
+	}
+}
+
+func normalizeIntegrationEnvironment(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "prod", "staging", "dev":
+		return value
+	default:
+		return ""
 	}
 }
 
