@@ -215,7 +215,6 @@ Defaults for `si google youtube` (YouTube Data API v3).
 - `google.youtube.upload_base_url` (string): upload API base URL (default: `https://www.googleapis.com/upload`)
 - `google.youtube.default_auth_mode` (string): `api-key` or `oauth` (default: `api-key`)
 - `google.youtube.upload_chunk_size_mb` (int): default chunk hint for upload flows (default: `16`)
-- `google.youtube.quota_budget_daily` (int): local daily quota budget used for report estimation (default: `10000`)
 
 #### `[google.youtube.accounts.<alias>]`
 Per-account YouTube context and env-key pointers.
@@ -385,7 +384,6 @@ api_base_url = "https://www.googleapis.com"
 upload_base_url = "https://www.googleapis.com/upload"
 default_auth_mode = "api-key"
 upload_chunk_size_mb = 16
-quota_budget_daily = 10000
 
 [google.youtube.accounts.core]
 name = "Core YouTube"
@@ -401,6 +399,43 @@ youtube_redirect_uri_env = "GOOGLE_CORE_YOUTUBE_REDIRECT_URI"
 youtube_refresh_token_env = "GOOGLE_CORE_YOUTUBE_REFRESH_TOKEN"
 default_region_code = "US"
 default_language_code = "en"
+
+[social]
+default_account = "core"
+default_env = "prod"
+log_file = "~/.si/logs/social.log"
+
+[social.facebook]
+api_base_url = "https://graph.facebook.com"
+api_version = "v22.0"
+auth_style = "query"
+
+[social.instagram]
+api_base_url = "https://graph.facebook.com"
+api_version = "v22.0"
+auth_style = "query"
+
+[social.x]
+api_base_url = "https://api.twitter.com"
+api_version = "2"
+auth_style = "bearer"
+
+[social.linkedin]
+api_base_url = "https://api.linkedin.com"
+api_version = "v2"
+auth_style = "bearer"
+
+[social.accounts.core]
+name = "Core Social"
+vault_prefix = "SOCIAL_CORE_"
+facebook_access_token_env = "SOCIAL_CORE_FACEBOOK_ACCESS_TOKEN"
+instagram_access_token_env = "SOCIAL_CORE_INSTAGRAM_ACCESS_TOKEN"
+x_access_token_env = "SOCIAL_CORE_X_BEARER_TOKEN"
+linkedin_access_token_env = "SOCIAL_CORE_LINKEDIN_ACCESS_TOKEN"
+facebook_page_id = "1234567890"
+instagram_business_id = "17890000000000000"
+x_username = "acme"
+linkedin_person_urn = "urn:li:person:abc123"
 
 [vault]
 dir = "vault"

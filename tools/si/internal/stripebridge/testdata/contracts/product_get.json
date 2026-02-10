@@ -1,0 +1,6 @@
+{
+  "id": "prod_123",
+  "object": "product",
+  "name": "Starter",
+  "active": true
+}

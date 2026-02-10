@@ -220,6 +220,8 @@ Behavior:
 ./si stripe auth status
 ./si stripe context list
 ./si stripe context use --account core --env sandbox
+./si stripe doctor --account core --env sandbox
+./si stripe doctor --public
 ./si stripe object list product --limit 20
 ./si stripe object create product --param name=Starter
 ./si stripe raw --method GET --path /v1/balance
@@ -240,6 +242,8 @@ Environment policy:
 ./si github auth status --account core
 ./si github context list
 ./si github context use --account core --owner Aureuma
+./si github doctor --account core
+./si github doctor --public
 
 # repositories
 ./si github repo list Aureuma
@@ -281,6 +285,7 @@ Auth policy:
 ./si cloudflare context list
 ./si cloudflare context use --account core --env prod --zone-id <zone_id>
 ./si cloudflare doctor --account core
+./si cloudflare doctor --public
 
 # common resources
 ./si cloudflare zone list
@@ -318,6 +323,7 @@ Environment policy:
 ./si google places context current
 ./si google places context use --account core --env prod --language en --region US
 ./si google places doctor --account core
+./si google places doctor --public
 
 # session lifecycle
 ./si google places session new
@@ -346,7 +352,7 @@ Environment policy:
 - `test` is intentionally not used as a standalone environment mode.
 
 ## Google YouTube
-`si` includes a YouTube Data API v3 bridge under `si google youtube`:
+`si` includes a YouTube Data API v3 bridge under `si google youtube` (alias: `si google youtube-data`):
 
 ```bash
 # auth/context/diagnostics
@@ -356,6 +362,7 @@ Environment policy:
 ./si google youtube context current
 ./si google youtube context use --account core --env prod --mode oauth
 ./si google youtube doctor --account core --mode oauth
+./si google youtube doctor --public
 
 # discovery/read
 ./si google youtube search list --query "engineering vlog" --type video
@@ -379,13 +386,61 @@ Environment policy:
 
 # observability/raw
 ./si google youtube report usage --since 2026-02-08T00:00:00Z
-./si google youtube report quota
 ./si google youtube raw --method GET --path /youtube/v3/search --param part=id --param q=music
 ```
 
 Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
+
+## Social (Facebook / Instagram / X / LinkedIn)
+`si` includes a unified social bridge under `si social`:
+
+```bash
+# facebook
+./si social facebook auth status --account core
+./si social facebook profile --json
+./si social facebook page list --json
+./si social facebook post list --page-id <page_id> --json
+./si social facebook post create --page-id <page_id> --message "hello world" --json
+./si social facebook comment create <object_id> --message "nice post" --json
+./si social facebook insights page --page-id <page_id> --metric page_impressions,page_engaged_users --json
+
+# instagram
+./si social instagram auth status --account core
+./si social instagram profile --json
+./si social instagram media list --ig-id <ig_business_id> --json
+./si social instagram media create --ig-id <ig_business_id> --image-url https://example.com/p.jpg --caption "launch" --json
+./si social instagram media publish --ig-id <ig_business_id> --creation-id <creation_id> --json
+./si social instagram insights account --ig-id <ig_business_id> --json
+
+# x (twitter)
+./si social x auth status --account core
+./si social x user me --json
+./si social x search recent --query "infra" --max-results 20 --json
+./si social x tweet create --text "hello from si" --json
+
+# linkedin
+./si social linkedin auth status --account core
+./si social linkedin profile --json
+./si social linkedin post list --author urn:li:person:<id> --json
+./si social linkedin post create --author urn:li:person:<id> --text "launch update" --json
+
+# generic/raw/report
+./si social facebook raw --method GET --path /v22.0/me --param fields=id,name --json
+./si social facebook raw --auth-style none --method GET --path /platform --json
+./si social x report usage --since 2026-02-08T00:00:00Z --json
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
+Provider characteristics and traffic policy:
+- Built-in defaults live in Go (`tools/si/internal/providers/specs.go`).
+- Runtime feedback (`Retry-After`, `X-RateLimit-*`, `429`) adapts pacing dynamically.
+- Inspect active effective settings with `./si providers characteristics --json`.
+- Inspect runtime integration telemetry with `./si integrations health --json`.
 
 ## Self Build/Upgrade
 Build or upgrade the `si` binary from the repo itself:
