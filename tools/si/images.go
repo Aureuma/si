@@ -50,6 +50,7 @@ func runDockerBuild(spec imageBuildSpec) error {
 	}
 	args = append(args, spec.contextDir)
 	infof("docker %s", redactedDockerBuildArgs(args))
+	// #nosec G204 -- fixed docker binary with explicit args assembled by CLI options.
 	cmd := exec.Command("docker", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -65,7 +66,7 @@ func hostCodexConfigBuildSecrets() []string {
 		return nil
 	}
 	path := filepath.Join(home, ".codex", "config.toml")
-	data, err := os.ReadFile(path)
+	data, err := readLocalFile(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			warnf("host codex config secret skipped: %v", err)

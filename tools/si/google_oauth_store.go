@@ -39,7 +39,7 @@ func loadGoogleOAuthTokenStore() (googleOAuthTokenStore, error) {
 	if err != nil {
 		return googleOAuthTokenStore{Tokens: map[string]googleOAuthTokenEntry{}}, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := readLocalFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return googleOAuthTokenStore{Tokens: map[string]googleOAuthTokenEntry{}}, nil
