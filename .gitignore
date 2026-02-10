@@ -21,3 +21,5 @@ data/
 .artifacts/
 /si
 .si/
+.tmp/
+tools/si/vault.test
