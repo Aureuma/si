@@ -11,10 +11,10 @@ func NormalizeDotenvValue(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
 	}
-	if raw[0] == '\'' && raw[len(raw)-1] != '\'' {
+	if raw[0] == '\'' && (len(raw) < 2 || raw[len(raw)-1] != '\'') {
 		return "", fmt.Errorf("invalid quoted value: missing closing single quote")
 	}
-	if raw[0] == '"' && raw[len(raw)-1] != '"' {
+	if raw[0] == '"' && (len(raw) < 2 || raw[len(raw)-1] != '"') {
 		return "", fmt.Errorf("invalid quoted value: missing closing double quote")
 	}
 	if len(raw) >= 2 && raw[0] == '\'' && raw[len(raw)-1] == '\'' {
