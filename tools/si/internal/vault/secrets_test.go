@@ -1,6 +1,9 @@
 package vault
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestEncryptDotenvValuesIdempotentWithoutReencrypt(t *testing.T) {
 	id, err := GenerateIdentity()
@@ -71,5 +74,99 @@ func TestEncryptDotenvValuesReencryptChangesCiphertextButNotPlaintext(t *testing
 	}
 	if dec.Values["A"] != "hello" {
 		t.Fatalf("got %q want %q", dec.Values["A"], "hello")
+	}
+}
+
+func TestEncryptDotenvValuesPreservesAssignmentLayout(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	doc := ParseDotenv([]byte("" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient " + recipient + "\n" +
+		"\n" +
+		"\texport API_KEY   =   \"abc\" # keep me\n"))
+
+	_, err = EncryptDotenvValues(&doc, id, false)
+	if err != nil {
+		t.Fatalf("EncryptDotenvValues: %v", err)
+	}
+	line := doc.Lines[len(doc.Lines)-1].Text
+	if !strings.HasPrefix(line, "\texport API_KEY   =   ") {
+		t.Fatalf("layout prefix changed: %q", line)
+	}
+	if !strings.HasSuffix(line, " # keep me") {
+		t.Fatalf("layout suffix changed: %q", line)
+	}
+}
+
+func TestEncryptDotenvValuesErrorsWithoutRecipients(t *testing.T) {
+	doc := ParseDotenv([]byte("A=1\n"))
+	if _, err := EncryptDotenvValues(&doc, nil, false); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestDecryptEnvWithMixedValuesAndQuotes(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	cipher, err := EncryptStringV1("secret", []string{recipient})
+	if err != nil {
+		t.Fatalf("EncryptStringV1: %v", err)
+	}
+	doc := ParseDotenv([]byte("" +
+		"PLAIN=abc\n" +
+		"SINGLE='hello world'\n" +
+		"DOUBLE=\"line1\\nline2\"\n" +
+		"ENC=" + cipher + "\n"))
+	dec, err := DecryptEnv(doc, id)
+	if err != nil {
+		t.Fatalf("DecryptEnv: %v", err)
+	}
+	if dec.Values["PLAIN"] != "abc" {
+		t.Fatalf("PLAIN=%q", dec.Values["PLAIN"])
+	}
+	if dec.Values["SINGLE"] != "hello world" {
+		t.Fatalf("SINGLE=%q", dec.Values["SINGLE"])
+	}
+	if dec.Values["DOUBLE"] != "line1\nline2" {
+		t.Fatalf("DOUBLE=%q", dec.Values["DOUBLE"])
+	}
+	if dec.Values["ENC"] != "secret" {
+		t.Fatalf("ENC=%q", dec.Values["ENC"])
+	}
+}
+
+func TestDecryptEnvRequiresIdentityForEncryptedValue(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	cipher, err := EncryptStringV1("secret", []string{recipient})
+	if err != nil {
+		t.Fatalf("EncryptStringV1: %v", err)
+	}
+	doc := ParseDotenv([]byte("ENC=" + cipher + "\n"))
+	if _, err := DecryptEnv(doc, nil); err == nil {
+		t.Fatalf("expected identity error")
+	}
+}
+
+func TestDecryptEnvDuplicateKeysLastValueWins(t *testing.T) {
+	doc := ParseDotenv([]byte("" +
+		"A=1\n" +
+		"A=2\n"))
+	dec, err := DecryptEnv(doc, nil)
+	if err != nil {
+		t.Fatalf("DecryptEnv: %v", err)
+	}
+	if dec.Values["A"] != "2" {
+		t.Fatalf("A=%q", dec.Values["A"])
 	}
 }
