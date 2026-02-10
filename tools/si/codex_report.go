@@ -212,6 +212,7 @@ func loadPrompts(dst *multiFlag, path string) error {
 	if strings.TrimSpace(path) == "" {
 		return nil
 	}
+	// #nosec G304 -- path is an explicit local CLI input and intentionally opened.
 	file, err := os.Open(path)
 	if err != nil {
 		return err

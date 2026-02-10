@@ -229,6 +229,7 @@ func loadProfileAuthFile(profile codexProfile) (string, profileAuthFile, error) 
 	if err != nil {
 		return "", profileAuthFile{}, err
 	}
+	// #nosec G304 -- path is derived from local profile auth location.
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return "", profileAuthFile{}, err
