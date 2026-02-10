@@ -11,7 +11,9 @@ import (
 
 func cmdPersona(args []string) {
 	fs := flag.NewFlagSet("persona", flag.ExitOnError)
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if fs.NArg() < 1 {
 		printUsage("usage: si persona <name>")
 		return
@@ -29,7 +31,7 @@ func cmdPersona(args []string) {
 	}
 	root := mustRepoRoot()
 	path := filepath.Join(root, "profiles", name+".md")
-	data, err := os.ReadFile(path)
+	data, err := readLocalFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			available := listProfiles(root)
@@ -48,7 +50,9 @@ func cmdPersona(args []string) {
 
 func cmdSkill(args []string) {
 	fs := flag.NewFlagSet("skill", flag.ExitOnError)
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if fs.NArg() < 1 {
 		printUsage("usage: si skill <role>")
 		return

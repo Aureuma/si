@@ -118,7 +118,7 @@ func parseGoogleYouTubeBody(raw string) (string, error) {
 		if path == "" {
 			return "", fmt.Errorf("body file path is empty")
 		}
-		data, err := os.ReadFile(path)
+		data, err := readLocalFile(path)
 		if err != nil {
 			return "", err
 		}

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"math/rand"
+	"hash/fnv"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -223,8 +223,13 @@ func execInContainerRaw(ctx context.Context, client *shared.Client, containerID 
 }
 
 func codexExecContainerName() string {
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return fmt.Sprintf("si-codex-exec-%d-%d", time.Now().Unix(), rng.Intn(10_000))
+	n, err := secureIntn(10_000)
+	if err != nil {
+		h := fnv.New32a()
+		_, _ = h.Write([]byte(fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())))
+		n = int(h.Sum32() % 10_000)
+	}
+	return fmt.Sprintf("si-codex-exec-%d-%d", time.Now().Unix(), n)
 }
 
 func writeNoMcpConfig(model, effort string) (string, error) {
@@ -232,13 +237,9 @@ func writeNoMcpConfig(model, effort string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.Chmod(dir, 0o755); err != nil {
-		_ = os.RemoveAll(dir)
-		return "", err
-	}
 	config := buildNoMcpConfig(model, effort)
 	path := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(path, []byte(config), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
 		_ = os.RemoveAll(dir)
 		return "", err
 	}

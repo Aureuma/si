@@ -88,7 +88,9 @@ func cmdDyadSpawn(args []string) {
 	profileKey := fs.String("profile", "", "codex profile name/email/id")
 	skipAuth := fs.Bool("skip-auth", false, "skip codex profile auth requirement (for offline/testing use)")
 	nameArg, filtered := splitDyadSpawnArgs(args)
-	fs.Parse(filtered)
+	if err := fs.Parse(filtered); err != nil {
+		fatal(err)
+	}
 	settings := loadSettingsOrDefault()
 
 	if !flagProvided(args, "actor-image") && strings.TrimSpace(settings.Dyad.ActorImage) != "" {
@@ -289,7 +291,9 @@ func cmdDyadPeek(args []string) {
 	member := fs.String("member", "both", "actor, critic, or both")
 	detached := fs.Bool("detached", false, "create host tmux session but do not attach")
 	hostSession := fs.String("session", "", "host tmux session name (default: si-dyad-peek-<dyad>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	dyad := ""
 	if fs.NArg() > 0 {
@@ -351,7 +355,7 @@ func cmdDyadPeek(args []string) {
 	criticCmd := dyadPeekAttachCmd(criticContainer, criticSession)
 
 	// Always create (or replace) the host peek session for predictable behavior.
-	_ = exec.Command("tmux", "kill-session", "-t", peekSession).Run()
+	_ = dyadTmuxRun("kill-session", "-t", peekSession)
 
 	var first string
 	switch memberVal {
@@ -362,31 +366,31 @@ func cmdDyadPeek(args []string) {
 	default:
 		first = actorCmd
 	}
-	if err := exec.Command("tmux", "new-session", "-d", "-s", peekSession, "bash", "-lc", first).Run(); err != nil {
+	if err := dyadTmuxRun("new-session", "-d", "-s", peekSession, "bash", "-lc", first); err != nil {
 		fatal(err)
 	}
-	_, _ = exec.Command("tmux", "set-option", "-t", peekSession, "remain-on-exit", "off").Output()
+	_, _ = dyadTmuxOutput("set-option", "-t", peekSession, "remain-on-exit", "off")
 	// Make pane titles visible and consistent.
-	_ = exec.Command("tmux", "rename-window", "-t", peekSession+":0", dyadPeekWindowTitle(dyad)).Run()
-	_ = exec.Command("tmux", "set-option", "-t", peekSession, "pane-border-status", "top").Run()
-	_ = exec.Command("tmux", "set-option", "-t", peekSession, "pane-border-format", "#{pane_title}").Run()
+	_ = dyadTmuxRun("rename-window", "-t", peekSession+":0", dyadPeekWindowTitle(dyad))
+	_ = dyadTmuxRun("set-option", "-t", peekSession, "pane-border-status", "top")
+	_ = dyadTmuxRun("set-option", "-t", peekSession, "pane-border-format", "#{pane_title}")
 
 	if memberVal == "both" {
-		if err := exec.Command("tmux", "split-window", "-h", "-t", peekSession+":0", "bash", "-lc", criticCmd).Run(); err != nil {
-			_ = exec.Command("tmux", "kill-session", "-t", peekSession).Run()
+		if err := dyadTmuxRun("split-window", "-h", "-t", peekSession+":0", "bash", "-lc", criticCmd); err != nil {
+			_ = dyadTmuxRun("kill-session", "-t", peekSession)
 			fatal(err)
 		}
-		_, _ = exec.Command("tmux", "select-layout", "-t", peekSession, "even-horizontal").Output()
+		_, _ = dyadTmuxOutput("select-layout", "-t", peekSession, "even-horizontal")
 	}
 	// Name panes so the user can immediately tell which dyad member they're driving.
 	switch memberVal {
 	case "actor":
-		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor")).Run()
+		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor"))
 	case "critic":
-		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "critic")).Run()
+		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "critic"))
 	default:
-		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor")).Run()
-		_ = exec.Command("tmux", "select-pane", "-t", peekSession+":0.1", "-T", dyadPeekPaneTitle(dyad, "critic")).Run()
+		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor"))
+		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.1", "-T", dyadPeekPaneTitle(dyad, "critic"))
 	}
 
 	if *detached {
@@ -396,13 +400,52 @@ func cmdDyadPeek(args []string) {
 	if !isInteractiveTerminal() {
 		fatal(errors.New("dyad peek requires an interactive terminal (or use --detached)"))
 	}
-	tmuxCmd := exec.Command("tmux", "attach-session", "-t", peekSession)
-	tmuxCmd.Stdout = os.Stdout
-	tmuxCmd.Stderr = os.Stderr
-	tmuxCmd.Stdin = os.Stdin
-	if err := tmuxCmd.Run(); err != nil {
+	if err := dyadTmuxAttach(peekSession); err != nil {
 		fatal(err)
 	}
+}
+
+func dyadTmuxRun(args ...string) error {
+	if err := validateTmuxArgs(args); err != nil {
+		return err
+	}
+	// #nosec G204 -- fixed binary with validated tmux argument list.
+	cmd := exec.Command("tmux", args...)
+	return cmd.Run()
+}
+
+func dyadTmuxOutput(args ...string) ([]byte, error) {
+	if err := validateTmuxArgs(args); err != nil {
+		return nil, err
+	}
+	// #nosec G204 -- fixed binary with validated tmux argument list.
+	cmd := exec.Command("tmux", args...)
+	return cmd.Output()
+}
+
+func dyadTmuxAttach(session string) error {
+	args := []string{"attach-session", "-t", session}
+	if err := validateTmuxArgs(args); err != nil {
+		return err
+	}
+	// #nosec G204 -- fixed binary with validated tmux argument list.
+	cmd := exec.Command("tmux", args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
+func validateTmuxArgs(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("tmux args required")
+	}
+	for _, arg := range args {
+		if strings.ContainsRune(arg, 0) {
+			return fmt.Errorf("invalid tmux argument: contains NUL byte")
+		}
+	}
+	return nil
 }
 
 func dyadPeekWindowTitle(dyad string) string {
@@ -726,7 +769,9 @@ func cmdDyadExec(args []string) {
 	fs := flag.NewFlagSet("dyad exec", flag.ExitOnError)
 	member := fs.String("member", "actor", "actor or critic")
 	tty := fs.Bool("tty", false, "allocate TTY")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	dyad := ""
 	if fs.NArg() > 0 {
 		dyad = strings.TrimSpace(fs.Arg(0))
@@ -806,7 +851,9 @@ func cmdDyadLogs(args []string) {
 	fs := flag.NewFlagSet("dyad logs", flag.ExitOnError)
 	member := fs.String("member", "critic", "actor or critic")
 	tail := fs.Int("tail", 200, "lines to tail")
-	fs.Parse(filtered)
+	if err := fs.Parse(filtered); err != nil {
+		fatal(err)
+	}
 	dyad := strings.TrimSpace(dyadArg)
 	rest := fs.Args()
 	if dyad == "" && len(rest) > 0 {
@@ -1068,7 +1115,7 @@ func seedDyadProfileAuth(ctx context.Context, client *shared.Client, containerID
 		warnf("dyad auth copy skipped: %v", err)
 		return
 	}
-	data, err := os.ReadFile(hostPath)
+	data, err := readLocalFile(hostPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			warnf("dyad auth copy skipped: %v", err)

@@ -31,7 +31,9 @@ func cmdAnalyze(args []string) {
 	skipLint := fs.Bool("skip-lint", false, "skip golangci-lint")
 	fix := fs.Bool("fix", false, "pass --fix to golangci-lint")
 	noFail := fs.Bool("no-fail", false, "always exit zero (still prints failures)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if fs.NArg() > 0 {
 		printUsage("usage: si analyze [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]")
 		return

@@ -40,7 +40,7 @@ func loadGooglePlacesSessionStore() (googlePlacesSessionStore, error) {
 	if err != nil {
 		return googlePlacesSessionStore{Sessions: map[string]googlePlacesSessionEntry{}}, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := readLocalFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return googlePlacesSessionStore{Sessions: map[string]googlePlacesSessionEntry{}}, nil

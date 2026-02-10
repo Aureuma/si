@@ -258,7 +258,7 @@ func acquireCodexLock(kind, name string, timeout, staleAfter time.Duration) (fun
 	lockPath := filepath.Join(os.TempDir(), fmt.Sprintf("si-codex-%s-%s.lock", kind, name))
 	deadline := time.Now().Add(timeout)
 	for {
-		f, err := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+		f, err := openLocalFileFlags(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 		if err == nil {
 			_, _ = fmt.Fprintf(f, "pid=%d time=%s\n", os.Getpid(), time.Now().Format(time.RFC3339))
 			_ = f.Close()

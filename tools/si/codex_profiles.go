@@ -194,6 +194,7 @@ func isValidCodexAuthFile(path string, now time.Time) bool {
 }
 
 func codexAuthValidationError(path string) error {
+	// #nosec G304 -- path is derived from local profile auth location.
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err

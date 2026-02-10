@@ -101,6 +101,7 @@ func cmdSelfRun(args []string) {
 	}
 	runArgs := []string{"run", "-buildvcs=false", "./tools/si"}
 	runArgs = append(runArgs, forward...)
+	// #nosec G204 -- goPath is resolved via exec.LookPath and args are constructed locally.
 	cmd := exec.Command(goPath, runArgs...)
 	cmd.Dir = root
 	cmd.Stdout = os.Stdout
@@ -148,7 +149,7 @@ func selfBuildBinary(root string, output string, goBin string, quiet bool) error
 	}
 
 	dir := filepath.Dir(output)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 	tmp := filepath.Join(dir, fmt.Sprintf(".si-build-%d-%d", os.Getpid(), time.Now().UnixNano()))
@@ -158,6 +159,7 @@ func selfBuildBinary(root string, output string, goBin string, quiet bool) error
 	if !quiet {
 		infof("running: %s %s", goPath, strings.Join(buildArgs, " "))
 	}
+	// #nosec G204 -- goPath is resolved via exec.LookPath and args are constructed locally.
 	cmd := exec.Command(goPath, buildArgs...)
 	cmd.Dir = root
 	cmd.Stdout = os.Stdout
@@ -166,6 +168,7 @@ func selfBuildBinary(root string, output string, goBin string, quiet bool) error
 	if err := cmd.Run(); err != nil {
 		return err
 	}
+	// #nosec G302 -- built binary must be executable for subsequent rename/use.
 	if err := os.Chmod(tmp, 0o755); err != nil {
 		return err
 	}

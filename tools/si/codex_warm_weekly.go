@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -311,10 +310,17 @@ func buildWeeklyWarmSchedule(profile codexProfile, now time.Time, minJitter, max
 		}
 		resetAt = normalizeResetTime(resetAt, windowSeconds, now)
 	}
-	rng := rand.New(rand.NewSource(time.Now().UnixNano() + seed))
 	jitter := minJitter
 	if maxJitter > minJitter {
-		jitter = minJitter + rng.Intn(maxJitter-minJitter+1)
+		span := maxJitter - minJitter + 1
+		n, err := secureIntn(span)
+		if err != nil {
+			return weeklyWarmSchedule{}, err
+		}
+		if seed != 0 {
+			n = (n + int(seed&0x7fffffff)) % span
+		}
+		jitter = minJitter + n
 	}
 	fireAt := resetAt.Add(time.Duration(jitter) * time.Minute)
 	if fireAt.Before(now) {
