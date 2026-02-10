@@ -18,8 +18,14 @@ import (
 	shared "si/agents/shared/docker"
 )
 
+var (
+	loadProfileAuthTokensFn = loadProfileAuthTokens
+	fetchUsagePayloadFn     = fetchUsagePayload
+	runWeeklyWarmPromptFn   = runWeeklyWarmPrompt
+)
+
 const (
-	warmWeeklyStateVersion        = 1
+	warmWeeklyStateVersion        = 2
 	warmWeeklyReconcileSchedule   = "0 0 * * * *"
 	warmWeeklyReconcileJobName    = "si-warmup-reconcile"
 	warmWeeklyMinUsageDelta       = 0.05
@@ -41,6 +47,7 @@ type warmWeeklyProfileState struct {
 	LastResult        string  `json:"last_result,omitempty"`
 	LastError         string  `json:"last_error,omitempty"`
 	LastWeeklyUsedPct float64 `json:"last_weekly_used_pct,omitempty"`
+	LastWeeklyUsedOK  bool    `json:"last_weekly_used_ok,omitempty"`
 	LastWeeklyReset   string  `json:"last_weekly_reset,omitempty"`
 	LastUsageDelta    float64 `json:"last_usage_delta,omitempty"`
 	NextDue           string  `json:"next_due,omitempty"`
@@ -92,6 +99,7 @@ func cmdWarmupEnable(args []string) {
 		return
 	}
 	if err := ensureWarmWeeklyReconcileScheduler(); err != nil {
+		appendWarmWeeklyLog("error", "warmup_enable_scheduler_failed", "", map[string]interface{}{"error": err.Error()})
 		fatal(err)
 	}
 	if err := setWarmWeeklyDisabled(false); err != nil {
@@ -108,13 +116,14 @@ func cmdWarmupEnable(args []string) {
 	}
 	opts := warmWeeklyReconcileOptions{
 		ProfileKeys:    profiles,
-		ForceBootstrap: true,
+		ForceBootstrap: false,
 		Quiet:          *quiet,
 		MaxAttempts:    3,
 		Prompt:         weeklyWarmPrompt,
 		Trigger:        "enable",
 	}
 	if _, err := runWarmWeeklyReconcile(opts); err != nil {
+		appendWarmWeeklyLog("error", "warmup_enable_reconcile_failed", "", map[string]interface{}{"error": err.Error()})
 		fatal(err)
 	}
 }
@@ -273,7 +282,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	entry.ProfileID = profile.ID
 	entry.LastAttempt = now.UTC().Format(time.RFC3339)
 
-	auth, err := loadProfileAuthTokens(profile)
+	auth, err := loadProfileAuthTokensFn(profile)
 	if err != nil {
 		setWarmWeeklyFailure(entry, now, fmt.Errorf("load auth: %w", err))
 		appendWarmWeeklyLog("warn", "profile_auth_missing", profile.ID, map[string]interface{}{"error": err.Error()})
@@ -281,7 +290,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	payloadBefore, err := fetchUsagePayload(ctx, profileUsageURL(), auth)
+	payloadBefore, err := fetchUsagePayloadFn(ctx, profileUsageURL(), auth)
 	cancel()
 	if err != nil {
 		if isAuthFailureError(err) {
@@ -307,6 +316,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 		entry.LastWeeklyReset = ""
 	}
 	entry.LastWeeklyUsedPct = usedBefore
+	entry.LastWeeklyUsedOK = usedKnown
 
 	needsWarm := warmWeeklyNeedsBootstrap(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown)
 	if !needsWarm {
@@ -322,26 +332,54 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 
 	lastErr := error(nil)
 	usedAfter := usedBefore
+	usedAfterKnown := usedKnown
+	resetAtAfter := resetAt
+	resetAfterKnown := resetKnown
 	success := false
 	for attempt := 1; attempt <= opts.MaxAttempts; attempt++ {
 		prompt := warmWeeklyPromptForAttempt(opts.Prompt, attempt)
-		if err := runWeeklyWarmPrompt(profile, prompt, execOpts); err != nil {
+		if err := runWeeklyWarmPromptFn(profile, prompt, execOpts); err != nil {
 			lastErr = fmt.Errorf("attempt %d run failed: %w", attempt, err)
 			appendWarmWeeklyLog("warn", "warm_attempt_failed", profile.ID, map[string]interface{}{"attempt": attempt, "error": err.Error()})
 			continue
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-		payloadAfter, err := fetchUsagePayload(ctx, profileUsageURL(), auth)
-		cancel()
+
+		// The usage endpoint can lag behind the actual execution; poll briefly
+		// rather than treating the first read-after-write as authoritative.
+		var payloadAfter usagePayload
+		var fetchErr error
+		for i := 0; i < 4; i++ {
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+			payloadAfter, fetchErr = fetchUsagePayloadFn(ctx, profileUsageURL(), auth)
+			cancel()
+			if fetchErr == nil {
+				break
+			}
+			time.Sleep(time.Duration(i+1) * 2 * time.Second)
+		}
+		err := fetchErr
 		if err != nil {
 			lastErr = fmt.Errorf("attempt %d verify failed: %w", attempt, err)
 			appendWarmWeeklyLog("warn", "warm_verify_failed", profile.ID, map[string]interface{}{"attempt": attempt, "error": err.Error()})
 			continue
 		}
+
 		if value, ok := weeklyUsedPercent(payloadAfter); ok {
 			usedAfter = value
+			usedAfterKnown = true
+		} else {
+			usedAfterKnown = false
 		}
-		if ok := warmWeeklyBootstrapSucceeded(usedBefore, usedAfter); ok {
+		resetAtCandidate, windowSecondsCandidate, okReset := weeklyResetTime(payloadAfter, now)
+		if okReset {
+			resetAtCandidate = normalizeResetTime(resetAtCandidate, windowSecondsCandidate, now)
+			resetAtAfter = resetAtCandidate
+			resetAfterKnown = true
+		} else {
+			resetAfterKnown = false
+		}
+
+		if ok := warmWeeklyBootstrapSucceeded(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown, usedAfter, usedAfterKnown, resetAfterKnown); ok {
 			success = true
 			break
 		}
@@ -350,13 +388,19 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	delta := usedAfter - usedBefore
 	entry.LastUsageDelta = delta
 	entry.LastWeeklyUsedPct = usedAfter
+	entry.LastWeeklyUsedOK = usedAfterKnown
+	if resetAfterKnown {
+		entry.LastWeeklyReset = resetAtAfter.UTC().Format(time.RFC3339)
+	} else {
+		entry.LastWeeklyReset = ""
+	}
 
 	if success {
 		entry.Paused = false
 		entry.LastResult = "warmed"
 		entry.LastError = ""
 		entry.FailureCount = 0
-		entry.NextDue = warmWeeklyNextDue(now, resetAt, resetKnown).UTC().Format(time.RFC3339)
+		entry.NextDue = warmWeeklyNextDue(now, resetAtAfter, resetAfterKnown).UTC().Format(time.RFC3339)
 		appendWarmWeeklyLog("info", "profile_warmed", profile.ID, map[string]interface{}{"weekly_used_before": usedBefore, "weekly_used_after": usedAfter, "delta": delta, "next_due": entry.NextDue})
 		return "warmed"
 	}
@@ -421,12 +465,26 @@ func warmWeeklyNeedsBootstrap(force bool, usedBefore float64, usedKnown bool, re
 	return !usedKnown || !resetKnown
 }
 
-func warmWeeklyBootstrapSucceeded(before, after float64) bool {
-	if after-before >= warmWeeklyMinUsageDelta {
+func warmWeeklyBootstrapSucceeded(force bool, before float64, beforeUsedOK bool, beforeResetOK bool, after float64, afterUsedOK bool, afterResetOK bool) bool {
+	// Primary goal: make the weekly window "real" (reset/time metadata becomes available),
+	// which starts/advances the timer even if percent deltas are too small to observe.
+	if !beforeResetOK {
+		// If we were missing reset/timer information, only treat the bootstrap as
+		// successful once that information appears.
+		return afterResetOK
+	}
+	if afterResetOK && force {
+		// When force is requested, avoid marking failures just because percent moved
+		// below our threshold or the endpoint is too coarse-grained.
 		return true
 	}
-	leftAfter := 100 - after
-	return leftAfter < 99.95
+	if beforeResetOK && !beforeUsedOK && afterUsedOK {
+		return true
+	}
+	if afterUsedOK && beforeUsedOK && after-before >= warmWeeklyMinUsageDelta {
+		return true
+	}
+	return false
 }
 
 func warmWeeklyNextDue(now, resetAt time.Time, resetKnown bool) time.Time {
@@ -495,6 +553,22 @@ func loadWarmWeeklyState() (warmWeeklyState, error) {
 	}
 	if state.Profiles == nil {
 		state.Profiles = map[string]*warmWeeklyProfileState{}
+	}
+	// v1 did not track whether a 0.00% reading was "known" vs "unknown"; infer
+	// a best-effort value from the presence of reset metadata.
+	if state.Version < warmWeeklyStateVersion {
+		for _, row := range state.Profiles {
+			if row == nil {
+				continue
+			}
+			if row.LastWeeklyUsedOK {
+				continue
+			}
+			if strings.TrimSpace(row.LastWeeklyReset) != "" || row.LastWeeklyUsedPct != 0 {
+				row.LastWeeklyUsedOK = true
+			}
+		}
+		state.Version = warmWeeklyStateVersion
 	}
 	return state, nil
 }
@@ -574,7 +648,7 @@ func printWarmWeeklyState(state warmWeeklyState) {
 			widthResult = w
 		}
 		used := "-"
-		if row.LastWeeklyUsedPct > 0 {
+		if row.LastWeeklyUsedOK {
 			used = fmt.Sprintf("%.2f%%", row.LastWeeklyUsedPct)
 		}
 		if w := displayWidth(used); w > widthUsed {
@@ -605,7 +679,7 @@ func printWarmWeeklyState(state warmWeeklyState) {
 	)
 	for _, row := range rows {
 		used := "-"
-		if row.LastWeeklyUsedPct > 0 {
+		if row.LastWeeklyUsedOK {
 			used = fmt.Sprintf("%.2f%%", row.LastWeeklyUsedPct)
 		}
 		delta := "-"
