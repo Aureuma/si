@@ -34,3 +34,18 @@ func TestRecipientsFingerprintStableAndOrderIndependent(t *testing.T) {
 		t.Fatalf("fingerprints differ: %s vs %s", fp1, fp2)
 	}
 }
+
+func TestParseRecipientsFromDotenvIgnoresLookalikes(t *testing.T) {
+	doc := ParseDotenv([]byte("" +
+		"# si-vault:recipient age1valid\n" +
+		"# si-vault:recipient-count 2\n" +
+		"si-vault:recipient age1notcomment\n" +
+		"#si-vault:recipient\tage1tab\n"))
+	got := ParseRecipientsFromDotenv(doc)
+	if len(got) != 2 {
+		t.Fatalf("recipients=%v", got)
+	}
+	if got[0] != "age1valid" || got[1] != "age1tab" {
+		t.Fatalf("recipients=%v", got)
+	}
+}
