@@ -48,6 +48,9 @@ func cmdVaultDockerExec(args []string) {
 	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
 		fatal(err)
 	}
+	if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
+		fatal(err)
+	}
 	info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
 	if err != nil {
 		fatal(err)
