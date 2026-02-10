@@ -93,14 +93,14 @@ si vault run --file vault/.env.prod -- ./your-command --args
 
 ## Formatting
 
-`si vault fmt` enforces a single canonical `.env` style:
+`si vault fmt` enforces a canonical header and key/value style:
 - header block:
   - `# si-vault:v1`
   - one or more `# si-vault:recipient age1...` lines
   - one blank line after header
 - sections:
-  - divider: `# ------------------------------------------------------------------------------`
-  - header: `# [stripe]`, `# [workos]`, etc
+  - section headers like `# [stripe]` are preserved as-authored (not lowercased/rewritten)
+  - divider comment lines (e.g. `# ---------...`) are preserved as-authored
 - keys:
   - `KEY=value` (no spaces around `=`)
 
