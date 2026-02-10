@@ -20,8 +20,7 @@ func TestFormatVaultDotenvCanonicalizesHeaderAndSections(t *testing.T) {
 		"# si-vault:v1\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
-		"# ------------------------------------------------------------------------------\n" +
-		"# [stripe]\n" +
+		"# [Stripe]\n" +
 		"STRIPE_A=1 # note\n"
 	if got := string(out.Bytes()); got != want {
 		t.Fatalf("got %q want %q", got, want)
@@ -41,7 +40,6 @@ func TestFormatVaultDotenvNoChangeForCanonicalInput(t *testing.T) {
 		"# si-vault:v1\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
-		"# ------------------------------------------------------------------------------\n" +
 		"# [stripe]\n" +
 		"STRIPE_A=1 # note\n"
 	in := ParseDotenv([]byte(inRaw))
@@ -98,7 +96,6 @@ func TestFormatVaultDotenvCollapsesExtraBlankLines(t *testing.T) {
 		"# si-vault:v1\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
-		"# ------------------------------------------------------------------------------\n" +
 		"# [stripe]\n" +
 		"\n" +
 		"STRIPE_A=1\n"
@@ -125,7 +122,6 @@ func TestFormatVaultDotenvPreservesUnknownPreambleLines(t *testing.T) {
 		"\n" +
 		"SHELL_SYNTAX: not-dotenv\n" +
 		"\n" +
-		"# ------------------------------------------------------------------------------\n" +
 		"# [stripe]\n" +
 		"STRIPE_A=1\n"
 	if got := string(out.Bytes()); got != want {
@@ -149,6 +145,30 @@ func TestFormatVaultDotenvKeepsLookalikeHeaderComment(t *testing.T) {
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# si-vault:recipient-count 2\n" +
+		"A=1\n"
+	if got := string(out.Bytes()); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestFormatVaultDotenvPreservesDividerAndSectionMarkerLines(t *testing.T) {
+	in := ParseDotenv([]byte("" +
+		"#si-vault:v1\n" +
+		"#si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"#----------------------------\n" +
+		"#[Stripe]\n" +
+		"A = 1\n"))
+	out, _, err := FormatVaultDotenv(in)
+	if err != nil {
+		t.Fatalf("FormatVaultDotenv: %v", err)
+	}
+	want := "" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"#----------------------------\n" +
+		"#[Stripe]\n" +
 		"A=1\n"
 	if got := string(out.Bytes()); got != want {
 		t.Fatalf("got %q want %q", got, want)

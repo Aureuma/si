@@ -28,7 +28,8 @@ func FormatVaultDotenv(input DotenvFile) (DotenvFile, bool, error) {
 	}
 	out.Lines = append(out.Lines, RawLine{Text: "", NL: nl})
 
-	// Body: canonicalize sections/dividers and normalize KEY=value spacing.
+	// Body: normalize KEY=value spacing and comment spacing, but preserve any
+	// divider markers and section header lines exactly as-authored.
 	body := stripVaultHeaderLines(input.Lines)
 	body = trimLeadingBlank(body)
 
@@ -43,21 +44,28 @@ func FormatVaultDotenv(input DotenvFile) (DotenvFile, bool, error) {
 		if isVaultHeaderLine(text) {
 			continue
 		}
-		if isDividerLine(text) {
-			// Always regenerate dividers from section headers.
-			continue
-		}
-		if name, ok := isSectionHeaderLine(text); ok {
-			// Exactly one blank line between sections (and after preamble content).
+		if _, ok := isSectionHeaderLine(text); ok {
+			// Keep section markers exactly as-authored; only normalize surrounding whitespace.
 			if len(out.Lines) > 0 {
 				last := out.Lines[len(out.Lines)-1].Text
-				if strings.TrimSpace(last) != "" {
+				// Allow "# ----" divider lines to sit directly above a section header.
+				if strings.TrimSpace(last) != "" && !isDividerLine(last) {
 					out.Lines = append(out.Lines, RawLine{Text: "", NL: nl})
 				}
 			}
-			out.Lines = append(out.Lines, RawLine{Text: canonicalDividerLine(), NL: nl})
-			out.Lines = append(out.Lines, RawLine{Text: renderSectionHeader(name), NL: nl})
+			out.Lines = append(out.Lines, RawLine{Text: strings.TrimRight(text, "\r\n"), NL: nl})
 			pendingBlank = false
+			continue
+		}
+		if isDividerLine(text) {
+			// Keep divider markers exactly as-authored.
+			if pendingBlank {
+				if len(out.Lines) > 0 && strings.TrimSpace(out.Lines[len(out.Lines)-1].Text) != "" {
+					out.Lines = append(out.Lines, RawLine{Text: "", NL: nl})
+				}
+				pendingBlank = false
+			}
+			out.Lines = append(out.Lines, RawLine{Text: strings.TrimRight(text, "\r\n"), NL: nl})
 			continue
 		}
 		if pendingBlank {
