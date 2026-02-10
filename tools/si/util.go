@@ -42,7 +42,7 @@ Usage:
 
 Core:
   si dyad spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup
-  si spawn|respawn|list|status|report|login|ps|run|logs|tail|clone|remove|stop|start
+  si spawn|respawn|list|status|report|login|logout|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|object|raw|report|sync>
   si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
@@ -163,6 +163,10 @@ codex:
     --open-url / --open-url=false
     --open-url-cmd <command>
     --safari-profile <name>
+
+  si logout [--force] [--all]
+    --force
+    --all
 
   si run (two modes, alias: exec)
     One-off run (isolated container):
