@@ -97,13 +97,17 @@ func cmdVaultCheck(args []string) {
 	findings := []finding{}
 
 	for _, p := range files {
-		var data []byte
+		var doc vault.DotenvFile
 		var err error
 		display := p
 		if *staged {
-			data, err = vault.GitShowIndexFile(target.RepoRoot, p)
+			data, derr := vault.GitShowIndexFile(target.RepoRoot, p)
+			err = derr
+			if err == nil {
+				doc = vault.ParseDotenv(data)
+			}
 		} else {
-			data, err = os.ReadFile(p)
+			doc, err = vault.ReadDotenvFile(p)
 			display = filepath.Clean(p)
 		}
 		if err != nil {
@@ -113,7 +117,6 @@ func cmdVaultCheck(args []string) {
 			}
 			fatal(err)
 		}
-		doc := vault.ParseDotenv(data)
 		scan, err := vault.ScanDotenvEncryption(doc)
 		if err != nil {
 			fatal(fmt.Errorf("%s: invalid vault dotenv (%w)", display, err))
