@@ -170,3 +170,26 @@ func TestDecryptEnvDuplicateKeysLastValueWins(t *testing.T) {
 		t.Fatalf("A=%q", dec.Values["A"])
 	}
 }
+
+func TestDecryptEnvErrorsOnInvalidQuotedPlaintext(t *testing.T) {
+	doc := ParseDotenv([]byte("A=\"unterminated\n"))
+	if _, err := DecryptEnv(doc, nil); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestEncryptDotenvValuesErrorsOnInvalidQuotedPlaintext(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	doc := ParseDotenv([]byte("" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient " + recipient + "\n" +
+		"\n" +
+		"A=\"unterminated\n"))
+	if _, err := EncryptDotenvValues(&doc, nil, false); err == nil {
+		t.Fatalf("expected error")
+	}
+}
