@@ -123,7 +123,8 @@ Device identities are age X25519 private keys. Resolution order:
 1. `SI_VAULT_IDENTITY` (or `SI_VAULT_PRIVATE_KEY`) (CI/ephemeral)
 2. `SI_VAULT_IDENTITY_FILE`
 3. OS keyring/keychain (when available)
-4. file backend (`vault.key_backend = "file"`, `vault.key_file = "~/.si/vault/keys/age.key"`)
+4. OS secure store (Keychain on macOS, Secret Service on Linux) (`vault.key_backend = "keyring"` or `"keychain"`)
+5. file backend (`vault.key_backend = "file"`, `vault.key_file = "~/.si/vault/keys/age.key"`)
 
 Settings are configured in `~/.si/settings.toml` under `[vault]`.
 

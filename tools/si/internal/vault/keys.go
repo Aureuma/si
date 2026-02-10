@@ -26,6 +26,16 @@ type KeyConfig struct {
 	KeyFile string // for file backend
 }
 
+func NormalizeKeyBackend(backend string) string {
+	backend = strings.ToLower(strings.TrimSpace(backend))
+	switch backend {
+	case "keychain":
+		return "keyring"
+	default:
+		return backend
+	}
+}
+
 func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 	// CI/ephemeral override: environment variable identity.
 	if raw := strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY")); raw != "" {
@@ -54,7 +64,7 @@ func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 		return &IdentityInfo{Identity: id, Source: "env_file", Path: path}, nil
 	}
 
-	backend := strings.ToLower(strings.TrimSpace(cfg.Backend))
+	backend := NormalizeKeyBackend(cfg.Backend)
 	if backend == "" {
 		backend = "keyring"
 	}
@@ -100,7 +110,7 @@ func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 		}
 		return &IdentityInfo{Identity: id, Source: "file", Path: keyFile}, nil
 	default:
-		return nil, fmt.Errorf("unsupported key backend %q (expected keyring or file)", cfg.Backend)
+		return nil, fmt.Errorf("unsupported key backend %q (expected keyring, keychain, or file)", cfg.Backend)
 	}
 
 	keyFile := strings.TrimSpace(cfg.KeyFile)
@@ -124,7 +134,7 @@ func EnsureIdentity(cfg KeyConfig) (*IdentityInfo, bool, error) {
 		return info, false, nil
 	}
 
-	backend := strings.ToLower(strings.TrimSpace(cfg.Backend))
+	backend := NormalizeKeyBackend(cfg.Backend)
 	if backend == "" {
 		backend = "keyring"
 	}
@@ -150,7 +160,7 @@ func EnsureIdentity(cfg KeyConfig) (*IdentityInfo, bool, error) {
 		info, ok, err := ensureIdentityFile(cfg, id)
 		return info, ok, err
 	default:
-		return nil, false, fmt.Errorf("unsupported key backend %q (expected keyring or file)", cfg.Backend)
+		return nil, false, fmt.Errorf("unsupported key backend %q (expected keyring, keychain, or file)", cfg.Backend)
 	}
 }
 
