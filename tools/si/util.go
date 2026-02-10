@@ -261,7 +261,8 @@ stripe:
 
 	  Default file (when --file is not set): <vault-dir>/.env
 
-	  si vault init --submodule-url <git-url> [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|file>] [--key-file <path>]
+	  si vault init --submodule-url <git-url> [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|keychain|file>] [--key-file <path>]
+	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault status [--file <path>] [--vault-dir <path>]
 	  si vault check [--file <path>] [--vault-dir <path>] [--staged] [--all]
 	  si vault hooks install|status|uninstall [--vault-dir <path>] [--force]
