@@ -26,3 +26,31 @@ Rules (human + dyad):
 Format:
 - 2026-02-09T00:00:00Z 🪢 <dyad> 🛩️ actor Turn N: <what changed>
 -->
+- 2026-02-10T03:02:40Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:02:40Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:02:40Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:02:40Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:15:29Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:15:29Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:15:29Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:15:29Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:24:45Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:24:45Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:24:45Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:24:45Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:25:00Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:25:00Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:25:00Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:25:00Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:30:36Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:30:36Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:30:36Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:30:36Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:40:18Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:40:18Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:40:18Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:40:18Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:55:25Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-10T03:55:25Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-10T03:55:25Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-10T03:55:25Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
