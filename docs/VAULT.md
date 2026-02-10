@@ -106,6 +106,19 @@ si vault run --file vault/.env.prod -- ./your-command --args
 
 Mutating commands support `--format` to run `fmt` after the minimal edit.
 
+## Decrypting To Plaintext
+
+By default, `si vault decrypt` decrypts values in-place in the same file on disk (similar to `dotenvx decrypt`).
+
+This is intentionally dangerous: it writes plaintext secrets to disk. Prefer runtime injection (`si vault run`)
+when possible, and re-encrypt immediately after editing.
+
+To preview the decrypted file without modifying it:
+
+```bash
+si vault decrypt --file vault/.env --stdout
+```
+
 ## Trust Model (TOFU)
 
 `si vault` uses trust-on-first-use (similar to `ssh known_hosts`) to prevent silent recipient drift:

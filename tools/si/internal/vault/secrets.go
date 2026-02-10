@@ -120,3 +120,51 @@ func EncryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity, reencryp
 
 	return result, nil
 }
+
+type DecryptDotenvResult struct {
+	Changed        bool
+	DecryptedKeys  []string
+	SkippedPlain   int
+	SkippedMissing int
+}
+
+// DecryptDotenvValues decrypts encrypted values in-place, preserving line layout/comments.
+// It keeps the vault header (recipients) intact so the file can be re-encrypted later.
+func DecryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity) (DecryptDotenvResult, error) {
+	if doc == nil {
+		return DecryptDotenvResult{}, nil
+	}
+	result := DecryptDotenvResult{}
+	for i := range doc.Lines {
+		assign, ok := parseAssignment(doc.Lines[i].Text)
+		if !ok {
+			continue
+		}
+		if err := ValidateKeyName(assign.Key); err != nil {
+			return DecryptDotenvResult{}, err
+		}
+		val, err := NormalizeDotenvValue(assign.ValueRaw)
+		if err != nil {
+			return DecryptDotenvResult{}, err
+		}
+		if !IsEncryptedValueV1(val) {
+			result.SkippedPlain++
+			continue
+		}
+		if identity == nil {
+			return DecryptDotenvResult{}, fmt.Errorf("decrypt requires a vault identity (set SI_VAULT_IDENTITY or configure vault.key_backend)")
+		}
+		plain, err := DecryptStringV1(val, identity)
+		if err != nil {
+			return DecryptDotenvResult{}, err
+		}
+		rendered := RenderDotenvValuePlain(plain)
+		line := renderAssignmentPreserveLayout(assign, assign.Key, rendered, assign.Comment)
+		if line != doc.Lines[i].Text {
+			doc.Lines[i].Text = line
+			result.Changed = true
+		}
+		result.DecryptedKeys = append(result.DecryptedKeys, assign.Key)
+	}
+	return result, nil
+}
