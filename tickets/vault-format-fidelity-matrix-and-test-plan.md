@@ -84,6 +84,19 @@ Legend:
 | M32 | Header | no header + recipients | ensure header | header prepended with blank-line separation | PASS | `TestEnsureVaultHeaderPrependsWhenMissing` |
 | M33 | Header | remove recipient | remove | target recipient removed only | PASS | `TestRemoveRecipientOnlyRemovesTarget` |
 | M34 | Section Range | canonical divider before next section | set in section | insert position excludes next section divider | PASS | `TestDotenvSetInSectionPreservesNextSectionDivider` |
+| M35 | Assignment | RHS comment-only (`=   # note`) | parse | empty value + preserved comment | PASS | `TestSplitValueAndCommentCommentOnlyRHS` |
+| M36 | Set/Unset | set existing key with equivalent value | set | no-op (`changed=false`) and bytes unchanged | PASS | `TestDotenvSetNoOpWhenValueUnchanged` |
+| M37 | Set/Unset | section update with custom `=` spacing | set section | spacing around `=` preserved | PASS | `TestDotenvSetInSectionPreservesEqSpacingOnUpdate` |
+| M38 | Value Norm | lone single quote (`'`) | normalize | error returned | FIXED | `TestNormalizeDotenvValueLoneSingleQuoteReturnsError` |
+| M39 | Value Norm | lone double quote (`\"`) | normalize | error returned | FIXED | `TestNormalizeDotenvValueLoneDoubleQuoteReturnsError` |
+| M40 | Header | CRLF input file | ensure header | inserted header uses CRLF | PASS | `TestEnsureVaultHeaderPreservesCRLF` |
+| M41 | Header | duplicate recipient args | ensure header | recipients deduped in emitted header | PASS | `TestEnsureVaultHeaderDedupesRecipientsInput` |
+| M42 | Header | remove absent recipient | remove | no-op, file unchanged | PASS | `TestRemoveRecipientNoOpWhenMissing` |
+| M43 | Fmt | repeated blank lines in body | fmt | collapse to canonical blank spacing | PASS | `TestFormatVaultDotenvCollapsesExtraBlankLines` |
+| M44 | Fmt | unknown preamble content before section | fmt | preserve unknown preamble lines | PASS | `TestFormatVaultDotenvPreservesUnknownPreambleLines` |
+| M45 | Scan | malformed quoted plaintext | scan | error surfaced | PASS | `TestScanDotenvEncryptionErrorsOnInvalidQuotedPlaintext` |
+| M46 | Decrypt | malformed quoted plaintext | decrypt | error surfaced | PASS | `TestDecryptEnvErrorsOnInvalidQuotedPlaintext` |
+| M47 | Encrypt | malformed quoted plaintext | encrypt | error surfaced | PASS | `TestEncryptDotenvValuesErrorsOnInvalidQuotedPlaintext` |
 
 ## Execution Plan
 
@@ -103,5 +116,8 @@ Legend:
   - unmatched quoted values now return normalization errors instead of silently passing through.
 - 2026-02-10: Preserved assignment layout during non-`fmt` mutation/encryption updates (leading indent, `export`, spacing around `=` and pre-comment spacing).
 - 2026-02-10: Validation runs:
+  - `go test ./tools/si/internal/vault -count=1` => PASS
+  - `go test ./tools/si/... -count=1` => PASS
+- 2026-02-10: Extended matrix beyond initial pass (`M35`-`M47`) and repeated full validation:
   - `go test ./tools/si/internal/vault -count=1` => PASS
   - `go test ./tools/si/... -count=1` => PASS
