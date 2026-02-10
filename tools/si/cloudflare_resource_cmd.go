@@ -116,7 +116,7 @@ func cmdCloudflareWorkers(args []string) {
 
 func cmdCloudflarePages(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si cloudflare pages <project|deploy> ...")
+		printUsage("usage: si cloudflare pages <project|deploy|domain> ...")
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
@@ -127,9 +127,11 @@ func cmdCloudflarePages(args []string) {
 		cmdCloudflareResourceFamily(rest, spec, "usage: si cloudflare pages project <list|get|create|update|delete> ...")
 	case "deploy", "deployment", "deployments":
 		cmdCloudflarePagesDeploy(rest)
+	case "domain", "domains":
+		cmdCloudflarePagesDomain(rest)
 	default:
 		printUnknown("cloudflare pages", sub)
-		printUsage("usage: si cloudflare pages <project|deploy> ...")
+		printUsage("usage: si cloudflare pages <project|deploy|domain> ...")
 	}
 }
 
@@ -696,6 +698,85 @@ func cmdCloudflarePagesDeploy(args []string) {
 	}
 	printCloudflareContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	resp, err := client.Do(ctx, request)
+	if err != nil {
+		printCloudflareError(err)
+		return
+	}
+	printCloudflareResponse(resp, *jsonOut, *raw)
+}
+
+func cmdCloudflarePagesDomain(args []string) {
+	if len(args) == 0 {
+		printUsage("usage: si cloudflare pages domain <list|get|create|delete> --project <name> [--domain <fqdn>]")
+		return
+	}
+	op := strings.ToLower(strings.TrimSpace(args[0]))
+	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
+	fs := cloudflareCommonFlagSet("cloudflare pages domain "+op, args)
+	project := fs.String("project", "", "pages project name")
+	domain := fs.String("domain", "", "custom domain fqdn")
+	body := fs.String("body", "", "raw request body")
+	force := fs.Bool("force", false, "skip confirmation prompt")
+	jsonOut := fs.Bool("json", false, "output json")
+	raw := fs.Bool("raw", false, "print raw response body")
+	params := multiFlag{}
+	fs.Var(&params, "param", "query/body parameter key=value (repeatable)")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 || strings.TrimSpace(*project) == "" {
+		printUsage("usage: si cloudflare pages domain <list|get|create|delete> --project <name> [--domain <fqdn>] [--param key=value] [--json]")
+		return
+	}
+	runtime, client := mustCloudflareClient(*commonAccount, *commonEnv, *commonZone, *commonZoneID, *commonToken, *commonBaseURL, *commonAccountID)
+	base, err := cloudflareResolvePath("/accounts/{account_id}/pages/projects/{id}/domains", runtime, *project)
+	if err != nil {
+		fatal(err)
+	}
+	request := cloudflarebridge.Request{}
+	switch op {
+	case "list":
+		request.Method = http.MethodGet
+		request.Path = base
+		request.Params = parseCloudflareParams(params)
+	case "get":
+		if strings.TrimSpace(*domain) == "" {
+			fatal(fmt.Errorf("--domain is required for get"))
+		}
+		request.Method = http.MethodGet
+		request.Path = base + "/" + strings.TrimSpace(*domain)
+		request.Params = parseCloudflareParams(params)
+	case "create":
+		request.Method = http.MethodPost
+		request.Path = base
+		if strings.TrimSpace(*body) != "" {
+			request.RawBody = strings.TrimSpace(*body)
+		} else {
+			payload := parseCloudflareBodyParams(params)
+			if strings.TrimSpace(*domain) != "" {
+				payload["name"] = strings.TrimSpace(*domain)
+			}
+			nameValue, _ := payload["name"].(string)
+			if strings.TrimSpace(nameValue) == "" {
+				fatal(fmt.Errorf("--domain or --param name=<fqdn> is required for create"))
+			}
+			request.JSONBody = payload
+		}
+	case "delete", "remove", "rm":
+		if strings.TrimSpace(*domain) == "" {
+			fatal(fmt.Errorf("--domain is required for delete"))
+		}
+		if err := requireCloudflareConfirmation("delete pages domain "+strings.TrimSpace(*domain), *force); err != nil {
+			fatal(err)
+		}
+		request.Method = http.MethodDelete
+		request.Path = base + "/" + strings.TrimSpace(*domain)
+	default:
+		printUnknown("cloudflare pages domain", op)
+		return
+	}
+	printCloudflareContextBanner(runtime, *jsonOut)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	resp, err := client.Do(ctx, request)
 	if err != nil {
