@@ -1,6 +1,6 @@
 # `si vault` (Git-Based Encrypted Credentials)
 
-`si vault` manages credentials in `.env.<env>` files with values encrypted inline using age recipients, designed to be committed to a separate private git repo (usually as a submodule).
+`si vault` manages credentials in dotenv files with values encrypted inline using age recipients, designed to be committed to a separate private git repo (usually as a submodule).
 
 Goals:
 - encrypted at rest (git-friendly, PR-reviewable)
@@ -16,9 +16,8 @@ Host repo:
 
 Vault repo (submodule checkout):
 - contains encrypted env files:
-  - `vault/.env.dev`
-  - `vault/.env.prod`
-  - etc
+  - `vault/.env` (default)
+  - optional additional files (managed via `--file`), e.g. `vault/.env.dev`, `vault/.env.prod`
 
 ## Quickstart
 
@@ -26,7 +25,7 @@ From your host repo (a normal git repo):
 
 1. Add/initialize the vault submodule and bootstrap the env file:
 ```bash
-si vault init --submodule-url <git-url-for-private-vault-repo> --env dev
+si vault init --submodule-url <git-url-for-private-vault-repo>
 ```
 
 2. Set a secret (prefer `--stdin` to avoid shell history):
@@ -36,17 +35,17 @@ printf '%s' 'sk_test_...' | si vault set STRIPE_API_KEY --stdin --section stripe
 
 3. Format the file to the canonical style (optional but recommended):
 ```bash
-si vault fmt --env dev
+si vault fmt
 ```
 
 4. Run a local process with secrets injected:
 ```bash
-si vault run --env dev -- ./your-command --args
+si vault run -- ./your-command --args
 ```
 
 5. Inject secrets into an existing container process (`docker exec` env injection for that exec only):
 ```bash
-si vault docker exec --container <name-or-id> --env dev -- ./your-command --args
+si vault docker exec --container <name-or-id> -- ./your-command --args
 ```
 
 ## Dyads + Codex Containers
@@ -58,7 +57,7 @@ For secret injection, prefer running from the host:
 
 ```bash
 # Inject decrypted env for that exec only (decrypt happens on the host).
-si vault docker exec --container si-actor-<dyad> --env dev -- ./your-command --args
+si vault docker exec --container si-actor-<dyad> -- ./your-command --args
 ```
 
 ## Prevent Plaintext Commits (Git Hooks)
@@ -78,11 +77,14 @@ Notes:
 - Git hooks are local-only and can be bypassed with `git commit --no-verify`.
 - For stronger enforcement, add a CI check in the vault repo that fails if any `.env*` file contains plaintext values.
 
-## Multi-Environment Files
+## Multiple Dotenv Files
 
-`--env <name>` maps to `.env.<name>` inside the vault dir, for example:
-- `--env dev` -> `vault/.env.dev`
-- `--env prod` -> `vault/.env.prod`
+By default, vault commands operate on `vault/.env`. To operate on a different dotenv file, pass `--file` explicitly:
+
+```bash
+si vault encrypt --file vault/.env.prod --format
+si vault run --file vault/.env.prod -- ./your-command --args
+```
 
 ## Formatting
 
@@ -103,7 +105,7 @@ Mutating commands support `--format` to run `fmt` after the minimal edit.
 
 `si vault` uses trust-on-first-use (similar to `ssh known_hosts`) to prevent silent recipient drift:
 - local trust store: `~/.si/vault/trust.json`
-- keyed by `(host repo root, vault dir, env)`
+- keyed by `(host repo root, env file)`
 - stores:
   - vault repo URL (when available)
   - recipients fingerprint

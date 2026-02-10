@@ -14,8 +14,8 @@ func cmdVaultInit(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault init", flag.ExitOnError)
 	submoduleURL := fs.String("submodule-url", "", "git URL for the vault repo (submodule)")
+	fileFlag := fs.String("file", "", "explicit env file path to bootstrap (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	ignoreDirty := fs.Bool("ignore-dirty", true, "set ignore=dirty for the vault submodule in .gitmodules")
 	installHooks := fs.Bool("hooks", true, "install git pre-commit hook to block plaintext dotenv commits (best effort)")
 	keyBackend := fs.String("key-backend", "", "override key backend: keyring or file")
@@ -24,11 +24,11 @@ func cmdVaultInit(args []string) {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>]")
+		printUsage("usage: si vault init --submodule-url <git-url> [--file <path>] [--vault-dir <path>] [--ignore-dirty]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, *env, true, true)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, true, true)
 	if err != nil {
 		fatal(err)
 	}
@@ -140,7 +140,7 @@ func cmdVaultInit(args []string) {
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
 		VaultDir:    target.VaultDir,
-		Env:         target.Env,
+		File:        target.File,
 		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})

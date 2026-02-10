@@ -16,9 +16,8 @@ func cmdVaultDockerExec(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault docker exec", flag.ExitOnError)
 	container := fs.String("container", "", "container name or id")
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	allowInsecure := fs.Bool("allow-insecure-docker-host", false, "allow injecting secrets over an insecure remote DOCKER_HOST")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow injecting even if plaintext keys exist (not recommended)")
 	if err := fs.Parse(args); err != nil {
@@ -30,7 +29,7 @@ func cmdVaultDockerExec(args []string) {
 		rest = rest[1:]
 	}
 	if strings.TrimSpace(*container) == "" || len(rest) == 0 {
-		printUsage("usage: si vault docker exec --container <name|id> [--vault-dir <path>] [--env <name>] -- <cmd...>")
+		printUsage("usage: si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>")
 		return
 	}
 
@@ -38,7 +37,7 @@ func cmdVaultDockerExec(args []string) {
 		fatal(fmt.Errorf("refusing to inject secrets over insecure docker host (%s); set --allow-insecure-docker-host to override", reason))
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}

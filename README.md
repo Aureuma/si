@@ -23,7 +23,7 @@ The unified image includes the `si` CLI inside the container so you can run `si 
 from within dyad/codex containers when needed.
 
 ## Vault (Secrets)
-`si vault` manages encrypted `.env.<env>` files stored in a pinned vault submodule and injects secrets into local processes or `docker exec` at runtime.
+`si vault` manages encrypted dotenv files stored in a pinned vault submodule and injects secrets into local processes or `docker exec` at runtime.
 
 See `docs/VAULT.md`.
 
@@ -78,7 +78,7 @@ Scope to a module or keep CI green while reviewing findings:
 Because the dyad containers include `si`, you can also run vault/status style commands from inside the container:
 
 ```bash
-./si dyad exec --member actor <dyad> -- si vault status --env dev
+./si dyad exec --member actor <dyad> -- si vault status
 ```
 
 - Stop/start dyad containers:
