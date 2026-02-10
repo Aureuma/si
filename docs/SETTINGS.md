@@ -249,7 +249,7 @@ Defaults for `si vault` (encrypted dotenv files, typically stored in a separate 
 - `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
 - `vault.trust_store` (string): local TOFU trust store path (default: `~/.si/vault/trust.json`)
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
-- `vault.key_backend` (string): where the device private key is stored. Supported: `keyring`, `file` (default: `keyring`)
+- `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
 
 ### `[shell.prompt]`

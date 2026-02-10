@@ -14,6 +14,7 @@ func vaultKeyConfigFromSettings(settings Settings) vault.KeyConfig {
 	if backend == "" {
 		backend = settings.Vault.KeyBackend
 	}
+	backend = vault.NormalizeKeyBackend(backend)
 	keyFile := strings.TrimSpace(os.Getenv("SI_VAULT_KEY_FILE"))
 	if keyFile == "" {
 		keyFile = settings.Vault.KeyFile

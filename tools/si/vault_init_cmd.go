@@ -18,7 +18,7 @@ func cmdVaultInit(args []string) {
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	ignoreDirty := fs.Bool("ignore-dirty", true, "set ignore=dirty for the vault submodule in .gitmodules")
 	installHooks := fs.Bool("hooks", true, "install git pre-commit hook to block plaintext dotenv commits (best effort)")
-	keyBackend := fs.String("key-backend", "", "override key backend: keyring or file")
+	keyBackend := fs.String("key-backend", "", "override key backend: keyring, keychain, or file")
 	keyFile := fs.String("key-file", "", "override key file path (for key-backend=file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
