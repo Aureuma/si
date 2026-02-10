@@ -48,6 +48,8 @@ func dispatchCodexCommand(cmd string, args []string) bool {
 		cmdCodexReport(args)
 	case "login":
 		cmdCodexLogin(args)
+	case "logout":
+		cmdCodexLogout(args)
 	case "exec", "run":
 		cmdCodexExec(args)
 	case "logs":
