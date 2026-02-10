@@ -36,7 +36,9 @@ func cmdVaultTrustStatus(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
 	if err != nil {
@@ -84,7 +86,9 @@ func cmdVaultTrustAccept(args []string) {
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	yes := fs.Bool("yes", false, "do not prompt")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
 	if err != nil {
@@ -138,7 +142,9 @@ func cmdVaultTrustForget(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, true, true)
 	if err != nil {

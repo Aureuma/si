@@ -35,7 +35,9 @@ func cmdVaultRecipientsList(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
 	if err != nil {
@@ -61,7 +63,9 @@ func cmdVaultRecipientsAdd(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	rest := fs.Args()
 	if len(rest) != 1 {
 		printUsage("usage: si vault recipients add <age1...> [--vault-dir <path>] [--env <name>]")
@@ -125,7 +129,9 @@ func cmdVaultRecipientsRemove(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	rest := fs.Args()
 	if len(rest) != 1 {
 		printUsage("usage: si vault recipients remove <age1...> [--vault-dir <path>] [--env <name>]")
