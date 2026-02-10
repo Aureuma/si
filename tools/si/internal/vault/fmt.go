@@ -32,7 +32,6 @@ func FormatVaultDotenv(input DotenvFile) (DotenvFile, bool, error) {
 	body := stripVaultHeaderLines(input.Lines)
 	body = trimLeadingBlank(body)
 
-	seenSection := false
 	pendingBlank := false
 	for _, line := range body {
 		text := line.Text
@@ -58,7 +57,6 @@ func FormatVaultDotenv(input DotenvFile) (DotenvFile, bool, error) {
 			}
 			out.Lines = append(out.Lines, RawLine{Text: canonicalDividerLine(), NL: nl})
 			out.Lines = append(out.Lines, RawLine{Text: renderSectionHeader(name), NL: nl})
-			seenSection = true
 			pendingBlank = false
 			continue
 		}
@@ -80,11 +78,7 @@ func FormatVaultDotenv(input DotenvFile) (DotenvFile, bool, error) {
 			continue
 		}
 		// Unknown lines: keep as-is.
-		if !seenSection {
-			out.Lines = append(out.Lines, RawLine{Text: strings.TrimRight(text, "\r\n"), NL: nl})
-		} else {
-			out.Lines = append(out.Lines, RawLine{Text: strings.TrimRight(text, "\r\n"), NL: nl})
-		}
+		out.Lines = append(out.Lines, RawLine{Text: strings.TrimRight(text, "\r\n"), NL: nl})
 	}
 
 	// Ensure trailing newline.
