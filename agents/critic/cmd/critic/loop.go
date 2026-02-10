@@ -1557,10 +1557,6 @@ func criticMessageLooksPlaceholder(msg string) bool {
 	return false
 }
 
-func actorReportLooksPlaceholder(report string) bool {
-	return actorReportLooksPlaceholderWithMode(report, true)
-}
-
 func actorReportLooksPlaceholderWithMode(report string, strict bool) bool {
 	if containsCodexChrome(report) {
 		return true
@@ -1614,10 +1610,6 @@ func actorReportLooksPlaceholderWithMode(report string, strict bool) bool {
 		return true
 	}
 	return false
-}
-
-func criticReportLooksPlaceholder(report string) bool {
-	return criticReportLooksPlaceholderWithMode(report, true)
 }
 
 func criticReportLooksPlaceholderWithMode(report string, strict bool) bool {
