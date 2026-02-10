@@ -69,11 +69,10 @@ func cmdVaultFmt(args []string) {
 }
 
 func vaultFormatOne(path string, check bool) (bool, error) {
-	data, err := os.ReadFile(path)
+	doc, err := vault.ReadDotenvFile(path)
 	if err != nil {
 		return false, err
 	}
-	doc := vault.ParseDotenv(data)
 	formatted, changed, err := vault.FormatVaultDotenv(doc)
 	if err != nil {
 		return false, err

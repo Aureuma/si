@@ -23,7 +23,7 @@ type SetOptions struct {
 }
 
 func ReadDotenvFile(path string) (DotenvFile, error) {
-	data, err := os.ReadFile(path)
+	data, err := readFileScoped(path)
 	if err != nil {
 		return DotenvFile{}, err
 	}
@@ -32,8 +32,11 @@ func ReadDotenvFile(path string) (DotenvFile, error) {
 
 func WriteDotenvFileAtomic(path string, contents []byte) error {
 	path = filepath.Clean(path)
+	if err := ensureNoSymlinkWriteTarget(path); err != nil {
+		return err
+	}
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	mode := os.FileMode(0o644)
@@ -105,8 +108,8 @@ func (f *DotenvFile) Lookup(key string) (string, bool) {
 
 func (f *DotenvFile) Set(key, value string, opts SetOptions) (bool, error) {
 	key = strings.TrimSpace(key)
-	if key == "" {
-		return false, fmt.Errorf("key required")
+	if err := ValidateKeyName(key); err != nil {
+		return false, err
 	}
 	section := normalizeSectionName(opts.Section)
 	if section != "" {
@@ -140,8 +143,8 @@ func (f *DotenvFile) Set(key, value string, opts SetOptions) (bool, error) {
 
 func (f *DotenvFile) Unset(key string) (bool, error) {
 	key = strings.TrimSpace(key)
-	if key == "" {
-		return false, fmt.Errorf("key required")
+	if err := ValidateKeyName(key); err != nil {
+		return false, err
 	}
 	changed := false
 	out := make([]RawLine, 0, len(f.Lines))
@@ -436,6 +439,23 @@ func leadingWhitespace(s string) string {
 		i++
 	}
 	return s[:i]
+}
+
+func ensureNoSymlinkWriteTarget(path string) error {
+	if isTruthyEnv("SI_VAULT_ALLOW_SYMLINK_ENV_FILE") {
+		return nil
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("refusing to write vault env file through symlink: %s (set SI_VAULT_ALLOW_SYMLINK_ENV_FILE=1 to override)", filepath.Clean(path))
+	}
+	return nil
 }
 
 func normalizeSectionName(name string) string {

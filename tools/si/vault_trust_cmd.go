@@ -42,11 +42,10 @@ func cmdVaultTrustStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	fp, err := vaultTrustFingerprint(doc)
 	if err != nil {
 		fatal(err)
@@ -91,11 +90,10 @@ func cmdVaultTrustAccept(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	fp, err := vaultTrustFingerprint(doc)
 	if err != nil {
 		fatal(err)

@@ -2,7 +2,6 @@ package vault
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -14,7 +13,7 @@ func EnsureGitmodulesIgnoreDirty(repoRoot, submodulePathRel string) (bool, error
 		return false, fmt.Errorf("repo root and submodule path required")
 	}
 	path := filepath.Join(repoRoot, ".gitmodules")
-	data, err := os.ReadFile(path)
+	data, err := readFileScoped(path)
 	if err != nil {
 		return false, err
 	}

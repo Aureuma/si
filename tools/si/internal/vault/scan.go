@@ -15,6 +15,9 @@ func ScanDotenvEncryption(doc DotenvFile) (DotenvEncryptionScan, error) {
 		if !ok {
 			continue
 		}
+		if err := ValidateKeyName(assign.Key); err != nil {
+			return DotenvEncryptionScan{}, err
+		}
 		val, err := NormalizeDotenvValue(assign.ValueRaw)
 		if err != nil {
 			return DotenvEncryptionScan{}, err
