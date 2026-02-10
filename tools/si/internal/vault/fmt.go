@@ -108,21 +108,11 @@ func stripVaultHeaderLines(lines []RawLine) []RawLine {
 }
 
 func isVaultHeaderLine(line string) bool {
-	trim := strings.TrimSpace(line)
-	if trim == "" {
-		return false
-	}
-	if strings.HasPrefix(trim, "#") {
-		trim = strings.TrimSpace(strings.TrimPrefix(trim, "#"))
-	}
-	switch {
-	case trim == "si-vault:v1":
+	if isVersionLine(line) {
 		return true
-	case strings.HasPrefix(trim, "si-vault:recipient"):
-		return true
-	default:
-		return false
 	}
+	_, ok := parseRecipientLine(line)
+	return ok
 }
 
 func trimLeadingBlank(lines []RawLine) []RawLine {
