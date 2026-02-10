@@ -1,0 +1,16 @@
+{
+  "kind": "youtube#searchListResponse",
+  "etag": "etag123",
+  "nextPageToken": "CAEQAA",
+  "items": [
+    {
+      "id": {
+        "kind": "youtube#video",
+        "videoId": "dQw4w9WgXcQ"
+      },
+      "snippet": {
+        "title": "Never Gonna Give You Up"
+      }
+    }
+  ]
+}

@@ -1,6 +1,7 @@
-# Google YouTube (`si google youtube`)
+# Google YouTube (`si google youtube` / `si google youtube-data`)
 
 `si google youtube` provides a YouTube Data API v3 command family with vault-compatible credential resolution, multi-account context, and both API-key and OAuth modes.
+`si google youtube-data` is an alias with identical behavior.
 
 ## Auth Modes
 - `api-key`: public/read operations
@@ -74,7 +75,6 @@ si google youtube live chat list --mode oauth --live-chat-id <chat_id>
 
 # observability and fallback
 si google youtube report usage --since 2026-02-08T00:00:00Z
-si google youtube report quota
 si google youtube raw --method GET --path /youtube/v3/search --param part=id --param q=music
 ```
 

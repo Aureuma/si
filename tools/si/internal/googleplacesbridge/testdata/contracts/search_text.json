@@ -1,0 +1,12 @@
+{
+  "places": [
+    {
+      "id": "place-1",
+      "displayName": {
+        "text": "Cafe One",
+        "languageCode": "en"
+      },
+      "formattedAddress": "1 Main St"
+    }
+  ]
+}

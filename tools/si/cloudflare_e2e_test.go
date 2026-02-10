@@ -49,3 +49,34 @@ func TestCloudflareE2E_RawWithTokenAuth(t *testing.T) {
 		t.Fatalf("unexpected status code payload: %#v", payload)
 	}
 }
+
+func TestCloudflareE2E_DoctorPublic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ips" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"result": map[string]any{"ipv4_cidrs": []string{"1.1.1.0/24"}}})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{},
+		"cloudflare", "doctor",
+		"--public",
+		"--base-url", server.URL,
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if ok, _ := payload["ok"].(bool); !ok {
+		t.Fatalf("expected ok payload: %#v", payload)
+	}
+}

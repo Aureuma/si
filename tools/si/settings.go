@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
+
+	"si/tools/si/internal/providers"
 )
 
 type Settings struct {
@@ -19,6 +21,7 @@ type Settings struct {
 	Github        GitHubSettings     `toml:"github,omitempty"`
 	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
 	Google        GoogleSettings     `toml:"google,omitempty"`
+	Social        SocialSettings     `toml:"social,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
 	Metadata      SettingsMetadata   `toml:"metadata,omitempty"`
@@ -212,12 +215,11 @@ type GoogleAccountEntry struct {
 }
 
 type GoogleYouTubeSettings struct {
-	APIBaseURL       string                               `toml:"api_base_url,omitempty"`
-	UploadBaseURL    string                               `toml:"upload_base_url,omitempty"`
-	DefaultAuthMode  string                               `toml:"default_auth_mode,omitempty"`
-	UploadChunkSize  int                                  `toml:"upload_chunk_size_mb,omitempty"`
-	QuotaBudgetDaily int64                                `toml:"quota_budget_daily,omitempty"`
-	Accounts         map[string]GoogleYouTubeAccountEntry `toml:"accounts,omitempty"`
+	APIBaseURL      string                               `toml:"api_base_url,omitempty"`
+	UploadBaseURL   string                               `toml:"upload_base_url,omitempty"`
+	DefaultAuthMode string                               `toml:"default_auth_mode,omitempty"`
+	UploadChunkSize int                                  `toml:"upload_chunk_size_mb,omitempty"`
+	Accounts        map[string]GoogleYouTubeAccountEntry `toml:"accounts,omitempty"`
 }
 
 type GoogleYouTubeAccountEntry struct {
@@ -235,6 +237,41 @@ type GoogleYouTubeAccountEntry struct {
 	YouTubeRefreshTokenEnv  string `toml:"youtube_refresh_token_env,omitempty"`
 	DefaultRegionCode       string `toml:"default_region_code,omitempty"`
 	DefaultLanguageCode     string `toml:"default_language_code,omitempty"`
+}
+
+type SocialSettings struct {
+	DefaultAccount string                          `toml:"default_account,omitempty"`
+	DefaultEnv     string                          `toml:"default_env,omitempty"`
+	LogFile        string                          `toml:"log_file,omitempty"`
+	Facebook       SocialPlatformSettings          `toml:"facebook,omitempty"`
+	Instagram      SocialPlatformSettings          `toml:"instagram,omitempty"`
+	X              SocialPlatformSettings          `toml:"x,omitempty"`
+	LinkedIn       SocialPlatformSettings          `toml:"linkedin,omitempty"`
+	Accounts       map[string]SocialAccountSetting `toml:"accounts,omitempty"`
+}
+
+type SocialPlatformSettings struct {
+	APIBaseURL string `toml:"api_base_url,omitempty"`
+	APIVersion string `toml:"api_version,omitempty"`
+	AuthStyle  string `toml:"auth_style,omitempty"`
+}
+
+type SocialAccountSetting struct {
+	Name string `toml:"name,omitempty"`
+
+	VaultPrefix string `toml:"vault_prefix,omitempty"`
+
+	FacebookAccessTokenEnv  string `toml:"facebook_access_token_env,omitempty"`
+	InstagramAccessTokenEnv string `toml:"instagram_access_token_env,omitempty"`
+	XAccessTokenEnv         string `toml:"x_access_token_env,omitempty"`
+	LinkedInAccessTokenEnv  string `toml:"linkedin_access_token_env,omitempty"`
+
+	FacebookPageID          string `toml:"facebook_page_id,omitempty"`
+	InstagramBusinessID     string `toml:"instagram_business_id,omitempty"`
+	XUserID                 string `toml:"x_user_id,omitempty"`
+	XUsername               string `toml:"x_username,omitempty"`
+	LinkedInPersonURN       string `toml:"linkedin_person_urn,omitempty"`
+	LinkedInOrganizationURN string `toml:"linkedin_organization_urn,omitempty"`
 }
 
 type ShellSettings struct {
@@ -448,8 +485,62 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Google.YouTube.UploadChunkSize <= 0 {
 		settings.Google.YouTube.UploadChunkSize = 16
 	}
-	if settings.Google.YouTube.QuotaBudgetDaily <= 0 {
-		settings.Google.YouTube.QuotaBudgetDaily = 10000
+	settings.Social.DefaultEnv = normalizeSocialEnvironment(settings.Social.DefaultEnv)
+	if settings.Social.DefaultEnv == "" {
+		settings.Social.DefaultEnv = "prod"
+	}
+	settings.Social.DefaultAccount = strings.TrimSpace(settings.Social.DefaultAccount)
+	facebookSpec := providers.Resolve(providers.SocialFacebook)
+	instagramSpec := providers.Resolve(providers.SocialInstagram)
+	xSpec := providers.Resolve(providers.SocialX)
+	linkedinSpec := providers.Resolve(providers.SocialLinkedIn)
+	settings.Social.Facebook.AuthStyle = normalizeSocialAuthStyle(settings.Social.Facebook.AuthStyle)
+	if settings.Social.Facebook.AuthStyle == "" {
+		settings.Social.Facebook.AuthStyle = firstNonEmpty(settings.Social.Facebook.AuthStyle, facebookSpec.AuthStyle, "query")
+	}
+	settings.Social.Instagram.AuthStyle = normalizeSocialAuthStyle(settings.Social.Instagram.AuthStyle)
+	if settings.Social.Instagram.AuthStyle == "" {
+		settings.Social.Instagram.AuthStyle = firstNonEmpty(settings.Social.Instagram.AuthStyle, instagramSpec.AuthStyle, "query")
+	}
+	settings.Social.X.AuthStyle = normalizeSocialAuthStyle(settings.Social.X.AuthStyle)
+	if settings.Social.X.AuthStyle == "" {
+		settings.Social.X.AuthStyle = firstNonEmpty(settings.Social.X.AuthStyle, xSpec.AuthStyle, "bearer")
+	}
+	settings.Social.LinkedIn.AuthStyle = normalizeSocialAuthStyle(settings.Social.LinkedIn.AuthStyle)
+	if settings.Social.LinkedIn.AuthStyle == "" {
+		settings.Social.LinkedIn.AuthStyle = firstNonEmpty(settings.Social.LinkedIn.AuthStyle, linkedinSpec.AuthStyle, "bearer")
+	}
+	settings.Social.Facebook.APIBaseURL = strings.TrimSpace(settings.Social.Facebook.APIBaseURL)
+	if settings.Social.Facebook.APIBaseURL == "" {
+		settings.Social.Facebook.APIBaseURL = firstNonEmpty(settings.Social.Facebook.APIBaseURL, facebookSpec.BaseURL, "https://graph.facebook.com")
+	}
+	settings.Social.Instagram.APIBaseURL = strings.TrimSpace(settings.Social.Instagram.APIBaseURL)
+	if settings.Social.Instagram.APIBaseURL == "" {
+		settings.Social.Instagram.APIBaseURL = firstNonEmpty(settings.Social.Instagram.APIBaseURL, instagramSpec.BaseURL, "https://graph.facebook.com")
+	}
+	settings.Social.X.APIBaseURL = strings.TrimSpace(settings.Social.X.APIBaseURL)
+	if settings.Social.X.APIBaseURL == "" {
+		settings.Social.X.APIBaseURL = firstNonEmpty(settings.Social.X.APIBaseURL, xSpec.BaseURL, "https://api.twitter.com")
+	}
+	settings.Social.LinkedIn.APIBaseURL = strings.TrimSpace(settings.Social.LinkedIn.APIBaseURL)
+	if settings.Social.LinkedIn.APIBaseURL == "" {
+		settings.Social.LinkedIn.APIBaseURL = firstNonEmpty(settings.Social.LinkedIn.APIBaseURL, linkedinSpec.BaseURL, "https://api.linkedin.com")
+	}
+	settings.Social.Facebook.APIVersion = strings.TrimSpace(settings.Social.Facebook.APIVersion)
+	if settings.Social.Facebook.APIVersion == "" {
+		settings.Social.Facebook.APIVersion = firstNonEmpty(settings.Social.Facebook.APIVersion, facebookSpec.APIVersion, "v22.0")
+	}
+	settings.Social.Instagram.APIVersion = strings.TrimSpace(settings.Social.Instagram.APIVersion)
+	if settings.Social.Instagram.APIVersion == "" {
+		settings.Social.Instagram.APIVersion = firstNonEmpty(settings.Social.Instagram.APIVersion, instagramSpec.APIVersion, "v22.0")
+	}
+	settings.Social.X.APIVersion = strings.TrimSpace(settings.Social.X.APIVersion)
+	if settings.Social.X.APIVersion == "" {
+		settings.Social.X.APIVersion = firstNonEmpty(settings.Social.X.APIVersion, xSpec.APIVersion, "2")
+	}
+	settings.Social.LinkedIn.APIVersion = strings.TrimSpace(settings.Social.LinkedIn.APIVersion)
+	if settings.Social.LinkedIn.APIVersion == "" {
+		settings.Social.LinkedIn.APIVersion = firstNonEmpty(settings.Social.LinkedIn.APIVersion, linkedinSpec.APIVersion, "v2")
 	}
 }
 
