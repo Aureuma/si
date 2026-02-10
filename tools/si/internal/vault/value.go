@@ -29,3 +29,42 @@ func NormalizeDotenvValue(raw string) (string, error) {
 	}
 	return raw, nil
 }
+
+// RenderDotenvValuePlain formats a plaintext value so that ParseDotenv+NormalizeDotenvValue
+// will read back the same value (especially around '#' comment parsing).
+//
+// This intentionally does not aim to preserve original quoting style; encryption
+// normalizes away the original representation.
+func RenderDotenvValuePlain(value string) string {
+	if value == "" {
+		return ""
+	}
+	if needsDotenvQuotes(value) {
+		return strconv.Quote(value)
+	}
+	return value
+}
+
+func needsDotenvQuotes(value string) bool {
+	if value == "" {
+		return false
+	}
+	if value[0] == '#' {
+		return true
+	}
+	// Leading/trailing whitespace would be trimmed by parsers and/or our own normalizer.
+	if strings.HasPrefix(value, " ") || strings.HasPrefix(value, "\t") || strings.HasSuffix(value, " ") || strings.HasSuffix(value, "\t") {
+		return true
+	}
+	// Preserve literal newlines safely.
+	if strings.ContainsAny(value, "\r\n") {
+		return true
+	}
+	// Our dotenv parser treats " <ws>#..." as an inline comment delimiter.
+	for i := 1; i < len(value); i++ {
+		if value[i] == '#' && (value[i-1] == ' ' || value[i-1] == '\t') {
+			return true
+		}
+	}
+	return false
+}

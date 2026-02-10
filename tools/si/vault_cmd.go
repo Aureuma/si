@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const vaultUsageText = "usage: si vault <init|keygen|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
+const vaultUsageText = "usage: si vault <init|keygen|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
 
 func cmdVault(args []string) {
 	if len(args) == 0 {
@@ -31,6 +31,8 @@ func cmdVault(args []string) {
 		cmdVaultFmt(rest)
 	case "encrypt":
 		cmdVaultEncrypt(rest)
+	case "decrypt":
+		cmdVaultDecrypt(rest)
 	case "set":
 		cmdVaultSet(rest)
 	case "unset":

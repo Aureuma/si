@@ -276,6 +276,7 @@ stripe:
 	  si vault hooks install|status|uninstall [--vault-dir <path>] [--force]
 	  si vault fmt [--file <path>] [--vault-dir <path>] [--all] [--check]
 	  si vault encrypt [--file <path>] [--vault-dir <path>] [--format] [--reencrypt]
+	  si vault decrypt [--file <path>] [--vault-dir <path>] [--stdout] [--yes]
 	  si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--section <name>] [--stdin] [--format]
 	  si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--format]
 	  si vault get <KEY> [--file <path>] [--vault-dir <path>] [--reveal]
