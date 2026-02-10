@@ -4,8 +4,6 @@ import (
 	"net/http"
 	"os"
 	"testing"
-
-	stripe "github.com/stripe/stripe-go/v83"
 )
 
 func TestContractNormalizeProductFixture(t *testing.T) {
@@ -13,13 +11,12 @@ func TestContractNormalizeProductFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read fixture: %v", err)
 	}
-	resp := &stripe.APIResponse{
+	httpResp := &http.Response{
 		StatusCode: http.StatusOK,
 		Status:     "200 OK",
-		RequestID:  "req_stripe_1",
-		RawJSON:    body,
+		Header:     http.Header{"Request-Id": []string{"req_stripe_1"}},
 	}
-	parsed := normalizeResponse(resp)
+	parsed := normalizeResponse(httpResp, string(body))
 	if parsed.RequestID != "req_stripe_1" {
 		t.Fatalf("unexpected request id: %q", parsed.RequestID)
 	}
