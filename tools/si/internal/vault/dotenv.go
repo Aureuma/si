@@ -125,7 +125,7 @@ func (f *DotenvFile) Set(key, value string, opts SetOptions) (bool, error) {
 		}
 	}
 	if last >= 0 {
-		line := renderAssignment(lastAssign.Leading, lastAssign.Export, key, value, lastAssign.Comment)
+		line := renderAssignmentPreserveLayout(lastAssign, key, value, lastAssign.Comment)
 		if f.Lines[last].Text == line {
 			return false, nil
 		}
@@ -180,7 +180,7 @@ func (f *DotenvFile) setInSection(key, value, section string) (bool, error) {
 		}
 	}
 	if last >= 0 {
-		line := renderAssignment(lastAssign.Leading, lastAssign.Export, key, value, lastAssign.Comment)
+		line := renderAssignmentPreserveLayout(lastAssign, key, value, lastAssign.Comment)
 		if f.Lines[last].Text == line {
 			return false, nil
 		}
@@ -266,8 +266,10 @@ func splitRawLines(data []byte) []RawLine {
 type assignment struct {
 	Leading  string
 	Export   bool
+	LeftRaw  string
 	Key      string
 	ValueRaw string
+	ValueWS  string
 	Comment  string
 }
 
@@ -300,11 +302,14 @@ func parseAssignment(line string) (assignment, bool) {
 	}
 
 	valueRaw, comment := splitValueAndComment(right)
+	valueWS := leadingWhitespace(valueRaw)
 	return assignment{
 		Leading:  leading,
 		Export:   export,
+		LeftRaw:  left,
 		Key:      key,
 		ValueRaw: valueRaw,
+		ValueWS:  valueWS,
 		Comment:  comment,
 	}, true
 }
@@ -407,6 +412,30 @@ func renderAssignment(leading string, export bool, key, value, comment string) s
 	b.WriteString(strings.TrimSpace(value))
 	b.WriteString(comment)
 	return b.String()
+}
+
+func renderAssignmentPreserveLayout(existing assignment, key, value, comment string) string {
+	if strings.TrimSpace(existing.LeftRaw) == "" {
+		return renderAssignment(existing.Leading, existing.Export, key, value, comment)
+	}
+	var b strings.Builder
+	b.WriteString(existing.LeftRaw)
+	b.WriteString("=")
+	b.WriteString(existing.ValueWS)
+	b.WriteString(strings.TrimSpace(value))
+	b.WriteString(comment)
+	return b.String()
+}
+
+func leadingWhitespace(s string) string {
+	if s == "" {
+		return ""
+	}
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	return s[:i]
 }
 
 func normalizeSectionName(name string) string {

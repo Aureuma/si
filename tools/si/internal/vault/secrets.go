@@ -92,7 +92,7 @@ func EncryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity, reencryp
 			if err != nil {
 				return EncryptResult{}, err
 			}
-			line := renderAssignment(assign.Leading, assign.Export, assign.Key, next, assign.Comment)
+			line := renderAssignmentPreserveLayout(assign, assign.Key, next, assign.Comment)
 			if line != doc.Lines[i].Text {
 				doc.Lines[i].Text = line
 				result.Changed = true
@@ -104,7 +104,7 @@ func EncryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity, reencryp
 		if err != nil {
 			return EncryptResult{}, err
 		}
-		line := renderAssignment(assign.Leading, assign.Export, assign.Key, next, assign.Comment)
+		line := renderAssignmentPreserveLayout(assign, assign.Key, next, assign.Comment)
 		if line != doc.Lines[i].Text {
 			doc.Lines[i].Text = line
 			result.Changed = true
