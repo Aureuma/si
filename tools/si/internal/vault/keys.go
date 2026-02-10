@@ -15,6 +15,17 @@ const (
 	KeyringAccount = "age-identity"
 )
 
+var (
+	// ErrIdentityNotFound indicates there is no configured identity available from
+	// the selected source (env, file, or OS secure store).
+	ErrIdentityNotFound = errors.New("vault identity not found")
+
+	// ErrIdentityInvalid indicates an identity was found but is malformed/unusable.
+	// We treat this as a hard error to avoid silently rotating keys, which can
+	// permanently break decryption for existing ciphertext.
+	ErrIdentityInvalid = errors.New("vault identity invalid")
+)
+
 type IdentityInfo struct {
 	Identity *age.X25519Identity
 	Source   string // env, env_file, keyring, file
@@ -41,14 +52,14 @@ func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 	if raw := strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY")); raw != "" {
 		id, err := age.ParseX25519Identity(raw)
 		if err != nil {
-			return nil, fmt.Errorf("SI_VAULT_IDENTITY invalid: %w", err)
+			return nil, fmt.Errorf("%w: SI_VAULT_IDENTITY invalid: %w", ErrIdentityInvalid, err)
 		}
 		return &IdentityInfo{Identity: id, Source: "env"}, nil
 	}
 	if raw := strings.TrimSpace(os.Getenv("SI_VAULT_PRIVATE_KEY")); raw != "" {
 		id, err := age.ParseX25519Identity(raw)
 		if err != nil {
-			return nil, fmt.Errorf("SI_VAULT_PRIVATE_KEY invalid: %w", err)
+			return nil, fmt.Errorf("%w: SI_VAULT_PRIVATE_KEY invalid: %w", ErrIdentityInvalid, err)
 		}
 		return &IdentityInfo{Identity: id, Source: "env"}, nil
 	}
@@ -74,27 +85,14 @@ func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 		if err == nil {
 			id, err := age.ParseX25519Identity(strings.TrimSpace(secret))
 			if err != nil {
-				return nil, fmt.Errorf("keyring identity invalid: %w", err)
+				return nil, fmt.Errorf("%w: keyring identity invalid: %w", ErrIdentityInvalid, err)
 			}
 			return &IdentityInfo{Identity: id, Source: "keyring"}, nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
 		}
-		// Fall through to file backend if configured, or if the key file already exists.
-		if strings.ToLower(strings.TrimSpace(cfg.Backend)) == "file" {
-			break
-		}
-		if keyFile := strings.TrimSpace(cfg.KeyFile); keyFile != "" {
-			keyFile, expandErr := ExpandHome(keyFile)
-			if expandErr == nil {
-				if _, statErr := os.Stat(keyFile); statErr == nil {
-					cfg.Backend = "file"
-					break
-				}
-			}
-		}
-		return nil, fmt.Errorf("vault identity not found in keyring; set vault.key_backend=\"file\" or export SI_VAULT_IDENTITY")
+		return nil, fmt.Errorf("%w: vault identity not found in keyring (run `si vault keygen` or set vault.key_backend=\"file\")", ErrIdentityNotFound)
 	case "file":
 		keyFile := strings.TrimSpace(cfg.KeyFile)
 		if keyFile == "" {
@@ -104,6 +102,12 @@ func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 		if err != nil {
 			return nil, err
 		}
+		if _, statErr := os.Stat(keyFile); statErr != nil {
+			if errors.Is(statErr, os.ErrNotExist) {
+				return nil, fmt.Errorf("%w: vault identity file missing (%s) (run `si vault keygen --key-backend file --key-file %s`)", ErrIdentityNotFound, filepath.Clean(keyFile), filepath.Clean(keyFile))
+			}
+			return nil, statErr
+		}
 		id, err := loadIdentityFromFile(keyFile)
 		if err != nil {
 			return nil, err
@@ -112,26 +116,17 @@ func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
 	default:
 		return nil, fmt.Errorf("unsupported key backend %q (expected keyring, keychain, or file)", cfg.Backend)
 	}
-
-	keyFile := strings.TrimSpace(cfg.KeyFile)
-	if keyFile == "" {
-		return nil, fmt.Errorf("vault.key_file required for file backend")
-	}
-	keyFile, err := ExpandHome(keyFile)
-	if err != nil {
-		return nil, err
-	}
-	id, err := loadIdentityFromFile(keyFile)
-	if err != nil {
-		return nil, err
-	}
-	return &IdentityInfo{Identity: id, Source: "file", Path: keyFile}, nil
 }
 
 func EnsureIdentity(cfg KeyConfig) (*IdentityInfo, bool, error) {
 	info, err := LoadIdentity(cfg)
 	if err == nil {
 		return info, false, nil
+	}
+	// Never overwrite/rotate an existing-but-invalid identity implicitly; doing so
+	// can permanently break decryption for existing ciphertext.
+	if !errors.Is(err, ErrIdentityNotFound) {
+		return nil, false, err
 	}
 
 	backend := NormalizeKeyBackend(cfg.Backend)
@@ -147,12 +142,6 @@ func EnsureIdentity(cfg KeyConfig) (*IdentityInfo, bool, error) {
 	switch backend {
 	case "keyring":
 		if err := keyringSet(KeyringService, KeyringAccount, secret); err != nil {
-			// If keyring isn't available, fall back to file backend if we can.
-			if cfg.KeyFile != "" {
-				fall := KeyConfig{Backend: "file", KeyFile: cfg.KeyFile}
-				info, ok, fileErr := ensureIdentityFile(fall, id)
-				return info, ok, fileErr
-			}
 			return nil, false, err
 		}
 		return &IdentityInfo{Identity: id, Source: "keyring"}, true, nil
@@ -161,6 +150,50 @@ func EnsureIdentity(cfg KeyConfig) (*IdentityInfo, bool, error) {
 		return info, ok, err
 	default:
 		return nil, false, fmt.Errorf("unsupported key backend %q (expected keyring, keychain, or file)", cfg.Backend)
+	}
+}
+
+// RotateIdentity generates and stores a new identity, even if one already exists.
+// WARNING: rotating without retaining the old key will prevent decrypting any
+// ciphertext encrypted to the old recipient.
+func RotateIdentity(cfg KeyConfig) (*IdentityInfo, error) {
+	backend := NormalizeKeyBackend(cfg.Backend)
+	if backend == "" {
+		backend = "keyring"
+	}
+	id, err := GenerateIdentity()
+	if err != nil {
+		return nil, err
+	}
+	secret := strings.TrimSpace(id.String())
+	switch backend {
+	case "keyring":
+		if err := keyringSet(KeyringService, KeyringAccount, secret); err != nil {
+			return nil, err
+		}
+		return &IdentityInfo{Identity: id, Source: "keyring"}, nil
+	case "file":
+		keyFile := strings.TrimSpace(cfg.KeyFile)
+		if keyFile == "" {
+			return nil, fmt.Errorf("vault.key_file required for file backend")
+		}
+		keyFile, err := ExpandHome(keyFile)
+		if err != nil {
+			return nil, err
+		}
+		if !isTruthyEnv("SI_VAULT_ALLOW_INSECURE_KEY_FILE") {
+			if info, err := os.Lstat(keyFile); err == nil {
+				if info.Mode()&os.ModeSymlink != 0 {
+					return nil, fmt.Errorf("insecure key file (%s): symlinks are not allowed (set SI_VAULT_ALLOW_INSECURE_KEY_FILE=1 to override)", filepath.Clean(keyFile))
+				}
+			}
+		}
+		if err := saveIdentityToFile(keyFile, secret); err != nil {
+			return nil, err
+		}
+		return &IdentityInfo{Identity: id, Source: "file", Path: keyFile}, nil
+	default:
+		return nil, fmt.Errorf("unsupported key backend %q (expected keyring, keychain, or file)", cfg.Backend)
 	}
 }
 
@@ -192,6 +225,9 @@ func loadIdentityFromFile(path string) (*age.X25519Identity, error) {
 	}
 	data, err := readFileScoped(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, fmt.Errorf("%w: vault identity file missing (%s)", ErrIdentityNotFound, filepath.Clean(path))
+		}
 		return nil, err
 	}
 	for _, raw := range strings.Split(string(data), "\n") {
@@ -200,10 +236,14 @@ func loadIdentityFromFile(path string) (*age.X25519Identity, error) {
 			continue
 		}
 		if strings.HasPrefix(line, "AGE-SECRET-KEY-") {
-			return age.ParseX25519Identity(line)
+			id, err := age.ParseX25519Identity(line)
+			if err != nil {
+				return nil, fmt.Errorf("%w: invalid AGE-SECRET-KEY in %s: %w", ErrIdentityInvalid, filepath.Clean(path), err)
+			}
+			return id, nil
 		}
 	}
-	return nil, fmt.Errorf("no AGE-SECRET-KEY found in %s", filepath.Clean(path))
+	return nil, fmt.Errorf("%w: no AGE-SECRET-KEY found in %s", ErrIdentityInvalid, filepath.Clean(path))
 }
 
 func ensureSecureKeyFile(path string) error {
