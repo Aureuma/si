@@ -44,20 +44,11 @@ func ValidateEncryptedValueV1(ciphertext string) error {
 func ParseRecipientsFromDotenv(f DotenvFile) []string {
 	out := []string{}
 	for _, line := range f.Lines {
-		trim := strings.TrimSpace(line.Text)
-		if !strings.HasPrefix(trim, "#") {
+		recipient, ok := parseRecipientLine(line.Text)
+		if !ok {
 			continue
 		}
-		trim = strings.TrimSpace(strings.TrimPrefix(trim, "#"))
-		if !strings.HasPrefix(trim, strings.TrimSpace(strings.TrimPrefix(VaultRecipientPrefix, "#"))) {
-			continue
-		}
-		// Accept both "# si-vault:recipient age1..." and "#si-vault:recipient age1..."
-		trim = strings.TrimSpace(strings.TrimPrefix(trim, "si-vault:recipient"))
-		if trim == "" {
-			continue
-		}
-		out = append(out, trim)
+		out = append(out, recipient)
 	}
 	return out
 }
