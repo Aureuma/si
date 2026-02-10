@@ -9,8 +9,9 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
-	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -29,6 +30,11 @@ Features:
   - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
   - Google YouTube bridge: auth/context flows, channel/video/playlist/live/caption operations, uploads, and usage reporting.
   - Social bridge: unified platform flows for Facebook, Instagram, X, and LinkedIn (auth/context/resources/raw/report).
+  - WorkOS bridge: account context, organization/user/member/invitation/directory management, and raw API access.
+  - Publish bridge: DistributionKit-backed launch catalog plus publishing workflows for Dev.to, Hashnode, Reddit, Hacker News, and Product Hunt.
+  - AWS bridge: IAM user lifecycle actions and signed raw query support.
+  - GCP bridge: Service Usage API flows (enable/disable/list/get services) and raw access.
+  - OCI bridge: signed identity/network/compute orchestration helpers plus raw API access.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
@@ -50,6 +56,11 @@ Core:
   si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
   si google <places|youtube|youtube-data>
   si social <facebook|instagram|x|linkedin>
+  si workos <auth|context|doctor|organization|user|membership|invitation|directory|raw>
+  si publish <catalog|devto|hashnode|reddit|hackernews|producthunt>
+  si aws <auth|context|doctor|iam|raw>
+  si gcp <auth|context|doctor|service|raw>
+  si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
@@ -315,6 +326,7 @@ cloudflare:
   si cloudflare workers script|route <list|get|create|update|delete> ...
   si cloudflare workers secret <set|delete> --script <name> --name <secret> [--text <value>]
   si cloudflare pages project <list|get|create|update|delete> ...
+  si cloudflare pages domain <list|get|create|delete> --project <name> [--domain <fqdn>]
   si cloudflare pages deploy <list|trigger|rollback> --project <name> [--deployment <id>]
   si cloudflare r2 bucket <list|get|create|update|delete> ...
   si cloudflare r2 object <list|get|put|delete> --bucket <name> [--key <key>]
@@ -393,6 +405,67 @@ social:
   Environment policy:
     CLI uses prod, staging, and dev context labels.
     test is intentionally not used; map sandbox workflows to staging/dev context.
+
+workos:
+  si workos auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si workos context list|current|use [--account <alias>] [--env <prod|staging|dev>] [--base-url <url>] [--org-id <id>]
+  si workos doctor [--account <alias>] [--env <prod|staging|dev>] [--public] [--json]
+
+  si workos organization list|get|create|update|delete ...
+  si workos user list|get|create|update|delete ...
+  si workos membership list|get|create|update|delete ...
+  si workos invitation list|get|create|revoke ...
+  si workos directory list|get|users|groups|sync ...
+  si workos raw --method <GET|POST|PUT|PATCH|DELETE> --path <api-path> [--param key=value] [--body raw|--json-body '{...}'] [--json]
+
+  Environment policy:
+    CLI uses prod, staging, and dev context labels.
+    test is intentionally not used; map sandbox workflows to staging/dev context.
+
+aws:
+  si aws auth status [--account <alias>] [--region <aws-region>] [--json]
+  si aws context list|current|use ...
+  si aws doctor [--account <alias>] [--region <aws-region>] [--public] [--json]
+  si aws iam user create --name <user> [--path /system/] [--json]
+  si aws iam user attach-policy --user <name> --policy-arn <arn> [--json]
+  si aws iam query --action <Action> [--param key=value] [--json]
+  si aws raw [query args...]  (alias of aws iam query)
+  si aws raw signed --method <GET|POST> --path <api-path> [--param key=value] [--body raw] [--json]
+
+gcp:
+  si gcp auth status [--account <alias>] [--env <prod|staging|dev>] [--project <id>] [--json]
+  si gcp context list|current|use ...
+  si gcp doctor [--account <alias>] [--env <prod|staging|dev>] [--project <id>] [--public] [--json]
+  si gcp service enable --name <service.googleapis.com> [--project <id>] [--json]
+  si gcp service disable --name <service.googleapis.com> [--check-usage] [--project <id>] [--json]
+  si gcp service get --name <service.googleapis.com> [--project <id>] [--json]
+  si gcp service list [--limit N] [--filter expr] [--project <id>] [--json]
+  si gcp raw --method <GET|POST|PATCH|DELETE> --path <api-path> [--param key=value] [--body raw|--json-body '{...}'] [--json]
+
+  Environment policy:
+    CLI uses prod, staging, and dev context labels.
+    test is intentionally not used; map sandbox workflows to staging/dev context.
+
+oci:
+  si oci auth status [--profile <name>] [--config-file <path>] [--region <region>] [--json]
+  si oci context list|current|use ...
+  si oci doctor [--profile <name>] [--config-file <path>] [--region <region>] [--public] [--json]
+
+  si oci identity availability-domains list [--tenancy <ocid>] [--json]
+  si oci identity compartment create --parent <ocid> --name <name> [--description <text>] [--json]
+  si oci network vcn|internet-gateway|route-table|security-list|subnet create ...
+  si oci compute image latest-ubuntu --tenancy <ocid> --shape <shape> [--json]
+  si oci compute instance create ... [--json]
+  si oci oracular cloud-init [--ssh-port <port>] [--json]
+  si oci oracular tenancy [--profile <name>] [--config-file <path>] [--json]
+  si oci raw --method <GET|POST|PUT|DELETE> --path <api-path> [--service <core|identity>] [--auth <signature|none>] [--json]
+
+image:
+  si image unsplash auth status [--json]
+  si image pexels auth status [--json]
+  si image pixabay auth status [--json]
+  si image <unsplash|pexels|pixabay> search --query <text> [--page <n>] [--per-page <n>] [--json]
+  si image <unsplash|pexels|pixabay> raw --method <GET|POST> --path <api-path> [--param key=value] [--json]
 
 providers:
   si providers characteristics [--provider <id>] [--json]
@@ -711,7 +784,57 @@ func stripANSIForPad(s string) string {
 }
 
 func displayWidth(s string) int {
-	return runewidth.StringWidth(stripANSIForPad(s))
+	s = stripANSIForPad(s)
+	width := 0
+	for len(s) > 0 {
+		r, n := utf8.DecodeRuneInString(s)
+		s = s[n:]
+		if r == utf8.RuneError && n == 1 {
+			width++
+			continue
+		}
+		if isZeroWidthRune(r) {
+			continue
+		}
+		if isWideRune(r) {
+			width += 2
+			continue
+		}
+		width++
+	}
+	return width
+}
+
+func isZeroWidthRune(r rune) bool {
+	switch {
+	case r == 0:
+		return true
+	case r == 0x200b || r == 0x200c || r == 0x200d:
+		return true
+	case r >= 0xfe00 && r <= 0xfe0f:
+		return true
+	case r >= 0xe0100 && r <= 0xe01ef:
+		return true
+	}
+	return unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r)
+}
+
+func isWideRune(r rune) bool {
+	if r < 0x1100 {
+		return false
+	}
+	return (r >= 0x1100 && r <= 0x115f) ||
+		r == 0x2329 || r == 0x232a ||
+		(r >= 0x2e80 && r <= 0xa4cf && r != 0x303f) ||
+		(r >= 0xac00 && r <= 0xd7a3) ||
+		(r >= 0xf900 && r <= 0xfaff) ||
+		(r >= 0xfe10 && r <= 0xfe19) ||
+		(r >= 0xfe30 && r <= 0xfe6f) ||
+		(r >= 0xff00 && r <= 0xff60) ||
+		(r >= 0xffe0 && r <= 0xffe6) ||
+		(r >= 0x1f300 && r <= 0x1f64f) ||
+		(r >= 0x1f900 && r <= 0x1f9ff) ||
+		(r >= 0x20000 && r <= 0x3fffd)
 }
 
 func padRightANSI(s string, width int) string {

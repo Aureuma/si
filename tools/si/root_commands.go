@@ -29,6 +29,24 @@ var (
 	loadSocialRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdSocial(args) }
 	}
+	loadWorkOSRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdWorkOS(args) }
+	}
+	loadAWSRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdAWS(args) }
+	}
+	loadGCPRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdGCP(args) }
+	}
+	loadOCIRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdOCI(args) }
+	}
+	loadImageRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdImage(args) }
+	}
+	loadPublishRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdPublish(args) }
+	}
 	loadProvidersRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdProviders(args) }
 	}
@@ -82,6 +100,12 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadCloudflareRootHandler), "cloudflare", "cf")
 	register(newLazyRootHandler(loadGoogleRootHandler), "google")
 	register(newLazyRootHandler(loadSocialRootHandler), "social")
+	register(newLazyRootHandler(loadWorkOSRootHandler), "workos")
+	register(newLazyRootHandler(loadAWSRootHandler), "aws")
+	register(newLazyRootHandler(loadGCPRootHandler), "gcp")
+	register(newLazyRootHandler(loadOCIRootHandler), "oci")
+	register(newLazyRootHandler(loadImageRootHandler), "image", "images")
+	register(newLazyRootHandler(loadPublishRootHandler), "publish", "pub")
 	register(newLazyRootHandler(loadProvidersRootHandler), "providers", "provider", "integrations", "apis")
 	register(newLazyRootHandler(loadDockerRootHandler), "docker")
 	register(newLazyRootHandler(loadDyadRootHandler), "dyad")
