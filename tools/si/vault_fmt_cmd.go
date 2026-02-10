@@ -18,7 +18,9 @@ func cmdVaultFmt(args []string) {
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	all := fs.Bool("all", false, "format all .env.* files in the vault dir")
 	check := fs.Bool("check", false, "fail if formatting would make changes")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault fmt [--vault-dir <path>] [--env <name>] [--all] [--check]")
 		return

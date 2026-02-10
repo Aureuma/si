@@ -47,6 +47,9 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 	if env == "" {
 		env = "dev"
 	}
+	if err := ValidateEnvName(env); err != nil {
+		return Target{}, err
+	}
 
 	if strings.TrimSpace(opts.File) != "" {
 		fileAbs, err := CleanAbs(opts.File)
