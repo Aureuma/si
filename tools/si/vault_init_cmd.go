@@ -20,7 +20,9 @@ func cmdVaultInit(args []string) {
 	installHooks := fs.Bool("hooks", true, "install git pre-commit hook to block plaintext dotenv commits (best effort)")
 	keyBackend := fs.String("key-backend", "", "override key backend: keyring or file")
 	keyFile := fs.String("key-file", "", "override key file path (for key-backend=file)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>]")
 		return

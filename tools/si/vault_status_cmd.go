@@ -16,7 +16,9 @@ func cmdVaultStatus(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault status [--vault-dir <path>] [--env <name>]")
 		return

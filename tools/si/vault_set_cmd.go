@@ -20,7 +20,9 @@ func cmdVaultSet(args []string) {
 	section := fs.String("section", "", "section name (e.g. stripe, workos)")
 	stdin := fs.Bool("stdin", false, "read value from stdin (avoids shell history)")
 	format := fs.Bool("format", false, "run `si vault fmt` after setting")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	rest := fs.Args()
 	if len(rest) < 1 {

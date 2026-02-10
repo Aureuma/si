@@ -19,7 +19,9 @@ func cmdVaultRun(args []string) {
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow running even if plaintext keys exist (not recommended)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	rest := fs.Args()
 	if len(rest) > 0 && rest[0] == "--" {
@@ -71,6 +73,7 @@ func cmdVaultRun(args []string) {
 		"plainCount":   len(dec.PlaintextKeys),
 	})
 
+	// #nosec G204 -- command is explicitly provided by the local operator.
 	cmd := exec.CommandContext(context.Background(), rest[0], rest[1:]...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

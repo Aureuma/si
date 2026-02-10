@@ -82,6 +82,11 @@ func GitShowIndexFile(repoDir, path string) ([]byte, error) {
 	if repoDir == "" || path == "" {
 		return nil, fmt.Errorf("repo dir and path required")
 	}
+	path, err := validateGitIndexPath(path)
+	if err != nil {
+		return nil, err
+	}
+	// #nosec G204 -- path is validated and exec.Command does not invoke a shell.
 	cmd := exec.Command("git", "show", ":"+path)
 	cmd.Dir = repoDir
 	return cmd.Output()
@@ -207,26 +212,26 @@ func GitEnsureCheckout(repoDir string) error {
 		for _, b := range branches {
 			hasRemote[b] = true
 		}
-		for _, candidate := range []string{"main", "master"} {
-			remote := "origin/" + candidate
-			if !hasRemote[remote] {
-				continue
+		if hasRemote["origin/main"] {
+			if err := gitCheckoutBranch(repoDir, "main", "origin/main"); err == nil {
+				return nil
 			}
-			cmd := exec.Command("git", "checkout", "-B", candidate, remote)
-			cmd.Dir = repoDir
-			if err := cmd.Run(); err == nil {
+		}
+		if hasRemote["origin/master"] {
+			if err := gitCheckoutBranch(repoDir, "master", "origin/master"); err == nil {
 				return nil
 			}
 		}
 		for _, b := range branches {
 			if strings.HasPrefix(b, "origin/") {
 				name := strings.TrimPrefix(b, "origin/")
-				if strings.TrimSpace(name) == "" {
+				if err := validateGitRefName(name); err != nil {
 					continue
 				}
-				cmd := exec.Command("git", "checkout", "-B", name, b)
-				cmd.Dir = repoDir
-				if err := cmd.Run(); err == nil {
+				if err := validateGitRefName(b); err != nil {
+					continue
+				}
+				if err := gitCheckoutBranch(repoDir, name, b); err == nil {
 					return nil
 				}
 			}
@@ -237,6 +242,57 @@ func GitEnsureCheckout(repoDir string) error {
 	cmd := exec.Command("git", "checkout", "--orphan", "main")
 	cmd.Dir = repoDir
 	return cmd.Run()
+}
+
+func gitCheckoutBranch(repoDir, local, remote string) error {
+	if err := validateGitRefName(local); err != nil {
+		return err
+	}
+	if err := validateGitRefName(remote); err != nil {
+		return err
+	}
+	// #nosec G204 -- refs are validated and exec.Command does not invoke a shell.
+	cmd := exec.Command("git", "checkout", "-B", local, remote)
+	cmd.Dir = repoDir
+	return cmd.Run()
+}
+
+func validateGitIndexPath(path string) (string, error) {
+	path = filepath.ToSlash(strings.TrimSpace(path))
+	if path == "" {
+		return "", fmt.Errorf("git path required")
+	}
+	if strings.HasPrefix(path, "-") {
+		return "", fmt.Errorf("invalid git path %q: option-like paths are not allowed", path)
+	}
+	if strings.Contains(path, "\x00") {
+		return "", fmt.Errorf("invalid git path %q: NUL byte is not allowed", path)
+	}
+	clean := filepath.ToSlash(filepath.Clean(path))
+	if clean == "." || strings.HasPrefix(clean, "../") || clean == ".." || strings.HasPrefix(clean, "/") {
+		return "", fmt.Errorf("invalid git path %q: must be repo-relative", path)
+	}
+	return clean, nil
+}
+
+func validateGitRefName(ref string) error {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return fmt.Errorf("git ref required")
+	}
+	if strings.HasPrefix(ref, "-") {
+		return fmt.Errorf("invalid git ref %q: option-like refs are not allowed", ref)
+	}
+	if strings.ContainsAny(ref, " \t\n\r\x00\\~^:?*[") {
+		return fmt.Errorf("invalid git ref %q: contains forbidden character", ref)
+	}
+	if strings.Contains(ref, "..") || strings.Contains(ref, "//") || strings.Contains(ref, "@{") {
+		return fmt.Errorf("invalid git ref %q", ref)
+	}
+	if strings.HasPrefix(ref, "/") || strings.HasSuffix(ref, "/") || strings.HasSuffix(ref, ".") {
+		return fmt.Errorf("invalid git ref %q", ref)
+	}
+	return nil
 }
 
 func GitRemoteOriginURL(repoDir string) (string, error) {

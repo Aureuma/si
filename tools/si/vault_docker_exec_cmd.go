@@ -21,7 +21,9 @@ func cmdVaultDockerExec(args []string) {
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	allowInsecure := fs.Bool("allow-insecure-docker-host", false, "allow injecting secrets over an insecure remote DOCKER_HOST")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow injecting even if plaintext keys exist (not recommended)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	rest := fs.Args()
 	if len(rest) > 0 && rest[0] == "--" {

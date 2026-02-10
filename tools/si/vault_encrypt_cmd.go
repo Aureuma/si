@@ -17,7 +17,9 @@ func cmdVaultEncrypt(args []string) {
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	format := fs.Bool("format", false, "run `si vault fmt` after encrypting")
 	reencrypt := fs.Bool("reencrypt", false, "re-encrypt already-encrypted values (intentional git noise)")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault encrypt [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]")
 		return

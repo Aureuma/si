@@ -17,7 +17,9 @@ func cmdVaultUnset(args []string) {
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	section := fs.String("section", "", "section name (accepted but unset removes all occurrences)")
 	format := fs.Bool("format", false, "run `si vault fmt` after unsetting")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	rest := fs.Args()
 	if len(rest) != 1 {

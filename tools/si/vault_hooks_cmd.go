@@ -35,7 +35,9 @@ func cmdVaultHooksInstall(args []string) {
 	fs := flag.NewFlagSet("vault hooks install", flag.ExitOnError)
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
 	force := fs.Bool("force", false, "overwrite existing hook")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault hooks install [--vault-dir <path>] [--force]")
 		return
@@ -58,7 +60,7 @@ func cmdVaultHooksInstall(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+	if err := os.MkdirAll(hooksDir, 0o700); err != nil {
 		fatal(err)
 	}
 
@@ -76,7 +78,9 @@ func cmdVaultHooksStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault hooks status", flag.ExitOnError)
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault hooks status [--vault-dir <path>]")
 		return
@@ -98,7 +102,7 @@ func cmdVaultHooksStatus(args []string) {
 		fatal(err)
 	}
 	hookPath := filepath.Join(hooksDir, "pre-commit")
-	data, err := os.ReadFile(hookPath)
+	data, err := readLocalFile(hookPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Printf("pre-commit: missing (%s)\n", filepath.Clean(hookPath))
@@ -117,7 +121,9 @@ func cmdVaultHooksUninstall(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault hooks uninstall", flag.ExitOnError)
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 	if len(fs.Args()) != 0 {
 		printUsage("usage: si vault hooks uninstall [--vault-dir <path>]")
 		return
@@ -139,7 +145,7 @@ func cmdVaultHooksUninstall(args []string) {
 		fatal(err)
 	}
 	hookPath := filepath.Join(hooksDir, "pre-commit")
-	data, err := os.ReadFile(hookPath)
+	data, err := readLocalFile(hookPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
@@ -190,13 +196,15 @@ func writeHookFile(path string, contents string, force bool) error {
 	if data, err := os.ReadFile(path); err == nil {
 		if isVaultHookScript(data) {
 			// Idempotent.
-			return os.WriteFile(path, []byte(contents), 0o755)
+			// #nosec G306 -- git hooks must be executable; mode is owner-only.
+			return os.WriteFile(path, []byte(contents), 0o700)
 		}
 		if !force {
 			return fmt.Errorf("hook already exists (use --force): %s", path)
 		}
 	}
-	if err := os.WriteFile(path, []byte(contents), 0o755); err != nil {
+	// #nosec G306 -- git hooks must be executable; mode is owner-only.
+	if err := os.WriteFile(path, []byte(contents), 0o700); err != nil {
 		return err
 	}
 	return nil

@@ -16,7 +16,9 @@ func cmdVaultGet(args []string) {
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	reveal := fs.Bool("reveal", false, "print the decrypted value to stdout")
-	fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
 
 	rest := fs.Args()
 	if len(rest) != 1 {
