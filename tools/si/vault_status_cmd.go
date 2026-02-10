@@ -79,7 +79,9 @@ func cmdVaultStatus(args []string) {
 
 	// Identity status (no secrets printed).
 	keyCfg := vaultKeyConfigFromSettings(settings)
-	if info, err := vault.LoadIdentity(keyCfg); err == nil {
+	if err := vaultRefuseNonInteractiveOSKeyring(keyCfg); err != nil {
+		fmt.Printf("key:       unavailable (%v)\n", err)
+	} else if info, err := vault.LoadIdentity(keyCfg); err == nil {
 		fmt.Printf("key:       ok (%s)\n", info.Source)
 	} else {
 		fmt.Printf("key:       missing (%v)\n", err)
