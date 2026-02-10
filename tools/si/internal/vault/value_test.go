@@ -47,3 +47,21 @@ func TestNormalizeDotenvValueInvalidDoubleQuoteReturnsError(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
+
+func TestNormalizeDotenvValueInvalidSingleQuoteReturnsError(t *testing.T) {
+	if _, err := NormalizeDotenvValue("'unterminated"); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestNormalizeDotenvValueLoneSingleQuoteReturnsError(t *testing.T) {
+	if _, err := NormalizeDotenvValue("'"); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestNormalizeDotenvValueLoneDoubleQuoteReturnsError(t *testing.T) {
+	if _, err := NormalizeDotenvValue("\""); err == nil {
+		t.Fatalf("expected error")
+	}
+}

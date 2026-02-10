@@ -78,3 +78,57 @@ func TestFormatVaultDotenvNormalizesCommentSpacing(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
+
+func TestFormatVaultDotenvCollapsesExtraBlankLines(t *testing.T) {
+	in := ParseDotenv([]byte("" +
+		"#si-vault:v1\n" +
+		"#si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"\n" +
+		"# [stripe]\n" +
+		"\n" +
+		"STRIPE_A=1\n" +
+		"\n" +
+		"\n"))
+	out, _, err := FormatVaultDotenv(in)
+	if err != nil {
+		t.Fatalf("FormatVaultDotenv: %v", err)
+	}
+	want := "" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"# ------------------------------------------------------------------------------\n" +
+		"# [stripe]\n" +
+		"\n" +
+		"STRIPE_A=1\n"
+	if got := string(out.Bytes()); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestFormatVaultDotenvPreservesUnknownPreambleLines(t *testing.T) {
+	in := ParseDotenv([]byte("" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"SHELL_SYNTAX: not-dotenv\n" +
+		"# [stripe]\n" +
+		"STRIPE_A=1\n"))
+	out, _, err := FormatVaultDotenv(in)
+	if err != nil {
+		t.Fatalf("FormatVaultDotenv: %v", err)
+	}
+	want := "" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"SHELL_SYNTAX: not-dotenv\n" +
+		"\n" +
+		"# ------------------------------------------------------------------------------\n" +
+		"# [stripe]\n" +
+		"STRIPE_A=1\n"
+	if got := string(out.Bytes()); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}

@@ -50,3 +50,10 @@ func TestScanDotenvEncryptionClassifiesValues(t *testing.T) {
 		t.Fatalf("enc=%v", scan.EncryptedKeys)
 	}
 }
+
+func TestScanDotenvEncryptionErrorsOnInvalidQuotedPlaintext(t *testing.T) {
+	doc := ParseDotenv([]byte("BAD=\"unterminated\n"))
+	if _, err := ScanDotenvEncryption(doc); err == nil {
+		t.Fatalf("expected error")
+	}
+}

@@ -273,3 +273,47 @@ func TestWriteDotenvFileAtomicCreatesMissingDirectories(t *testing.T) {
 		t.Fatalf("got %q", string(got))
 	}
 }
+
+func TestSplitValueAndCommentCommentOnlyRHS(t *testing.T) {
+	value, comment := splitValueAndComment("   # note")
+	if value != "" || comment != "   # note" {
+		t.Fatalf("value=%q comment=%q", value, comment)
+	}
+}
+
+func TestDotenvSetNoOpWhenValueUnchanged(t *testing.T) {
+	in := []byte("A=1\n")
+	f := ParseDotenv(in)
+	changed, err := f.Set("A", "1", SetOptions{})
+	if err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if changed {
+		t.Fatalf("expected no change")
+	}
+	if got := string(f.Bytes()); got != "A=1\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestDotenvSetInSectionPreservesEqSpacingOnUpdate(t *testing.T) {
+	in := []byte("" +
+		"# ------------------------------------------------------------------------------\n" +
+		"# [stripe]\n" +
+		"STRIPE_A  =  1 # note\n")
+	f := ParseDotenv(in)
+	changed, err := f.Set("STRIPE_A", "2", SetOptions{Section: "stripe"})
+	if err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected change")
+	}
+	want := "" +
+		"# ------------------------------------------------------------------------------\n" +
+		"# [stripe]\n" +
+		"STRIPE_A  =  2 # note\n"
+	if got := string(f.Bytes()); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
