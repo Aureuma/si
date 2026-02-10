@@ -7,7 +7,10 @@ func TestEntriesDuplicateKeysUseLastValue(t *testing.T) {
 		"A=1\n" +
 		"B=2\n" +
 		"A=3\n"))
-	entries := Entries(doc)
+	entries, err := Entries(doc)
+	if err != nil {
+		t.Fatalf("Entries: %v", err)
+	}
 	if len(entries) != 2 {
 		t.Fatalf("entries=%d", len(entries))
 	}
@@ -19,13 +22,16 @@ func TestEntriesDuplicateKeysUseLastValue(t *testing.T) {
 	}
 }
 
-func TestEntriesInvalidQuotedValueReturnsEmptyRaw(t *testing.T) {
+func TestEntriesInvalidQuotedValueErrors(t *testing.T) {
 	doc := ParseDotenv([]byte("A=\"unterminated\n"))
-	entries := Entries(doc)
-	if len(entries) != 1 {
-		t.Fatalf("entries=%d", len(entries))
+	if _, err := Entries(doc); err == nil {
+		t.Fatalf("expected error")
 	}
-	if entries[0].ValueRaw != "" {
-		t.Fatalf("value=%q", entries[0].ValueRaw)
+}
+
+func TestEntriesInvalidKeyErrors(t *testing.T) {
+	doc := ParseDotenv([]byte("BAD KEY=1\n"))
+	if _, err := Entries(doc); err == nil {
+		t.Fatalf("expected error")
 	}
 }

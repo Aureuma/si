@@ -28,8 +28,8 @@ func cmdVaultSet(args []string) {
 		return
 	}
 	key := strings.TrimSpace(rest[0])
-	if key == "" {
-		fatal(fmt.Errorf("key required"))
+	if err := vault.ValidateKeyName(key); err != nil {
+		fatal(err)
 	}
 
 	value := ""
@@ -50,11 +50,10 @@ func cmdVaultSet(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
 		fatal(err)
 	}

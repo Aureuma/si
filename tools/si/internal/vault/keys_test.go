@@ -40,3 +40,25 @@ func TestLoadIdentityFromFileRejectsInsecurePermissions(t *testing.T) {
 		t.Fatalf("expected permission error")
 	}
 }
+
+func TestLoadIdentityFromFileOverrideRequiresTruthyValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "age.key")
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(id.String()+"\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	t.Setenv("SI_VAULT_ALLOW_INSECURE_KEY_FILE", "0")
+	if _, err := loadIdentityFromFile(path); err == nil {
+		t.Fatalf("expected rejection when override is non-truthy")
+	}
+
+	t.Setenv("SI_VAULT_ALLOW_INSECURE_KEY_FILE", "1")
+	if _, err := loadIdentityFromFile(path); err != nil {
+		t.Fatalf("expected truthy override to allow load: %v", err)
+	}
+}

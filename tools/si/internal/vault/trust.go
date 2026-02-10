@@ -32,7 +32,7 @@ func LoadTrustStore(path string) (*TrustStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := readFileScoped(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return &TrustStore{SchemaVersion: 1}, nil

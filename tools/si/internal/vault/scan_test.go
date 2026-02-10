@@ -57,3 +57,10 @@ func TestScanDotenvEncryptionErrorsOnInvalidQuotedPlaintext(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
+
+func TestScanDotenvEncryptionErrorsOnInvalidKeyName(t *testing.T) {
+	doc := ParseDotenv([]byte("BAD KEY=1\n"))
+	if _, err := ScanDotenvEncryption(doc); err == nil {
+		t.Fatalf("expected error")
+	}
+}

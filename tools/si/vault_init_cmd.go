@@ -106,20 +106,20 @@ func cmdVaultInit(args []string) {
 
 	// Read or create the env file.
 	var doc vault.DotenvFile
-	data, err := os.ReadFile(target.File)
+	fileMissing := false
+	doc, err = vault.ReadDotenvFile(target.File)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			fatal(err)
 		}
 		doc = vault.ParseDotenv(nil)
-	} else {
-		doc = vault.ParseDotenv(data)
+		fileMissing = true
 	}
 	changed, err := vault.EnsureVaultHeader(&doc, []string{recipient})
 	if err != nil {
 		fatal(err)
 	}
-	if changed || len(data) == 0 {
+	if changed || fileMissing {
 		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
 			fatal(err)
 		}

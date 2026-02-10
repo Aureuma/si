@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -42,11 +41,10 @@ func cmdVaultRecipientsList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	recipients := vault.ParseRecipientsFromDotenv(doc)
 	fp := vault.RecipientsFingerprint(recipients)
 
@@ -78,11 +76,10 @@ func cmdVaultRecipientsAdd(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	changed, err := vault.EnsureVaultHeader(&doc, []string{recipient})
 	if err != nil {
 		fatal(err)
@@ -143,11 +140,10 @@ func cmdVaultRecipientsRemove(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	changed := vault.RemoveRecipient(&doc, recipient)
 	if changed {
 		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {

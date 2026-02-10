@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"si/tools/si/internal/vault"
@@ -26,12 +25,14 @@ func cmdVaultList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
-	entries := vault.Entries(doc)
+	entries, err := vault.Entries(doc)
+	if err != nil {
+		fatal(err)
+	}
 
 	fmt.Printf("file: %s\n", filepath.Clean(target.File))
 	for _, e := range entries {

@@ -55,8 +55,7 @@ func cmdVaultStatus(args []string) {
 	}
 
 	// Trust + recipients fingerprint.
-	if data, err := os.ReadFile(target.File); err == nil {
-		doc := vault.ParseDotenv(data)
+	if doc, err := vault.ReadDotenvFile(target.File); err == nil {
 		fp, fpErr := vaultTrustFingerprint(doc)
 		if fpErr == nil {
 			store, storeErr := vault.LoadTrustStore(vaultTrustStorePath(settings))

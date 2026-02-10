@@ -193,3 +193,89 @@ func TestEncryptDotenvValuesErrorsOnInvalidQuotedPlaintext(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
+
+func TestDecryptEnvErrorsOnInvalidKeyName(t *testing.T) {
+	doc := ParseDotenv([]byte("BAD KEY=1\n"))
+	if _, err := DecryptEnv(doc, nil); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestEncryptDotenvValuesErrorsOnInvalidKeyName(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	doc := ParseDotenv([]byte("" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient " + recipient + "\n" +
+		"\n" +
+		"BAD KEY=1\n"))
+	if _, err := EncryptDotenvValues(&doc, nil, false); err == nil {
+		t.Fatalf("expected error")
+	}
+}
+
+func TestEncryptDotenvValuesPreservesLayoutMatrix(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	cases := []struct {
+		name string
+		line string
+	}{
+		{name: "plain", line: "A=abc"},
+		{name: "hash in unquoted value", line: "A=abc#def"},
+		{name: "single-quoted", line: "A='hello world'"},
+		{name: "double-quoted escapes", line: "A=\"line1\\nline2\\tq\""},
+		{name: "export with spacing and comment", line: "\texport API_KEY   =   \"a b\"   # keep"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			doc := ParseDotenv([]byte("" +
+				"# si-vault:v1\n" +
+				"# si-vault:recipient " + recipient + "\n" +
+				"\n" +
+				tc.line + "\n"))
+			before := tc.line
+			assign, ok := parseAssignment(before)
+			if !ok {
+				t.Fatalf("parseAssignment failed for %q", before)
+			}
+			plain, err := NormalizeDotenvValue(assign.ValueRaw)
+			if err != nil {
+				t.Fatalf("NormalizeDotenvValue: %v", err)
+			}
+			prefix := assign.LeftRaw + "=" + assign.ValueWS
+			suffix := assign.Comment
+
+			res, err := EncryptDotenvValues(&doc, id, false)
+			if err != nil {
+				t.Fatalf("EncryptDotenvValues: %v", err)
+			}
+			if !res.Changed {
+				t.Fatalf("expected change")
+			}
+
+			out := doc.Lines[len(doc.Lines)-1].Text
+			if !strings.HasPrefix(out, prefix) {
+				t.Fatalf("prefix changed: got %q want prefix %q", out, prefix)
+			}
+			if suffix != "" && !strings.HasSuffix(out, suffix) {
+				t.Fatalf("suffix changed: got %q want suffix %q", out, suffix)
+			}
+
+			dec, err := DecryptEnv(doc, id)
+			if err != nil {
+				t.Fatalf("DecryptEnv: %v", err)
+			}
+			if dec.Values[assign.Key] != plain {
+				t.Fatalf("decrypted value mismatch: got %q want %q", dec.Values[assign.Key], plain)
+			}
+		})
+	}
+}
