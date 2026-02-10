@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-const stripeUsageText = "usage: si stripe <auth|context|object|raw|report|sync>"
+const stripeUsageText = "usage: si stripe <auth|context|doctor|object|raw|report|sync>"
 
 func cmdStripe(args []string) {
 	if len(args) == 0 {
@@ -18,6 +18,8 @@ func cmdStripe(args []string) {
 		cmdStripeAuth(rest)
 	case "context":
 		cmdStripeContext(rest)
+	case "doctor":
+		cmdStripeDoctor(rest)
 	case "object":
 		cmdStripeObject(rest)
 	case "raw":
