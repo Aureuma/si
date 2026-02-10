@@ -3,6 +3,7 @@ package stripebridge
 import (
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 )
@@ -41,6 +42,7 @@ type ClientConfig struct {
 	AccountID         string
 	StripeContext     string
 	BaseURL           string
+	HTTPClient        *http.Client
 	Timeout           time.Duration
 	MaxNetworkRetries int64
 	LogPath           string
