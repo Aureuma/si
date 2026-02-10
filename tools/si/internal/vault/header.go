@@ -112,22 +112,45 @@ func EnsureVaultHeader(doc *DotenvFile, recipients []string) (bool, error) {
 }
 
 func isVersionLine(line string) bool {
-	trim := strings.TrimSpace(line)
-	if strings.HasPrefix(trim, "#") {
-		trim = strings.TrimSpace(strings.TrimPrefix(trim, "#"))
+	body, ok := vaultCommentBody(line)
+	if !ok {
+		return false
 	}
-	return trim == "si-vault:v1"
+	return body == "si-vault:v1"
 }
 
 func parseRecipientLine(line string) (string, bool) {
-	trim := strings.TrimSpace(line)
-	if strings.HasPrefix(trim, "#") {
-		trim = strings.TrimSpace(strings.TrimPrefix(trim, "#"))
-	}
-	if !strings.HasPrefix(trim, "si-vault:recipient") {
+	body, ok := vaultCommentBody(line)
+	if !ok {
 		return "", false
 	}
-	rest := strings.TrimSpace(strings.TrimPrefix(trim, "si-vault:recipient"))
+	rest, ok := parseRecipientBody(body)
+	if !ok {
+		return "", false
+	}
+	return rest, true
+}
+
+func vaultCommentBody(line string) (string, bool) {
+	trim := strings.TrimSpace(line)
+	if trim == "" || !strings.HasPrefix(trim, "#") {
+		return "", false
+	}
+	return strings.TrimSpace(strings.TrimPrefix(trim, "#")), true
+}
+
+func parseRecipientBody(body string) (string, bool) {
+	if !strings.HasPrefix(body, "si-vault:recipient") {
+		return "", false
+	}
+	if len(body) == len("si-vault:recipient") {
+		return "", false
+	}
+	next := body[len("si-vault:recipient")]
+	if next != ' ' && next != '\t' {
+		return "", false
+	}
+	rest := strings.TrimSpace(body[len("si-vault:recipient"):])
 	if rest == "" {
 		return "", false
 	}
