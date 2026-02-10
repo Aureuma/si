@@ -163,3 +163,24 @@ func TestRemoveRecipientNoOpWhenMissing(t *testing.T) {
 		t.Fatalf("got %q want %q", got, in)
 	}
 }
+
+func TestParseRecipientLineRejectsLookalikeSuffixes(t *testing.T) {
+	if _, ok := parseRecipientLine("# si-vault:recipient-count 2"); ok {
+		t.Fatalf("expected reject")
+	}
+	if _, ok := parseRecipientLine("# si-vault:recipient_extra age1x"); ok {
+		t.Fatalf("expected reject")
+	}
+}
+
+func TestParseRecipientLineRejectsNonCommentLine(t *testing.T) {
+	if _, ok := parseRecipientLine("si-vault:recipient age1x"); ok {
+		t.Fatalf("expected reject")
+	}
+}
+
+func TestIsVersionLineRejectsNonCommentLine(t *testing.T) {
+	if isVersionLine("si-vault:v1") {
+		t.Fatalf("expected reject")
+	}
+}
