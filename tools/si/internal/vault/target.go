@@ -12,7 +12,6 @@ type Target struct {
 	RepoRoot       string // git repo root when resolvable
 	VaultDir       string // absolute path (directory containing env files)
 	VaultDirRel    string // relative to RepoRoot when known
-	Env            string // logical env name (dev/prod/etc)
 	File           string // absolute path to the target env file
 	FileIsExplicit bool
 }
@@ -22,10 +21,8 @@ type ResolveOptions struct {
 
 	File     string
 	VaultDir string
-	Env      string
 
 	DefaultVaultDir string
-	DefaultEnv      string
 
 	AllowMissingVaultDir bool
 	AllowMissingFile     bool
@@ -39,16 +36,6 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 		if err != nil {
 			return Target{}, err
 		}
-	}
-	env := strings.TrimSpace(opts.Env)
-	if env == "" {
-		env = strings.TrimSpace(opts.DefaultEnv)
-	}
-	if env == "" {
-		env = "dev"
-	}
-	if err := ValidateEnvName(env); err != nil {
-		return Target{}, err
 	}
 
 	if strings.TrimSpace(opts.File) != "" {
@@ -74,7 +61,6 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 			RepoRoot:       repoRoot,
 			VaultDir:       filepath.Clean(vaultDir),
 			VaultDirRel:    vaultRel,
-			Env:            env,
 			File:           fileAbs,
 			FileIsExplicit: true,
 		}, nil
@@ -106,7 +92,9 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 		}
 	}
 
-	fileAbs := filepath.Join(vaultAbs, ".env."+env)
+	// Default vault env file is a plain ".env" inside the vault dir. If you want
+	// multiple dotenv files (e.g. .env.dev/.env.prod), use --file explicitly.
+	fileAbs := filepath.Join(vaultAbs, ".env")
 	if !opts.AllowMissingFile {
 		if _, err := os.Stat(fileAbs); err != nil {
 			return Target{}, err
@@ -118,7 +106,6 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 		RepoRoot:       repoRoot,
 		VaultDir:       vaultAbs,
 		VaultDirRel:    vaultRelClean,
-		Env:            env,
 		File:           fileAbs,
 		FileIsExplicit: false,
 	}, nil

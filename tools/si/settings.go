@@ -112,7 +112,6 @@ type DyadLoopSettings struct {
 
 type VaultSettings struct {
 	Dir        string `toml:"dir,omitempty"`
-	DefaultEnv string `toml:"default_env,omitempty"`
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 
@@ -146,7 +145,6 @@ type GitHubSettings struct {
 	DefaultAuthMode string                        `toml:"default_auth_mode,omitempty"`
 	APIBaseURL      string                        `toml:"api_base_url,omitempty"`
 	DefaultOwner    string                        `toml:"default_owner,omitempty"`
-	VaultEnv        string                        `toml:"vault_env,omitempty"`
 	VaultFile       string                        `toml:"vault_file,omitempty"`
 	LogFile         string                        `toml:"log_file,omitempty"`
 	Accounts        map[string]GitHubAccountEntry `toml:"accounts,omitempty"`
@@ -170,7 +168,6 @@ type CloudflareSettings struct {
 	DefaultAccount string                            `toml:"default_account,omitempty"`
 	DefaultEnv     string                            `toml:"default_env,omitempty"`
 	APIBaseURL     string                            `toml:"api_base_url,omitempty"`
-	VaultEnv       string                            `toml:"vault_env,omitempty"`
 	VaultFile      string                            `toml:"vault_file,omitempty"`
 	LogFile        string                            `toml:"log_file,omitempty"`
 	Accounts       map[string]CloudflareAccountEntry `toml:"accounts,omitempty"`
@@ -194,7 +191,6 @@ type GoogleSettings struct {
 	DefaultAccount string                        `toml:"default_account,omitempty"`
 	DefaultEnv     string                        `toml:"default_env,omitempty"`
 	APIBaseURL     string                        `toml:"api_base_url,omitempty"`
-	VaultEnv       string                        `toml:"vault_env,omitempty"`
 	VaultFile      string                        `toml:"vault_file,omitempty"`
 	LogFile        string                        `toml:"log_file,omitempty"`
 	YouTube        GoogleYouTubeSettings         `toml:"youtube,omitempty"`
@@ -355,9 +351,6 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Vault.Dir == "" {
 		settings.Vault.Dir = "vault"
 	}
-	if settings.Vault.DefaultEnv == "" {
-		settings.Vault.DefaultEnv = "dev"
-	}
 	if settings.Vault.TrustStore == "" {
 		settings.Vault.TrustStore = "~/.si/vault/trust.json"
 	}
@@ -420,9 +413,6 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	settings.Github.DefaultOwner = strings.TrimSpace(settings.Github.DefaultOwner)
 	settings.Github.DefaultAccount = strings.TrimSpace(settings.Github.DefaultAccount)
-	if settings.Github.VaultEnv == "" {
-		settings.Github.VaultEnv = "dev"
-	}
 	settings.Cloudflare.DefaultEnv = normalizeCloudflareEnvironment(settings.Cloudflare.DefaultEnv)
 	if settings.Cloudflare.DefaultEnv == "" {
 		settings.Cloudflare.DefaultEnv = "prod"
@@ -432,9 +422,6 @@ func applySettingsDefaults(settings *Settings) {
 		settings.Cloudflare.APIBaseURL = "https://api.cloudflare.com/client/v4"
 	}
 	settings.Cloudflare.DefaultAccount = strings.TrimSpace(settings.Cloudflare.DefaultAccount)
-	if settings.Cloudflare.VaultEnv == "" {
-		settings.Cloudflare.VaultEnv = "dev"
-	}
 	settings.Google.DefaultEnv = normalizeGoogleEnvironment(settings.Google.DefaultEnv)
 	if settings.Google.DefaultEnv == "" {
 		settings.Google.DefaultEnv = "prod"
@@ -444,9 +431,6 @@ func applySettingsDefaults(settings *Settings) {
 		settings.Google.APIBaseURL = "https://places.googleapis.com"
 	}
 	settings.Google.DefaultAccount = strings.TrimSpace(settings.Google.DefaultAccount)
-	if settings.Google.VaultEnv == "" {
-		settings.Google.VaultEnv = "dev"
-	}
 	settings.Google.YouTube.DefaultAuthMode = strings.ToLower(strings.TrimSpace(settings.Google.YouTube.DefaultAuthMode))
 	switch settings.Google.YouTube.DefaultAuthMode {
 	case "api-key", "oauth":

@@ -14,19 +14,18 @@ import (
 func cmdVaultCheck(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault check", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path to check (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path to check (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	staged := fs.Bool("staged", false, "check staged (git index) contents instead of working tree")
 	all := fs.Bool("all", false, "check all dotenv files under the vault dir (or all staged dotenv files)")
 	includeExamples := fs.Bool("include-examples", false, "include example/template dotenv files (e.g. .env.example)")
 	_ = fs.Parse(args)
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault check [--file <path>] [--vault-dir <path>] [--env <name>] [--staged] [--all] [--include-examples]")
+		printUsage("usage: si vault check [--file <path>] [--vault-dir <path>] [--staged] [--all] [--include-examples]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, true, true)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, true, true)
 	if err != nil {
 		fatal(err)
 	}
@@ -61,13 +60,8 @@ func cmdVaultCheck(args []string) {
 		}
 		if !*all {
 			// Default to checking only the resolved target file when not using --all.
-			if strings.TrimSpace(*fileFlag) != "" {
-				rel, _ := filepath.Rel(target.RepoRoot, target.File)
-				files = []string{filepath.ToSlash(rel)}
-			} else {
-				rel, _ := filepath.Rel(target.RepoRoot, filepath.Join(vaultAbs, ".env."+strings.TrimSpace(target.Env)))
-				files = []string{filepath.ToSlash(rel)}
-			}
+			rel, _ := filepath.Rel(target.RepoRoot, target.File)
+			files = []string{filepath.ToSlash(rel)}
 		}
 	} else {
 		if *all {
@@ -77,11 +71,7 @@ func cmdVaultCheck(args []string) {
 			}
 			files = append(files, found...)
 		} else {
-			if strings.TrimSpace(*fileFlag) != "" {
-				files = []string{target.File}
-			} else {
-				files = []string{filepath.Join(vaultAbs, ".env."+strings.TrimSpace(target.Env))}
-			}
+			files = []string{target.File}
 		}
 	}
 
@@ -92,6 +82,7 @@ func cmdVaultCheck(args []string) {
 
 	type finding struct {
 		File string
+		Abs  string
 		Keys []string
 	}
 	findings := []finding{}
@@ -100,15 +91,18 @@ func cmdVaultCheck(args []string) {
 		var doc vault.DotenvFile
 		var err error
 		display := p
+		abs := p
 		if *staged {
 			data, derr := vault.GitShowIndexFile(target.RepoRoot, p)
 			err = derr
 			if err == nil {
 				doc = vault.ParseDotenv(data)
 			}
+			abs = filepath.Clean(filepath.Join(target.RepoRoot, filepath.FromSlash(p)))
 		} else {
 			doc, err = vault.ReadDotenvFile(p)
 			display = filepath.Clean(p)
+			abs = display
 		}
 		if err != nil {
 			// Ignore deleted/absent files in staged mode.
@@ -124,7 +118,7 @@ func cmdVaultCheck(args []string) {
 		if len(scan.PlaintextKeys) > 0 {
 			keys := append([]string(nil), scan.PlaintextKeys...)
 			sort.Strings(keys)
-			findings = append(findings, finding{File: display, Keys: keys})
+			findings = append(findings, finding{File: display, Abs: abs, Keys: keys})
 		}
 	}
 
@@ -142,11 +136,11 @@ func cmdVaultCheck(args []string) {
 		b.WriteString("\n")
 	}
 	b.WriteString("\nFix:\n")
-	b.WriteString("  si vault encrypt --vault-dir ")
-	b.WriteString(shellSingleQuote(filepath.Clean(vaultAbs)))
-	b.WriteString(" --env ")
-	b.WriteString(shellSingleQuote(strings.TrimSpace(target.Env)))
-	b.WriteString(" --format\n")
+	for _, f := range findings {
+		b.WriteString("  si vault encrypt --file ")
+		b.WriteString(shellSingleQuote(filepath.Clean(f.Abs)))
+		b.WriteString(" --format\n")
+	}
 	b.WriteString("\nBypass (not recommended): git commit --no-verify\n")
 	fmt.Fprint(os.Stderr, b.String())
 	os.Exit(2)
