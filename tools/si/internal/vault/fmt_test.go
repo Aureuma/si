@@ -132,3 +132,25 @@ func TestFormatVaultDotenvPreservesUnknownPreambleLines(t *testing.T) {
 		t.Fatalf("got %q want %q", got, want)
 	}
 }
+
+func TestFormatVaultDotenvKeepsLookalikeHeaderComment(t *testing.T) {
+	in := ParseDotenv([]byte("" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"# si-vault:recipient-count 2\n" +
+		"A=1\n"))
+	out, _, err := FormatVaultDotenv(in)
+	if err != nil {
+		t.Fatalf("FormatVaultDotenv: %v", err)
+	}
+	want := "" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
+		"\n" +
+		"# si-vault:recipient-count 2\n" +
+		"A=1\n"
+	if got := string(out.Bytes()); got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
