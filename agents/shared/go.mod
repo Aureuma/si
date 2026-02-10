@@ -1,6 +1,7 @@
 module si/agents/shared
 
 go 1.25.0
+toolchain go1.25.7
 
 require (
 	github.com/docker/docker v26.1.4+incompatible
