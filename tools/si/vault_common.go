@@ -9,6 +9,23 @@ import (
 	"si/tools/si/internal/vault"
 )
 
+func vaultRefuseNonInteractiveOSKeyring(keyCfg vault.KeyConfig) error {
+	// In non-interactive environments (CI/VPS), OS keychains can block on prompts.
+	// Prefer SI_VAULT_IDENTITY(_FILE) or file backend for deterministic behavior.
+	if isInteractiveTerminal() {
+		return nil
+	}
+	if strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY")) != "" ||
+		strings.TrimSpace(os.Getenv("SI_VAULT_PRIVATE_KEY")) != "" ||
+		strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY_FILE")) != "" {
+		return nil
+	}
+	if vault.NormalizeKeyBackend(keyCfg.Backend) == "keyring" {
+		return fmt.Errorf("non-interactive: refusing to access OS keychain/keyring (set SI_VAULT_IDENTITY/SI_VAULT_IDENTITY_FILE or use vault.key_backend=\"file\")")
+	}
+	return nil
+}
+
 func vaultKeyConfigFromSettings(settings Settings) vault.KeyConfig {
 	backend := strings.TrimSpace(os.Getenv("SI_VAULT_KEY_BACKEND"))
 	if backend == "" {
