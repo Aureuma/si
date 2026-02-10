@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+
+## [v0.45.0] - 2026-02-10
 ### Changed
 - Moved build-related commands under `si build`:
   - `si image build` -> `si build image`
@@ -18,6 +20,10 @@ All notable changes to this project will be documented in this file.
   - `si self upgrade` -> `si build self upgrade`
   - `si self run` -> `si build self run`
 - Removed the top-level `si image` and `si self` command surfaces.
+- Restored direct Go HTTP implementations for Cloudflare, GitHub, Google Places, and YouTube command paths.
+
+### Fixed
+- Recovered provider bridge plumbing for non-`apibridge` execution paths in direct integration handlers and logging.
 
 ## [v0.44.0] - 2026-02-08
 ### Added

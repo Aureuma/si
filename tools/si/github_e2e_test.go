@@ -176,6 +176,37 @@ func TestGitHubE2E_SecretRepoSetEncryptsValue(t *testing.T) {
 	}
 }
 
+func TestGitHubE2E_DoctorPublic(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/zen" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte("keep it logically awesome"))
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{},
+		"github", "doctor",
+		"--public",
+		"--base-url", server.URL,
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if ok, _ := payload["ok"].(bool); !ok {
+		t.Fatalf("expected ok payload: %#v", payload)
+	}
+}
+
 func runSICommand(t *testing.T, env map[string]string, args ...string) (string, string, error) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"sort"
 	"strings"
+	"time"
 
+	"si/tools/si/internal/providers"
 	"si/tools/si/internal/stripebridge"
 )
 
@@ -158,6 +161,93 @@ func cmdStripeAuthStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatStripeContext(runtime))
 	fmt.Printf("%s %s\n", styleHeading("Key source:"), runtime.Source)
 	fmt.Printf("%s %s\n", styleHeading("Key preview:"), previewSecret(runtime.APIKey))
+}
+
+func cmdStripeDoctor(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "public": true})
+	fs := flag.NewFlagSet("stripe doctor", flag.ExitOnError)
+	account := fs.String("account", "", "account alias or acct_ id")
+	env := fs.String("env", "", "environment (live|sandbox)")
+	apiKey := fs.String("api-key", "", "override api key")
+	baseURL := fs.String("base-url", "", "stripe api base url")
+	public := fs.Bool("public", false, "run unauthenticated provider public probe")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si stripe doctor [--account <alias|acct_id>] [--env <live|sandbox>] [--public] [--json]")
+		return
+	}
+	if *public {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		result, err := runPublicProviderDoctor(ctx, providers.Stripe, *baseURL)
+		if err != nil {
+			fatal(err)
+		}
+		printPublicDoctorResult("Stripe", result, *jsonOut)
+		return
+	}
+	runtime, err := resolveStripeRuntimeContext(*account, *env, *apiKey)
+	if err != nil {
+		fatal(err)
+	}
+	if value := strings.TrimSpace(*baseURL); value != "" {
+		runtime.BaseURL = value
+	}
+	client, err := buildStripeClient(runtime)
+	if err != nil {
+		fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	type check struct {
+		Name   string `json:"name"`
+		OK     bool   `json:"ok"`
+		Detail string `json:"detail"`
+	}
+	checks := make([]check, 0, 2)
+	resp, err := client.Do(ctx, stripebridge.Request{Method: "GET", Path: "/v1/balance"})
+	if err != nil {
+		checks = append(checks, check{Name: "balance.read", OK: false, Detail: err.Error()})
+	} else {
+		checks = append(checks, check{Name: "balance.read", OK: true, Detail: summarizeStripeResponse(resp)})
+	}
+	ok := true
+	for _, item := range checks {
+		ok = ok && item.OK
+	}
+	payload := map[string]any{
+		"ok":      ok,
+		"context": runtime,
+		"checks":  checks,
+	}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		if !ok {
+			os.Exit(1)
+		}
+		return
+	}
+	if ok {
+		fmt.Printf("%s %s\n", styleHeading("Stripe doctor:"), styleSuccess("ok"))
+	} else {
+		fmt.Printf("%s %s\n", styleHeading("Stripe doctor:"), styleError("issues found"))
+	}
+	fmt.Printf("%s %s\n", styleHeading("Context:"), formatStripeContext(runtime))
+	for _, item := range checks {
+		icon := styleSuccess("OK")
+		if !item.OK {
+			icon = styleError("ERR")
+		}
+		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(item.Name, 16), strings.TrimSpace(item.Detail))
+	}
+	if !ok {
+		os.Exit(1)
+	}
 }
 
 func cmdStripeContext(args []string) {
@@ -322,6 +412,31 @@ func previewSecret(secret string) string {
 		return secret
 	}
 	return secret[:8] + "..."
+}
+
+func summarizeStripeResponse(resp stripebridge.Response) string {
+	if len(resp.Data) == 0 {
+		return firstNonEmpty(resp.Status, "ok")
+	}
+	for _, key := range []string{"object", "id", "livemode", "url"} {
+		if value, ok := resp.Data[key]; ok {
+			return fmt.Sprintf("%s=%s", key, stringifyStripeAny(value))
+		}
+	}
+	return "ok"
+}
+
+func stringifyStripeAny(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return strings.TrimSpace(fmt.Sprintf("%v", value))
+	}
 }
 
 func orDash(value string) string {

@@ -9,8 +9,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"si/tools/si/internal/githubbridge"
+	"si/tools/si/internal/providers"
 )
 
 type githubAuthOverrides struct {
@@ -311,6 +313,92 @@ func cmdGithubAuthStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("Token preview:"), tokenPreview)
 }
 
+func cmdGithubDoctor(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "public": true})
+	fs := flag.NewFlagSet("github doctor", flag.ExitOnError)
+	account := fs.String("account", "", "account alias")
+	owner := fs.String("owner", "", "owner/org")
+	baseURL := fs.String("base-url", "", "github api base url")
+	appID := fs.Int64("app-id", 0, "override app id")
+	appKey := fs.String("app-key", "", "override app private key pem")
+	installationID := fs.Int64("installation-id", 0, "override installation id")
+	public := fs.Bool("public", false, "run unauthenticated provider public probe")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si github doctor [--account <alias>] [--owner <owner>] [--public] [--json]")
+		return
+	}
+	if *public {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		result, err := runPublicProviderDoctor(ctx, providers.GitHub, *baseURL)
+		if err != nil {
+			fatal(err)
+		}
+		printPublicDoctorResult("GitHub", result, *jsonOut)
+		return
+	}
+	runtime, err := resolveGithubRuntimeContext(*account, *owner, *baseURL, githubAuthOverrides{
+		AppID:          *appID,
+		AppKey:         *appKey,
+		InstallationID: *installationID,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	client, err := buildGithubClient(runtime)
+	if err != nil {
+		fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	type check struct {
+		Name   string `json:"name"`
+		OK     bool   `json:"ok"`
+		Detail string `json:"detail"`
+	}
+	checks := make([]check, 0, 2)
+	resp, err := client.Do(ctx, githubbridge.Request{Method: "GET", Path: "/rate_limit"})
+	if err != nil {
+		checks = append(checks, check{Name: "rate_limit", OK: false, Detail: err.Error()})
+	} else {
+		checks = append(checks, check{Name: "rate_limit", OK: true, Detail: summarizeGitHubResponse(resp)})
+	}
+	ok := true
+	for _, item := range checks {
+		ok = ok && item.OK
+	}
+	payload := map[string]any{"ok": ok, "context": runtime, "checks": checks}
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		if !ok {
+			os.Exit(1)
+		}
+		return
+	}
+	if ok {
+		fmt.Printf("%s %s\n", styleHeading("GitHub doctor:"), styleSuccess("ok"))
+	} else {
+		fmt.Printf("%s %s\n", styleHeading("GitHub doctor:"), styleError("issues found"))
+	}
+	fmt.Printf("%s %s\n", styleHeading("Context:"), formatGithubContext(runtime))
+	for _, item := range checks {
+		icon := styleSuccess("OK")
+		if !item.OK {
+			icon = styleError("ERR")
+		}
+		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(item.Name, 16), strings.TrimSpace(item.Detail))
+	}
+	if !ok {
+		os.Exit(1)
+	}
+}
+
 func cmdGithubContext(args []string) {
 	if len(args) == 0 {
 		printUsage("usage: si github context <list|current|use>")
@@ -450,4 +538,19 @@ func previewGitHubSecret(secret string) string {
 		return secret
 	}
 	return secret[:8] + "..."
+}
+
+func summarizeGitHubResponse(resp githubbridge.Response) string {
+	if len(resp.List) > 0 {
+		return fmt.Sprintf("%d item(s)", len(resp.List))
+	}
+	if len(resp.Data) == 0 {
+		return "ok"
+	}
+	for _, key := range []string{"id", "name", "full_name", "message"} {
+		if value, ok := resp.Data[key]; ok {
+			return fmt.Sprintf("%s=%s", key, stringifyGitHubAny(value))
+		}
+	}
+	return "ok"
 }

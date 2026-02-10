@@ -478,7 +478,7 @@ func buildAppServerInput() []byte {
 			Params: map[string]interface{}{
 				"clientInfo": map[string]string{
 					"name":    "si",
-					"version": "0.44.0",
+					"version": "0.45.0",
 				},
 			},
 		},

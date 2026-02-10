@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"si/tools/si/internal/apibridge"
 )
 
 func TestClientDo(t *testing.T) {
@@ -46,7 +44,7 @@ func TestClientDo(t *testing.T) {
 }
 
 func TestResolveURL(t *testing.T) {
-	u, err := apibridge.ResolveURL("https://places.googleapis.com", "/v1/places:searchText", map[string]string{"pageToken": "abc"})
+	u, err := resolveURL("https://places.googleapis.com", "/v1/places:searchText", map[string]string{"pageToken": "abc"})
 	if err != nil {
 		t.Fatalf("resolveURL: %v", err)
 	}

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"si/tools/si/internal/cloudflarebridge"
+	"si/tools/si/internal/providers"
 )
 
 type cloudflareRuntimeContextInput struct {
@@ -445,7 +446,7 @@ func cmdCloudflareContextUse(args []string) {
 }
 
 func cmdCloudflareDoctor(args []string) {
-	args = stripeFlagsFirst(args, map[string]bool{"json": true})
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "public": true})
 	fs := flag.NewFlagSet("cloudflare doctor", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
 	env := fs.String("env", "", "environment (prod|staging|dev)")
@@ -454,10 +455,21 @@ func cmdCloudflareDoctor(args []string) {
 	apiToken := fs.String("api-token", "", "override cloudflare api token")
 	baseURL := fs.String("base-url", "", "cloudflare api base url")
 	accountID := fs.String("account-id", "", "cloudflare account id")
+	public := fs.Bool("public", false, "run unauthenticated provider public probe")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si cloudflare doctor [--account <alias>] [--env <prod|staging|dev>] [--json]")
+		printUsage("usage: si cloudflare doctor [--account <alias>] [--env <prod|staging|dev>] [--public] [--json]")
+		return
+	}
+	if *public {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		result, err := runPublicProviderDoctor(ctx, providers.Cloudflare, *baseURL)
+		if err != nil {
+			fatal(err)
+		}
+		printPublicDoctorResult("Cloudflare", result, *jsonOut)
 		return
 	}
 	runtime, err := resolveCloudflareRuntimeContext(cloudflareRuntimeContextInput{

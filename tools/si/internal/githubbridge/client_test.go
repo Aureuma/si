@@ -3,14 +3,10 @@ package githubbridge
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
-	"sync/atomic"
 	"testing"
-
-	"si/tools/si/internal/apibridge"
 )
 
 type staticProvider struct {
@@ -21,19 +17,6 @@ func (p staticProvider) Mode() AuthMode { return AuthModeApp }
 func (p staticProvider) Source() string { return "test" }
 func (p staticProvider) Token(context.Context, TokenRequest) (Token, error) {
 	return Token{Value: p.token}, nil
-}
-
-type countingProvider struct {
-	calls atomic.Int64
-}
-
-func (p *countingProvider) Mode() AuthMode { return AuthModeApp }
-func (p *countingProvider) Source() string { return "test" }
-func (p *countingProvider) Token(ctx context.Context, req TokenRequest) (Token, error) {
-	_ = ctx
-	_ = req
-	n := p.calls.Add(1)
-	return Token{Value: fmt.Sprintf("token-%d", n)}, nil
 }
 
 func TestClientDo(t *testing.T) {
@@ -62,7 +45,7 @@ func TestClientDo(t *testing.T) {
 }
 
 func TestResolveURL(t *testing.T) {
-	u, err := apibridge.ResolveURL("https://api.github.com", "/repos/a/b", map[string]string{"page": "2"})
+	u, err := resolveURL("https://api.github.com", "/repos/a/b", map[string]string{"page": "2"})
 	if err != nil {
 		t.Fatalf("resolveURL: %v", err)
 	}
@@ -101,39 +84,5 @@ func TestClientListAllPagination(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("expected 2 calls, got %d", calls)
-	}
-}
-
-func TestClientDo_RetriesAndReauthsPerAttempt(t *testing.T) {
-	var calls atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		n := calls.Add(1)
-		if got, want := r.Header.Get("Authorization"), "Bearer "+fmt.Sprintf("token-%d", n); got != want {
-			t.Fatalf("call=%d unexpected auth header: got %q want %q", n, got, want)
-		}
-		if n == 1 {
-			w.Header().Set("Retry-After", "0")
-			w.WriteHeader(http.StatusTooManyRequests)
-			_ = json.NewEncoder(w).Encode(map[string]any{"message": "rate limited"})
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-	}))
-	defer srv.Close()
-
-	provider := &countingProvider{}
-	client, err := NewClient(ClientConfig{BaseURL: srv.URL, Provider: provider, MaxRetries: 1})
-	if err != nil {
-		t.Fatalf("new client: %v", err)
-	}
-	resp, err := client.Do(context.Background(), Request{Method: http.MethodGet, Path: "/rate-limited"})
-	if err != nil {
-		t.Fatalf("do request: %v", err)
-	}
-	if resp.StatusCode != 200 {
-		t.Fatalf("unexpected status: %d", resp.StatusCode)
-	}
-	if got := provider.calls.Load(); got != 2 {
-		t.Fatalf("expected 2 token calls, got %d", got)
 	}
 }

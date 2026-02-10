@@ -26,6 +26,10 @@ Rules (human + dyad):
 Format:
 - 2026-02-09T00:00:00Z 🪢 <dyad> 🛩️ actor Turn N: <what changed>
 -->
+- 2026-02-09T23:49:45Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-09T23:49:45Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-09T23:49:45Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-09T23:49:45Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
 - 2026-02-10T03:02:40Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
 - 2026-02-10T03:02:40Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
 - 2026-02-10T03:02:40Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3

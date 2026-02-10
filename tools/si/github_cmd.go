@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-const githubUsageText = "usage: si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>"
+const githubUsageText = "usage: si github <auth|context|doctor|repo|pr|issue|workflow|release|secret|raw|graphql>"
 
 func cmdGithub(args []string) {
 	if len(args) == 0 {
@@ -18,6 +18,8 @@ func cmdGithub(args []string) {
 		cmdGithubAuth(rest)
 	case "context":
 		cmdGithubContext(rest)
+	case "doctor":
+		cmdGithubDoctor(rest)
 	case "repo":
 		cmdGithubRepo(rest)
 	case "pr":

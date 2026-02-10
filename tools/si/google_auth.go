@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"si/tools/si/internal/googleplacesbridge"
+	"si/tools/si/internal/providers"
 )
 
 type googlePlacesRuntimeContextInput struct {
@@ -460,7 +461,7 @@ func cmdGooglePlacesContextUse(args []string) {
 }
 
 func cmdGooglePlacesDoctor(args []string) {
-	args = stripeFlagsFirst(args, map[string]bool{"json": true})
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "public": true})
 	fs := flag.NewFlagSet("google places doctor", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
 	env := fs.String("env", "", "environment (prod|staging|dev)")
@@ -469,10 +470,21 @@ func cmdGooglePlacesDoctor(args []string) {
 	projectID := fs.String("project-id", "", "google project id")
 	language := fs.String("language", "", "language code (BCP-47)")
 	region := fs.String("region", "", "region code (CLDR)")
+	public := fs.Bool("public", false, "run unauthenticated provider public probe")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si google places doctor [--account <alias>] [--env <prod|staging|dev>] [--json]")
+		printUsage("usage: si google places doctor [--account <alias>] [--env <prod|staging|dev>] [--public] [--json]")
+		return
+	}
+	if *public {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		result, err := runPublicProviderDoctor(ctx, providers.GooglePlaces, *baseURL)
+		if err != nil {
+			fatal(err)
+		}
+		printPublicDoctorResult("Google Places", result, *jsonOut)
 		return
 	}
 	runtime, err := resolveGooglePlacesRuntimeContext(googlePlacesRuntimeContextInput{

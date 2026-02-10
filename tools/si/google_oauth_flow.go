@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
-	"si/tools/si/internal/apibridge"
 	"si/tools/si/internal/youtubebridge"
 )
 
@@ -51,30 +51,19 @@ func startGoogleOAuthDeviceFlow(ctx context.Context, clientID string, scopes []s
 	form := url.Values{}
 	form.Set("client_id", strings.TrimSpace(clientID))
 	form.Set("scope", strings.Join(scopes, " "))
-	client, err := apibridge.NewClient(apibridge.Config{
-		Component:   "google-oauth",
-		BaseURL:     "https://oauth2.googleapis.com",
-		UserAgent:   "si-google-oauth/1.0",
-		Timeout:     30 * time.Second,
-		MaxRetries:  0,
-		SanitizeURL: apibridge.StripQuery,
-	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/device/code", strings.NewReader(form.Encode()))
 	if err != nil {
 		return googleOAuthDeviceCodeResponse{}, err
 	}
-	resp, err := client.Do(ctx, apibridge.Request{
-		Method:      http.MethodPost,
-		Path:        "/device/code",
-		RawBody:     form.Encode(),
-		ContentType: "application/x-www-form-urlencoded",
-		Headers: map[string]string{
-			"Accept": "application/json",
-		},
-	})
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return googleOAuthDeviceCodeResponse{}, err
 	}
-	body := resp.Body
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return googleOAuthDeviceCodeResponse{}, fmt.Errorf("device code request failed: %s", strings.TrimSpace(string(body)))
 	}
@@ -160,32 +149,21 @@ func refreshGoogleOAuthAccessToken(ctx context.Context, clientID, clientSecret, 
 }
 
 func exchangeGoogleOAuthToken(ctx context.Context, form url.Values) (googleOAuthTokenResponse, error) {
-	client, err := apibridge.NewClient(apibridge.Config{
-		Component:   "google-oauth",
-		BaseURL:     "https://oauth2.googleapis.com",
-		UserAgent:   "si-google-oauth/1.0",
-		Timeout:     30 * time.Second,
-		MaxRetries:  0,
-		SanitizeURL: apibridge.StripQuery,
-	})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/token", strings.NewReader(form.Encode()))
 	if err != nil {
 		return googleOAuthTokenResponse{}, err
 	}
-	resp, err := client.Do(ctx, apibridge.Request{
-		Method:      http.MethodPost,
-		Path:        "/token",
-		RawBody:     form.Encode(),
-		ContentType: "application/x-www-form-urlencoded",
-		Headers: map[string]string{
-			"Accept": "application/json",
-		},
-	})
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return googleOAuthTokenResponse{}, err
 	}
-	body := resp.Body
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return googleOAuthTokenResponse{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(body))
+		return googleOAuthTokenResponse{}, youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Header, string(body))
 	}
 	var parsed googleOAuthTokenResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {

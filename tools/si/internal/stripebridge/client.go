@@ -2,6 +2,8 @@ package stripebridge
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,6 +14,8 @@ import (
 
 	stripe "github.com/stripe/stripe-go/v83"
 	"github.com/stripe/stripe-go/v83/rawrequest"
+
+	"si/tools/si/internal/providers"
 )
 
 type rawRequester interface {
@@ -89,13 +93,26 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, err
 	}
+	subject := strings.TrimSpace(c.cfg.LogContext["account_alias"])
 	start := time.Now().UTC()
+	release, err := providers.Acquire(ctx, providers.Stripe, subject, method, path)
+	if err != nil {
+		return Response{}, err
+	}
+	defer release()
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	idempotencyDefaulted := false
+	if idempotencyKey == "" && method == http.MethodPost {
+		idempotencyKey = defaultIdempotencyKey(reqPath, content)
+		idempotencyDefaulted = true
+	}
 	c.logEvent("request", map[string]any{
-		"method":          method,
-		"path":            reqPath,
-		"idempotency_key": RedactSensitive(strings.TrimSpace(req.IdempotencyKey)),
-		"params_count":    len(req.Params),
-		"body_bytes":      len(content),
+		"method":           method,
+		"path":             reqPath,
+		"idempotency_key":  RedactSensitive(idempotencyKey),
+		"idempotency_auto": idempotencyDefaulted,
+		"params_count":     len(req.Params),
+		"body_bytes":       len(content),
 	})
 	rawParams := &stripe.RawParams{}
 	if strings.TrimSpace(c.cfg.AccountID) != "" {
@@ -104,8 +121,8 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 	if strings.TrimSpace(c.cfg.StripeContext) != "" {
 		rawParams.StripeContext = strings.TrimSpace(c.cfg.StripeContext)
 	}
-	if strings.TrimSpace(req.IdempotencyKey) != "" {
-		rawParams.SetIdempotencyKey(strings.TrimSpace(req.IdempotencyKey))
+	if idempotencyKey != "" {
+		rawParams.SetIdempotencyKey(idempotencyKey)
 	}
 
 	type responsePack struct {
@@ -128,12 +145,16 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 		})
 		return Response{}, ctx.Err()
 	case pack := <-resultCh:
+		duration := time.Since(start)
 		if pack.err != nil {
 			apiErr := NormalizeAPIError(pack.err, "")
+			if apiErr != nil && apiErr.StatusCode > 0 {
+				providers.FeedbackWithLatency(providers.Stripe, subject, apiErr.StatusCode, nil, duration)
+			}
 			fields := map[string]any{
 				"method":      method,
 				"path":        reqPath,
-				"duration_ms": time.Since(start).Milliseconds(),
+				"duration_ms": duration.Milliseconds(),
 				"error":       RedactSensitive(apiErr.Error()),
 			}
 			if apiErr != nil {
@@ -146,10 +167,15 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 			return Response{}, apiErr
 		}
 		resp := normalizeResponse(pack.resp)
+		var feedbackHeaders http.Header
+		if pack.resp != nil {
+			feedbackHeaders = pack.resp.Header
+		}
+		providers.FeedbackWithLatency(providers.Stripe, subject, resp.StatusCode, feedbackHeaders, duration)
 		c.logEvent("response", map[string]any{
 			"method":      method,
 			"path":        reqPath,
-			"duration_ms": time.Since(start).Milliseconds(),
+			"duration_ms": duration.Milliseconds(),
 			"status":      resp.StatusCode,
 			"request_id":  resp.RequestID,
 		})
@@ -228,6 +254,12 @@ func buildRequestContent(path string, method string, params map[string]string, r
 		return string(body), reqPath, nil
 	}
 	return values.Encode(), reqPath, nil
+}
+
+func defaultIdempotencyKey(path string, content string) string {
+	seed := fmt.Sprintf("%d|%s|%s", time.Now().UTC().UnixNano(), strings.TrimSpace(path), strings.TrimSpace(content))
+	sum := sha256.Sum256([]byte(seed))
+	return "si_" + hex.EncodeToString(sum[:16])
 }
 
 func (c *Client) logEvent(kind string, fields map[string]any) {

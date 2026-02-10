@@ -28,6 +28,7 @@ Features:
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
   - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
   - Google YouTube bridge: auth/context flows, channel/video/playlist/live/caption operations, uploads, and usage reporting.
+  - Social bridge: unified platform flows for Facebook, Instagram, X, and LinkedIn (auth/context/resources/raw/report).
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
@@ -44,10 +45,12 @@ Core:
   si dyad spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|logout|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
-  si stripe <auth|context|object|raw|report|sync>
-  si github <auth|context|repo|pr|issue|workflow|release|secret|raw|graphql>
+  si stripe <auth|context|doctor|object|raw|report|sync>
+  si github <auth|context|doctor|repo|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
-  si google <places|youtube>
+  si google <places|youtube|youtube-data>
+  si social <facebook|instagram|x|linkedin>
+  si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -244,6 +247,7 @@ analyze:
 stripe:
   si stripe auth status [--account <alias>] [--env <live|sandbox>] [--json]
   si stripe context list|current|use [--account <alias|acct_id>] [--env <live|sandbox>]
+  si stripe doctor [--account <alias|acct_id>] [--env <live|sandbox>] [--public] [--json]
   si stripe object list <object> [--limit N] [--param key=value] [--json]
   si stripe object get <object> <id> [--param key=value] [--json]
   si stripe object create <object> [--param key=value] [--idempotency-key <key>] [--json]
@@ -287,6 +291,7 @@ stripe:
 github:
   si github auth status [--account <alias>] [--owner <owner>] [--json]
   si github context list|current|use [--account <alias>] [--owner <owner>] [--base-url <url>]
+  si github doctor [--account <alias>] [--owner <owner>] [--public] [--json]
   si github repo list|get|create|update|archive|delete ...
   si github pr list|get|create|comment|merge ...
   si github issue list|get|create|comment|close|reopen ...
@@ -304,7 +309,7 @@ github:
 cloudflare:
   si cloudflare auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
   si cloudflare context list|current|use [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--base-url <url>]
-  si cloudflare doctor [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si cloudflare doctor [--account <alias>] [--env <prod|staging|dev>] [--public] [--json]
   si cloudflare zone|dns|waf|ruleset|firewall|ratelimit|queue|tunnel|lb <list|get|create|update|delete> ...
   si cloudflare workers script|route <list|get|create|update|delete> ...
   si cloudflare workers secret <set|delete> --script <name> --name <secret> [--text <value>]
@@ -336,7 +341,7 @@ cloudflare:
 google:
   si google places auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
   si google places context list|current|use [--account <alias>] [--env <prod|staging|dev>]
-  si google places doctor [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si google places doctor [--account <alias>] [--env <prod|staging|dev>] [--public] [--json]
 
   si google places session new|inspect|end|list ...
 
@@ -352,7 +357,7 @@ google:
 
   si google youtube auth status|login|logout [--account <alias>] [--env <prod|staging|dev>] [--mode <api-key|oauth>] [--json]
   si google youtube context list|current|use [--account <alias>] [--env <prod|staging|dev>]
-  si google youtube doctor [--account <alias>] [--env <prod|staging|dev>] [--mode <api-key|oauth>] [--json]
+  si google youtube doctor [--account <alias>] [--env <prod|staging|dev>] [--mode <api-key|oauth>] [--public] [--json]
   si google youtube search list --query <text> [--type <video|channel|playlist>] [--all] [--json]
   si google youtube channel list|get|mine|update ...
   si google youtube video list|get|update|delete|upload|rate|get-rating ...
@@ -364,12 +369,34 @@ google:
   si google youtube thumbnail set --video-id <id> --file <path>
   si google youtube live broadcast|stream|chat ...
   si google youtube support languages|regions|categories ...
-  si google youtube report usage|quota [--since <ts>] [--until <ts>] [--json]
+  si google youtube report usage [--since <ts>] [--until <ts>] [--json]
   si google youtube raw --method <GET|POST|PUT|DELETE> --path <api-path> [--param key=value] [--body raw] [--json]
 
   Environment policy:
     CLI uses prod, staging, and dev context labels.
     test is intentionally not used; map sandbox workflows to staging/dev context.
+
+social:
+  si social facebook <auth|context|doctor|profile|page|post|comment|insights|raw|report>
+  si social instagram <auth|context|doctor|profile|media|comment|insights|raw|report>
+  si social x <auth|context|doctor|user|tweet|search|raw|report>
+  si social linkedin <auth|context|doctor|profile|organization|post|raw|report>
+
+  Common:
+    si social <platform> auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
+    si social <platform> context list|current|use ...
+    si social <platform> doctor [--json]
+    si social <platform> raw --method <GET|POST|PATCH|PUT|DELETE> --path <api-path> [--param key=value] [--body raw]
+    si social <platform> report usage|errors [--since <ts>] [--until <ts>] [--json]
+
+  Environment policy:
+    CLI uses prod, staging, and dev context labels.
+    test is intentionally not used; map sandbox workflows to staging/dev context.
+
+providers:
+  si providers characteristics [--provider <id>] [--json]
+  si providers health [--provider <id>] [--json]
+  Aliases: si integrations ..., si apis ...
 
 Environment defaults (selected)
 -------------------------------
@@ -381,7 +408,7 @@ Environment defaults (selected)
 `))
 }
 
-const siVersion = "v0.44.0"
+const siVersion = "v0.45.0"
 
 func printVersion() {
 	fmt.Println(siVersion)
