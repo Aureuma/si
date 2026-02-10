@@ -54,6 +54,9 @@ func cmdVaultGet(args []string) {
 			fmt.Printf("%s: encrypted (use --reveal)\n", key)
 			return
 		}
+		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
+			fatal(err)
+		}
 		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
 		if err != nil {
 			fatal(err)
