@@ -18,11 +18,25 @@ func TestWarmWeeklyBackoffDuration(t *testing.T) {
 }
 
 func TestWarmWeeklyBootstrapSucceeded(t *testing.T) {
-	if !warmWeeklyBootstrapSucceeded(0.0, 0.2) {
+	// Non-force: delta can be a valid success signal when both readings are known.
+	if !warmWeeklyBootstrapSucceeded(false, 0.0, true, true, 0.2, true, true) {
 		t.Fatalf("expected warm success for positive usage delta")
 	}
-	if warmWeeklyBootstrapSucceeded(0.0, 0.0) {
-		t.Fatalf("expected warm failure for unchanged usage")
+	if warmWeeklyBootstrapSucceeded(false, 0.0, true, false, 0.2, true, false) {
+		t.Fatalf("expected warm failure when reset timing is still unavailable")
+	}
+
+	// Bootstrapping: becoming aware of reset timing is success even if percent deltas are tiny/zero.
+	if !warmWeeklyBootstrapSucceeded(false, 0.0, true, false, 0.0, true, true) {
+		t.Fatalf("expected warm success when reset timing becomes available")
+	}
+	if warmWeeklyBootstrapSucceeded(false, 0.0, true, false, 0.0, true, false) {
+		t.Fatalf("expected warm failure when reset timing is still unavailable")
+	}
+
+	// Force mode: avoid false failures when the endpoint is too coarse-grained to show deltas.
+	if !warmWeeklyBootstrapSucceeded(true, 0.0, true, true, 0.0, true, true) {
+		t.Fatalf("expected force warm to treat stable reset/usage signals as success")
 	}
 }
 
