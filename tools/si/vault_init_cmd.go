@@ -89,6 +89,13 @@ func cmdVaultInit(args []string) {
 	if keyFileOverride != "" {
 		keyCfg.KeyFile = keyFileOverride
 	}
+	if vault.NormalizeKeyBackend(keyCfg.Backend) == "keyring" && !isInteractiveTerminal() {
+		if strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY")) == "" &&
+			strings.TrimSpace(os.Getenv("SI_VAULT_PRIVATE_KEY")) == "" &&
+			strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY_FILE")) == "" {
+			fatal(fmt.Errorf("non-interactive: refusing to access OS keychain/keyring (set SI_VAULT_IDENTITY/SI_VAULT_IDENTITY_FILE or use --key-backend file)"))
+		}
+	}
 	identityInfo, createdKey, err := vault.EnsureIdentity(keyCfg)
 	if err != nil {
 		fatal(err)
