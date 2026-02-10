@@ -32,14 +32,13 @@ func cmdVaultRecipients(args []string) {
 func cmdVaultRecipientsList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients list", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -60,15 +59,14 @@ func cmdVaultRecipientsList(args []string) {
 func cmdVaultRecipientsAdd(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients add", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault recipients add <age1...> [--vault-dir <path>] [--env <name>]")
+		printUsage("usage: si vault recipients add <age1...> [--file <path>] [--vault-dir <path>]")
 		return
 	}
 	recipient := strings.TrimSpace(rest[0])
@@ -76,7 +74,7 @@ func cmdVaultRecipientsAdd(args []string) {
 		fatal(fmt.Errorf("recipient required"))
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -107,7 +105,7 @@ func cmdVaultRecipientsAdd(args []string) {
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
 		VaultDir:    target.VaultDir,
-		Env:         target.Env,
+		File:        target.File,
 		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})
@@ -126,15 +124,14 @@ func cmdVaultRecipientsAdd(args []string) {
 func cmdVaultRecipientsRemove(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients remove", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault recipients remove <age1...> [--vault-dir <path>] [--env <name>]")
+		printUsage("usage: si vault recipients remove <age1...> [--file <path>] [--vault-dir <path>]")
 		return
 	}
 	recipient := strings.TrimSpace(rest[0])
@@ -142,7 +139,7 @@ func cmdVaultRecipientsRemove(args []string) {
 		fatal(fmt.Errorf("recipient required"))
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -162,7 +159,7 @@ func cmdVaultRecipientsRemove(args []string) {
 		storePath := vaultTrustStorePath(settings)
 		store, err := vault.LoadTrustStore(storePath)
 		if err == nil {
-			_ = store.Delete(target.RepoRoot, target.VaultDir, target.Env)
+			_ = store.Delete(target.RepoRoot, target.File)
 			_ = store.Save(storePath)
 		}
 		fatal(fmt.Errorf("no recipients remaining after removal"))
@@ -179,7 +176,7 @@ func cmdVaultRecipientsRemove(args []string) {
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
 		VaultDir:    target.VaultDir,
-		Env:         target.Env,
+		File:        target.File,
 		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})

@@ -13,25 +13,23 @@ import (
 func cmdVaultStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault status", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault status [--vault-dir <path>] [--env <name>]")
+		printUsage("usage: si vault status [--file <path>] [--vault-dir <path>]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, true, true)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, true, true)
 	if err != nil {
 		fatal(err)
 	}
 
 	fmt.Printf("repo root: %s\n", filepath.Clean(target.RepoRoot))
 	fmt.Printf("vault dir: %s\n", filepath.Clean(target.VaultDir))
-	fmt.Printf("env:      %s\n", strings.TrimSpace(target.Env))
 	fmt.Printf("env file: %s\n", filepath.Clean(target.File))
 
 	if target.RepoRoot != "" && target.VaultDirRel != "" {
@@ -63,7 +61,7 @@ func cmdVaultStatus(args []string) {
 			store, storeErr := vault.LoadTrustStore(vaultTrustStorePath(settings))
 			if storeErr != nil {
 				fmt.Printf("trust:     error (%v)\n", storeErr)
-			} else if entry, ok := store.Find(target.RepoRoot, target.VaultDir, target.Env); !ok {
+			} else if entry, ok := store.Find(target.RepoRoot, target.File); !ok {
 				fmt.Printf("trust:     untrusted (%s)\n", fp)
 			} else if strings.TrimSpace(entry.Fingerprint) != fp {
 				fmt.Printf("trust:     mismatch (stored %s, current %s)\n", strings.TrimSpace(entry.Fingerprint), fp)

@@ -43,7 +43,7 @@ func cmdVaultHooksInstall(args []string) {
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, settings.Vault.DefaultEnv, true, true)
+	target, err := vaultResolveTarget(settings, "", *vaultDir, true, true)
 	if err != nil {
 		fatal(err)
 	}
@@ -86,7 +86,7 @@ func cmdVaultHooksStatus(args []string) {
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, settings.Vault.DefaultEnv, true, true)
+	target, err := vaultResolveTarget(settings, "", *vaultDir, true, true)
 	if err != nil {
 		fatal(err)
 	}
@@ -129,7 +129,7 @@ func cmdVaultHooksUninstall(args []string) {
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, settings.Vault.DefaultEnv, true, true)
+	target, err := vaultResolveTarget(settings, "", *vaultDir, true, true)
 	if err != nil {
 		fatal(err)
 	}

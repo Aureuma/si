@@ -12,20 +12,19 @@ import (
 func cmdVaultEncrypt(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault encrypt", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	format := fs.Bool("format", false, "run `si vault fmt` after encrypting")
 	reencrypt := fs.Bool("reencrypt", false, "re-encrypt already-encrypted values (intentional git noise)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault encrypt [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]")
+		printUsage("usage: si vault encrypt [--file <path>] [--vault-dir <path>] [--format] [--reencrypt]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}

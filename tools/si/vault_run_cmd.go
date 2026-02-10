@@ -15,9 +15,8 @@ import (
 func cmdVaultRun(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault run", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow running even if plaintext keys exist (not recommended)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
@@ -28,11 +27,11 @@ func cmdVaultRun(args []string) {
 		rest = rest[1:]
 	}
 	if len(rest) == 0 {
-		printUsage("usage: si vault run [--vault-dir <path>] [--env <name>] -- <cmd...>")
+		printUsage("usage: si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] -- <cmd...>")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}

@@ -37,14 +37,12 @@ func vaultAuditLogPath(settings Settings) string {
 	return path
 }
 
-func vaultResolveTarget(settings Settings, fileFlag, vaultDirFlag, envFlag string, allowMissingVaultDir, allowMissingFile bool) (vault.Target, error) {
+func vaultResolveTarget(settings Settings, fileFlag, vaultDirFlag string, allowMissingVaultDir, allowMissingFile bool) (vault.Target, error) {
 	return vault.ResolveTarget(vault.ResolveOptions{
 		CWD:                  "",
 		File:                 fileFlag,
 		VaultDir:             vaultDirFlag,
-		Env:                  envFlag,
 		DefaultVaultDir:      settings.Vault.Dir,
-		DefaultEnv:           settings.Vault.DefaultEnv,
 		AllowMissingVaultDir: allowMissingVaultDir,
 		AllowMissingFile:     allowMissingFile,
 	})
@@ -79,16 +77,16 @@ func vaultRequireTrusted(settings Settings, target vault.Target, doc vault.Doten
 	if err != nil {
 		return "", err
 	}
-	entry, ok := store.Find(target.RepoRoot, target.VaultDir, target.Env)
+	entry, ok := store.Find(target.RepoRoot, target.File)
 	if !ok {
-		return "", fmt.Errorf("vault trust not established for %s (%s): run `si vault trust accept`", filepath.Clean(target.VaultDir), target.Env)
+		return "", fmt.Errorf("vault trust not established for %s: run `si vault trust accept --file %s`", filepath.Clean(target.File), shellSingleQuote(filepath.Clean(target.File)))
 	}
 	if strings.TrimSpace(entry.Fingerprint) != fp {
-		return "", fmt.Errorf("vault trust fingerprint changed for %s (%s): run `si vault trust status` and `si vault trust accept`", filepath.Clean(target.VaultDir), target.Env)
+		return "", fmt.Errorf("vault trust fingerprint changed for %s: run `si vault trust status --file %s` and `si vault trust accept --file %s`", filepath.Clean(target.File), shellSingleQuote(filepath.Clean(target.File)), shellSingleQuote(filepath.Clean(target.File)))
 	}
 	currentURL := vaultRepoURL(target)
 	if entry.VaultRepo != "" && currentURL != "" && strings.TrimSpace(entry.VaultRepo) != strings.TrimSpace(currentURL) {
-		return "", fmt.Errorf("vault repo URL changed for %s (%s): run `si vault trust status` and `si vault trust accept`", filepath.Clean(target.VaultDir), target.Env)
+		return "", fmt.Errorf("vault repo URL changed for %s: run `si vault trust status --file %s` and `si vault trust accept --file %s`", filepath.Clean(target.File), shellSingleQuote(filepath.Clean(target.File)), shellSingleQuote(filepath.Clean(target.File)))
 	}
 	return fp, nil
 }
@@ -109,7 +107,7 @@ func vaultAuditEvent(settings Settings, target vault.Target, typ string, fields 
 		"gid":      os.Getgid(),
 		"repoRoot": strings.TrimSpace(target.RepoRoot),
 		"vaultDir": strings.TrimSpace(target.VaultDir),
-		"env":      strings.TrimSpace(target.Env),
+		"file":     strings.TrimSpace(target.File),
 	}
 	for k, v := range fields {
 		if strings.TrimSpace(k) == "" {

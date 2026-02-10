@@ -14,9 +14,8 @@ import (
 func cmdVaultSet(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault set", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir/--env)")
+	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	env := fs.String("env", settings.Vault.DefaultEnv, "environment name (maps to .env.<env>)")
 	section := fs.String("section", "", "section name (e.g. stripe, workos)")
 	stdin := fs.Bool("stdin", false, "read value from stdin (avoids shell history)")
 	format := fs.Bool("format", false, "run `si vault fmt` after setting")
@@ -26,7 +25,7 @@ func cmdVaultSet(args []string) {
 
 	rest := fs.Args()
 	if len(rest) < 1 {
-		printUsage("usage: si vault set <KEY> <VALUE> [--vault-dir <path>] [--env <name>] [--section <name>] [--stdin] [--format]")
+		printUsage("usage: si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--section <name>] [--stdin] [--format]")
 		return
 	}
 	key := strings.TrimSpace(rest[0])
@@ -48,7 +47,7 @@ func cmdVaultSet(args []string) {
 		value = rest[1]
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
+	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
 	if err != nil {
 		fatal(err)
 	}
