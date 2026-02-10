@@ -2204,7 +2204,7 @@ func googleYouTubeUploadVideo(ctx context.Context, runtime googleYouTubeRuntimeC
 	if !resumable {
 		return googleYouTubeMultipartUpload(ctx, runtime, "/youtube/v3/videos", part, filePath, "application/octet-stream", metadata)
 	}
-	videoBytes, err := os.ReadFile(filePath)
+	videoBytes, err := readLocalFile(filePath)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
@@ -2298,7 +2298,7 @@ func newGoogleYouTubeHTTPClient(baseURL string, timeout time.Duration) (*apibrid
 }
 
 func googleYouTubeMultipartUpload(ctx context.Context, runtime googleYouTubeRuntimeContext, path string, part string, filePath string, contentType string, metadata map[string]any) (youtubebridge.Response, error) {
-	fileBytes, err := os.ReadFile(filePath)
+	fileBytes, err := readLocalFile(filePath)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
@@ -2360,7 +2360,7 @@ func googleYouTubeMultipartUpload(ctx context.Context, runtime googleYouTubeRunt
 }
 
 func googleYouTubeMediaUpload(ctx context.Context, runtime googleYouTubeRuntimeContext, path string, query map[string]string, filePath string, contentType string) (youtubebridge.Response, error) {
-	fileBytes, err := os.ReadFile(filePath)
+	fileBytes, err := readLocalFile(filePath)
 	if err != nil {
 		return youtubebridge.Response{}, err
 	}
@@ -2425,7 +2425,7 @@ func googleYouTubeDownloadMedia(ctx context.Context, runtime googleYouTubeRuntim
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return 0, "", youtubebridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 	}
-	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(output), 0o750); err != nil {
 		return 0, "", err
 	}
 	if err := os.WriteFile(output, resp.Body, 0o600); err != nil {
@@ -2570,7 +2570,7 @@ type youtubeUsageLogEvent struct {
 }
 
 func buildGoogleYouTubeUsageReport(logPath string, account string, env string, since *time.Time, until *time.Time, quotaBudget int64) (map[string]any, error) {
-	file, err := os.Open(logPath)
+	file, err := openLocalFile(logPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return map[string]any{

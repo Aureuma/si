@@ -631,7 +631,7 @@ func downloadGooglePlacePhoto(ctx context.Context, runtime googlePlacesRuntimeCo
 		return 0, "", googleplacesbridge.NormalizeHTTPError(resp.StatusCode, resp.Headers, string(resp.Body))
 	}
 
-	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(output), 0o750); err != nil {
 		return 0, "", err
 	}
 	if err := os.WriteFile(output, resp.Body, 0o600); err != nil {
@@ -1000,7 +1000,7 @@ type googlePlacesUsageLogEvent struct {
 }
 
 func buildGooglePlacesUsageReport(logPath string, account string, env string, since *time.Time, until *time.Time) (map[string]any, error) {
-	file, err := os.Open(logPath)
+	file, err := openLocalFile(logPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return map[string]any{

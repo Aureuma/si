@@ -263,6 +263,7 @@ func openSafariProfileURL(url string, profile codexProfile, override string) err
 	for _, line := range script {
 		cmdArgs = append(cmdArgs, "-e", line)
 	}
+	// #nosec G204 -- osascript command and generated script lines are controlled locally.
 	cmd := exec.Command("osascript", cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -316,6 +317,7 @@ func safariProfileMenuItems() (map[string]bool, error) {
 	for _, line := range script {
 		cmdArgs = append(cmdArgs, "-e", line)
 	}
+	// #nosec G204 -- osascript command and generated script lines are controlled locally.
 	out, err := exec.Command("osascript", cmdArgs...).Output()
 	if err != nil {
 		return nil, err

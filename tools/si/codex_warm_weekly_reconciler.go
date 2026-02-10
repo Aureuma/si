@@ -537,7 +537,7 @@ func loadWarmWeeklyState() (warmWeeklyState, error) {
 	if err != nil {
 		return warmWeeklyState{}, err
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := readLocalFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return warmWeeklyState{Version: warmWeeklyStateVersion, Profiles: map[string]*warmWeeklyProfileState{}}, nil
@@ -714,7 +714,7 @@ func appendWarmWeeklyLog(level string, event string, profileID string, extra map
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := openLocalFileFlags(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
 	}
@@ -817,6 +817,7 @@ func launchWarmupCommand(args ...string) error {
 	if err != nil {
 		return err
 	}
+	// #nosec G204 -- exePath is from os.Executable and args are fixed subcommands.
 	cmd := exec.Command(exePath, args...)
 	cmd.Env = os.Environ()
 	cmd.Stdin = nil

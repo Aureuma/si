@@ -476,7 +476,7 @@ func loadSettings() (Settings, error) {
 		applySettingsDefaults(&settings)
 		return settings, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := readLocalFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			settings := defaultSettings()
