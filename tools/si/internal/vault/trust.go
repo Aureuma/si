@@ -17,7 +17,7 @@ type TrustStore struct {
 type TrustEntry struct {
 	RepoRoot    string `json:"repo_root"`
 	VaultDir    string `json:"vault_dir"`
-	Env         string `json:"env"`
+	File        string `json:"file"`
 	VaultRepo   string `json:"vault_repo_url,omitempty"`
 	Fingerprint string `json:"fingerprint"`
 	TrustedAt   string `json:"trusted_at,omitempty"`
@@ -26,7 +26,7 @@ type TrustEntry struct {
 func LoadTrustStore(path string) (*TrustStore, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return &TrustStore{SchemaVersion: 1}, nil
+		return &TrustStore{SchemaVersion: 2}, nil
 	}
 	path, err := ExpandHome(path)
 	if err != nil {
@@ -35,7 +35,7 @@ func LoadTrustStore(path string) (*TrustStore, error) {
 	data, err := readFileScoped(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &TrustStore{SchemaVersion: 1}, nil
+			return &TrustStore{SchemaVersion: 2}, nil
 		}
 		return nil, err
 	}
@@ -43,24 +43,22 @@ func LoadTrustStore(path string) (*TrustStore, error) {
 	if err := json.Unmarshal(data, &store); err != nil {
 		return nil, err
 	}
-	if store.SchemaVersion == 0 {
-		store.SchemaVersion = 1
+	if store.SchemaVersion < 2 {
+		store.SchemaVersion = 2
 	}
 	return &store, nil
 }
 
-func (s *TrustStore) Find(repoRoot, vaultDir, env string) (*TrustEntry, bool) {
+func (s *TrustStore) Find(repoRoot, file string) (*TrustEntry, bool) {
 	if s == nil {
 		return nil, false
 	}
 	repoRoot = filepath.Clean(strings.TrimSpace(repoRoot))
-	vaultDir = filepath.Clean(strings.TrimSpace(vaultDir))
-	env = strings.TrimSpace(env)
+	file = filepath.Clean(strings.TrimSpace(file))
 	for i := range s.Entries {
 		e := &s.Entries[i]
 		if filepath.Clean(strings.TrimSpace(e.RepoRoot)) == repoRoot &&
-			filepath.Clean(strings.TrimSpace(e.VaultDir)) == vaultDir &&
-			strings.TrimSpace(e.Env) == env {
+			filepath.Clean(strings.TrimSpace(e.File)) == file {
 			return e, true
 		}
 	}
@@ -73,7 +71,7 @@ func (s *TrustStore) Upsert(entry TrustEntry) {
 	}
 	entry.RepoRoot = filepath.Clean(strings.TrimSpace(entry.RepoRoot))
 	entry.VaultDir = filepath.Clean(strings.TrimSpace(entry.VaultDir))
-	entry.Env = strings.TrimSpace(entry.Env)
+	entry.File = filepath.Clean(strings.TrimSpace(entry.File))
 	entry.VaultRepo = strings.TrimSpace(entry.VaultRepo)
 	entry.Fingerprint = strings.TrimSpace(entry.Fingerprint)
 	if entry.TrustedAt == "" {
@@ -82,8 +80,7 @@ func (s *TrustStore) Upsert(entry TrustEntry) {
 	for i := range s.Entries {
 		e := &s.Entries[i]
 		if filepath.Clean(strings.TrimSpace(e.RepoRoot)) == entry.RepoRoot &&
-			filepath.Clean(strings.TrimSpace(e.VaultDir)) == entry.VaultDir &&
-			strings.TrimSpace(e.Env) == entry.Env {
+			filepath.Clean(strings.TrimSpace(e.File)) == entry.File {
 			*e = entry
 			return
 		}
@@ -91,19 +88,17 @@ func (s *TrustStore) Upsert(entry TrustEntry) {
 	s.Entries = append(s.Entries, entry)
 }
 
-func (s *TrustStore) Delete(repoRoot, vaultDir, env string) bool {
+func (s *TrustStore) Delete(repoRoot, file string) bool {
 	if s == nil {
 		return false
 	}
 	repoRoot = filepath.Clean(strings.TrimSpace(repoRoot))
-	vaultDir = filepath.Clean(strings.TrimSpace(vaultDir))
-	env = strings.TrimSpace(env)
+	file = filepath.Clean(strings.TrimSpace(file))
 	out := s.Entries[:0]
 	removed := false
 	for _, e := range s.Entries {
 		if filepath.Clean(strings.TrimSpace(e.RepoRoot)) == repoRoot &&
-			filepath.Clean(strings.TrimSpace(e.VaultDir)) == vaultDir &&
-			strings.TrimSpace(e.Env) == env {
+			filepath.Clean(strings.TrimSpace(e.File)) == file {
 			removed = true
 			continue
 		}

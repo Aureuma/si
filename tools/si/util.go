@@ -254,26 +254,27 @@ stripe:
     CLI uses live and sandbox.
     test is not accepted as a standalone environment mode.
 
-vault:
-  Target selection (most commands):
-    --file <path>               (explicit env file path, overrides --vault-dir/--env)
-    --vault-dir <path>          (default: vault; resolved relative to git root)
-    --env <name>                (default: dev; maps to .env.<env>)
+	vault:
+	  Target selection (most commands):
+	    --file <path>               (explicit env file path, overrides --vault-dir)
+	    --vault-dir <path>          (default: vault; resolved relative to git root)
 
-  si vault init --submodule-url <git-url> [--vault-dir <path>] [--ignore-dirty] [--env <name>] [--hooks] [--key-backend <keyring|file>] [--key-file <path>]
-  si vault status [--file <path>] [--vault-dir <path>] [--env <name>]
-  si vault check [--file <path>] [--vault-dir <path>] [--env <name>] [--staged] [--all]
-  si vault hooks install|status|uninstall [--vault-dir <path>] [--force]
-  si vault fmt [--file <path>] [--vault-dir <path>] [--env <name>] [--all] [--check]
-  si vault encrypt [--file <path>] [--vault-dir <path>] [--env <name>] [--format] [--reencrypt]
-  si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--env <name>] [--section <name>] [--stdin] [--format]
-  si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--env <name>] [--format]
-  si vault get <KEY> [--file <path>] [--vault-dir <path>] [--env <name>] [--reveal]
-  si vault list [--file <path>] [--vault-dir <path>] [--env <name>]
-  si vault run [--file <path>] [--vault-dir <path>] [--env <name>] [--allow-plaintext] -- <cmd...>
-  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--env <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
-  si vault trust status|accept|forget [--file <path>] [--vault-dir <path>] [--env <name>]
-  si vault recipients list|add|remove [--file <path>] [--vault-dir <path>] [--env <name>]
+	  Default file (when --file is not set): <vault-dir>/.env
+
+	  si vault init --submodule-url <git-url> [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|file>] [--key-file <path>]
+	  si vault status [--file <path>] [--vault-dir <path>]
+	  si vault check [--file <path>] [--vault-dir <path>] [--staged] [--all]
+	  si vault hooks install|status|uninstall [--vault-dir <path>] [--force]
+	  si vault fmt [--file <path>] [--vault-dir <path>] [--all] [--check]
+	  si vault encrypt [--file <path>] [--vault-dir <path>] [--format] [--reencrypt]
+	  si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--section <name>] [--stdin] [--format]
+	  si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--format]
+	  si vault get <KEY> [--file <path>] [--vault-dir <path>] [--reveal]
+	  si vault list [--file <path>] [--vault-dir <path>]
+	  si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] -- <cmd...>
+	  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
+	  si vault trust status|accept|forget [--file <path>] [--vault-dir <path>]
+	  si vault recipients list|add|remove [--file <path>] [--vault-dir <path>]
 
   Alias:
     si creds ...

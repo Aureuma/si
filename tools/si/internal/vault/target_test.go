@@ -7,32 +7,14 @@ import (
 	"testing"
 )
 
-func TestResolveTargetRejectsInvalidEnvName(t *testing.T) {
+func TestResolveTargetDefaultsToDotenvInVaultDir(t *testing.T) {
 	repo := initGitRepoForTargetTest(t)
 	vaultDir := filepath.Join(repo, "vault")
 	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
 		t.Fatalf("mkdir vault dir: %v", err)
 	}
 
-	_, err := ResolveTarget(ResolveOptions{
-		CWD:                  repo,
-		VaultDir:             "vault",
-		Env:                  "../escape",
-		AllowMissingVaultDir: false,
-		AllowMissingFile:     true,
-	})
-	if err == nil {
-		t.Fatalf("expected invalid env error")
-	}
-}
-
-func TestResolveTargetBuildsEnvFileInsideVaultDir(t *testing.T) {
-	repo := initGitRepoForTargetTest(t)
-	vaultDir := filepath.Join(repo, "vault")
-	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
-		t.Fatalf("mkdir vault dir: %v", err)
-	}
-	path := filepath.Join(vaultDir, ".env.staging-us")
+	path := filepath.Join(vaultDir, ".env")
 	if err := os.WriteFile(path, []byte("A=1\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
@@ -40,14 +22,42 @@ func TestResolveTargetBuildsEnvFileInsideVaultDir(t *testing.T) {
 	target, err := ResolveTarget(ResolveOptions{
 		CWD:                  repo,
 		VaultDir:             "vault",
-		Env:                  "staging-us",
 		AllowMissingVaultDir: false,
 		AllowMissingFile:     false,
 	})
 	if err != nil {
 		t.Fatalf("ResolveTarget: %v", err)
 	}
-	if target.File != path {
+	got, _ := filepath.EvalSymlinks(target.File)
+	want, _ := filepath.EvalSymlinks(path)
+	if got != want {
+		t.Fatalf("file=%q want %q", target.File, path)
+	}
+}
+
+func TestResolveTargetExplicitFile(t *testing.T) {
+	repo := initGitRepoForTargetTest(t)
+	vaultDir := filepath.Join(repo, "vault")
+	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
+		t.Fatalf("mkdir vault dir: %v", err)
+	}
+	path := filepath.Join(vaultDir, ".env.prod")
+	if err := os.WriteFile(path, []byte("A=1\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	target, err := ResolveTarget(ResolveOptions{
+		CWD:                  repo,
+		File:                 path,
+		AllowMissingVaultDir: false,
+		AllowMissingFile:     false,
+	})
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	got, _ := filepath.EvalSymlinks(target.File)
+	want, _ := filepath.EvalSymlinks(path)
+	if got != want {
 		t.Fatalf("file=%q want %q", target.File, path)
 	}
 }
