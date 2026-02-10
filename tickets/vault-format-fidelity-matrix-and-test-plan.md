@@ -97,6 +97,10 @@ Legend:
 | M45 | Scan | malformed quoted plaintext | scan | error surfaced | PASS | `TestScanDotenvEncryptionErrorsOnInvalidQuotedPlaintext` |
 | M46 | Decrypt | malformed quoted plaintext | decrypt | error surfaced | PASS | `TestDecryptEnvErrorsOnInvalidQuotedPlaintext` |
 | M47 | Encrypt | malformed quoted plaintext | encrypt | error surfaced | PASS | `TestEncryptDotenvValuesErrorsOnInvalidQuotedPlaintext` |
+| M48 | Header Parse | lookalike recipient metadata comment (`recipient-count`) | parse recipients | ignore lookalike; keep only true recipient directives | FIXED | `TestParseRecipientsFromDotenvIgnoresLookalikes` |
+| M49 | Header Parse | non-comment recipient-like line | parse recipient | reject non-comment line | FIXED | `TestParseRecipientLineRejectsNonCommentLine` |
+| M50 | Header Parse | non-comment version-like line | version detection | reject non-comment line | FIXED | `TestIsVersionLineRejectsNonCommentLine` |
+| M51 | Fmt | lookalike header comment in body | fmt | preserve comment (do not strip as header) | FIXED | `TestFormatVaultDotenvKeepsLookalikeHeaderComment` |
 
 ## Execution Plan
 
@@ -119,5 +123,11 @@ Legend:
   - `go test ./tools/si/internal/vault -count=1` => PASS
   - `go test ./tools/si/... -count=1` => PASS
 - 2026-02-10: Extended matrix beyond initial pass (`M35`-`M47`) and repeated full validation:
+  - `go test ./tools/si/internal/vault -count=1` => PASS
+  - `go test ./tools/si/... -count=1` => PASS
+- 2026-02-10: Found and fixed permissive header parsing gap:
+  - recipient/version detection now requires comment-form directives and exact recipient directive prefix boundaries.
+  - formatter no longer strips lookalike comments such as `# si-vault:recipient-count ...`.
+- 2026-02-10: Re-ran validation after header parsing fix:
   - `go test ./tools/si/internal/vault -count=1` => PASS
   - `go test ./tools/si/... -count=1` => PASS
