@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -27,19 +26,18 @@ func cmdVaultUnset(args []string) {
 	}
 	_ = section
 	key := strings.TrimSpace(rest[0])
-	if key == "" {
-		fatal(fmt.Errorf("key required"))
+	if err := vault.ValidateKeyName(key); err != nil {
+		fatal(err)
 	}
 
 	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, *env, false, false)
 	if err != nil {
 		fatal(err)
 	}
-	data, err := os.ReadFile(target.File)
+	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
 	}
-	doc := vault.ParseDotenv(data)
 	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
 		fatal(err)
 	}

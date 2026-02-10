@@ -6,7 +6,7 @@ type Entry struct {
 	Encrypted bool
 }
 
-func Entries(doc DotenvFile) []Entry {
+func Entries(doc DotenvFile) ([]Entry, error) {
 	lastByKey := map[string]Entry{}
 	order := []string{}
 	seenInOrder := map[string]bool{}
@@ -15,8 +15,8 @@ func Entries(doc DotenvFile) []Entry {
 		if !ok {
 			continue
 		}
-		if assign.Key == "" {
-			continue
+		if err := ValidateKeyName(assign.Key); err != nil {
+			return nil, err
 		}
 		if !seenInOrder[assign.Key] {
 			order = append(order, assign.Key)
@@ -24,7 +24,7 @@ func Entries(doc DotenvFile) []Entry {
 		}
 		val, err := NormalizeDotenvValue(assign.ValueRaw)
 		if err != nil {
-			val = ""
+			return nil, err
 		}
 		lastByKey[assign.Key] = Entry{
 			Key:       assign.Key,
@@ -36,5 +36,5 @@ func Entries(doc DotenvFile) []Entry {
 	for _, key := range order {
 		out = append(out, lastByKey[key])
 	}
-	return out
+	return out, nil
 }

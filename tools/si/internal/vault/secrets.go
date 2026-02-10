@@ -22,6 +22,9 @@ func DecryptEnv(doc DotenvFile, identity *age.X25519Identity) (DecryptResult, er
 		if !ok {
 			continue
 		}
+		if err := ValidateKeyName(assign.Key); err != nil {
+			return DecryptResult{}, err
+		}
 		raw := assign.ValueRaw
 		val, err := NormalizeDotenvValue(raw)
 		if err != nil {
@@ -71,6 +74,9 @@ func EncryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity, reencryp
 		assign, ok := parseAssignment(doc.Lines[i].Text)
 		if !ok {
 			continue
+		}
+		if err := ValidateKeyName(assign.Key); err != nil {
+			return EncryptResult{}, err
 		}
 		val, err := NormalizeDotenvValue(assign.ValueRaw)
 		if err != nil {

@@ -180,7 +180,7 @@ func loadIdentityFromFile(path string) (*age.X25519Identity, error) {
 	if err := ensureSecureKeyFile(path); err != nil {
 		return nil, err
 	}
-	data, err := os.ReadFile(path)
+	data, err := readFileScoped(path)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func ensureSecureKeyFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("key file path required")
 	}
-	if strings.TrimSpace(os.Getenv("SI_VAULT_ALLOW_INSECURE_KEY_FILE")) != "" {
+	if isTruthyEnv("SI_VAULT_ALLOW_INSECURE_KEY_FILE") {
 		return nil
 	}
 	info, err := os.Lstat(path)
