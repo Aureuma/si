@@ -6,26 +6,21 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
-
-	stripe "github.com/stripe/stripe-go/v83"
-	"github.com/stripe/stripe-go/v83/rawrequest"
 
 	"si/tools/si/internal/providers"
 )
 
-type rawRequester interface {
-	RawRequest(method string, path string, content string, params *stripe.RawParams) (*stripe.APIResponse, error)
-}
-
 type Client struct {
-	cfg ClientConfig
-	raw rawRequester
-	log EventLogger
+	cfg        ClientConfig
+	httpClient *http.Client
+	log        EventLogger
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
@@ -38,44 +33,21 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if cfg.MaxNetworkRetries < 0 {
 		cfg.MaxNetworkRetries = 0
 	}
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = stripe.APIURL
+	if strings.TrimSpace(cfg.BaseURL) == "" {
+		cfg.BaseURL = providers.Resolve(providers.Stripe).BaseURL
 	}
 	if cfg.Logger == nil && strings.TrimSpace(cfg.LogPath) != "" {
 		cfg.Logger = NewJSONLLogger(strings.TrimSpace(cfg.LogPath))
 	}
-	backendCfg := &stripe.BackendConfig{
-		HTTPClient:        &http.Client{Timeout: cfg.Timeout},
-		MaxNetworkRetries: stripe.Int64(cfg.MaxNetworkRetries),
-		URL:               stripe.String(cfg.BaseURL),
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: cfg.Timeout}
 	}
-	if strings.TrimSpace(cfg.StripeContext) != "" {
-		backendCfg.StripeContext = stripe.String(strings.TrimSpace(cfg.StripeContext))
-	}
-	backend := stripe.GetBackendWithConfig(stripe.APIBackend, backendCfg)
-	rawBackend, ok := backend.(stripe.RawRequestBackend)
-	if !ok {
-		return nil, fmt.Errorf("stripe backend does not support raw requests")
-	}
-	return &Client{
-		cfg: cfg,
-		raw: rawrequest.Client{B: rawBackend, Key: strings.TrimSpace(cfg.APIKey)},
-		log: cfg.Logger,
-	}, nil
-}
-
-func newClientWithRaw(cfg ClientConfig, raw rawRequester) (*Client, error) {
-	if raw == nil {
-		return nil, fmt.Errorf("raw requester is required")
-	}
-	if strings.TrimSpace(cfg.APIKey) == "" {
-		return nil, fmt.Errorf("stripe api key is required")
-	}
-	return &Client{cfg: cfg, raw: raw, log: cfg.Logger}, nil
+	return &Client{cfg: cfg, httpClient: client, log: cfg.Logger}, nil
 }
 
 func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
-	if c == nil || c.raw == nil {
+	if c == nil || c.httpClient == nil {
 		return Response{}, fmt.Errorf("stripe client is not initialized")
 	}
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
@@ -90,6 +62,10 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 		path = "/" + path
 	}
 	content, reqPath, err := buildRequestContent(path, method, req.Params, req.RawBody)
+	if err != nil {
+		return Response{}, err
+	}
+	endpoint, err := resolveURL(c.cfg.BaseURL, reqPath)
 	if err != nil {
 		return Response{}, err
 	}
@@ -114,94 +90,165 @@ func (c *Client) Do(ctx context.Context, req Request) (Response, error) {
 		"params_count":     len(req.Params),
 		"body_bytes":       len(content),
 	})
-	rawParams := &stripe.RawParams{}
-	if strings.TrimSpace(c.cfg.AccountID) != "" {
-		rawParams.SetStripeAccount(strings.TrimSpace(c.cfg.AccountID))
+	maxAttempts := int(c.cfg.MaxNetworkRetries) + 1
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
-	if strings.TrimSpace(c.cfg.StripeContext) != "" {
-		rawParams.StripeContext = strings.TrimSpace(c.cfg.StripeContext)
-	}
-	if idempotencyKey != "" {
-		rawParams.SetIdempotencyKey(idempotencyKey)
-	}
-
-	type responsePack struct {
-		resp *stripe.APIResponse
-		err  error
-	}
-	resultCh := make(chan responsePack, 1)
-	go func() {
-		resp, callErr := c.raw.RawRequest(method, reqPath, content, rawParams)
-		resultCh <- responsePack{resp: resp, err: callErr}
-	}()
-
-	select {
-	case <-ctx.Done():
-		c.logEvent("error", map[string]any{
-			"method":      method,
-			"path":        reqPath,
-			"duration_ms": time.Since(start).Milliseconds(),
-			"error":       RedactSensitive(ctx.Err().Error()),
-		})
-		return Response{}, ctx.Err()
-	case pack := <-resultCh:
-		duration := time.Since(start)
-		if pack.err != nil {
-			apiErr := NormalizeAPIError(pack.err, "")
-			if apiErr != nil && apiErr.StatusCode > 0 {
-				providers.FeedbackWithLatency(providers.Stripe, subject, apiErr.StatusCode, nil, duration)
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		httpReq, reqErr := c.buildRequest(ctx, method, endpoint, content, req.RawBody, idempotencyKey)
+		if reqErr != nil {
+			return Response{}, reqErr
+		}
+		attemptStart := time.Now().UTC()
+		httpResp, callErr := c.httpClient.Do(httpReq)
+		if callErr != nil {
+			lastErr = callErr
+			if attempt < maxAttempts && isRetryableNetwork(method, idempotencyKey, callErr) {
+				time.Sleep(retryDelay(attempt, nil))
+				continue
 			}
-			fields := map[string]any{
+			c.logEvent("error", map[string]any{
 				"method":      method,
 				"path":        reqPath,
-				"duration_ms": duration.Milliseconds(),
-				"error":       RedactSensitive(apiErr.Error()),
-			}
-			if apiErr != nil {
-				fields["status"] = apiErr.StatusCode
-				fields["type"] = apiErr.Type
-				fields["code"] = apiErr.Code
-				fields["request_id"] = apiErr.RequestID
-			}
-			c.logEvent("error", fields)
-			return Response{}, apiErr
+				"duration_ms": time.Since(attemptStart).Milliseconds(),
+				"error":       RedactSensitive(callErr.Error()),
+			})
+			return Response{}, NormalizeAPIError(callErr, "")
 		}
-		resp := normalizeResponse(pack.resp)
-		var feedbackHeaders http.Header
-		if pack.resp != nil {
-			feedbackHeaders = pack.resp.Header
-		}
-		providers.FeedbackWithLatency(providers.Stripe, subject, resp.StatusCode, feedbackHeaders, duration)
+		bodyBytes, _ := io.ReadAll(httpResp.Body)
+		_ = httpResp.Body.Close()
+		body := strings.TrimSpace(string(bodyBytes))
+		resp := normalizeResponse(httpResp, body)
+		duration := time.Since(attemptStart)
+		providers.FeedbackWithLatency(providers.Stripe, subject, resp.StatusCode, httpResp.Header, duration)
 		c.logEvent("response", map[string]any{
 			"method":      method,
 			"path":        reqPath,
+			"attempt":     attempt,
 			"duration_ms": duration.Milliseconds(),
 			"status":      resp.StatusCode,
 			"request_id":  resp.RequestID,
 		})
-		return resp, nil
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			return resp, nil
+		}
+		apiErr := NormalizeHTTPError(resp.StatusCode, httpResp.Header, body)
+		lastErr = apiErr
+		c.logEvent("error", map[string]any{
+			"method":      method,
+			"path":        reqPath,
+			"attempt":     attempt,
+			"duration_ms": duration.Milliseconds(),
+			"status":      apiErr.StatusCode,
+			"type":        apiErr.Type,
+			"code":        apiErr.Code,
+			"request_id":  apiErr.RequestID,
+			"error":       RedactSensitive(apiErr.Error()),
+		})
+		if attempt < maxAttempts && isRetryableHTTP(method, idempotencyKey, resp.StatusCode) {
+			time.Sleep(retryDelay(attempt, httpResp.Header))
+			continue
+		}
+		return Response{}, apiErr
 	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("stripe request failed")
+	}
+	c.logEvent("error", map[string]any{
+		"method":      method,
+		"path":        reqPath,
+		"duration_ms": time.Since(start).Milliseconds(),
+		"error":       RedactSensitive(lastErr.Error()),
+	})
+	return Response{}, NormalizeAPIError(lastErr, "")
 }
 
-func normalizeResponse(resp *stripe.APIResponse) Response {
+func (c *Client) buildRequest(ctx context.Context, method string, endpoint string, content string, rawBody string, idempotencyKey string) (*http.Request, error) {
+	bodyReader := io.Reader(nil)
+	if strings.TrimSpace(content) != "" {
+		bodyReader = strings.NewReader(content)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
+	if err != nil {
+		return nil, err
+	}
+	spec := providers.Resolve(providers.Stripe)
+	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(c.cfg.APIKey))
+	httpReq.Header.Set("Accept", firstNonEmpty(strings.TrimSpace(spec.Accept), "application/json"))
+	httpReq.Header.Set("User-Agent", firstNonEmpty(strings.TrimSpace(spec.UserAgent), "si-stripe/1.0"))
+	if strings.TrimSpace(c.cfg.AccountID) != "" {
+		httpReq.Header.Set("Stripe-Account", strings.TrimSpace(c.cfg.AccountID))
+	}
+	if strings.TrimSpace(c.cfg.StripeContext) != "" {
+		httpReq.Header.Set("Stripe-Context", strings.TrimSpace(c.cfg.StripeContext))
+	}
+	if strings.TrimSpace(idempotencyKey) != "" {
+		httpReq.Header.Set("Idempotency-Key", strings.TrimSpace(idempotencyKey))
+	}
+	if strings.TrimSpace(content) != "" {
+		contentType := detectStripeContentType(strings.TrimSpace(httpReq.URL.Path), rawBody)
+		httpReq.Header.Set("Content-Type", contentType)
+	}
+	return httpReq, nil
+}
+
+func detectStripeContentType(path string, rawBody string) string {
+	if strings.HasPrefix(strings.TrimSpace(path), "/v2/") {
+		return "application/json"
+	}
+	rawBody = strings.TrimSpace(rawBody)
+	if strings.HasPrefix(rawBody, "{") || strings.HasPrefix(rawBody, "[") {
+		return "application/json"
+	}
+	return "application/x-www-form-urlencoded"
+}
+
+func resolveURL(baseURL string, path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("request path is required")
+	}
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		u, err := url.Parse(path)
+		if err != nil {
+			return "", err
+		}
+		return u.String(), nil
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	base, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return "", err
+	}
+	rel, err := url.Parse(path)
+	if err != nil {
+		return "", err
+	}
+	return base.ResolveReference(rel).String(), nil
+}
+
+func normalizeResponse(httpResp *http.Response, body string) Response {
 	out := Response{}
-	if resp == nil {
+	if httpResp == nil {
 		return out
 	}
-	out.StatusCode = resp.StatusCode
-	out.Status = resp.Status
-	out.RequestID = strings.TrimSpace(resp.RequestID)
-	out.IdempotencyKey = strings.TrimSpace(resp.IdempotencyKey)
-	out.Body = RedactSensitive(strings.TrimSpace(string(resp.RawJSON)))
-	if len(resp.Header) > 0 {
-		headers := make([]string, 0, len(resp.Header))
-		for key := range resp.Header {
+	out.StatusCode = httpResp.StatusCode
+	out.Status = strings.TrimSpace(httpResp.Status)
+	out.RequestID = strings.TrimSpace(httpResp.Header.Get("Request-Id"))
+	out.IdempotencyKey = strings.TrimSpace(httpResp.Header.Get("Idempotency-Key"))
+	out.Body = RedactSensitive(strings.TrimSpace(body))
+	if len(httpResp.Header) > 0 {
+		headers := make([]string, 0, len(httpResp.Header))
+		for key := range httpResp.Header {
 			headers = append(headers, key)
 		}
 		sort.Strings(headers)
 		out.Headers = make(map[string]string, len(headers))
 		for _, key := range headers {
-			val := strings.Join(resp.Header.Values(key), ",")
+			val := strings.Join(httpResp.Header.Values(key), ",")
 			out.Headers[key] = RedactSensitive(val)
 		}
 	}
@@ -212,6 +259,80 @@ func normalizeResponse(resp *stripe.APIResponse) Response {
 		}
 	}
 	return out
+}
+
+func isRetryableNetwork(method string, idempotencyKey string, _ error) bool {
+	return canRetryMethod(method, idempotencyKey)
+}
+
+func isRetryableHTTP(method string, idempotencyKey string, statusCode int) bool {
+	if !canRetryMethod(method, idempotencyKey) {
+		return false
+	}
+	switch statusCode {
+	case http.StatusConflict, http.StatusTooManyRequests, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	}
+	return statusCode >= 500
+}
+
+func canRetryMethod(method string, idempotencyKey string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodDelete:
+		return true
+	case http.MethodPost:
+		return strings.TrimSpace(idempotencyKey) != ""
+	default:
+		return false
+	}
+}
+
+func retryDelay(attempt int, headers http.Header) time.Duration {
+	if seconds, ok := retryAfterSeconds(headers); ok {
+		return time.Duration(seconds * float64(time.Second))
+	}
+	if attempt < 1 {
+		attempt = 1
+	}
+	base := 500 * time.Millisecond
+	delay := base * time.Duration(1<<(attempt-1))
+	if delay > 5*time.Second {
+		return 5 * time.Second
+	}
+	return delay
+}
+
+func retryAfterSeconds(headers http.Header) (float64, bool) {
+	if headers == nil {
+		return 0, false
+	}
+	raw := strings.TrimSpace(headers.Get("Retry-After"))
+	if raw == "" {
+		return 0, false
+	}
+	if asInt, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		if asInt < 0 {
+			return 0, false
+		}
+		return float64(asInt), true
+	}
+	if when, err := http.ParseTime(raw); err == nil {
+		seconds := time.Until(when).Seconds()
+		if seconds < 0 {
+			return 0, true
+		}
+		return seconds, true
+	}
+	return 0, false
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func buildRequestContent(path string, method string, params map[string]string, rawBody string) (content string, reqPath string, err error) {

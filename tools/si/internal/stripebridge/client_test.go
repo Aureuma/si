@@ -4,41 +4,54 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
-
-	stripe "github.com/stripe/stripe-go/v83"
 )
 
-type mockRawRequester struct {
-	lastMethod  string
-	lastPath    string
-	lastContent string
-	response    *stripe.APIResponse
-	err         error
+type mockEventLogger struct {
+	events []map[string]any
 }
 
-func (m *mockRawRequester) RawRequest(method string, path string, content string, params *stripe.RawParams) (*stripe.APIResponse, error) {
-	m.lastMethod = method
-	m.lastPath = path
-	m.lastContent = content
-	return m.response, m.err
+func (m *mockEventLogger) Log(event map[string]any) {
+	copyEvent := map[string]any{}
+	for key, value := range event {
+		copyEvent[key] = value
+	}
+	m.events = append(m.events, copyEvent)
 }
 
 func TestClientDoGETBuildsQuery(t *testing.T) {
-	mock := &mockRawRequester{
-		response: &stripe.APIResponse{
-			StatusCode: http.StatusOK,
-			Status:     "200 OK",
-			RawJSON:    []byte(`{"object":"list","data":[],"has_more":false}`),
-		},
-	}
-	client, err := newClientWithRaw(ClientConfig{APIKey: "sk_test_123"}, mock)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Method; got != http.MethodGet {
+			t.Fatalf("unexpected method: %s", got)
+		}
+		if got := r.URL.Path; got != "/v1/products" {
+			t.Fatalf("unexpected path: %s", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "3" {
+			t.Fatalf("unexpected limit query: %q", got)
+		}
+		if got := r.URL.Query().Get("active"); got != "true" {
+			t.Fatalf("unexpected active query: %q", got)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer sk_test_123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_, _ = w.Write([]byte(`{"object":"list","data":[],"has_more":false}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(ClientConfig{
+		APIKey:     "sk_test_123",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
+	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
-	_, err = client.Do(context.Background(), Request{
+	resp, err := client.Do(context.Background(), Request{
 		Method: "GET",
 		Path:   "/v1/products",
 		Params: map[string]string{"limit": "3", "active": "true"},
@@ -46,14 +59,8 @@ func TestClientDoGETBuildsQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("client do: %v", err)
 	}
-	if mock.lastMethod != "GET" {
-		t.Fatalf("unexpected method: %s", mock.lastMethod)
-	}
-	if mock.lastContent != "" {
-		t.Fatalf("expected empty GET content, got %q", mock.lastContent)
-	}
-	if mock.lastPath == "/v1/products" {
-		t.Fatalf("expected query string in path")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status: %d", resp.StatusCode)
 	}
 }
 
@@ -70,32 +77,20 @@ func TestBuildRequestContentForPostForm(t *testing.T) {
 	}
 }
 
-type mockEventLogger struct {
-	events []map[string]any
-}
-
-func (m *mockEventLogger) Log(event map[string]any) {
-	copyEvent := map[string]any{}
-	for key, value := range event {
-		copyEvent[key] = value
-	}
-	m.events = append(m.events, copyEvent)
-}
-
 func TestClientDoWritesLogEvents(t *testing.T) {
-	mock := &mockRawRequester{
-		response: &stripe.APIResponse{
-			StatusCode: http.StatusOK,
-			Status:     "200 OK",
-			RawJSON:    []byte(`{"id":"prod_1"}`),
-		},
-	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"prod_1"}`))
+	}))
+	defer srv.Close()
+
 	logger := &mockEventLogger{}
-	client, err := newClientWithRaw(ClientConfig{
+	client, err := NewClient(ClientConfig{
 		APIKey:     "sk_test_123",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
 		Logger:     logger,
 		LogContext: map[string]string{"environment": "sandbox"},
-	}, mock)
+	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
@@ -115,18 +110,20 @@ func TestClientDoWritesLogEvents(t *testing.T) {
 }
 
 func TestClientDoAutogeneratesIdempotencyForPost(t *testing.T) {
-	mock := &mockRawRequester{
-		response: &stripe.APIResponse{
-			StatusCode: http.StatusOK,
-			Status:     "200 OK",
-			RawJSON:    []byte(`{"id":"prod_1"}`),
-		},
-	}
+	capturedIdempotency := ""
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedIdempotency = strings.TrimSpace(r.Header.Get("Idempotency-Key"))
+		_, _ = w.Write([]byte(`{"id":"prod_1"}`))
+	}))
+	defer srv.Close()
+
 	logger := &mockEventLogger{}
-	client, err := newClientWithRaw(ClientConfig{
-		APIKey: "sk_test_123",
-		Logger: logger,
-	}, mock)
+	client, err := NewClient(ClientConfig{
+		APIKey:     "sk_test_123",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
+		Logger:     logger,
+	})
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
@@ -137,6 +134,9 @@ func TestClientDoAutogeneratesIdempotencyForPost(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("client do: %v", err)
+	}
+	if strings.TrimSpace(capturedIdempotency) == "" {
+		t.Fatalf("expected autogenerated idempotency header")
 	}
 	if len(logger.events) == 0 {
 		t.Fatalf("expected request log event")
@@ -149,6 +149,41 @@ func TestClientDoAutogeneratesIdempotencyForPost(t *testing.T) {
 	auto, _ := requestEvent["idempotency_auto"].(bool)
 	if !auto {
 		t.Fatalf("expected idempotency_auto=true: %+v", requestEvent)
+	}
+}
+
+func TestClientDoNormalizesHTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Request-Id", "req_123")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"type":"invalid_request_error","code":"resource_missing","param":"id","message":"No such product","doc_url":"https://docs.stripe.com/errors"}}`))
+	}))
+	defer srv.Close()
+
+	client, err := NewClient(ClientConfig{
+		APIKey:     "sk_test_123",
+		BaseURL:    srv.URL,
+		HTTPClient: srv.Client(),
+	})
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	_, err = client.Do(context.Background(), Request{
+		Method: "GET",
+		Path:   "/v1/products/prod_missing",
+	})
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+	apiErr, ok := err.(*APIErrorDetails)
+	if !ok {
+		t.Fatalf("unexpected error type: %T", err)
+	}
+	if apiErr.StatusCode != http.StatusBadRequest || apiErr.RequestID != "req_123" {
+		t.Fatalf("unexpected normalized error: %+v", apiErr)
+	}
+	if apiErr.Type != "invalid_request_error" || apiErr.Code != "resource_missing" {
+		t.Fatalf("unexpected normalized fields: %+v", apiErr)
 	}
 }
 
