@@ -25,6 +25,7 @@ type codexExecOneOffOptions struct {
 	Workdir       string
 	Network       string
 	CodexVolume   string
+	SkillsVolume  string
 	GHVolume      string
 	Env           []string
 	Model         string
@@ -112,9 +113,15 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 
 	mounts := []mount.Mount{}
 	if strings.TrimSpace(opts.CodexVolume) != "" {
+		_, _ = client.EnsureVolume(ctx, strings.TrimSpace(opts.CodexVolume), map[string]string{codexLabelKey: codexLabelValue})
 		mounts = append(mounts, mount.Mount{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/home/si/.codex"})
 	}
+	if strings.TrimSpace(opts.SkillsVolume) != "" {
+		_, _ = client.EnsureVolume(ctx, strings.TrimSpace(opts.SkillsVolume), map[string]string{codexLabelKey: codexLabelValue})
+		mounts = append(mounts, mount.Mount{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: "/home/si/.codex/skills"})
+	}
 	if strings.TrimSpace(opts.GHVolume) != "" {
+		_, _ = client.EnsureVolume(ctx, strings.TrimSpace(opts.GHVolume), map[string]string{codexLabelKey: codexLabelValue})
 		mounts = append(mounts, mount.Mount{Type: mount.TypeVolume, Source: opts.GHVolume, Target: "/home/si/.config/gh"})
 	}
 	mounts = append(mounts, shared.BuildContainerCoreMounts(shared.ContainerCoreMountPlan{

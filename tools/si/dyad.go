@@ -81,6 +81,7 @@ func cmdDyadSpawn(args []string) {
 	codexEffortLow := fs.String("codex-effort-low", envOr("CODEX_REASONING_EFFORT_LOW", ""), "codex effort low")
 	codexEffortMedium := fs.String("codex-effort-medium", envOr("CODEX_REASONING_EFFORT_MEDIUM", ""), "codex effort medium")
 	codexEffortHigh := fs.String("codex-effort-high", envOr("CODEX_REASONING_EFFORT_HIGH", ""), "codex effort high")
+	skillsVolume := fs.String("skills-volume", envOr("SI_CODEX_SKILLS_VOLUME", ""), "shared codex skills volume name")
 	workspaceHost := fs.String("workspace", envOr("SI_WORKSPACE_HOST", ""), "host path to workspace (repo root)")
 	configsHost := fs.String("configs", envOr("SI_CONFIGS_HOST", ""), "host path to configs")
 	forwardPorts := fs.String("forward-ports", envOr("SI_DYAD_FORWARD_PORTS", ""), "actor forward ports (default 1455-1465)")
@@ -125,6 +126,11 @@ func cmdDyadSpawn(args []string) {
 	}
 	if !flagProvided(args, "codex-effort-high") && strings.TrimSpace(settings.Dyad.CodexEffortHigh) != "" {
 		*codexEffortHigh = strings.TrimSpace(settings.Dyad.CodexEffortHigh)
+	}
+	if !flagProvided(args, "skills-volume") && strings.TrimSpace(settings.Dyad.SkillsVolume) != "" {
+		*skillsVolume = strings.TrimSpace(settings.Dyad.SkillsVolume)
+	} else if !flagProvided(args, "skills-volume") && strings.TrimSpace(settings.Codex.SkillsVolume) != "" {
+		*skillsVolume = strings.TrimSpace(settings.Codex.SkillsVolume)
 	}
 	if !workspaceSet && strings.TrimSpace(settings.Dyad.Workspace) != "" {
 		*workspaceHost = strings.TrimSpace(settings.Dyad.Workspace)
@@ -253,6 +259,7 @@ func cmdDyadSpawn(args []string) {
 		CodexEffortHigh:   *codexEffortHigh,
 		WorkspaceHost:     *workspaceHost,
 		ConfigsHost:       *configsHost,
+		SkillsVolume:      strings.TrimSpace(*skillsVolume),
 		ForwardPorts:      *forwardPorts,
 		Network:           shared.DefaultNetwork,
 		DockerSocket:      *dockerSocket,

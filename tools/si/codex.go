@@ -81,6 +81,7 @@ type codexSpawnFlags struct {
 	cmdStr        *string
 	workdir       *string
 	codexVolume   *string
+	skillsVolume  *string
 	ghVolume      *string
 	dockerSocket  *bool
 	profile       *string
@@ -99,6 +100,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 	cmdStr := fs.String("cmd", "", "command to run in the container")
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	codexVolume := fs.String("codex-volume", "", "override codex volume name")
+	skillsVolume := fs.String("skills-volume", "", "override shared codex skills volume name")
 	ghVolume := fs.String("gh-volume", "", "override github config volume name")
 	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in the container")
 	profile := fs.String("profile", "", "codex profile name/email")
@@ -117,6 +119,7 @@ func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
 		cmdStr:        cmdStr,
 		workdir:       workdir,
 		codexVolume:   codexVolume,
+		skillsVolume:  skillsVolume,
 		ghVolume:      ghVolume,
 		dockerSocket:  dockerSocket,
 		profile:       profile,
@@ -166,6 +169,9 @@ func cmdCodexSpawn(args []string) {
 	}
 	if !flagProvided(args, "codex-volume") && strings.TrimSpace(settings.Codex.CodexVolume) != "" {
 		*flags.codexVolume = strings.TrimSpace(settings.Codex.CodexVolume)
+	}
+	if !flagProvided(args, "skills-volume") && strings.TrimSpace(settings.Codex.SkillsVolume) != "" {
+		*flags.skillsVolume = strings.TrimSpace(settings.Codex.SkillsVolume)
 	}
 	if !flagProvided(args, "gh-volume") && strings.TrimSpace(settings.Codex.GHVolume) != "" {
 		*flags.ghVolume = strings.TrimSpace(settings.Codex.GHVolume)
@@ -383,11 +389,16 @@ func cmdCodexSpawn(args []string) {
 	if codexVol == "" {
 		codexVol = "si-codex-" + name
 	}
+	skillsVol := strings.TrimSpace(*flags.skillsVolume)
+	if skillsVol == "" {
+		skillsVol = shared.DefaultCodexSkillsVolume
+	}
 	ghVol := strings.TrimSpace(*flags.ghVolume)
 	if ghVol == "" {
 		ghVol = "si-gh-" + name
 	}
 	_, _ = client.EnsureVolume(ctx, codexVol, map[string]string{codexLabelKey: codexLabelValue})
+	_, _ = client.EnsureVolume(ctx, skillsVol, map[string]string{codexLabelKey: codexLabelValue})
 	_, _ = client.EnsureVolume(ctx, ghVol, map[string]string{codexLabelKey: codexLabelValue})
 
 	labels := map[string]string{
@@ -440,6 +451,7 @@ func cmdCodexSpawn(args []string) {
 	}
 	mounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
+		{Type: mount.TypeVolume, Source: skillsVol, Target: "/home/si/.codex/skills"},
 		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
 	}
 	mounts = append(mounts, shared.BuildContainerCoreMounts(shared.ContainerCoreMountPlan{
@@ -659,6 +671,7 @@ func cmdCodexExec(args []string) {
 	workdir := fs.String("workdir", "/workspace", "container working directory")
 	networkName := fs.String("network", envOr("SI_NETWORK", shared.DefaultNetwork), "docker network")
 	codexVolume := fs.String("codex-volume", envOr("SI_CODEX_EXEC_VOLUME", ""), "codex volume name")
+	skillsVolume := fs.String("skills-volume", envOr("SI_CODEX_SKILLS_VOLUME", ""), "shared codex skills volume name")
 	ghVolume := fs.String("gh-volume", "", "gh config volume name")
 	model := fs.String("model", envOr("CODEX_MODEL", "gpt-5.2-codex"), "codex model")
 	effort := fs.String("effort", envOr("CODEX_REASONING_EFFORT", "medium"), "codex reasoning effort")
@@ -671,6 +684,9 @@ func cmdCodexExec(args []string) {
 	settings := loadSettingsOrDefault()
 	if !flagProvided(args, "docker-socket") && settings.Codex.DockerSocket != nil {
 		*dockerSocket = *settings.Codex.DockerSocket
+	}
+	if !flagProvided(args, "skills-volume") && strings.TrimSpace(settings.Codex.SkillsVolume) != "" {
+		*skillsVolume = strings.TrimSpace(settings.Codex.SkillsVolume)
 	}
 
 	prompt := strings.TrimSpace(*promptFlag)
@@ -707,6 +723,7 @@ func cmdCodexExec(args []string) {
 			Workdir:       strings.TrimSpace(*workdir),
 			Network:       strings.TrimSpace(*networkName),
 			CodexVolume:   strings.TrimSpace(*codexVolume),
+			SkillsVolume:  strings.TrimSpace(*skillsVolume),
 			GHVolume:      strings.TrimSpace(*ghVolume),
 			Env:           envs,
 			Model:         strings.TrimSpace(*model),
@@ -716,6 +733,9 @@ func cmdCodexExec(args []string) {
 			KeepContainer: *keep,
 			DockerSocket:  *dockerSocket,
 			Profile:       profile,
+		}
+		if opts.SkillsVolume == "" {
+			opts.SkillsVolume = shared.DefaultCodexSkillsVolume
 		}
 		if err := runCodexExecOneOff(opts); err != nil {
 			fatal(err)

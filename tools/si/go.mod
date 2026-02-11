@@ -1,6 +1,7 @@
 module si/tools/si
 
 go 1.25.0
+
 toolchain go1.25.7
 
 require (
@@ -8,6 +9,7 @@ require (
 	github.com/docker/docker v26.1.4+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/pelletier/go-toml/v2 v2.2.4
+	golang.org/x/crypto v0.45.0
 	golang.org/x/term v0.39.0
 	si/agents/shared v0.0.0
 )
@@ -34,7 +36,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.39.0 // indirect
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/sys v0.40.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 )

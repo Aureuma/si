@@ -50,6 +50,7 @@ type CodexSettings struct {
 	Repo         string               `toml:"repo,omitempty"`
 	GHPAT        string               `toml:"gh_pat,omitempty"`
 	CodexVolume  string               `toml:"codex_volume,omitempty"`
+	SkillsVolume string               `toml:"skills_volume,omitempty"`
 	GHVolume     string               `toml:"gh_volume,omitempty"`
 	DockerSocket *bool                `toml:"docker_socket,omitempty"`
 	Profile      string               `toml:"profile,omitempty"`
@@ -98,6 +99,7 @@ type DyadSettings struct {
 	Workspace         string           `toml:"workspace,omitempty"`
 	Configs           string           `toml:"configs,omitempty"`
 	ForwardPorts      string           `toml:"forward_ports,omitempty"`
+	SkillsVolume      string           `toml:"skills_volume,omitempty"`
 	DockerSocket      *bool            `toml:"docker_socket,omitempty"`
 	Loop              DyadLoopSettings `toml:"loop,omitempty"`
 }

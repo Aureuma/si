@@ -39,6 +39,46 @@ func TestBuildDyadSpecsIncludesHostSiMounts(t *testing.T) {
 	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".si"), "/root/.si") {
 		t.Fatalf("critic spec missing host ~/.si mount: %+v", critic.HostConfig.Mounts)
 	}
+	if !mountExists(actor.HostConfig.Mounts, DefaultCodexSkillsVolume, "/root/.codex/skills") {
+		t.Fatalf("actor spec missing shared skills volume mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, DefaultCodexSkillsVolume, "/root/.codex/skills") {
+		t.Fatalf("critic spec missing shared skills volume mount: %+v", critic.HostConfig.Mounts)
+	}
+}
+
+func TestBuildDyadSpecsRespectsCustomSkillsVolume(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	const customSkills = "si-codex-skills-custom"
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "mounttest-custom",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		SkillsVolume:  customSkills,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+	if !mountExists(actor.HostConfig.Mounts, customSkills, "/root/.codex/skills") {
+		t.Fatalf("actor spec missing custom shared skills volume mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, customSkills, "/root/.codex/skills") {
+		t.Fatalf("critic spec missing custom shared skills volume mount: %+v", critic.HostConfig.Mounts)
+	}
 }
 
 func mountExists(mounts []mount.Mount, source string, target string) bool {

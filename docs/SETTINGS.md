@@ -45,6 +45,7 @@ Defaults for Codex container commands (spawn/respawn/login/run).
 - `codex.repo` (string): default repo in `Org/Repo` form
 - `codex.gh_pat` (string): optional PAT (stored in settings; keep file permissions restrictive)
 - `codex.codex_volume` (string): override codex volume name
+- `codex.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
 - `codex.gh_volume` (string): override GitHub config volume name
 - `codex.docker_socket` (bool): mount host Docker socket into codex containers (default: `true`)
 - `codex.profile` (string): default profile ID/email
@@ -91,6 +92,7 @@ Defaults for dyad spawns.
 - `dyad.workspace` (string): host path for workspace bind
 - `dyad.configs` (string): host path for configs
 - `dyad.forward_ports` (string): port range, e.g. `1455-1465`
+- `dyad.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
 - `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
 
 ### `[stripe]`

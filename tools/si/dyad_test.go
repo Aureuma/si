@@ -216,6 +216,52 @@ func TestSplitDyadSpawnArgsBoolFlagWithSeparateValue(t *testing.T) {
 	}
 }
 
+func TestSplitDyadSpawnArgsSkipAuthBoolDoesNotConsumeNextFlag(t *testing.T) {
+	name, filtered := splitDyadSpawnArgs([]string{
+		"demo",
+		"--skip-auth",
+		"--actor-image", "aureuma/si:local",
+	})
+	if name != "demo" {
+		t.Fatalf("unexpected name %q", name)
+	}
+	want := []string{
+		"--skip-auth",
+		"--actor-image", "aureuma/si:local",
+	}
+	if len(filtered) != len(want) {
+		t.Fatalf("unexpected filtered len=%d want=%d (%v)", len(filtered), len(want), filtered)
+	}
+	for i := range want {
+		if filtered[i] != want[i] {
+			t.Fatalf("unexpected filtered[%d]=%q want %q (%v)", i, filtered[i], want[i], filtered)
+		}
+	}
+}
+
+func TestSplitDyadSpawnArgsSkipAuthBoolWithSeparateValue(t *testing.T) {
+	name, filtered := splitDyadSpawnArgs([]string{
+		"demo",
+		"--skip-auth", "false",
+		"--actor-image", "aureuma/si:local",
+	})
+	if name != "demo" {
+		t.Fatalf("unexpected name %q", name)
+	}
+	want := []string{
+		"--skip-auth=false",
+		"--actor-image", "aureuma/si:local",
+	}
+	if len(filtered) != len(want) {
+		t.Fatalf("unexpected filtered len=%d want=%d (%v)", len(filtered), len(want), filtered)
+	}
+	for i := range want {
+		if filtered[i] != want[i] {
+			t.Fatalf("unexpected filtered[%d]=%q want %q (%v)", i, filtered[i], want[i], filtered)
+		}
+	}
+}
+
 func TestIsBoolLiteral(t *testing.T) {
 	for _, input := range []string{"true", "false", "1", "0", "t", "f", " TRUE "} {
 		if !isBoolLiteral(input) {
