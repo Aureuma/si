@@ -59,7 +59,7 @@ Core:
   si workos <auth|context|doctor|organization|user|membership|invitation|directory|raw>
   si publish <catalog|devto|hashnode|reddit|hackernews|producthunt>
   si aws <auth|context|doctor|iam|raw>
-  si gcp <auth|context|doctor|service|raw>
+  si gcp <auth|context|doctor|service|iam|apikey|gemini|generativelanguage|vertex|ai|raw>
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
@@ -448,6 +448,11 @@ gcp:
   si gcp service disable --name <service.googleapis.com> [--check-usage] [--project <id>] [--json]
   si gcp service get --name <service.googleapis.com> [--project <id>] [--json]
   si gcp service list [--limit N] [--filter expr] [--project <id>] [--json]
+  si gcp iam service-account|service-account-key|policy|role ...
+  si gcp apikey <list|get|create|update|delete|lookup|undelete> ...
+  si gcp gemini models|generate|embed|count-tokens|batch-embed ...
+  si gcp vertex model|endpoint|batch|pipeline|operation ...
+  si gcp ai <gemini|vertex> ...
   si gcp raw --method <GET|POST|PATCH|DELETE> --path <api-path> [--param key=value] [--body raw|--json-body '{...}'] [--json]
 
   Environment policy:
