@@ -84,3 +84,11 @@ Format:
 - 2026-02-11T19:56:10Z 🪢 go 🛩️ actor Turn 3: Picked T-002, updated docs/testing.md static analysis notes (`--no-fail`, CLI module scope), and marked task done.
 - 2026-02-11T19:56:04Z 🪢 go 🛩️ actor Turn 3: • Explored
 - 2026-02-11T19:56:09Z 🪢 go 🛩️ actor Turn 4: • Explored
+- 2026-02-11T22:01:21Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-11T22:01:21Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-11T22:01:21Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-11T22:01:21Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-11T22:05:28Z 🪢 testdyad 🛩️ actor Turn 1: ACTOR REPORT TURN 1
+- 2026-02-11T22:05:28Z 🪢 testdyad 🛩️ actor Turn 2: ACTOR REPORT TURN 2
+- 2026-02-11T22:05:28Z 🪢 testdyad 🛩️ actor Turn 3: ACTOR REPORT TURN 3
+- 2026-02-11T22:05:28Z 🪢 seedstop 🛩️ actor Turn 1: ACTOR REPORT TURN 1
