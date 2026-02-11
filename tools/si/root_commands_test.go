@@ -14,6 +14,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"github",
 		"cloudflare", "cf",
 		"google",
+		"apple",
 		"social",
 		"workos",
 		"aws",
