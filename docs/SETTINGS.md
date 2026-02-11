@@ -194,6 +194,42 @@ Credential resolution for `si cloudflare` is vault-compatible and token-only:
 4. Account-prefix env keys (`CLOUDFLARE_<ACCOUNT>_API_TOKEN`, `CLOUDFLARE_<ACCOUNT>_ACCOUNT_ID`, `CLOUDFLARE_<ACCOUNT>_PROD_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_STAGING_ZONE_ID`, `CLOUDFLARE_<ACCOUNT>_DEV_ZONE_ID`)
 5. Global env fallbacks (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`)
 
+### `[gcp]`
+Defaults for `si gcp` (Service Usage, IAM, API keys, Gemini, and Vertex AI).
+- `gcp.default_account` (string): default account alias
+- `gcp.default_env` (string): `prod`, `staging`, or `dev` (default: `prod`)
+- `gcp.api_base_url` (string): default API base URL used by `si gcp service` (default: `https://serviceusage.googleapis.com`)
+- `gcp.log_file` (string): JSONL log path for GCP bridge events (default: `~/.si/logs/gcp-serviceusage.log`)
+
+#### `[gcp.accounts.<alias>]`
+Per-account GCP context and env-key pointers.
+- `name` (string): display name
+- `vault_prefix` (string): env key prefix override (example `GCP_CORE_`)
+- `project_id` (string): default Google Cloud project id
+- `project_id_env` (string): env var with project id
+- `access_token_env` (string): env var with OAuth access token
+- `api_key_env` (string): env var with API key (used by Gemini API-key mode)
+- `api_base_url` (string): per-account API base URL override
+
+Credential resolution for `si gcp` project id:
+1. CLI override (`--project`)
+2. Account settings (`project_id`)
+3. Account env ref (`project_id_env`)
+4. Account-prefix env key (`GCP_<ACCOUNT>_PROJECT_ID`)
+5. Global env fallbacks (`GCP_PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`)
+
+Credential resolution for `si gcp` OAuth token:
+1. CLI override (`--access-token`)
+2. Account env ref (`access_token_env`)
+3. Account-prefix env key (`GCP_<ACCOUNT>_ACCESS_TOKEN`)
+4. Global env fallbacks (`GOOGLE_OAUTH_ACCESS_TOKEN`, `GCP_ACCESS_TOKEN`)
+
+Credential resolution for Gemini API-key mode (`si gcp gemini`):
+1. CLI override (`--api-key`)
+2. Account env ref (`api_key_env`)
+3. Account-prefix env key (`GCP_<ACCOUNT>_API_KEY`)
+4. Global env fallbacks (`GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GCP_API_KEY`)
+
 ### `[google]`
 Defaults for `si google places` and `si google youtube` (multi-account and env context labels).
 - `google.default_account` (string): default account alias
