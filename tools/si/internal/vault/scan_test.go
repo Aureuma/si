@@ -20,6 +20,9 @@ func TestValidateEncryptedValueV1RejectsNonAgePayload(t *testing.T) {
 	if err := ValidateEncryptedValueV1("encrypted:si:v1:aGVsbG8"); err == nil {
 		t.Fatalf("expected non-age payload to be rejected")
 	}
+	if err := ValidateEncryptedValueV1("es2:aGVsbG8"); err == nil {
+		t.Fatalf("expected non-age payload to be rejected for v2")
+	}
 }
 
 func TestScanDotenvEncryptionClassifiesValues(t *testing.T) {

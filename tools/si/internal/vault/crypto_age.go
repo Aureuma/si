@@ -18,25 +18,30 @@ const (
 	VaultRecipientPrefix   = "# si-vault:recipient "
 
 	EncryptedValuePrefixV1 = "encrypted:si:v1:"
+	EncryptedValuePrefixV2 = "es2:"
+)
+
+const (
+	ageMagicLine          = "age-encryption.org/v1\n"
+	ageStanzaX25519Prefix = "-> X25519 "
+	ageMACLinePrefix      = "\n--- "
 )
 
 func IsEncryptedValueV1(value string) bool {
-	return strings.HasPrefix(strings.TrimSpace(value), EncryptedValuePrefixV1)
+	value = strings.TrimSpace(value)
+	return strings.HasPrefix(value, EncryptedValuePrefixV1) || strings.HasPrefix(value, EncryptedValuePrefixV2)
 }
 
 func ValidateEncryptedValueV1(ciphertext string) error {
-	ciphertext = strings.TrimSpace(ciphertext)
-	if !strings.HasPrefix(ciphertext, EncryptedValuePrefixV1) {
-		return fmt.Errorf("value is not %s ciphertext", EncryptedValuePrefixV1)
-	}
-	payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV1)
-	raw, err := base64.RawURLEncoding.DecodeString(payload)
+	raw, err := decodeCiphertextPayload(ciphertext)
 	if err != nil {
-		return fmt.Errorf("invalid ciphertext payload: %w", err)
+		return err
 	}
-	const ageMagic = "age-encryption.org/v1"
-	if len(raw) < len(ageMagic) || string(raw[:len(ageMagic)]) != ageMagic {
+	if !bytes.HasPrefix(raw, []byte(ageMagicLine)) {
 		return fmt.Errorf("invalid ciphertext payload: not age format")
+	}
+	if !bytes.Contains(raw, []byte(ageMACLinePrefix)) {
+		return fmt.Errorf("invalid ciphertext payload: missing age MAC stanza")
 	}
 	return nil
 }
@@ -105,7 +110,13 @@ func EncryptStringV1(plaintext string, recipientStrs []string) (string, error) {
 	if err := w.Close(); err != nil {
 		return "", err
 	}
-	enc := base64.RawURLEncoding.EncodeToString(buf.Bytes())
+	raw := buf.Bytes()
+	compactPrefix := []byte(ageMagicLine + ageStanzaX25519Prefix)
+	if bytes.HasPrefix(raw, compactPrefix) {
+		enc := base64.RawURLEncoding.EncodeToString(raw[len(compactPrefix):])
+		return EncryptedValuePrefixV2 + enc, nil
+	}
+	enc := base64.RawURLEncoding.EncodeToString(raw)
 	return EncryptedValuePrefixV1 + enc, nil
 }
 
@@ -113,18 +124,9 @@ func DecryptStringV1(ciphertext string, identity *age.X25519Identity) (string, e
 	if identity == nil {
 		return "", fmt.Errorf("identity required")
 	}
-	ciphertext = strings.TrimSpace(ciphertext)
-	if !strings.HasPrefix(ciphertext, EncryptedValuePrefixV1) {
-		return "", fmt.Errorf("value is not %s ciphertext", EncryptedValuePrefixV1)
-	}
-	payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV1)
-	raw, err := base64.RawURLEncoding.DecodeString(payload)
+	raw, err := decodeCiphertextPayload(ciphertext)
 	if err != nil {
-		return "", fmt.Errorf("invalid ciphertext payload: %w", err)
-	}
-	const ageMagic = "age-encryption.org/v1"
-	if len(raw) < len(ageMagic) || string(raw[:len(ageMagic)]) != ageMagic {
-		return "", fmt.Errorf("invalid ciphertext payload: not age format")
+		return "", err
 	}
 	r, err := age.Decrypt(bytes.NewReader(raw), identity)
 	if err != nil {
@@ -139,4 +141,30 @@ func DecryptStringV1(ciphertext string, identity *age.X25519Identity) (string, e
 
 func GenerateIdentity() (*age.X25519Identity, error) {
 	return age.GenerateX25519Identity()
+}
+
+func decodeCiphertextPayload(ciphertext string) ([]byte, error) {
+	ciphertext = strings.TrimSpace(ciphertext)
+	switch {
+	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV2):
+		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV2)
+		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ciphertext payload: %w", err)
+		}
+		prefix := []byte(ageMagicLine + ageStanzaX25519Prefix)
+		out := make([]byte, 0, len(prefix)+len(raw))
+		out = append(out, prefix...)
+		out = append(out, raw...)
+		return out, nil
+	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV1):
+		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV1)
+		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ciphertext payload: %w", err)
+		}
+		return raw, nil
+	default:
+		return nil, fmt.Errorf("value is not %s or %s ciphertext", EncryptedValuePrefixV2, EncryptedValuePrefixV1)
+	}
 }
