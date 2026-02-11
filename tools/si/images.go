@@ -1,9 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -15,6 +15,9 @@ type imageBuildSpec struct {
 	buildArgs  []string
 	secrets    []string
 }
+
+var dockerBuildxAvailableFn = dockerBuildxAvailable
+var runDockerBuildCommandFn = runDockerBuildCommand
 
 func cmdBuildImage(args []string) {
 	if len(args) != 0 {
@@ -38,6 +41,23 @@ func runDockerBuild(spec imageBuildSpec) error {
 	if spec.tag == "" || spec.contextDir == "" {
 		return fmt.Errorf("image tag and context required")
 	}
+	secrets := spec.secrets
+	if len(secrets) > 0 {
+		ok, err := dockerBuildxAvailableFn()
+		if err != nil {
+			warnf("docker buildx detection failed; building without host build secrets: %v", err)
+			secrets = nil
+		} else if !ok {
+			warnf("docker buildx is not available; building without host build secrets")
+			secrets = nil
+		}
+	}
+	args := dockerBuildArgs(spec, secrets)
+	infof("docker %s", redactedDockerBuildArgs(args))
+	return runDockerBuildCommandFn(args)
+}
+
+func dockerBuildArgs(spec imageBuildSpec, secrets []string) []string {
 	args := []string{"build", "-t", spec.tag}
 	if spec.dockerfile != "" {
 		args = append(args, "-f", spec.dockerfile)
@@ -45,19 +65,34 @@ func runDockerBuild(spec imageBuildSpec) error {
 	for _, arg := range spec.buildArgs {
 		args = append(args, "--build-arg", arg)
 	}
-	for _, secret := range spec.secrets {
+	for _, secret := range secrets {
 		args = append(args, "--secret", secret)
 	}
 	args = append(args, spec.contextDir)
-	infof("docker %s", redactedDockerBuildArgs(args))
-	// #nosec G204 -- fixed docker binary with explicit args assembled by CLI options.
-	cmd := exec.Command("docker", args...)
+	return args
+}
+
+func runDockerBuildCommand(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("docker build args required")
+	}
+	cmd := dockerCommandWithEnv([]string{"DOCKER_BUILDKIT=1"}, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	// `--secret` requires BuildKit; enable it explicitly so builds don't depend on daemon defaults.
-	cmd.Env = append(os.Environ(), "DOCKER_BUILDKIT=1")
 	return cmd.Run()
+}
+
+func dockerBuildxAvailable() (bool, error) {
+	cmd := dockerCommand("buildx", "version")
+	cmd.Stdin = nil
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Run(); err != nil {
+		return false, nil
+	}
+	return true, nil
 }
 
 func hostCodexConfigBuildSecrets() []string {
