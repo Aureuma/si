@@ -53,6 +53,16 @@ si vault fmt
 si vault run -- ./your-command --args
 ```
 
+To run shell syntax (pipes, redirection, `&&`, etc), you can run a shell explicitly:
+```bash
+si vault run -- bash -lc 'echo "$STRIPE_API_KEY" | head -c 4'
+```
+
+Or use the built-in shell mode (note: this does not inherit functions/aliases from your current shell process; source them explicitly):
+```bash
+si vault run --shell -- 'source ./settings.sh; vps'
+```
+
 5. Inject secrets into an existing container process (`docker exec` env injection for that exec only):
 ```bash
 si vault docker exec --container <name-or-id> -- ./your-command --args
