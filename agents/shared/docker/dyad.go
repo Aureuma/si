@@ -18,10 +18,13 @@ import (
 
 const (
 	DefaultNetwork = "si"
-	LabelApp       = "app"
-	LabelDyad      = "si.dyad"
-	LabelMember    = "si.member"
-	LabelRole      = "si.role"
+	// DefaultCodexSkillsVolume is mounted into CODEX_HOME/skills so all codex
+	// and dyad containers share one skill set.
+	DefaultCodexSkillsVolume = "si-codex-skills"
+	LabelApp                 = "app"
+	LabelDyad                = "si.dyad"
+	LabelMember              = "si.member"
+	LabelRole                = "si.role"
 )
 
 const DyadAppLabel = "si-dyad"
@@ -43,6 +46,7 @@ type DyadOptions struct {
 	WorkspaceHost     string
 	ConfigsHost       string
 	CodexVolume       string
+	SkillsVolume      string
 	Network           string
 	ForwardPorts      string
 	DockerSocket      bool
@@ -232,6 +236,9 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	if strings.TrimSpace(opts.CodexVolume) == "" {
 		opts.CodexVolume = "si-codex-" + opts.Dyad
 	}
+	if strings.TrimSpace(opts.SkillsVolume) == "" {
+		opts.SkillsVolume = DefaultCodexSkillsVolume
+	}
 	if strings.TrimSpace(opts.WorkspaceHost) == "" {
 		return ContainerSpec{}, ContainerSpec{}, errors.New("workspace host path required")
 	}
@@ -299,6 +306,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	}
 	actorMounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
+		{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: "/root/.codex/skills"},
 	}
 	actorMounts = append(actorMounts, BuildContainerCoreMounts(ContainerCoreMountPlan{
 		WorkspaceHost:          opts.WorkspaceHost,
@@ -336,6 +344,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	}
 	criticMounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
+		{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: "/root/.codex/skills"},
 		{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
 	}
 	criticMounts = append(criticMounts, BuildContainerCoreMounts(ContainerCoreMountPlan{

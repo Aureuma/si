@@ -6,6 +6,22 @@ GH_CONFIG_DIR="/home/si/.config/gh"
 
 mkdir -p "$CODEX_DIR" "$GH_CONFIG_DIR" /workspace
 
+sync_codex_skills() {
+  local bundle_dir shared_dir target_dir
+  bundle_dir="${SI_CODEX_SKILLS_BUNDLE_DIR:-/opt/si/codex-skills}"
+  target_dir="/home/si/.codex/skills"
+  shared_dir="/home/si/.si/codex/skills"
+
+  mkdir -p "/home/si/.codex" "$target_dir"
+  if [[ -d "$bundle_dir" ]]; then
+    cp -a "$bundle_dir"/. "$target_dir"/ 2>/dev/null || true
+  fi
+  if [[ -d "/home/si/.si" ]]; then
+    mkdir -p "$shared_dir"
+    cp -a "$target_dir"/. "$shared_dir"/ 2>/dev/null || true
+  fi
+}
+
 apply_host_ids() {
   local uid gid current_uid current_gid group_name user_name
   uid="${SI_HOST_UID:-}"
@@ -42,6 +58,7 @@ apply_host_ids() {
 
 if [[ "$(id -u)" -eq 0 ]]; then
   apply_host_ids
+  sync_codex_skills
   if [[ -n "${SI_HOST_UID:-}" && -n "${SI_HOST_GID:-}" ]]; then
     if [[ "$(id -u si 2>/dev/null || true)" == "${SI_HOST_UID}" && "$(id -g si 2>/dev/null || true)" == "${SI_HOST_GID}" ]]; then
       chown -R si:si /home/si /workspace 2>/dev/null || true

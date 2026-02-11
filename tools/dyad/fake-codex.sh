@@ -20,6 +20,98 @@ while IFS= read -r line; do
     sleep "${delay}" || true
   fi
 
+  case "${line}" in
+    /status)
+      echo "status: ok"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /model*)
+      echo "model: gpt-5.2-codex"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /approval*)
+      echo "approval: auto"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /sandbox*)
+      echo "sandbox: workspace-write"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /agents)
+      echo "agents: actor,critic"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /prompts)
+      echo "prompts: available"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /review)
+      echo "review: started"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /compact)
+      echo "compact: done"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /clear)
+      echo "clear: done"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /help)
+      echo "help: commands listed"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /logout)
+      echo "logout: skipped"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /vim)
+      echo "vim: enabled"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /)
+      echo "menu: /status /model /approval"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    1)
+      echo "menu-select: /status"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    2)
+      echo "menu-select: /model"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    $'\033[A'*|'^[[A'*)
+      echo "menu-select: /status"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    $'\033[B'*|'^[[B'*)
+      echo "menu-select: /model"
+      printf "%s " "${prompt_char}"
+      continue
+      ;;
+    /exit)
+      echo "bye"
+      exit 0
+      ;;
+  esac
+
   emit_long="0"
   if [[ "${long_lines}" != "0" ]]; then
     emit_long="1"
