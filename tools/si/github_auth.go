@@ -19,6 +19,8 @@ type githubAuthOverrides struct {
 	AppID          int64
 	AppKey         string
 	InstallationID int64
+	AccessToken    string
+	AuthMode       string
 }
 
 func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFlag string, overrides githubAuthOverrides) (githubRuntimeContext, error) {
@@ -50,6 +52,42 @@ func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFl
 		baseURL = "https://api.github.com"
 	}
 
+	mode, modeSource, err := resolveGitHubAuthMode(settings, alias, account, overrides)
+	if err != nil {
+		return githubRuntimeContext{}, err
+	}
+	if mode == "" {
+		mode = githubbridge.AuthModeApp
+	}
+
+	sourceParts := nonEmpty(modeSource)
+	if mode == githubbridge.AuthModeOAuth {
+		accessToken, tokenSource := resolveGitHubOAuthAccessToken(alias, account, overrides)
+		if strings.TrimSpace(accessToken) == "" {
+			prefix := githubAccountEnvPrefix(alias, account)
+			if prefix == "" {
+				prefix = "GITHUB_<ACCOUNT>_"
+			}
+			return githubRuntimeContext{}, fmt.Errorf("github oauth token not found (set --token, %sOAUTH_ACCESS_TOKEN, %sTOKEN, GITHUB_TOKEN, or GH_TOKEN)", prefix, prefix)
+		}
+		provider, providerErr := githubbridge.NewOAuthProvider(githubbridge.OAuthProviderConfig{
+			AccessToken: accessToken,
+			TokenSource: strings.Join(nonEmpty(modeSource, tokenSource), ","),
+		})
+		if providerErr != nil {
+			return githubRuntimeContext{}, providerErr
+		}
+		sourceParts = append(sourceParts, tokenSource)
+		return githubRuntimeContext{
+			AccountAlias: alias,
+			Owner:        owner,
+			AuthMode:     githubbridge.AuthModeOAuth,
+			Source:       strings.Join(nonEmpty(sourceParts...), ","),
+			BaseURL:      baseURL,
+			Provider:     provider,
+		}, nil
+	}
+
 	appID, appIDSource := resolveGitHubAppID(alias, account, overrides)
 	appKey, appKeySource := resolveGitHubAppKey(alias, account, overrides)
 	installationID, installationSource := resolveGitHubInstallationID(alias, account, overrides)
@@ -68,7 +106,7 @@ func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFl
 	if err != nil {
 		return githubRuntimeContext{}, err
 	}
-	source := strings.Join(nonEmpty(appIDSource, appKeySource, installationSource), ",")
+	source := strings.Join(nonEmpty(append(sourceParts, appIDSource, appKeySource, installationSource)...), ",")
 
 	return githubRuntimeContext{
 		AccountAlias: alias,
@@ -78,6 +116,45 @@ func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFl
 		BaseURL:      baseURL,
 		Provider:     provider,
 	}, nil
+}
+
+func resolveGitHubAuthMode(settings Settings, alias string, account GitHubAccountEntry, overrides githubAuthOverrides) (githubbridge.AuthMode, string, error) {
+	if value := strings.TrimSpace(overrides.AuthMode); value != "" {
+		mode, err := githubbridge.ParseAuthMode(value)
+		if err != nil {
+			return "", "", err
+		}
+		return mode, "flag:--auth-mode", nil
+	}
+	if value := strings.TrimSpace(account.AuthMode); value != "" {
+		mode, err := githubbridge.ParseAuthMode(value)
+		if err != nil {
+			return "", "", fmt.Errorf("invalid github account auth_mode for %q: %w", firstNonEmpty(alias, "default"), err)
+		}
+		return mode, "settings.auth_mode", nil
+	}
+	if value := strings.TrimSpace(os.Getenv("GITHUB_AUTH_MODE")); value != "" {
+		mode, err := githubbridge.ParseAuthMode(value)
+		if err != nil {
+			return "", "", err
+		}
+		return mode, "env:GITHUB_AUTH_MODE", nil
+	}
+	if value := strings.TrimSpace(os.Getenv("GITHUB_DEFAULT_AUTH_MODE")); value != "" {
+		mode, err := githubbridge.ParseAuthMode(value)
+		if err != nil {
+			return "", "", err
+		}
+		return mode, "env:GITHUB_DEFAULT_AUTH_MODE", nil
+	}
+	if value := strings.TrimSpace(settings.Github.DefaultAuthMode); value != "" {
+		mode, err := githubbridge.ParseAuthMode(value)
+		if err != nil {
+			return "", "", fmt.Errorf("invalid github default_auth_mode: %w", err)
+		}
+		return mode, "settings.default_auth_mode", nil
+	}
+	return githubbridge.AuthModeApp, "", nil
 }
 
 func resolveGitHubAccountSelection(settings Settings, accountFlag string) (string, GitHubAccountEntry) {
@@ -182,6 +259,37 @@ func resolveGitHubInstallationID(alias string, account GitHubAccountEntry, overr
 	return 0, ""
 }
 
+func resolveGitHubOAuthAccessToken(alias string, account GitHubAccountEntry, overrides githubAuthOverrides) (string, string) {
+	if value := strings.TrimSpace(overrides.AccessToken); value != "" {
+		return value, "flag:--token"
+	}
+	if value := strings.TrimSpace(account.OAuthAccessToken); value != "" {
+		return value, "settings.oauth_access_token"
+	}
+	if ref := strings.TrimSpace(account.OAuthTokenEnv); ref != "" {
+		if value := strings.TrimSpace(os.Getenv(ref)); value != "" {
+			return value, "env:" + ref
+		}
+	}
+	prefix := githubAccountEnvPrefix(alias, account)
+	if value := strings.TrimSpace(resolveGitHubEnv(alias, account, "OAUTH_ACCESS_TOKEN")); value != "" {
+		return value, "env:" + prefix + "OAUTH_ACCESS_TOKEN"
+	}
+	if value := strings.TrimSpace(resolveGitHubEnv(alias, account, "TOKEN")); value != "" {
+		return value, "env:" + prefix + "TOKEN"
+	}
+	if value := strings.TrimSpace(os.Getenv("GITHUB_OAUTH_TOKEN")); value != "" {
+		return value, "env:GITHUB_OAUTH_TOKEN"
+	}
+	if value := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); value != "" {
+		return value, "env:GITHUB_TOKEN"
+	}
+	if value := strings.TrimSpace(os.Getenv("GH_TOKEN")); value != "" {
+		return value, "env:GH_TOKEN"
+	}
+	return "", ""
+}
+
 func resolveGitHubEnv(alias string, account GitHubAccountEntry, key string) string {
 	prefix := githubAccountEnvPrefix(alias, account)
 	if prefix != "" {
@@ -250,7 +358,7 @@ func nonEmpty(values ...string) []string {
 
 func cmdGithubAuth(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--json]")
+		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]")
 		return
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -266,16 +374,20 @@ func cmdGithubAuthStatus(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--json]")
+		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]")
 		return
 	}
 	runtime, err := resolveGithubRuntimeContext(*account, *owner, *baseURL, githubAuthOverrides{
+		AuthMode:       *authMode,
+		AccessToken:    *token,
 		AppID:          *appID,
 		AppKey:         *appKey,
 		InstallationID: *installationID,
@@ -319,6 +431,8 @@ func cmdGithubDoctor(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -326,7 +440,7 @@ func cmdGithubDoctor(args []string) {
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si github doctor [--account <alias>] [--owner <owner>] [--public] [--json]")
+		printUsage("usage: si github doctor [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--public] [--json]")
 		return
 	}
 	if *public {
@@ -340,6 +454,8 @@ func cmdGithubDoctor(args []string) {
 		return
 	}
 	runtime, err := resolveGithubRuntimeContext(*account, *owner, *baseURL, githubAuthOverrides{
+		AuthMode:       *authMode,
+		AccessToken:    *token,
 		AppID:          *appID,
 		AppKey:         *appKey,
 		InstallationID: *installationID,
@@ -429,11 +545,18 @@ func cmdGithubContextList(args []string) {
 	rows := make([]map[string]string, 0, len(aliases))
 	for _, alias := range aliases {
 		entry := settings.Github.Accounts[alias]
+		authMode := strings.TrimSpace(entry.AuthMode)
+		if authMode == "" {
+			authMode = strings.TrimSpace(settings.Github.DefaultAuthMode)
+		}
+		if authMode == "" {
+			authMode = string(githubbridge.AuthModeApp)
+		}
 		rows = append(rows, map[string]string{
 			"alias":        alias,
 			"name":         strings.TrimSpace(entry.Name),
 			"owner":        strings.TrimSpace(entry.Owner),
-			"auth_mode":    "app",
+			"auth_mode":    authMode,
 			"default":      boolString(alias == strings.TrimSpace(settings.Github.DefaultAccount)),
 			"api_base_url": strings.TrimSpace(entry.APIBaseURL),
 		})
@@ -506,9 +629,11 @@ func cmdGithubContextUse(args []string) {
 	account := fs.String("account", "", "default account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "default github api base url")
+	authMode := fs.String("auth-mode", "", "default auth mode (app|oauth)")
+	tokenEnv := fs.String("token-env", "", "oauth token env-var reference for selected account")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si github context use [--account <alias>] [--owner <owner>] [--base-url <url>]")
+		printUsage("usage: si github context use [--account <alias>] [--owner <owner>] [--base-url <url>] [--auth-mode <app|oauth>] [--token-env <env_key>]")
 		return
 	}
 	settings := loadSettingsOrDefault()
@@ -521,7 +646,30 @@ func cmdGithubContextUse(args []string) {
 	if value := strings.TrimSpace(*baseURL); value != "" {
 		settings.Github.APIBaseURL = value
 	}
-	settings.Github.DefaultAuthMode = string(githubbridge.AuthModeApp)
+	if value := strings.TrimSpace(*authMode); value != "" {
+		mode, err := githubbridge.ParseAuthMode(value)
+		if err != nil {
+			fatal(err)
+		}
+		settings.Github.DefaultAuthMode = string(mode)
+	}
+	if alias := strings.TrimSpace(*account); alias != "" {
+		if settings.Github.Accounts == nil {
+			settings.Github.Accounts = map[string]GitHubAccountEntry{}
+		}
+		entry := settings.Github.Accounts[alias]
+		if value := strings.TrimSpace(*tokenEnv); value != "" {
+			entry.OAuthTokenEnv = value
+		}
+		if value := strings.TrimSpace(*authMode); value != "" {
+			mode, err := githubbridge.ParseAuthMode(value)
+			if err != nil {
+				fatal(err)
+			}
+			entry.AuthMode = string(mode)
+		}
+		settings.Github.Accounts[alias] = entry
+	}
 	if err := saveSettings(settings); err != nil {
 		fatal(err)
 	}

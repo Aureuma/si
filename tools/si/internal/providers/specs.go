@@ -23,6 +23,7 @@ const (
 	SocialInstagram ID = "social_instagram"
 	SocialX         ID = "social_x"
 	SocialLinkedIn  ID = "social_linkedin"
+	SocialReddit    ID = "social_reddit"
 	WorkOS          ID = "workos"
 	AWSIAM          ID = "aws_iam"
 	GCPServiceUsage ID = "gcp_serviceusage"
@@ -168,6 +169,17 @@ var defaultSpecs = map[ID]Spec{
 		PublicProbePath:    "/v2/me",
 		PublicProbeMethod:  "GET",
 	},
+	SocialReddit: {
+		BaseURL:            "https://oauth.reddit.com",
+		UserAgent:          "si-social-reddit/1.0",
+		Accept:             "application/json",
+		AuthStyle:          "bearer",
+		RequestIDHeaders:   []string{"x-request-id"},
+		RateLimitPerSecond: 1.0,
+		RateLimitBurst:     2,
+		PublicProbePath:    "/api/v1/scopes",
+		PublicProbeMethod:  "GET",
+	},
 	WorkOS: {
 		BaseURL:            "https://api.workos.com",
 		APIVersion:         "v1",
@@ -273,6 +285,12 @@ var defaultCapabilities = map[ID]Capability{
 		SupportsIdempotency: false,
 		SupportsRaw:         true,
 	},
+	SocialReddit: {
+		SupportsPagination:  true,
+		SupportsBulk:        false,
+		SupportsIdempotency: false,
+		SupportsRaw:         true,
+	},
 	WorkOS: {
 		SupportsPagination:  true,
 		SupportsBulk:        false,
@@ -309,6 +327,7 @@ var apiVersionPolicies = []APIVersionPolicy{
 	{Provider: SocialInstagram, Version: "v22.0", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: SocialX, Version: "2", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: SocialLinkedIn, Version: "v2", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: SocialReddit, ExemptReason: "Reddit OAuth API is unversioned; pinning occurs by endpoint contracts.", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: WorkOS, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: AWSIAM, Version: "2010-05-08", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: GCPServiceUsage, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
@@ -324,6 +343,7 @@ var providerCacheTTLs = map[ID]time.Duration{
 	SocialInstagram: 3 * time.Second,
 	SocialX:         3 * time.Second,
 	SocialLinkedIn:  3 * time.Second,
+	SocialReddit:    3 * time.Second,
 	WorkOS:          3 * time.Second,
 	AWSIAM:          3 * time.Second,
 	GCPServiceUsage: 3 * time.Second,
@@ -340,6 +360,7 @@ var providerConcurrencyLimits = map[ID]int{
 	SocialInstagram: 2,
 	SocialX:         2,
 	SocialLinkedIn:  2,
+	SocialReddit:    2,
 	WorkOS:          2,
 	AWSIAM:          2,
 	GCPServiceUsage: 2,
@@ -356,6 +377,7 @@ var providerCommandConcurrencyLimits = map[ID]int{
 	SocialInstagram: 1,
 	SocialX:         1,
 	SocialLinkedIn:  1,
+	SocialReddit:    1,
 	WorkOS:          1,
 	AWSIAM:          1,
 	GCPServiceUsage: 1,
@@ -1180,6 +1202,8 @@ func normalizeID(raw string) ID {
 		return SocialX
 	case "social_linkedin", "linkedin":
 		return SocialLinkedIn
+	case "social_reddit", "reddit":
+		return SocialReddit
 	case "workos":
 		return WorkOS
 	case "aws", "aws_iam", "iam":

@@ -72,6 +72,61 @@ func cmdCloudflareDNS(args []string) {
 	cmdCloudflareResourceFamily(args, spec, "usage: si cloudflare dns <list|get|create|update|delete|import|export> ...")
 }
 
+func cmdCloudflareEmail(args []string) {
+	if len(args) == 0 {
+		printUsage("usage: si cloudflare email <rule|address|settings> ...")
+		return
+	}
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	rest := args[1:]
+	switch sub {
+	case "rule", "rules", "route", "routes":
+		spec := cloudflareResourceSpec{
+			Name:         "email rule",
+			Scope:        cloudflareScopeZone,
+			ListPath:     "/zones/{zone_id}/email/routing/rules",
+			ResourcePath: "/zones/{zone_id}/email/routing/rules/{id}",
+		}
+		cmdCloudflareResourceFamily(rest, spec, "usage: si cloudflare email rule <list|get|create|update|delete> ...")
+	case "address", "addresses", "destination", "destinations":
+		spec := cloudflareResourceSpec{
+			Name:         "email address",
+			Scope:        cloudflareScopeAccount,
+			ListPath:     "/accounts/{account_id}/email/routing/addresses",
+			ResourcePath: "/accounts/{account_id}/email/routing/addresses/{id}",
+		}
+		cmdCloudflareResourceFamily(rest, spec, "usage: si cloudflare email address <list|get|create|update|delete> ...")
+	case "setting", "settings":
+		cmdCloudflareEmailSettings(rest)
+	default:
+		printUnknown("cloudflare email", sub)
+		printUsage("usage: si cloudflare email <rule|address|settings> ...")
+	}
+}
+
+func cmdCloudflareStatus(args []string) {
+	cmdCloudflareAuthStatus(args)
+}
+
+func cmdCloudflareToken(args []string) {
+	if len(args) == 0 {
+		printUsage("usage: si cloudflare token <list|get|create|update|delete|verify|permission-groups> ...")
+		return
+	}
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	rest := args[1:]
+	switch sub {
+	case "verify":
+		cmdCloudflareTokenVerify(rest)
+		return
+	case "permission-groups", "permissions", "permission-group":
+		cmdCloudflareScopedRead(rest, "cloudflare token permission-groups", "/user/tokens/permission_groups")
+		return
+	}
+	spec := cloudflareResourceSpec{Name: "token", Scope: cloudflareScopeGlobal, ListPath: "/user/tokens", ResourcePath: "/user/tokens/{id}"}
+	cmdCloudflareResourceFamily(args, spec, "usage: si cloudflare token <list|get|create|update|delete|verify|permission-groups> ...")
+}
+
 func cmdCloudflareWAF(args []string) {
 	spec := cloudflareResourceSpec{Name: "waf", Scope: cloudflareScopeZone, ListPath: "/zones/{zone_id}/firewall/waf/packages", ResourcePath: "/zones/{zone_id}/firewall/waf/packages/{id}", CreateMethod: "", UpdateMethod: http.MethodPatch}
 	cmdCloudflareResourceFamily(args, spec, "usage: si cloudflare waf <list|get|update> ...")
@@ -1041,6 +1096,28 @@ func cmdCloudflareTunnelToken(args []string) {
 	printCloudflareResponse(resp, *jsonOut, *raw)
 }
 
+func cmdCloudflareTokenVerify(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
+	fs := cloudflareCommonFlagSet("cloudflare token verify", args)
+	jsonOut := fs.Bool("json", false, "output json")
+	raw := fs.Bool("raw", false, "print raw response body")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si cloudflare token verify [--json]")
+		return
+	}
+	runtime, client := mustCloudflareClient(*commonAccount, *commonEnv, *commonZone, *commonZoneID, *commonToken, *commonBaseURL, *commonAccountID)
+	printCloudflareContextBanner(runtime, *jsonOut)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	resp, err := client.Do(ctx, cloudflarebridge.Request{Method: http.MethodGet, Path: "/user/tokens/verify"})
+	if err != nil {
+		printCloudflareError(err)
+		return
+	}
+	printCloudflareResponse(resp, *jsonOut, *raw)
+}
+
 func cmdCloudflareTLSGetSet(mode string, args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := cloudflareCommonFlagSet("cloudflare tls "+mode, args)
@@ -1065,6 +1142,69 @@ func cmdCloudflareTLSGetSet(mode string, args []string) {
 	if mode == "set" {
 		request.Method = http.MethodPatch
 		request.JSONBody = map[string]any{"value": strings.TrimSpace(*value)}
+	}
+	printCloudflareContextBanner(runtime, *jsonOut)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	resp, err := client.Do(ctx, request)
+	if err != nil {
+		printCloudflareError(err)
+		return
+	}
+	printCloudflareResponse(resp, *jsonOut, *raw)
+}
+
+func cmdCloudflareEmailSettings(args []string) {
+	if len(args) == 0 {
+		printUsage("usage: si cloudflare email settings <get|enable|disable> [--zone-id <zone>] [--json]")
+		return
+	}
+	op := strings.ToLower(strings.TrimSpace(args[0]))
+	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
+	fs := cloudflareCommonFlagSet("cloudflare email settings "+op, args)
+	force := fs.Bool("force", false, "skip confirmation prompt")
+	jsonOut := fs.Bool("json", false, "output json")
+	raw := fs.Bool("raw", false, "print raw response body")
+	params := multiFlag{}
+	fs.Var(&params, "param", "query/body parameter key=value (repeatable)")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si cloudflare email settings <get|enable|disable> [--zone-id <zone>] [--json]")
+		return
+	}
+	runtime, client := mustCloudflareClient(*commonAccount, *commonEnv, *commonZone, *commonZoneID, *commonToken, *commonBaseURL, *commonAccountID)
+	request := cloudflarebridge.Request{Params: parseCloudflareParams(params)}
+	switch op {
+	case "get":
+		path, err := cloudflareResolvePath("/zones/{zone_id}/email/routing", runtime, "")
+		if err != nil {
+			fatal(err)
+		}
+		request.Method = http.MethodGet
+		request.Path = path
+	case "enable":
+		if err := requireCloudflareConfirmation("enable email routing for zone "+runtime.ZoneID, *force); err != nil {
+			fatal(err)
+		}
+		path, err := cloudflareResolvePath("/zones/{zone_id}/email/routing/enable", runtime, "")
+		if err != nil {
+			fatal(err)
+		}
+		request.Method = http.MethodPost
+		request.Path = path
+	case "disable":
+		if err := requireCloudflareConfirmation("disable email routing for zone "+runtime.ZoneID, *force); err != nil {
+			fatal(err)
+		}
+		path, err := cloudflareResolvePath("/zones/{zone_id}/email/routing/disable", runtime, "")
+		if err != nil {
+			fatal(err)
+		}
+		request.Method = http.MethodPost
+		request.Path = path
+	default:
+		printUnknown("cloudflare email settings", op)
+		return
 	}
 	printCloudflareContextBanner(runtime, *jsonOut)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)

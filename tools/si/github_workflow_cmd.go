@@ -37,6 +37,8 @@ func cmdGithubWorkflowList(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -47,7 +49,7 @@ func cmdGithubWorkflowList(args []string) {
 		printUsage("usage: si github workflow list <owner/repo|repo> [--owner <owner>] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -92,6 +94,8 @@ func cmdGithubWorkflowRun(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -108,7 +112,7 @@ func cmdGithubWorkflowRun(args []string) {
 	if strings.TrimSpace(*ref) == "" {
 		fatal(fmt.Errorf("--ref is required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -142,6 +146,8 @@ func cmdGithubWorkflowRuns(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -155,7 +161,7 @@ func cmdGithubWorkflowRuns(args []string) {
 		printUsage("usage: si github workflow runs <owner/repo|repo> [--workflow <id|file>] [--param key=value] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -202,6 +208,8 @@ func cmdGithubWorkflowRunAction(args []string, action string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -212,7 +220,7 @@ func cmdGithubWorkflowRunAction(args []string, action string) {
 		printUsage("usage: si github workflow run " + action + " <owner/repo|repo> <run-id> [--owner <owner>] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -248,6 +256,8 @@ func cmdGithubWorkflowLogs(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -258,7 +268,7 @@ func cmdGithubWorkflowLogs(args []string) {
 		printUsage("usage: si github workflow logs <owner/repo|repo> <run-id> [--owner <owner>] [--raw]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)

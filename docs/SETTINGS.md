@@ -119,9 +119,9 @@ Credential resolution order for `si stripe`:
 `SI_STRIPE_ACCOUNT` can provide default account selection when settings do not specify one.
 
 ### `[github]`
-Defaults for `si github` (GitHub App-only auth).
+Defaults for `si github` (GitHub App or OAuth token auth).
 - `github.default_account` (string): default account alias
-- `github.default_auth_mode` (string): always `app` for `si github`
+- `github.default_auth_mode` (string): `app` or `oauth` (default: `app`)
 - `github.api_base_url` (string): API base URL (default: `https://api.github.com`)
 - `github.default_owner` (string): default owner/org for commands that accept owner fallback
 - `github.vault_env` (string): vault env hint (default: `dev`)
@@ -129,12 +129,14 @@ Defaults for `si github` (GitHub App-only auth).
 - `github.log_file` (string): JSONL log path for GitHub bridge request/response events (default: `~/.si/logs/github.log`)
 
 #### `[github.accounts.<alias>]`
-Per-account GitHub App settings.
+Per-account GitHub settings.
 - `name` (string): display name
 - `owner` (string): default owner/org for this account
 - `api_base_url` (string): per-account API base URL (supports GHES)
-- `auth_mode` (string): kept for compatibility; `si github` enforces `app`
+- `auth_mode` (string): `app` or `oauth` (overrides global default for this account)
 - `vault_prefix` (string): env key prefix override (example `GITHUB_CORE_`)
+- `oauth_access_token` (string): direct OAuth token (prefer env refs)
+- `oauth_token_env` (string): env var with OAuth token
 - `app_id` (int): direct app id (prefer env refs for secretless settings)
 - `app_id_env` (string): env var with app id
 - `app_private_key_pem` (string): direct private key PEM (prefer env refs)
@@ -142,12 +144,25 @@ Per-account GitHub App settings.
 - `installation_id` (int): explicit installation id
 - `installation_id_env` (string): env var with installation id
 
-Credential resolution for `si github` is vault-compatible and app-only:
+Auth mode resolution for `si github`:
+1. CLI override (`--auth-mode` where available)
+2. Account settings (`auth_mode`)
+3. Env fallback (`GITHUB_AUTH_MODE`, then `GITHUB_DEFAULT_AUTH_MODE`)
+4. Global settings (`github.default_auth_mode`)
+
+Credential resolution for `si github` in `app` mode:
 1. CLI overrides (`--app-id`, `--app-key`, `--installation-id`)
 2. Account settings (`app_id`, `app_private_key_pem`, `installation_id`)
 3. Account env refs (`app_id_env`, `app_private_key_env`, `installation_id_env`)
 4. Account-prefix env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, `GITHUB_<ACCOUNT>_INSTALLATION_ID`)
 5. Global env fallbacks (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_PEM`, `GITHUB_INSTALLATION_ID`)
+
+Credential resolution for `si github` in `oauth` mode:
+1. CLI override (`--token` where available)
+2. Account settings (`oauth_access_token`)
+3. Account env ref (`oauth_token_env`)
+4. Account-prefix env keys (`GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN`, `GITHUB_<ACCOUNT>_TOKEN`)
+5. Global env fallbacks (`GITHUB_OAUTH_TOKEN`, `GITHUB_TOKEN`, `GH_TOKEN`)
 
 ### `[cloudflare]`
 Defaults for `si cloudflare` (token auth with multi-account and env context labels).
@@ -343,9 +358,11 @@ log_file = "~/.si/logs/github.log"
 name = "Core GitHub App"
 owner = "Aureuma"
 vault_prefix = "GITHUB_CORE_"
+auth_mode = "app"
 app_id_env = "GITHUB_CORE_APP_ID"
 app_private_key_env = "GITHUB_CORE_APP_PRIVATE_KEY_PEM"
 installation_id_env = "GITHUB_CORE_INSTALLATION_ID"
+oauth_token_env = "GITHUB_CORE_OAUTH_ACCESS_TOKEN"
 
 [cloudflare]
 default_account = "core"
@@ -425,6 +442,10 @@ api_base_url = "https://api.linkedin.com"
 api_version = "v2"
 auth_style = "bearer"
 
+[social.reddit]
+api_base_url = "https://oauth.reddit.com"
+auth_style = "bearer"
+
 [social.accounts.core]
 name = "Core Social"
 vault_prefix = "SOCIAL_CORE_"
@@ -432,10 +453,12 @@ facebook_access_token_env = "SOCIAL_CORE_FACEBOOK_ACCESS_TOKEN"
 instagram_access_token_env = "SOCIAL_CORE_INSTAGRAM_ACCESS_TOKEN"
 x_access_token_env = "SOCIAL_CORE_X_BEARER_TOKEN"
 linkedin_access_token_env = "SOCIAL_CORE_LINKEDIN_ACCESS_TOKEN"
+reddit_access_token_env = "SOCIAL_CORE_REDDIT_ACCESS_TOKEN"
 facebook_page_id = "1234567890"
 instagram_business_id = "17890000000000000"
 x_username = "acme"
 linkedin_person_urn = "urn:li:person:abc123"
+reddit_username = "acme_bot"
 
 [vault]
 dir = "vault"

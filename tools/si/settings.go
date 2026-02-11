@@ -163,6 +163,8 @@ type GitHubAccountEntry struct {
 	APIBaseURL       string `toml:"api_base_url,omitempty"`
 	AuthMode         string `toml:"auth_mode,omitempty"`
 	VaultPrefix      string `toml:"vault_prefix,omitempty"`
+	OAuthAccessToken string `toml:"oauth_access_token,omitempty"`
+	OAuthTokenEnv    string `toml:"oauth_token_env,omitempty"`
 	AppID            int64  `toml:"app_id,omitempty"`
 	AppIDEnv         string `toml:"app_id_env,omitempty"`
 	AppPrivateKeyPEM string `toml:"app_private_key_pem,omitempty"`
@@ -251,6 +253,7 @@ type SocialSettings struct {
 	Instagram      SocialPlatformSettings          `toml:"instagram,omitempty"`
 	X              SocialPlatformSettings          `toml:"x,omitempty"`
 	LinkedIn       SocialPlatformSettings          `toml:"linkedin,omitempty"`
+	Reddit         SocialPlatformSettings          `toml:"reddit,omitempty"`
 	Accounts       map[string]SocialAccountSetting `toml:"accounts,omitempty"`
 }
 
@@ -269,6 +272,7 @@ type SocialAccountSetting struct {
 	InstagramAccessTokenEnv string `toml:"instagram_access_token_env,omitempty"`
 	XAccessTokenEnv         string `toml:"x_access_token_env,omitempty"`
 	LinkedInAccessTokenEnv  string `toml:"linkedin_access_token_env,omitempty"`
+	RedditAccessTokenEnv    string `toml:"reddit_access_token_env,omitempty"`
 
 	FacebookPageID          string `toml:"facebook_page_id,omitempty"`
 	InstagramBusinessID     string `toml:"instagram_business_id,omitempty"`
@@ -276,6 +280,7 @@ type SocialAccountSetting struct {
 	XUsername               string `toml:"x_username,omitempty"`
 	LinkedInPersonURN       string `toml:"linkedin_person_urn,omitempty"`
 	LinkedInOrganizationURN string `toml:"linkedin_organization_urn,omitempty"`
+	RedditUsername          string `toml:"reddit_username,omitempty"`
 }
 
 type WorkOSSettings struct {
@@ -529,6 +534,11 @@ func applySettingsDefaults(settings *Settings) {
 		settings.Stripe.DefaultEnv = "sandbox"
 	}
 	settings.Github.DefaultAuthMode = strings.ToLower(strings.TrimSpace(settings.Github.DefaultAuthMode))
+	switch settings.Github.DefaultAuthMode {
+	case "", "app", "oauth":
+	default:
+		settings.Github.DefaultAuthMode = "app"
+	}
 	if settings.Github.DefaultAuthMode == "" {
 		settings.Github.DefaultAuthMode = "app"
 	}
@@ -538,6 +548,17 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	settings.Github.DefaultOwner = strings.TrimSpace(settings.Github.DefaultOwner)
 	settings.Github.DefaultAccount = strings.TrimSpace(settings.Github.DefaultAccount)
+	if len(settings.Github.Accounts) > 0 {
+		for alias, entry := range settings.Github.Accounts {
+			entry.AuthMode = strings.ToLower(strings.TrimSpace(entry.AuthMode))
+			switch entry.AuthMode {
+			case "", "app", "oauth":
+			default:
+				entry.AuthMode = ""
+			}
+			settings.Github.Accounts[alias] = entry
+		}
+	}
 	settings.Cloudflare.DefaultEnv = normalizeCloudflareEnvironment(settings.Cloudflare.DefaultEnv)
 	if settings.Cloudflare.DefaultEnv == "" {
 		settings.Cloudflare.DefaultEnv = "prod"
@@ -582,6 +603,7 @@ func applySettingsDefaults(settings *Settings) {
 	instagramSpec := providers.Resolve(providers.SocialInstagram)
 	xSpec := providers.Resolve(providers.SocialX)
 	linkedinSpec := providers.Resolve(providers.SocialLinkedIn)
+	redditSpec := providers.Resolve(providers.SocialReddit)
 	settings.Social.Facebook.AuthStyle = normalizeSocialAuthStyle(settings.Social.Facebook.AuthStyle)
 	if settings.Social.Facebook.AuthStyle == "" {
 		settings.Social.Facebook.AuthStyle = firstNonEmpty(settings.Social.Facebook.AuthStyle, facebookSpec.AuthStyle, "query")
@@ -597,6 +619,10 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Social.LinkedIn.AuthStyle = normalizeSocialAuthStyle(settings.Social.LinkedIn.AuthStyle)
 	if settings.Social.LinkedIn.AuthStyle == "" {
 		settings.Social.LinkedIn.AuthStyle = firstNonEmpty(settings.Social.LinkedIn.AuthStyle, linkedinSpec.AuthStyle, "bearer")
+	}
+	settings.Social.Reddit.AuthStyle = normalizeSocialAuthStyle(settings.Social.Reddit.AuthStyle)
+	if settings.Social.Reddit.AuthStyle == "" {
+		settings.Social.Reddit.AuthStyle = firstNonEmpty(settings.Social.Reddit.AuthStyle, redditSpec.AuthStyle, "bearer")
 	}
 	settings.Social.Facebook.APIBaseURL = strings.TrimSpace(settings.Social.Facebook.APIBaseURL)
 	if settings.Social.Facebook.APIBaseURL == "" {
@@ -614,6 +640,10 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Social.LinkedIn.APIBaseURL == "" {
 		settings.Social.LinkedIn.APIBaseURL = firstNonEmpty(settings.Social.LinkedIn.APIBaseURL, linkedinSpec.BaseURL, "https://api.linkedin.com")
 	}
+	settings.Social.Reddit.APIBaseURL = strings.TrimSpace(settings.Social.Reddit.APIBaseURL)
+	if settings.Social.Reddit.APIBaseURL == "" {
+		settings.Social.Reddit.APIBaseURL = firstNonEmpty(settings.Social.Reddit.APIBaseURL, redditSpec.BaseURL, "https://oauth.reddit.com")
+	}
 	settings.Social.Facebook.APIVersion = strings.TrimSpace(settings.Social.Facebook.APIVersion)
 	if settings.Social.Facebook.APIVersion == "" {
 		settings.Social.Facebook.APIVersion = firstNonEmpty(settings.Social.Facebook.APIVersion, facebookSpec.APIVersion, "v22.0")
@@ -629,6 +659,10 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Social.LinkedIn.APIVersion = strings.TrimSpace(settings.Social.LinkedIn.APIVersion)
 	if settings.Social.LinkedIn.APIVersion == "" {
 		settings.Social.LinkedIn.APIVersion = firstNonEmpty(settings.Social.LinkedIn.APIVersion, linkedinSpec.APIVersion, "v2")
+	}
+	settings.Social.Reddit.APIVersion = strings.TrimSpace(settings.Social.Reddit.APIVersion)
+	if settings.Social.Reddit.APIVersion == "" {
+		settings.Social.Reddit.APIVersion = firstNonEmpty(settings.Social.Reddit.APIVersion, redditSpec.APIVersion)
 	}
 	settings.WorkOS.DefaultEnv = normalizeWorkOSEnvironment(settings.WorkOS.DefaultEnv)
 	if settings.WorkOS.DefaultEnv == "" {

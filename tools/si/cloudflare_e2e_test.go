@@ -121,3 +121,163 @@ func TestCloudflareE2E_PagesDomainCreate(t *testing.T) {
 		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }
+
+func TestCloudflareE2E_StatusAlias(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/tokens/verify" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"result": map[string]any{
+				"status": "active",
+			},
+		})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{},
+		"cloudflare", "status",
+		"--base-url", server.URL,
+		"--api-token", "token-123",
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if status, _ := payload["status"].(string); status != "ready" {
+		t.Fatalf("unexpected status payload: %#v", payload)
+	}
+}
+
+func TestCloudflareE2E_TokenVerify(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user/tokens/verify" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"result": map[string]any{
+				"id":     "token-1",
+				"status": "active",
+			},
+		})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{},
+		"cloudflare", "token", "verify",
+		"--base-url", server.URL,
+		"--api-token", "token-123",
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestCloudflareE2E_EmailRuleList(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/zones/zone-123/email/routing/rules" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token-123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"result": []map[string]any{{
+				"id":   "rule-1",
+				"name": "route-to-inbox",
+			}},
+		})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{},
+		"cloudflare", "email", "rule", "list",
+		"--base-url", server.URL,
+		"--api-token", "token-123",
+		"--zone-id", "zone-123",
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["count"].(float64)) != 1 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestCloudflareE2E_APIAlias(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/zones" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer token-xyz" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"success": true,
+			"result": []map[string]any{{
+				"id": "zone-1",
+			}},
+		})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{},
+		"cloudflare", "api",
+		"--base-url", server.URL,
+		"--api-token", "token-xyz",
+		"--path", "/zones",
+		"--json",
+	)
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}

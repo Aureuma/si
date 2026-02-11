@@ -63,6 +63,38 @@ func TestGitHubE2E_RawWithAppAuth(t *testing.T) {
 	}
 }
 
+func TestGitHubE2E_RawWithOAuthToken(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/user" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer oauth-token-123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"login": "octocat", "id": 1})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"GITHUB_DEFAULT_AUTH_MODE": "oauth",
+		"GITHUB_TOKEN":             "oauth-token-123",
+	}, "github", "raw", "--base-url", server.URL, "--method", "GET", "--path", "/user", "--json")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
 func TestGitHubE2E_ReleaseUploadUsesAPIUploadURL(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
@@ -204,6 +236,124 @@ func TestGitHubE2E_DoctorPublic(t *testing.T) {
 	}
 	if ok, _ := payload["ok"].(bool); !ok {
 		t.Fatalf("expected ok payload: %#v", payload)
+	}
+}
+
+func TestGitHubE2E_BranchCreateFromDefaultBranch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	pemKey := testAppPrivateKeyPEM(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/app/installations/123/access_tokens":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "inst-token", "expires_at": time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339)})
+		case "/repos/acme/repo":
+			_ = json.NewEncoder(w).Encode(map[string]any{"default_branch": "main"})
+		case "/repos/acme/repo/branches/main":
+			_ = json.NewEncoder(w).Encode(map[string]any{"name": "main", "commit": map[string]any{"sha": "abc123"}})
+		case "/repos/acme/repo/git/refs":
+			if got := r.Header.Get("Authorization"); got != "Bearer inst-token" {
+				t.Fatalf("unexpected auth header: %q", got)
+			}
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode create ref body: %v", err)
+			}
+			if body["ref"] != "refs/heads/feature/new-api" {
+				t.Fatalf("unexpected ref payload: %#v", body)
+			}
+			if body["sha"] != "abc123" {
+				t.Fatalf("unexpected sha payload: %#v", body)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"ref": "refs/heads/feature/new-api",
+				"object": map[string]any{
+					"sha": "abc123",
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"GITHUB_TEST_APP_ID":              "1",
+		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_TEST_INSTALLATION_ID":     "123",
+	}, "github", "branch", "create", "acme/repo", "--account", "test", "--base-url", server.URL, "--name", "feature/new-api", "--json")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["status_code"].(float64)) != 201 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestGitHubE2E_BranchProtect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	pemKey := testAppPrivateKeyPEM(t)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/app/installations/123/access_tokens":
+			_ = json.NewEncoder(w).Encode(map[string]any{"token": "inst-token", "expires_at": time.Now().UTC().Add(10 * time.Minute).Format(time.RFC3339)})
+		case "/repos/acme/repo/branches/main/protection":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode branch protect body: %v", err)
+			}
+			requiredChecks, ok := body["required_status_checks"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing required_status_checks: %#v", body)
+			}
+			checks, ok := requiredChecks["checks"].([]any)
+			if !ok || len(checks) != 2 {
+				t.Fatalf("unexpected checks payload: %#v", body)
+			}
+			if checks[0] != "ci" || checks[1] != "lint" {
+				t.Fatalf("unexpected check values: %#v", checks)
+			}
+			prReviews, ok := body["required_pull_request_reviews"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing required_pull_request_reviews: %#v", body)
+			}
+			if int(prReviews["required_approving_review_count"].(float64)) != 2 {
+				t.Fatalf("unexpected approvals payload: %#v", prReviews)
+			}
+			if enforceAdmins, _ := body["enforce_admins"].(bool); !enforceAdmins {
+				t.Fatalf("expected enforce_admins=true: %#v", body)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"url": "https://api.github.com/repos/acme/repo/branches/main/protection",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"GITHUB_TEST_APP_ID":              "1",
+		"GITHUB_TEST_APP_PRIVATE_KEY_PEM": pemKey,
+		"GITHUB_TEST_INSTALLATION_ID":     "123",
+	}, "github", "branch", "protect", "acme/repo", "main", "--account", "test", "--base-url", server.URL, "--required-check", "ci", "--required-check", "lint", "--required-approvals", "2", "--dismiss-stale-reviews", "--require-code-owner-reviews", "--allow-force-pushes", "--require-linear-history", "--json")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }
 
