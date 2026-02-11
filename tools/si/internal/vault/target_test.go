@@ -62,6 +62,35 @@ func TestResolveTargetExplicitFile(t *testing.T) {
 	}
 }
 
+func TestResolveTargetExplicitFileOutsideGitRepo(t *testing.T) {
+	base := t.TempDir()
+	vaultDir := filepath.Join(base, "secrets")
+	if err := os.MkdirAll(vaultDir, 0o700); err != nil {
+		t.Fatalf("mkdir vault dir: %v", err)
+	}
+	path := filepath.Join(vaultDir, ".env.custom")
+	if err := os.WriteFile(path, []byte("A=1\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
+	target, err := ResolveTarget(ResolveOptions{
+		CWD:              base,
+		File:             path,
+		AllowMissingFile: false,
+	})
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	if target.RepoRoot != "" {
+		t.Fatalf("expected empty repo root for non-git path, got %q", target.RepoRoot)
+	}
+	got, _ := filepath.EvalSymlinks(target.File)
+	want, _ := filepath.EvalSymlinks(path)
+	if got != want {
+		t.Fatalf("file=%q want %q", target.File, path)
+	}
+}
+
 func initGitRepoForTargetTest(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()

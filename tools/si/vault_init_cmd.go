@@ -13,7 +13,7 @@ import (
 func cmdVaultInit(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault init", flag.ExitOnError)
-	submoduleURL := fs.String("submodule-url", "", "git URL for the vault repo (submodule)")
+	submoduleURL := fs.String("submodule-url", "", "optional git URL for the vault repo (adds target vault dir as a submodule)")
 	fileFlag := fs.String("file", "", "explicit env file path to bootstrap (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	ignoreDirty := fs.Bool("ignore-dirty", true, "set ignore=dirty for the vault submodule in .gitmodules")
@@ -24,7 +24,7 @@ func cmdVaultInit(args []string) {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault init --submodule-url <git-url> [--file <path>] [--vault-dir <path>] [--ignore-dirty]")
+		printUsage("usage: si vault init [--submodule-url <git-url>] [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|keychain|file>] [--key-file <path>]")
 		return
 	}
 
@@ -33,49 +33,63 @@ func cmdVaultInit(args []string) {
 		fatal(err)
 	}
 
-	// Bootstrap the vault dir as a submodule when missing.
+	repoConfigured := strings.TrimSpace(target.RepoRoot) != "" && strings.TrimSpace(target.VaultDirRel) != ""
+	submoduleRequested := strings.TrimSpace(*submoduleURL) != ""
+	submodulePresent := false
+	vaultDirHadGitMetadata := vaultDirHasGitMetadata(target.VaultDir)
+
+	// Bootstrap the vault dir. Submodule is optional.
 	if !vault.IsDir(target.VaultDir) {
-		if strings.TrimSpace(*submoduleURL) == "" {
-			fatal(fmt.Errorf("vault dir not found (%s); provide --submodule-url to add it as a git submodule", filepath.Clean(target.VaultDir)))
-		}
-		if err := vault.GitSubmoduleAdd(target.RepoRoot, *submoduleURL, target.VaultDirRel); err != nil {
-			// A common failure mode for brand-new repos is a missing/invalid remote HEAD.
-			// Git may clone the repo but fail to checkout, returning an error while leaving
-			// a usable git working directory behind.
-			if vault.IsDir(target.VaultDir) {
-				originURL, oerr := vault.GitRemoteOriginURL(target.VaultDir)
-				if oerr != nil {
+		if submoduleRequested {
+			if !repoConfigured {
+				fatal(fmt.Errorf("--submodule-url requires target to resolve under a git repo root (use a repo-local --vault-dir or omit --submodule-url)"))
+			}
+			if err := vault.GitSubmoduleAdd(target.RepoRoot, *submoduleURL, target.VaultDirRel); err != nil {
+				// A common failure mode for brand-new repos is a missing/invalid remote HEAD.
+				// Git may clone the repo but fail to checkout, returning an error while leaving
+				// a usable git working directory behind.
+				if vault.IsDir(target.VaultDir) {
+					originURL, oerr := vault.GitRemoteOriginURL(target.VaultDir)
+					if oerr != nil {
+						fatal(err)
+					}
+					warnf("vault submodule add failed; attempting checkout recovery + submodule re-register: %v", err)
+					if recErr := vault.GitEnsureCheckout(target.VaultDir); recErr != nil {
+						fatal(fmt.Errorf("%w (recovery failed: %v)", err, recErr))
+					}
+					branch, berr := vault.GitCurrentBranch(target.VaultDir)
+					if berr != nil || strings.TrimSpace(branch) == "" {
+						branch = "main"
+					}
+					if regErr := vault.GitSubmoduleAddForce(target.RepoRoot, originURL, target.VaultDirRel, branch); regErr != nil {
+						fatal(fmt.Errorf("%w (recovery failed: %v)", err, regErr))
+					}
+				} else {
 					fatal(err)
 				}
-				warnf("vault submodule add failed; attempting checkout recovery + submodule re-register: %v", err)
-				if recErr := vault.GitEnsureCheckout(target.VaultDir); recErr != nil {
-					fatal(fmt.Errorf("%w (recovery failed: %v)", err, recErr))
-				}
-				branch, berr := vault.GitCurrentBranch(target.VaultDir)
-				if berr != nil || strings.TrimSpace(branch) == "" {
-					branch = "main"
-				}
-				if regErr := vault.GitSubmoduleAddForce(target.RepoRoot, originURL, target.VaultDirRel, branch); regErr != nil {
-					fatal(fmt.Errorf("%w (recovery failed: %v)", err, regErr))
-				}
-			} else {
+			}
+		} else {
+			if err := os.MkdirAll(target.VaultDir, 0o750); err != nil {
 				fatal(err)
 			}
 		}
 	}
 
 	// Ensure the submodule checkout exists (when this vault dir is configured as a submodule).
-	if sm, err := vault.GitSubmoduleStatus(target.RepoRoot, target.VaultDirRel); err == nil && sm != nil && sm.Present {
-		if err := vault.GitSubmoduleUpdate(target.RepoRoot, target.VaultDirRel); err != nil {
-			fatal(err)
+	if repoConfigured {
+		if sm, err := vault.GitSubmoduleStatus(target.RepoRoot, target.VaultDirRel); err == nil && sm != nil && sm.Present {
+			submodulePresent = true
+			if err := vault.GitSubmoduleUpdate(target.RepoRoot, target.VaultDirRel); err != nil {
+				fatal(err)
+			}
 		}
 	}
-	if vault.IsDir(target.VaultDir) {
+	if vault.IsDir(target.VaultDir) && (submodulePresent || submoduleRequested || vaultDirHadGitMetadata) {
 		if err := vault.GitEnsureCheckout(target.VaultDir); err != nil {
 			fatal(fmt.Errorf("vault repo checkout failed: %w", err))
 		}
 	}
-	if *ignoreDirty {
+	if *ignoreDirty && submodulePresent && repoConfigured {
 		_, _ = vault.EnsureGitmodulesIgnoreDirty(target.RepoRoot, target.VaultDirRel)
 	}
 
@@ -187,4 +201,13 @@ func cmdVaultInit(args []string) {
 			warnf("hooks: not installed (%v) (run `si vault hooks install`)", err)
 		}
 	}
+}
+
+func vaultDirHasGitMetadata(dir string) bool {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, ".git"))
+	return err == nil
 }

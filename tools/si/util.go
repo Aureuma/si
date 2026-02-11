@@ -23,7 +23,7 @@ Holistic CLI for si. This help includes all commands, flags, and core features.
 Features:
   - Dyads: spawn paired actor/critic containers with a critic-driven closed loop, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
-  - Vault: encrypted secrets stored in a pinned submodule; format, encrypt, and inject into processes/containers.
+  - Vault: encrypted dotenv secrets (submodule optional); format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - GitHub bridge: App-auth context, REST/GraphQL access, and repository automation commands.
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
@@ -280,7 +280,7 @@ stripe:
 
 	  Default file (when --file is not set): <vault-dir>/.env
 
-	  si vault init --submodule-url <git-url> [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|keychain|file>] [--key-file <path>]
+	  si vault init [--submodule-url <git-url>] [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault status [--file <path>] [--vault-dir <path>]
 	  si vault check [--file <path>] [--vault-dir <path>] [--staged] [--all]
