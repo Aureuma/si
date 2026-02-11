@@ -18,8 +18,9 @@ import (
 )
 
 const (
-	reportBeginMarker = "<<WORK_REPORT_BEGIN>>"
-	reportEndMarker   = "<<WORK_REPORT_END>>"
+	reportBeginMarker    = "<<WORK_REPORT_BEGIN>>"
+	reportEndMarker      = "<<WORK_REPORT_END>>"
+	dyadTmuxHistoryLimit = "200000"
 )
 
 type loopConfig struct {
@@ -551,7 +552,7 @@ func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner 
 			return "", "", err
 		}
 	}
-	_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	applyDyadTmuxSessionDefaults(ctx, runner, session)
 	_, _ = runner.Output(ctx, "rename-window", "-t", session+":0", windowName)
 	_, _ = runner.Output(ctx, "select-pane", "-t", paneTarget, "-T", windowName)
 	if out, err := runner.Output(ctx, "display-message", "-p", "-t", paneTarget, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
@@ -559,7 +560,7 @@ func (e codexTurnExecutor) ensureInteractiveSession(ctx context.Context, runner 
 		if _, err := runner.Output(ctx, "new-session", "-d", "-s", session, "-n", windowName, "bash", "-lc", startCmd); err != nil {
 			return "", "", err
 		}
-		_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+		applyDyadTmuxSessionDefaults(ctx, runner, session)
 		_, _ = runner.Output(ctx, "rename-window", "-t", session+":0", windowName)
 		_, _ = runner.Output(ctx, "select-pane", "-t", paneTarget, "-T", windowName)
 	}
@@ -817,6 +818,16 @@ type tmuxRunner struct {
 type statusOptions struct {
 	CaptureMode  string
 	CaptureLines int
+}
+
+func applyDyadTmuxSessionDefaults(ctx context.Context, runner tmuxRunner, session string) {
+	session = strings.TrimSpace(session)
+	if session == "" {
+		return
+	}
+	_, _ = runner.Output(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	_, _ = runner.Output(ctx, "set-option", "-t", session, "mouse", "on")
+	_, _ = runner.Output(ctx, "set-option", "-t", session, "history-limit", dyadTmuxHistoryLimit)
 }
 
 func (r tmuxRunner) Output(ctx context.Context, args ...string) (string, error) {

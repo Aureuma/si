@@ -1231,13 +1231,13 @@ func attachCodexTmuxPane(containerName string) error {
 			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
 		}
 	}
-	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+	applyTmuxSessionDefaults(ctx, session)
 	if out, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
 		_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
 		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 			return err
 		}
-		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
+		applyTmuxSessionDefaults(ctx, session)
 		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
 		if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
 			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
