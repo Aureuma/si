@@ -41,20 +41,23 @@ func runDockerBuild(spec imageBuildSpec) error {
 	if spec.tag == "" || spec.contextDir == "" {
 		return fmt.Errorf("image tag and context required")
 	}
+	enableBuildKit := false
+	buildxOK, buildxErr := dockerBuildxAvailableFn()
+	if buildxErr != nil {
+		warnf("docker buildx detection failed; using legacy docker build path: %v", buildxErr)
+	} else if buildxOK {
+		enableBuildKit = true
+	} else {
+		warnf("docker buildx is not available; using legacy docker build path")
+	}
 	secrets := spec.secrets
-	if len(secrets) > 0 {
-		ok, err := dockerBuildxAvailableFn()
-		if err != nil {
-			warnf("docker buildx detection failed; building without host build secrets: %v", err)
-			secrets = nil
-		} else if !ok {
-			warnf("docker buildx is not available; building without host build secrets")
-			secrets = nil
-		}
+	if len(secrets) > 0 && !enableBuildKit {
+		warnf("building without host build secrets because BuildKit/buildx is unavailable")
+		secrets = nil
 	}
 	args := dockerBuildArgs(spec, secrets)
 	infof("docker %s", redactedDockerBuildArgs(args))
-	return runDockerBuildCommandFn(args)
+	return runDockerBuildCommandFn(args, enableBuildKit)
 }
 
 func dockerBuildArgs(spec imageBuildSpec, secrets []string) []string {
@@ -72,11 +75,15 @@ func dockerBuildArgs(spec imageBuildSpec, secrets []string) []string {
 	return args
 }
 
-func runDockerBuildCommand(args []string) error {
+func runDockerBuildCommand(args []string, enableBuildKit bool) error {
 	if len(args) == 0 {
 		return fmt.Errorf("docker build args required")
 	}
-	cmd := dockerCommandWithEnv([]string{"DOCKER_BUILDKIT=1"}, args...)
+	buildKitSetting := "DOCKER_BUILDKIT=0"
+	if enableBuildKit {
+		buildKitSetting = "DOCKER_BUILDKIT=1"
+	}
+	cmd := dockerCommandWithEnv([]string{buildKitSetting}, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

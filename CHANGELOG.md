@@ -15,6 +15,8 @@ All notable changes to this project will be documented in this file.
 - Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
 - Unified user-facing datetime rendering to GitHub-style relative dates and updated `si status`/weekly reset displays to show date-only absolute values plus relative countdowns.
 - Hardened Docker runtime compatibility for Colima-based macOS setups (including profile/context socket detection) and made `si build image` gracefully skip build secrets when `docker buildx` is unavailable.
+### Fixed
+- Fixed `si build image` to disable BuildKit (`DOCKER_BUILDKIT=0`) when `docker buildx` is missing or broken, preventing BuildKit hard-fail errors on Colima-only hosts.
 
 ## [v0.45.0] - 2026-02-11
 ### Added

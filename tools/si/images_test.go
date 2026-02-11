@@ -34,8 +34,10 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxMissing(t *testing.T) {
 
 	dockerBuildxAvailableFn = func() (bool, error) { return false, nil }
 	var captured []string
-	runDockerBuildCommandFn = func(args []string) error {
+	gotBuildKit := true
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
 		captured = append([]string(nil), args...)
+		gotBuildKit = enableBuildKit
 		return nil
 	}
 
@@ -52,6 +54,9 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxMissing(t *testing.T) {
 			t.Fatalf("did not expect --secret when buildx missing, args=%v", captured)
 		}
 	}
+	if gotBuildKit {
+		t.Fatalf("expected buildkit to be disabled when buildx is missing")
+	}
 }
 
 func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
@@ -64,8 +69,10 @@ func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
 
 	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
 	var captured []string
-	runDockerBuildCommandFn = func(args []string) error {
+	gotBuildKit := false
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
 		captured = append([]string(nil), args...)
+		gotBuildKit = enableBuildKit
 		return nil
 	}
 
@@ -87,6 +94,9 @@ func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
 	if !found {
 		t.Fatalf("expected --secret when buildx is available, args=%v", captured)
 	}
+	if !gotBuildKit {
+		t.Fatalf("expected buildkit to be enabled when buildx is available")
+	}
 }
 
 func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
@@ -99,8 +109,10 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 
 	dockerBuildxAvailableFn = func() (bool, error) { return false, assertErr("probe failed") }
 	var captured []string
-	runDockerBuildCommandFn = func(args []string) error {
+	gotBuildKit := true
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
 		captured = append([]string(nil), args...)
+		gotBuildKit = enableBuildKit
 		return nil
 	}
 
@@ -116,6 +128,9 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 		if arg == "--secret" {
 			t.Fatalf("did not expect --secret when buildx probe errors, args=%v", captured)
 		}
+	}
+	if gotBuildKit {
+		t.Fatalf("expected buildkit to be disabled when buildx probe errors")
 	}
 }
 
