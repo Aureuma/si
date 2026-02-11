@@ -240,6 +240,7 @@ func fetchCodexReportsViaTmux(ctx context.Context, containerID string, prompts [
 	if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
 		return "", nil, err
 	}
+	applyTmuxSessionDefaults(ctx, session)
 	if opts.Debug {
 		debugf(statusOptions{Debug: true}, "tmux session: %s", session)
 	}

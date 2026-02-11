@@ -56,6 +56,8 @@ WORKDIR /workspace
 
 RUN printf '%s\n' 'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' > /etc/profile.d/si-codex-alias.sh \
     && chmod 0644 /etc/profile.d/si-codex-alias.sh \
+    && printf '%s\n' 'set -g mouse on' 'set -g history-limit 200000' > /etc/tmux.conf \
+    && chmod 0644 /etc/tmux.conf \
     && printf '%s\n' 'if [ -n "${SI_TERM_TITLE:-}" ]; then' \
          '  __si_set_title() { printf "\\033]0;%s\\007" "$SI_TERM_TITLE"; }' \
          '  if [ -n "${PROMPT_COMMAND:-}" ]; then' \
