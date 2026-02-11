@@ -10,8 +10,6 @@ import (
 type Target struct {
 	CWD            string
 	RepoRoot       string // git repo root when resolvable
-	VaultDir       string // absolute path (directory containing env files)
-	VaultDirRel    string // relative to RepoRoot when known
 	File           string // absolute path to the target env file
 	FileIsExplicit bool
 }
@@ -19,13 +17,13 @@ type Target struct {
 type ResolveOptions struct {
 	CWD string
 
-	File     string
-	VaultDir string
+	// File is the explicitly provided env file path (flag).
+	File string
 
-	DefaultVaultDir string
+	// DefaultFile is used when File is empty.
+	DefaultFile string
 
-	AllowMissingVaultDir bool
-	AllowMissingFile     bool
+	AllowMissingFile bool
 }
 
 func ResolveTarget(opts ResolveOptions) (Target, error) {
@@ -38,75 +36,36 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 		}
 	}
 
-	if strings.TrimSpace(opts.File) != "" {
-		fileAbs, err := CleanAbs(opts.File)
-		if err != nil {
-			return Target{}, err
-		}
-		repoRoot, _ := GitRoot(filepath.Dir(fileAbs))
-		vaultDir := filepath.Dir(fileAbs)
-		vaultRel := ""
-		if repoRoot != "" {
-			if rel, err := filepath.Rel(repoRoot, vaultDir); err == nil {
-				vaultRel = filepath.Clean(rel)
-			}
-		}
-		if !opts.AllowMissingFile {
-			if _, err := os.Stat(fileAbs); err != nil {
-				return Target{}, err
-			}
-		}
-		return Target{
-			CWD:            cwd,
-			RepoRoot:       repoRoot,
-			VaultDir:       filepath.Clean(vaultDir),
-			VaultDirRel:    vaultRel,
-			File:           fileAbs,
-			FileIsExplicit: true,
-		}, nil
+	file := strings.TrimSpace(opts.File)
+	fileIsExplicit := file != ""
+	if file == "" {
+		file = strings.TrimSpace(opts.DefaultFile)
+	}
+	if file == "" {
+		return Target{}, fmt.Errorf("vault env file not configured (run `si vault init` or pass --file)")
 	}
 
-	repoRoot, err := GitRoot(cwd)
+	fileAbs, err := CleanAbsFrom(cwd, file)
 	if err != nil {
 		return Target{}, err
 	}
-	vaultRel := strings.TrimSpace(opts.VaultDir)
-	if vaultRel == "" {
-		vaultRel = strings.TrimSpace(opts.DefaultVaultDir)
-	}
-	if vaultRel == "" {
-		vaultRel = "vault"
-	}
-	vaultAbs := vaultRel
-	if !filepath.IsAbs(vaultAbs) {
-		vaultAbs = filepath.Join(repoRoot, vaultRel)
-	}
-	vaultAbs = filepath.Clean(vaultAbs)
-	if !opts.AllowMissingVaultDir && !IsDir(vaultAbs) {
-		return Target{}, fmt.Errorf("vault dir not found: %s (run si vault init)", vaultAbs)
-	}
-	vaultRelClean := filepath.Clean(vaultRel)
-	if filepath.IsAbs(vaultRelClean) {
-		if rel, err := filepath.Rel(repoRoot, vaultAbs); err == nil {
-			vaultRelClean = filepath.Clean(rel)
-		}
-	}
-
-	// Default vault env file is a plain ".env" inside the vault dir. If you want
-	// multiple dotenv files (e.g. .env.dev/.env.prod), use --file explicitly.
-	fileAbs := filepath.Join(vaultAbs, ".env")
 	if !opts.AllowMissingFile {
 		if _, err := os.Stat(fileAbs); err != nil {
 			return Target{}, err
 		}
 	}
 
+	// Repo root is used for optional features (trust + staged checks). It can be empty.
+	repoRoot, _ := GitRoot(filepath.Dir(fileAbs))
+	if repoRoot == "" {
+		repoRoot, _ = GitRoot(cwd)
+	}
+
 	return Target{
 		CWD:            cwd,
 		RepoRoot:       repoRoot,
-		VaultDir:       vaultAbs,
-		VaultDirRel:    vaultRelClean,
-		File:           fileAbs,
-		FileIsExplicit: false,
+		File:           filepath.Clean(fileAbs),
+		FileIsExplicit: fileIsExplicit,
 	}, nil
 }
+

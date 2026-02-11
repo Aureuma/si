@@ -31,29 +31,23 @@ func cmdVaultHooks(args []string) {
 }
 
 func cmdVaultHooksInstall(args []string) {
-	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault hooks install", flag.ExitOnError)
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
 	force := fs.Bool("force", false, "overwrite existing hook")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault hooks install [--vault-dir <path>] [--force]")
+		printUsage("usage: si vault hooks install [--force]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, true, true)
+	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)
 	}
-	repoDir := strings.TrimSpace(target.VaultDir)
-	if repoDir == "" || !vault.IsDir(repoDir) {
-		// Fallback: allow running inside the vault repo itself when vault dir isn't resolvable.
-		repoDir = strings.TrimSpace(target.RepoRoot)
-	}
-	if repoDir == "" || !vault.IsDir(repoDir) {
-		fatal(fmt.Errorf("vault dir not found (set --vault-dir or run inside the vault repo)"))
+	repoDir, err := vault.GitRoot(cwd)
+	if err != nil {
+		fatal(err)
 	}
 
 	hooksDir, err := vault.GitHooksDir(repoDir)
@@ -75,27 +69,22 @@ func cmdVaultHooksInstall(args []string) {
 }
 
 func cmdVaultHooksStatus(args []string) {
-	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault hooks status", flag.ExitOnError)
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault hooks status [--vault-dir <path>]")
+		printUsage("usage: si vault hooks status")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, true, true)
+	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)
 	}
-	repoDir := strings.TrimSpace(target.VaultDir)
-	if repoDir == "" || !vault.IsDir(repoDir) {
-		repoDir = strings.TrimSpace(target.RepoRoot)
-	}
-	if repoDir == "" || !vault.IsDir(repoDir) {
-		fatal(fmt.Errorf("vault dir not found (set --vault-dir or run inside the vault repo)"))
+	repoDir, err := vault.GitRoot(cwd)
+	if err != nil {
+		fatal(err)
 	}
 	hooksDir, err := vault.GitHooksDir(repoDir)
 	if err != nil {
@@ -118,27 +107,22 @@ func cmdVaultHooksStatus(args []string) {
 }
 
 func cmdVaultHooksUninstall(args []string) {
-	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault hooks uninstall", flag.ExitOnError)
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to git root; use '.' when running inside the vault repo)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault hooks uninstall [--vault-dir <path>]")
+		printUsage("usage: si vault hooks uninstall")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, "", *vaultDir, true, true)
+	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)
 	}
-	repoDir := strings.TrimSpace(target.VaultDir)
-	if repoDir == "" || !vault.IsDir(repoDir) {
-		repoDir = strings.TrimSpace(target.RepoRoot)
-	}
-	if repoDir == "" || !vault.IsDir(repoDir) {
-		fatal(fmt.Errorf("vault dir not found (set --vault-dir or run inside the vault repo)"))
+	repoDir, err := vault.GitRoot(cwd)
+	if err != nil {
+		fatal(err)
 	}
 	hooksDir, err := vault.GitHooksDir(repoDir)
 	if err != nil {
@@ -176,10 +160,10 @@ func renderVaultPreCommitHook(selfExe string) string {
 	}
 	b.WriteString("SI_BIN=${SI_BIN:-$SI_BIN_DEFAULT}\n")
 	b.WriteString("if [ -n \"$SI_BIN\" ] && [ -x \"$SI_BIN\" ]; then\n")
-	b.WriteString("  exec \"$SI_BIN\" vault check --staged --all --vault-dir .\n")
+	b.WriteString("  exec \"$SI_BIN\" vault check --staged --all\n")
 	b.WriteString("fi\n")
 	b.WriteString("if command -v si >/dev/null 2>&1; then\n")
-	b.WriteString("  exec si vault check --staged --all --vault-dir .\n")
+	b.WriteString("  exec si vault check --staged --all\n")
 	b.WriteString("fi\n")
 	b.WriteString("echo \"[si vault] error: si not found (install si or set SI_BIN)\" >&2\n")
 	b.WriteString("exit 1\n")
