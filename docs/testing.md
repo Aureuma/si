@@ -34,7 +34,13 @@ Run static analysis from the repo root:
 ./si analyze
 ```
 
-Scope it to the CLI module when iterating locally:
+Use non-failing mode for local iteration while keeping CI strict with default `./si analyze`:
+
+```bash
+./si analyze --no-fail
+```
+
+If you only changed the CLI, this is the fastest local scope:
 
 ```bash
 ./si analyze --module tools/si
