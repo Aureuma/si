@@ -335,6 +335,7 @@ type GCPAccountEntry struct {
 	ProjectID      string `toml:"project_id,omitempty"`
 	ProjectIDEnv   string `toml:"project_id_env,omitempty"`
 	AccessTokenEnv string `toml:"access_token_env,omitempty"`
+	APIKeyEnv      string `toml:"api_key_env,omitempty"`
 	APIBaseURL     string `toml:"api_base_url,omitempty"`
 }
 

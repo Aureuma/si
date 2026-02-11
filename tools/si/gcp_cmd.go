@@ -22,7 +22,7 @@ import (
 	"si/tools/si/internal/providers"
 )
 
-const gcpUsageText = "usage: si gcp <auth|context|doctor|service|raw>"
+const gcpUsageText = "usage: si gcp <auth|context|doctor|service|iam|apikey|gemini|generativelanguage|vertex|ai|raw>"
 
 type gcpRuntimeContext struct {
 	AccountAlias string
@@ -35,12 +35,13 @@ type gcpRuntimeContext struct {
 }
 
 type gcpRuntimeContextInput struct {
-	AccountFlag  string
-	EnvFlag      string
-	ProjectFlag  string
-	BaseURLFlag  string
-	TokenFlag    string
-	RequireToken bool
+	AccountFlag    string
+	EnvFlag        string
+	ProjectFlag    string
+	BaseURLFlag    string
+	TokenFlag      string
+	RequireToken   bool
+	RequireProject bool
 }
 
 type gcpResponse struct {
@@ -106,6 +107,16 @@ func cmdGCP(args []string) {
 		cmdGCPDoctor(rest)
 	case "service", "services":
 		cmdGCPService(rest)
+	case "iam":
+		cmdGCPIAM(rest)
+	case "apikey", "api-key", "apikeys":
+		cmdGCPAPIKey(rest)
+	case "gemini", "generativelanguage":
+		cmdGCPGemini(rest)
+	case "vertex":
+		cmdGCPVertex(rest)
+	case "ai":
+		cmdGCPAI(rest)
 	case "raw":
 		cmdGCPRaw(rest)
 	default:
@@ -230,6 +241,7 @@ func cmdGCPContextList(args []string) {
 			"project_id":     strings.TrimSpace(entry.ProjectID),
 			"project_id_env": strings.TrimSpace(entry.ProjectIDEnv),
 			"token_env":      strings.TrimSpace(entry.AccessTokenEnv),
+			"api_key_env":    strings.TrimSpace(entry.APIKeyEnv),
 		})
 	}
 	if *jsonOut {
@@ -244,21 +256,23 @@ func cmdGCPContextList(args []string) {
 		infof("no gcp accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s\n",
+	fmt.Printf("%s %s %s %s %s %s %s\n",
 		padRightANSI(styleHeading("ALIAS"), 18),
 		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("PROJECT ID"), 20),
+		padRightANSI(styleHeading("PROJECT ID"), 18),
 		padRightANSI(styleHeading("PROJECT ENV"), 24),
 		padRightANSI(styleHeading("TOKEN ENV"), 24),
+		padRightANSI(styleHeading("API KEY ENV"), 24),
 		styleHeading("NAME"),
 	)
 	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s\n",
+		fmt.Printf("%s %s %s %s %s %s %s\n",
 			padRightANSI(orDash(row["alias"]), 18),
 			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["project_id"]), 20),
+			padRightANSI(orDash(row["project_id"]), 18),
 			padRightANSI(orDash(row["project_id_env"]), 24),
 			padRightANSI(orDash(row["token_env"]), 24),
+			padRightANSI(orDash(row["api_key_env"]), 24),
 			orDash(row["name"]),
 		)
 	}
@@ -305,10 +319,11 @@ func cmdGCPContextUse(args []string) {
 	baseURL := fs.String("base-url", "", "serviceusage api base url")
 	projectEnv := fs.String("project-env", "", "project id env-var reference")
 	tokenEnv := fs.String("token-env", "", "access token env-var reference")
+	apiKeyEnv := fs.String("api-key-env", "", "api key env-var reference (for gemini api-key mode)")
 	vaultPrefix := fs.String("vault-prefix", "", "account env prefix")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si gcp context use [--account <alias>] [--env <prod|staging|dev>] [--project <id>] [--base-url <url>] [--project-env <env>] [--token-env <env>] [--vault-prefix <prefix>]")
+		printUsage("usage: si gcp context use [--account <alias>] [--env <prod|staging|dev>] [--project <id>] [--base-url <url>] [--project-env <env>] [--token-env <env>] [--api-key-env <env>] [--vault-prefix <prefix>]")
 		return
 	}
 	settings := loadSettingsOrDefault()
@@ -329,7 +344,7 @@ func cmdGCPContextUse(args []string) {
 	if value := strings.TrimSpace(*account); value != "" {
 		targetAlias = value
 	}
-	if targetAlias == "" && (strings.TrimSpace(*project) != "" || strings.TrimSpace(*projectEnv) != "" || strings.TrimSpace(*tokenEnv) != "" || strings.TrimSpace(*vaultPrefix) != "") {
+	if targetAlias == "" && (strings.TrimSpace(*project) != "" || strings.TrimSpace(*projectEnv) != "" || strings.TrimSpace(*tokenEnv) != "" || strings.TrimSpace(*apiKeyEnv) != "" || strings.TrimSpace(*vaultPrefix) != "") {
 		targetAlias = "default"
 		settings.GCP.DefaultAccount = targetAlias
 	}
@@ -346,6 +361,9 @@ func cmdGCPContextUse(args []string) {
 		}
 		if value := strings.TrimSpace(*tokenEnv); value != "" {
 			entry.AccessTokenEnv = value
+		}
+		if value := strings.TrimSpace(*apiKeyEnv); value != "" {
+			entry.APIKeyEnv = value
 		}
 		if value := strings.TrimSpace(*vaultPrefix); value != "" {
 			entry.VaultPrefix = value
@@ -646,13 +664,22 @@ func bindGCPCommonFlags(fs *flag.FlagSet) gcpCommonFlags {
 }
 
 func resolveRuntimeFromGCPFlags(flags gcpCommonFlags, requireToken bool) (gcpRuntimeContext, error) {
+	return resolveRuntimeFromGCPFlagsWithBase(flags, requireToken, "", true)
+}
+
+func resolveRuntimeFromGCPFlagsWithBase(flags gcpCommonFlags, requireToken bool, defaultBaseURL string, requireProject bool) (gcpRuntimeContext, error) {
+	base := strings.TrimSpace(valueOrEmpty(flags.baseURL))
+	if base == "" {
+		base = strings.TrimSpace(defaultBaseURL)
+	}
 	return resolveGCPRuntimeContext(gcpRuntimeContextInput{
-		AccountFlag:  strings.TrimSpace(valueOrEmpty(flags.account)),
-		EnvFlag:      strings.TrimSpace(valueOrEmpty(flags.env)),
-		ProjectFlag:  strings.TrimSpace(valueOrEmpty(flags.project)),
-		BaseURLFlag:  strings.TrimSpace(valueOrEmpty(flags.baseURL)),
-		TokenFlag:    strings.TrimSpace(valueOrEmpty(flags.token)),
-		RequireToken: requireToken,
+		AccountFlag:    strings.TrimSpace(valueOrEmpty(flags.account)),
+		EnvFlag:        strings.TrimSpace(valueOrEmpty(flags.env)),
+		ProjectFlag:    strings.TrimSpace(valueOrEmpty(flags.project)),
+		BaseURLFlag:    base,
+		TokenFlag:      strings.TrimSpace(valueOrEmpty(flags.token)),
+		RequireToken:   requireToken,
+		RequireProject: requireProject,
 	})
 }
 
@@ -693,7 +720,7 @@ func resolveGCPRuntimeContext(input gcpRuntimeContextInput) (gcpRuntimeContext, 
 	}
 
 	projectID, projectSource := resolveGCPProjectID(alias, account, strings.TrimSpace(input.ProjectFlag))
-	if projectID == "" {
+	if input.RequireProject && projectID == "" {
 		return gcpRuntimeContext{}, fmt.Errorf("gcp project id not found (set --project, GCP_PROJECT_ID, or account project settings)")
 	}
 	token, tokenSource := resolveGCPAccessToken(alias, account, strings.TrimSpace(input.TokenFlag))

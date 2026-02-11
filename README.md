@@ -412,6 +412,44 @@ Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
 
+## GCP
+`si` includes a broad Google Cloud bridge under `si gcp`:
+
+```bash
+# auth/context/diagnostics
+./si gcp auth status --project <project_id>
+./si gcp context list
+./si gcp context use --account core --project <project_id> --token-env GOOGLE_OAUTH_ACCESS_TOKEN --api-key-env GEMINI_API_KEY
+./si gcp doctor --project <project_id>
+
+# service usage + IAM + API keys
+./si gcp service list --project <project_id> --filter state:ENABLED
+./si gcp iam service-account list --project <project_id>
+./si gcp iam service-account create --project <project_id> --account-id app-bot --display-name "App Bot"
+./si gcp iam policy test-permissions --project <project_id> --permission resourcemanager.projects.get
+./si gcp apikey list --project <project_id>
+./si gcp apikey create --project <project_id> --display-name gemini-client
+
+# gemini (generativelanguage) api-key mode
+./si gcp gemini models list --api-key $GEMINI_API_KEY
+./si gcp gemini generate --api-key $GEMINI_API_KEY --model gemini-2.0-flash --prompt "Write a haiku about shipping software."
+./si gcp gemini embed --api-key $GEMINI_API_KEY --model text-embedding-004 --text "search phrase"
+
+# vertex ai (oauth)
+./si gcp vertex model list --project <project_id> --location us-central1
+./si gcp vertex endpoint list --project <project_id> --location us-central1
+./si gcp vertex batch create --project <project_id> --location us-central1 --json-body '{"displayName":"batch-job"}'
+./si gcp vertex pipeline list --project <project_id> --location us-central1
+./si gcp vertex operation list --project <project_id> --location us-central1
+
+# raw escape hatch
+./si gcp raw --project <project_id> --method GET --path /v1/projects/<project_id>/services
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
 ## Social (Facebook / Instagram / X / LinkedIn / Reddit)
 `si` includes a unified social bridge under `si social`:
 
