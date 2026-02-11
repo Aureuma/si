@@ -293,17 +293,22 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		ExposedPorts: actorExposed,
 		User:         "root",
 	}
+	actorMirrorTarget := ""
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
+		actorMirrorTarget = target
+	}
 	actorMounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
-		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 	}
-	// Allow `si status` inside dyad containers to reflect host Codex profiles/auth.
-	actorMounts = append(actorMounts, HostSiCodexProfileMounts("/root")...)
+	actorMounts = append(actorMounts, BuildContainerCoreMounts(ContainerCoreMountPlan{
+		WorkspaceHost:          opts.WorkspaceHost,
+		WorkspacePrimaryTarget: "/workspace",
+		WorkspaceMirrorTarget:  actorMirrorTarget,
+		ContainerHome:          "/root",
+		IncludeHostSi:          true,
+	})...)
 	if hasSocket {
 		actorMounts = append(actorMounts, socketMount)
-	}
-	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
-		actorMounts = append(actorMounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: target})
 	}
 	actorHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
@@ -325,18 +330,23 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		Cmd:        []string{"critic"},
 		User:       "root",
 	}
+	criticMirrorTarget := ""
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
+		criticMirrorTarget = target
+	}
 	criticMounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
-		{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"},
 		{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
 	}
-	// Allow `si status` inside dyad containers to reflect host Codex profiles/auth.
-	criticMounts = append(criticMounts, HostSiCodexProfileMounts("/root")...)
+	criticMounts = append(criticMounts, BuildContainerCoreMounts(ContainerCoreMountPlan{
+		WorkspaceHost:          opts.WorkspaceHost,
+		WorkspacePrimaryTarget: "/workspace",
+		WorkspaceMirrorTarget:  criticMirrorTarget,
+		ContainerHome:          "/root",
+		IncludeHostSi:          true,
+	})...)
 	if hasSocket {
 		criticMounts = append(criticMounts, socketMount)
-	}
-	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
-		criticMounts = append(criticMounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: target})
 	}
 	criticHostConfig := &container.HostConfig{
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
