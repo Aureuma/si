@@ -187,14 +187,17 @@ Inspect profiles and usage:
 Run/attach workflows:
 
 ```bash
-# open shell in existing container
+# attach to persistent codex tmux pane (default)
 ./si run <container-or-profile>
 
-# attach to persistent codex tmux pane
-./si run <container-or-profile> --tmux
+# open direct shell without tmux
+./si run <container-or-profile> --no-tmux
+
+# run a custom command (requires --no-tmux)
+./si run <container-or-profile> --no-tmux <command>
 ```
 
-Note: the legacy `--autopoietic` companion mode has been removed in favor of dyads (`./si dyad spawn ...`), while `--tmux` remains supported.
+Note: the legacy `--autopoietic` companion mode has been removed in favor of dyads (`./si dyad spawn ...`). `--tmux` remains supported, and existing-container `si run` now defaults to tmux attach.
 
 ## Warmup
 `si` can auto-bootstrap weekly usage timers for logged-in Codex profiles:

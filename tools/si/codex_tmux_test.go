@@ -28,9 +28,13 @@ func TestValidateRunTmuxArgs(t *testing.T) {
 
 func TestConsumeRunContainerModeFlags(t *testing.T) {
 	tmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "--tmux", "bash"}, &tmux)
+	noTmux := false
+	args := consumeRunContainerModeFlags([]string{"berylla", "--tmux", "bash"}, &tmux, &noTmux)
 	if !tmux {
 		t.Fatalf("expected tmux to be enabled")
+	}
+	if noTmux {
+		t.Fatalf("expected no-tmux to remain false")
 	}
 	if len(args) != 2 || args[0] != "berylla" || args[1] != "bash" {
 		t.Fatalf("unexpected args after consume: %v", args)
@@ -39,11 +43,30 @@ func TestConsumeRunContainerModeFlags(t *testing.T) {
 
 func TestConsumeRunContainerModeFlagsStopsAtCommand(t *testing.T) {
 	tmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "printf", "%s\n", "--tmux"}, &tmux)
+	noTmux := false
+	args := consumeRunContainerModeFlags([]string{"berylla", "printf", "%s\n", "--tmux"}, &tmux, &noTmux)
 	if tmux {
 		t.Fatalf("expected tmux flag to remain false once command args begin")
 	}
+	if noTmux {
+		t.Fatalf("expected no-tmux flag to remain false once command args begin")
+	}
 	if len(args) != 4 || args[0] != "berylla" || args[1] != "printf" || args[3] != "--tmux" {
+		t.Fatalf("unexpected args after consume: %v", args)
+	}
+}
+
+func TestConsumeRunContainerModeFlagsNoTmux(t *testing.T) {
+	tmux := false
+	noTmux := false
+	args := consumeRunContainerModeFlags([]string{"berylla", "--no-tmux", "bash"}, &tmux, &noTmux)
+	if tmux {
+		t.Fatalf("expected tmux to remain false")
+	}
+	if !noTmux {
+		t.Fatalf("expected no-tmux to be enabled")
+	}
+	if len(args) != 2 || args[0] != "berylla" || args[1] != "bash" {
 		t.Fatalf("unexpected args after consume: %v", args)
 	}
 }

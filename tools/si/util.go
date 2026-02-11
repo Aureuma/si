@@ -206,9 +206,10 @@ codex:
       --env KEY=VALUE        (repeatable)
 
     Run in existing container:
-      si run [name]
-      si run [name] --tmux
-      si run <name> <command>
+      si run [name]           (tmux default)
+      si run [name] --no-tmux
+      si run <name> --no-tmux <command>
+      --no-tmux
       --tmux
 
   si logs <name> [--tail N]

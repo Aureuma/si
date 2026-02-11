@@ -661,7 +661,8 @@ func cmdCodexExec(args []string) {
 	}
 	fs := flag.NewFlagSet("exec", flag.ExitOnError)
 	oneOff := fs.Bool("one-off", false, "run a one-off codex exec in an isolated container")
-	tmuxAttach := fs.Bool("tmux", false, "attach to codex tmux pane for existing container mode")
+	tmuxAttach := fs.Bool("tmux", false, "force tmux attach for existing container mode")
+	noTmux := fs.Bool("no-tmux", false, "disable tmux attach for existing container mode")
 	promptFlag := fs.String("prompt", "", "prompt to execute (one-off mode)")
 	outputOnly := fs.Bool("output-only", false, "print only the Codex response (one-off mode)")
 	noMcp := fs.Bool("no-mcp", false, "disable MCP servers (one-off mode)")
@@ -743,7 +744,7 @@ func cmdCodexExec(args []string) {
 		return
 	}
 
-	rest = consumeRunContainerModeFlags(rest, tmuxAttach)
+	rest = consumeRunContainerModeFlags(rest, tmuxAttach, noTmux)
 	if len(rest) < 1 {
 		name, ok := selectCodexContainer("run", true)
 		if !ok {
@@ -751,10 +752,20 @@ func cmdCodexExec(args []string) {
 		}
 		rest = []string{name}
 	}
+	if *tmuxAttach && *noTmux {
+		fatal(fmt.Errorf("--tmux and --no-tmux cannot be combined"))
+	}
 	name := rest[0]
 	containerName := codexContainerName(name)
 	cmd := rest[1:]
-	if err := validateRunTmuxArgs(*tmuxAttach, cmd); err != nil {
+	tmuxMode := true
+	if *noTmux {
+		tmuxMode = false
+	}
+	if *tmuxAttach {
+		tmuxMode = true
+	}
+	if err := validateRunTmuxArgs(tmuxMode, cmd); err != nil {
 		fatal(err)
 	}
 
@@ -768,7 +779,7 @@ func cmdCodexExec(args []string) {
 		ctx := context.Background()
 		id, info, err := client.ContainerByName(ctx, containerName)
 		if err != nil {
-			if *tmuxAttach {
+			if tmuxMode {
 				fatal(err)
 			}
 		} else if id != "" {
@@ -828,11 +839,11 @@ func cmdCodexExec(args []string) {
 				}
 			}
 		}
-	} else if *tmuxAttach {
+	} else if tmuxMode {
 		fatal(fmt.Errorf("docker client unavailable: %w", clientErr))
 	}
 
-	if *tmuxAttach {
+	if tmuxMode {
 		if err := attachCodexTmuxPane(containerName); err != nil {
 			fatal(err)
 		}
@@ -1130,12 +1141,12 @@ func codexImageDisplay(image string) string {
 
 func validateRunTmuxArgs(tmux bool, cmd []string) error {
 	if tmux && len(cmd) > 0 {
-		return fmt.Errorf("--tmux cannot be combined with a custom command")
+		return fmt.Errorf("custom command mode requires --no-tmux")
 	}
 	return nil
 }
 
-func consumeRunContainerModeFlags(args []string, tmuxAttach *bool) []string {
+func consumeRunContainerModeFlags(args []string, tmuxAttach *bool, noTmux *bool) []string {
 	if len(args) == 0 {
 		return args
 	}
@@ -1151,6 +1162,10 @@ func consumeRunContainerModeFlags(args []string, tmuxAttach *bool) []string {
 		case "--tmux":
 			if tmuxAttach != nil {
 				*tmuxAttach = true
+			}
+		case "--no-tmux":
+			if noTmux != nil {
+				*noTmux = true
 			}
 		default:
 			parseModeFlags = false

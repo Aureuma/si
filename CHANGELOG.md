@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Changed
+- Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
 
 ## [v0.45.0] - 2026-02-11
 ### Added
