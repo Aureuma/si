@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"sync"
+	"sync/atomic"
 )
 
 type rootCommandHandler func(cmd string, args []string)
@@ -10,6 +11,7 @@ type rootCommandHandler func(cmd string, args []string)
 var (
 	rootCommandsMu      sync.Mutex
 	rootCommandHandlers map[string]rootCommandHandler
+	rootCommandsPtr     atomic.Pointer[map[string]rootCommandHandler]
 
 	loadStripeRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdStripe(args) }
@@ -81,7 +83,7 @@ func dispatchRootCommand(cmd string, args []string) bool {
 }
 
 func buildRootCommandHandlers() map[string]rootCommandHandler {
-	handlers := map[string]rootCommandHandler{}
+	handlers := make(map[string]rootCommandHandler, 64)
 	register := func(handler rootCommandHandler, names ...string) {
 		for _, name := range names {
 			handlers[name] = handler
@@ -122,10 +124,18 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 }
 
 func getRootCommandHandlers() map[string]rootCommandHandler {
+	if ptr := rootCommandsPtr.Load(); ptr != nil {
+		return *ptr
+	}
 	rootCommandsMu.Lock()
 	defer rootCommandsMu.Unlock()
+	if ptr := rootCommandsPtr.Load(); ptr != nil {
+		return *ptr
+	}
 	if rootCommandHandlers == nil {
-		rootCommandHandlers = buildRootCommandHandlers()
+		handlers := buildRootCommandHandlers()
+		rootCommandHandlers = handlers
+		rootCommandsPtr.Store(&rootCommandHandlers)
 	}
 	return rootCommandHandlers
 }
@@ -133,6 +143,7 @@ func getRootCommandHandlers() map[string]rootCommandHandler {
 func resetRootCommandHandlersForTest() {
 	rootCommandsMu.Lock()
 	rootCommandHandlers = nil
+	rootCommandsPtr.Store(nil)
 	rootCommandsMu.Unlock()
 }
 

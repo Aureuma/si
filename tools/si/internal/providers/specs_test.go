@@ -176,6 +176,27 @@ func TestCacheStoreLookupAndInvalidate(t *testing.T) {
 	}
 }
 
+func TestCacheInvalidateIsSubjectScoped(t *testing.T) {
+	ResetRuntimeCounters()
+	headers := http.Header{}
+	headers.Set("X-Test", "ok")
+
+	CacheStore(GitHub, "core", http.MethodGet, "https://api.github.com/repos/acme/repo", http.StatusOK, "200 OK", headers, `{"scope":"core"}`)
+	CacheStore(GitHub, "core", http.MethodGet, "https://api.github.com/repos/acme/other", http.StatusOK, "200 OK", headers, `{"scope":"core"}`)
+	CacheStore(GitHub, "billing", http.MethodGet, "https://api.github.com/orgs/acme", http.StatusOK, "200 OK", headers, `{"scope":"billing"}`)
+
+	CacheInvalidate(GitHub, "core")
+	if _, _, _, _, ok := CacheLookup(GitHub, "core", http.MethodGet, "https://api.github.com/repos/acme/repo"); ok {
+		t.Fatalf("expected first core entry to be invalidated")
+	}
+	if _, _, _, _, ok := CacheLookup(GitHub, "core", http.MethodGet, "https://api.github.com/repos/acme/other"); ok {
+		t.Fatalf("expected second core entry to be invalidated")
+	}
+	if _, _, _, _, ok := CacheLookup(GitHub, "billing", http.MethodGet, "https://api.github.com/orgs/acme"); !ok {
+		t.Fatalf("expected non-core subject cache entry to remain")
+	}
+}
+
 func TestCacheStoreSkipsNoStoreAndUnsafe(t *testing.T) {
 	ResetRuntimeCounters()
 	noStoreHeaders := http.Header{}
