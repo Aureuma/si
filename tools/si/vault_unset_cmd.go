@@ -12,8 +12,7 @@ import (
 func cmdVaultUnset(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault unset", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	section := fs.String("section", "", "section name (accepted but unset removes all occurrences)")
 	format := fs.Bool("format", false, "run `si vault fmt` after unsetting")
 	if err := fs.Parse(args); err != nil {
@@ -22,7 +21,7 @@ func cmdVaultUnset(args []string) {
 
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--format]")
+		printUsage("usage: si vault unset <KEY> [--file <path>] [--format]")
 		return
 	}
 	_ = section
@@ -31,7 +30,7 @@ func cmdVaultUnset(args []string) {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}
