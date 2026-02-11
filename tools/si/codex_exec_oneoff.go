@@ -117,11 +117,12 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	if strings.TrimSpace(opts.GHVolume) != "" {
 		mounts = append(mounts, mount.Mount{Type: mount.TypeVolume, Source: opts.GHVolume, Target: "/home/si/.config/gh"})
 	}
-	if strings.TrimSpace(opts.WorkspaceHost) != "" {
-		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: opts.WorkspaceHost, Target: "/workspace"})
-	}
-	// Make host Codex profile registry + auth cache visible to `si` inside the container.
-	mounts = append(mounts, shared.HostSiCodexProfileMounts("/home/si")...)
+	mounts = append(mounts, shared.BuildContainerCoreMounts(shared.ContainerCoreMountPlan{
+		WorkspaceHost:          opts.WorkspaceHost,
+		WorkspacePrimaryTarget: "/workspace",
+		ContainerHome:          "/home/si",
+		IncludeHostSi:          true,
+	})...)
 	if configHostDir != "" && configTargetDir != "" {
 		mounts = append(mounts, mount.Mount{
 			Type:     mount.TypeBind,
