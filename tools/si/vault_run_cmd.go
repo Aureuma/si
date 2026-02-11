@@ -18,6 +18,9 @@ func cmdVaultRun(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
 	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow running even if plaintext keys exist (not recommended)")
+	shellFlag := fs.Bool("shell", false, "run via a shell (exec: $SHELL -lc <cmd>); enables pipes/redirection/etc; does not inherit parent shell functions/aliases unless you source them")
+	shellInteractive := fs.Bool("shell-interactive", false, "when --shell is set, use -ic instead of -lc (loads interactive rc; may have side effects)")
+	shellPath := fs.String("shell-path", "", "when --shell is set, shell binary to use (default: $SHELL, fallback: /bin/bash)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -27,7 +30,7 @@ func cmdVaultRun(args []string) {
 		rest = rest[1:]
 	}
 	if len(rest) == 0 {
-		printUsage("usage: si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] -- <cmd...>")
+		printUsage("usage: si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>")
 		return
 	}
 
@@ -73,10 +76,32 @@ func cmdVaultRun(args []string) {
 		"keysCount":    len(keys),
 		"decryptCount": len(dec.DecryptedKeys),
 		"plainCount":   len(dec.PlaintextKeys),
+		"shell":        *shellFlag,
+		"shellI":       *shellInteractive,
 	})
 
-	// #nosec G204 -- command is explicitly provided by the local operator.
-	cmd := exec.CommandContext(context.Background(), rest[0], rest[1:]...)
+	var cmd *exec.Cmd
+	if *shellFlag {
+		// Note: This cannot "see" functions/aliases from the parent shell process.
+		// If you want those, you must explicitly source the defining file inside the shell command.
+		sh := strings.TrimSpace(*shellPath)
+		if sh == "" {
+			sh = strings.TrimSpace(os.Getenv("SHELL"))
+		}
+		if sh == "" {
+			sh = "/bin/bash"
+		}
+		mode := "-lc"
+		if *shellInteractive {
+			mode = "-ic"
+		}
+		shellCmd := strings.Join(rest, " ")
+		// #nosec G204 -- shell command is explicitly provided by the local operator.
+		cmd = exec.CommandContext(context.Background(), sh, mode, shellCmd)
+	} else {
+		// #nosec G204 -- command is explicitly provided by the local operator.
+		cmd = exec.CommandContext(context.Background(), rest[0], rest[1:]...)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
