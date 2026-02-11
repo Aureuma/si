@@ -29,8 +29,8 @@ func cmdVaultCheck(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if strings.TrimSpace(target.RepoRoot) == "" {
-		fatal(fmt.Errorf("git repo root not found"))
+	if *staged && strings.TrimSpace(target.RepoRoot) == "" {
+		fatal(fmt.Errorf("git repo root not found (required with --staged)"))
 	}
 
 	// Resolve vault dir when running inside the vault repo itself (common for hooks).

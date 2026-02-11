@@ -1,6 +1,6 @@
-# `si vault` (Git-Based Encrypted Credentials)
+# `si vault` (Encrypted Dotenv Credentials)
 
-`si vault` manages credentials in dotenv files with values encrypted inline using age recipients, designed to be committed to a separate private git repo (usually as a submodule).
+`si vault` manages credentials in dotenv files with values encrypted inline using age recipients. Vault files can live in any local path; using a separate private git repo/submodule is optional.
 
 Goals:
 - encrypted at rest (git-friendly, PR-reviewable)
@@ -12,7 +12,7 @@ Goals:
 
 Host repo:
 - contains code
-- includes a `vault/` git submodule pointing at a private vault repo
+- optionally includes a `vault/` git submodule pointing at a private vault repo
 
 Vault repo (submodule checkout):
 - contains encrypted env files:
@@ -21,14 +21,19 @@ Vault repo (submodule checkout):
 
 ## Quickstart
 
-From your host repo (a normal git repo):
+From your host repo (or any local workspace):
 
 0. Ensure you have a device identity (this stores a private age identity in your OS secure store by default):
 ```bash
 si vault keygen
 ```
 
-1. Add/initialize the vault submodule and bootstrap the env file:
+1. Bootstrap the env file (plain local directory, no submodule required):
+```bash
+si vault init --vault-dir vault
+```
+
+Optional: if you want `vault/` to be a git submodule, initialize it directly:
 ```bash
 si vault init --submodule-url <git-url-for-private-vault-repo>
 ```
@@ -84,11 +89,12 @@ Notes:
 
 ## Multiple Dotenv Files
 
-By default, vault commands operate on `vault/.env`. To operate on a different dotenv file, pass `--file` explicitly:
+By default, vault commands operate on `vault/.env`. To operate on any different dotenv file, pass `--file` explicitly:
 
 ```bash
 si vault encrypt --file vault/.env.prod --format
 si vault run --file vault/.env.prod -- ./your-command --args
+si vault init --file /path/to/any/.env
 ```
 
 ## Formatting
