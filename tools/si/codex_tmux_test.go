@@ -1,10 +1,13 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 )
 
 func TestCodexTmuxSessionName(t *testing.T) {
@@ -154,5 +157,63 @@ func TestCodexContainerConfigTargets(t *testing.T) {
 	}
 	if targets[1].Path != "/root/.codex/config.toml" || targets[1].Owner != "root:root" {
 		t.Fatalf("unexpected second target: %+v", targets[1])
+	}
+}
+
+func TestCodexContainerWorkspaceMatchesRequiresHostSiMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	desiredHost := "/home/ubuntu/Development/si"
+	mirror := desiredHost
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			WorkingDir: mirror,
+			Env: []string{
+				"SI_WORKSPACE_MIRROR=" + mirror,
+				"SI_WORKSPACE_HOST=" + desiredHost,
+			},
+		},
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: desiredHost, Destination: "/workspace"},
+			{Type: "bind", Source: desiredHost, Destination: mirror},
+		},
+	}
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror) {
+		t.Fatalf("expected match to fail when host ~/.si mount is missing")
+	}
+	info.Mounts = append(info.Mounts, types.MountPoint{
+		Type:        "bind",
+		Source:      filepath.Join(home, ".si"),
+		Destination: "/home/si/.si",
+	})
+	if !codexContainerWorkspaceMatches(info, desiredHost, mirror) {
+		t.Fatalf("expected match when workspace and ~/.si mounts are present")
+	}
+}
+
+func TestCodexContainerWorkspaceSource(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/tmp/other", Destination: "/tmp/other"},
+			{Type: "volume", Source: "workspace", Destination: "/workspace"},
+			{Type: "bind", Source: "/home/ubuntu/Development/si", Destination: "/workspace"},
+		},
+	}
+	if got := codexContainerWorkspaceSource(info); got != "/home/ubuntu/Development/si" {
+		t.Fatalf("unexpected workspace source: %q", got)
+	}
+}
+
+func TestCodexContainerWorkspaceSourceMissing(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/tmp/other", Destination: "/tmp/other"},
+		},
+	}
+	if got := codexContainerWorkspaceSource(info); got != "" {
+		t.Fatalf("expected empty workspace source, got %q", got)
 	}
 }

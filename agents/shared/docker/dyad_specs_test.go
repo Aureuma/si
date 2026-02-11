@@ -1,0 +1,51 @@
+package docker
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/docker/docker/api/types/mount"
+)
+
+func TestBuildDyadSpecsIncludesHostSiMounts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "mounttest",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".si"), "/root/.si") {
+		t.Fatalf("actor spec missing host ~/.si mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".si"), "/root/.si") {
+		t.Fatalf("critic spec missing host ~/.si mount: %+v", critic.HostConfig.Mounts)
+	}
+}
+
+func mountExists(mounts []mount.Mount, source string, target string) bool {
+	for _, m := range mounts {
+		if filepath.Clean(m.Source) == filepath.Clean(source) && filepath.ToSlash(m.Target) == target {
+			return true
+		}
+	}
+	return false
+}
