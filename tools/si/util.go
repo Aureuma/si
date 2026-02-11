@@ -28,6 +28,7 @@ Features:
   - GitHub bridge: App/OAuth-auth context, REST/GraphQL access, and repository automation commands.
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
   - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
+  - Google Play bridge: service-account auth/context, custom app create, listing/details/assets automation, release track orchestration, and raw API access.
   - Google YouTube bridge: auth/context flows, channel/video/playlist/live/caption operations, uploads, and usage reporting.
   - Social bridge: unified platform flows for Facebook, Instagram, X, LinkedIn, and Reddit (auth/context/resources/raw/report).
   - WorkOS bridge: account context, organization/user/member/invitation/directory management, and raw API access.
@@ -55,7 +56,7 @@ Core:
   si stripe <auth|context|doctor|object|raw|report|sync>
   si github <auth|context|doctor|repo|branch|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|status|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>
-  si google <places|youtube|youtube-data>
+  si google <places|play|youtube|youtube-data>
   si social <facebook|instagram|x|linkedin|reddit>
   si workos <auth|context|doctor|organization|user|membership|invitation|directory|raw>
   si publish <catalog|devto|hashnode|reddit|hackernews|producthunt>

@@ -11,6 +11,9 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Added
+- Added `si google play` direct API automation with service-account auth/context, custom app creation, listing/details/image management, release-track orchestration, metadata apply workflow, provider telemetry registration, and raw API access.
+
 ### Changed
 - Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
 - Unified user-facing datetime rendering to GitHub-style relative dates and updated `si status`/weekly reset displays to show date-only absolute values plus relative countdowns.

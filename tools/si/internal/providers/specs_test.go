@@ -65,6 +65,13 @@ func TestParseID(t *testing.T) {
 	if id != SocialX {
 		t.Fatalf("unexpected parsed id: %s", id)
 	}
+	playID, ok := ParseID("google-play")
+	if !ok {
+		t.Fatalf("expected parse success for google play")
+	}
+	if playID != GooglePlay {
+		t.Fatalf("unexpected parsed id for google play: %s", playID)
+	}
 }
 
 func TestCircuitBreakerOpensAfterRepeatedFailures(t *testing.T) {

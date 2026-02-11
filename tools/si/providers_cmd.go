@@ -38,7 +38,7 @@ func cmdProviders(args []string) {
 func cmdProvidersCharacteristics(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("providers characteristics", flag.ExitOnError)
-	providerID := fs.String("provider", "", "provider id (github, cloudflare, google_places, youtube, stripe, social_*, workos, aws_iam, gcp_serviceusage, oci_core)")
+	providerID := fs.String("provider", "", "provider id (github, cloudflare, google_places, google_play, youtube, stripe, social_*, workos, aws_iam, gcp_serviceusage, oci_core)")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -153,7 +153,7 @@ func formatRate(value float64) string {
 func cmdProvidersHealth(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("providers health", flag.ExitOnError)
-	providerID := fs.String("provider", "", "provider id (github, cloudflare, google_places, youtube, stripe, social_*, workos, aws_iam, gcp_serviceusage, oci_core)")
+	providerID := fs.String("provider", "", "provider id (github, cloudflare, google_places, google_play, youtube, stripe, social_*, workos, aws_iam, gcp_serviceusage, oci_core)")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
