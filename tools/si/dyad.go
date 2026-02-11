@@ -376,7 +376,7 @@ func cmdDyadPeek(args []string) {
 	if err := dyadTmuxRun("new-session", "-d", "-s", peekSession, "bash", "-lc", first); err != nil {
 		fatal(err)
 	}
-	_, _ = dyadTmuxOutput("set-option", "-t", peekSession, "remain-on-exit", "off")
+	dyadApplyTmuxSessionDefaults(peekSession)
 	// Make pane titles visible and consistent.
 	_ = dyadTmuxRun("rename-window", "-t", peekSession+":0", dyadPeekWindowTitle(dyad))
 	_ = dyadTmuxRun("set-option", "-t", peekSession, "pane-border-status", "top")
@@ -441,6 +441,16 @@ func dyadTmuxAttach(session string) error {
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+func dyadApplyTmuxSessionDefaults(session string) {
+	session = strings.TrimSpace(session)
+	if session == "" {
+		return
+	}
+	_, _ = dyadTmuxOutput("set-option", "-t", session, "remain-on-exit", "off")
+	_, _ = dyadTmuxOutput("set-option", "-t", session, "mouse", "on")
+	_, _ = dyadTmuxOutput("set-option", "-t", session, "history-limit", siTmuxHistoryLimit)
 }
 
 func validateTmuxArgs(args []string) error {
