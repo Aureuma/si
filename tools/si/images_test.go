@@ -44,6 +44,7 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxMissing(t *testing.T) {
 	err := runDockerBuild(imageBuildSpec{
 		tag:        "aureuma/si:local",
 		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
 		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
 	})
 	if err != nil {
@@ -56,6 +57,10 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxMissing(t *testing.T) {
 	}
 	if gotBuildKit {
 		t.Fatalf("expected buildkit to be disabled when buildx is missing")
+	}
+	want := "/workspace/tools/si-image/Dockerfile.legacy"
+	if !argsContain(captured, "-f", want) {
+		t.Fatalf("expected legacy dockerfile when buildx is missing, args=%v", captured)
 	}
 }
 
@@ -79,6 +84,7 @@ func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
 	err := runDockerBuild(imageBuildSpec{
 		tag:        "aureuma/si:local",
 		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
 		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
 	})
 	if err != nil {
@@ -96,6 +102,10 @@ func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
 	}
 	if !gotBuildKit {
 		t.Fatalf("expected buildkit to be enabled when buildx is available")
+	}
+	want := "/workspace/tools/si-image/Dockerfile"
+	if !argsContain(captured, "-f", want) {
+		t.Fatalf("expected default dockerfile when buildx is available, args=%v", captured)
 	}
 }
 
@@ -119,6 +129,7 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 	err := runDockerBuild(imageBuildSpec{
 		tag:        "aureuma/si:local",
 		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
 		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
 	})
 	if err != nil {
@@ -132,8 +143,21 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 	if gotBuildKit {
 		t.Fatalf("expected buildkit to be disabled when buildx probe errors")
 	}
+	want := "/workspace/tools/si-image/Dockerfile.legacy"
+	if !argsContain(captured, "-f", want) {
+		t.Fatalf("expected legacy dockerfile when buildx probe errors, args=%v", captured)
+	}
 }
 
 type assertErr string
 
 func (e assertErr) Error() string { return string(e) }
+
+func argsContain(args []string, key, value string) bool {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == key && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
