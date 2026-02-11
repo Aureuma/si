@@ -292,7 +292,7 @@ stripe:
 	  si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--format]
 	  si vault get <KEY> [--file <path>] [--vault-dir <path>] [--reveal]
 	  si vault list [--file <path>] [--vault-dir <path>]
-	  si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] -- <cmd...>
+	  si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
 	  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
 	  si vault trust status|accept|forget [--file <path>] [--vault-dir <path>]
 	  si vault recipients list|add|remove [--file <path>] [--vault-dir <path>]
