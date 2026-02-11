@@ -769,6 +769,38 @@ func cmdCodexExec(args []string) {
 		}
 
 		if strings.TrimSpace(containerID) != "" {
+			if containerInfo != nil && !shared.HasHostSiMount(containerInfo, "/home/si") {
+				slug := codexContainerSlug(containerName)
+				if strings.TrimSpace(slug) == "" {
+					fatal(fmt.Errorf("codex container %s is missing host ~/.si mount required for `si vault`; run `si respawn %s`", containerName, containerName))
+				}
+				warnf("codex container %s is missing host ~/.si mount; recreating to enable full `si`/`si vault` support", containerName)
+				spawnArgs := []string{slug}
+				if workspace := codexContainerWorkspaceSource(containerInfo); workspace != "" {
+					spawnArgs = append(spawnArgs, "--workspace", workspace)
+				}
+				if containerInfo.Config != nil {
+					if image := strings.TrimSpace(containerInfo.Config.Image); image != "" {
+						spawnArgs = append(spawnArgs, "--image", image)
+					}
+				}
+				if profileID != "" && strings.EqualFold(strings.TrimSpace(slug), strings.TrimSpace(profileID)) {
+					spawnArgs = append(spawnArgs, "--profile", strings.TrimSpace(profileID))
+				}
+				cmdCodexSpawn(spawnArgs)
+				id, info, err = client.ContainerByName(ctx, containerName)
+				if err != nil {
+					fatal(err)
+				}
+				if id == "" || info == nil {
+					fatal(fmt.Errorf("codex container %s recreation failed", containerName))
+				}
+				if !shared.HasHostSiMount(info, "/home/si") {
+					fatal(fmt.Errorf("codex container %s recreation missing host ~/.si mount; run `si respawn %s`", containerName, codexContainerSlug(containerName)))
+				}
+				containerID = id
+				containerInfo = info
+			}
 			seedCodexConfig(ctx, client, containerID, false)
 			if profileID != "" {
 				if profile, ok := codexProfileByKey(profileID); ok {
@@ -1309,6 +1341,9 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 	if info == nil {
 		return false
 	}
+	if !shared.HasHostSiMount(info, "/home/si") {
+		return false
+	}
 	desiredHost = filepath.Clean(strings.TrimSpace(desiredHost))
 	mirrorTarget = filepath.ToSlash(strings.TrimSpace(mirrorTarget))
 	if desiredHost == "" {
@@ -1350,6 +1385,26 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 		return false
 	}
 	return true
+}
+
+func codexContainerWorkspaceSource(info *types.ContainerJSON) string {
+	if info == nil {
+		return ""
+	}
+	for _, m := range info.Mounts {
+		if strings.TrimSpace(string(m.Type)) != "bind" {
+			continue
+		}
+		dest := filepath.ToSlash(strings.TrimSpace(m.Destination))
+		if dest != "/workspace" {
+			continue
+		}
+		src := filepath.Clean(strings.TrimSpace(m.Source))
+		if src != "" && strings.HasPrefix(src, "/") {
+			return src
+		}
+	}
+	return ""
 }
 
 func envValue(env []string, key string) string {
