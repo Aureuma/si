@@ -25,7 +25,7 @@ import (
 	"si/tools/si/internal/providers"
 )
 
-const awsUsageText = "usage: si aws <auth|context|doctor|iam|raw>"
+const awsUsageText = "usage: si aws <auth|context|doctor|iam|sts|s3|ec2|lambda|ecr|secrets|kms|dynamodb|ssm|cloudwatch|logs|raw>"
 
 type awsRuntimeContext struct {
 	AccountAlias string
@@ -105,6 +105,28 @@ func cmdAWS(args []string) {
 		cmdAWSDoctor(rest)
 	case "iam":
 		cmdAWSIAM(rest)
+	case "sts":
+		cmdAWSSTS(rest)
+	case "s3":
+		cmdAWSS3(rest)
+	case "ec2":
+		cmdAWSEC2(rest)
+	case "lambda":
+		cmdAWSLambda(rest)
+	case "ecr":
+		cmdAWSECR(rest)
+	case "secrets", "secretsmanager", "secret":
+		cmdAWSSecrets(rest)
+	case "kms":
+		cmdAWSKMS(rest)
+	case "dynamodb":
+		cmdAWSDynamoDB(rest)
+	case "ssm":
+		cmdAWSSSM(rest)
+	case "cloudwatch":
+		cmdAWSCloudWatch(rest)
+	case "logs", "cloudwatch-logs":
+		cmdAWSLogs(rest)
 	case "raw":
 		cmdAWSRaw(rest)
 	default:
@@ -562,10 +584,18 @@ func cmdAWSRaw(args []string) {
 }
 
 func resolveRuntimeFromAWSFlags(flags awsCommonFlags) (awsRuntimeContext, error) {
+	return resolveRuntimeFromAWSFlagsWithBase(flags, "")
+}
+
+func resolveRuntimeFromAWSFlagsWithBase(flags awsCommonFlags, defaultBaseURL string) (awsRuntimeContext, error) {
+	base := strings.TrimSpace(valueOrEmpty(flags.baseURL))
+	if base == "" {
+		base = strings.TrimSpace(defaultBaseURL)
+	}
 	return resolveAWSRuntimeContext(awsRuntimeContextInput{
 		AccountFlag:   strings.TrimSpace(valueOrEmpty(flags.account)),
 		RegionFlag:    strings.TrimSpace(valueOrEmpty(flags.region)),
-		BaseURLFlag:   strings.TrimSpace(valueOrEmpty(flags.baseURL)),
+		BaseURLFlag:   base,
 		AccessKeyFlag: strings.TrimSpace(valueOrEmpty(flags.accessKey)),
 		SecretKeyFlag: strings.TrimSpace(valueOrEmpty(flags.secretKey)),
 		SessionFlag:   strings.TrimSpace(valueOrEmpty(flags.sessionToken)),
@@ -783,16 +813,23 @@ func previewAWSAccessKey(value string) string {
 }
 
 func awsSignIAMRequest(httpReq *http.Request, body string, runtime awsRuntimeContext) error {
+	return awsSignRequest(httpReq, body, runtime, "iam")
+}
+
+func awsSignRequest(httpReq *http.Request, body string, runtime awsRuntimeContext, service string) error {
 	accessKey := strings.TrimSpace(runtime.AccessKeyID)
 	secretKey := strings.TrimSpace(runtime.SecretKey)
 	if accessKey == "" || secretKey == "" {
 		return fmt.Errorf("aws access key and secret key are required for signing")
 	}
+	service = strings.ToLower(strings.TrimSpace(service))
+	if service == "" {
+		service = "iam"
+	}
 	region := strings.TrimSpace(runtime.Region)
 	if region == "" {
 		region = "us-east-1"
 	}
-	service := "iam"
 	now := time.Now().UTC()
 	amzDate := now.Format("20060102T150405Z")
 	dateStamp := now.Format("20060102")
@@ -1056,6 +1093,17 @@ func normalizeAWSResponse(httpResp *http.Response, body string) awsResponse {
 			resp.Data["request_id"] = strings.TrimSpace(parsed.RequestID)
 		}
 	}
+	if len(resp.Data) == 0 && strings.TrimSpace(resp.Body) != "" {
+		var jsonPayload any
+		if err := json.Unmarshal([]byte(resp.Body), &jsonPayload); err == nil {
+			switch typed := jsonPayload.(type) {
+			case map[string]any:
+				resp.Data = typed
+			case []any:
+				resp.Data = map[string]any{"items": typed}
+			}
+		}
+	}
 	if len(resp.Data) == 0 {
 		resp.Data = nil
 	}
@@ -1084,6 +1132,23 @@ func normalizeAWSHTTPError(statusCode int, headers http.Header, body string) err
 		}
 		if strings.TrimSpace(parsed.RequestID) != "" {
 			details.RequestID = strings.TrimSpace(parsed.RequestID)
+		}
+	}
+	if details.Code == "" || details.Message == "aws iam request failed" {
+		var jsonErr map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(body)), &jsonErr); err == nil {
+			if value := strings.TrimSpace(stringifyWorkOSAny(jsonErr["__type"])); value != "" {
+				details.Code = value
+			}
+			if value := strings.TrimSpace(stringifyWorkOSAny(jsonErr["code"])); value != "" && details.Code == "" {
+				details.Code = value
+			}
+			if value := strings.TrimSpace(stringifyWorkOSAny(jsonErr["message"])); value != "" {
+				details.Message = value
+			}
+			if value := strings.TrimSpace(stringifyWorkOSAny(jsonErr["Message"])); value != "" && strings.TrimSpace(details.Message) == "aws iam request failed" {
+				details.Message = value
+			}
 		}
 	}
 	if strings.TrimSpace(details.Message) == "aws iam request failed" {
@@ -1265,7 +1330,7 @@ func ensureURLWithSlash(raw string) string {
 	return strings.TrimSpace(u.String())
 }
 
-func awsDoSignedRequest(ctx context.Context, runtime awsRuntimeContext, method string, endpoint string, body string, contentType string) (awsResponse, error) {
+func awsDoSignedRequest(ctx context.Context, runtime awsRuntimeContext, method string, endpoint string, body string, contentType string, service string, headers map[string]string) (awsResponse, error) {
 	providerID := providers.AWSIAM
 	method = strings.ToUpper(strings.TrimSpace(method))
 	if method == "" {
@@ -1299,7 +1364,14 @@ func awsDoSignedRequest(ctx context.Context, runtime awsRuntimeContext, method s
 			if body != "" {
 				httpReq.Header.Set("Content-Type", strings.TrimSpace(contentType))
 			}
-			if signErr := awsSignIAMRequest(httpReq, body, runtime); signErr != nil {
+			for key, value := range headers {
+				key = strings.TrimSpace(key)
+				if key == "" {
+					continue
+				}
+				httpReq.Header.Set(key, strings.TrimSpace(value))
+			}
+			if signErr := awsSignRequest(httpReq, body, runtime, service); signErr != nil {
 				return nil, signErr
 			}
 			return httpReq, nil
@@ -1373,6 +1445,7 @@ func cmdAWSRawSigned(args []string) {
 	path := fs.String("path", "/", "api path")
 	body := fs.String("body", "", "raw request body")
 	contentType := fs.String("content-type", "application/json", "request content type")
+	service := fs.String("service", "iam", "sigv4 service name (for example iam|sts|ec2|s3)")
 	jsonOut := fs.Bool("json", false, "output json")
 	raw := fs.Bool("raw", false, "print raw response body")
 	params := multiFlag{}
@@ -1392,7 +1465,7 @@ func cmdAWSRawSigned(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	resp, err := awsDoSignedRequest(ctx, runtime, strings.ToUpper(strings.TrimSpace(*method)), endpoint, strings.TrimSpace(*body), strings.TrimSpace(*contentType))
+	resp, err := awsDoSignedRequest(ctx, runtime, strings.ToUpper(strings.TrimSpace(*method)), endpoint, strings.TrimSpace(*body), strings.TrimSpace(*contentType), strings.TrimSpace(*service), nil)
 	if err != nil {
 		printAWSError(err)
 		return
