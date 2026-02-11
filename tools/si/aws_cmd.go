@@ -25,7 +25,7 @@ import (
 	"si/tools/si/internal/providers"
 )
 
-const awsUsageText = "usage: si aws <auth|context|doctor|iam|sts|s3|ec2|lambda|ecr|secrets|kms|dynamodb|ssm|cloudwatch|logs|raw>"
+const awsUsageText = "usage: si aws <auth|context|doctor|iam|sts|s3|ec2|lambda|ecr|secrets|kms|dynamodb|ssm|cloudwatch|logs|bedrock|raw>"
 
 type awsRuntimeContext struct {
 	AccountAlias string
@@ -127,6 +127,8 @@ func cmdAWS(args []string) {
 		cmdAWSCloudWatch(rest)
 	case "logs", "cloudwatch-logs":
 		cmdAWSLogs(rest)
+	case "bedrock", "ai":
+		cmdAWSBedrock(rest)
 	case "raw":
 		cmdAWSRaw(rest)
 	default:
