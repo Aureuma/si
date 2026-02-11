@@ -701,13 +701,10 @@ func formatLimitColumn(pct float64, reset string, remainingMinutes int) string {
 	if pct == 0 && reset == "" {
 		return "-"
 	}
-	remaining := formatRemainingDuration(remainingMinutes)
-	if reset != "" && remaining != "" {
-		return styleLimitTextByPct(fmt.Sprintf("%.0f%% (%s, in %s)", pct, reset, remaining), pct)
-	}
 	if reset != "" {
 		return styleLimitTextByPct(fmt.Sprintf("%.0f%% (%s)", pct, reset), pct)
 	}
+	remaining := formatRemainingDuration(remainingMinutes)
 	if remaining != "" {
 		return styleLimitTextByPct(fmt.Sprintf("%.0f%% (in %s)", pct, remaining), pct)
 	}
@@ -718,17 +715,15 @@ func formatLimitDetail(pct float64, reset string, remainingMinutes int) string {
 	if pct < 0 {
 		return "-"
 	}
-	remaining := formatRemainingDuration(remainingMinutes)
 	switch {
-	case reset != "" && remaining != "":
-		return styleLimitTextByPct(fmt.Sprintf("%.0f%% left (resets %s, in %s)", pct, reset, remaining), pct)
 	case reset != "":
 		return styleLimitTextByPct(fmt.Sprintf("%.0f%% left (resets %s)", pct, reset), pct)
-	case remaining != "":
-		return styleLimitTextByPct(fmt.Sprintf("%.0f%% left (in %s)", pct, remaining), pct)
-	default:
-		return styleLimitTextByPct(fmt.Sprintf("%.0f%% left", pct), pct)
 	}
+	remaining := formatRemainingDuration(remainingMinutes)
+	if remaining != "" {
+		return styleLimitTextByPct(fmt.Sprintf("%.0f%% left (in %s)", pct, remaining), pct)
+	}
+	return styleLimitTextByPct(fmt.Sprintf("%.0f%% left", pct), pct)
 }
 
 func formatRemainingDuration(minutes int) string {
