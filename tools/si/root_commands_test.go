@@ -18,6 +18,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"workos",
 		"aws",
 		"gcp",
+		"openai",
 		"oci",
 		"image", "images",
 		"publish", "pub",

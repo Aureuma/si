@@ -25,6 +25,7 @@ type Settings struct {
 	WorkOS        WorkOSSettings     `toml:"workos,omitempty"`
 	AWS           AWSSettings        `toml:"aws,omitempty"`
 	GCP           GCPSettings        `toml:"gcp,omitempty"`
+	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
 	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
@@ -337,6 +338,27 @@ type GCPAccountEntry struct {
 	AccessTokenEnv string `toml:"access_token_env,omitempty"`
 	APIKeyEnv      string `toml:"api_key_env,omitempty"`
 	APIBaseURL     string `toml:"api_base_url,omitempty"`
+}
+
+type OpenAISettings struct {
+	DefaultAccount        string                        `toml:"default_account,omitempty"`
+	APIBaseURL            string                        `toml:"api_base_url,omitempty"`
+	DefaultOrganizationID string                        `toml:"default_organization_id,omitempty"`
+	DefaultProjectID      string                        `toml:"default_project_id,omitempty"`
+	LogFile               string                        `toml:"log_file,omitempty"`
+	Accounts              map[string]OpenAIAccountEntry `toml:"accounts,omitempty"`
+}
+
+type OpenAIAccountEntry struct {
+	Name              string `toml:"name,omitempty"`
+	VaultPrefix       string `toml:"vault_prefix,omitempty"`
+	APIBaseURL        string `toml:"api_base_url,omitempty"`
+	APIKeyEnv         string `toml:"api_key_env,omitempty"`
+	AdminAPIKeyEnv    string `toml:"admin_api_key_env,omitempty"`
+	OrganizationID    string `toml:"organization_id,omitempty"`
+	OrganizationIDEnv string `toml:"organization_id_env,omitempty"`
+	ProjectID         string `toml:"project_id,omitempty"`
+	ProjectIDEnv      string `toml:"project_id_env,omitempty"`
 }
 
 type OCISettings struct {
@@ -695,6 +717,14 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.GCP.APIBaseURL == "" {
 		gcpSpec := providers.Resolve(providers.GCPServiceUsage)
 		settings.GCP.APIBaseURL = firstNonEmpty(gcpSpec.BaseURL, "https://serviceusage.googleapis.com")
+	}
+	settings.OpenAI.DefaultAccount = strings.TrimSpace(settings.OpenAI.DefaultAccount)
+	settings.OpenAI.DefaultOrganizationID = strings.TrimSpace(settings.OpenAI.DefaultOrganizationID)
+	settings.OpenAI.DefaultProjectID = strings.TrimSpace(settings.OpenAI.DefaultProjectID)
+	settings.OpenAI.APIBaseURL = strings.TrimSpace(settings.OpenAI.APIBaseURL)
+	if settings.OpenAI.APIBaseURL == "" {
+		openAISpec := providers.Resolve(providers.OpenAI)
+		settings.OpenAI.APIBaseURL = firstNonEmpty(openAISpec.BaseURL, "https://api.openai.com")
 	}
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
