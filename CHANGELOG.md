@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Changed
 - Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
+- Unified user-facing datetime rendering to GitHub-style relative dates and updated `si status`/weekly reset displays to show date-only absolute values plus relative countdowns.
 
 ## [v0.45.0] - 2026-02-11
 ### Added

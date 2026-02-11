@@ -160,7 +160,7 @@ func buildSyncPlanWithClients(account string, liveKey string, sandboxKey string,
 }
 
 func printSyncPlan(plan stripebridge.SyncPlan) {
-	fmt.Printf("%s %s\n", styleHeading("Sync plan generated:"), plan.GeneratedAt.Format(time.RFC3339))
+	fmt.Printf("%s %s\n", styleHeading("Sync plan generated:"), formatDateWithGitHubRelativeNow(plan.GeneratedAt))
 	fmt.Printf("%s %d actions\n", styleHeading("Total actions:"), len(plan.Actions))
 	for _, action := range plan.Actions {
 		fmt.Printf("  %s %-8s live=%s sandbox=%s %s\n",

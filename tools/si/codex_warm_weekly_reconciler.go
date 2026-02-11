@@ -661,10 +661,7 @@ func printWarmWeeklyState(state warmWeeklyState) {
 		if w := displayWidth(delta); w > widthDelta {
 			widthDelta = w
 		}
-		next := strings.TrimSpace(row.NextDue)
-		if next == "" {
-			next = "-"
-		}
+		next := formatISODateWithGitHubRelativeNow(row.NextDue)
 		if w := displayWidth(next); w > widthNext {
 			widthNext = w
 		}
@@ -686,10 +683,7 @@ func printWarmWeeklyState(state warmWeeklyState) {
 		if row.LastUsageDelta != 0 {
 			delta = fmt.Sprintf("%.3f", row.LastUsageDelta)
 		}
-		next := strings.TrimSpace(row.NextDue)
-		if next == "" {
-			next = "-"
-		}
+		next := formatISODateWithGitHubRelativeNow(row.NextDue)
 		result := strings.TrimSpace(row.LastResult)
 		if result == "" {
 			result = "-"

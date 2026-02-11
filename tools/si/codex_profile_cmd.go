@@ -89,7 +89,7 @@ func showCodexProfile(key string, jsonOut bool, withStatus bool) {
 	}
 	if item.AuthCached {
 		fmt.Printf("%s %s\n", styleHeading("Auth cached:"), "yes")
-		fmt.Printf("%s %s\n", styleHeading("Auth updated:"), status.Modified.UTC().Format(time.RFC3339))
+		fmt.Printf("%s %s\n", styleHeading("Auth updated:"), formatDateWithGitHubRelativeNow(status.Modified))
 	} else {
 		fmt.Printf("%s %s\n", styleHeading("Auth cached:"), "no")
 	}
