@@ -17,6 +17,8 @@ func cmdGithubRaw(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -33,6 +35,8 @@ func cmdGithubRaw(args []string) {
 		return
 	}
 	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{
+		AuthMode:       *authMode,
+		AccessToken:    *token,
 		AppID:          *appID,
 		AppKey:         *appKey,
 		InstallationID: *installationID,
@@ -60,6 +64,8 @@ func cmdGithubGraphQL(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -78,6 +84,8 @@ func cmdGithubGraphQL(args []string) {
 		payload["variables"] = parsed
 	}
 	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{
+		AuthMode:       *authMode,
+		AccessToken:    *token,
 		AppID:          *appID,
 		AppKey:         *appKey,
 		InstallationID: *installationID,

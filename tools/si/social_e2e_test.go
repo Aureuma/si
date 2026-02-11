@@ -145,6 +145,40 @@ func TestSocialE2E_LinkedInProfile(t *testing.T) {
 	}
 }
 
+func TestSocialE2E_RedditProfile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/me" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer reddit-token-123" {
+			t.Fatalf("unexpected auth header: %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"name":   "acme_bot",
+			"is_mod": false,
+		})
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"REDDIT_ACCESS_TOKEN": "reddit-token-123",
+	}, "social", "reddit", "profile", "--base-url", server.URL, "--json")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
 func TestSocialE2E_PublicNoAuthRaw(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
@@ -159,6 +193,8 @@ func TestSocialE2E_PublicNoAuthRaw(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "provider": "x"})
 		case "/v2/me":
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "provider": "linkedin"})
+		case "/api/v1/scopes":
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "provider": "reddit"})
 		default:
 			http.NotFound(w, r)
 		}
@@ -170,6 +206,7 @@ func TestSocialE2E_PublicNoAuthRaw(t *testing.T) {
 		{"social", "instagram", "raw", "--auth-style", "none", "--base-url", server.URL, "--path", "/oauth/access_token", "--json"},
 		{"social", "x", "raw", "--auth-style", "none", "--base-url", server.URL, "--path", "/openapi.json", "--json"},
 		{"social", "linkedin", "raw", "--auth-style", "none", "--base-url", server.URL, "--path", "/me", "--json"},
+		{"social", "reddit", "raw", "--auth-style", "none", "--base-url", server.URL, "--path", "/api/v1/scopes", "--json"},
 	}
 	for _, args := range cases {
 		stdout, stderr, err := runSICommand(t, map[string]string{}, args...)
