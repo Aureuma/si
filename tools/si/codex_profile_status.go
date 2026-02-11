@@ -63,6 +63,8 @@ type usageAPIError struct {
 	Message    string
 }
 
+var profileAuthRefreshLocks sync.Map
+
 func (e *usageAPIError) Error() string {
 	if e == nil {
 		return "usage api error"
@@ -241,8 +243,8 @@ func loadProfileAuthFile(profile codexProfile) (string, profileAuthFile, error) 
 	if auth.Tokens == nil {
 		return "", profileAuthFile{}, errors.New("auth tokens missing")
 	}
-	if strings.TrimSpace(auth.Tokens.AccessToken) == "" {
-		return "", profileAuthFile{}, errors.New("access token missing")
+	if strings.TrimSpace(auth.Tokens.AccessToken) == "" && strings.TrimSpace(auth.Tokens.RefreshToken) == "" {
+		return "", profileAuthFile{}, errors.New("auth tokens missing (need access_token or refresh_token)")
 	}
 	return path, auth, nil
 }
@@ -284,21 +286,49 @@ func saveProfileAuthFile(path string, auth profileAuthFile) error {
 }
 
 func refreshProfileAuthTokens(ctx context.Context, client *http.Client, profile codexProfile, current profileAuthTokens) (profileAuthTokens, error) {
+	refreshKey := strings.ToLower(strings.TrimSpace(profile.ID))
+	if refreshKey == "" {
+		refreshKey = "__default__"
+	}
+	lockAny, _ := profileAuthRefreshLocks.LoadOrStore(refreshKey, &sync.Mutex{})
+	lock, _ := lockAny.(*sync.Mutex)
+	lock.Lock()
+	defer lock.Unlock()
+
 	if client == nil {
 		client = &http.Client{Timeout: 20 * time.Second}
 	}
-	if strings.TrimSpace(current.RefreshToken) == "" {
+
+	effective := current
+	if _, latestFile, err := loadProfileAuthFile(profile); err == nil && latestFile.Tokens != nil {
+		latest := *latestFile.Tokens
+		effective = latest
+		if strings.TrimSpace(effective.RefreshToken) == "" {
+			effective.RefreshToken = strings.TrimSpace(current.RefreshToken)
+		}
+		if strings.TrimSpace(effective.IDToken) == "" {
+			effective.IDToken = strings.TrimSpace(current.IDToken)
+		}
+		if strings.TrimSpace(effective.AccountID) == "" {
+			effective.AccountID = strings.TrimSpace(current.AccountID)
+		}
+		if strings.TrimSpace(effective.AccessToken) == "" {
+			effective.AccessToken = strings.TrimSpace(current.AccessToken)
+		}
+	}
+	if strings.TrimSpace(effective.RefreshToken) == "" {
 		return profileAuthTokens{}, errors.New("refresh token missing")
 	}
-	clientID, err := profileOAuthClientID(current)
+	clientID, err := profileOAuthClientID(effective)
 	if err != nil {
 		return profileAuthTokens{}, err
 	}
 	refreshURL := profileTokenURL()
+	refreshToken := strings.TrimSpace(effective.RefreshToken)
 	reqBody := map[string]string{
 		"grant_type":    "refresh_token",
 		"client_id":     clientID,
-		"refresh_token": strings.TrimSpace(current.RefreshToken),
+		"refresh_token": refreshToken,
 	}
 
 	api, err := apibridge.NewClient(apibridge.Config{
@@ -339,6 +369,11 @@ func refreshProfileAuthTokens(ctx context.Context, client *http.Client, profile 
 			}
 			apiErr.Message = snippet
 		}
+		if isRefreshTokenReusedError(apiErr) {
+			if latest, loadErr := loadProfileAuthTokens(profile); loadErr == nil && strings.TrimSpace(latest.RefreshToken) != "" && strings.TrimSpace(latest.RefreshToken) != refreshToken {
+				return latest, nil
+			}
+		}
 		return profileAuthTokens{}, apiErr
 	}
 	var refreshed tokenRefreshResponse
@@ -349,7 +384,7 @@ func refreshProfileAuthTokens(ctx context.Context, client *http.Client, profile 
 		return profileAuthTokens{}, errors.New("refreshed access token missing")
 	}
 
-	updated := current
+	updated := effective
 	updated.AccessToken = strings.TrimSpace(refreshed.AccessToken)
 	if strings.TrimSpace(refreshed.IDToken) != "" {
 		updated.IDToken = strings.TrimSpace(refreshed.IDToken)
