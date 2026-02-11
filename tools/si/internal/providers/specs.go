@@ -27,6 +27,7 @@ const (
 	WorkOS          ID = "workos"
 	AWSIAM          ID = "aws_iam"
 	GCPServiceUsage ID = "gcp_serviceusage"
+	OpenAI          ID = "openai"
 	OCICore         ID = "oci_core"
 )
 
@@ -216,6 +217,18 @@ var defaultSpecs = map[ID]Spec{
 		PublicProbePath:    "/v1/services?filter=state:ENABLED&pageSize=1",
 		PublicProbeMethod:  "GET",
 	},
+	OpenAI: {
+		BaseURL:            "https://api.openai.com",
+		APIVersion:         "v1",
+		UserAgent:          "si-openai/1.0",
+		Accept:             "application/json",
+		AuthStyle:          "bearer",
+		RequestIDHeaders:   []string{"x-request-id"},
+		RateLimitPerSecond: 2.0,
+		RateLimitBurst:     4,
+		PublicProbePath:    "/v1/models?limit=1",
+		PublicProbeMethod:  "GET",
+	},
 	OCICore: {
 		BaseURL:            "https://iaas.us-ashburn-1.oraclecloud.com",
 		APIVersion:         "20160918",
@@ -309,6 +322,12 @@ var defaultCapabilities = map[ID]Capability{
 		SupportsIdempotency: false,
 		SupportsRaw:         true,
 	},
+	OpenAI: {
+		SupportsPagination:  true,
+		SupportsBulk:        true,
+		SupportsIdempotency: true,
+		SupportsRaw:         true,
+	},
 	OCICore: {
 		SupportsPagination:  true,
 		SupportsBulk:        false,
@@ -331,6 +350,7 @@ var apiVersionPolicies = []APIVersionPolicy{
 	{Provider: WorkOS, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: AWSIAM, Version: "2010-05-08", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: GCPServiceUsage, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: OpenAI, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: OCICore, Version: "20160918", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 }
 
@@ -347,6 +367,7 @@ var providerCacheTTLs = map[ID]time.Duration{
 	WorkOS:          3 * time.Second,
 	AWSIAM:          3 * time.Second,
 	GCPServiceUsage: 3 * time.Second,
+	OpenAI:          3 * time.Second,
 	OCICore:         3 * time.Second,
 }
 
@@ -364,6 +385,7 @@ var providerConcurrencyLimits = map[ID]int{
 	WorkOS:          2,
 	AWSIAM:          2,
 	GCPServiceUsage: 2,
+	OpenAI:          2,
 	OCICore:         2,
 }
 
@@ -381,6 +403,7 @@ var providerCommandConcurrencyLimits = map[ID]int{
 	WorkOS:          1,
 	AWSIAM:          1,
 	GCPServiceUsage: 1,
+	OpenAI:          1,
 	OCICore:         1,
 }
 
@@ -1210,6 +1233,8 @@ func normalizeID(raw string) ID {
 		return AWSIAM
 	case "gcp", "gcp_serviceusage", "serviceusage":
 		return GCPServiceUsage
+	case "openai":
+		return OpenAI
 	case "oci", "oracle", "oci_core":
 		return OCICore
 	default:
