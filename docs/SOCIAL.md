@@ -5,6 +5,7 @@
 - Instagram Graph API
 - X (Twitter API v2)
 - LinkedIn API
+- Reddit API
 
 ## Command Surface
 ```bash
@@ -12,6 +13,7 @@ si social facebook <auth|context|doctor|profile|page|post|comment|insights|raw|r
 si social instagram <auth|context|doctor|profile|media|comment|insights|raw|report>
 si social x <auth|context|doctor|user|tweet|search|raw|report>
 si social linkedin <auth|context|doctor|profile|organization|post|raw|report>
+si social reddit <auth|context|doctor|profile|subreddit|post|comment|raw|report>
 ```
 
 Common platform commands:
@@ -31,18 +33,21 @@ Token keys:
 - Instagram: `INSTAGRAM_ACCESS_TOKEN`
 - X: `X_BEARER_TOKEN` (or `X_ACCESS_TOKEN`)
 - LinkedIn: `LINKEDIN_ACCESS_TOKEN`
+- Reddit: `REDDIT_ACCESS_TOKEN`
 
 Global fallbacks:
 - `FACEBOOK_ACCESS_TOKEN`
 - `INSTAGRAM_ACCESS_TOKEN`
 - `X_BEARER_TOKEN` / `TWITTER_BEARER_TOKEN`
 - `LINKEDIN_ACCESS_TOKEN`
+- `REDDIT_ACCESS_TOKEN`
 
 Optional default IDs:
 - `FACEBOOK_PAGE_ID`
 - `INSTAGRAM_BUSINESS_ID`
 - `X_USER_ID`, `X_USERNAME`
 - `LINKEDIN_PERSON_URN`, `LINKEDIN_ORGANIZATION_URN`
+- `REDDIT_USERNAME`
 
 ## Settings Model
 Settings live under `[social]`:
@@ -72,15 +77,21 @@ api_base_url = "https://api.linkedin.com"
 api_version = "v2"
 auth_style = "bearer"
 
+[social.reddit]
+api_base_url = "https://oauth.reddit.com"
+auth_style = "bearer"
+
 [social.accounts.core]
 facebook_access_token_env = "SOCIAL_CORE_FACEBOOK_ACCESS_TOKEN"
 instagram_access_token_env = "SOCIAL_CORE_INSTAGRAM_ACCESS_TOKEN"
 x_access_token_env = "SOCIAL_CORE_X_BEARER_TOKEN"
 linkedin_access_token_env = "SOCIAL_CORE_LINKEDIN_ACCESS_TOKEN"
+reddit_access_token_env = "SOCIAL_CORE_REDDIT_ACCESS_TOKEN"
 facebook_page_id = "1234567890"
 instagram_business_id = "17890000000000000"
 x_username = "acme"
 linkedin_person_urn = "urn:li:person:abc123"
+reddit_username = "acme_bot"
 ```
 
 ## Characteristics + Scalability

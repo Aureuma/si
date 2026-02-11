@@ -58,6 +58,8 @@ func cmdGithubRepoSecretSet(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -72,7 +74,7 @@ func cmdGithubRepoSecretSet(args []string) {
 	if strings.TrimSpace(*value) == "" {
 		fatal(fmt.Errorf("--value is required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -95,6 +97,8 @@ func cmdGithubRepoSecretDelete(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -106,7 +110,7 @@ func cmdGithubRepoSecretDelete(args []string) {
 		printUsage("usage: si github secret repo delete <owner/repo|repo> <name> [--force] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -147,6 +151,8 @@ func cmdGithubEnvSecretSet(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -161,7 +167,7 @@ func cmdGithubEnvSecretSet(args []string) {
 	if strings.TrimSpace(*value) == "" {
 		fatal(fmt.Errorf("--value is required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -182,6 +188,8 @@ func cmdGithubEnvSecretDelete(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -193,7 +201,7 @@ func cmdGithubEnvSecretDelete(args []string) {
 		printUsage("usage: si github secret env delete <owner/repo|repo> <environment> <name> [--force] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -235,6 +243,8 @@ func cmdGithubOrgSecretSet(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "org owner")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -251,7 +261,7 @@ func cmdGithubOrgSecretSet(args []string) {
 	if strings.TrimSpace(*value) == "" {
 		fatal(fmt.Errorf("--value is required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	org := strings.TrimSpace(fs.Arg(0))
 	if org == "" {
 		org = strings.TrimSpace(runtime.Owner)
@@ -277,6 +287,8 @@ func cmdGithubOrgSecretDelete(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "org owner")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -288,7 +300,7 @@ func cmdGithubOrgSecretDelete(args []string) {
 		printUsage("usage: si github secret org delete <org> <name> [--force] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	org := strings.TrimSpace(fs.Arg(0))
 	if org == "" {
 		org = strings.TrimSpace(runtime.Owner)

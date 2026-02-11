@@ -33,6 +33,7 @@ const (
 	socialPlatformInstagram socialPlatform = "instagram"
 	socialPlatformX         socialPlatform = "x"
 	socialPlatformLinkedIn  socialPlatform = "linkedin"
+	socialPlatformReddit    socialPlatform = "reddit"
 )
 
 type socialRuntimeContext struct {
@@ -51,6 +52,7 @@ type socialRuntimeContext struct {
 	XUsername               string
 	LinkedInPersonURN       string
 	LinkedInOrganizationURN string
+	RedditUsername          string
 }
 
 type socialRuntimeContextInput struct {
@@ -136,6 +138,8 @@ func normalizeSocialPlatform(raw string) socialPlatform {
 		return socialPlatformX
 	case "linkedin", "li":
 		return socialPlatformLinkedIn
+	case "reddit", "rd":
+		return socialPlatformReddit
 	default:
 		return socialPlatformUnknown
 	}
@@ -189,6 +193,8 @@ func socialPlatformLabel(platform socialPlatform) string {
 		return "x"
 	case socialPlatformLinkedIn:
 		return "linkedin"
+	case socialPlatformReddit:
+		return "reddit"
 	default:
 		return "social"
 	}
@@ -204,6 +210,8 @@ func socialProviderID(platform socialPlatform) providers.ID {
 		return providers.SocialX
 	case socialPlatformLinkedIn:
 		return providers.SocialLinkedIn
+	case socialPlatformReddit:
+		return providers.SocialReddit
 	default:
 		return ""
 	}
@@ -302,6 +310,7 @@ func resolveSocialRuntimeContext(input socialRuntimeContextInput) (socialRuntime
 		XUsername:               ids.XUsername,
 		LinkedInPersonURN:       ids.LinkedInPersonURN,
 		LinkedInOrganizationURN: ids.LinkedInOrganizationURN,
+		RedditUsername:          ids.RedditUsername,
 	}, nil
 }
 
@@ -312,6 +321,7 @@ type socialDefaultIDs struct {
 	XUsername               string
 	LinkedInPersonURN       string
 	LinkedInOrganizationURN string
+	RedditUsername          string
 }
 
 func resolveSocialDefaultIDs(platform socialPlatform, alias string, account SocialAccountSetting) (socialDefaultIDs, string) {
@@ -322,6 +332,7 @@ func resolveSocialDefaultIDs(platform socialPlatform, alias string, account Soci
 		XUsername:               strings.TrimSpace(account.XUsername),
 		LinkedInPersonURN:       strings.TrimSpace(account.LinkedInPersonURN),
 		LinkedInOrganizationURN: strings.TrimSpace(account.LinkedInOrganizationURN),
+		RedditUsername:          strings.TrimSpace(account.RedditUsername),
 	}
 	sources := make([]string, 0, 6)
 	if ids.FacebookPageID != "" {
@@ -341,6 +352,9 @@ func resolveSocialDefaultIDs(platform socialPlatform, alias string, account Soci
 	}
 	if ids.LinkedInOrganizationURN != "" {
 		sources = append(sources, "settings.linkedin_organization_urn")
+	}
+	if ids.RedditUsername != "" {
+		sources = append(sources, "settings.reddit_username")
 	}
 	prefix := socialAccountEnvPrefix(alias, account)
 	if value := strings.TrimSpace(resolveSocialEnv(alias, account, "FACEBOOK_PAGE_ID")); value != "" {
@@ -391,6 +405,14 @@ func resolveSocialDefaultIDs(platform socialPlatform, alias string, account Soci
 		ids.LinkedInOrganizationURN = value
 		sources = append(sources, "env:LINKEDIN_ORGANIZATION_URN")
 	}
+	if value := strings.TrimSpace(resolveSocialEnv(alias, account, "REDDIT_USERNAME")); value != "" {
+		ids.RedditUsername = value
+		sources = append(sources, "env:"+prefix+"REDDIT_USERNAME")
+	}
+	if value := strings.TrimSpace(os.Getenv("REDDIT_USERNAME")); value != "" {
+		ids.RedditUsername = value
+		sources = append(sources, "env:REDDIT_USERNAME")
+	}
 	filtered := make([]string, 0, len(sources))
 	seen := map[string]bool{}
 	for _, entry := range sources {
@@ -414,6 +436,8 @@ func socialPlatformSettings(settings Settings, platform socialPlatform) SocialPl
 		return settings.Social.X
 	case socialPlatformLinkedIn:
 		return settings.Social.LinkedIn
+	case socialPlatformReddit:
+		return settings.Social.Reddit
 	default:
 		return SocialPlatformSettings{}
 	}
@@ -427,6 +451,8 @@ func socialDefaultBaseURL(platform socialPlatform) string {
 		return "https://api.twitter.com"
 	case socialPlatformLinkedIn:
 		return "https://api.linkedin.com"
+	case socialPlatformReddit:
+		return "https://oauth.reddit.com"
 	default:
 		return ""
 	}
@@ -440,6 +466,8 @@ func socialDefaultAPIVersion(platform socialPlatform) string {
 		return "2"
 	case socialPlatformLinkedIn:
 		return "v2"
+	case socialPlatformReddit:
+		return ""
 	default:
 		return ""
 	}
@@ -450,6 +478,8 @@ func socialDefaultAuthStyle(platform socialPlatform) string {
 	case socialPlatformFacebook, socialPlatformInstagram:
 		return "query"
 	case socialPlatformX, socialPlatformLinkedIn:
+		return "bearer"
+	case socialPlatformReddit:
 		return "bearer"
 	default:
 		return "bearer"
@@ -507,6 +537,16 @@ func resolveSocialAccessToken(platform socialPlatform, alias string, account Soc
 		if value := strings.TrimSpace(os.Getenv("LINKEDIN_ACCESS_TOKEN")); value != "" {
 			return value, "env:LINKEDIN_ACCESS_TOKEN"
 		}
+	case socialPlatformReddit:
+		if value := strings.TrimSpace(resolveSocialEnv(alias, account, "REDDIT_ACCESS_TOKEN")); value != "" {
+			return value, "env:" + prefix + "REDDIT_ACCESS_TOKEN"
+		}
+		if value := strings.TrimSpace(os.Getenv("REDDIT_ACCESS_TOKEN")); value != "" {
+			return value, "env:REDDIT_ACCESS_TOKEN"
+		}
+		if value := strings.TrimSpace(os.Getenv("SI_PUBLISH_REDDIT_ACCESS_TOKEN")); value != "" {
+			return value, "env:SI_PUBLISH_REDDIT_ACCESS_TOKEN"
+		}
 	}
 	return "", ""
 }
@@ -521,6 +561,8 @@ func socialAccountTokenEnvRef(platform socialPlatform, account SocialAccountSett
 		return strings.TrimSpace(account.XAccessTokenEnv)
 	case socialPlatformLinkedIn:
 		return strings.TrimSpace(account.LinkedInAccessTokenEnv)
+	case socialPlatformReddit:
+		return strings.TrimSpace(account.RedditAccessTokenEnv)
 	default:
 		return ""
 	}
@@ -1079,6 +1121,8 @@ func socialPlatformTokenEnvKey(platform socialPlatform) string {
 		return "X_BEARER_TOKEN"
 	case socialPlatformLinkedIn:
 		return "LINKEDIN_ACCESS_TOKEN"
+	case socialPlatformReddit:
+		return "REDDIT_ACCESS_TOKEN"
 	default:
 		return "ACCESS_TOKEN"
 	}
@@ -1100,6 +1144,8 @@ func socialPlatformDefaultProbePath(platform socialPlatform, authStyle string) s
 		return "/users/me"
 	case socialPlatformLinkedIn:
 		return "/me"
+	case socialPlatformReddit:
+		return "/api/v1/me"
 	default:
 		return "/"
 	}
@@ -1139,6 +1185,8 @@ func socialPlatformContextID(platform socialPlatform, runtime socialRuntimeConte
 			return runtime.LinkedInPersonURN
 		}
 		return runtime.LinkedInOrganizationURN
+	case socialPlatformReddit:
+		return runtime.RedditUsername
 	default:
 		return ""
 	}

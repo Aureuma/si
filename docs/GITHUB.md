@@ -1,10 +1,10 @@
 # GitHub Command Guide (`si github`)
 
-`si github` is an App-auth bridge for GitHub REST/GraphQL.
+`si github` supports GitHub REST/GraphQL using either GitHub App auth or OAuth token auth.
 
 Auth policy:
-- GitHub App only.
-- No PAT/OAuth path in `si github`.
+- `app` mode: GitHub App installation tokens
+- `oauth` mode: OAuth access token / token-based auth (including PAT-style tokens)
 - Credentials should be injected from `si vault` (or compatible env keys).
 
 ## Credential Keys (Vault-Compatible)
@@ -14,23 +14,32 @@ Per account alias `<ACCOUNT>` (uppercase slug):
 - `GITHUB_<ACCOUNT>_APP_ID`
 - `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`
 - `GITHUB_<ACCOUNT>_INSTALLATION_ID` (optional)
+- `GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN`
+- `GITHUB_<ACCOUNT>_TOKEN`
 
 Global fallback keys:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY_PEM`
 - `GITHUB_INSTALLATION_ID`
+- `GITHUB_OAUTH_TOKEN`
+- `GITHUB_TOKEN`
+- `GH_TOKEN`
 - `GITHUB_API_BASE_URL`
 - `GITHUB_DEFAULT_OWNER`
 - `GITHUB_DEFAULT_ACCOUNT`
+- `GITHUB_AUTH_MODE`
+- `GITHUB_DEFAULT_AUTH_MODE`
 
 ## Context
 
 ```bash
 si github auth status --account core
+si github auth status --auth-mode oauth --token "$GITHUB_TOKEN"
 si github context list
 si github context current
-si github context use --account core --owner Aureuma --base-url https://api.github.com
+si github context use --account core --owner Aureuma --auth-mode app --base-url https://api.github.com
+si github context use --account core --auth-mode oauth --token-env GITHUB_CORE_OAUTH_ACCESS_TOKEN
 ```
 
 ## Repositories
@@ -42,6 +51,18 @@ si github repo create si-demo --owner Aureuma
 si github repo update Aureuma/si --param description="si substrate"
 si github repo archive Aureuma/si --force
 si github repo delete Aureuma/si-demo --force
+```
+
+## Branches and Protection
+
+```bash
+si github branch list Aureuma/si
+si github branch get Aureuma/si main
+si github branch create Aureuma/si --name feature/release-train --from main
+si github branch delete Aureuma/si feature/release-train --force
+
+si github branch protect Aureuma/si main --required-check ci --required-check lint --required-approvals 2
+si github branch unprotect Aureuma/si main --force
 ```
 
 ## Pull Requests

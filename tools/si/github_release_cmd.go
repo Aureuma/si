@@ -41,6 +41,8 @@ func cmdGithubReleaseList(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -54,7 +56,7 @@ func cmdGithubReleaseList(args []string) {
 		printUsage("usage: si github release list <owner/repo|repo> [--owner <owner>] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -77,6 +79,8 @@ func cmdGithubReleaseGet(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -87,7 +91,7 @@ func cmdGithubReleaseGet(args []string) {
 		printUsage("usage: si github release get <owner/repo|repo> <tag|id> [--owner <owner>] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -117,6 +121,8 @@ func cmdGithubReleaseCreate(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -139,7 +145,7 @@ func cmdGithubReleaseCreate(args []string) {
 	if strings.TrimSpace(*tag) == "" || strings.TrimSpace(*title) == "" {
 		fatal(fmt.Errorf("--tag and --title are required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -184,6 +190,8 @@ func cmdGithubReleaseUpload(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -200,7 +208,7 @@ func cmdGithubReleaseUpload(args []string) {
 	if strings.TrimSpace(*assetPath) == "" {
 		fatal(fmt.Errorf("--asset is required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -243,6 +251,8 @@ func cmdGithubReleaseDelete(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -254,7 +264,7 @@ func cmdGithubReleaseDelete(args []string) {
 		printUsage("usage: si github release delete <owner/repo|repo> <tag|id> [--force] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)

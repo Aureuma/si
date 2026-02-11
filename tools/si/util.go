@@ -25,11 +25,11 @@ Features:
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
   - Vault: encrypted dotenv secrets (submodule optional); format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
-  - GitHub bridge: App-auth context, REST/GraphQL access, and repository automation commands.
+  - GitHub bridge: App/OAuth-auth context, REST/GraphQL access, and repository automation commands.
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
   - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
   - Google YouTube bridge: auth/context flows, channel/video/playlist/live/caption operations, uploads, and usage reporting.
-  - Social bridge: unified platform flows for Facebook, Instagram, X, and LinkedIn (auth/context/resources/raw/report).
+  - Social bridge: unified platform flows for Facebook, Instagram, X, LinkedIn, and Reddit (auth/context/resources/raw/report).
   - WorkOS bridge: account context, organization/user/member/invitation/directory management, and raw API access.
   - Publish bridge: DistributionKit-backed launch catalog plus publishing workflows for Dev.to, Hashnode, Reddit, Hacker News, and Product Hunt.
   - AWS bridge: IAM user lifecycle actions and signed raw query support.
@@ -52,10 +52,10 @@ Core:
   si spawn|respawn|list|status|report|login|logout|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|doctor|object|raw|report|sync>
-  si github <auth|context|doctor|repo|pr|issue|workflow|release|secret|raw|graphql>
-  si cloudflare <auth|context|doctor|zone|dns|tls|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|tunnel|lb|analytics|logs|report|raw>
+  si github <auth|context|doctor|repo|branch|pr|issue|workflow|release|secret|raw|graphql>
+  si cloudflare <auth|context|doctor|status|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>
   si google <places|youtube|youtube-data>
-  si social <facebook|instagram|x|linkedin>
+  si social <facebook|instagram|x|linkedin|reddit>
   si workos <auth|context|doctor|organization|user|membership|invitation|directory|raw>
   si publish <catalog|devto|hashnode|reddit|hackernews|producthunt>
   si aws <auth|context|doctor|iam|raw>
@@ -301,10 +301,11 @@ stripe:
     si creds ...
 
 github:
-  si github auth status [--account <alias>] [--owner <owner>] [--json]
-  si github context list|current|use [--account <alias>] [--owner <owner>] [--base-url <url>]
-  si github doctor [--account <alias>] [--owner <owner>] [--public] [--json]
+  si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]
+  si github context list|current|use [--account <alias>] [--owner <owner>] [--base-url <url>] [--auth-mode <app|oauth>] [--token-env <env_key>]
+  si github doctor [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--public] [--json]
   si github repo list|get|create|update|archive|delete ...
+  si github branch list|get|create|delete|protect|unprotect ...
   si github pr list|get|create|comment|merge ...
   si github issue list|get|create|comment|close|reopen ...
   si github workflow list|run|runs|logs ...
@@ -315,14 +316,20 @@ github:
   si github graphql --query <query> [--var key=json] [--json]
 
   Auth policy:
-    GitHub App only.
-    Configure app credentials via vault-compatible env keys (for example GITHUB_<ACCOUNT>_APP_ID, GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM).
+    Supports GitHub App auth and OAuth token auth.
+    Configure default_auth_mode/auth_mode as app or oauth.
+    App credentials use env keys such as GITHUB_<ACCOUNT>_APP_ID and GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM.
+    OAuth credentials use env keys such as GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN or GITHUB_TOKEN.
 
 cloudflare:
   si cloudflare auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
+  si cloudflare status [--account <alias>] [--env <prod|staging|dev>] [--json]
   si cloudflare context list|current|use [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--base-url <url>]
   si cloudflare doctor [--account <alias>] [--env <prod|staging|dev>] [--public] [--json]
   si cloudflare zone|dns|waf|ruleset|firewall|ratelimit|queue|tunnel|lb <list|get|create|update|delete> ...
+  si cloudflare email rule|address <list|get|create|update|delete> ...
+  si cloudflare email settings <get|enable|disable> [--zone-id <zone>] [--force]
+  si cloudflare token <list|get|create|update|delete|verify|permission-groups> ...
   si cloudflare workers script|route <list|get|create|update|delete> ...
   si cloudflare workers secret <set|delete> --script <name> --name <secret> [--text <value>]
   si cloudflare pages project <list|get|create|update|delete> ...
@@ -336,16 +343,16 @@ cloudflare:
   si cloudflare kv namespace <list|get|create|update|delete> ...
   si cloudflare kv key <list|get|put|delete|bulk> --namespace <id> [--key <key>]
   si cloudflare access app|policy <list|get|create|update|delete> ...
-  si cloudflare tls get|set --setting <name> [--value <value>]
+  si cloudflare tls|ssl get|set --setting <name> [--value <value>]
   si cloudflare tls cert <list|get|create|update|delete> ...
-  si cloudflare tls origin-cert <list|create|revoke> ...
+  si cloudflare tls origin-cert <list|create|revoke> ...   (aliases: cloudflare origin, cloudflare cert)
   si cloudflare cache purge [--everything|--tag ...|--host ...|--prefix ...] [--force]
   si cloudflare cache settings <get|set> --setting <name> [--value <value>]
   si cloudflare analytics <http|security|cache> ...
   si cloudflare logs job <list|get|create|update|delete> ...
   si cloudflare logs received ...
   si cloudflare report <traffic-summary|security-events|cache-summary|billing-summary> [--from <iso>] [--to <iso>]
-  si cloudflare raw --method <GET|POST|PATCH|PUT|DELETE> --path <api-path> [--param key=value] [--body raw] [--json]
+  si cloudflare raw|api --method <GET|POST|PATCH|PUT|DELETE> --path <api-path> [--param key=value] [--body raw] [--json]
 
   Environment policy:
     CLI uses prod, staging, and dev context labels.
@@ -394,6 +401,7 @@ social:
   si social instagram <auth|context|doctor|profile|media|comment|insights|raw|report>
   si social x <auth|context|doctor|user|tweet|search|raw|report>
   si social linkedin <auth|context|doctor|profile|organization|post|raw|report>
+  si social reddit <auth|context|doctor|profile|subreddit|post|comment|raw|report>
 
   Common:
     si social <platform> auth status [--account <alias>] [--env <prod|staging|dev>] [--json]

@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-const socialUsageText = "usage: si social <facebook|instagram|x|linkedin>"
+const socialUsageText = "usage: si social <facebook|instagram|x|linkedin|reddit>"
 
 func cmdSocial(args []string) {
 	if len(args) == 0 {
@@ -22,6 +22,8 @@ func cmdSocial(args []string) {
 		cmdSocialX(rest)
 	case socialPlatformLinkedIn:
 		cmdSocialLinkedIn(rest)
+	case socialPlatformReddit:
+		cmdSocialReddit(rest)
 	default:
 		value := strings.TrimSpace(args[0])
 		printUnknown("social", value)

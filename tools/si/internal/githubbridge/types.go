@@ -11,7 +11,8 @@ import (
 type AuthMode string
 
 const (
-	AuthModeApp AuthMode = "app"
+	AuthModeApp   AuthMode = "app"
+	AuthModeOAuth AuthMode = "oauth"
 )
 
 func ParseAuthMode(raw string) (AuthMode, error) {
@@ -19,10 +20,12 @@ func ParseAuthMode(raw string) (AuthMode, error) {
 	switch value {
 	case string(AuthModeApp):
 		return AuthModeApp, nil
+	case string(AuthModeOAuth), "token", "pat":
+		return AuthModeOAuth, nil
 	case "":
-		return "", fmt.Errorf("auth mode required (app)")
+		return "", fmt.Errorf("auth mode required (app|oauth)")
 	default:
-		return "", fmt.Errorf("invalid auth mode %q (expected app)", raw)
+		return "", fmt.Errorf("invalid auth mode %q (expected app|oauth)", raw)
 	}
 }
 

@@ -198,7 +198,7 @@ func resolveCloudflareZoneID(alias string, account CloudflareAccountEntry, env s
 
 func cmdCloudflareAuth(args []string) {
 	if len(args) == 0 {
-		printUsage("usage: si cloudflare auth status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
+		printUsage("usage: si cloudflare auth status|status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
 		return
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
@@ -222,7 +222,7 @@ func cmdCloudflareAuthStatus(args []string) {
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si cloudflare auth status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
+		printUsage("usage: si cloudflare auth status|status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
 		return
 	}
 	runtime, err := resolveCloudflareRuntimeContext(cloudflareRuntimeContextInput{
