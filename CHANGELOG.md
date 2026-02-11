@@ -12,18 +12,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [v0.45.0] - 2026-02-10
+## [v0.45.0] - 2026-02-11
+### Added
+- Added `si publish` with DistributionKit catalog listing and provider-specific publish flows.
+- Added direct API command families for WorkOS, AWS IAM, GCP Service Usage, OCI Core, and image providers (Unsplash, Pexels, Pixabay).
+- Added Cloudflare Pages custom-domain CRUD support under `si cloudflare pages domain`.
+- Added `si vault decrypt` (dotenvx-style in-place decryption and `--stdout` mode), plus key generation and keychain alias support.
+
 ### Changed
-- Moved build-related commands under `si build`:
-  - `si image build` -> `si build image`
-  - `si self build` -> `si build self`
-  - `si self upgrade` -> `si build self upgrade`
-  - `si self run` -> `si build self run`
-- Removed the top-level `si image` and `si self` command surfaces.
-- Restored direct Go HTTP implementations for Cloudflare, GitHub, Google Places, and YouTube command paths.
+- Moved build operations under `si build` (`si build image`, `si build self`, `si build self upgrade`, `si build self run`).
+- Removed the top-level `si self` command surface in favor of `si build self`.
+- Restored direct Go HTTP command execution paths for core integrations (Cloudflare, GitHub, Google Places, YouTube, Stripe).
+- Unified provider runtime metadata/health characteristics and expanded integration guardrails and e2e coverage.
 
 ### Fixed
-- Recovered provider bridge plumbing for non-`apibridge` execution paths in direct integration handlers and logging.
+- Reworked Stripe to direct HTTP requests (no `stripe-go` runtime dependency), including improved retry and error normalization.
+- Hardened vault parsing/format fidelity and command safety checks, including stricter header parsing and non-interactive keyring restrictions.
+- Fixed dyad/codex workspace mount and loop handoff edge cases, including prompt readiness and recovery controls.
 
 ## [v0.44.0] - 2026-02-08
 ### Added
