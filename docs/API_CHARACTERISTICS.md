@@ -35,6 +35,7 @@ There is no external rate-limit or quota reference file to maintain.
   - `si github doctor --public`
   - `si cloudflare doctor --public`
   - `si google places doctor --public`
+  - `si google play doctor --public`
   - `si google youtube doctor --public`
   - `si stripe doctor --public`
 
