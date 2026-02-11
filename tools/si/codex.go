@@ -441,14 +441,14 @@ func cmdCodexSpawn(args []string) {
 	mounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
 		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
-		{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetPrimary},
 	}
-	// Allow `si status` (and related profile-aware commands) to see the host's
-	// Codex profile registry + cached auth while running inside containers.
-	mounts = append(mounts, shared.HostSiCodexProfileMounts("/home/si")...)
-	if workspaceTargetMirror != "" && workspaceTargetMirror != workspaceTargetPrimary {
-		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: *flags.workspaceHost, Target: workspaceTargetMirror})
-	}
+	mounts = append(mounts, shared.BuildContainerCoreMounts(shared.ContainerCoreMountPlan{
+		WorkspaceHost:          *flags.workspaceHost,
+		WorkspacePrimaryTarget: workspaceTargetPrimary,
+		WorkspaceMirrorTarget:  workspaceTargetMirror,
+		ContainerHome:          "/home/si",
+		IncludeHostSi:          true,
+	})...)
 	if *flags.dockerSocket {
 		if socketMount, ok := shared.DockerSocketMount(); ok {
 			mounts = append(mounts, socketMount)
