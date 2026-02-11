@@ -42,3 +42,111 @@ func TestSelfBuildBinary(t *testing.T) {
 		t.Fatalf("expected file, got directory")
 	}
 }
+
+func TestResolveSelfInstallPathExplicit(t *testing.T) {
+	got, err := resolveSelfInstallPath("tmp/si")
+	if err != nil {
+		t.Fatalf("resolveSelfInstallPath failed: %v", err)
+	}
+	want := filepath.Join(mustGetwd(t), "tmp", "si")
+	if got != want {
+		t.Fatalf("expected %s, got %s", want, got)
+	}
+}
+
+func TestResolveSelfInstallPathFromPathLookup(t *testing.T) {
+	tmp := t.TempDir()
+	siPath := filepath.Join(tmp, "si")
+	if err := os.WriteFile(siPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write si shim: %v", err)
+	}
+	t.Setenv("PATH", tmp)
+	got, err := resolveSelfInstallPath("")
+	if err != nil {
+		t.Fatalf("resolveSelfInstallPath failed: %v", err)
+	}
+	if got != siPath {
+		t.Fatalf("expected %s, got %s", siPath, got)
+	}
+}
+
+func TestResolveSelfBuildTargetDefaultsToUpgrade(t *testing.T) {
+	root, err := resolveSelfRepoRoot("")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	tmp := t.TempDir()
+	siPath := filepath.Join(tmp, "si")
+	if err := os.WriteFile(siPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write si shim: %v", err)
+	}
+	t.Setenv("PATH", tmp)
+	got, err := resolveSelfBuildTarget(root, "", "", false)
+	if err != nil {
+		t.Fatalf("resolveSelfBuildTarget failed: %v", err)
+	}
+	if !got.Upgrade {
+		t.Fatalf("expected upgrade target")
+	}
+	if got.Target != siPath {
+		t.Fatalf("expected target %s, got %s", siPath, got.Target)
+	}
+}
+
+func TestResolveSelfBuildTargetNoUpgradeDefaultsToRepoBinary(t *testing.T) {
+	root, err := resolveSelfRepoRoot("")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	got, err := resolveSelfBuildTarget(root, "", "", true)
+	if err != nil {
+		t.Fatalf("resolveSelfBuildTarget failed: %v", err)
+	}
+	if got.Upgrade {
+		t.Fatalf("expected non-upgrade target")
+	}
+	want := filepath.Join(root, "si")
+	if got.Target != want {
+		t.Fatalf("expected target %s, got %s", want, got.Target)
+	}
+}
+
+func TestResolveSelfBuildTargetOutputImpliesNoUpgrade(t *testing.T) {
+	root, err := resolveSelfRepoRoot("")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	got, err := resolveSelfBuildTarget(root, "", "build/si-dev", false)
+	if err != nil {
+		t.Fatalf("resolveSelfBuildTarget failed: %v", err)
+	}
+	if got.Upgrade {
+		t.Fatalf("expected non-upgrade target")
+	}
+	want := filepath.Join(mustGetwd(t), "build", "si-dev")
+	if got.Target != want {
+		t.Fatalf("expected target %s, got %s", want, got.Target)
+	}
+}
+
+func TestResolveSelfBuildTargetRejectsMixedFlags(t *testing.T) {
+	root, err := resolveSelfRepoRoot("")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	if _, err := resolveSelfBuildTarget(root, "/tmp/si", "", true); err == nil {
+		t.Fatalf("expected mixed install-path/no-upgrade to fail")
+	}
+	if _, err := resolveSelfBuildTarget(root, "/tmp/si", "/tmp/out", false); err == nil {
+		t.Fatalf("expected mixed install-path/output to fail")
+	}
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	return dir
+}

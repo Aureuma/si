@@ -70,7 +70,7 @@ Core:
 
 Build:
   si build image                  (builds aureuma/si:local; no extra args)
-  si build self                   (builds ./si by default; see "build" below)
+  si build self                   (upgrades installed si by default; see "build" below)
 
 Profiles:
   si status [profile]      (codex profiles)
@@ -229,13 +229,13 @@ codex:
 
 build:
   si build image                  (builds aureuma/si:local; no extra args)
-  si build self [--repo <path>] [--output <path>]
+  si build self [--repo <path>] [--install-path <path>] [--no-upgrade] [--output <path>]
   si build self upgrade [--repo <path>] [--install-path <path>]
   si build self run [--repo <path>] [--] [si args...]
 
   Typical workflows:
-    Stable use: build/install once, then run that binary and call si build self upgrade when you want to upgrade.
-    Active dev: run si build self --output ./si or si build self run -- <args...> from your checkout.
+    Stable use: run si build self to upgrade installed si from your checkout.
+    Active dev: run si build self --no-upgrade --output ./si or si build self run -- <args...> from your checkout.
 
 persona:
   si persona <name>

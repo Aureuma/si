@@ -26,12 +26,12 @@ func cmdBuild(args []string) {
 
 func cmdBuildSelf(args []string) {
 	if len(args) == 0 {
-		// Default: build the si binary from the current checkout.
+		// Default: upgrade installed si from the current checkout.
 		cmdSelfBuild(nil)
 		return
 	}
 	head := strings.ToLower(strings.TrimSpace(args[0]))
-	// Preserve flag-first UX: `si build self --output ./si`.
+	// Preserve flag-first UX: `si build self --no-upgrade --output ./si`.
 	if strings.HasPrefix(head, "-") {
 		cmdSelfBuild(args)
 		return
