@@ -13,6 +13,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Added
 - Added `si google play` direct API automation with service-account auth/context, custom app creation, listing/details/image management, release-track orchestration, metadata apply workflow, provider telemetry registration, and raw API access.
+- Added `si apple appstore` direct API automation with JWT auth/context, bundle/app onboarding, localized listing updates, metadata apply workflows, provider telemetry registration, and raw App Store Connect API access.
 
 ### Changed
 - Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.

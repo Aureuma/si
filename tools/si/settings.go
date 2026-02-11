@@ -21,6 +21,7 @@ type Settings struct {
 	Github        GitHubSettings     `toml:"github,omitempty"`
 	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
 	Google        GoogleSettings     `toml:"google,omitempty"`
+	Apple         AppleSettings      `toml:"apple,omitempty"`
 	Social        SocialSettings     `toml:"social,omitempty"`
 	WorkOS        WorkOSSettings     `toml:"workos,omitempty"`
 	AWS           AWSSettings        `toml:"aws,omitempty"`
@@ -271,6 +272,37 @@ type GooglePlayAccountEntry struct {
 	DevServiceAccountJSONEnv     string `toml:"dev_service_account_json_env,omitempty"`
 	ServiceAccountFile           string `toml:"service_account_file,omitempty"`
 	ServiceAccountFileEnv        string `toml:"service_account_file_env,omitempty"`
+}
+
+type AppleSettings struct {
+	DefaultAccount string                `toml:"default_account,omitempty"`
+	DefaultEnv     string                `toml:"default_env,omitempty"`
+	APIBaseURL     string                `toml:"api_base_url,omitempty"`
+	LogFile        string                `toml:"log_file,omitempty"`
+	AppStore       AppleAppStoreSettings `toml:"appstore,omitempty"`
+}
+
+type AppleAppStoreSettings struct {
+	APIBaseURL string                            `toml:"api_base_url,omitempty"`
+	Accounts   map[string]AppleAppStoreAccountEntry `toml:"accounts,omitempty"`
+}
+
+type AppleAppStoreAccountEntry struct {
+	Name               string `toml:"name,omitempty"`
+	ProjectID          string `toml:"project_id,omitempty"`
+	ProjectIDEnv       string `toml:"project_id_env,omitempty"`
+	VaultPrefix        string `toml:"vault_prefix,omitempty"`
+	IssuerID           string `toml:"issuer_id,omitempty"`
+	IssuerIDEnv        string `toml:"issuer_id_env,omitempty"`
+	KeyID              string `toml:"key_id,omitempty"`
+	KeyIDEnv           string `toml:"key_id_env,omitempty"`
+	PrivateKeyPEM      string `toml:"private_key_pem,omitempty"`
+	PrivateKeyEnv      string `toml:"private_key_env,omitempty"`
+	PrivateKeyFile     string `toml:"private_key_file,omitempty"`
+	PrivateKeyFileEnv  string `toml:"private_key_file_env,omitempty"`
+	DefaultBundleID    string `toml:"default_bundle_id,omitempty"`
+	DefaultLanguage    string `toml:"default_language,omitempty"`
+	DefaultPlatform    string `toml:"default_platform,omitempty"`
 }
 
 type SocialSettings struct {
@@ -655,6 +687,19 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Google.Play.CustomAppBaseURL = strings.TrimSpace(settings.Google.Play.CustomAppBaseURL)
 	if settings.Google.Play.CustomAppBaseURL == "" {
 		settings.Google.Play.CustomAppBaseURL = "https://playcustomapp.googleapis.com"
+	}
+	settings.Apple.DefaultEnv = normalizeIntegrationEnvironment(settings.Apple.DefaultEnv)
+	if settings.Apple.DefaultEnv == "" {
+		settings.Apple.DefaultEnv = "prod"
+	}
+	settings.Apple.DefaultAccount = strings.TrimSpace(settings.Apple.DefaultAccount)
+	settings.Apple.APIBaseURL = strings.TrimSpace(settings.Apple.APIBaseURL)
+	if settings.Apple.APIBaseURL == "" {
+		settings.Apple.APIBaseURL = "https://api.appstoreconnect.apple.com"
+	}
+	settings.Apple.AppStore.APIBaseURL = strings.TrimSpace(settings.Apple.AppStore.APIBaseURL)
+	if settings.Apple.AppStore.APIBaseURL == "" {
+		settings.Apple.AppStore.APIBaseURL = settings.Apple.APIBaseURL
 	}
 	settings.Social.DefaultEnv = normalizeSocialEnvironment(settings.Social.DefaultEnv)
 	if settings.Social.DefaultEnv == "" {
