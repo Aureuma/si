@@ -244,7 +244,7 @@ Local OAuth token cache for `si google youtube auth login` is stored at:
 - `~/.si/google/youtube/oauth_tokens.json`
 
 ### `[vault]`
-Defaults for `si vault` (encrypted dotenv files, typically stored in a separate vault repo submodule).
+Defaults for `si vault` (encrypted dotenv files; submodule usage is optional).
 - `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
 - `vault.trust_store` (string): local TOFU trust store path (default: `~/.si/vault/trust.json`)
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
