@@ -373,6 +373,38 @@ Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
 
+## Google Play
+`si` includes a Google Play bridge under `si google play` for direct Play Developer API automation:
+
+```bash
+# auth/context/diagnostics
+./si google play auth status --account core --verify-package com.example.app
+./si google play context list
+./si google play context current
+./si google play context use --account core --env prod --package com.example.app --service-account-file ~/.secrets/play-sa.json
+./si google play doctor --account core
+./si google play doctor --public
+
+# app/listing/details
+./si google play app create --account core --developer-account <play_account_id> --title "Acme App" --language en-US
+./si google play listing update --account core --package com.example.app --language en-US --title "Acme App" --short-description "Short text" --full-description "Long text"
+./si google play details update --account core --package com.example.app --contact-email support@example.com --contact-website https://example.com/support
+
+# assets/releases
+./si google play asset upload --account core --package com.example.app --language en-US --type phoneScreenshots --clear-first --file ./play-store/images/en-US/phoneScreenshots/01.png
+./si google play release upload --account core --package com.example.app --aab ./app-release.aab --track internal
+./si google play release promote --account core --package com.example.app --from internal --to production --status completed
+./si google play release set-status --account core --package com.example.app --track production --status halted
+
+# metadata pipeline + raw fallback
+./si google play apply --account core --package com.example.app --metadata-dir ./play-store --aab ./app-release.aab --track internal
+./si google play raw --account core --method GET --path /androidpublisher/v3/applications/com.example.app/edits
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
 ## Google YouTube
 `si` includes a YouTube Data API v3 bridge under `si google youtube` (alias: `si google youtube-data`):
 
