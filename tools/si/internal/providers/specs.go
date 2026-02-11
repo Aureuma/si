@@ -424,8 +424,9 @@ var (
 	metricsMu sync.Mutex
 	metrics   = map[string]*trafficMetrics{}
 
-	cacheMu       sync.Mutex
-	responseCache = map[string]cachedResponse{}
+	cacheMu            sync.RWMutex
+	responseCache      = map[string]cachedResponse{}
+	cacheKeysBySubject = map[string]map[string]struct{}{}
 
 	guardrailMu            sync.Mutex
 	inFlightRequests       = map[string]int64{}
@@ -641,6 +642,7 @@ func ResetRuntimeCounters() {
 
 	cacheMu.Lock()
 	responseCache = map[string]cachedResponse{}
+	cacheKeysBySubject = map[string]map[string]struct{}{}
 	cacheMu.Unlock()
 
 	guardrailMu.Lock()
@@ -1349,18 +1351,23 @@ func CacheLookup(id ID, subject string, method string, endpoint string) (statusC
 	}
 	key := cacheKey(id, subject, method, endpoint)
 	now := time.Now().UTC()
-	cacheMu.Lock()
+	cacheMu.RLock()
 	entry, exists := responseCache[key]
 	if !exists {
+		cacheMu.RUnlock()
+		return 0, "", nil, "", false
+	}
+	expired := !entry.ExpiresAt.After(now)
+	cacheMu.RUnlock()
+	if expired {
+		cacheMu.Lock()
+		if latest, stillExists := responseCache[key]; stillExists && !latest.ExpiresAt.After(now) {
+			delete(responseCache, key)
+			unindexCachedKey(cacheSubjectKey(id, subject), key)
+		}
 		cacheMu.Unlock()
 		return 0, "", nil, "", false
 	}
-	if !entry.ExpiresAt.After(now) {
-		delete(responseCache, key)
-		cacheMu.Unlock()
-		return 0, "", nil, "", false
-	}
-	cacheMu.Unlock()
 	return entry.StatusCode, entry.Status, cloneHeader(entry.Headers), entry.Body, true
 }
 
@@ -1379,6 +1386,7 @@ func CacheStore(id ID, subject string, method string, endpoint string, statusCod
 		return
 	}
 	key := cacheKey(id, subject, method, endpoint)
+	subjectKey := cacheSubjectKey(id, subject)
 	cacheMu.Lock()
 	responseCache[key] = cachedResponse{
 		StatusCode: statusCode,
@@ -1387,17 +1395,22 @@ func CacheStore(id ID, subject string, method string, endpoint string, statusCod
 		Body:       body,
 		ExpiresAt:  time.Now().UTC().Add(ttl),
 	}
+	indexCachedKey(subjectKey, key)
 	cacheMu.Unlock()
 }
 
 func CacheInvalidate(id ID, subject string) {
-	prefix := fmt.Sprintf("%s|%s|", id, normalizeSubject(subject))
+	subjectKey := cacheSubjectKey(id, subject)
 	cacheMu.Lock()
-	for key := range responseCache {
-		if strings.HasPrefix(key, prefix) {
-			delete(responseCache, key)
-		}
+	keys := cacheKeysBySubject[subjectKey]
+	if len(keys) == 0 {
+		cacheMu.Unlock()
+		return
 	}
+	for key := range keys {
+		delete(responseCache, key)
+	}
+	delete(cacheKeysBySubject, subjectKey)
 	cacheMu.Unlock()
 }
 
@@ -1407,6 +1420,36 @@ func cacheTTLFor(id ID) time.Duration {
 
 func cacheKey(id ID, subject string, method string, endpoint string) string {
 	return fmt.Sprintf("%s|%s|%s|%s", id, normalizeSubject(subject), strings.ToUpper(strings.TrimSpace(method)), strings.TrimSpace(endpoint))
+}
+
+func cacheSubjectKey(id ID, subject string) string {
+	return fmt.Sprintf("%s|%s", id, normalizeSubject(subject))
+}
+
+func indexCachedKey(subjectKey, key string) {
+	if strings.TrimSpace(subjectKey) == "" || strings.TrimSpace(key) == "" {
+		return
+	}
+	keys, ok := cacheKeysBySubject[subjectKey]
+	if !ok {
+		keys = map[string]struct{}{}
+		cacheKeysBySubject[subjectKey] = keys
+	}
+	keys[key] = struct{}{}
+}
+
+func unindexCachedKey(subjectKey, key string) {
+	if strings.TrimSpace(subjectKey) == "" || strings.TrimSpace(key) == "" {
+		return
+	}
+	keys, ok := cacheKeysBySubject[subjectKey]
+	if !ok {
+		return
+	}
+	delete(keys, key)
+	if len(keys) == 0 {
+		delete(cacheKeysBySubject, subjectKey)
+	}
 }
 
 func isCacheableMethod(method string) bool {
