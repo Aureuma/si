@@ -270,13 +270,13 @@ func TestRefreshProfileAuthTokensReusedFallsBackToLatestFromDisk(t *testing.T) {
 	}
 }
 
-func TestFormatLimitColumnIncludesResetAndCountdown(t *testing.T) {
+func TestFormatLimitColumnPrefersResetDisplay(t *testing.T) {
 	prev := ansiEnabled
 	ansiEnabled = false
 	defer func() { ansiEnabled = prev }()
 
-	got := formatLimitColumn(71, "20:52", 151)
-	want := "71% (20:52, in 2h31m)"
+	got := formatLimitColumn(71, "Feb 14, in 2 days", 151)
+	want := "71% (Feb 14, in 2 days)"
 	if got != want {
 		t.Fatalf("unexpected formatted limit: got %q want %q", got, want)
 	}

@@ -116,9 +116,9 @@ func cmdGooglePlacesSessionInspect(args []string) {
 	}
 	fmt.Printf("%s %s\n", styleHeading("Session token:"), entry.Token)
 	fmt.Printf("%s %s\n", styleHeading("Status:"), status)
-	fmt.Printf("%s %s\n", styleHeading("Created:"), entry.CreatedAt)
-	fmt.Printf("%s %s\n", styleHeading("Updated:"), entry.UpdatedAt)
-	fmt.Printf("%s %s\n", styleHeading("Ended:"), orDash(entry.EndedAt))
+	fmt.Printf("%s %s\n", styleHeading("Created:"), formatISODateWithGitHubRelativeNow(entry.CreatedAt))
+	fmt.Printf("%s %s\n", styleHeading("Updated:"), formatISODateWithGitHubRelativeNow(entry.UpdatedAt))
+	fmt.Printf("%s %s\n", styleHeading("Ended:"), orDash(formatISODateWithGitHubRelativeNow(entry.EndedAt)))
 	fmt.Printf("%s %s\n", styleHeading("Account:"), orDash(entry.AccountAlias))
 	fmt.Printf("%s %s\n", styleHeading("Note:"), orDash(entry.Note))
 }
@@ -206,7 +206,7 @@ func cmdGooglePlacesSessionList(args []string) {
 			padRightANSI(item.Token, 40),
 			padRightANSI(status, 8),
 			padRightANSI(orDash(item.AccountAlias), 12),
-			item.CreatedAt,
+			formatISODateWithGitHubRelativeNow(item.CreatedAt),
 		)
 	}
 }

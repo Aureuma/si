@@ -235,7 +235,7 @@ func cmdProvidersHealth(args []string) {
 			circuit = "closed"
 		}
 		if circuit == "open" && !entry.OpenUntil.IsZero() {
-			circuit = fmt.Sprintf("open until %s", entry.OpenUntil.Format(time.RFC3339))
+			circuit = fmt.Sprintf("open until %s", formatDateWithGitHubRelativeNow(entry.OpenUntil))
 		}
 		fmt.Printf("%s %s %s %s %s %s %s %s %s\n",
 			padRightANSI(string(entry.Provider), 16),

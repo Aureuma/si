@@ -1210,7 +1210,7 @@ func printGooglePlacesSessionsReport(report map[string]any) {
 		if strings.TrimSpace(item.EndedAt) != "" {
 			status = "ended"
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(item.Token, 38), padRightANSI(status, 8), item.CreatedAt)
+		fmt.Printf("  %s %s %s\n", padRightANSI(item.Token, 38), padRightANSI(status, 8), formatISODateWithGitHubRelativeNow(item.CreatedAt))
 	}
 }
 

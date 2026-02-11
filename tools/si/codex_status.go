@@ -645,12 +645,5 @@ func formatReset(raw *int64) string {
 }
 
 func formatResetAt(t time.Time) string {
-	now := time.Now().In(t.Location())
-	if t.Year() == now.Year() && t.YearDay() == now.YearDay() {
-		return t.Format("15:04")
-	}
-	if t.Year() == now.Year() {
-		return t.Format("15:04 on 2 Jan")
-	}
-	return t.Format("15:04 on 2 Jan 2006")
+	return formatDateWithGitHubRelativeNow(t)
 }
