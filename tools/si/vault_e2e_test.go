@@ -19,6 +19,10 @@ func TestVaultE2E_InitSupportsArbitraryDotenvPath(t *testing.T) {
 	auditLog := filepath.Join(tempState, "vault", "audit.log")
 
 	env := map[string]string{
+		"HOME":                 tempState,
+		"GOFLAGS":              "-modcacherw",
+		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
 		"SI_VAULT_KEY_BACKEND": "file",
 		"SI_VAULT_KEY_FILE":    keyFile,
 		"SI_VAULT_TRUST_STORE": trustFile,
@@ -27,7 +31,6 @@ func TestVaultE2E_InitSupportsArbitraryDotenvPath(t *testing.T) {
 	stdout, stderr, err := runSICommand(t, env,
 		"vault", "init",
 		"--file", envFile,
-		"--hooks=false",
 	)
 	if err != nil {
 		t.Fatalf("vault init failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)

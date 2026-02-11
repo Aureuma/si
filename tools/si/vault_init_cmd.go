@@ -13,84 +13,21 @@ import (
 func cmdVaultInit(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault init", flag.ExitOnError)
-	submoduleURL := fs.String("submodule-url", "", "optional git URL for the vault repo (adds target vault dir as a submodule)")
-	fileFlag := fs.String("file", "", "explicit env file path to bootstrap (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	ignoreDirty := fs.Bool("ignore-dirty", true, "set ignore=dirty for the vault submodule in .gitmodules")
-	installHooks := fs.Bool("hooks", true, "install git pre-commit hook to block plaintext dotenv commits (best effort)")
+	fileFlag := fs.String("file", "", "env file path to bootstrap (also becomes the default when --file is omitted)")
 	keyBackend := fs.String("key-backend", "", "override key backend: keyring, keychain, or file")
 	keyFile := fs.String("key-file", "", "override key file path (for key-backend=file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault init [--submodule-url <git-url>] [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|keychain|file>] [--key-file <path>]")
+		printUsage("usage: si vault init [--file <path>] [--key-backend <keyring|keychain|file>] [--key-file <path>]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, true, true)
+	// Resolve target file (may not exist yet).
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), true)
 	if err != nil {
 		fatal(err)
-	}
-
-	repoConfigured := strings.TrimSpace(target.RepoRoot) != "" && strings.TrimSpace(target.VaultDirRel) != ""
-	submoduleRequested := strings.TrimSpace(*submoduleURL) != ""
-	submodulePresent := false
-	vaultDirHadGitMetadata := vaultDirHasGitMetadata(target.VaultDir)
-
-	// Bootstrap the vault dir. Submodule is optional.
-	if !vault.IsDir(target.VaultDir) {
-		if submoduleRequested {
-			if !repoConfigured {
-				fatal(fmt.Errorf("--submodule-url requires target to resolve under a git repo root (use a repo-local --vault-dir or omit --submodule-url)"))
-			}
-			if err := vault.GitSubmoduleAdd(target.RepoRoot, *submoduleURL, target.VaultDirRel); err != nil {
-				// A common failure mode for brand-new repos is a missing/invalid remote HEAD.
-				// Git may clone the repo but fail to checkout, returning an error while leaving
-				// a usable git working directory behind.
-				if vault.IsDir(target.VaultDir) {
-					originURL, oerr := vault.GitRemoteOriginURL(target.VaultDir)
-					if oerr != nil {
-						fatal(err)
-					}
-					warnf("vault submodule add failed; attempting checkout recovery + submodule re-register: %v", err)
-					if recErr := vault.GitEnsureCheckout(target.VaultDir); recErr != nil {
-						fatal(fmt.Errorf("%w (recovery failed: %v)", err, recErr))
-					}
-					branch, berr := vault.GitCurrentBranch(target.VaultDir)
-					if berr != nil || strings.TrimSpace(branch) == "" {
-						branch = "main"
-					}
-					if regErr := vault.GitSubmoduleAddForce(target.RepoRoot, originURL, target.VaultDirRel, branch); regErr != nil {
-						fatal(fmt.Errorf("%w (recovery failed: %v)", err, regErr))
-					}
-				} else {
-					fatal(err)
-				}
-			}
-		} else {
-			if err := os.MkdirAll(target.VaultDir, 0o750); err != nil {
-				fatal(err)
-			}
-		}
-	}
-
-	// Ensure the submodule checkout exists (when this vault dir is configured as a submodule).
-	if repoConfigured {
-		if sm, err := vault.GitSubmoduleStatus(target.RepoRoot, target.VaultDirRel); err == nil && sm != nil && sm.Present {
-			submodulePresent = true
-			if err := vault.GitSubmoduleUpdate(target.RepoRoot, target.VaultDirRel); err != nil {
-				fatal(err)
-			}
-		}
-	}
-	if vault.IsDir(target.VaultDir) && (submodulePresent || submoduleRequested || vaultDirHadGitMetadata) {
-		if err := vault.GitEnsureCheckout(target.VaultDir); err != nil {
-			fatal(fmt.Errorf("vault repo checkout failed: %w", err))
-		}
-	}
-	if *ignoreDirty && submodulePresent && repoConfigured {
-		_, _ = vault.EnsureGitmodulesIgnoreDirty(target.RepoRoot, target.VaultDirRel)
 	}
 
 	// Ensure we have a device identity and public recipient.
@@ -115,17 +52,6 @@ func cmdVaultInit(args []string) {
 		fatal(err)
 	}
 	recipient := identityInfo.Identity.Recipient().String()
-	if keyBackendOverride != "" || keyFileOverride != "" {
-		if keyBackendOverride != "" {
-			settings.Vault.KeyBackend = keyBackendOverride
-		}
-		if keyFileOverride != "" {
-			settings.Vault.KeyFile = keyFileOverride
-		}
-		if err := saveSettings(settings); err != nil {
-			fatal(err)
-		}
-	}
 
 	// Read or create the env file.
 	var doc vault.DotenvFile
@@ -143,12 +69,15 @@ func cmdVaultInit(args []string) {
 		fatal(err)
 	}
 	if changed || fileMissing {
+		if err := os.MkdirAll(filepath.Dir(target.File), 0o700); err != nil {
+			fatal(err)
+		}
 		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
 			fatal(err)
 		}
 	}
 
-	// Trust the current recipient set (TOFU) for this repo/vault/env.
+	// Trust the current recipient set (TOFU) for this repo/file.
 	trustPath := vaultTrustStorePath(settings)
 	store, err := vault.LoadTrustStore(trustPath)
 	if err != nil {
@@ -160,13 +89,35 @@ func cmdVaultInit(args []string) {
 	}
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
-		VaultDir:    target.VaultDir,
 		File:        target.File,
-		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})
 	if err := store.Save(trustPath); err != nil {
 		fatal(err)
+	}
+
+	// Persist settings changes (default file and key overrides, when provided).
+	settingsChanged := false
+	if cur := strings.TrimSpace(settings.Vault.File); cur == "" {
+		settings.Vault.File = target.File
+		settingsChanged = true
+	} else if abs, err := vault.CleanAbs(cur); err != nil || filepath.Clean(abs) != filepath.Clean(target.File) {
+		// Normalize to an absolute path so subsequent commands behave the same from any cwd.
+		settings.Vault.File = target.File
+		settingsChanged = true
+	}
+	if keyBackendOverride != "" {
+		settings.Vault.KeyBackend = keyBackendOverride
+		settingsChanged = true
+	}
+	if keyFileOverride != "" {
+		settings.Vault.KeyFile = keyFileOverride
+		settingsChanged = true
+	}
+	if settingsChanged {
+		if err := saveSettings(settings); err != nil {
+			fatal(err)
+		}
 	}
 
 	vaultAuditEvent(settings, target, "init", map[string]any{
@@ -174,40 +125,15 @@ func cmdVaultInit(args []string) {
 		"recipient":  recipient,
 		"trustFp":    fp,
 		"keyCreated": createdKey,
-		"keySource":  identityInfo.Source,
+		"keyBackend": vault.NormalizeKeyBackend(keyCfg.Backend),
 	})
 
-	fmt.Printf("vault dir: %s\n", filepath.Clean(target.VaultDir))
 	fmt.Printf("env file:  %s\n", filepath.Clean(target.File))
 	fmt.Printf("recipient: %s\n", recipient)
 	fmt.Printf("trust fp:  %s\n", fp)
 	if createdKey {
-		fmt.Printf("key:       created (%s)\n", identityInfo.Source)
+		fmt.Printf("key:       created (backend=%s)\n", vault.NormalizeKeyBackend(keyCfg.Backend))
 	} else {
-		fmt.Printf("key:       ok (%s)\n", identityInfo.Source)
+		fmt.Printf("key:       ok (backend=%s)\n", vault.NormalizeKeyBackend(keyCfg.Backend))
 	}
-	if *installHooks {
-		// Best-effort: hooks are local-only, but they prevent accidental plaintext commits during day-to-day work.
-		if hooksDir, err := vault.GitHooksDir(target.VaultDir); err == nil {
-			hookPath := filepath.Join(hooksDir, "pre-commit")
-			exe, _ := os.Executable()
-			script := renderVaultPreCommitHook(exe)
-			if err := writeHookFile(hookPath, script, false); err != nil {
-				warnf("hooks: not installed (%v) (run `si vault hooks install --force`)", err)
-			} else {
-				fmt.Printf("hooks:     installed (%s)\n", filepath.Clean(hookPath))
-			}
-		} else {
-			warnf("hooks: not installed (%v) (run `si vault hooks install`)", err)
-		}
-	}
-}
-
-func vaultDirHasGitMetadata(dir string) bool {
-	dir = strings.TrimSpace(dir)
-	if dir == "" {
-		return false
-	}
-	_, err := os.Stat(filepath.Join(dir, ".git"))
-	return err == nil
 }

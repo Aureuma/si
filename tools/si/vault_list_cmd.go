@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"si/tools/si/internal/vault"
 )
@@ -11,18 +12,17 @@ import (
 func cmdVaultList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault list", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault list [--file <path>] [--vault-dir <path>]")
+		printUsage("usage: si vault list [--file <path>]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}

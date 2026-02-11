@@ -1,6 +1,6 @@
 # `si vault` (Encrypted Dotenv Credentials)
 
-`si vault` manages credentials in dotenv files with values encrypted inline using age recipients. Vault files can live in any local path; using a separate private git repo/submodule is optional.
+`si vault` manages credentials in dotenv files with values encrypted inline using age recipients. Vault commands operate on a single default env file (`vault.file` in settings) unless `--file` is provided.
 
 Goals:
 - encrypted at rest (git-friendly, PR-reviewable)
@@ -10,14 +10,8 @@ Goals:
 
 ## Model (Recommended Default)
 
-Host repo:
-- contains code
-- optionally includes a `vault/` git submodule pointing at a private vault repo
-
-Vault repo (submodule checkout):
-- contains encrypted env files:
-  - `vault/.env` (default)
-  - optional additional files (managed via `--file`), e.g. `vault/.env.dev`, `vault/.env.prod`
+- One encrypted dotenv file on disk (default: `~/.si/vault/.env`).
+- Use `--file` to operate on a different file.
 
 ## Quickstart
 
@@ -28,14 +22,14 @@ From your host repo (or any local workspace):
 si vault keygen
 ```
 
-1. Bootstrap the env file (plain local directory, no submodule required):
+1. Bootstrap the default env file:
 ```bash
-si vault init --vault-dir vault
+si vault init
 ```
 
-Optional: if you want `vault/` to be a git submodule, initialize it directly:
+To bootstrap a specific file path (and set it as the default for future commands), pass `--file`:
 ```bash
-si vault init --submodule-url <git-url-for-private-vault-repo>
+si vault init --file /path/to/.env
 ```
 
 2. Set a secret (prefer `--stdin` to avoid shell history):
@@ -82,16 +76,16 @@ si vault docker exec --container si-actor-<dyad> -- ./your-command --args
 
 ## Prevent Plaintext Commits (Git Hooks)
 
-`si vault init` installs a best-effort local `pre-commit` hook inside the vault repo to block committing dotenv files that contain plaintext values.
+`si vault hooks install` installs a best-effort local `pre-commit` hook in the current git repo to block committing dotenv files that contain plaintext values.
 
 You can also manage hooks explicitly:
 ```bash
-si vault hooks install --vault-dir vault
-si vault hooks status --vault-dir vault
-si vault hooks uninstall --vault-dir vault
+si vault hooks install
+si vault hooks status
+si vault hooks uninstall
 ```
 
-The hook runs `si vault check --staged --all --vault-dir .` inside the vault repo.
+The hook runs `si vault check --staged --all`.
 
 Notes:
 - Git hooks are local-only and can be bypassed with `git commit --no-verify`.
@@ -99,7 +93,7 @@ Notes:
 
 ## Multiple Dotenv Files
 
-By default, vault commands operate on `vault/.env`. To operate on any different dotenv file, pass `--file` explicitly:
+By default, vault commands operate on the configured `vault.file`. To operate on a different dotenv file, pass `--file` explicitly:
 
 ```bash
 si vault encrypt --file vault/.env.prod --format
@@ -140,9 +134,7 @@ si vault decrypt --file vault/.env --stdout
 `si vault` uses trust-on-first-use (similar to `ssh known_hosts`) to prevent silent recipient drift:
 - local trust store: `~/.si/vault/trust.json`
 - keyed by `(host repo root, env file)`
-- stores:
-  - vault repo URL (when available)
-  - recipients fingerprint
+- stores the recipients fingerprint
 
 Commands:
 - `si vault trust status` shows stored vs current fingerprint.

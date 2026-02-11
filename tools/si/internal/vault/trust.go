@@ -16,9 +16,7 @@ type TrustStore struct {
 
 type TrustEntry struct {
 	RepoRoot    string `json:"repo_root"`
-	VaultDir    string `json:"vault_dir"`
 	File        string `json:"file"`
-	VaultRepo   string `json:"vault_repo_url,omitempty"`
 	Fingerprint string `json:"fingerprint"`
 	TrustedAt   string `json:"trusted_at,omitempty"`
 }
@@ -26,7 +24,7 @@ type TrustEntry struct {
 func LoadTrustStore(path string) (*TrustStore, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return &TrustStore{SchemaVersion: 2}, nil
+		return &TrustStore{SchemaVersion: 3}, nil
 	}
 	path, err := ExpandHome(path)
 	if err != nil {
@@ -35,7 +33,7 @@ func LoadTrustStore(path string) (*TrustStore, error) {
 	data, err := readFileScoped(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &TrustStore{SchemaVersion: 2}, nil
+			return &TrustStore{SchemaVersion: 3}, nil
 		}
 		return nil, err
 	}
@@ -43,8 +41,8 @@ func LoadTrustStore(path string) (*TrustStore, error) {
 	if err := json.Unmarshal(data, &store); err != nil {
 		return nil, err
 	}
-	if store.SchemaVersion < 2 {
-		store.SchemaVersion = 2
+	if store.SchemaVersion < 3 {
+		store.SchemaVersion = 3
 	}
 	return &store, nil
 }
@@ -70,9 +68,7 @@ func (s *TrustStore) Upsert(entry TrustEntry) {
 		return
 	}
 	entry.RepoRoot = filepath.Clean(strings.TrimSpace(entry.RepoRoot))
-	entry.VaultDir = filepath.Clean(strings.TrimSpace(entry.VaultDir))
 	entry.File = filepath.Clean(strings.TrimSpace(entry.File))
-	entry.VaultRepo = strings.TrimSpace(entry.VaultRepo)
 	entry.Fingerprint = strings.TrimSpace(entry.Fingerprint)
 	if entry.TrustedAt == "" {
 		entry.TrustedAt = time.Now().UTC().Format(time.RFC3339Nano)

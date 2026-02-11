@@ -295,8 +295,8 @@ Local OAuth token cache for `si google youtube auth login` is stored at:
 - `~/.si/google/youtube/oauth_tokens.json`
 
 ### `[vault]`
-Defaults for `si vault` (encrypted dotenv files; submodule usage is optional).
-- `vault.dir` (string): vault directory relative to the current host repo root (default: `vault`)
+Defaults for `si vault` (encrypted dotenv files).
+- `vault.file` (string): default env file path used when `--file` is not provided (default: `~/.si/vault/.env`)
 - `vault.trust_store` (string): local TOFU trust store path (default: `~/.si/vault/trust.json`)
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
@@ -497,8 +497,7 @@ linkedin_person_urn = "urn:li:person:abc123"
 reddit_username = "acme_bot"
 
 [vault]
-dir = "vault"
-default_env = "dev"
+file = "~/.si/vault/.env"
 trust_store = "~/.si/vault/trust.json"
 audit_log = "~/.si/logs/vault.log"
 key_backend = "keyring"

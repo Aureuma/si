@@ -32,13 +32,12 @@ func cmdVaultRecipients(args []string) {
 func cmdVaultRecipientsList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients list", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}
@@ -59,14 +58,13 @@ func cmdVaultRecipientsList(args []string) {
 func cmdVaultRecipientsAdd(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients add", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault recipients add <age1...> [--file <path>] [--vault-dir <path>]")
+		printUsage("usage: si vault recipients add <age1...> [--file <path>]")
 		return
 	}
 	recipient := strings.TrimSpace(rest[0])
@@ -74,7 +72,7 @@ func cmdVaultRecipientsAdd(args []string) {
 		fatal(fmt.Errorf("recipient required"))
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}
@@ -104,9 +102,7 @@ func cmdVaultRecipientsAdd(args []string) {
 	}
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
-		VaultDir:    target.VaultDir,
 		File:        target.File,
-		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})
 	if err := store.Save(storePath); err != nil {
@@ -124,14 +120,13 @@ func cmdVaultRecipientsAdd(args []string) {
 func cmdVaultRecipientsRemove(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients remove", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault recipients remove <age1...> [--file <path>] [--vault-dir <path>]")
+		printUsage("usage: si vault recipients remove <age1...> [--file <path>]")
 		return
 	}
 	recipient := strings.TrimSpace(rest[0])
@@ -139,7 +134,7 @@ func cmdVaultRecipientsRemove(args []string) {
 		fatal(fmt.Errorf("recipient required"))
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}
@@ -175,9 +170,7 @@ func cmdVaultRecipientsRemove(args []string) {
 	}
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
-		VaultDir:    target.VaultDir,
 		File:        target.File,
-		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})
 	if err := store.Save(storePath); err != nil {

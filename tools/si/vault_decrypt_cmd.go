@@ -13,15 +13,14 @@ func cmdVaultDecrypt(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault decrypt", flag.ExitOnError)
 	var files multiFlag
-	fs.Var(&files, "file", "explicit env file path (repeatable; overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fs.Var(&files, "file", "explicit env file path (repeatable; defaults to the configured vault.file when omitted)")
 	yes := fs.Bool("yes", false, "do not prompt (required for in-place decrypt in non-interactive mode)")
 	stdout := fs.Bool("stdout", false, "write decrypted file to stdout (does not modify the file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault decrypt [--file <path>]... [--vault-dir <path>] [--stdout] [--yes]")
+		printUsage("usage: si vault decrypt [--file <path>]... [--stdout] [--yes]")
 		return
 	}
 
@@ -38,7 +37,7 @@ func cmdVaultDecrypt(args []string) {
 	}
 
 	runOne := func(file string) {
-		target, err := vaultResolveTarget(settings, file, *vaultDir, false, false)
+		target, err := vaultResolveTarget(settings, file, false)
 		if err != nil {
 			fatal(err)
 		}

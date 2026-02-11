@@ -23,7 +23,7 @@ Holistic CLI for si. This help includes all commands, flags, and core features.
 Features:
   - Dyads: spawn paired actor/critic containers with a critic-driven closed loop, exec into them, manage logs.
   - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
-  - Vault: encrypted dotenv secrets (submodule optional); format, encrypt, and inject into processes/containers.
+  - Vault: encrypted dotenv secrets; format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - GitHub bridge: App/OAuth-auth context, REST/GraphQL access, and repository automation commands.
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
@@ -277,27 +277,24 @@ stripe:
 
 	vault:
 	  Target selection (most commands):
-	    --file <path>               (explicit env file path, overrides --vault-dir)
-	    --vault-dir <path>          (default: vault; resolved relative to git root)
+	    --file <path>               (explicit env file path; otherwise uses vault.file from settings or SI_VAULT_FILE)
 
-	  Default file (when --file is not set): <vault-dir>/.env
-
-	  si vault init [--submodule-url <git-url>] [--file <path>] [--vault-dir <path>] [--ignore-dirty] [--hooks] [--key-backend <keyring|keychain|file>] [--key-file <path>]
+	  si vault init [--file <path>] [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
-	  si vault status [--file <path>] [--vault-dir <path>]
-	  si vault check [--file <path>] [--vault-dir <path>] [--staged] [--all]
-	  si vault hooks install|status|uninstall [--vault-dir <path>] [--force]
-	  si vault fmt [--file <path>] [--vault-dir <path>] [--all] [--check]
-	  si vault encrypt [--file <path>] [--vault-dir <path>] [--format] [--reencrypt]
-	  si vault decrypt [--file <path>] [--vault-dir <path>] [--stdout] [--yes]
-	  si vault set <KEY> <VALUE> [--file <path>] [--vault-dir <path>] [--section <name>] [--stdin] [--format]
-	  si vault unset <KEY> [--file <path>] [--vault-dir <path>] [--format]
-	  si vault get <KEY> [--file <path>] [--vault-dir <path>] [--reveal]
-	  si vault list [--file <path>] [--vault-dir <path>]
-	  si vault run [--file <path>] [--vault-dir <path>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
-	  si vault docker exec --container <name|id> [--file <path>] [--vault-dir <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
-	  si vault trust status|accept|forget [--file <path>] [--vault-dir <path>]
-	  si vault recipients list|add|remove [--file <path>] [--vault-dir <path>]
+	  si vault status [--file <path>]
+	  si vault check [--file <path>] [--staged] [--all]
+	  si vault hooks install|status|uninstall [--force]
+	  si vault fmt [--file <path>] [--all] [--check]
+	  si vault encrypt [--file <path>] [--format] [--reencrypt]
+	  si vault decrypt [--file <path>] [--stdout] [--yes]
+	  si vault set <KEY> <VALUE> [--file <path>] [--section <name>] [--stdin] [--format]
+	  si vault unset <KEY> [--file <path>] [--format]
+	  si vault get <KEY> [--file <path>] [--reveal]
+	  si vault list [--file <path>]
+	  si vault run [--file <path>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
+	  si vault docker exec --container <name|id> [--file <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
+	  si vault trust status|accept|forget [--file <path>]
+	  si vault recipients list|add|remove [--file <path>]
 
   Alias:
     si creds ...

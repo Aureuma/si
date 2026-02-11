@@ -1,8 +1,6 @@
 package vault
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -90,74 +88,6 @@ func GitShowIndexFile(repoDir, path string) ([]byte, error) {
 	cmd := exec.Command("git", "show", ":"+path)
 	cmd.Dir = repoDir
 	return cmd.Output()
-}
-
-func GitSubmoduleAdd(repoRoot, url, path string) error {
-	repoRoot = strings.TrimSpace(repoRoot)
-	url = strings.TrimSpace(url)
-	path = strings.TrimSpace(path)
-	if repoRoot == "" || url == "" || path == "" {
-		return fmt.Errorf("repo root, url, and path required")
-	}
-	cmd := exec.Command("git", "submodule", "add", url, path)
-	cmd.Dir = repoRoot
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return fmt.Errorf("%w: %s", err, msg)
-		}
-		return err
-	}
-	return nil
-}
-
-func GitSubmoduleUpdate(repoRoot, path string) error {
-	repoRoot = strings.TrimSpace(repoRoot)
-	path = strings.TrimSpace(path)
-	if repoRoot == "" || path == "" {
-		return fmt.Errorf("repo root and path required")
-	}
-	cmd := exec.Command("git", "submodule", "update", "--init", "--recursive", "--", path)
-	cmd.Dir = repoRoot
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return fmt.Errorf("%w: %s", err, msg)
-		}
-		return err
-	}
-	return nil
-}
-
-func GitSubmoduleAddForce(repoRoot, url, path, branch string) error {
-	repoRoot = strings.TrimSpace(repoRoot)
-	url = strings.TrimSpace(url)
-	path = strings.TrimSpace(path)
-	branch = strings.TrimSpace(branch)
-	if repoRoot == "" || url == "" || path == "" {
-		return fmt.Errorf("repo root, url, and path required")
-	}
-	args := []string{"submodule", "add", "--force"}
-	if branch != "" {
-		args = append(args, "-b", branch)
-	}
-	args = append(args, url, path)
-	cmd := exec.Command("git", args...)
-	cmd.Dir = repoRoot
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg != "" {
-			return fmt.Errorf("%w: %s", err, msg)
-		}
-		return err
-	}
-	return nil
 }
 
 func GitRemoteBranches(repoDir string) ([]string, error) {
@@ -335,54 +265,6 @@ func GitDirty(repoDir string) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(string(out)) != "", nil
-}
-
-type SubmoduleStatus struct {
-	Present bool
-	Prefix  string // " ", "-", "+", "U"
-	Commit  string
-	Path    string
-	Meta    string
-}
-
-func GitSubmoduleStatus(repoRoot, path string) (*SubmoduleStatus, error) {
-	repoRoot = strings.TrimSpace(repoRoot)
-	path = strings.TrimSpace(path)
-	if repoRoot == "" || path == "" {
-		return nil, fmt.Errorf("repo root and path required")
-	}
-	cmd := exec.Command("git", "submodule", "status", "--", path)
-	cmd.Dir = repoRoot
-	out, err := cmd.Output()
-	if err != nil {
-		// If the path isn't a submodule, treat as "not present" instead of fatal.
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
-			return &SubmoduleStatus{Present: false, Path: path}, nil
-		}
-		return nil, err
-	}
-	line := strings.TrimSpace(string(out))
-	if line == "" {
-		return &SubmoduleStatus{Present: false, Path: path}, nil
-	}
-	// Example: " 1d2c3f4 vault (heads/main)"
-	prefix := string(line[0])
-	rest := strings.TrimSpace(line[1:])
-	fields := strings.Fields(rest)
-	if len(fields) < 2 {
-		return &SubmoduleStatus{Present: true, Prefix: prefix, Path: path}, nil
-	}
-	commit := fields[0]
-	actualPath := fields[1]
-	meta := strings.TrimSpace(strings.TrimPrefix(rest, commit+" "+actualPath))
-	return &SubmoduleStatus{
-		Present: true,
-		Prefix:  prefix,
-		Commit:  commit,
-		Path:    actualPath,
-		Meta:    meta,
-	}, nil
 }
 
 func IsDir(path string) bool {

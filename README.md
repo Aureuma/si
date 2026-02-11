@@ -23,7 +23,7 @@ The unified image includes the `si` CLI inside the container so you can run `si 
 from within dyad/codex containers when needed.
 
 ## Vault (Secrets)
-`si vault` manages encrypted dotenv files (in any local path; optional submodule) and injects secrets into local processes or `docker exec` at runtime.
+`si vault` manages encrypted dotenv files (in any local path) and injects secrets into local processes or `docker exec` at runtime.
 
 See `docs/VAULT.md`.
 

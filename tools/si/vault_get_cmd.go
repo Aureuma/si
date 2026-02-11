@@ -12,8 +12,7 @@ import (
 func cmdVaultGet(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault get", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	reveal := fs.Bool("reveal", false, "print the decrypted value to stdout")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
@@ -21,7 +20,7 @@ func cmdVaultGet(args []string) {
 
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault get <KEY> [--file <path>] [--vault-dir <path>] [--reveal]")
+		printUsage("usage: si vault get <KEY> [--file <path>] [--reveal]")
 		return
 	}
 	key := strings.TrimSpace(rest[0])
@@ -29,7 +28,7 @@ func cmdVaultGet(args []string) {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}

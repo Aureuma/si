@@ -13,24 +13,25 @@ import (
 func cmdVaultFmt(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault fmt", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
-	all := fs.Bool("all", false, "format all .env.* files in the vault dir")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	all := fs.Bool("all", false, "format all .env* files in the same directory as the target file")
 	check := fs.Bool("check", false, "fail if formatting would make changes")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault fmt [--file <path>] [--vault-dir <path>] [--all] [--check]")
+		printUsage("usage: si vault fmt [--file <path>] [--all] [--check]")
 		return
 	}
 
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	if err != nil {
+		fatal(err)
+	}
+
 	if *all {
-		target, err := vaultResolveTarget(settings, "", *vaultDir, false, true)
-		if err != nil {
-			fatal(err)
-		}
-		entries, err := os.ReadDir(target.VaultDir)
+		dir := filepath.Dir(target.File)
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			fatal(err)
 		}
@@ -43,7 +44,7 @@ func cmdVaultFmt(args []string) {
 			if name != ".env" && !strings.HasPrefix(name, ".env.") {
 				continue
 			}
-			path := filepath.Join(target.VaultDir, name)
+			path := filepath.Join(dir, name)
 			changed, err := vaultFormatOne(path, *check)
 			if err != nil {
 				fatal(err)
@@ -56,10 +57,6 @@ func cmdVaultFmt(args []string) {
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
-	if err != nil {
-		fatal(err)
-	}
 	changed, err := vaultFormatOne(target.File, *check)
 	if err != nil {
 		fatal(err)

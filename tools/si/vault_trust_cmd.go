@@ -33,13 +33,12 @@ func cmdVaultTrust(args []string) {
 func cmdVaultTrustStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault trust status", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}
@@ -51,7 +50,6 @@ func cmdVaultTrustStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	url := vaultRepoURL(target)
 
 	store, err := vault.LoadTrustStore(vaultTrustStorePath(settings))
 	if err != nil {
@@ -59,11 +57,7 @@ func cmdVaultTrustStatus(args []string) {
 	}
 	entry, ok := store.Find(target.RepoRoot, target.File)
 
-	fmt.Printf("vault dir: %s\n", filepath.Clean(target.VaultDir))
 	fmt.Printf("env file:  %s\n", filepath.Clean(target.File))
-	if url != "" {
-		fmt.Printf("vault url: %s\n", url)
-	}
 	fmt.Printf("current fp: %s\n", fp)
 	if !ok {
 		fmt.Printf("stored fp:  (none)\n")
@@ -81,14 +75,13 @@ func cmdVaultTrustStatus(args []string) {
 func cmdVaultTrustAccept(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault trust accept", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	yes := fs.Bool("yes", false, "do not prompt")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, false, false)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
 		fatal(err)
 	}
@@ -123,9 +116,7 @@ func cmdVaultTrustAccept(args []string) {
 	}
 	store.Upsert(vault.TrustEntry{
 		RepoRoot:    target.RepoRoot,
-		VaultDir:    target.VaultDir,
 		File:        target.File,
-		VaultRepo:   vaultRepoURL(target),
 		Fingerprint: fp,
 	})
 	if err := store.Save(storePath); err != nil {
@@ -137,13 +128,12 @@ func cmdVaultTrustAccept(args []string) {
 func cmdVaultTrustForget(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault trust forget", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (overrides --vault-dir)")
-	vaultDir := fs.String("vault-dir", settings.Vault.Dir, "vault directory (relative to host git root)")
+	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, *fileFlag, *vaultDir, true, true)
+	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), true)
 	if err != nil {
 		fatal(err)
 	}
