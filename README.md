@@ -405,6 +405,36 @@ Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
 
+## Apple App Store
+`si` includes an App Store Connect bridge under `si apple appstore` for direct listing + release metadata automation:
+
+```bash
+# auth/context/diagnostics
+./si apple appstore auth status --account core
+./si apple appstore context list
+./si apple appstore context current
+./si apple appstore context use --account core --env prod --bundle-id com.example.app --issuer-id <issuer_id> --key-id <key_id> --private-key-file ~/.secrets/AuthKey_KEYID.p8
+./si apple appstore doctor --account core
+./si apple appstore doctor --public
+
+# app onboarding
+./si apple appstore app list --bundle-id com.example.app
+./si apple appstore app get --bundle-id com.example.app
+./si apple appstore app create --bundle-id com.example.app --bundle-name "Acme App" --platform IOS --app-name "Acme App" --sku ACME-001 --primary-locale en-US
+
+# listing metadata
+./si apple appstore listing get --bundle-id com.example.app --locale en-US --version 1.2.3
+./si apple appstore listing update --bundle-id com.example.app --locale en-US --version 1.2.3 --create-version --name "Acme App" --description "Long description" --whats-new "Bug fixes"
+./si apple appstore apply --bundle-id com.example.app --metadata-dir ./appstore --version 1.2.3 --create-version
+
+# raw fallback
+./si apple appstore raw --method GET --path /v1/apps --param 'filter[bundleId]=com.example.app'
+```
+
+Environment policy:
+- Use `prod`, `staging`, and `dev` context labels.
+- `test` is intentionally not used as a standalone environment mode.
+
 ## Google YouTube
 `si` includes a YouTube Data API v3 bridge under `si google youtube` (alias: `si google youtube-data`):
 
