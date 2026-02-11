@@ -10,6 +10,8 @@ import (
 	shared "si/agents/shared/docker"
 )
 
+var autoDockerHostFn = shared.AutoDockerHost
+
 func cmdDocker(args []string) {
 	if len(args) == 0 {
 		printUsage("usage: si docker <args...>")
@@ -24,15 +26,10 @@ func execDockerCLI(args ...string) error {
 	if len(args) == 0 {
 		return errors.New("docker args required")
 	}
-	cmd := exec.Command("docker", args...)
+	cmd := dockerCommand(args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	if os.Getenv("DOCKER_HOST") == "" {
-		if host, ok := shared.AutoDockerHost(); ok {
-			cmd.Env = append(os.Environ(), "DOCKER_HOST="+host)
-		}
-	}
 	return cmd.Run()
 }
 
@@ -43,7 +40,7 @@ func execDockerCLIWithOutput(args []string, handler func([]byte)) error {
 	if handler == nil {
 		return execDockerCLI(args...)
 	}
-	cmd := exec.Command("docker", args...)
+	cmd := dockerCommand(args...)
 	cmd.Stdin = os.Stdin
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -52,11 +49,6 @@ func execDockerCLIWithOutput(args []string, handler func([]byte)) error {
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return err
-	}
-	if os.Getenv("DOCKER_HOST") == "" {
-		if host, ok := shared.AutoDockerHost(); ok {
-			cmd.Env = append(os.Environ(), "DOCKER_HOST="+host)
-		}
 	}
 	if err := cmd.Start(); err != nil {
 		return err
@@ -83,4 +75,23 @@ func execDockerCLIWithOutput(args []string, handler func([]byte)) error {
 	err = cmd.Wait()
 	wg.Wait()
 	return err
+}
+
+func dockerCommand(args ...string) *exec.Cmd {
+	return dockerCommandWithEnv(nil, args...)
+}
+
+func dockerCommandWithEnv(extraEnv []string, args ...string) *exec.Cmd {
+	cmd := exec.Command("docker", args...)
+	env := os.Environ()
+	if os.Getenv("DOCKER_HOST") == "" {
+		if host, ok := autoDockerHostFn(); ok && host != "" {
+			env = append(env, "DOCKER_HOST="+host)
+		}
+	}
+	if len(extraEnv) > 0 {
+		env = append(env, extraEnv...)
+	}
+	cmd.Env = env
+	return cmd
 }
