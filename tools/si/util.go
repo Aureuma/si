@@ -34,6 +34,7 @@ Features:
   - Publish bridge: DistributionKit-backed launch catalog plus publishing workflows for Dev.to, Hashnode, Reddit, Hacker News, and Product Hunt.
   - AWS bridge: auth/context diagnostics plus IAM, STS, S3, EC2, Lambda, ECR, Secrets, KMS, DynamoDB, SSM, CloudWatch, Logs, Bedrock AI/LLM (runtime, batch, agents), and signed raw API access.
   - GCP bridge: Service Usage API flows (enable/disable/list/get services) and raw access.
+  - OpenAI bridge: auth/context diagnostics, model/project/admin-key/service-account controls, usage/cost monitoring (including Codex usage views), and raw API access.
   - OCI bridge: signed identity/network/compute orchestration helpers plus raw API access.
   - Self-management: build or upgrade the si binary from the current checkout.
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
@@ -60,6 +61,7 @@ Core:
   si publish <catalog|devto|hashnode|reddit|hackernews|producthunt>
   si aws <auth|context|doctor|iam|sts|s3|ec2|lambda|ecr|secrets|kms|dynamodb|ssm|cloudwatch|logs|bedrock|raw>
   si gcp <auth|context|doctor|service|iam|apikey|gemini|generativelanguage|vertex|ai|raw>
+  si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
@@ -482,6 +484,21 @@ gcp:
   Environment policy:
     CLI uses prod, staging, and dev context labels.
     test is intentionally not used; map sandbox workflows to staging/dev context.
+
+openai:
+  si openai auth status [--account <alias>] [--base-url <url>] [--json]
+  si openai context list|current|use ...
+  si openai doctor [--account <alias>] [--public] [--json]
+  si openai model list|get ...
+  si openai project list|get|create|update|archive ...
+  si openai project rate-limit list|update ...
+  si openai project api-key list|get|delete ...
+  si openai project service-account list|create|get|delete ...
+  si openai key list|get|create|delete ...   (organization admin keys)
+  si openai usage <completions|embeddings|images|audio_speeches|audio_transcriptions|moderations|vector_stores|code_interpreter_sessions|costs> ...
+  si openai monitor usage|limits ...
+  si openai codex usage ...
+  si openai raw --method <GET|POST|PATCH|DELETE> --path <api-path> [--param key=value] [--body raw|--json-body '{...}'] [--admin] [--json]
 
 oci:
   si oci auth status [--profile <name>] [--config-file <path>] [--region <region>] [--json]

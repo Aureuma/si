@@ -38,6 +38,9 @@ var (
 	loadGCPRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdGCP(args) }
 	}
+	loadOpenAIRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdOpenAI(args) }
+	}
 	loadOCIRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdOCI(args) }
 	}
@@ -103,6 +106,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadWorkOSRootHandler), "workos")
 	register(newLazyRootHandler(loadAWSRootHandler), "aws")
 	register(newLazyRootHandler(loadGCPRootHandler), "gcp")
+	register(newLazyRootHandler(loadOpenAIRootHandler), "openai")
 	register(newLazyRootHandler(loadOCIRootHandler), "oci")
 	register(newLazyRootHandler(loadImageRootHandler), "image", "images")
 	register(newLazyRootHandler(loadPublishRootHandler), "publish", "pub")

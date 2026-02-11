@@ -122,6 +122,46 @@ func TestLazyAWSRootHandlerLoadsOnDispatch(t *testing.T) {
 	}
 }
 
+func TestLazyOpenAIRootHandlerLoadsOnDispatch(t *testing.T) {
+	resetRootCommandHandlersForTest()
+	originalLoader := loadOpenAIRootHandler
+	defer func() {
+		loadOpenAIRootHandler = originalLoader
+		resetRootCommandHandlersForTest()
+	}()
+
+	loaded := 0
+	invoked := 0
+	loadOpenAIRootHandler = func() rootCommandHandler {
+		loaded++
+		return func(_ string, _ []string) {
+			invoked++
+		}
+	}
+
+	if loaded != 0 || invoked != 0 {
+		t.Fatalf("unexpected eager execution")
+	}
+	if !dispatchRootCommand("openai", []string{"help"}) {
+		t.Fatalf("expected openai command dispatch")
+	}
+	if loaded != 1 {
+		t.Fatalf("expected exactly one lazy load, got %d", loaded)
+	}
+	if invoked != 1 {
+		t.Fatalf("expected one invocation, got %d", invoked)
+	}
+	if !dispatchRootCommand("openai", []string{"auth"}) {
+		t.Fatalf("expected openai command dispatch")
+	}
+	if loaded != 1 {
+		t.Fatalf("expected lazy load once, got %d", loaded)
+	}
+	if invoked != 2 {
+		t.Fatalf("expected second invocation, got %d", invoked)
+	}
+}
+
 func TestLazyPublishRootHandlerLoadsOnDispatch(t *testing.T) {
 	resetRootCommandHandlersForTest()
 	originalLoader := loadPublishRootHandler
