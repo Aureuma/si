@@ -207,6 +207,7 @@ type GoogleSettings struct {
 	VaultFile      string                        `toml:"vault_file,omitempty"`
 	LogFile        string                        `toml:"log_file,omitempty"`
 	YouTube        GoogleYouTubeSettings         `toml:"youtube,omitempty"`
+	Play           GooglePlaySettings            `toml:"play,omitempty"`
 	Accounts       map[string]GoogleAccountEntry `toml:"accounts,omitempty"`
 }
 
@@ -247,6 +248,29 @@ type GoogleYouTubeAccountEntry struct {
 	YouTubeRefreshTokenEnv  string `toml:"youtube_refresh_token_env,omitempty"`
 	DefaultRegionCode       string `toml:"default_region_code,omitempty"`
 	DefaultLanguageCode     string `toml:"default_language_code,omitempty"`
+}
+
+type GooglePlaySettings struct {
+	APIBaseURL       string                            `toml:"api_base_url,omitempty"`
+	UploadBaseURL    string                            `toml:"upload_base_url,omitempty"`
+	CustomAppBaseURL string                            `toml:"custom_app_base_url,omitempty"`
+	Accounts         map[string]GooglePlayAccountEntry `toml:"accounts,omitempty"`
+}
+
+type GooglePlayAccountEntry struct {
+	Name                         string `toml:"name,omitempty"`
+	ProjectID                    string `toml:"project_id,omitempty"`
+	ProjectIDEnv                 string `toml:"project_id_env,omitempty"`
+	VaultPrefix                  string `toml:"vault_prefix,omitempty"`
+	DeveloperAccountID           string `toml:"developer_account_id,omitempty"`
+	DefaultPackageName           string `toml:"default_package_name,omitempty"`
+	DefaultLanguageCode          string `toml:"default_language_code,omitempty"`
+	ServiceAccountJSONEnv        string `toml:"service_account_json_env,omitempty"`
+	ProdServiceAccountJSONEnv    string `toml:"prod_service_account_json_env,omitempty"`
+	StagingServiceAccountJSONEnv string `toml:"staging_service_account_json_env,omitempty"`
+	DevServiceAccountJSONEnv     string `toml:"dev_service_account_json_env,omitempty"`
+	ServiceAccountFile           string `toml:"service_account_file,omitempty"`
+	ServiceAccountFileEnv        string `toml:"service_account_file_env,omitempty"`
 }
 
 type SocialSettings struct {
@@ -619,6 +643,18 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	if settings.Google.YouTube.UploadChunkSize <= 0 {
 		settings.Google.YouTube.UploadChunkSize = 16
+	}
+	settings.Google.Play.APIBaseURL = strings.TrimSpace(settings.Google.Play.APIBaseURL)
+	if settings.Google.Play.APIBaseURL == "" {
+		settings.Google.Play.APIBaseURL = "https://androidpublisher.googleapis.com"
+	}
+	settings.Google.Play.UploadBaseURL = strings.TrimSpace(settings.Google.Play.UploadBaseURL)
+	if settings.Google.Play.UploadBaseURL == "" {
+		settings.Google.Play.UploadBaseURL = "https://androidpublisher.googleapis.com"
+	}
+	settings.Google.Play.CustomAppBaseURL = strings.TrimSpace(settings.Google.Play.CustomAppBaseURL)
+	if settings.Google.Play.CustomAppBaseURL == "" {
+		settings.Google.Play.CustomAppBaseURL = "https://playcustomapp.googleapis.com"
 	}
 	settings.Social.DefaultEnv = normalizeSocialEnvironment(settings.Social.DefaultEnv)
 	if settings.Social.DefaultEnv == "" {
