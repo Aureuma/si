@@ -834,12 +834,15 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 	}
 	defer client.Close()
 	containerName := shared.DyadContainerName(dyad, member)
-	id, _, err := client.ContainerByName(context.Background(), containerName)
+	id, info, err := client.ContainerByName(context.Background(), containerName)
 	if err != nil {
 		return err
 	}
 	if id == "" {
 		return fmt.Errorf("container not found: %s", containerName)
+	}
+	if !shared.HasHostSiMount(info, "/root") {
+		return fmt.Errorf("dyad container %s is missing host ~/.si mount required for full `si vault` support; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
 	opts := shared.ExecOptions{TTY: tty}
 	return client.Exec(context.Background(), id, cmd, opts, os.Stdin, os.Stdout, os.Stderr)

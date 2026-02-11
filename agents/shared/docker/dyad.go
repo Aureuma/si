@@ -156,6 +156,21 @@ func (c *Client) EnsureDyad(ctx context.Context, opts DyadOptions) (string, stri
 	if actorID == "" || criticID == "" {
 		return c.CreateDyad(ctx, opts)
 	}
+	// Backward compatibility: recreate older dyads that were created before host
+	// ~/.si mounts were added, so full `si`/`si vault` works inside both members.
+	if !HasHostSiMount(actorInfo, "/root") || !HasHostSiMount(criticInfo, "/root") {
+		if actorID != "" {
+			if err := c.RemoveContainer(ctx, actorID, true); err != nil {
+				return "", "", err
+			}
+		}
+		if criticID != "" {
+			if err := c.RemoveContainer(ctx, criticID, true); err != nil {
+				return "", "", err
+			}
+		}
+		return c.CreateDyad(ctx, opts)
+	}
 	if actorInfo != nil && actorInfo.State != nil && !actorInfo.State.Running {
 		if err := c.StartContainer(ctx, actorID); err != nil {
 			return "", "", err
