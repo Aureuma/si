@@ -85,6 +85,8 @@ RUN --mount=type=secret,id=si_host_codex_config,required=false \
 COPY tools/si-image/entrypoint.sh /usr/local/bin/si-entrypoint
 RUN chmod +x /usr/local/bin/si-entrypoint
 
+COPY tools/codex-skills /opt/si/codex-skills
+
 COPY --from=codex-stdout-parser-build /out/codex-stdout-parser /usr/local/bin/codex-stdout-parser
 COPY --from=codex-init-build /out/si-codex-init /usr/local/bin/si-codex-init
 COPY --from=critic-build /out/critic /usr/local/bin/critic

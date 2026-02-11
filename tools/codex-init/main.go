@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,6 +24,9 @@ func main() {
 	templatePath := envOr("CODEX_CONFIG_TEMPLATE", "")
 
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		fatal(err, quiet)
+	}
+	if err := syncCodexSkills(home, codexHome); err != nil {
 		fatal(err, quiet)
 	}
 
@@ -137,6 +142,107 @@ func writeConfig(path, templatePath string) error {
 	return os.Rename(tmp.Name(), path)
 }
 
+func syncCodexSkills(home, codexHome string) error {
+	home = strings.TrimSpace(home)
+	codexHome = strings.TrimSpace(codexHome)
+	if home == "" || codexHome == "" {
+		return nil
+	}
+	bundleDir := strings.TrimSpace(envOr("SI_CODEX_SKILLS_BUNDLE_DIR", "/opt/si/codex-skills"))
+	if bundleDir == "" {
+		return nil
+	}
+	targetDir := filepath.Join(codexHome, "skills")
+	if err := os.MkdirAll(targetDir, 0o700); err != nil {
+		return err
+	}
+	if err := copyTree(bundleDir, targetDir); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	sharedDir := filepath.Join(home, ".si", "codex", "skills")
+	if isDir(filepath.Join(home, ".si")) {
+		if err := os.MkdirAll(sharedDir, 0o700); err == nil {
+			_ = copyTree(targetDir, sharedDir)
+		}
+	}
+	return nil
+}
+
+func copyTree(src, dst string) error {
+	src = filepath.Clean(strings.TrimSpace(src))
+	dst = filepath.Clean(strings.TrimSpace(dst))
+	if src == "" || dst == "" {
+		return nil
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o700)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			return err
+		}
+		return copyFile(path, target)
+	})
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	info, err := in.Stat()
+	if err != nil {
+		return err
+	}
+	mode := fs.FileMode(0o600)
+	if info.Mode()&0o111 != 0 {
+		mode = 0o755
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(dst), "skill-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(mode); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := io.Copy(tmp, in); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), mode); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), dst)
+}
+
 func applyTemplate(input string, values map[string]string) []byte {
 	out := input
 	for key, val := range values {
@@ -182,6 +288,14 @@ func envOr(key, def string) string {
 		return def
 	}
 	return val
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
 }
 
 func fatal(err error, quiet bool) {

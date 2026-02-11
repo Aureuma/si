@@ -404,6 +404,7 @@ func selectDyadRole(defaultRole string) (string, bool) {
 func dyadSpawnBoolFlags() map[string]bool {
 	return map[string]bool{
 		"docker-socket": true,
+		"skip-auth":     true,
 	}
 }
 
