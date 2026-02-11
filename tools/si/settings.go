@@ -119,7 +119,8 @@ type DyadLoopSettings struct {
 }
 
 type VaultSettings struct {
-	Dir        string `toml:"dir,omitempty"`
+	// File is the default env file path for `si vault` commands when --file is not provided.
+	File       string `toml:"file,omitempty"`
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 
@@ -501,8 +502,8 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Paths.CodexProfilesDir == "" {
 		settings.Paths.CodexProfilesDir = "~/.si/codex/profiles"
 	}
-	if settings.Vault.Dir == "" {
-		settings.Vault.Dir = "vault"
+	if settings.Vault.File == "" {
+		settings.Vault.File = "~/.si/vault/.env"
 	}
 	if settings.Vault.TrustStore == "" {
 		settings.Vault.TrustStore = "~/.si/vault/trust.json"
