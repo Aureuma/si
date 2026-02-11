@@ -15,20 +15,27 @@ All notable changes to this project will be documented in this file.
 ## [v0.45.0] - 2026-02-11
 ### Added
 - Added `si publish` with DistributionKit catalog listing and provider-specific publish flows.
-- Added direct API command families for WorkOS, AWS IAM, GCP Service Usage, OCI Core, and image providers (Unsplash, Pexels, Pixabay).
+- Added direct API command families across OpenAI, AWS, GCP, WorkOS, OCI, and image providers (Unsplash, Pexels, Pixabay), including broad AWS and Bedrock coverage plus GCP IAM/API key/Gemini/Vertex AI command suites.
 - Added Cloudflare Pages custom-domain CRUD support under `si cloudflare pages domain`.
-- Added `si vault decrypt` (dotenvx-style in-place decryption and `--stdout` mode), plus key generation and keychain alias support.
+- Added expanded vault workflows: `si vault decrypt` (in-place and `--stdout`), `si vault keygen`, `si vault run --shell`, and support for arbitrary env file paths.
 
 ### Changed
 - Moved build operations under `si build` (`si build image`, `si build self`, `si build self upgrade`, `si build self run`).
 - Removed the top-level `si self` command surface in favor of `si build self`.
-- Restored direct Go HTTP command execution paths for core integrations (Cloudflare, GitHub, Google Places, YouTube, Stripe).
+- Completed direct Go HTTP execution paths for core integrations (Cloudflare, GitHub, Google Places, YouTube, Stripe) using shared runtime/retry semantics.
+- Simplified vault targeting from repo/submodule-oriented directories to a file-first model (`vault.file` default + optional `--file`) across commands, trust, help text, and docs.
 - Unified provider runtime metadata/health characteristics and expanded integration guardrails and e2e coverage.
 
 ### Fixed
 - Reworked Stripe to direct HTTP requests (no `stripe-go` runtime dependency), including improved retry and error normalization.
-- Hardened vault parsing/format fidelity and command safety checks, including stricter header parsing and non-interactive keyring restrictions.
+- Hardened vault parsing/format fidelity and command safety checks, including stricter header parsing, quote validation, non-interactive keyring restrictions, and clearer macOS Keychain failure diagnostics.
 - Fixed dyad/codex workspace mount and loop handoff edge cases, including prompt readiness and recovery controls.
+
+### Removed
+- Removed vault submodule-oriented flags and initialization/status plumbing (`--vault-dir`, submodule bootstrap wiring, and `.gitmodules`-specific helpers) in favor of file-based targeting.
+
+### Security
+- Hardened CLI file/exec handling and vault path-safety boundaries to reduce traversal and unsafe invocation risk.
 
 ## [v0.44.0] - 2026-02-08
 ### Added
