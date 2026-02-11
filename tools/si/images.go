@@ -55,9 +55,17 @@ func runDockerBuild(spec imageBuildSpec) error {
 		warnf("building without host build secrets because BuildKit/buildx is unavailable")
 		secrets = nil
 	}
+	spec.dockerfile = dockerfileForBuildMode(spec.dockerfile, enableBuildKit)
 	args := dockerBuildArgs(spec, secrets)
 	infof("docker %s", redactedDockerBuildArgs(args))
 	return runDockerBuildCommandFn(args, enableBuildKit)
+}
+
+func dockerfileForBuildMode(dockerfile string, enableBuildKit bool) string {
+	if enableBuildKit || strings.TrimSpace(dockerfile) == "" {
+		return dockerfile
+	}
+	return dockerfile + ".legacy"
 }
 
 func dockerBuildArgs(spec imageBuildSpec, secrets []string) []string {
