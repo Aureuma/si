@@ -512,8 +512,11 @@ Build or upgrade the `si` binary from the repo itself:
 # installer (builds + installs to ~/.local/bin by default)
 ./tools/install-si.sh
 
-# dev checkout build
-./si build self --output ./si
+# default from a checkout: upgrade installed host si
+./si build self
+
+# dev checkout artifact only (no host upgrade)
+./si build self --no-upgrade --output ./si
 
 # explicit stable upgrade of installed binary
 si build self upgrade
