@@ -770,6 +770,11 @@ func cmdCodexExec(args []string) {
 
 		if strings.TrimSpace(containerID) != "" {
 			seedCodexConfig(ctx, client, containerID, false)
+			if profileID != "" {
+				if profile, ok := codexProfileByKey(profileID); ok {
+					seedCodexAuth(ctx, client, containerID, false, profile)
+				}
+			}
 		}
 	} else if *tmuxAttach {
 		fatal(fmt.Errorf("docker client unavailable: %w", clientErr))

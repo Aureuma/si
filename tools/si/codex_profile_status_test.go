@@ -176,6 +176,100 @@ func TestRefreshProfileAuthTokensUpdatesFile(t *testing.T) {
 	}
 }
 
+func TestLoadProfileAuthTokensAllowsRefreshOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	authPath := filepath.Join(home, ".si", "codex", "profiles", profile.ID, "auth.json")
+	if err := os.MkdirAll(filepath.Dir(authPath), 0o700); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	initial := map[string]interface{}{
+		"tokens": map[string]interface{}{
+			"refresh_token": "refresh_only",
+			"id_token":      buildTestJWT(map[string]interface{}{"aud": []interface{}{"app_test_client"}}),
+		},
+	}
+	data, _ := json.Marshal(initial)
+	if err := os.WriteFile(authPath, data, 0o600); err != nil {
+		t.Fatalf("write failed: %v", err)
+	}
+
+	got, err := loadProfileAuthTokens(profile)
+	if err != nil {
+		t.Fatalf("unexpected load error: %v", err)
+	}
+	if got.AccessToken != "" {
+		t.Fatalf("expected empty access token, got %q", got.AccessToken)
+	}
+	if got.RefreshToken != "refresh_only" {
+		t.Fatalf("unexpected refresh token %q", got.RefreshToken)
+	}
+}
+
+func TestRefreshProfileAuthTokensReusedFallsBackToLatestFromDisk(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	authPath := filepath.Join(home, ".si", "codex", "profiles", profile.ID, "auth.json")
+	if err := os.MkdirAll(filepath.Dir(authPath), 0o700); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	writeAuth := func(access, refresh string) {
+		payload := map[string]interface{}{
+			"tokens": map[string]interface{}{
+				"access_token":  access,
+				"refresh_token": refresh,
+				"id_token":      buildTestJWT(map[string]interface{}{"aud": []interface{}{"app_test_client"}}),
+				"account_id":    "acct-1",
+			},
+		}
+		data, _ := json.Marshal(payload)
+		if err := os.WriteFile(authPath, data, 0o600); err != nil {
+			t.Fatalf("write failed: %v", err)
+		}
+	}
+	writeAuth("access_old", "refresh_old")
+
+	tokenSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if req["refresh_token"] != "refresh_old" {
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":{"message":"unexpected refresh token","code":"invalid_request"}}`))
+			return
+		}
+		// Simulate another process that already rotated credentials.
+		writeAuth("access_rotated", "refresh_new")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":{"message":"reused","code":"refresh_token_reused"}}`))
+	}))
+	defer tokenSrv.Close()
+	t.Setenv("SI_CODEX_TOKEN_URL", tokenSrv.URL)
+
+	current := profileAuthTokens{
+		AccessToken:  "access_old",
+		AccountID:    "acct-1",
+		IDToken:      buildTestJWT(map[string]interface{}{"aud": []interface{}{"app_test_client"}}),
+		RefreshToken: "refresh_old",
+	}
+	updated, err := refreshProfileAuthTokens(context.Background(), &http.Client{Timeout: 2 * time.Second}, profile, current)
+	if err != nil {
+		t.Fatalf("unexpected refresh error: %v", err)
+	}
+	if updated.AccessToken != "access_rotated" {
+		t.Fatalf("expected rotated access token, got %q", updated.AccessToken)
+	}
+	if updated.RefreshToken != "refresh_new" {
+		t.Fatalf("expected rotated refresh token, got %q", updated.RefreshToken)
+	}
+}
+
 func TestFormatLimitColumnIncludesResetAndCountdown(t *testing.T) {
 	prev := ansiEnabled
 	ansiEnabled = false
