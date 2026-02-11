@@ -72,6 +72,13 @@ func TestParseID(t *testing.T) {
 	if playID != GooglePlay {
 		t.Fatalf("unexpected parsed id for google play: %s", playID)
 	}
+	appleID, ok := ParseID("app-store-connect")
+	if !ok {
+		t.Fatalf("expected parse success for apple app store")
+	}
+	if appleID != AppleAppStore {
+		t.Fatalf("unexpected parsed id for apple app store: %s", appleID)
+	}
 }
 
 func TestCircuitBreakerOpensAfterRepeatedFailures(t *testing.T) {

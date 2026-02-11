@@ -18,6 +18,7 @@ const (
 	GitHub          ID = "github"
 	GooglePlaces    ID = "google_places"
 	GooglePlay      ID = "google_play"
+	AppleAppStore   ID = "apple_appstore"
 	YouTube         ID = "youtube"
 	Stripe          ID = "stripe"
 	SocialFacebook  ID = "social_facebook"
@@ -110,6 +111,18 @@ var defaultSpecs = map[ID]Spec{
 		RateLimitPerSecond: 1.0,
 		RateLimitBurst:     2,
 		PublicProbePath:    "/$discovery/rest?version=v3",
+		PublicProbeMethod:  "GET",
+	},
+	AppleAppStore: {
+		BaseURL:            "https://api.appstoreconnect.apple.com",
+		APIVersion:         "v1",
+		UserAgent:          "si-apple-appstore/1.0",
+		Accept:             "application/json",
+		AuthStyle:          "bearer",
+		RequestIDHeaders:   []string{"x-request-id", "X-Request-ID"},
+		RateLimitPerSecond: 1.0,
+		RateLimitBurst:     2,
+		PublicProbePath:    "https://developer.apple.com/sample-code/app-store-connect/app-store-connect-openapi-specification.zip",
 		PublicProbeMethod:  "GET",
 	},
 	YouTube: {
@@ -282,6 +295,12 @@ var defaultCapabilities = map[ID]Capability{
 		SupportsIdempotency: false,
 		SupportsRaw:         true,
 	},
+	AppleAppStore: {
+		SupportsPagination:  true,
+		SupportsBulk:        false,
+		SupportsIdempotency: false,
+		SupportsRaw:         true,
+	},
 	YouTube: {
 		SupportsPagination:  true,
 		SupportsBulk:        false,
@@ -361,6 +380,7 @@ var apiVersionPolicies = []APIVersionPolicy{
 	{Provider: GitHub, Version: "2022-11-28", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: GooglePlaces, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: GooglePlay, Version: "v3", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
+	{Provider: AppleAppStore, Version: "v1", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: YouTube, Version: "v3", ReviewBy: time.Date(2027, time.January, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: Stripe, Version: "account-default", ExemptReason: "Stripe API version is pinned by account/workspace unless explicitly overridden.", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
 	{Provider: SocialFacebook, Version: "v22.0", ReviewBy: time.Date(2026, time.December, 31, 0, 0, 0, 0, time.UTC)},
@@ -380,6 +400,7 @@ var providerCacheTTLs = map[ID]time.Duration{
 	GitHub:          3 * time.Second,
 	GooglePlaces:    3 * time.Second,
 	GooglePlay:      3 * time.Second,
+	AppleAppStore:   3 * time.Second,
 	YouTube:         3 * time.Second,
 	SocialFacebook:  3 * time.Second,
 	SocialInstagram: 3 * time.Second,
@@ -398,6 +419,7 @@ var providerConcurrencyLimits = map[ID]int{
 	GitHub:          2,
 	GooglePlaces:    3,
 	GooglePlay:      2,
+	AppleAppStore:   2,
 	YouTube:         2,
 	Stripe:          8,
 	SocialFacebook:  2,
@@ -417,6 +439,7 @@ var providerCommandConcurrencyLimits = map[ID]int{
 	GitHub:          1,
 	GooglePlaces:    2,
 	GooglePlay:      1,
+	AppleAppStore:   1,
 	YouTube:         1,
 	Stripe:          2,
 	SocialFacebook:  1,
@@ -1241,6 +1264,8 @@ func normalizeID(raw string) ID {
 		return GooglePlaces
 	case "google_play", "googleplay", "play":
 		return GooglePlay
+	case "apple", "appstore", "app_store", "apple_appstore", "appstoreconnect", "app_store_connect":
+		return AppleAppStore
 	case "youtube":
 		return YouTube
 	case "stripe":
