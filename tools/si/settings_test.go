@@ -136,3 +136,34 @@ max_turns = -5
 		t.Fatalf("expected max_turns=0 clamp, got %d", got.Dyad.Loop.MaxTurns)
 	}
 }
+
+func TestLoadSettingsParsesSkillsVolumeFields(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	path := filepath.Join(tmp, ".si", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := `
+[codex]
+skills_volume = "si-codex-skills-custom"
+
+[dyad]
+skills_volume = "si-dyad-skills-custom"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got, err := loadSettings()
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if got.Codex.SkillsVolume != "si-codex-skills-custom" {
+		t.Fatalf("unexpected codex.skills_volume: %q", got.Codex.SkillsVolume)
+	}
+	if got.Dyad.SkillsVolume != "si-dyad-skills-custom" {
+		t.Fatalf("unexpected dyad.skills_volume: %q", got.Dyad.SkillsVolume)
+	}
+}
