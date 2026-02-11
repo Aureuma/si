@@ -36,6 +36,7 @@ Environment policy:
 
 ```bash
 si cloudflare auth status --account core
+si cloudflare status --account core
 si cloudflare context list
 si cloudflare context current
 si cloudflare context use --account core --env prod --zone-id <zone>
@@ -62,8 +63,11 @@ si cloudflare dns import --zone-id <zone_id> --body '<BIND DATA>' --force
 ```bash
 si cloudflare tls get --zone-id <zone_id> --setting min_tls_version
 si cloudflare tls set --zone-id <zone_id> --setting min_tls_version --value 1.2
+si cloudflare ssl get --zone-id <zone_id> --setting ssl
 si cloudflare tls cert list --zone-id <zone_id>
+si cloudflare cert list --zone-id <zone_id>
 si cloudflare tls origin-cert list
+si cloudflare origin list
 
 si cloudflare cache purge --zone-id <zone_id> --everything --force
 si cloudflare cache settings get --zone-id <zone_id> --setting cache_level
@@ -108,10 +112,25 @@ si cloudflare access app list --account-id <account_id>
 si cloudflare access policy list --account-id <account_id>
 
 si cloudflare tunnel list --account-id <account_id>
+si cloudflare tunnels list --account-id <account_id>
 si cloudflare tunnel token --account-id <account_id> --tunnel <id>
 
 si cloudflare lb list --zone-id <zone_id>
 si cloudflare lb pool list --account-id <account_id>
+```
+
+## Email + Tokens
+
+```bash
+si cloudflare email rule list --zone-id <zone_id>
+si cloudflare email rule create --zone-id <zone_id> --param name=forward-inbox --param enabled=true
+si cloudflare email address list --account-id <account_id>
+si cloudflare email settings get --zone-id <zone_id>
+si cloudflare email settings enable --zone-id <zone_id> --force
+
+si cloudflare token verify
+si cloudflare token list
+si cloudflare token permission-groups
 ```
 
 ## Analytics + Logs + Reports
@@ -127,6 +146,7 @@ si cloudflare report traffic-summary --zone-id <zone_id>
 
 ```bash
 si cloudflare raw --method GET --path /zones
+si cloudflare api --method GET --path /zones
 si cloudflare raw --method POST --path /zones/<zone_id>/purge_cache --body '{"purge_everything":true}'
 ```
 

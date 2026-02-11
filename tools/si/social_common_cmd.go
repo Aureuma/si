@@ -662,6 +662,8 @@ func socialAccountDefaultID(platform socialPlatform, account SocialAccountSettin
 			return value
 		}
 		return strings.TrimSpace(account.LinkedInOrganizationURN)
+	case socialPlatformReddit:
+		return strings.TrimSpace(account.RedditUsername)
 	default:
 		return ""
 	}
@@ -680,6 +682,8 @@ func setSocialAccountTokenEnv(platform socialPlatform, account *SocialAccountSet
 		account.XAccessTokenEnv = value
 	case socialPlatformLinkedIn:
 		account.LinkedInAccessTokenEnv = value
+	case socialPlatformReddit:
+		account.RedditAccessTokenEnv = value
 	}
 }
 
@@ -708,6 +712,8 @@ func setSocialAccountDefaultID(platform socialPlatform, account *SocialAccountSe
 		} else {
 			account.LinkedInPersonURN = value
 		}
+	case socialPlatformReddit:
+		account.RedditUsername = strings.TrimPrefix(value, "u/")
 	}
 }
 
@@ -724,5 +730,7 @@ func applySocialPlatformSettings(settings *Settings, platform socialPlatform, cf
 		settings.Social.X = cfg
 	case socialPlatformLinkedIn:
 		settings.Social.LinkedIn = cfg
+	case socialPlatformReddit:
+		settings.Social.Reddit = cfg
 	}
 }

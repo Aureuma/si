@@ -39,6 +39,8 @@ func cmdGithubPRList(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -52,7 +54,7 @@ func cmdGithubPRList(args []string) {
 		printUsage("usage: si github pr list <owner/repo|repo> [--owner <owner>] [--param key=value] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -75,6 +77,8 @@ func cmdGithubPRGet(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -85,7 +89,7 @@ func cmdGithubPRGet(args []string) {
 		printUsage("usage: si github pr get <owner/repo|repo> <number> [--owner <owner>] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -111,6 +115,8 @@ func cmdGithubPRCreate(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -128,7 +134,7 @@ func cmdGithubPRCreate(args []string) {
 		printUsage("usage: si github pr create <owner/repo|repo> --head <branch> --base <branch> --title <title> [--body <text>] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -163,6 +169,8 @@ func cmdGithubPRComment(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -177,7 +185,7 @@ func cmdGithubPRComment(args []string) {
 	if strings.TrimSpace(*body) == "" {
 		fatal(fmt.Errorf("--body is required"))
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)
@@ -203,6 +211,8 @@ func cmdGithubPRMerge(args []string) {
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")
 	baseURL := fs.String("base-url", "", "github api base url")
+	authMode := fs.String("auth-mode", "", "auth mode (app|oauth)")
+	token := fs.String("token", "", "override oauth access token")
 	appID := fs.Int64("app-id", 0, "override app id")
 	appKey := fs.String("app-key", "", "override app private key pem")
 	installationID := fs.Int64("installation-id", 0, "override installation id")
@@ -216,7 +226,7 @@ func cmdGithubPRMerge(args []string) {
 		printUsage("usage: si github pr merge <owner/repo|repo> <number> [--method merge|squash|rebase] [--json]")
 		return
 	}
-	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
+	runtime, client := mustGithubClient(*account, *owner, *baseURL, githubAuthOverrides{AuthMode: *authMode, AccessToken: *token, AppID: *appID, AppKey: *appKey, InstallationID: *installationID})
 	repoOwner, repoName, err := parseGitHubOwnerRepo(fs.Arg(0), runtime.Owner)
 	if err != nil {
 		fatal(err)

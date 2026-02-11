@@ -49,3 +49,41 @@ func TestResolveGitHubInstallationIDFromEnv(t *testing.T) {
 		t.Fatalf("unexpected source: %q", source)
 	}
 }
+
+func TestResolveGitHubOAuthAccessTokenFromEnv(t *testing.T) {
+	t.Setenv("GITHUB_CORE_OAUTH_ACCESS_TOKEN", "oauth-token")
+	token, source := resolveGitHubOAuthAccessToken("core", GitHubAccountEntry{}, githubAuthOverrides{})
+	if token != "oauth-token" {
+		t.Fatalf("unexpected oauth token: %q", token)
+	}
+	if source != "env:GITHUB_CORE_OAUTH_ACCESS_TOKEN" {
+		t.Fatalf("unexpected source: %q", source)
+	}
+}
+
+func TestResolveGitHubAuthMode_OAuthFromOverride(t *testing.T) {
+	mode, source, err := resolveGitHubAuthMode(Settings{}, "core", GitHubAccountEntry{}, githubAuthOverrides{AuthMode: "oauth"})
+	if err != nil {
+		t.Fatalf("resolve auth mode: %v", err)
+	}
+	if string(mode) != "oauth" {
+		t.Fatalf("unexpected mode: %q", mode)
+	}
+	if source != "flag:--auth-mode" {
+		t.Fatalf("unexpected source: %q", source)
+	}
+}
+
+func TestResolveGitHubAuthMode_OAuthFromEnv(t *testing.T) {
+	t.Setenv("GITHUB_AUTH_MODE", "oauth")
+	mode, source, err := resolveGitHubAuthMode(Settings{}, "core", GitHubAccountEntry{}, githubAuthOverrides{})
+	if err != nil {
+		t.Fatalf("resolve auth mode: %v", err)
+	}
+	if string(mode) != "oauth" {
+		t.Fatalf("unexpected mode: %q", mode)
+	}
+	if source != "env:GITHUB_AUTH_MODE" {
+		t.Fatalf("unexpected source: %q", source)
+	}
+}

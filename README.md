@@ -235,11 +235,12 @@ Environment policy:
 - `test` is intentionally rejected as a CLI environment mode.
 
 ## GitHub
-`si` includes an App-auth GitHub bridge:
+`si` includes a GitHub bridge with both App auth and OAuth token auth:
 
 ```bash
 # auth/context
 ./si github auth status --account core
+./si github auth status --auth-mode oauth --token "$GITHUB_TOKEN"
 ./si github context list
 ./si github context use --account core --owner Aureuma
 ./si github doctor --account core
@@ -249,6 +250,11 @@ Environment policy:
 ./si github repo list Aureuma
 ./si github repo get Aureuma/si
 ./si github repo create si-sandbox --owner Aureuma
+
+# branches
+./si github branch list Aureuma/si
+./si github branch create Aureuma/si --name feature/launch-copy --from main
+./si github branch protect Aureuma/si main --required-check ci --required-check lint --required-approvals 2
 
 # pull requests + issues
 ./si github pr list Aureuma/si
@@ -273,8 +279,9 @@ Environment policy:
 ```
 
 Auth policy:
-- GitHub App only.
-- Configure app credentials via vault-compatible env keys (`GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, optional `GITHUB_<ACCOUNT>_INSTALLATION_ID`).
+- Set auth mode with `github.default_auth_mode` / account `auth_mode` (`app` or `oauth`).
+- App mode keys: `GITHUB_<ACCOUNT>_APP_ID`, `GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM`, optional `GITHUB_<ACCOUNT>_INSTALLATION_ID`.
+- OAuth mode keys: `GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN` (or `GITHUB_<ACCOUNT>_TOKEN`), plus global fallbacks `GITHUB_TOKEN` / `GH_TOKEN`.
 
 ## Cloudflare
 `si` includes a token-auth Cloudflare bridge with multi-account context:
@@ -282,6 +289,7 @@ Auth policy:
 ```bash
 # auth/context/diagnostics
 ./si cloudflare auth status --account core
+./si cloudflare status --account core
 ./si cloudflare context list
 ./si cloudflare context use --account core --env prod --zone-id <zone_id>
 ./si cloudflare doctor --account core
@@ -298,7 +306,17 @@ Auth policy:
 # security/cache/tls
 ./si cloudflare cache purge --zone-id <zone_id> --everything --force
 ./si cloudflare tls get --zone-id <zone_id> --setting min_tls_version
+./si cloudflare ssl set --zone-id <zone_id> --setting min_tls_version --value 1.2
+./si cloudflare origin list
+./si cloudflare cert list --zone-id <zone_id>
 ./si cloudflare waf list --zone-id <zone_id>
+
+# email/tokens/tunnels
+./si cloudflare email rule list --zone-id <zone_id>
+./si cloudflare email address list --account-id <account_id>
+./si cloudflare token verify
+./si cloudflare token permission-groups
+./si cloudflare tunnels list --account-id <account_id>
 
 # analytics/logging/reporting
 ./si cloudflare analytics http --zone-id <zone_id>
@@ -307,6 +325,7 @@ Auth policy:
 
 # raw fallback
 ./si cloudflare raw --method GET --path /zones
+./si cloudflare api --method GET --path /zones
 ```
 
 Environment policy:
@@ -393,7 +412,7 @@ Environment policy:
 - Use `prod`, `staging`, and `dev` context labels.
 - `test` is intentionally not used as a standalone environment mode.
 
-## Social (Facebook / Instagram / X / LinkedIn)
+## Social (Facebook / Instagram / X / LinkedIn / Reddit)
 `si` includes a unified social bridge under `si social`:
 
 ```bash
@@ -425,6 +444,12 @@ Environment policy:
 ./si social linkedin profile --json
 ./si social linkedin post list --author urn:li:person:<id> --json
 ./si social linkedin post create --author urn:li:person:<id> --text "launch update" --json
+
+# reddit
+./si social reddit auth status --account core
+./si social reddit profile --json
+./si social reddit subreddit posts --subreddit golang --sort hot --limit 20 --json
+./si social reddit post create --subreddit golang --title "hello from si" --kind self --text "launch update" --json
 
 # generic/raw/report
 ./si social facebook raw --method GET --path /v22.0/me --param fields=id,name --json
