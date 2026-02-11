@@ -207,7 +207,7 @@ func cmdGoogleYouTubeAuthLogin(args []string) {
 	}
 	successf("youtube oauth login stored for account=%s env=%s", orDash(runtime.AccountAlias), runtime.Environment)
 	fmt.Printf("%s %s\n", styleHeading("Scope:"), orDash(entry.Scope))
-	fmt.Printf("%s %s\n", styleHeading("Expires:"), orDash(entry.ExpiresAt))
+	fmt.Printf("%s %s\n", styleHeading("Expires:"), formatISODateWithGitHubRelativeNow(entry.ExpiresAt))
 	if strings.TrimSpace(entry.RefreshToken) == "" {
 		warnf("refresh token was not returned; future auth refresh may require re-login")
 	}
