@@ -279,9 +279,12 @@ stripe:
     CLI uses live and sandbox.
     test is not accepted as a standalone environment mode.
 
-	vault:
-	  Target selection (most commands):
-	    --file <path>               (explicit env file path; otherwise uses vault.file from settings or SI_VAULT_FILE)
+vault:
+  Running si vault with no subcommand opens an interactive command picker.
+  Running si vault trust/recipients/hooks/docker with no subcommand opens an interactive command picker.
+
+  Target selection (most commands):
+    --file <path>               (explicit env file path; otherwise uses vault.file from settings or SI_VAULT_FILE)
 
 	  si vault init [--file <path>] [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]

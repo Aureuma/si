@@ -7,11 +7,39 @@ import (
 
 const vaultUsageText = "usage: si vault <init|keygen|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
 
+const vaultDockerUsageText = "usage: si vault docker <exec>"
+
+var vaultActions = []subcommandAction{
+	{Name: "init", Description: "initialize vault metadata for a dotenv file"},
+	{Name: "status", Description: "show vault configuration and readiness"},
+	{Name: "check", Description: "validate vault formatting and encryption rules"},
+	{Name: "fmt", Description: "format vault dotenv files"},
+	{Name: "encrypt", Description: "encrypt plaintext values in vault file"},
+	{Name: "decrypt", Description: "decrypt values (guarded for safety)"},
+	{Name: "set", Description: "set/update encrypted secret value"},
+	{Name: "get", Description: "inspect a key (optionally reveal)"},
+	{Name: "list", Description: "list keys and encryption status"},
+	{Name: "run", Description: "run a command with decrypted env injection"},
+	{Name: "docker", Description: "run commands in containers with vault env"},
+	{Name: "trust", Description: "manage trust state for vault files"},
+	{Name: "recipients", Description: "manage recipient keys"},
+	{Name: "keygen", Description: "create or load vault identity key"},
+}
+
+var vaultDockerActions = []subcommandAction{
+	{Name: "exec", Description: "execute command in a container with vault env"},
+}
+
 func cmdVault(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultAction)
+	if showUsage {
 		printUsage(vaultUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -56,11 +84,20 @@ func cmdVault(args []string) {
 	}
 }
 
+func selectVaultAction() (string, bool) {
+	return selectSubcommandAction("Vault commands:", vaultActions)
+}
+
 func cmdVaultDocker(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si vault docker <exec>")
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultDockerAction)
+	if showUsage {
+		printUsage(vaultDockerUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -68,7 +105,11 @@ func cmdVaultDocker(args []string) {
 		cmdVaultDockerExec(rest)
 	default:
 		printUnknown("vault docker", cmd)
-		printUsage("usage: si vault docker <exec>")
+		printUsage(vaultDockerUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectVaultDockerAction() (string, bool) {
+	return selectSubcommandAction("Vault docker commands:", vaultDockerActions)
 }
