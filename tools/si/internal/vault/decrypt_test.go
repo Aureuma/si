@@ -14,7 +14,7 @@ func TestDecryptDotenvValuesPreservesLayoutAndComments(t *testing.T) {
 	recipient := id.Recipient().String()
 
 	in := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient " + recipient + "\n" +
 		"\n" +
 		"export A = plaintext   # keep\n" +

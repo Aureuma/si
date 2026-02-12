@@ -5,7 +5,7 @@ import (
 )
 
 func TestScanDotenvEncryptionErrorsOnInvalidCiphertext(t *testing.T) {
-	doc := ParseDotenv([]byte(`# si-vault:v1
+	doc := ParseDotenv([]byte(`# si-vault:v2
 # si-vault:recipient age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
 
 BAD=encrypted:si:v1:not_base64!!!
