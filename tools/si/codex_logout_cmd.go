@@ -3,19 +3,21 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
 type codexLogoutOptions struct {
-	Home  string
-	All   bool
+	Home string
+	All  bool
 }
 
 type codexLogoutResult struct {
-	Removed []string
-	Skipped []string
+	Removed   []string
+	Skipped   []string
+	Preserved []string
 }
 
 func cmdCodexLogout(args []string) {
@@ -52,19 +54,22 @@ func cmdCodexLogout(args []string) {
 	}
 
 	res, err := codexLogout(codexLogoutOptions{
-		Home:  home,
-		All:   *all,
+		Home: home,
+		All:  *all,
 	})
 	if err != nil {
 		fatal(err)
 	}
 
-	if len(res.Removed) == 0 && len(res.Skipped) == 0 {
+	if len(res.Removed) == 0 && len(res.Skipped) == 0 && len(res.Preserved) == 0 {
 		successf("codex logout complete (nothing to remove)")
 		return
 	}
 	for _, p := range res.Removed {
 		successf("removed %s", p)
+	}
+	for _, p := range res.Preserved {
+		successf("preserved %s", p)
 	}
 	for _, p := range res.Skipped {
 		infof("skipped %s", p)
@@ -76,24 +81,74 @@ func codexLogout(opts codexLogoutOptions) (codexLogoutResult, error) {
 	if home == "" {
 		return codexLogoutResult{}, fmt.Errorf("home required")
 	}
-	paths := []string{filepath.Join(home, ".codex")}
-	if opts.All {
-		paths = append(paths, filepath.Join(home, ".si", "codex"))
+	res := codexLogoutResult{}
+
+	codexDir := filepath.Join(home, ".codex")
+	removed, preserved, err := resetCodexDirPreserveConfig(home, codexDir)
+	if err != nil {
+		return res, err
+	}
+	if removed {
+		res.Removed = append(res.Removed, codexDir)
+	} else {
+		res.Skipped = append(res.Skipped, codexDir)
+	}
+	if preserved {
+		res.Preserved = append(res.Preserved, filepath.Join(codexDir, "config.toml"))
 	}
 
-	res := codexLogoutResult{}
-	for _, p := range paths {
-		removed, err := removeHomeChildDir(home, p)
+	if opts.All {
+		siCodexDir := filepath.Join(home, ".si", "codex")
+		removed, err := removeHomeChildDir(home, siCodexDir)
 		if err != nil {
 			return res, err
 		}
 		if removed {
-			res.Removed = append(res.Removed, p)
+			res.Removed = append(res.Removed, siCodexDir)
 		} else {
-			res.Skipped = append(res.Skipped, p)
+			res.Skipped = append(res.Skipped, siCodexDir)
 		}
 	}
 	return res, nil
+}
+
+func resetCodexDirPreserveConfig(home, codexDir string) (removed bool, preserved bool, err error) {
+	home = filepath.Clean(strings.TrimSpace(home))
+	codexDir = filepath.Clean(strings.TrimSpace(codexDir))
+	configPath := filepath.Join(codexDir, "config.toml")
+
+	var cfgData []byte
+	cfgMode := fs.FileMode(0o600)
+	if info, statErr := os.Lstat(configPath); statErr == nil {
+		if info.Mode().IsRegular() {
+			data, readErr := os.ReadFile(configPath)
+			if readErr != nil {
+				return false, false, readErr
+			}
+			cfgData = data
+			cfgMode = info.Mode().Perm()
+		}
+	} else if !os.IsNotExist(statErr) {
+		return false, false, statErr
+	}
+
+	removed, err = removeHomeChildDir(home, codexDir)
+	if err != nil {
+		return removed, false, err
+	}
+	if !removed || len(cfgData) == 0 {
+		return removed, false, nil
+	}
+	if err := os.MkdirAll(codexDir, 0o700); err != nil {
+		return removed, false, err
+	}
+	if cfgMode == 0 {
+		cfgMode = 0o600
+	}
+	if err := os.WriteFile(configPath, cfgData, cfgMode); err != nil {
+		return removed, false, err
+	}
+	return removed, true, nil
 }
 
 // removeHomeChildDir removes the given path if it exists and is a directory (or a symlink to a directory).
