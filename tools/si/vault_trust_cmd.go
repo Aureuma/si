@@ -10,11 +10,24 @@ import (
 	"si/tools/si/internal/vault"
 )
 
+const vaultTrustUsageText = "usage: si vault trust status|accept|forget"
+
+var vaultTrustActions = []subcommandAction{
+	{Name: "status", Description: "show trust fingerprint state for vault file"},
+	{Name: "accept", Description: "accept and store current vault fingerprint"},
+	{Name: "forget", Description: "remove stored trust entry"},
+}
+
 func cmdVaultTrust(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si vault trust status|accept|forget")
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultTrustAction)
+	if showUsage {
+		printUsage(vaultTrustUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -26,8 +39,12 @@ func cmdVaultTrust(args []string) {
 		cmdVaultTrustForget(rest)
 	default:
 		printUnknown("vault trust", cmd)
-		printUsage("usage: si vault trust status|accept|forget")
+		printUsage(vaultTrustUsageText)
 	}
+}
+
+func selectVaultTrustAction() (string, bool) {
+	return selectSubcommandAction("Vault trust commands:", vaultTrustActions)
 }
 
 func cmdVaultTrustStatus(args []string) {

@@ -9,11 +9,24 @@ import (
 	"si/tools/si/internal/vault"
 )
 
+const vaultRecipientsUsageText = "usage: si vault recipients list|add|remove"
+
+var vaultRecipientsActions = []subcommandAction{
+	{Name: "list", Description: "list recipients and trust fingerprint"},
+	{Name: "add", Description: "add a recipient to vault metadata"},
+	{Name: "remove", Description: "remove a recipient from vault metadata"},
+}
+
 func cmdVaultRecipients(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si vault recipients list|add|remove")
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultRecipientsAction)
+	if showUsage {
+		printUsage(vaultRecipientsUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -25,8 +38,12 @@ func cmdVaultRecipients(args []string) {
 		cmdVaultRecipientsRemove(rest)
 	default:
 		printUnknown("vault recipients", cmd)
-		printUsage("usage: si vault recipients list|add|remove")
+		printUsage(vaultRecipientsUsageText)
 	}
+}
+
+func selectVaultRecipientsAction() (string, bool) {
+	return selectSubcommandAction("Vault recipients commands:", vaultRecipientsActions)
 }
 
 func cmdVaultRecipientsList(args []string) {

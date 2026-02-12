@@ -10,11 +10,24 @@ import (
 	"si/tools/si/internal/vault"
 )
 
+const vaultHooksUsageText = "usage: si vault hooks <install|status|uninstall>"
+
+var vaultHooksActions = []subcommandAction{
+	{Name: "install", Description: "install si-managed pre-commit hook"},
+	{Name: "status", Description: "show pre-commit hook install status"},
+	{Name: "uninstall", Description: "remove si-managed pre-commit hook"},
+}
+
 func cmdVaultHooks(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si vault hooks <install|status|uninstall>")
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultHooksAction)
+	if showUsage {
+		printUsage(vaultHooksUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -26,8 +39,12 @@ func cmdVaultHooks(args []string) {
 		cmdVaultHooksUninstall(rest)
 	default:
 		printUnknown("vault hooks", cmd)
-		printUsage("usage: si vault hooks <install|status|uninstall>")
+		printUsage(vaultHooksUsageText)
 	}
+}
+
+func selectVaultHooksAction() (string, bool) {
+	return selectSubcommandAction("Vault hooks commands:", vaultHooksActions)
 }
 
 func cmdVaultHooksInstall(args []string) {
