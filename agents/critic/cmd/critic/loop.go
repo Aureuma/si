@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -1727,11 +1728,79 @@ func reportBulletCount(report string) int {
 }
 
 func maybeApplyHostOwnership(path string) {
+	if isPathOnMount(path) {
+		return
+	}
 	uid, gid, ok := hostOwnership()
 	if !ok {
 		return
 	}
 	_ = os.Chown(path, uid, gid)
+}
+
+func isPathOnMount(path string) bool {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return false
+	}
+	if !filepath.IsAbs(path) {
+		if abs, err := filepath.Abs(path); err == nil {
+			path = abs
+		}
+	}
+	path = filepath.Clean(path)
+	for _, mp := range mountPoints() {
+		if mp == "" || mp == "/" {
+			continue
+		}
+		if path == mp || strings.HasPrefix(path, mp+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
+}
+
+func mountPoints() []string {
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	out := make([]string, 0, 16)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		left := line
+		if idx := strings.Index(line, " - "); idx >= 0 {
+			left = line[:idx]
+		}
+		fields := strings.Fields(left)
+		if len(fields) < 5 {
+			continue
+		}
+		out = append(out, filepath.Clean(decodeMountInfoPath(fields[4])))
+	}
+	return out
+}
+
+func decodeMountInfoPath(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(raw))
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '\\' && i+3 < len(raw) {
+			if v, err := strconv.ParseUint(raw[i+1:i+4], 8, 8); err == nil {
+				b.WriteByte(byte(v))
+				i += 3
+				continue
+			}
+		}
+		b.WriteByte(raw[i])
+	}
+	return b.String()
 }
 
 func hostOwnership() (int, int, bool) {
