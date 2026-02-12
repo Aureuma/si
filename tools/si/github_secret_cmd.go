@@ -19,10 +19,11 @@ import (
 )
 
 func cmdGithubSecret(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github secret <repo|env|org> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github secret <repo|env|org> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	scope := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch scope {
@@ -38,10 +39,11 @@ func cmdGithubSecret(args []string) {
 }
 
 func cmdGithubRepoSecret(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github secret repo <set|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github secret repo <set|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "set":
 		cmdGithubRepoSecretSet(args[1:])
@@ -131,10 +133,11 @@ func cmdGithubRepoSecretDelete(args []string) {
 }
 
 func cmdGithubEnvSecret(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github secret env <set|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github secret env <set|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "set":
 		cmdGithubEnvSecretSet(args[1:])
@@ -223,10 +226,11 @@ func cmdGithubEnvSecretDelete(args []string) {
 }
 
 func cmdGithubOrgSecret(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github secret org <set|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github secret org <set|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "set":
 		cmdGithubOrgSecretSet(args[1:])

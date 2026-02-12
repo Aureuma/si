@@ -586,10 +586,11 @@ func printAppleAppStoreContextBanner(runtime appleAppStoreRuntimeContext, jsonOu
 }
 
 func cmdAppleAppStoreAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si apple appstore auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si apple appstore auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -687,10 +688,11 @@ func cmdAppleAppStoreAuthStatus(args []string) {
 }
 
 func cmdAppleAppStoreContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si apple appstore context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si apple appstore context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

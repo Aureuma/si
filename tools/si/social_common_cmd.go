@@ -13,10 +13,11 @@ import (
 )
 
 func cmdSocialPlatformAuth(platform socialPlatform, args []string) {
-	if len(args) == 0 {
-		printUsage(fmt.Sprintf("usage: si social %s auth status [--account <alias>] [--env <prod|staging|dev>] [--json]", socialPlatformLabel(platform)))
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, fmt.Sprintf("usage: si social %s auth status [--account <alias>] [--env <prod|staging|dev>] [--json]", socialPlatformLabel(platform)))
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
 		cmdSocialPlatformAuthStatus(platform, args[1:])
@@ -105,10 +106,11 @@ func cmdSocialPlatformAuthStatus(platform socialPlatform, args []string) {
 }
 
 func cmdSocialPlatformContext(platform socialPlatform, args []string) {
-	if len(args) == 0 {
-		printUsage(fmt.Sprintf("usage: si social %s context <list|current|use>", socialPlatformLabel(platform)))
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, fmt.Sprintf("usage: si social %s context <list|current|use>", socialPlatformLabel(platform)))
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialPlatformContextList(platform, args[1:])

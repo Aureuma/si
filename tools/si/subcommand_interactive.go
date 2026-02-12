@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type subcommandAction struct {
@@ -51,4 +52,86 @@ func selectSubcommandAction(title string, actions []subcommandAction) (string, b
 		return "", false
 	}
 	return options[idx], true
+}
+
+func resolveUsageSubcommandArgs(args []string, usageText string) ([]string, bool) {
+	if len(args) > 0 {
+		return args, true
+	}
+	usage := strings.TrimSpace(usageText)
+	options := parseUsageSubcommandOptions(usage)
+	if !isInteractiveTerminal() || len(options) == 0 {
+		printUsage(usageText)
+		return nil, false
+	}
+	actions := make([]subcommandAction, 0, len(options))
+	for _, option := range options {
+		actions = append(actions, subcommandAction{Name: option, Description: "select " + option})
+	}
+	title := usageSubcommandTitle(usage)
+	selected, ok := selectSubcommandAction(title, actions)
+	if !ok {
+		return nil, false
+	}
+	return []string{selected}, true
+}
+
+func usageSubcommandTitle(usage string) string {
+	usage = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(usage), "usage:"))
+	if usage == "" {
+		return "Commands:"
+	}
+	if idx := strings.Index(usage, "<"); idx != -1 {
+		usage = strings.TrimSpace(usage[:idx])
+	}
+	if usage == "" {
+		return "Commands:"
+	}
+	return usage + " commands:"
+}
+
+func parseUsageSubcommandOptions(usage string) []string {
+	fields := strings.Fields(usage)
+	if len(fields) == 0 {
+		return nil
+	}
+	var raw string
+	for _, token := range fields {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		if strings.HasPrefix(token, "[") {
+			break
+		}
+		if strings.HasPrefix(token, "--") {
+			continue
+		}
+		if strings.HasPrefix(token, "<") {
+			end := strings.Index(token, ">")
+			if end == -1 {
+				return nil
+			}
+			raw = strings.TrimSpace(token[1:end])
+			break
+		}
+	}
+	if raw == "" || !strings.Contains(raw, "|") {
+		return nil
+	}
+	parts := strings.Split(raw, "|")
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.ToLower(strings.TrimSpace(part))
+		if part == "" {
+			continue
+		}
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		out = append(out, part)
+	}
+	return out
 }

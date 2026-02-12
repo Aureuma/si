@@ -5,10 +5,11 @@ import "strings"
 const googlePlacesUsageText = "usage: si google places <auth|context|doctor|session|autocomplete|search-text|search-nearby|details|photo|types|raw|report>"
 
 func cmdGooglePlaces(args []string) {
-	if len(args) == 0 {
-		printUsage(googlePlacesUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, googlePlacesUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {

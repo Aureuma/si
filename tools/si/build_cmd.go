@@ -7,10 +7,11 @@ import (
 const buildUsageText = "usage: si build <image|self> [args...]"
 
 func cmdBuild(args []string) {
-	if len(args) == 0 {
-		printUsage(buildUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, buildUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "image":
 		cmdBuildImage(args[1:])

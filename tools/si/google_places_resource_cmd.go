@@ -464,10 +464,11 @@ func cmdGooglePlacesDetails(args []string) {
 }
 
 func cmdGooglePlacesPhoto(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google places photo <get|download> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places photo <get|download> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -644,10 +645,11 @@ func downloadGooglePlacePhoto(ctx context.Context, runtime googlePlacesRuntimeCo
 }
 
 func cmdGooglePlacesTypes(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google places types <list|validate>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places types <list|validate>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -840,10 +842,11 @@ func cmdGooglePlacesRaw(args []string) {
 }
 
 func cmdGooglePlacesReport(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google places report <usage|sessions> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places report <usage|sessions> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

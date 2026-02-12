@@ -25,10 +25,11 @@ type appleListingMutation struct {
 }
 
 func cmdAppleAppStoreApp(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si apple appstore app <list|get|create>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si apple appstore app <list|get|create>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -243,10 +244,11 @@ func cmdAppleAppStoreAppCreate(args []string) {
 }
 
 func cmdAppleAppStoreListing(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si apple appstore listing <get|update>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si apple appstore listing <get|update>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

@@ -61,10 +61,11 @@ func googlePlayRunEdit(ctx context.Context, client googlePlayBridgeClient, packa
 }
 
 func cmdGooglePlayApp(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play app create --title <name> [--developer-account <id>] [--language <code>] [--organization <org>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play app create --title <name> [--developer-account <id>] [--language <code>] [--organization <org>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -122,10 +123,11 @@ func cmdGooglePlayAppCreate(args []string) {
 }
 
 func cmdGooglePlayListing(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play listing <get|list|update>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play listing <get|list|update>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -264,10 +266,11 @@ func cmdGooglePlayListingUpdate(args []string) {
 }
 
 func cmdGooglePlayDetails(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play details <get|update>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play details <get|update>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -370,10 +373,11 @@ func cmdGooglePlayDetailsUpdate(args []string) {
 }
 
 func cmdGooglePlayAsset(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play asset <list|upload|clear>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play asset <list|upload|clear>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -533,10 +537,11 @@ func cmdGooglePlayAssetUpload(args []string) {
 }
 
 func cmdGooglePlayRelease(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play release <upload|status|promote|set-status>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play release <upload|status|promote|set-status>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

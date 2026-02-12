@@ -206,10 +206,11 @@ func resolveGoogleRegionCode(alias string, account GoogleAccountEntry, override 
 }
 
 func cmdGooglePlacesAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google places auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
 		cmdGooglePlacesAuthStatus(args[1:])
@@ -303,10 +304,11 @@ func cmdGooglePlacesAuthStatus(args []string) {
 }
 
 func cmdGooglePlacesContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google places context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGooglePlacesContextList(args[1:])

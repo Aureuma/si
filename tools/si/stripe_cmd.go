@@ -5,10 +5,11 @@ import "strings"
 const stripeUsageText = "usage: si stripe <auth|context|doctor|object|raw|report|sync>"
 
 func cmdStripe(args []string) {
-	if len(args) == 0 {
-		printUsage(stripeUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, stripeUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {

@@ -54,10 +54,11 @@ func cmdCloudflareRaw(args []string) {
 }
 
 func cmdCloudflareAnalytics(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare analytics <http|security|cache> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare analytics <http|security|cache> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	args = args[1:]
 	path := ""
@@ -76,10 +77,11 @@ func cmdCloudflareAnalytics(args []string) {
 }
 
 func cmdCloudflareLogs(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare logs <job|received> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare logs <job|received> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -93,10 +95,11 @@ func cmdCloudflareLogs(args []string) {
 }
 
 func cmdCloudflareLogsJobs(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare logs job <list|get|create|update|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare logs job <list|get|create|update|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	spec := cloudflareResourceSpec{
 		Name:         "log job",
 		Scope:        cloudflareScopeZone,

@@ -85,10 +85,11 @@ func (e *imageAPIErrorDetails) Error() string {
 }
 
 func cmdImage(args []string) {
-	if len(args) == 0 {
-		printUsage(imageUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, imageUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	provider := normalizeImageProvider(args[0])
 	rest := args[1:]
 	switch provider {
@@ -104,10 +105,11 @@ func cmdImage(args []string) {
 }
 
 func cmdImageProvider(provider imageProvider, args []string) {
-	if len(args) == 0 {
-		printUsage(fmt.Sprintf("usage: si image %s <auth|search|raw>", provider))
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, fmt.Sprintf("usage: si image %s <auth|search|raw>", provider))
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -126,10 +128,11 @@ func cmdImageProvider(provider imageProvider, args []string) {
 }
 
 func cmdImageAuth(provider imageProvider, args []string) {
-	if len(args) == 0 {
-		printUsage(fmt.Sprintf("usage: si image %s auth status [--json]", provider))
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, fmt.Sprintf("usage: si image %s auth status [--json]", provider))
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
 		cmdImageAuthStatus(provider, args[1:])

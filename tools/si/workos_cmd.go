@@ -97,10 +97,11 @@ func (e *workosAPIErrorDetails) Error() string {
 }
 
 func cmdWorkOS(args []string) {
-	if len(args) == 0 {
-		printUsage(workosUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, workosUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -131,10 +132,11 @@ func cmdWorkOS(args []string) {
 }
 
 func cmdWorkOSAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si workos auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "status":
@@ -221,10 +223,11 @@ func cmdWorkOSAuthStatus(args []string) {
 }
 
 func cmdWorkOSContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si workos context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -554,10 +557,11 @@ func cmdWorkOSMembership(args []string) {
 }
 
 func cmdWorkOSInvitation(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si workos invitation <list|get|create|revoke|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos invitation <list|get|create|revoke|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -602,10 +606,11 @@ func cmdWorkOSInvitationRevoke(args []string) {
 }
 
 func cmdWorkOSDirectory(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si workos directory <list|get|users|groups|sync>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos directory <list|get|users|groups|sync>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -700,10 +705,11 @@ func cmdWorkOSDirectorySync(args []string) {
 }
 
 func cmdWorkOSResource(spec workosResourceSpec, args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si workos " + spec.Label + " <list|get|create|update|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos "+spec.Label+" <list|get|create|update|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

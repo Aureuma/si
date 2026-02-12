@@ -59,10 +59,11 @@ type publishHTTPResponse struct {
 }
 
 func cmdPublish(args []string) {
-	if len(args) == 0 {
-		printUsage(publishUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, publishUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -159,10 +160,11 @@ func cmdPublishCatalogList(args []string) {
 }
 
 func cmdPublishDevTo(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si publish devto <auth|article|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si publish devto <auth|article|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "auth":
@@ -297,10 +299,11 @@ func cmdPublishDevToRaw(args []string) {
 }
 
 func cmdPublishHashnode(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si publish hashnode <auth|post|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si publish hashnode <auth|post|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "auth":
@@ -473,10 +476,11 @@ func cmdPublishHashnodeRaw(args []string) {
 }
 
 func cmdPublishReddit(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si publish reddit <auth|submit|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si publish reddit <auth|submit|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "auth":
@@ -630,10 +634,11 @@ func cmdPublishRedditRaw(args []string) {
 }
 
 func cmdPublishHackerNews(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si publish hackernews <top|item|submit-url|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si publish hackernews <top|item|submit-url|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "top":
@@ -759,10 +764,11 @@ func cmdPublishHackerNewsRaw(args []string) {
 }
 
 func cmdPublishProductHunt(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si publish producthunt <auth|posts|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si publish producthunt <auth|posts|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "auth":

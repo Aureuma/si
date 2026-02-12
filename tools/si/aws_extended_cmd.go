@@ -24,10 +24,11 @@ const (
 )
 
 func cmdAWSSTS(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws sts <get-caller-identity|assume-role> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws sts <get-caller-identity|assume-role> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -119,10 +120,11 @@ func cmdAWSSTSAssumeRole(args []string) {
 }
 
 func cmdAWSEC2(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ec2 <instance> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ec2 <instance> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -134,10 +136,11 @@ func cmdAWSEC2(args []string) {
 }
 
 func cmdAWSEC2Instance(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ec2 instance <list|start|stop|terminate> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ec2 instance <list|start|stop|terminate> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -228,10 +231,11 @@ func cmdAWSEC2InstanceStartStopTerminate(action string, args []string) {
 }
 
 func cmdAWSS3(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws s3 <bucket|object> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws s3 <bucket|object> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -245,10 +249,11 @@ func cmdAWSS3(args []string) {
 }
 
 func cmdAWSS3Bucket(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws s3 bucket <list|create|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws s3 bucket <list|create|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -350,10 +355,11 @@ func cmdAWSS3BucketDelete(args []string) {
 }
 
 func cmdAWSS3Object(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws s3 object <list|get|put|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws s3 object <list|get|put|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -502,10 +508,11 @@ func cmdAWSS3ObjectDelete(args []string) {
 }
 
 func cmdAWSLambda(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws lambda <function> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws lambda <function> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -517,10 +524,11 @@ func cmdAWSLambda(args []string) {
 }
 
 func cmdAWSLambdaFunction(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws lambda function <list|get|invoke|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws lambda function <list|get|invoke|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -671,10 +679,11 @@ func cmdAWSLambdaFunctionDelete(args []string) {
 }
 
 func cmdAWSECR(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ecr <repository|image> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ecr <repository|image> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -688,10 +697,11 @@ func cmdAWSECR(args []string) {
 }
 
 func cmdAWSECRRepository(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ecr repository <list|create|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ecr repository <list|create|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -775,10 +785,11 @@ func cmdAWSECRRepositoryDelete(args []string) {
 }
 
 func cmdAWSECRImage(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ecr image <list> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ecr image <list> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -806,10 +817,11 @@ func cmdAWSECRImage(args []string) {
 }
 
 func cmdAWSSecrets(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws secrets <list|get|create|put|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws secrets <list|get|create|put|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -909,10 +921,11 @@ func cmdAWSSecrets(args []string) {
 }
 
 func cmdAWSKMS(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws kms <key|encrypt|decrypt> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws kms <key|encrypt|decrypt> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -928,10 +941,11 @@ func cmdAWSKMS(args []string) {
 }
 
 func cmdAWSKMSKey(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws kms key <list|describe>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws kms key <list|describe>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1003,10 +1017,11 @@ func cmdAWSKMSDecrypt(args []string) {
 }
 
 func cmdAWSDynamoDB(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws dynamodb <table|item> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws dynamodb <table|item> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1020,10 +1035,11 @@ func cmdAWSDynamoDB(args []string) {
 }
 
 func cmdAWSDynamoTable(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws dynamodb table <list|describe>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws dynamodb table <list|describe>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1063,10 +1079,11 @@ func cmdAWSDynamoTable(args []string) {
 }
 
 func cmdAWSDynamoItem(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws dynamodb item <get|put|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws dynamodb item <get|put|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1152,10 +1169,11 @@ func cmdAWSDynamoItemDelete(args []string) {
 }
 
 func cmdAWSSSM(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ssm <parameter> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ssm <parameter> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1167,10 +1185,11 @@ func cmdAWSSSM(args []string) {
 }
 
 func cmdAWSSSMParameter(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws ssm parameter <list|get|put|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws ssm parameter <list|get|put|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1246,10 +1265,11 @@ func cmdAWSSSMParameter(args []string) {
 }
 
 func cmdAWSCloudWatch(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws cloudwatch <metric> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws cloudwatch <metric> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1284,10 +1304,11 @@ func cmdAWSCloudWatch(args []string) {
 }
 
 func cmdAWSLogs(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws logs <group|stream|events> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws logs <group|stream|events> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1303,10 +1324,11 @@ func cmdAWSLogs(args []string) {
 }
 
 func cmdAWSLogsGroup(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws logs group <list>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws logs group <list>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1330,10 +1352,11 @@ func cmdAWSLogsGroup(args []string) {
 }
 
 func cmdAWSLogsStream(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws logs stream <list>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws logs stream <list>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

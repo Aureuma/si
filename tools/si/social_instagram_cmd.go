@@ -12,10 +12,11 @@ import (
 const socialInstagramUsageText = "usage: si social instagram <auth|context|doctor|profile|media|comment|insights|raw|report>"
 
 func cmdSocialInstagram(args []string) {
-	if len(args) == 0 {
-		printUsage(socialInstagramUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, socialInstagramUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -89,10 +90,11 @@ func cmdSocialInstagramProfile(args []string) {
 }
 
 func cmdSocialInstagramMedia(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social instagram media <list|get|create|publish> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social instagram media <list|get|create|publish> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialInstagramMediaList(args[1:])
@@ -330,10 +332,11 @@ func cmdSocialInstagramMediaPublish(args []string) {
 }
 
 func cmdSocialInstagramComment(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social instagram comment <list|create> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social instagram comment <list|create> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialInstagramCommentList(args[1:])
@@ -437,10 +440,11 @@ func cmdSocialInstagramCommentCreate(args []string) {
 }
 
 func cmdSocialInstagramInsights(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social instagram insights <account|media> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social instagram insights <account|media> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "account":
 		cmdSocialInstagramInsightsAccount(args[1:])

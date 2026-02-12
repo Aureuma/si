@@ -110,10 +110,11 @@ func (e *ociAPIErrorDetails) Error() string {
 }
 
 func cmdOCI(args []string) {
-	if len(args) == 0 {
-		printUsage(ociUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, ociUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -142,10 +143,11 @@ func cmdOCI(args []string) {
 }
 
 func cmdOCIAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci auth status [--profile <name>] [--config-file <path>] [--region <region>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci auth status [--profile <name>] [--config-file <path>] [--region <region>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "status":
@@ -229,10 +231,11 @@ func cmdOCIAuthStatus(args []string) {
 }
 
 func cmdOCIContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -489,10 +492,11 @@ func cmdOCIDoctor(args []string) {
 }
 
 func cmdOCIIdentity(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci identity <availability-domains|compartment> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci identity <availability-domains|compartment> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -506,10 +510,11 @@ func cmdOCIIdentity(args []string) {
 }
 
 func cmdOCIIdentityAvailabilityDomains(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci identity availability-domains list [--tenancy <ocid>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci identity availability-domains list [--tenancy <ocid>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	if sub != "list" {
 		printUnknown("oci identity availability-domains", sub)
@@ -552,10 +557,11 @@ func cmdOCIIdentityAvailabilityDomains(args []string) {
 }
 
 func cmdOCIIdentityCompartment(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci identity compartment <create>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci identity compartment <create>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	if sub != "create" {
 		printUnknown("oci identity compartment", sub)
@@ -598,10 +604,11 @@ func cmdOCIIdentityCompartment(args []string) {
 }
 
 func cmdOCINetwork(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci network <vcn|internet-gateway|route-table|security-list|subnet> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci network <vcn|internet-gateway|route-table|security-list|subnet> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -901,10 +908,11 @@ func cmdOCINetworkSubnet(args []string) {
 }
 
 func cmdOCICompute(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci compute <image|instance|availability-domains> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci compute <image|instance|availability-domains> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -920,10 +928,11 @@ func cmdOCICompute(args []string) {
 }
 
 func cmdOCIComputeImage(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci compute image latest-ubuntu --tenancy <ocid> --shape <shape> [--os-version 24.04] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci compute image latest-ubuntu --tenancy <ocid> --shape <shape> [--os-version 24.04] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	if sub != "latest-ubuntu" {
 		printUnknown("oci compute image", sub)
@@ -975,10 +984,11 @@ func cmdOCIComputeImage(args []string) {
 }
 
 func cmdOCIComputeInstance(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci compute instance create ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci compute instance create ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	if sub != "create" {
 		printUnknown("oci compute instance", sub)
@@ -1060,10 +1070,11 @@ func cmdOCIComputeInstance(args []string) {
 }
 
 func cmdOCIOracular(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si oci oracular <cloud-init|tenancy>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci oracular <cloud-init|tenancy>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

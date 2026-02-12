@@ -14,10 +14,11 @@ import (
 )
 
 func cmdAWSBedrock(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock <foundation-model|inference-profile|guardrail|runtime|job|agent|knowledge-base|agent-runtime> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock <foundation-model|inference-profile|guardrail|runtime|job|agent|knowledge-base|agent-runtime> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -43,10 +44,11 @@ func cmdAWSBedrock(args []string) {
 }
 
 func cmdAWSBedrockFoundationModel(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock foundation-model <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock foundation-model <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -110,10 +112,11 @@ func cmdAWSBedrockFoundationModelGet(args []string) {
 }
 
 func cmdAWSBedrockInferenceProfile(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock inference-profile <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock inference-profile <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -169,10 +172,11 @@ func cmdAWSBedrockInferenceProfileGet(args []string) {
 }
 
 func cmdAWSBedrockGuardrail(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock guardrail <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock guardrail <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -229,10 +233,11 @@ func cmdAWSBedrockGuardrailGet(args []string) {
 }
 
 func cmdAWSBedrockRuntime(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock runtime <invoke|converse|count-tokens> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock runtime <invoke|converse|count-tokens> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -374,10 +379,11 @@ func cmdAWSBedrockRuntimeCountTokens(args []string) {
 }
 
 func cmdAWSBedrockJob(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock job <create|get|list|stop> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock job <create|get|list|stop> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -540,10 +546,11 @@ func cmdAWSBedrockJobStop(args []string) {
 }
 
 func cmdAWSBedrockAgent(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock agent <list|get|alias> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock agent <list|get|alias> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -597,10 +604,11 @@ func cmdAWSBedrockAgentGet(args []string) {
 }
 
 func cmdAWSBedrockAgentAlias(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock agent alias <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock agent alias <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -655,10 +663,11 @@ func cmdAWSBedrockAgentAliasGet(args []string) {
 }
 
 func cmdAWSBedrockKnowledgeBase(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock knowledge-base <list|get|data-source> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock knowledge-base <list|get|data-source> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -712,10 +721,11 @@ func cmdAWSBedrockKnowledgeBaseGet(args []string) {
 }
 
 func cmdAWSBedrockKnowledgeBaseDataSource(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock knowledge-base data-source <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock knowledge-base data-source <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -765,10 +775,11 @@ func cmdAWSBedrockKnowledgeBaseDataSourceGet(args []string) {
 }
 
 func cmdAWSBedrockAgentRuntime(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws bedrock agent-runtime <invoke-agent|retrieve|retrieve-and-generate> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws bedrock agent-runtime <invoke-agent|retrieve|retrieve-and-generate> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

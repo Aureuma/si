@@ -16,10 +16,11 @@ import (
 const providersUsageText = "usage: si providers <characteristics|health>"
 
 func cmdProviders(args []string) {
-	if len(args) == 0 {
-		printUsage(providersUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, providersUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

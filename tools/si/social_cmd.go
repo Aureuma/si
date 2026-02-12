@@ -5,10 +5,11 @@ import "strings"
 const socialUsageText = "usage: si social <facebook|instagram|x|linkedin|reddit>"
 
 func cmdSocial(args []string) {
-	if len(args) == 0 {
-		printUsage(socialUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, socialUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := normalizeSocialPlatform(args[0])
 	rest := args[1:]
 	switch cmd {

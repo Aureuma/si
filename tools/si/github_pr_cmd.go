@@ -13,10 +13,11 @@ import (
 )
 
 func cmdGithubPR(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github pr <list|get|create|comment|merge> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github pr <list|get|create|comment|merge> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGithubPRList(args[1:])

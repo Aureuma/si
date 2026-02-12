@@ -88,10 +88,11 @@ func (e *awsAPIErrorDetails) Error() string {
 }
 
 func cmdAWS(args []string) {
-	if len(args) == 0 {
-		printUsage(awsUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, awsUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -138,10 +139,11 @@ func cmdAWS(args []string) {
 }
 
 func cmdAWSAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws auth status [--account <alias>] [--region <aws-region>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws auth status [--account <alias>] [--region <aws-region>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "status":
@@ -215,10 +217,11 @@ func cmdAWSAuthStatus(args []string) {
 }
 
 func cmdAWSContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -460,10 +463,11 @@ func cmdAWSDoctor(args []string) {
 }
 
 func cmdAWSIAM(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws iam <user|query>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws iam <user|query>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -477,10 +481,11 @@ func cmdAWSIAM(args []string) {
 }
 
 func cmdAWSIAMUser(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si aws iam user <create|attach-policy>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws iam user <create|attach-policy>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

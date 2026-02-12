@@ -14,10 +14,11 @@ import (
 )
 
 func cmdStripeObject(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si stripe object <list|get|create|update|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si stripe object <list|get|create|update|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdStripeObjectList(args[1:])

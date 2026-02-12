@@ -115,10 +115,11 @@ func resolveStripeAPIKey(account StripeAccountSetting, env stripebridge.Environm
 }
 
 func cmdStripeAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si stripe auth status [--account <alias|acct_id>] [--env <live|sandbox>] [--api-key <key>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si stripe auth status [--account <alias|acct_id>] [--env <live|sandbox>] [--api-key <key>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
 		cmdStripeAuthStatus(args[1:])
@@ -251,10 +252,11 @@ func cmdStripeDoctor(args []string) {
 }
 
 func cmdStripeContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si stripe context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si stripe context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdStripeContextList(args[1:])

@@ -654,10 +654,11 @@ func printGooglePlayContextBanner(runtime googlePlayRuntimeContext, jsonOut bool
 }
 
 func cmdGooglePlayAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play auth status [--account <alias>] [--env <prod|staging|dev>] [--package <name>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play auth status [--account <alias>] [--env <prod|staging|dev>] [--package <name>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -760,10 +761,11 @@ func cmdGooglePlayAuthStatus(args []string) {
 }
 
 func cmdGooglePlayContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google play context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

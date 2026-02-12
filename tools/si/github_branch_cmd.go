@@ -15,10 +15,11 @@ import (
 )
 
 func cmdGithubBranch(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github branch <list|get|create|delete|protect|unprotect> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github branch <list|get|create|delete|protect|unprotect> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGithubBranchList(args[1:])

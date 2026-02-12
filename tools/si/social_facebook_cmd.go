@@ -13,10 +13,11 @@ import (
 const socialFacebookUsageText = "usage: si social facebook <auth|context|doctor|profile|page|post|comment|insights|raw|report>"
 
 func cmdSocialFacebook(args []string) {
-	if len(args) == 0 {
-		printUsage(socialFacebookUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, socialFacebookUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -92,10 +93,11 @@ func cmdSocialFacebookProfile(args []string) {
 }
 
 func cmdSocialFacebookPage(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social facebook page <list|get> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social facebook page <list|get> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialFacebookPageList(args[1:])
@@ -202,10 +204,11 @@ func cmdSocialFacebookPageGet(args []string) {
 }
 
 func cmdSocialFacebookPost(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social facebook post <list|get|create|delete> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social facebook post <list|get|create|delete> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialFacebookPostList(args[1:])
@@ -420,10 +423,11 @@ func cmdSocialFacebookPostDelete(args []string) {
 }
 
 func cmdSocialFacebookComment(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social facebook comment <list|create> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social facebook comment <list|create> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialFacebookCommentList(args[1:])
@@ -527,10 +531,11 @@ func cmdSocialFacebookCommentCreate(args []string) {
 }
 
 func cmdSocialFacebookInsights(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social facebook insights <page|post> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social facebook insights <page|post> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "page":
 		cmdSocialFacebookInsightsPage(args[1:])

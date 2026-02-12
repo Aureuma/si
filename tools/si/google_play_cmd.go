@@ -5,10 +5,11 @@ import "strings"
 const googlePlayUsageText = "usage: si google play <auth|context|doctor|app|listing|details|asset|release|raw|apply>"
 
 func cmdGooglePlay(args []string) {
-	if len(args) == 0 {
-		printUsage(googlePlayUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, googlePlayUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
