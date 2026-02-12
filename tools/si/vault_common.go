@@ -65,11 +65,29 @@ func vaultDefaultEnvFile(settings Settings) string {
 
 func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
 	return vault.ResolveTarget(vault.ResolveOptions{
-		CWD:             "",
-		File:            fileFlag,
-		DefaultFile:     vaultDefaultEnvFile(settings),
+		CWD:              "",
+		File:             fileFlag,
+		DefaultFile:      vaultDefaultEnvFile(settings),
 		AllowMissingFile: allowMissingFile,
 	})
+}
+
+// vaultContainerEnvFileMountPath resolves the host vault env file path to bind
+// into containers. Returns empty when unresolved or missing.
+func vaultContainerEnvFileMountPath(settings Settings) string {
+	target, err := vaultResolveTarget(settings, "", true)
+	if err != nil {
+		return ""
+	}
+	path := filepath.Clean(strings.TrimSpace(target.File))
+	if path == "" {
+		return ""
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil || !info.Mode().IsRegular() {
+		return ""
+	}
+	return path
 }
 
 func vaultTrustFingerprint(doc vault.DotenvFile) (string, error) {

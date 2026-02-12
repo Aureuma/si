@@ -142,6 +142,7 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	settings := loadSettingsOrDefault()
+	requiredVaultFile := vaultContainerEnvFileMountPath(settings)
 	defaultProfileKey := codexDefaultProfileKey(settings)
 
 	if !flagProvided(args, "image") && strings.TrimSpace(settings.Codex.Image) != "" {
@@ -329,8 +330,8 @@ func cmdCodexSpawn(args []string) {
 					}
 				}
 				// Ensure workspace mounts reflect the current host directory. If not, recreate.
-				if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror) {
-					warnf("codex container %s workspace differs from %s; recreating", choice.Name, desiredWorkspaceHost)
+				if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile) {
+					warnf("codex container %s workspace/vault mounts differ from %s; recreating", choice.Name, desiredWorkspaceHost)
 					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
 						fatal(err)
 					}
@@ -365,8 +366,8 @@ func cmdCodexSpawn(args []string) {
 			}
 		}
 		// Ensure workspace mounts reflect the current host directory. If not, recreate.
-		if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror) {
-			warnf("codex container %s workspace differs from %s; recreating", containerName, desiredWorkspaceHost)
+		if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile) {
+			warnf("codex container %s workspace/vault mounts differ from %s; recreating", containerName, desiredWorkspaceHost)
 			if err := client.RemoveContainer(ctx, existingID, true); err != nil {
 				fatal(err)
 			}
@@ -460,6 +461,7 @@ func cmdCodexSpawn(args []string) {
 		WorkspaceMirrorTarget:  workspaceTargetMirror,
 		ContainerHome:          "/home/si",
 		IncludeHostSi:          true,
+		HostVaultEnvFile:       requiredVaultFile,
 	})...)
 	if *flags.dockerSocket {
 		if socketMount, ok := shared.DockerSocketMount(); ok {
@@ -683,6 +685,7 @@ func cmdCodexExec(args []string) {
 	_ = fs.Parse(args)
 
 	settings := loadSettingsOrDefault()
+	requiredVaultFile := vaultContainerEnvFileMountPath(settings)
 	if !flagProvided(args, "docker-socket") && settings.Codex.DockerSocket != nil {
 		*dockerSocket = *settings.Codex.DockerSocket
 	}
@@ -733,6 +736,7 @@ func cmdCodexExec(args []string) {
 			OutputOnly:    *outputOnly,
 			KeepContainer: *keep,
 			DockerSocket:  *dockerSocket,
+			VaultEnvFile:  requiredVaultFile,
 			Profile:       profile,
 		}
 		if opts.SkillsVolume == "" {
@@ -800,12 +804,12 @@ func cmdCodexExec(args []string) {
 		}
 
 		if strings.TrimSpace(containerID) != "" {
-			if containerInfo != nil && !shared.HasHostSiMount(containerInfo, "/home/si") {
+			if containerInfo != nil && (!shared.HasHostSiMount(containerInfo, "/home/si") || !shared.HasHostVaultEnvFileMount(containerInfo, requiredVaultFile)) {
 				slug := codexContainerSlug(containerName)
 				if strings.TrimSpace(slug) == "" {
-					fatal(fmt.Errorf("codex container %s is missing host ~/.si mount required for `si vault`; run `si respawn %s`", containerName, containerName))
+					fatal(fmt.Errorf("codex container %s is missing required host `si vault` mounts; run `si respawn %s`", containerName, containerName))
 				}
-				warnf("codex container %s is missing host ~/.si mount; recreating to enable full `si`/`si vault` support", containerName)
+				warnf("codex container %s is missing required host `si vault` mounts; recreating for full `si`/`si vault` support", containerName)
 				spawnArgs := []string{slug}
 				if workspace := codexContainerWorkspaceSource(containerInfo); workspace != "" {
 					spawnArgs = append(spawnArgs, "--workspace", workspace)
@@ -826,8 +830,8 @@ func cmdCodexExec(args []string) {
 				if id == "" || info == nil {
 					fatal(fmt.Errorf("codex container %s recreation failed", containerName))
 				}
-				if !shared.HasHostSiMount(info, "/home/si") {
-					fatal(fmt.Errorf("codex container %s recreation missing host ~/.si mount; run `si respawn %s`", containerName, codexContainerSlug(containerName)))
+				if !shared.HasHostSiMount(info, "/home/si") || !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
+					fatal(fmt.Errorf("codex container %s recreation missing required host `si vault` mounts; run `si respawn %s`", containerName, codexContainerSlug(containerName)))
 				}
 				containerID = id
 				containerInfo = info
@@ -1372,11 +1376,11 @@ func containerCwdForHostCwd(info *types.ContainerJSON, hostCwd string) (string, 
 	return path.Join(bestDest, filepath.ToSlash(bestRel)), true
 }
 
-func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirrorTarget string) bool {
+func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirrorTarget, requiredVaultFile string) bool {
 	if info == nil {
 		return false
 	}
-	if !shared.HasHostSiMount(info, "/home/si") {
+	if !shared.HasHostSiMount(info, "/home/si") || !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
 		return false
 	}
 	desiredHost = filepath.Clean(strings.TrimSpace(desiredHost))

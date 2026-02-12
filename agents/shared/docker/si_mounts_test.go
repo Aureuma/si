@@ -74,6 +74,57 @@ func TestHasHostSiMountNoHostSiDir(t *testing.T) {
 	}
 }
 
+func TestHostVaultEnvFileMount(t *testing.T) {
+	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
+	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+
+	got, ok := HostVaultEnvFileMount(vaultFile)
+	if !ok {
+		t.Fatalf("expected vault mount to be returned")
+	}
+	if got.Source != vaultFile {
+		t.Fatalf("unexpected source %q", got.Source)
+	}
+	if got.Target != filepath.ToSlash(vaultFile) {
+		t.Fatalf("unexpected target %q", got.Target)
+	}
+}
+
+func TestHostVaultEnvFileMountMissingFile(t *testing.T) {
+	if _, ok := HostVaultEnvFileMount(filepath.Join(t.TempDir(), "missing.env")); ok {
+		t.Fatalf("expected no mount for missing file")
+	}
+}
+
+func TestHasHostVaultEnvFileMount(t *testing.T) {
+	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
+	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "bind",
+				Source:      vaultFile,
+				Destination: filepath.ToSlash(vaultFile),
+			},
+		},
+	}
+	if !HasHostVaultEnvFileMount(info, vaultFile) {
+		t.Fatalf("expected vault env file mount to be detected")
+	}
+	other := filepath.Join(filepath.Dir(vaultFile), "other.env")
+	if err := os.WriteFile(other, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatalf("write other vault file: %v", err)
+	}
+	if HasHostVaultEnvFileMount(info, other) {
+		t.Fatalf("expected wrong vault file to fail detection")
+	}
+}
+
 func ensureDir(p string) error {
 	return os.MkdirAll(p, 0o700)
 }
