@@ -5,10 +5,11 @@ import "strings"
 const githubUsageText = "usage: si github <auth|context|doctor|repo|branch|pr|issue|workflow|release|secret|raw|graphql>"
 
 func cmdGithub(args []string) {
-	if len(args) == 0 {
-		printUsage(githubUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, githubUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {

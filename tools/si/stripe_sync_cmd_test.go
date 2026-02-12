@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,47 @@ func TestPrintSyncPlan(t *testing.T) {
 	}
 	if !strings.Contains(out, "products") {
 		t.Fatalf("missing family output: %q", out)
+	}
+}
+
+func TestStripeSyncNoArgsShowsUsage(t *testing.T) {
+	out := captureStdout(t, func() {
+		cmdStripeSync(nil)
+	})
+	if !strings.Contains(out, stripeSyncUsageText) {
+		t.Fatalf("expected usage output, got %q", out)
+	}
+}
+
+func TestStripeSyncModeWithoutActionShowsUsage(t *testing.T) {
+	out := captureStdout(t, func() {
+		cmdStripeSync([]string{"live-to-sandbox"})
+	})
+	if !strings.Contains(out, stripeSyncUsageText) {
+		t.Fatalf("expected usage output, got %q", out)
+	}
+}
+
+func TestStripeSyncActionSets(t *testing.T) {
+	if len(stripeSyncModeActions) == 0 {
+		t.Fatalf("stripe sync mode actions should not be empty")
+	}
+	if len(stripeSyncActionActions) == 0 {
+		t.Fatalf("stripe sync action actions should not be empty")
+	}
+	modeNames := make([]string, 0, len(stripeSyncModeActions))
+	for _, action := range stripeSyncModeActions {
+		modeNames = append(modeNames, action.Name)
+	}
+	if !slices.Contains(modeNames, "live-to-sandbox") {
+		t.Fatalf("missing live-to-sandbox mode: %v", modeNames)
+	}
+	actionNames := make([]string, 0, len(stripeSyncActionActions))
+	for _, action := range stripeSyncActionActions {
+		actionNames = append(actionNames, action.Name)
+	}
+	if !slices.Contains(actionNames, "plan") || !slices.Contains(actionNames, "apply") {
+		t.Fatalf("missing stripe sync actions: %v", actionNames)
 	}
 }
 

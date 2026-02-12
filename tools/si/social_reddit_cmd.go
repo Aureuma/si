@@ -14,10 +14,11 @@ import (
 const socialRedditUsageText = "usage: si social reddit <auth|context|doctor|profile|subreddit|post|comment|raw|report>"
 
 func cmdSocialReddit(args []string) {
-	if len(args) == 0 {
-		printUsage(socialRedditUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, socialRedditUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -93,10 +94,11 @@ func cmdSocialRedditProfile(args []string) {
 }
 
 func cmdSocialRedditSubreddit(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social reddit subreddit <get|posts> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social reddit subreddit <get|posts> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "get", "about":
 		cmdSocialRedditSubredditGet(args[1:])
@@ -252,10 +254,11 @@ func cmdSocialRedditSubredditPosts(args []string) {
 }
 
 func cmdSocialRedditPost(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social reddit post <get|create|delete> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social reddit post <get|create|delete> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "get":
 		cmdSocialRedditPostGet(args[1:])
@@ -464,10 +467,11 @@ func cmdSocialRedditPostDelete(args []string) {
 }
 
 func cmdSocialRedditComment(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social reddit comment <list|create|delete> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social reddit comment <list|create|delete> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list", "get":
 		cmdSocialRedditCommentList(args[1:])

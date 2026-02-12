@@ -13,10 +13,11 @@ import (
 )
 
 func cmdGithubIssue(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github issue <list|get|create|comment|close|reopen> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github issue <list|get|create|comment|close|reopen> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGithubIssueList(args[1:])

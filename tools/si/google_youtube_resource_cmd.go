@@ -23,10 +23,11 @@ import (
 )
 
 func cmdGoogleYouTubeSearch(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube search <list>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube search <list>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "list":
@@ -119,10 +120,11 @@ func cmdGoogleYouTubeSearchList(args []string) {
 }
 
 func cmdGoogleYouTubeSupport(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube support <languages|regions|categories>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube support <languages|regions|categories>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -221,10 +223,11 @@ func cmdGoogleYouTubeSupportCategories(args []string) {
 }
 
 func cmdGoogleYouTubeChannel(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube channel <list|get|mine|update>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube channel <list|get|mine|update>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -328,10 +331,11 @@ func cmdGoogleYouTubeChannelUpdate(args []string) {
 }
 
 func cmdGoogleYouTubeVideo(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube video <list|get|update|delete|upload|rate|get-rating>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube video <list|get|update|delete|upload|rate|get-rating>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -564,10 +568,11 @@ func cmdGoogleYouTubeVideoUpload(args []string) {
 }
 
 func cmdGoogleYouTubePlaylist(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube playlist <list|get|create|update|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube playlist <list|get|create|update|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -740,10 +745,11 @@ func cmdGoogleYouTubePlaylistDelete(args []string) {
 }
 
 func cmdGoogleYouTubePlaylistItem(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube playlist-item <list|add|update|remove>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube playlist-item <list|add|update|remove>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -908,10 +914,11 @@ func cmdGoogleYouTubePlaylistItemRemove(args []string) {
 }
 
 func cmdGoogleYouTubeSubscription(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube subscription <list|create|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube subscription <list|create|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1047,10 +1054,11 @@ func cmdGoogleYouTubeSubscriptionDelete(args []string) {
 }
 
 func cmdGoogleYouTubeComment(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube comment <list|get|create|update|delete|thread>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube comment <list|get|create|update|delete|thread>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1174,10 +1182,11 @@ func cmdGoogleYouTubeCommentDelete(args []string) {
 }
 
 func cmdGoogleYouTubeCommentThread(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube comment thread <list|create>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube comment thread <list|create>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1297,10 +1306,11 @@ func cmdGoogleYouTubeCommentThreadCreate(args []string) {
 }
 
 func cmdGoogleYouTubeCaption(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube caption <list|upload|update|delete|download>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube caption <list|upload|update|delete|download>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1480,10 +1490,11 @@ func cmdGoogleYouTubeCaptionDownload(args []string) {
 }
 
 func cmdGoogleYouTubeThumbnail(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube thumbnail <set>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube thumbnail <set>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1521,10 +1532,11 @@ func cmdGoogleYouTubeThumbnailSet(args []string) {
 }
 
 func cmdGoogleYouTubeLive(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube live <broadcast|stream|chat>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube live <broadcast|stream|chat>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1541,10 +1553,11 @@ func cmdGoogleYouTubeLive(args []string) {
 }
 
 func cmdGoogleYouTubeLiveBroadcast(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube live broadcast <list|get|create|update|delete|bind|transition>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube live broadcast <list|get|create|update|delete|bind|transition>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1769,10 +1782,11 @@ func cmdGoogleYouTubeLiveBroadcastTransition(args []string) {
 }
 
 func cmdGoogleYouTubeLiveStream(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube live stream <list|get|create|update|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube live stream <list|get|create|update|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1923,10 +1937,11 @@ func cmdGoogleYouTubeLiveStreamDelete(args []string) {
 }
 
 func cmdGoogleYouTubeLiveChat(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube live chat <list|create|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube live chat <list|create|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -2086,10 +2101,11 @@ func cmdGoogleYouTubeRaw(args []string) {
 }
 
 func cmdGoogleYouTubeReport(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube report <usage>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube report <usage>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

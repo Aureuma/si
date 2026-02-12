@@ -5,10 +5,11 @@ import "strings"
 const cloudflareUsageText = "usage: si cloudflare <auth|context|doctor|status|smoke|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>"
 
 func cmdCloudflare(args []string) {
-	if len(args) == 0 {
-		printUsage(cloudflareUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, cloudflareUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {

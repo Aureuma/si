@@ -12,12 +12,18 @@ import (
 )
 
 const socialLinkedInUsageText = "usage: si social linkedin <auth|context|doctor|profile|organization|post|raw|report>"
+const socialLinkedInOrganizationUsageText = "usage: si social linkedin organization <get>"
+
+var socialLinkedInOrganizationActions = []subcommandAction{
+	{Name: "get", Description: "get organization by id or urn"},
+}
 
 func cmdSocialLinkedIn(args []string) {
-	if len(args) == 0 {
-		printUsage(socialLinkedInUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, socialLinkedInUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -92,16 +98,26 @@ func cmdSocialLinkedInProfile(args []string) {
 }
 
 func cmdSocialLinkedInOrganization(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social linkedin organization get <org_id|urn>")
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectSocialLinkedInOrganizationAction)
+	if showUsage {
+		printUsage(socialLinkedInOrganizationUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "get":
 		cmdSocialLinkedInOrganizationGet(args[1:])
 	default:
 		printUnknown("social linkedin organization", args[0])
+		printUsage(socialLinkedInOrganizationUsageText)
 	}
+}
+
+func selectSocialLinkedInOrganizationAction() (string, bool) {
+	return selectSubcommandAction("Social LinkedIn organization commands:", socialLinkedInOrganizationActions)
 }
 
 func cmdSocialLinkedInOrganizationGet(args []string) {
@@ -164,10 +180,11 @@ func cmdSocialLinkedInOrganizationGet(args []string) {
 }
 
 func cmdSocialLinkedInPost(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social linkedin post <list|get|create|delete> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social linkedin post <list|get|create|delete> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdSocialLinkedInPostList(args[1:])

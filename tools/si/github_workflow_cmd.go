@@ -13,10 +13,11 @@ import (
 )
 
 func cmdGithubWorkflow(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github workflow <list|run|runs|logs> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github workflow <list|run|runs|logs> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGithubWorkflowList(args[1:])

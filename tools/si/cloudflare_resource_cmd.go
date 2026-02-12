@@ -73,10 +73,11 @@ func cmdCloudflareDNS(args []string) {
 }
 
 func cmdCloudflareEmail(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare email <rule|address|settings> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare email <rule|address|settings> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -109,10 +110,11 @@ func cmdCloudflareStatus(args []string) {
 }
 
 func cmdCloudflareToken(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare token <list|get|create|update|delete|verify|permission-groups> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare token <list|get|create|update|delete|verify|permission-groups> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -148,10 +150,11 @@ func cmdCloudflareRateLimit(args []string) {
 }
 
 func cmdCloudflareWorkers(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare workers <script|route|secret> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare workers <script|route|secret> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -170,10 +173,11 @@ func cmdCloudflareWorkers(args []string) {
 }
 
 func cmdCloudflarePages(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare pages <project|deploy|domain> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare pages <project|deploy|domain> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -191,10 +195,11 @@ func cmdCloudflarePages(args []string) {
 }
 
 func cmdCloudflareR2(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare r2 <bucket|object> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare r2 <bucket|object> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -210,10 +215,11 @@ func cmdCloudflareR2(args []string) {
 }
 
 func cmdCloudflareD1(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare d1 <db|query|migration> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare d1 <db|query|migration> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -231,10 +237,11 @@ func cmdCloudflareD1(args []string) {
 }
 
 func cmdCloudflareKV(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare kv <namespace|key> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare kv <namespace|key> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -255,10 +262,11 @@ func cmdCloudflareQueue(args []string) {
 }
 
 func cmdCloudflareAccess(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare access <app|policy> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare access <app|policy> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -275,10 +283,11 @@ func cmdCloudflareAccess(args []string) {
 }
 
 func cmdCloudflareTunnel(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare tunnel <list|get|create|update|delete|token> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare tunnel <list|get|create|update|delete|token> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	if sub == "token" || sub == "issue" {
 		cmdCloudflareTunnelToken(args[1:])
@@ -302,10 +311,11 @@ func cmdCloudflareLB(args []string) {
 }
 
 func cmdCloudflareTLS(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare tls <get|set|cert|origin-cert> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare tls <get|set|cert|origin-cert> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -325,10 +335,11 @@ func cmdCloudflareTLS(args []string) {
 }
 
 func cmdCloudflareCache(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare cache <purge|settings> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare cache <purge|settings> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -343,10 +354,11 @@ func cmdCloudflareCache(args []string) {
 }
 
 func cmdCloudflareResourceFamily(args []string, spec cloudflareResourceSpec, usage string) {
-	if len(args) == 0 {
-		printUsage(usage)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, usage)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	switch op {
 	case "list":
@@ -651,10 +663,11 @@ func cmdCloudflareDNSIO(mode string, args []string) {
 }
 
 func cmdCloudflareWorkersSecret(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare workers secret <set|delete> --script <name> --name <secret> [--text <value>] [--force]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare workers secret <set|delete> --script <name> --name <secret> [--text <value>] [--force]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare workers secret "+op, args)
@@ -704,10 +717,11 @@ func cmdCloudflareWorkersSecret(args []string) {
 }
 
 func cmdCloudflarePagesDeploy(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare pages deploy <list|trigger|rollback> --project <name> [--deployment <id>]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare pages deploy <list|trigger|rollback> --project <name> [--deployment <id>]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare pages deploy "+op, args)
@@ -763,10 +777,11 @@ func cmdCloudflarePagesDeploy(args []string) {
 }
 
 func cmdCloudflarePagesDomain(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare pages domain <list|get|create|delete> --project <name> [--domain <fqdn>]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare pages domain <list|get|create|delete> --project <name> [--domain <fqdn>]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare pages domain "+op, args)
@@ -842,10 +857,11 @@ func cmdCloudflarePagesDomain(args []string) {
 }
 
 func cmdCloudflareR2Object(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare r2 object <list|get|put|delete> --bucket <name> [--key <key>] [--body <text>]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare r2 object <list|get|put|delete> --bucket <name> [--key <key>] [--body <text>]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare r2 object "+op, args)
@@ -938,10 +954,11 @@ func cmdCloudflareD1Query(args []string) {
 }
 
 func cmdCloudflareD1Migration(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare d1 migration <list|apply> --db <id> [--body <json>] [--force]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare d1 migration <list|apply> --db <id> [--body <json>] [--force]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare d1 migration "+op, args)
@@ -990,10 +1007,11 @@ func cmdCloudflareD1Migration(args []string) {
 }
 
 func cmdCloudflareKVKey(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare kv key <list|get|put|delete|bulk> --namespace <id> [--key <key>] [--value <text>] [--body <json>]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare kv key <list|get|put|delete|bulk> --namespace <id> [--key <key>] [--value <text>] [--body <json>]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare kv key "+op, args)
@@ -1155,10 +1173,11 @@ func cmdCloudflareTLSGetSet(mode string, args []string) {
 }
 
 func cmdCloudflareEmailSettings(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare email settings <get|enable|disable> [--zone-id <zone>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare email settings <get|enable|disable> [--zone-id <zone>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare email settings "+op, args)
@@ -1218,10 +1237,11 @@ func cmdCloudflareEmailSettings(args []string) {
 }
 
 func cmdCloudflareOriginCert(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare tls origin-cert <list|create|revoke> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare tls origin-cert <list|create|revoke> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true, "force": true})
 	fs := cloudflareCommonFlagSet("cloudflare tls origin-cert "+op, args)
@@ -1330,10 +1350,11 @@ func cmdCloudflareCachePurge(args []string) {
 }
 
 func cmdCloudflareCacheSettings(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare cache settings <get|set> --setting <name> [--value <value>]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare cache settings <get|set> --setting <name> [--value <value>]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	op := strings.ToLower(strings.TrimSpace(args[0]))
 	args = stripeFlagsFirst(args[1:], map[string]bool{"json": true, "raw": true})
 	fs := cloudflareCommonFlagSet("cloudflare cache settings "+op, args)

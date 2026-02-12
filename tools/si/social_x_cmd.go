@@ -13,10 +13,11 @@ import (
 const socialXUsageText = "usage: si social x <auth|context|doctor|user|tweet|search|raw|report>"
 
 func cmdSocialX(args []string) {
-	if len(args) == 0 {
-		printUsage(socialXUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, socialXUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {
@@ -45,10 +46,11 @@ func cmdSocialX(args []string) {
 }
 
 func cmdSocialXUser(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social x user <me|get|by-username> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social x user <me|get|by-username> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "me":
 		cmdSocialXUserMe(args[1:])
@@ -206,10 +208,11 @@ func cmdSocialXUserByUsername(args []string) {
 }
 
 func cmdSocialXTweet(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social x tweet <get|create|delete> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social x tweet <get|create|delete> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "get":
 		cmdSocialXTweetGet(args[1:])
@@ -363,10 +366,11 @@ func cmdSocialXTweetDelete(args []string) {
 }
 
 func cmdSocialXSearch(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si social x search recent --query <q> [flags]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si social x search recent --query <q> [flags]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "recent", "list":
 		cmdSocialXSearchRecent(args[1:])
