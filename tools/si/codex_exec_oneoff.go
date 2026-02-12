@@ -35,6 +35,7 @@ type codexExecOneOffOptions struct {
 	Quiet         bool
 	KeepContainer bool
 	DockerSocket  bool
+	VaultEnvFile  string
 	Profile       *codexProfile
 }
 
@@ -129,6 +130,7 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		WorkspacePrimaryTarget: "/workspace",
 		ContainerHome:          "/home/si",
 		IncludeHostSi:          true,
+		HostVaultEnvFile:       opts.VaultEnvFile,
 	})...)
 	if configHostDir != "" && configTargetDir != "" {
 		mounts = append(mounts, mount.Mount{

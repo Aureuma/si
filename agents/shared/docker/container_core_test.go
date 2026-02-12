@@ -57,3 +57,25 @@ func TestBuildContainerCoreMountsRejectsEmptyWorkspace(t *testing.T) {
 		t.Fatalf("expected no mounts for empty workspace host, got %+v", mounts)
 	}
 }
+
+func TestBuildContainerCoreMountsIncludesVaultEnvFileMount(t *testing.T) {
+	workspace := t.TempDir()
+	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
+	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+
+	mounts := BuildContainerCoreMounts(ContainerCoreMountPlan{
+		WorkspaceHost:          workspace,
+		WorkspacePrimaryTarget: "/workspace",
+		ContainerHome:          "/home/si",
+		IncludeHostSi:          false,
+		HostVaultEnvFile:       vaultFile,
+	})
+	if len(mounts) != 2 {
+		t.Fatalf("expected 2 mounts, got %d: %+v", len(mounts), mounts)
+	}
+	if mounts[1].Source != vaultFile || mounts[1].Target != filepath.ToSlash(vaultFile) {
+		t.Fatalf("unexpected vault mount: %+v", mounts[1])
+	}
+}

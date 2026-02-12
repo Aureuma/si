@@ -45,6 +45,7 @@ type DyadOptions struct {
 	CodexEffortHigh   string
 	WorkspaceHost     string
 	ConfigsHost       string
+	VaultEnvFile      string
 	CodexVolume       string
 	SkillsVolume      string
 	Network           string
@@ -161,8 +162,12 @@ func (c *Client) EnsureDyad(ctx context.Context, opts DyadOptions) (string, stri
 		return c.CreateDyad(ctx, opts)
 	}
 	// Backward compatibility: recreate older dyads that were created before host
-	// ~/.si mounts were added, so full `si`/`si vault` works inside both members.
-	if !HasHostSiMount(actorInfo, "/root") || !HasHostSiMount(criticInfo, "/root") {
+	// ~/.si and vault env file mounts were added, so full `si`/`si vault` works
+	// inside both members.
+	if !HasHostSiMount(actorInfo, "/root") ||
+		!HasHostSiMount(criticInfo, "/root") ||
+		!HasHostVaultEnvFileMount(actorInfo, opts.VaultEnvFile) ||
+		!HasHostVaultEnvFileMount(criticInfo, opts.VaultEnvFile) {
 		if actorID != "" {
 			if err := c.RemoveContainer(ctx, actorID, true); err != nil {
 				return "", "", err
@@ -314,6 +319,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		WorkspaceMirrorTarget:  actorMirrorTarget,
 		ContainerHome:          "/root",
 		IncludeHostSi:          true,
+		HostVaultEnvFile:       opts.VaultEnvFile,
 	})...)
 	if hasSocket {
 		actorMounts = append(actorMounts, socketMount)
@@ -353,6 +359,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		WorkspaceMirrorTarget:  criticMirrorTarget,
 		ContainerHome:          "/root",
 		IncludeHostSi:          true,
+		HostVaultEnvFile:       opts.VaultEnvFile,
 	})...)
 	if hasSocket {
 		criticMounts = append(criticMounts, socketMount)

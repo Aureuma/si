@@ -204,7 +204,7 @@ func TestCodexContainerWorkspaceMatchesRequiresHostSiMount(t *testing.T) {
 			{Type: "bind", Source: desiredHost, Destination: mirror},
 		},
 	}
-	if codexContainerWorkspaceMatches(info, desiredHost, mirror) {
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
 		t.Fatalf("expected match to fail when host ~/.si mount is missing")
 	}
 	info.Mounts = append(info.Mounts, types.MountPoint{
@@ -212,7 +212,7 @@ func TestCodexContainerWorkspaceMatchesRequiresHostSiMount(t *testing.T) {
 		Source:      filepath.Join(home, ".si"),
 		Destination: "/home/si/.si",
 	})
-	if !codexContainerWorkspaceMatches(info, desiredHost, mirror) {
+	if !codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
 		t.Fatalf("expected match when workspace and ~/.si mounts are present")
 	}
 }
@@ -238,5 +238,44 @@ func TestCodexContainerWorkspaceSourceMissing(t *testing.T) {
 	}
 	if got := codexContainerWorkspaceSource(info); got != "" {
 		t.Fatalf("expected empty workspace source, got %q", got)
+	}
+}
+
+func TestCodexContainerWorkspaceMatchesRequiresVaultEnvFileMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
+	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+	desiredHost := "/home/ubuntu/Development/si"
+	mirror := desiredHost
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			WorkingDir: mirror,
+			Env: []string{
+				"SI_WORKSPACE_MIRROR=" + mirror,
+				"SI_WORKSPACE_HOST=" + desiredHost,
+			},
+		},
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: desiredHost, Destination: "/workspace"},
+			{Type: "bind", Source: desiredHost, Destination: mirror},
+			{Type: "bind", Source: filepath.Join(home, ".si"), Destination: "/home/si/.si"},
+		},
+	}
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror, vaultFile) {
+		t.Fatalf("expected match to fail when vault env file mount is missing")
+	}
+	info.Mounts = append(info.Mounts, types.MountPoint{
+		Type:        "bind",
+		Source:      vaultFile,
+		Destination: filepath.ToSlash(vaultFile),
+	})
+	if !codexContainerWorkspaceMatches(info, desiredHost, mirror, vaultFile) {
+		t.Fatalf("expected match when vault env file mount is present")
 	}
 }
