@@ -41,7 +41,17 @@ func TestResolveURL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveURL: %v", err)
 	}
-	if u != "https://api.cloudflare.com/zones?page=2" {
+	if u != "https://api.cloudflare.com/client/v4/zones?page=2" {
+		t.Fatalf("unexpected url: %q", u)
+	}
+}
+
+func TestResolveURL_PreservesPrefixedPath(t *testing.T) {
+	u, err := resolveURL("https://api.cloudflare.com/client/v4", "/client/v4/accounts", map[string]string{"page": "1"})
+	if err != nil {
+		t.Fatalf("resolveURL: %v", err)
+	}
+	if u != "https://api.cloudflare.com/client/v4/accounts?page=1" {
 		t.Fatalf("unexpected url: %q", u)
 	}
 }
