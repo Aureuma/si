@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -149,6 +150,117 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 	}
 }
 
+func TestRunDockerBuildRetriesLegacyOnRecoverableBuildKitError(t *testing.T) {
+	origCheck := dockerBuildxAvailableFn
+	origRun := runDockerBuildCommandFn
+	defer func() {
+		dockerBuildxAvailableFn = origCheck
+		runDockerBuildCommandFn = origRun
+	}()
+
+	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
+	var calls []struct {
+		args           []string
+		enableBuildKit bool
+	}
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
+		calls = append(calls, struct {
+			args           []string
+			enableBuildKit bool
+		}{args: append([]string(nil), args...), enableBuildKit: enableBuildKit})
+		if len(calls) == 1 {
+			return &dockerBuildCommandError{
+				err:    assertErr("build failed"),
+				output: "ERROR: failed to solve: failed to prepare extraction snapshot",
+			}
+		}
+		return nil
+	}
+
+	err := runDockerBuild(imageBuildSpec{
+		tag:        "aureuma/si:local",
+		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
+		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
+	})
+	if err != nil {
+		t.Fatalf("runDockerBuild returned error: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 docker build attempts, got %d", len(calls))
+	}
+	if !calls[0].enableBuildKit {
+		t.Fatalf("expected first attempt to use BuildKit")
+	}
+	if !argsContain(calls[0].args, "-f", "/workspace/tools/si-image/Dockerfile") {
+		t.Fatalf("expected first attempt to use buildkit dockerfile, args=%v", calls[0].args)
+	}
+	if !argsContainKey(calls[0].args, "--secret") {
+		t.Fatalf("expected first attempt to include --secret, args=%v", calls[0].args)
+	}
+	if calls[1].enableBuildKit {
+		t.Fatalf("expected second attempt to disable BuildKit")
+	}
+	if !argsContain(calls[1].args, "-f", "/workspace/tools/si-image/Dockerfile.legacy") {
+		t.Fatalf("expected second attempt to use legacy dockerfile, args=%v", calls[1].args)
+	}
+	if argsContainKey(calls[1].args, "--secret") {
+		t.Fatalf("did not expect second attempt to include --secret, args=%v", calls[1].args)
+	}
+}
+
+func TestRunDockerBuildDoesNotRetryLegacyOnNonRecoverableBuildKitError(t *testing.T) {
+	origCheck := dockerBuildxAvailableFn
+	origRun := runDockerBuildCommandFn
+	defer func() {
+		dockerBuildxAvailableFn = origCheck
+		runDockerBuildCommandFn = origRun
+	}()
+
+	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
+	attempts := 0
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
+		attempts++
+		return &dockerBuildCommandError{
+			err:    assertErr("build failed"),
+			output: "ERROR: failed to solve: process \"/bin/sh -c exit 42\" did not complete successfully",
+		}
+	}
+
+	err := runDockerBuild(imageBuildSpec{
+		tag:        "aureuma/si:local",
+		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
+		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
+	})
+	if err == nil {
+		t.Fatalf("expected runDockerBuild to return error")
+	}
+	if attempts != 1 {
+		t.Fatalf("expected exactly 1 attempt for non-recoverable error, got %d", attempts)
+	}
+}
+
+func TestShouldRetryLegacyBuild(t *testing.T) {
+	recoverable := &dockerBuildCommandError{
+		err:    errors.New("build failed"),
+		output: "failed to prepare extraction snapshot",
+	}
+	if !shouldRetryLegacyBuild(recoverable) {
+		t.Fatalf("expected recoverable error to trigger legacy retry")
+	}
+	other := &dockerBuildCommandError{
+		err:    errors.New("build failed"),
+		output: "failed to solve: go test failed",
+	}
+	if shouldRetryLegacyBuild(other) {
+		t.Fatalf("did not expect non-recoverable build failure to trigger legacy retry")
+	}
+	if shouldRetryLegacyBuild(assertErr("plain error")) {
+		t.Fatalf("did not expect non-build error type to trigger legacy retry")
+	}
+}
+
 type assertErr string
 
 func (e assertErr) Error() string { return string(e) }
@@ -156,6 +268,15 @@ func (e assertErr) Error() string { return string(e) }
 func argsContain(args []string, key, value string) bool {
 	for i := 0; i < len(args)-1; i++ {
 		if args[i] == key && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
+func argsContainKey(args []string, key string) bool {
+	for _, arg := range args {
+		if arg == key {
 			return true
 		}
 	}
