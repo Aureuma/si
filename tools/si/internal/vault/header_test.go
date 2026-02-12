@@ -12,7 +12,7 @@ func TestEnsureVaultHeaderPrependsWhenMissing(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1abc\n" +
 		"\n" +
 		"A=1\n"
@@ -23,7 +23,7 @@ func TestEnsureVaultHeaderPrependsWhenMissing(t *testing.T) {
 
 func TestEnsureVaultHeaderAddsMissingRecipientOnly(t *testing.T) {
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1old\n" +
 		"\n" +
 		"A=1\n"))
@@ -35,7 +35,7 @@ func TestEnsureVaultHeaderAddsMissingRecipientOnly(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1old\n" +
 		"# si-vault:recipient age1new\n" +
 		"\n" +
@@ -58,7 +58,7 @@ func TestEnsureVaultHeaderAddsVersionWhenOnlyRecipientsPresent(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1old\n" +
 		"\n" +
 		"A=1\n"
@@ -69,7 +69,7 @@ func TestEnsureVaultHeaderAddsVersionWhenOnlyRecipientsPresent(t *testing.T) {
 
 func TestEnsureVaultHeaderEnsuresBlankLineAfterHeader(t *testing.T) {
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1old\n" +
 		"A=1\n"))
 	changed, err := EnsureVaultHeader(&doc, []string{"age1old"})
@@ -80,7 +80,7 @@ func TestEnsureVaultHeaderEnsuresBlankLineAfterHeader(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1old\n" +
 		"\n" +
 		"A=1\n"
@@ -91,7 +91,7 @@ func TestEnsureVaultHeaderEnsuresBlankLineAfterHeader(t *testing.T) {
 
 func TestRemoveRecipientOnlyRemovesTarget(t *testing.T) {
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1a\n" +
 		"# si-vault:recipient age1b\n" +
 		"\n" +
@@ -101,7 +101,7 @@ func TestRemoveRecipientOnlyRemovesTarget(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1b\n" +
 		"\n" +
 		"A=1\n"
@@ -120,7 +120,7 @@ func TestEnsureVaultHeaderPreservesCRLF(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\r\n" +
+		"# si-vault:v2\r\n" +
 		"# si-vault:recipient age1abc\r\n" +
 		"\r\n" +
 		"A=1\r\n"
@@ -139,7 +139,7 @@ func TestEnsureVaultHeaderDedupesRecipientsInput(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1abc\n" +
 		"\n" +
 		"A=1\n"
@@ -150,7 +150,7 @@ func TestEnsureVaultHeaderDedupesRecipientsInput(t *testing.T) {
 
 func TestRemoveRecipientNoOpWhenMissing(t *testing.T) {
 	in := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1a\n" +
 		"\n" +
 		"A=1\n"
@@ -182,5 +182,28 @@ func TestParseRecipientLineRejectsNonCommentLine(t *testing.T) {
 func TestIsVersionLineRejectsNonCommentLine(t *testing.T) {
 	if isVersionLine("si-vault:v1") {
 		t.Fatalf("expected reject")
+	}
+}
+
+func TestEnsureVaultHeaderAcceptsLegacyV1VersionLine(t *testing.T) {
+	doc := ParseDotenv([]byte("" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1old\n" +
+		"\n" +
+		"A=1\n"))
+	changed, err := EnsureVaultHeader(&doc, []string{"age1old"})
+	if err != nil {
+		t.Fatalf("EnsureVaultHeader: %v", err)
+	}
+	if changed {
+		t.Fatalf("expected no change")
+	}
+	want := "" +
+		"# si-vault:v1\n" +
+		"# si-vault:recipient age1old\n" +
+		"\n" +
+		"A=1\n"
+	if got := string(doc.Bytes()); got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }

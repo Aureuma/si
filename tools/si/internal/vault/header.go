@@ -116,7 +116,7 @@ func isVersionLine(line string) bool {
 	if !ok {
 		return false
 	}
-	return body == "si-vault:v1"
+	return body == VaultHeaderVersionBody || body == VaultHeaderVersionBodyV1
 }
 
 func parseRecipientLine(line string) (string, bool) {

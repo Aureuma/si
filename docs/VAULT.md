@@ -105,9 +105,10 @@ si vault init --file /path/to/any/.env
 
 `si vault fmt` enforces a canonical header and key/value style:
 - header block:
-  - `# si-vault:v1`
+  - `# si-vault:v2`
   - one or more `# si-vault:recipient age1...` lines
   - one blank line after header
+  - version is shared with the current encrypted value prefix (`encrypted:si:v2:`)
 - sections:
   - section headers like `# [stripe]` are preserved as-authored (not lowercased/rewritten)
   - divider comment lines (e.g. `# ---------...`) are preserved as-authored

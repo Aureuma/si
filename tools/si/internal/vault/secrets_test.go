@@ -12,7 +12,7 @@ func TestEncryptDotenvValuesIdempotentWithoutReencrypt(t *testing.T) {
 	}
 	recipient := id.Recipient().String()
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient " + recipient + "\n" +
 		"\n" +
 		"A=hello\n"))
@@ -46,7 +46,7 @@ func TestEncryptDotenvValuesReencryptChangesCiphertextButNotPlaintext(t *testing
 	}
 	recipient := id.Recipient().String()
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient " + recipient + "\n" +
 		"\n" +
 		"A=hello\n"))
@@ -84,7 +84,7 @@ func TestEncryptDotenvValuesPreservesAssignmentLayout(t *testing.T) {
 	}
 	recipient := id.Recipient().String()
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient " + recipient + "\n" +
 		"\n" +
 		"\texport API_KEY   =   \"abc\" # keep me\n"))
@@ -185,7 +185,7 @@ func TestEncryptDotenvValuesErrorsOnInvalidQuotedPlaintext(t *testing.T) {
 	}
 	recipient := id.Recipient().String()
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient " + recipient + "\n" +
 		"\n" +
 		"A=\"unterminated\n"))
@@ -208,7 +208,7 @@ func TestEncryptDotenvValuesErrorsOnInvalidKeyName(t *testing.T) {
 	}
 	recipient := id.Recipient().String()
 	doc := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient " + recipient + "\n" +
 		"\n" +
 		"BAD KEY=1\n"))
@@ -237,7 +237,7 @@ func TestEncryptDotenvValuesPreservesLayoutMatrix(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			doc := ParseDotenv([]byte("" +
-				"# si-vault:v1\n" +
+				"# si-vault:v2\n" +
 				"# si-vault:recipient " + recipient + "\n" +
 				"\n" +
 				tc.line + "\n"))
