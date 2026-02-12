@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +60,24 @@ func runDockerBuild(spec imageBuildSpec) error {
 	spec.dockerfile = dockerfileForBuildMode(spec.dockerfile, enableBuildKit)
 	args := dockerBuildArgs(spec, secrets)
 	infof("docker %s", redactedDockerBuildArgs(args))
-	return runDockerBuildCommandFn(args, enableBuildKit)
+	err := runDockerBuildCommandFn(args, enableBuildKit)
+	if err == nil {
+		return nil
+	}
+	if !enableBuildKit || !shouldRetryLegacyBuild(err) {
+		return err
+	}
+	warnf("BuildKit build failed with a recoverable snapshot/export error; retrying with legacy docker builder")
+	spec.dockerfile = dockerfileForBuildMode(spec.dockerfile, false)
+	if len(secrets) > 0 {
+		warnf("retrying without host build secrets because legacy docker build does not support --secret")
+	}
+	legacyArgs := dockerBuildArgs(spec, nil)
+	infof("docker %s", redactedDockerBuildArgs(legacyArgs))
+	if retryErr := runDockerBuildCommandFn(legacyArgs, false); retryErr != nil {
+		return fmt.Errorf("docker build failed in BuildKit mode (%v); legacy retry also failed: %w", err, retryErr)
+	}
+	return nil
 }
 
 func dockerfileForBuildMode(dockerfile string, enableBuildKit bool) string {
@@ -87,15 +106,20 @@ func runDockerBuildCommand(args []string, enableBuildKit bool) error {
 	if len(args) == 0 {
 		return fmt.Errorf("docker build args required")
 	}
-	buildKitSetting := "DOCKER_BUILDKIT=0"
+	env := []string{"DOCKER_BUILDKIT=0"}
 	if enableBuildKit {
-		buildKitSetting = "DOCKER_BUILDKIT=1"
+		// Local image builds do not require default provenance attestations.
+		env = []string{"DOCKER_BUILDKIT=1", "BUILDX_NO_DEFAULT_ATTESTATIONS=1"}
 	}
-	cmd := dockerCommandWithEnv([]string{buildKitSetting}, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd := dockerCommandWithEnv(env, args...)
+	var output bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &output)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &output)
 	cmd.Stdin = os.Stdin
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return &dockerBuildCommandError{err: err, output: output.String()}
+	}
+	return nil
 }
 
 func dockerBuildxAvailable() (bool, error) {
@@ -105,9 +129,66 @@ func dockerBuildxAvailable() (bool, error) {
 	cmd.Stdout = &output
 	cmd.Stderr = &output
 	if err := cmd.Run(); err != nil {
-		return false, nil
+		trimmed := strings.TrimSpace(output.String())
+		lower := strings.ToLower(trimmed)
+		if strings.Contains(lower, "not a docker command") ||
+			strings.Contains(lower, "unknown command \"buildx\"") ||
+			strings.Contains(lower, "buildx: command not found") {
+			return false, nil
+		}
+		if trimmed == "" {
+			return false, err
+		}
+		return false, fmt.Errorf("docker buildx probe failed: %s", trimmed)
 	}
 	return true, nil
+}
+
+type dockerBuildCommandError struct {
+	err    error
+	output string
+}
+
+func (e *dockerBuildCommandError) Error() string {
+	if e == nil || e.err == nil {
+		return "docker build command failed"
+	}
+	msg := strings.TrimSpace(e.output)
+	if msg == "" {
+		return e.err.Error()
+	}
+	return fmt.Sprintf("%v: %s", e.err, msg)
+}
+
+func (e *dockerBuildCommandError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.err
+}
+
+func shouldRetryLegacyBuild(err error) bool {
+	if err == nil {
+		return false
+	}
+	var buildErr *dockerBuildCommandError
+	if !errors.As(err, &buildErr) {
+		return false
+	}
+	lower := strings.ToLower(buildErr.output)
+	if lower == "" {
+		lower = strings.ToLower(err.Error())
+	}
+	if strings.Contains(lower, "failed to prepare extraction snapshot") {
+		return true
+	}
+	if strings.Contains(lower, "parent snapshot") && strings.Contains(lower, "does not exist") {
+		return true
+	}
+	if strings.Contains(lower, "error exporting to image") && strings.Contains(lower, "snapshot") {
+		return true
+	}
+	return false
 }
 
 func hostCodexConfigBuildSecrets() []string {
