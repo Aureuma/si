@@ -37,6 +37,7 @@ Environment policy:
 ```bash
 si cloudflare auth status --account core
 si cloudflare status --account core
+si cloudflare smoke --account core
 si cloudflare context list
 si cloudflare context current
 si cloudflare context use --account core --env prod --zone-id <zone>
