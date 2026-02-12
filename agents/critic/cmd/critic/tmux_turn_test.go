@@ -207,6 +207,45 @@ func TestCodexTurnExecutorRunTurnNonStrictAcceptsUndelimitedSectionReport(t *tes
 	}
 }
 
+func TestCodexTurnExecutorRunTurnTaggedMarkersNormalized(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not available")
+	}
+	dir := t.TempDir()
+	fake := filepath.Join(dir, "fake-codex-tagged")
+	if err := os.WriteFile(fake, []byte(fakeCodexTaggedScript), 0o755); err != nil {
+		t.Fatalf("write fake codex tagged: %v", err)
+	}
+	session := "si-test-" + sanitizeSessionName(t.Name())
+	defer func() { _ = exec.Command("tmux", "kill-session", "-t", session).Run() }()
+
+	e := codexTurnExecutor{
+		promptLines:  1,
+		allowMcp:     false,
+		captureMode:  "main",
+		captureLines: 1200,
+		strictReport: true,
+		readyTimeout: 3 * time.Second,
+		turnTimeout:  4 * time.Second,
+		pollInterval: 75 * time.Millisecond,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+
+	out, err := e.runTurn(ctx, tmuxRunner{}, session, "exec "+shellQuote(fake), "hello", "actor")
+	if err != nil {
+		t.Fatalf("runTurn: %v\nout:\n%s", err, out)
+	}
+	// Tagged reports are normalized into the legacy delimited format for downstream consumers.
+	if !strings.Contains(out, reportBeginMarker) || !strings.Contains(out, reportEndMarker) {
+		t.Fatalf("expected normalized delimited report markers, got:\n%s", out)
+	}
+	report := extractDelimitedWorkReport(out)
+	if !strings.Contains(report, "Summary:") || !strings.Contains(report, "Next Step for Critic:") {
+		t.Fatalf("expected actor report content, got:\n%s", report)
+	}
+}
+
 func shellQuote(s string) string {
 	// Minimal single-quote safe quoting for bash -lc usage in tests.
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
@@ -271,9 +310,9 @@ const fakeCodexNoMarkersScript = `#!/usr/bin/env bash
 	`
 
 const fakeCodexNoMarkersFullScript = `#!/usr/bin/env bash
-	set -euo pipefail
-	printf "› "
-	while IFS= read -r line; do
+		set -euo pipefail
+		printf "› "
+		while IFS= read -r line; do
 	  echo "ok"
 	  echo "Summary:"
 	  echo "- prompt_len: ${#line}"
@@ -286,5 +325,35 @@ const fakeCodexNoMarkersFullScript = `#!/usr/bin/env bash
 	  echo "Next Step for Critic:"
 	  echo "- proceed"
 	  printf "› "
-	done
-	`
+		done
+		`
+
+const fakeCodexTaggedScript = `#!/usr/bin/env bash
+set -euo pipefail
+printf "› "
+while IFS= read -r line; do
+  turn_id=""
+  if [[ "${line}" =~ \[(si-dyad-turn-id:[^]]+)\] ]]; then
+    turn_id="${BASH_REMATCH[1]}"
+  fi
+  begin="<<WORK_REPORT_BEGIN>>"
+  end="<<WORK_REPORT_END>>"
+  if [[ -n "${turn_id}" ]]; then
+    begin="<<WORK_REPORT_BEGIN:${turn_id}>>"
+    end="<<WORK_REPORT_END:${turn_id}>>"
+  fi
+  echo "${begin}"
+  echo "Summary:"
+  echo "- tagged marker path"
+  echo "Changes:"
+  echo "- none"
+  echo "Validation:"
+  echo "- none"
+  echo "Open Questions:"
+  echo "- none"
+  echo "Next Step for Critic:"
+  echo "- proceed"
+  echo "${end}"
+  printf "› "
+done
+`
