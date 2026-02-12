@@ -377,3 +377,12 @@ or connect an API key for usage-based billing
 		t.Fatalf("did not expect auth required without auth options")
 	}
 }
+
+func TestDecodeMountInfoPath(t *testing.T) {
+	in := `/workspace\040project\011tab\012line\134slash`
+	got := decodeMountInfoPath(in)
+	want := "/workspace project\ttab\nline\\slash"
+	if got != want {
+		t.Fatalf("decodeMountInfoPath()=%q want=%q", got, want)
+	}
+}

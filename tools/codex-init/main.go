@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -163,12 +165,60 @@ func syncCodexSkills(home, codexHome string) error {
 		return err
 	}
 	sharedDir := filepath.Join(home, ".si", "codex", "skills")
-	if isDir(filepath.Join(home, ".si")) {
+	if isDir(filepath.Join(home, ".si")) && !isMountPoint(filepath.Join(home, ".si")) {
 		if err := os.MkdirAll(sharedDir, 0o700); err == nil {
 			_ = copyTree(targetDir, sharedDir)
 		}
 	}
 	return nil
+}
+
+func isMountPoint(path string) bool {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return false
+	}
+	f, err := os.Open("/proc/self/mountinfo")
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		left := line
+		if idx := strings.Index(line, " - "); idx >= 0 {
+			left = line[:idx]
+		}
+		fields := strings.Fields(left)
+		if len(fields) < 5 {
+			continue
+		}
+		mountPoint := filepath.Clean(decodeMountInfoPath(fields[4]))
+		if mountPoint == path {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeMountInfoPath(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(raw))
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '\\' && i+3 < len(raw) {
+			if v, err := strconv.ParseUint(raw[i+1:i+4], 8, 8); err == nil {
+				b.WriteByte(byte(v))
+				i += 3
+				continue
+			}
+		}
+		b.WriteByte(raw[i])
+	}
+	return b.String()
 }
 
 func copyTree(src, dst string) error {

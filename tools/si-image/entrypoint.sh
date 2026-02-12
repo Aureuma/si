@@ -6,6 +6,30 @@ GH_CONFIG_DIR="/home/si/.config/gh"
 
 mkdir -p "$CODEX_DIR" "$GH_CONFIG_DIR" /workspace
 
+decode_mountinfo_path() {
+  local encoded="$1"
+  encoded="${encoded//\\040/ }"
+  encoded="${encoded//\\011/$'\t'}"
+  encoded="${encoded//\\012/$'\n'}"
+  encoded="${encoded//\\134/\\}"
+  printf '%s' "$encoded"
+}
+
+is_mountpoint() {
+  local target="$1"
+  if [[ -z "$target" ]]; then
+    return 1
+  fi
+  target="$(readlink -f "$target" 2>/dev/null || printf '%s' "$target")"
+  while read -r _ _ _ _ mountpoint _; do
+    mountpoint="$(decode_mountinfo_path "$mountpoint")"
+    if [[ "$mountpoint" == "$target" ]]; then
+      return 0
+    fi
+  done < /proc/self/mountinfo
+  return 1
+}
+
 sync_codex_skills() {
   local bundle_dir shared_dir target_dir
   bundle_dir="${SI_CODEX_SKILLS_BUNDLE_DIR:-/opt/si/codex-skills}"
@@ -16,7 +40,8 @@ sync_codex_skills() {
   if [[ -d "$bundle_dir" ]]; then
     cp -a "$bundle_dir"/. "$target_dir"/ 2>/dev/null || true
   fi
-  if [[ -d "/home/si/.si" ]]; then
+  # Never mutate mounted host ~/.si metadata from container startup.
+  if [[ -d "/home/si/.si" ]] && ! is_mountpoint "/home/si/.si"; then
     mkdir -p "$shared_dir"
     cp -a "$target_dir"/. "$shared_dir"/ 2>/dev/null || true
   fi
@@ -59,14 +84,9 @@ apply_host_ids() {
 if [[ "$(id -u)" -eq 0 ]]; then
   apply_host_ids
   sync_codex_skills
-  if [[ -n "${SI_HOST_UID:-}" && -n "${SI_HOST_GID:-}" ]]; then
-    if [[ "$(id -u si 2>/dev/null || true)" == "${SI_HOST_UID}" && "$(id -g si 2>/dev/null || true)" == "${SI_HOST_GID}" ]]; then
-      chown -R si:si /home/si /workspace 2>/dev/null || true
-    else
-      chown -R si:si /home/si 2>/dev/null || true
-    fi
-  else
-    chown -R si:si /home/si /workspace 2>/dev/null || true
+  # Avoid recursive chown on mount trees to prevent host bind/volume metadata changes.
+  if ! is_mountpoint "/home/si"; then
+    chown si:si /home/si 2>/dev/null || true
   fi
   # Avoid "dubious ownership" errors in bind-mounted workspaces.
   git config --global --add safe.directory /workspace >/dev/null 2>&1 || true
