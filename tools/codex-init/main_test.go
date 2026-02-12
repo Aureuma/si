@@ -77,3 +77,12 @@ func TestParseArgsExecForwarding(t *testing.T) {
 		t.Fatalf("unexpected exec args: %q", got)
 	}
 }
+
+func TestDecodeMountInfoPath(t *testing.T) {
+	in := `/home/si/.si\040with\040space\011tab\012line\134slash`
+	got := decodeMountInfoPath(in)
+	want := "/home/si/.si with space\ttab\nline\\slash"
+	if got != want {
+		t.Fatalf("decodeMountInfoPath()=%q want=%q", got, want)
+	}
+}
