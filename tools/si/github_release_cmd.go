@@ -15,10 +15,11 @@ import (
 )
 
 func cmdGithubRelease(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github release <list|get|create|upload|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github release <list|get|create|upload|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGithubReleaseList(args[1:])

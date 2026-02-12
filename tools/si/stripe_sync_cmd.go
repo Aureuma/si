@@ -12,17 +12,41 @@ import (
 	"si/tools/si/internal/stripebridge"
 )
 
+const stripeSyncUsageText = "usage: si stripe sync <live-to-sandbox> <plan|apply> [flags]"
+
+var stripeSyncModeActions = []subcommandAction{
+	{Name: "live-to-sandbox", Description: "sync selected data from live to sandbox"},
+}
+
+var stripeSyncActionActions = []subcommandAction{
+	{Name: "plan", Description: "preview changes without applying"},
+	{Name: "apply", Description: "apply planned changes to sandbox"},
+}
+
 func cmdStripeSync(args []string) {
-	if len(args) < 2 {
-		printUsage("usage: si stripe sync live-to-sandbox <plan|apply> [flags]")
+	modeArgs, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectStripeSyncModeAction)
+	if showUsage {
+		printUsage(stripeSyncUsageText)
 		return
 	}
-	mode := strings.ToLower(strings.TrimSpace(args[0]))
-	action := strings.ToLower(strings.TrimSpace(args[1]))
-	rest := args[2:]
+	if !ok {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(modeArgs[0]))
+	restMode := modeArgs[1:]
 	if mode != "live-to-sandbox" {
 		fatal(fmt.Errorf("unsupported sync mode %q (expected live-to-sandbox)", mode))
 	}
+	actionArgs, showUsage, ok := resolveSubcommandDispatchArgs(restMode, isInteractiveTerminal(), selectStripeSyncAction)
+	if showUsage {
+		printUsage(stripeSyncUsageText)
+		return
+	}
+	if !ok {
+		return
+	}
+	action := strings.ToLower(strings.TrimSpace(actionArgs[0]))
+	rest := actionArgs[1:]
 	switch action {
 	case "plan":
 		cmdStripeSyncPlan(rest)
@@ -30,7 +54,16 @@ func cmdStripeSync(args []string) {
 		cmdStripeSyncApply(rest)
 	default:
 		printUnknown("stripe sync", action)
+		printUsage(stripeSyncUsageText)
 	}
+}
+
+func selectStripeSyncModeAction() (string, bool) {
+	return selectSubcommandAction("Stripe sync modes:", stripeSyncModeActions)
+}
+
+func selectStripeSyncAction() (string, bool) {
+	return selectSubcommandAction("Stripe sync actions:", stripeSyncActionActions)
 }
 
 func cmdStripeSyncPlan(args []string) {

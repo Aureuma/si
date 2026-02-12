@@ -13,10 +13,11 @@ import (
 var autoDockerHostFn = shared.AutoDockerHost
 
 func cmdDocker(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si docker <args...>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si docker <args...>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	if err := execDockerCLI(args...); err != nil {
 		fatal(err)
 	}

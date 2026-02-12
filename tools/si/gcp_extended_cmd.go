@@ -21,10 +21,11 @@ const (
 )
 
 func cmdGCPAI(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp ai <gemini|vertex> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp ai <gemini|vertex> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -39,10 +40,11 @@ func cmdGCPAI(args []string) {
 }
 
 func cmdGCPAPIKey(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp apikey <list|get|create|update|delete|lookup|undelete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp apikey <list|get|create|update|delete|lookup|undelete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -312,10 +314,11 @@ func cmdGCPAPIKeyLookup(args []string) {
 }
 
 func cmdGCPIAM(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp iam <service-account|service-account-key|policy|role>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp iam <service-account|service-account-key|policy|role>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -333,10 +336,11 @@ func cmdGCPIAM(args []string) {
 }
 
 func cmdGCPIAMServiceAccount(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp iam service-account <list|get|create|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp iam service-account <list|get|create|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -474,10 +478,11 @@ func cmdGCPIAMServiceAccountDelete(args []string) {
 }
 
 func cmdGCPIAMServiceAccountKey(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp iam service-account-key <list|create|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp iam service-account-key <list|create|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -587,10 +592,11 @@ func cmdGCPIAMServiceAccountKeyDelete(args []string) {
 }
 
 func cmdGCPIAMPolicy(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp iam policy <get|set|test-permissions>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp iam policy <get|set|test-permissions>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -689,10 +695,11 @@ func cmdGCPIAMPolicyTestPermissions(args []string) {
 }
 
 func cmdGCPIAMRole(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp iam role <list|get>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp iam role <list|get>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -760,10 +767,11 @@ func cmdGCPIAMRoleGet(args []string) {
 }
 
 func cmdGCPGemini(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp gemini <models|generate|embed|count-tokens|batch-embed|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp gemini <models|generate|embed|count-tokens|batch-embed|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -785,10 +793,11 @@ func cmdGCPGemini(args []string) {
 }
 
 func cmdGCPGeminiModels(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp gemini models <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp gemini models <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1043,10 +1052,11 @@ func cmdGCPGeminiRaw(args []string) {
 }
 
 func cmdGCPVertex(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp vertex <model|endpoint|batch|pipeline|operation|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp vertex <model|endpoint|batch|pipeline|operation|raw>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1068,10 +1078,11 @@ func cmdGCPVertex(args []string) {
 }
 
 func cmdGCPVertexModel(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp vertex model <list|get>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp vertex model <list|get>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1085,10 +1096,11 @@ func cmdGCPVertexModel(args []string) {
 }
 
 func cmdGCPVertexEndpoint(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp vertex endpoint <list|get|create|delete|predict>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp vertex endpoint <list|get|create|delete|predict>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1108,10 +1120,11 @@ func cmdGCPVertexEndpoint(args []string) {
 }
 
 func cmdGCPVertexBatch(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp vertex batch <list|get|create|cancel|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp vertex batch <list|get|create|cancel|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1131,10 +1144,11 @@ func cmdGCPVertexBatch(args []string) {
 }
 
 func cmdGCPVertexPipeline(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp vertex pipeline <list|get|create|cancel|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp vertex pipeline <list|get|create|cancel|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1154,10 +1168,11 @@ func cmdGCPVertexPipeline(args []string) {
 }
 
 func cmdGCPVertexOperation(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp vertex operation <list|get|cancel|delete>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp vertex operation <list|get|cancel|delete>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

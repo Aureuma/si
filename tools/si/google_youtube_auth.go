@@ -18,10 +18,11 @@ import (
 )
 
 func cmdGoogleYouTubeAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube auth <status|login|logout>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube auth <status|login|logout>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -259,10 +260,11 @@ func cmdGoogleYouTubeAuthLogout(args []string) {
 }
 
 func cmdGoogleYouTubeContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google youtube context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google youtube context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

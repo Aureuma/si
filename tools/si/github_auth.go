@@ -357,10 +357,11 @@ func nonEmpty(values ...string) []string {
 }
 
 func cmdGithubAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
 		cmdGithubAuthStatus(args[1:])
@@ -516,10 +517,11 @@ func cmdGithubDoctor(args []string) {
 }
 
 func cmdGithubContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si github context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdGithubContextList(args[1:])

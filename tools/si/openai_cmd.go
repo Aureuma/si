@@ -106,10 +106,11 @@ func (e *openaiAPIErrorDetails) Error() string {
 }
 
 func cmdOpenAI(args []string) {
-	if len(args) == 0 {
-		printUsage(openAIUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, openAIUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -142,10 +143,11 @@ func cmdOpenAI(args []string) {
 }
 
 func cmdOpenAIAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai auth status [--account <alias>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai auth status [--account <alias>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "status":
@@ -220,10 +222,11 @@ func cmdOpenAIAuthStatus(args []string) {
 }
 
 func cmdOpenAIContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -490,10 +493,11 @@ func cmdOpenAIDoctor(args []string) {
 }
 
 func cmdOpenAIModel(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai model <list|get> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai model <list|get> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -545,10 +549,11 @@ func cmdOpenAIModelGet(args []string) {
 }
 
 func cmdOpenAIProject(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai project <list|get|create|update|archive|rate-limit|api-key|service-account> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project <list|get|create|update|archive|rate-limit|api-key|service-account> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -716,10 +721,11 @@ func cmdOpenAIProjectArchive(args []string) {
 }
 
 func cmdOpenAIProjectRateLimit(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai project rate-limit <list|update> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project rate-limit <list|update> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -826,10 +832,11 @@ func cmdOpenAIProjectRateLimitUpdate(args []string) {
 }
 
 func cmdOpenAIProjectAPIKey(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai project api-key <list|get|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project api-key <list|get|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -925,10 +932,11 @@ func cmdOpenAIProjectAPIKeyDelete(args []string) {
 }
 
 func cmdOpenAIProjectServiceAccount(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai project service-account <list|create|get|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project service-account <list|create|get|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1062,10 +1070,11 @@ func cmdOpenAIProjectServiceAccountDelete(args []string) {
 }
 
 func cmdOpenAIKey(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai key <list|get|create|delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai key <list|get|create|delete> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1183,20 +1192,22 @@ func cmdOpenAIKeyDelete(args []string) {
 }
 
 func cmdOpenAIUsage(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai usage <completions|embeddings|images|audio_speeches|audio_transcriptions|moderations|vector_stores|code_interpreter_sessions|costs> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai usage <completions|embeddings|images|audio_speeches|audio_transcriptions|moderations|vector_stores|code_interpreter_sessions|costs> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	metric := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	cmdOpenAIUsageMetric(metric, rest)
 }
 
 func cmdOpenAIMonitor(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai monitor <usage|limits> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai monitor <usage|limits> ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -1214,10 +1225,11 @@ func cmdOpenAIMonitor(args []string) {
 }
 
 func cmdOpenAICodex(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si openai codex usage [--model <name>] ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai codex usage [--model <name>] ...")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
