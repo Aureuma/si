@@ -4,7 +4,7 @@ import "testing"
 
 func TestFormatVaultDotenvCanonicalizesHeaderAndSections(t *testing.T) {
 	in := ParseDotenv([]byte("" +
-		"#si-vault:v1\n" +
+		"#si-vault:v2\n" +
 		"#si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# [Stripe]\n" +
@@ -17,7 +17,7 @@ func TestFormatVaultDotenvCanonicalizesHeaderAndSections(t *testing.T) {
 		t.Fatalf("expected change")
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# [Stripe]\n" +
@@ -37,7 +37,7 @@ func TestFormatVaultDotenvErrorsWithoutRecipients(t *testing.T) {
 
 func TestFormatVaultDotenvNoChangeForCanonicalInput(t *testing.T) {
 	inRaw := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# [stripe]\n" +
@@ -57,7 +57,7 @@ func TestFormatVaultDotenvNoChangeForCanonicalInput(t *testing.T) {
 
 func TestFormatVaultDotenvNormalizesCommentSpacing(t *testing.T) {
 	in := ParseDotenv([]byte("" +
-		"#si-vault:v1\n" +
+		"#si-vault:v2\n" +
 		"#si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"#comment\n" +
@@ -67,7 +67,7 @@ func TestFormatVaultDotenvNormalizesCommentSpacing(t *testing.T) {
 		t.Fatalf("FormatVaultDotenv: %v", err)
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# comment\n" +
@@ -79,7 +79,7 @@ func TestFormatVaultDotenvNormalizesCommentSpacing(t *testing.T) {
 
 func TestFormatVaultDotenvCollapsesExtraBlankLines(t *testing.T) {
 	in := ParseDotenv([]byte("" +
-		"#si-vault:v1\n" +
+		"#si-vault:v2\n" +
 		"#si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"\n" +
@@ -93,7 +93,7 @@ func TestFormatVaultDotenvCollapsesExtraBlankLines(t *testing.T) {
 		t.Fatalf("FormatVaultDotenv: %v", err)
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# [stripe]\n" +
@@ -106,7 +106,7 @@ func TestFormatVaultDotenvCollapsesExtraBlankLines(t *testing.T) {
 
 func TestFormatVaultDotenvPreservesUnknownPreambleLines(t *testing.T) {
 	in := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"SHELL_SYNTAX: not-dotenv\n" +
@@ -117,7 +117,7 @@ func TestFormatVaultDotenvPreservesUnknownPreambleLines(t *testing.T) {
 		t.Fatalf("FormatVaultDotenv: %v", err)
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"SHELL_SYNTAX: not-dotenv\n" +
@@ -131,7 +131,7 @@ func TestFormatVaultDotenvPreservesUnknownPreambleLines(t *testing.T) {
 
 func TestFormatVaultDotenvKeepsLookalikeHeaderComment(t *testing.T) {
 	in := ParseDotenv([]byte("" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# si-vault:recipient-count 2\n" +
@@ -141,7 +141,7 @@ func TestFormatVaultDotenvKeepsLookalikeHeaderComment(t *testing.T) {
 		t.Fatalf("FormatVaultDotenv: %v", err)
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"# si-vault:recipient-count 2\n" +
@@ -153,7 +153,7 @@ func TestFormatVaultDotenvKeepsLookalikeHeaderComment(t *testing.T) {
 
 func TestFormatVaultDotenvPreservesDividerAndSectionMarkerLines(t *testing.T) {
 	in := ParseDotenv([]byte("" +
-		"#si-vault:v1\n" +
+		"#si-vault:v2\n" +
 		"#si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"#----------------------------\n" +
@@ -164,7 +164,7 @@ func TestFormatVaultDotenvPreservesDividerAndSectionMarkerLines(t *testing.T) {
 		t.Fatalf("FormatVaultDotenv: %v", err)
 	}
 	want := "" +
-		"# si-vault:v1\n" +
+		"# si-vault:v2\n" +
 		"# si-vault:recipient age1exampleexampleexampleexampleexampleexampleexampleexampleexample\n" +
 		"\n" +
 		"#----------------------------\n" +

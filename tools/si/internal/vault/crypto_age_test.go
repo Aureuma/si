@@ -127,6 +127,32 @@ func TestDecryptStringV1SupportsLegacyV1Ciphertexts(t *testing.T) {
 	}
 }
 
+func TestDecryptStringV1SupportsLegacyV2Es2Ciphertexts(t *testing.T) {
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	recipient := id.Recipient().String()
+	cipher, err := EncryptStringV1("legacy-v2", []string{recipient})
+	if err != nil {
+		t.Fatalf("EncryptStringV1: %v", err)
+	}
+	if !strings.HasPrefix(cipher, EncryptedValuePrefixV2) {
+		t.Fatalf("expected v2 prefix, got %q", cipher)
+	}
+	legacy := strings.Replace(cipher, EncryptedValuePrefixV2, EncryptedValuePrefixV2Legacy, 1)
+	if !IsEncryptedValueV1(legacy) {
+		t.Fatalf("expected legacy v2 ciphertext to be recognized")
+	}
+	plain, err := DecryptStringV1(legacy, id)
+	if err != nil {
+		t.Fatalf("DecryptStringV1: %v", err)
+	}
+	if plain != "legacy-v2" {
+		t.Fatalf("plain=%q", plain)
+	}
+}
+
 func TestRecipientsFingerprintStableAndOrderIndependent(t *testing.T) {
 	a := "age1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	b := "age1bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
