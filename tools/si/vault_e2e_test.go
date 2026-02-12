@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"si/tools/si/internal/vault"
 )
 
 func TestVaultE2E_InitSupportsArbitraryDotenvPath(t *testing.T) {
@@ -40,7 +42,7 @@ func TestVaultE2E_InitSupportsArbitraryDotenvPath(t *testing.T) {
 		t.Fatalf("expected env file to be created: %v", err)
 	}
 	content := string(raw)
-	if !strings.Contains(content, "# si-vault:v1") {
+	if !strings.Contains(content, vault.VaultHeaderVersionLine) {
 		t.Fatalf("expected vault header, got:\n%s", content)
 	}
 	if !strings.Contains(content, "# si-vault:recipient age1") {
