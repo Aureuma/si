@@ -5,10 +5,11 @@ import "strings"
 const googleYouTubeUsageText = "usage: si google youtube <auth|context|doctor|search|channel|video|playlist|playlist-item|subscription|comment|caption|thumbnail|live|support|raw|report>"
 
 func cmdGoogleYouTube(args []string) {
-	if len(args) == 0 {
-		printUsage(googleYouTubeUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, googleYouTubeUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {

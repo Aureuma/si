@@ -90,10 +90,11 @@ func (e *gcpAPIErrorDetails) Error() string {
 }
 
 func cmdGCP(args []string) {
-	if len(args) == 0 {
-		printUsage(gcpUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, gcpUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -126,10 +127,11 @@ func cmdGCP(args []string) {
 }
 
 func cmdGCPAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp auth status [--account <alias>] [--env <prod|staging|dev>] [--project <project>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp auth status [--account <alias>] [--env <prod|staging|dev>] [--project <project>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	switch sub {
 	case "status":
@@ -202,10 +204,11 @@ func cmdGCPAuthStatus(args []string) {
 }
 
 func cmdGCPContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -461,10 +464,11 @@ func cmdGCPDoctor(args []string) {
 }
 
 func cmdGCPService(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si gcp service <enable|disable|get|list>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp service <enable|disable|get|list>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

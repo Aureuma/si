@@ -10,10 +10,11 @@ import (
 )
 
 func cmdGooglePlacesSession(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si google places session <new|inspect|end|list>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places session <new|inspect|end|list>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {

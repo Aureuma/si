@@ -5,10 +5,11 @@ import "strings"
 const appleUsageText = "usage: si apple <appstore|app-store|app-store-connect>"
 
 func cmdApple(args []string) {
-	if len(args) == 0 {
-		printUsage(appleUsageText)
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, appleUsageText)
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch cmd {

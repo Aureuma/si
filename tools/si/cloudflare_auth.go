@@ -197,10 +197,11 @@ func resolveCloudflareZoneID(alias string, account CloudflareAccountEntry, env s
 }
 
 func cmdCloudflareAuth(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare auth status|status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare auth status|status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
 		cmdCloudflareAuthStatus(args[1:])
@@ -288,10 +289,11 @@ func cmdCloudflareAuthStatus(args []string) {
 }
 
 func cmdCloudflareContext(args []string) {
-	if len(args) == 0 {
-		printUsage("usage: si cloudflare context <list|current|use>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare context <list|current|use>")
+	if !routedOK {
 		return
 	}
+	args = routedArgs
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		cmdCloudflareContextList(args[1:])
