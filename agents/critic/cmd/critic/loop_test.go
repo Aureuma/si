@@ -72,6 +72,35 @@ func TestExtractDelimitedWorkReport(t *testing.T) {
 	}
 }
 
+func TestExtractTaggedWorkReport(t *testing.T) {
+	turnID := "si-dyad-turn-id:actor-abc123"
+	begin := taggedReportMarker(reportBeginMarker, turnID)
+	end := taggedReportMarker(reportEndMarker, turnID)
+	input := "noise\n" + begin + "\nhello\nworld\n" + end + "\nextra"
+	got, ok := extractTaggedWorkReport(input, turnID)
+	if !ok {
+		t.Fatalf("expected tagged report to parse")
+	}
+	if got != "hello\nworld" {
+		t.Fatalf("unexpected tagged report parse: %q", got)
+	}
+}
+
+func TestWrapTurnPromptIncludesTurnMarkers(t *testing.T) {
+	wire, turnID := wrapTurnPrompt("CRITIC MESSAGE TURN 1", "actor")
+	if strings.TrimSpace(turnID) == "" {
+		t.Fatalf("expected turnID")
+	}
+	if !strings.Contains(wire, "["+turnID+"]") {
+		t.Fatalf("wire prompt missing turn id: %q", wire)
+	}
+	begin := taggedReportMarker(reportBeginMarker, turnID)
+	end := taggedReportMarker(reportEndMarker, turnID)
+	if !strings.Contains(wire, begin) || !strings.Contains(wire, end) {
+		t.Fatalf("wire prompt missing tagged markers: %q", wire)
+	}
+}
+
 func TestRunTurnLoopMultiTurnClosedFeedback(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := loopConfig{
