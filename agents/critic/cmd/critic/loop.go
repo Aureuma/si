@@ -22,6 +22,7 @@ const (
 	reportBeginMarker    = "<<WORK_REPORT_BEGIN>>"
 	reportEndMarker      = "<<WORK_REPORT_END>>"
 	dyadTmuxHistoryLimit = "200000"
+	turnIDPrefix         = "si-dyad-turn-id:"
 )
 
 type loopConfig struct {
@@ -523,7 +524,8 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-u"); err != nil {
 		return "", err
 	}
-	normalizedPrompt := normalizeInteractivePrompt(prompt)
+	wirePrompt, turnID := wrapTurnPrompt(prompt, role)
+	normalizedPrompt := normalizeInteractivePrompt(wirePrompt)
 	if err := tmuxSendLiteral(ctx, runner, paneTarget, normalizedPrompt); err != nil {
 		return "", err
 	}
@@ -533,7 +535,7 @@ func (e codexTurnExecutor) runTurn(ctx context.Context, runner tmuxRunner, sessi
 	if err := tmuxSendKeys(ctx, runner, paneTarget, "C-m"); err != nil {
 		return "", err
 	}
-	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineReportEnd, role, normalizedPrompt)
+	return e.waitForTurnCompletion(ctx, runner, paneTarget, baselineReportEnd, role, normalizedPrompt, turnID)
 }
 
 func (e codexTurnExecutor) recoverSession(session string, runner tmuxRunner, cause error) {
@@ -620,14 +622,14 @@ func (e codexTurnExecutor) waitForPromptReady(ctx context.Context, runner tmuxRu
 	return lastOutput, errors.New("timeout waiting for codex prompt")
 }
 
-func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineReportEnd int, role string, sentPrompt string) (string, error) {
+func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmuxRunner, target string, baselineReportEnd int, role string, sentPrompt string, turnID string) (string, error) {
 	captureOpts := statusOptions{CaptureMode: e.captureMode, CaptureLines: e.captureLines}
 	deadline := time.Now().Add(e.turnTimeout)
 	var lastOutput string
 	submitAttempts := 1
 	lastSubmit := time.Now()
 	sentPrompt = strings.TrimSpace(sentPrompt)
-	sig := sentPrompt
+	sig := turnPromptSignature(turnID, sentPrompt)
 	if len(sig) > 64 {
 		sig = sig[:64]
 	}
@@ -640,14 +642,29 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 		promptReady := codexPromptReady(clean, e.promptLines, e.allowMcp)
 		promptLine, hasPromptLine := lastCodexPromptLine(clean, e.promptLines)
 
+		// Preferred path: each turn carries an envelope id and asks for tagged report markers.
+		// This avoids ambiguities when tmux output still contains older marker blocks.
+		report, ok := extractTaggedWorkReport(clean, turnID)
+		reportWasDelimited := false
+		if ok {
+			if role == "actor" && actorReportLooksPlaceholderWithMode(report, e.strictReport) {
+				ok = false
+			}
+			if role == "critic" && criticReportLooksPlaceholderWithMode(report, e.strictReport) {
+				ok = false
+			}
+		}
+
 		// Primary: anchor parsing to the echoed input line (or a short signature of it),
 		// then extract the first delimited work report that appears after that anchor.
 		after := -1
 		if sig != "" {
 			after = strings.LastIndex(clean, sig)
 		}
-		report, ok := extractDelimitedWorkReportAfter(clean, after)
-		reportWasDelimited := ok
+		if !ok {
+			report, ok = extractDelimitedWorkReportAfter(clean, after)
+			reportWasDelimited = ok
+		}
 		if ok {
 			if role == "actor" && actorReportLooksPlaceholderWithMode(report, e.strictReport) {
 				ok = false
@@ -662,6 +679,17 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 			fullOut, fullErr := tmuxCapture(ctx, runner, target, statusOptions{CaptureMode: e.captureMode, CaptureLines: 0})
 			if fullErr == nil && strings.TrimSpace(fullOut) != "" {
 				fullClean := stripANSI(fullOut)
+				if tmpReport, tmpOk := extractTaggedWorkReport(fullClean, turnID); tmpOk {
+					tmpReport = strings.TrimSpace(tmpReport)
+					if tmpReport != "" {
+						if role == "actor" && !actorReportLooksPlaceholderWithMode(tmpReport, e.strictReport) {
+							return normalizeOutputWithDelimitedReport(fullOut, tmpReport), nil
+						}
+						if role == "critic" && !criticReportLooksPlaceholderWithMode(tmpReport, e.strictReport) {
+							return normalizeOutputWithDelimitedReport(fullOut, tmpReport), nil
+						}
+					}
+				}
 				if tmpReport, tmpOk := extractDelimitedWorkReportAfter(fullClean, baselineReportEnd); tmpOk {
 					tmpReport = strings.TrimSpace(tmpReport)
 					if tmpReport != "" {
@@ -713,12 +741,7 @@ func (e codexTurnExecutor) waitForTurnCompletion(ctx context.Context, runner tmu
 			if reportWasDelimited {
 				return output, nil
 			}
-			normalizedOutput := strings.TrimSpace(output)
-			if normalizedOutput != "" {
-				normalizedOutput += "\n"
-			}
-			normalizedOutput += reportBeginMarker + "\n" + report + "\n" + reportEndMarker
-			return normalizedOutput, nil
+			return normalizeOutputWithDelimitedReport(output, report), nil
 		}
 
 		if promptReady {
@@ -959,6 +982,44 @@ func normalizeInteractivePrompt(prompt string) string {
 	prompt = strings.ReplaceAll(prompt, "\r", "\n")
 	prompt = strings.Join(strings.Fields(prompt), " ")
 	return strings.TrimSpace(prompt)
+}
+
+func buildTurnID(role string) string {
+	role = strings.TrimSpace(strings.ToLower(role))
+	switch role {
+	case "actor", "critic":
+	default:
+		role = "agent"
+	}
+	return fmt.Sprintf("%s%s-%x", turnIDPrefix, role, time.Now().UTC().UnixNano())
+}
+
+func taggedReportMarker(base string, turnID string) string {
+	root := strings.TrimSuffix(strings.TrimSpace(base), ">>")
+	if root == "" {
+		root = strings.TrimSpace(base)
+	}
+	return root + ":" + strings.TrimSpace(turnID) + ">>"
+}
+
+func wrapTurnPrompt(prompt string, role string) (string, string) {
+	base := strings.TrimSpace(prompt)
+	if base == "" {
+		return "", ""
+	}
+	turnID := buildTurnID(role)
+	begin := taggedReportMarker(reportBeginMarker, turnID)
+	end := taggedReportMarker(reportEndMarker, turnID)
+	wire := fmt.Sprintf("[%s] %s Reply using %s ... %s (legacy %s/%s also acceptable).",
+		turnID, base, begin, end, reportBeginMarker, reportEndMarker)
+	return wire, turnID
+}
+
+func turnPromptSignature(turnID string, sentPrompt string) string {
+	if strings.TrimSpace(turnID) != "" {
+		return "[" + turnID + "]"
+	}
+	return sentPrompt
 }
 
 func tmuxSendKeys(ctx context.Context, runner tmuxRunner, target string, keys ...string) error {
@@ -1275,6 +1336,29 @@ func extractDelimitedWorkReport(output string) string {
 	return ""
 }
 
+func extractTaggedWorkReport(output string, turnID string) (string, bool) {
+	turnID = strings.TrimSpace(turnID)
+	if turnID == "" {
+		return "", false
+	}
+	clean := strings.TrimSpace(strings.ReplaceAll(output, "\r\n", "\n"))
+	if clean == "" {
+		return "", false
+	}
+	begin := taggedReportMarker(reportBeginMarker, turnID)
+	end := taggedReportMarker(reportEndMarker, turnID)
+	start := strings.LastIndex(clean, begin)
+	finish := strings.LastIndex(clean, end)
+	if start < 0 || finish <= start {
+		return "", false
+	}
+	body := strings.TrimSpace(clean[start+len(begin) : finish])
+	if body == "" {
+		return "", false
+	}
+	return body, true
+}
+
 func extractDelimitedWorkReportAfter(output string, afterEnd int) (string, bool) {
 	clean := strings.TrimSpace(strings.ReplaceAll(output, "\r\n", "\n"))
 	if clean == "" {
@@ -1293,6 +1377,15 @@ func extractDelimitedWorkReportAfter(output string, afterEnd int) (string, bool)
 		return "", false
 	}
 	return body, true
+}
+
+func normalizeOutputWithDelimitedReport(output string, report string) string {
+	normalizedOutput := strings.TrimSpace(output)
+	if normalizedOutput != "" {
+		normalizedOutput += "\n"
+	}
+	normalizedOutput += reportBeginMarker + "\n" + strings.TrimSpace(report) + "\n" + reportEndMarker
+	return normalizedOutput
 }
 
 var (
