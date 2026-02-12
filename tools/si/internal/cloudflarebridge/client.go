@@ -240,9 +240,6 @@ func resolveURL(baseURL string, path string, params map[string]string) (string, 
 		addQuery(u, params)
 		return u.String(), nil
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
 	base, err := url.Parse(strings.TrimSpace(baseURL))
 	if err != nil {
 		return "", err
@@ -251,9 +248,32 @@ func resolveURL(baseURL string, path string, params map[string]string) (string, 
 	if err != nil {
 		return "", err
 	}
-	u := base.ResolveReference(rel)
-	addQuery(u, params)
+	resolvedPath := resolveBasePath(base.Path, rel.Path)
+	u := *base
+	u.Path = resolvedPath
+	u.RawPath = ""
+	q := u.Query()
+	relQuery := rel.Query()
+	for key, values := range relQuery {
+		for _, value := range values {
+			q.Add(key, value)
+		}
+	}
+	u.RawQuery = q.Encode()
+	addQuery(&u, params)
 	return u.String(), nil
+}
+
+func resolveBasePath(basePath string, requestPath string) string {
+	cleanRequest := "/" + strings.TrimLeft(strings.TrimSpace(requestPath), "/")
+	cleanBase := "/" + strings.Trim(strings.TrimSpace(basePath), "/")
+	if cleanBase == "/" {
+		return cleanRequest
+	}
+	if cleanRequest == cleanBase || strings.HasPrefix(cleanRequest, cleanBase+"/") {
+		return cleanRequest
+	}
+	return cleanBase + cleanRequest
 }
 
 func addQuery(u *url.URL, params map[string]string) {

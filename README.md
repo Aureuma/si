@@ -293,6 +293,7 @@ Auth policy:
 # auth/context/diagnostics
 ./si cloudflare auth status --account core
 ./si cloudflare status --account core
+./si cloudflare smoke --account core
 ./si cloudflare context list
 ./si cloudflare context use --account core --env prod --zone-id <zone_id>
 ./si cloudflare doctor --account core
