@@ -89,3 +89,40 @@ func mountExists(mounts []mount.Mount, source string, target string) bool {
 	}
 	return false
 }
+
+func TestBuildDyadSpecsIncludesVaultEnvFileMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
+	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "mounttest-vault",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		VaultEnvFile:  vaultFile,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+	if !mountExists(actor.HostConfig.Mounts, vaultFile, filepath.ToSlash(vaultFile)) {
+		t.Fatalf("actor spec missing vault env file mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, vaultFile, filepath.ToSlash(vaultFile)) {
+		t.Fatalf("critic spec missing vault env file mount: %+v", critic.HostConfig.Mounts)
+	}
+}

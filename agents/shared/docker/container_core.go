@@ -15,6 +15,7 @@ type ContainerCoreMountPlan struct {
 	WorkspaceMirrorTarget  string
 	ContainerHome          string
 	IncludeHostSi          bool
+	HostVaultEnvFile       string
 }
 
 // BuildContainerCoreMounts builds a normalized mount set for shared container
@@ -47,6 +48,9 @@ func BuildContainerCoreMounts(plan ContainerCoreMountPlan) []mount.Mount {
 		for _, m := range HostSiCodexProfileMounts(plan.ContainerHome) {
 			appendUniqueMount(&mounts, m)
 		}
+	}
+	if m, ok := HostVaultEnvFileMount(plan.HostVaultEnvFile); ok {
+		appendUniqueMount(&mounts, m)
 	}
 	return mounts
 }

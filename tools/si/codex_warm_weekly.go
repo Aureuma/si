@@ -380,6 +380,7 @@ func runWeeklyWarmPrompt(profile codexProfile, prompt string, opts weeklyWarmExe
 		Quiet:         opts.Quiet,
 		KeepContainer: opts.KeepContainer,
 		DockerSocket:  opts.DockerSocket,
+		VaultEnvFile:  vaultContainerEnvFileMountPath(loadSettingsOrDefault()),
 		Profile:       &profile,
 	}
 	return runCodexExecOneOff(oneOff)
