@@ -14,11 +14,19 @@ import (
 )
 
 const (
-	VaultHeaderVersionLine = "# si-vault:v1"
-	VaultRecipientPrefix   = "# si-vault:recipient "
+	// Keep a single authoritative vault format version. Header and current
+	// ciphertext prefix are intentionally coupled to this value.
+	VaultFormatVersionCurrent = "v2"
+	VaultHeaderVersionBodyV1  = "si-vault:v1"
+	VaultHeaderVersionBody    = "si-vault:" + VaultFormatVersionCurrent
+	VaultHeaderVersionLine    = "# " + VaultHeaderVersionBody
+	VaultRecipientPrefix      = "# si-vault:recipient "
 
 	EncryptedValuePrefixV1 = "encrypted:si:v1:"
-	EncryptedValuePrefixV2 = "es2:"
+	EncryptedValuePrefixV2 = "encrypted:si:" + VaultFormatVersionCurrent + ":"
+
+	// Legacy compact prefix kept for backwards-compatible decrypt support.
+	EncryptedValuePrefixV2Legacy = "es2:"
 )
 
 const (
@@ -29,7 +37,9 @@ const (
 
 func IsEncryptedValueV1(value string) bool {
 	value = strings.TrimSpace(value)
-	return strings.HasPrefix(value, EncryptedValuePrefixV1) || strings.HasPrefix(value, EncryptedValuePrefixV2)
+	return strings.HasPrefix(value, EncryptedValuePrefixV1) ||
+		strings.HasPrefix(value, EncryptedValuePrefixV2) ||
+		strings.HasPrefix(value, EncryptedValuePrefixV2Legacy)
 }
 
 func ValidateEncryptedValueV1(ciphertext string) error {
@@ -157,6 +167,17 @@ func decodeCiphertextPayload(ciphertext string) ([]byte, error) {
 		out = append(out, prefix...)
 		out = append(out, raw...)
 		return out, nil
+	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV2Legacy):
+		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV2Legacy)
+		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ciphertext payload: %w", err)
+		}
+		prefix := []byte(ageMagicLine + ageStanzaX25519Prefix)
+		out := make([]byte, 0, len(prefix)+len(raw))
+		out = append(out, prefix...)
+		out = append(out, raw...)
+		return out, nil
 	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV1):
 		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV1)
 		raw, err := base64.RawURLEncoding.DecodeString(payload)
@@ -165,6 +186,11 @@ func decodeCiphertextPayload(ciphertext string) ([]byte, error) {
 		}
 		return raw, nil
 	default:
-		return nil, fmt.Errorf("value is not %s or %s ciphertext", EncryptedValuePrefixV2, EncryptedValuePrefixV1)
+		return nil, fmt.Errorf(
+			"value is not %s, %s, or %s ciphertext",
+			EncryptedValuePrefixV2,
+			EncryptedValuePrefixV2Legacy,
+			EncryptedValuePrefixV1,
+		)
 	}
 }
