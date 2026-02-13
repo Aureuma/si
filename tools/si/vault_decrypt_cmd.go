@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"si/tools/si/internal/vault"
 )
@@ -19,9 +20,17 @@ func cmdVaultDecrypt(args []string) {
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
-	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault decrypt [--file <path>]... [--stdout] [--yes]")
-		return
+	rawKeys := fs.Args()
+	keys := make([]string, 0, len(rawKeys))
+	for _, k := range rawKeys {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		if err := vault.ValidateKeyName(k); err != nil {
+			fatal(err)
+		}
+		keys = append(keys, k)
 	}
 
 	if *stdout && len(files) > 1 {
@@ -50,7 +59,10 @@ func cmdVaultDecrypt(args []string) {
 		}
 
 		working := doc
-		res, err := vault.DecryptDotenvValues(&working, info.Identity)
+		// If positional args are provided, only decrypt those keys.
+		// Example:
+		//   si vault decrypt --stdout STRIPE_API_KEY
+		res, err := vault.DecryptDotenvKeys(&working, info.Identity, keys)
 		if err != nil {
 			fatal(err)
 		}
@@ -59,6 +71,8 @@ func cmdVaultDecrypt(args []string) {
 			vaultAuditEvent(settings, target, "decrypt_stdout", map[string]any{
 				"envFile":        filepath.Clean(target.File),
 				"decryptedCount": len(res.DecryptedKeys),
+				"keyCount":       len(keys),
+				"missingCount":   res.SkippedMissing,
 			})
 			_, _ = os.Stdout.Write(working.Bytes())
 			return
@@ -73,6 +87,8 @@ func cmdVaultDecrypt(args []string) {
 		vaultAuditEvent(settings, target, "decrypt_inplace", map[string]any{
 			"envFile":        filepath.Clean(target.File),
 			"decryptedCount": len(res.DecryptedKeys),
+			"keyCount":       len(keys),
+			"missingCount":   res.SkippedMissing,
 		})
 		fmt.Printf("file: %s\n", filepath.Clean(target.File))
 		fmt.Printf("decrypted: %d\n", len(res.DecryptedKeys))
@@ -80,7 +96,11 @@ func cmdVaultDecrypt(args []string) {
 
 	// If doing an in-place decrypt for multiple files, confirm once up-front.
 	if !*stdout && len(files) > 1 && !*yes {
-		confirmed, ok := confirmYN(fmt.Sprintf("Decrypt %d files in place to plaintext? This will write secrets to disk.", len(files)), false)
+		prompt := fmt.Sprintf("Decrypt %d files in place to plaintext? This will write secrets to disk.", len(files))
+		if len(keys) > 0 {
+			prompt = fmt.Sprintf("Decrypt selected keys in %d files in place to plaintext? This will write secrets to disk.", len(files))
+		}
+		confirmed, ok := confirmYN(prompt, false)
 		if !ok {
 			fatal(fmt.Errorf("non-interactive: re-run with --yes, or use --stdout"))
 		}
@@ -91,7 +111,11 @@ func cmdVaultDecrypt(args []string) {
 
 	if len(files) == 0 {
 		if !*stdout && !*yes {
-			confirmed, ok := confirmYN("Decrypt in place to plaintext? This will write secrets to disk.", false)
+			prompt := "Decrypt in place to plaintext? This will write secrets to disk."
+			if len(keys) > 0 {
+				prompt = "Decrypt selected keys in place to plaintext? This will write secrets to disk."
+			}
+			confirmed, ok := confirmYN(prompt, false)
 			if !ok {
 				fatal(fmt.Errorf("non-interactive: re-run with --yes, or use --stdout"))
 			}
@@ -104,7 +128,11 @@ func cmdVaultDecrypt(args []string) {
 	}
 
 	if !*stdout && len(files) == 1 && !*yes {
-		confirmed, ok := confirmYN("Decrypt in place to plaintext? This will write secrets to disk.", false)
+		prompt := "Decrypt in place to plaintext? This will write secrets to disk."
+		if len(keys) > 0 {
+			prompt = "Decrypt selected keys in place to plaintext? This will write secrets to disk."
+		}
+		confirmed, ok := confirmYN(prompt, false)
 		if !ok {
 			fatal(fmt.Errorf("non-interactive: re-run with --yes, or use --stdout"))
 		}
