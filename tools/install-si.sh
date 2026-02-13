@@ -677,7 +677,7 @@ post_install() {
   log info "🔐 First-time vault notes:"
   log info "  - Linux keyring support (recommended): sudo apt install -y libsecret-tools"
   log info "🏗️  Build notes:"
-  log info "  - 'si build self' requires 'go' on PATH (this installer will place a go shim next to si if it had to download Go)"
+  log info "  - 'si build self' needs a Go toolchain. If this installer downloads Go, it will place a go shim next to si."
   log info "  - 'si build image' is best with Docker BuildKit/buildx enabled"
   log info "  - If you see legacy-builder warnings, check/unset: DOCKER_BUILDKIT=0"
   log info "  - In a host repo: git submodule update --init --recursive"
