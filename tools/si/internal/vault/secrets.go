@@ -2,6 +2,8 @@ package vault
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"filippo.io/age"
 )
@@ -126,14 +128,41 @@ type DecryptDotenvResult struct {
 	DecryptedKeys  []string
 	SkippedPlain   int
 	SkippedMissing int
+	MissingKeys    []string
+}
+
+func normalizeKeyFilter(keys []string) map[string]struct{} {
+	if len(keys) == 0 {
+		return nil
+	}
+	out := make(map[string]struct{}, len(keys))
+	for _, k := range keys {
+		k = strings.TrimSpace(k)
+		if k == "" {
+			continue
+		}
+		out[k] = struct{}{}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // DecryptDotenvValues decrypts encrypted values in-place, preserving line layout/comments.
 // It keeps the vault header (recipients) intact so the file can be re-encrypted later.
 func DecryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity) (DecryptDotenvResult, error) {
+	return DecryptDotenvKeys(doc, identity, nil)
+}
+
+// DecryptDotenvKeys decrypts only the selected keys (when keys is non-empty).
+// When keys is empty/nil, it decrypts all encrypted keys (same behavior as DecryptDotenvValues).
+func DecryptDotenvKeys(doc *DotenvFile, identity *age.X25519Identity, keys []string) (DecryptDotenvResult, error) {
 	if doc == nil {
 		return DecryptDotenvResult{}, nil
 	}
+	filter := normalizeKeyFilter(keys)
+	found := map[string]struct{}{}
 	result := DecryptDotenvResult{}
 	for i := range doc.Lines {
 		assign, ok := parseAssignment(doc.Lines[i].Text)
@@ -142,6 +171,11 @@ func DecryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity) (Decrypt
 		}
 		if err := ValidateKeyName(assign.Key); err != nil {
 			return DecryptDotenvResult{}, err
+		}
+		if filter != nil {
+			if _, ok := filter[assign.Key]; !ok {
+				continue
+			}
 		}
 		val, err := NormalizeDotenvValue(assign.ValueRaw)
 		if err != nil {
@@ -165,6 +199,20 @@ func DecryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity) (Decrypt
 			result.Changed = true
 		}
 		result.DecryptedKeys = append(result.DecryptedKeys, assign.Key)
+		if filter != nil {
+			found[assign.Key] = struct{}{}
+		}
+	}
+
+	if filter != nil {
+		for k := range filter {
+			if _, ok := found[k]; ok {
+				continue
+			}
+			result.SkippedMissing++
+			result.MissingKeys = append(result.MissingKeys, k)
+		}
+		sort.Strings(result.MissingKeys)
 	}
 	return result, nil
 }

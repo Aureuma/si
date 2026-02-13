@@ -252,3 +252,120 @@ func TestVaultE2E_DecryptBackCompatCiphertextEncodings(t *testing.T) {
 		t.Fatalf("expected decrypted plaintext %q, got %q", "legacy", gotRes.Values["OLD_CIPHER"])
 	}
 }
+
+func TestVaultE2E_DecryptSelectiveKeys(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	tempState := t.TempDir()
+	targetRoot := t.TempDir()
+	envFile := filepath.Join(targetRoot, ".env.selective")
+	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
+	trustFile := filepath.Join(tempState, "vault", "trust.json")
+	auditLog := filepath.Join(tempState, "vault", "audit.log")
+
+	env := map[string]string{
+		"HOME":                 tempState,
+		"GOFLAGS":              "-modcacherw",
+		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
+		"SI_VAULT_KEY_BACKEND": "file",
+		"SI_VAULT_KEY_FILE":    keyFile,
+		"SI_VAULT_TRUST_STORE": trustFile,
+		"SI_VAULT_AUDIT_LOG":   auditLog,
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envFile); err != nil {
+		t.Fatalf("vault init failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "set", "KEY1", "v1", "--file", envFile); err != nil {
+		t.Fatalf("vault set KEY1 failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "set", "KEY2", "v2", "--file", envFile); err != nil {
+		t.Fatalf("vault set KEY2 failed: %v", err)
+	}
+
+	// Sanity: both keys on disk should be encrypted.
+	onDiskBytes, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env file: %v", err)
+	}
+	onDisk := string(onDiskBytes)
+	if !strings.Contains(onDisk, "KEY1="+vault.EncryptedValuePrefixV1) && !strings.Contains(onDisk, "KEY1="+vault.EncryptedValuePrefixV2) {
+		t.Fatalf("expected KEY1 to be encrypted, got:\n%s", onDisk)
+	}
+	if !strings.Contains(onDisk, "KEY2="+vault.EncryptedValuePrefixV1) && !strings.Contains(onDisk, "KEY2="+vault.EncryptedValuePrefixV2) {
+		t.Fatalf("expected KEY2 to be encrypted, got:\n%s", onDisk)
+	}
+
+	// Decrypt only KEY1 to stdout; KEY2 should remain encrypted in output, and disk should remain encrypted.
+	stdout, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--stdout", "KEY1")
+	if err != nil {
+		t.Fatalf("vault decrypt --stdout KEY1 failed: %v\nstdout=%s", err, stdout)
+	}
+	outDoc := vault.ParseDotenv([]byte(stdout))
+	v1Raw, ok := outDoc.Lookup("KEY1")
+	if !ok {
+		t.Fatalf("expected KEY1 in stdout")
+	}
+	v1, err := vault.NormalizeDotenvValue(v1Raw)
+	if err != nil {
+		t.Fatalf("NormalizeDotenvValue(KEY1): %v", err)
+	}
+	if v1 != "v1" {
+		t.Fatalf("expected KEY1 plaintext %q, got %q", "v1", v1)
+	}
+	v2Raw, ok := outDoc.Lookup("KEY2")
+	if !ok {
+		t.Fatalf("expected KEY2 in stdout")
+	}
+	v2, err := vault.NormalizeDotenvValue(v2Raw)
+	if err != nil {
+		t.Fatalf("NormalizeDotenvValue(KEY2): %v", err)
+	}
+	if !vault.IsEncryptedValueV1(v2) {
+		t.Fatalf("expected KEY2 to remain encrypted in stdout, got %q", v2)
+	}
+
+	onDiskBytes2, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env file after stdout decrypt: %v", err)
+	}
+	onDisk2 := string(onDiskBytes2)
+	if strings.Contains(onDisk2, "KEY1=v1") || strings.Contains(onDisk2, "KEY2=v2") {
+		t.Fatalf("expected disk file to remain encrypted after --stdout decrypt, got:\n%s", onDisk2)
+	}
+
+	// In-place decrypt only KEY2.
+	if _, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--yes", "KEY2"); err != nil {
+		t.Fatalf("vault decrypt --yes KEY2 failed: %v", err)
+	}
+	onDiskBytes3, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env file after in-place decrypt: %v", err)
+	}
+	onDisk3 := string(onDiskBytes3)
+	doc3 := vault.ParseDotenv(onDiskBytes3)
+	k2Raw, ok := doc3.Lookup("KEY2")
+	if !ok {
+		t.Fatalf("expected KEY2 on disk")
+	}
+	k2, err := vault.NormalizeDotenvValue(k2Raw)
+	if err != nil {
+		t.Fatalf("NormalizeDotenvValue(KEY2): %v", err)
+	}
+	if k2 != "v2" {
+		t.Fatalf("expected KEY2 plaintext %q, got %q\nfile:\n%s", "v2", k2, onDisk3)
+	}
+	k1Raw, ok := doc3.Lookup("KEY1")
+	if !ok {
+		t.Fatalf("expected KEY1 on disk")
+	}
+	k1, err := vault.NormalizeDotenvValue(k1Raw)
+	if err != nil {
+		t.Fatalf("NormalizeDotenvValue(KEY1): %v", err)
+	}
+	if !vault.IsEncryptedValueV1(k1) {
+		t.Fatalf("expected KEY1 to remain encrypted on disk, got %q\nfile:\n%s", k1, onDisk3)
+	}
+}

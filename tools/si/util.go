@@ -293,7 +293,7 @@ vault:
 	  si vault hooks install|status|uninstall [--force]
 	  si vault fmt [--file <path>] [--all] [--check]
 	  si vault encrypt [--file <path>] [--format] [--reencrypt]
-	  si vault decrypt [--file <path>] [--stdout] [--yes]
+	  si vault decrypt [--file <path>] [--stdout] [--yes] [KEY]...
 	  si vault set <KEY> <VALUE> [--file <path>] [--section <name>] [--stdin] [--format]
 	  si vault unset <KEY> [--file <path>] [--format]
 	  si vault get <KEY> [--file <path>] [--reveal]
