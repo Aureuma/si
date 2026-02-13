@@ -6,6 +6,7 @@ set -euo pipefail
 # - Builds from a local checkout when available, else clones and builds.
 # - Ensures a compatible Go toolchain (downloads a user-local Go tarball if needed).
 # - Installs to ~/.local/bin/si by default (or /usr/local/bin/si when run as root).
+# - Builds a slim binary by default (trimpath, no VCS embedding, stripped symbols).
 #
 
 SCRIPT_NAME="install-si.sh"
@@ -15,6 +16,7 @@ usage() {
 Install the si CLI.
 
 Usage:
+  tools/install-si.sh
   tools/install-si.sh [flags]
 
 Flags:
@@ -33,6 +35,14 @@ Flags:
                           system: require a compatible go in PATH
   --go-version <ver>      Override required Go version (default: parsed from tools/si/go.mod)
 
+  --build-tags <tags>     Go build tags (comma-separated)
+  --build-ldflags <flags> Go linker flags (default: "-s -w")
+
+  --link-go               Force: symlink go/gofmt into the install dir (even if a system Go exists)
+  --no-link-go            Disable: do not symlink go/gofmt even if Go is auto-downloaded
+  --with-buildx           Force: if docker buildx is missing, install it as a user-level Docker CLI plugin
+  --no-buildx             Disable: do not attempt buildx installation (warn only)
+
   --os <linux|darwin>     Override OS detection (primarily for dry-run/testing)
   --arch <amd64|arm64>    Override arch detection (primarily for dry-run/testing)
 
@@ -43,6 +53,11 @@ Flags:
   -h, --help              Show this help
 
 Notes:
+  - With no flags, this script automatically picks the next-best option:
+      1) Use a local checkout if present.
+      2) Otherwise fetch the repo (git clone preferred; GitHub tarball fallback if git is missing).
+      3) Ensure a compatible Go toolchain (auto-download if needed).
+      4) Install si to the first writable default install dir.
   - This script does not modify your shell rc files. If your install dir isn't on PATH,
     it prints the exact line to add for bash/zsh.
   - For si vault on Linux, installing "secret-tool" enables keyring storage:
@@ -57,8 +72,8 @@ log() {
   fi
   case "${level}" in
     info) printf '%s\n' "$*" ;;
-    warn) printf '%s\n' "warn: $*" >&2 ;;
-    err)  printf '%s\n' "error: $*" >&2 ;;
+    warn) printf '%s\n' "⚠️  $*" >&2 ;;
+    err)  printf '%s\n' "❌ $*" >&2 ;;
     *)    printf '%s\n' "$*" ;;
   esac
 }
@@ -71,6 +86,55 @@ die() {
 need_cmd() {
   local c="$1"
   command -v "${c}" >/dev/null 2>&1 || die "missing required command: ${c}"
+}
+
+need_downloader() {
+  if command -v curl >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    return 0
+  fi
+  die "missing required command: curl or wget"
+}
+
+http_get() {
+  local url="$1"
+  local header="${2:-}"
+  need_downloader
+  if command -v curl >/dev/null 2>&1; then
+    if [[ -n "${header}" ]]; then
+      curl --proto "=https" --tlsv1.2 -fsSL -H "${header}" "${url}"
+    else
+      curl --proto "=https" --tlsv1.2 -fsSL "${url}"
+    fi
+    return 0
+  fi
+  if [[ -n "${header}" ]]; then
+    wget -q -O - --header "${header}" "${url}"
+  else
+    wget -q -O - "${url}"
+  fi
+}
+
+http_get_to_file() {
+  local url="$1"
+  local out="$2"
+  local header="${3:-}"
+  need_downloader
+  if command -v curl >/dev/null 2>&1; then
+    if [[ -n "${header}" ]]; then
+      curl --proto "=https" --tlsv1.2 -fsSL -H "${header}" -o "${out}" "${url}"
+    else
+      curl --proto "=https" --tlsv1.2 -fsSL -o "${out}" "${url}"
+    fi
+    return 0
+  fi
+  if [[ -n "${header}" ]]; then
+    wget -q -O "${out}" --header "${header}" "${url}"
+  else
+    wget -q -O "${out}" "${url}"
+  fi
 }
 
 mktemp_dir() {
@@ -131,6 +195,19 @@ sha256_file() {
   die "missing sha256 tool (need sha256sum or shasum)"
 }
 
+sha256_file_best_effort() {
+  local path="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${path}" | awk '{print $1}'
+    return 0
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "${path}" | awk '{print $1}'
+    return 0
+  fi
+  return 1
+}
+
 run() {
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     log info "+ $*"
@@ -147,12 +224,12 @@ resolve_latest_release_tag() {
   if [[ -n "${GITHUB_TOKEN:-}" ]]; then token="${GITHUB_TOKEN}"; fi
 
   local url="https://api.github.com/repos/${owner_repo}/releases/latest"
-  local hdr=()
-  if [[ -n "${token}" ]]; then
-    hdr=(-H "Authorization: Bearer ${token}")
-  fi
   local json
-  if ! json="$(curl -fsSL "${hdr[@]}" "${url}" 2>/dev/null)"; then
+  local header=""
+  if [[ -n "${token}" ]]; then
+    header="Authorization: Bearer ${token}"
+  fi
+  if ! json="$(http_get "${url}" "${header}" 2>/dev/null)"; then
     return 1
   fi
   # Extract "tag_name": "vX.Y.Z"
@@ -274,6 +351,7 @@ ensure_go() {
     have="$(go_version_from_bin "${go_bin}" || true)"
     if [[ -n "${have}" ]] && version_ge "${have}" "${required}"; then
       log info "go: using system go ${have} (${go_bin})"
+      GO_BIN_KIND="system"
       printf '%s' "${go_bin}"
       return 0
     fi
@@ -296,13 +374,14 @@ ensure_go() {
     have="$(go_version_from_bin "${go_path}" || true)"
     if [[ -n "${have}" ]] && version_ge "${have}" "${required}"; then
       log info "go: using cached go ${have} (${go_path})"
+      GO_BIN_KIND="cached"
       printf '%s' "${go_path}"
       return 0
     fi
     log warn "go: cached go exists but version mismatch (have ${have:-unknown}, need ${required}); reinstalling"
   fi
 
-  need_cmd curl
+  need_downloader
   need_cmd tar
 
   local tgz="go${required}.${os}-${arch}.tar.gz"
@@ -313,6 +392,7 @@ ensure_go() {
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     log info "go: would verify sha256 via ${sha_url}"
     log info "go: would install to ${dest}"
+    GO_BIN_KIND="downloaded"
     printf '%s' "${go_path}"
     return 0
   fi
@@ -323,10 +403,10 @@ ensure_go() {
   # leave the directory behind to preserve diagnostics.
 
   local tgz_path="${work}/${tgz}"
-  curl -fsSL -o "${tgz_path}" "${url}"
+  http_get_to_file "${url}" "${tgz_path}"
 
   local expected
-  expected="$(curl -fsSL "${sha_url}" | awk '{print $1}' | tr -d '\r\n')"
+  expected="$(http_get "${sha_url}" | awk '{print $1}' | tr -d '\r\n')"
   expected="$(trim "${expected}")"
   [[ -n "${expected}" ]] || die "go: failed to fetch expected sha256"
 
@@ -350,8 +430,9 @@ ensure_go() {
     die "go: installed go version check failed (have ${have:-unknown}, need ${required})"
   fi
 
-  log info "go: installed ${have} at ${go_path}"
+  log info "✅ go: installed ${have} at ${go_path}"
   rm -rf "${work}" || true
+  GO_BIN_KIND="downloaded"
   printf '%s' "${go_path}"
 }
 
@@ -382,10 +463,22 @@ build_si() {
 
   [[ -f "${root}/tools/si/go.mod" ]] || die "not a si repo root: ${root} (missing tools/si/go.mod)"
   if [[ "${DRY_RUN}" -eq 1 ]]; then
-    log info "build: would run (${root}): ${go_bin} build -o ${out_bin} ./tools/si"
+    log info "🛠️  build: would run (${root}): ${go_bin} build -trimpath -buildvcs=false -ldflags \"${BUILD_LDFLAGS}\" ${BUILD_TAGS:+-tags \"${BUILD_TAGS}\"} -o ${out_bin} ./tools/si"
     return 0
   fi
-  (cd "${root}" && "${go_bin}" build -o "${out_bin}" ./tools/si)
+  (
+    cd "${root}"
+    # Keep the default build artifact small and reproducible:
+    # -trimpath: avoid embedding local paths
+    # -buildvcs=false: avoid embedding git metadata (also avoids requiring git at build time)
+    local -a args
+    args=(build -trimpath -buildvcs=false)
+    if [[ -n "${BUILD_TAGS}" ]]; then
+      args+=(-tags "${BUILD_TAGS}")
+    fi
+    args+=(-ldflags "${BUILD_LDFLAGS}" -o "${out_bin}" ./tools/si)
+    "${go_bin}" "${args[@]}"
+  )
 }
 
 install_bin() {
@@ -395,7 +488,7 @@ install_bin() {
   dst_dir="$(dirname "${dst}")"
 
   if [[ "${DRY_RUN}" -eq 1 ]]; then
-    log info "install: would install ${src} -> ${dst}"
+    log info "📦 install: would install ${src} -> ${dst}"
     return 0
   fi
 
@@ -413,6 +506,125 @@ install_bin() {
   mv -f "${tmp}" "${dst}"
 }
 
+install_symlink() {
+  local target="$1"
+  local linkpath="$2"
+  local linkdir
+  linkdir="$(dirname "${linkpath}")"
+
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    log info "🔗 install: would symlink ${linkpath} -> ${target}"
+    return 0
+  fi
+
+  mkdir -p "${linkdir}"
+  if [[ -e "${linkpath}" && "${FORCE}" -ne 1 ]]; then
+    log warn "install: not overwriting existing path (use --force): ${linkpath}"
+    return 0
+  fi
+  if [[ ! -w "${linkdir}" ]]; then
+    log warn "install: cannot write symlink into: ${linkdir}"
+    return 0
+  fi
+  ln -sfn "${target}" "${linkpath}"
+}
+
+ensure_docker_buildx() {
+  # If docker is present but buildx isn't, try a next-best fix:
+  # - Auto mode: attempt install only in an interactive TTY (avoid surprising CI/tests).
+  # - Force mode: always attempt.
+  # - Never mode: warn only.
+  if ! command -v docker >/dev/null 2>&1; then
+    return 0
+  fi
+  if docker buildx version >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ "${BUILDX_MODE}" == "never" ]]; then
+    log warn "docker buildx is not available (BuildKit features like build secrets may be disabled)"
+    log info "🔧 To install buildx on Debian/Ubuntu (Docker repo): sudo apt-get install -y docker-buildx-plugin"
+    return 0
+  fi
+  if [[ "${BUILDX_MODE}" == "auto" ]] && ! is_tty; then
+    log warn "docker buildx is not available (BuildKit features like build secrets may be disabled)"
+    log info "💡 Tip: re-run in a TTY to auto-install buildx, or pass --with-buildx."
+    return 0
+  fi
+
+  local os="$1"
+  local arch="$2"
+  local docker_config="${DOCKER_CONFIG:-${HOME:-}/.docker}"
+  if [[ -z "${docker_config}" ]]; then
+    log warn "docker buildx: DOCKER_CONFIG/HOME not set; cannot install buildx plugin"
+    return 0
+  fi
+
+  local plugin_dir="${docker_config%/}/cli-plugins"
+  local plugin_path="${plugin_dir}/docker-buildx"
+
+  need_cmd chmod
+  need_downloader
+  local tag
+  log info "🔧 docker buildx: resolving latest release..."
+  if ! tag="$(resolve_latest_release_tag "docker/buildx" 2>/dev/null)"; then
+    log warn "docker buildx: failed to resolve latest release tag"
+    return 0
+  fi
+
+  local asset="buildx-${tag}.${os}-${arch}"
+  local url="https://github.com/docker/buildx/releases/download/${tag}/${asset}"
+  local checksums_url="https://github.com/docker/buildx/releases/download/${tag}/checksums.txt"
+
+  log info "⬇️  docker buildx: downloading ${url}"
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    log info "docker buildx: would verify sha256 via ${checksums_url}"
+    log info "docker buildx: would install to ${plugin_path}"
+    return 0
+  fi
+
+  local work
+  work="$(mktemp_dir)"
+  local bin="${work}/${asset}"
+  if ! http_get_to_file "${url}" "${bin}" 2>/dev/null; then
+    log warn "docker buildx: download failed: ${url}"
+    rm -rf "${work}" || true
+    return 0
+  fi
+
+  # Best-effort checksum verification.
+  if sums="$(http_get "${checksums_url}" 2>/dev/null)"; then
+    expected="$(printf '%s\n' "${sums}" | awk -v f="${asset}" '$2==f {print $1}' | head -n 1 | tr -d '\r\n')"
+    expected="$(trim "${expected}")"
+    if [[ -n "${expected}" ]]; then
+      if actual="$(sha256_file_best_effort "${bin}" 2>/dev/null)"; then
+        if [[ "${actual}" != "${expected}" ]]; then
+          log warn "docker buildx: sha256 mismatch for ${asset} (expected ${expected}, got ${actual}); not installing"
+          rm -rf "${work}" || true
+          return 0
+        fi
+      else
+        log warn "docker buildx: sha256 tool not found; skipping sha256 verification"
+      fi
+    else
+      log warn "docker buildx: checksums.txt did not contain an entry for ${asset}; skipping sha256 verification"
+    fi
+  else
+    log warn "docker buildx: failed to fetch checksums.txt; skipping sha256 verification"
+  fi
+
+  mkdir -p "${plugin_dir}"
+  cp "${bin}" "${plugin_path}"
+  chmod 0755 "${plugin_path}"
+  rm -rf "${work}" || true
+
+  if docker buildx version >/dev/null 2>&1; then
+    log info "✅ docker buildx: installed plugin at ${plugin_path}"
+  else
+    log warn "docker buildx: installed, but docker still does not see buildx (check DOCKER_CONFIG and Docker version)"
+  fi
+}
+
 post_install() {
   local dst="$1"
   local install_dir
@@ -427,8 +639,8 @@ post_install() {
   fi
 
   log info ""
-  log info "installed: ${dst}"
-  log info "verify:    ${dst} --help"
+  log info "✅ installed: ${dst}"
+  log info "🔎 verify:    ${dst} --help"
   log info ""
 
   if [[ "${NO_PATH_HINT}" -eq 0 ]]; then
@@ -436,19 +648,23 @@ post_install() {
       *":${install_dir}:"*) ;;
       *)
         if [[ "${install_dir}" == "${HOME:-}/.local/bin" ]]; then
-          log warn "~/.local/bin is not on PATH for this shell."
+          log warn "🧭 ~/.local/bin is not on PATH for this shell."
           log info "Add this to your shell rc (~/.bashrc or ~/.zshrc):"
           log info "  export PATH=\"${HOME}/.local/bin:\$PATH\""
           log info ""
         else
-          log warn "install dir is not on PATH for this shell: ${install_dir}"
+          log warn "🧭 install dir is not on PATH for this shell: ${install_dir}"
         fi
         ;;
     esac
   fi
 
-  log info "First-time vault notes:"
+  log info "🔐 First-time vault notes:"
   log info "  - Linux keyring support (recommended): sudo apt install -y libsecret-tools"
+  log info "🏗️  Build notes:"
+  log info "  - 'si build self' requires 'go' on PATH (this installer will place a go shim next to si if it had to download Go)"
+  log info "  - 'si build image' is best with Docker BuildKit/buildx enabled"
+  log info "  - If you see legacy-builder warnings, check/unset: DOCKER_BUILDKIT=0"
   log info "  - In a host repo: git submodule update --init --recursive"
   log info "  - Then: si vault status --env dev"
 }
@@ -458,6 +674,8 @@ DRY_RUN=0
 FORCE=0
 UNINSTALL=0
 NO_PATH_HINT=0
+LINK_GO_MODE="auto"
+BUILDX_MODE="auto"
 
 REPO="Aureuma/si"
 REPO_URL=""
@@ -468,6 +686,8 @@ INSTALL_DIR=""
 INSTALL_PATH=""
 GO_MODE="auto"
 GO_VERSION=""
+BUILD_TAGS=""
+BUILD_LDFLAGS="-s -w"
 OS_OVERRIDE=""
 ARCH_OVERRIDE=""
 TMP_DIR=""
@@ -486,6 +706,12 @@ while [[ $# -gt 0 ]]; do
     --uninstall) UNINSTALL=1; shift ;;
     --go-mode) GO_MODE="$2"; shift 2 ;;
     --go-version) GO_VERSION="$2"; shift 2 ;;
+    --build-tags) BUILD_TAGS="$2"; shift 2 ;;
+    --build-ldflags) BUILD_LDFLAGS="$2"; shift 2 ;;
+    --link-go) LINK_GO_MODE="always"; shift ;;
+    --no-link-go) LINK_GO_MODE="never"; shift ;;
+    --with-buildx) BUILDX_MODE="always"; shift ;;
+    --no-buildx) BUILDX_MODE="never"; shift ;;
     --os) OS_OVERRIDE="$2"; shift 2 ;;
     --arch) ARCH_OVERRIDE="$2"; shift 2 ;;
     --tmp-dir) TMP_DIR="$2"; shift 2 ;;
@@ -499,6 +725,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 normalize_os_arch_overrides
+
+LINK_GO_MODE="$(echo "$(trim "${LINK_GO_MODE}")" | tr '[:upper:]' '[:lower:]')"
+case "${LINK_GO_MODE}" in
+  auto|always|never) ;;
+  *) die "invalid link-go mode (expected auto|always|never)" ;;
+esac
+
+BUILDX_MODE="$(echo "$(trim "${BUILDX_MODE}")" | tr '[:upper:]' '[:lower:]')"
+case "${BUILDX_MODE}" in
+  auto|always|never) ;;
+  *) die "invalid buildx mode (expected auto|always|never)" ;;
+esac
 
 if [[ "${DRY_RUN}" -eq 0 ]]; then
   if [[ -n "${OS_OVERRIDE}" || -n "${ARCH_OVERRIDE}" ]]; then
@@ -536,25 +774,32 @@ if [[ -z "${INSTALL_PATH}" ]]; then
       INSTALL_DIR="/usr/local/bin"
     else
       [[ -n "${HOME:-}" ]] || die "HOME is not set; pass --install-dir or --install-path"
-      INSTALL_DIR="${HOME}/.local/bin"
+      # Pick the first writable default install dir.
+      for d in "${HOME}/.local/bin" "${HOME}/bin"; do
+        if mkdir -p "${d}" 2>/dev/null && [[ -w "${d}" ]]; then
+          INSTALL_DIR="${d}"
+          break
+        fi
+      done
+      [[ -n "${INSTALL_DIR}" ]] || die "no writable default install dir found under HOME; pass --install-dir or --install-path"
     fi
   fi
   INSTALL_PATH="${INSTALL_DIR%/}/si"
 fi
 
-if [[ "${UNINSTALL}" -eq 1 ]]; then
-  if [[ "${DRY_RUN}" -eq 1 ]]; then
-    log info "uninstall: would remove ${INSTALL_PATH}"
+  if [[ "${UNINSTALL}" -eq 1 ]]; then
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+      log info "🧹 uninstall: would remove ${INSTALL_PATH}"
+      exit 0
+    fi
+    if [[ -e "${INSTALL_PATH}" ]]; then
+      rm -f "${INSTALL_PATH}"
+      log info "🧹 removed: ${INSTALL_PATH}"
+    else
+      log info "not installed: ${INSTALL_PATH}"
+    fi
     exit 0
   fi
-  if [[ -e "${INSTALL_PATH}" ]]; then
-    rm -f "${INSTALL_PATH}"
-    log info "removed: ${INSTALL_PATH}"
-  else
-    log info "not installed: ${INSTALL_PATH}"
-  fi
-  exit 0
-fi
 
 OS="$(detect_os)"
 ARCH="$(detect_arch)"
@@ -576,7 +821,6 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ -z "${SOURCE_DIR}" ]]; then
-  need_cmd git
   if [[ -z "${TMP_DIR}" ]]; then
     WORKDIR="$(mktemp_dir)"
   else
@@ -591,7 +835,57 @@ if [[ -z "${SOURCE_DIR}" ]]; then
       REPO_URL="https://github.com/${REPO}.git"
     fi
   fi
-  clone_repo "${REPO_URL}" "${REF}" "${local_dir}"
+  fetch_github_tarball() {
+    local repo_url="$1"
+    local ref="$2"
+    local out_dir="$3"
+
+    if [[ ! "${repo_url}" =~ ^https://github.com/([^/]+/[^/.]+)(\\.git)?$ ]]; then
+      return 1
+    fi
+    local owner_repo="${BASH_REMATCH[1]}"
+    local repo_name="${owner_repo#*/}"
+
+    # For private repos, users can export GH_TOKEN/GITHUB_TOKEN.
+    local token=""
+    if [[ -n "${GH_TOKEN:-}" ]]; then token="${GH_TOKEN}"; fi
+    if [[ -n "${GITHUB_TOKEN:-}" ]]; then token="${GITHUB_TOKEN}"; fi
+    local header=""
+    if [[ -n "${token}" ]]; then
+      header="Authorization: Bearer ${token}"
+    fi
+
+    need_downloader
+    need_cmd tar
+    local archive_url="https://github.com/${owner_repo}/archive/${ref}.tar.gz"
+
+    log info "⬇️  repo: downloading ${archive_url}"
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+      log info "repo: would extract to ${out_dir}"
+      return 0
+    fi
+
+    mkdir -p "${out_dir}"
+    local tgz="${WORKDIR}/src.tgz"
+    http_get_to_file "${archive_url}" "${tgz}" "${header}"
+    tar -C "${WORKDIR}" -xzf "${tgz}"
+
+    local extracted
+    extracted="$(find "${WORKDIR}" -maxdepth 1 -type d -name "${repo_name}-*" | head -n 1)"
+    [[ -n "${extracted}" && -d "${extracted}/tools/si" ]] || die "repo: failed to extract expected source tree from ${archive_url}"
+    mv "${extracted}" "${out_dir}"
+    return 0
+  }
+
+  if command -v git >/dev/null 2>&1; then
+    if ! clone_repo "${REPO_URL}" "${REF}" "${local_dir}"; then
+      log warn "repo: git fetch failed; trying GitHub tarball fallback"
+      fetch_github_tarball "${REPO_URL}" "${REF}" "${local_dir}" || die "repo: failed to fetch repo (git failed, tarball fallback unavailable)"
+    fi
+  else
+    log warn "repo: git not found; trying GitHub tarball fallback"
+    fetch_github_tarball "${REPO_URL}" "${REF}" "${local_dir}" || die "git is required to fetch the repo (or use a https://github.com/<owner>/<repo>.git repo URL)"
+  fi
   SOURCE_DIR="${local_dir}"
 fi
 
@@ -601,6 +895,7 @@ if [[ -z "${required_go}" ]]; then
   required_go="$(parse_go_mod_required_version "${SOURCE_DIR}")"
 fi
 
+GO_BIN_KIND=""
 go_bin="$(ensure_go "${required_go}" "${OS}" "${ARCH}")"
 
 if [[ -z "${TMP_DIR}" ]]; then
@@ -617,4 +912,19 @@ out_bin="${build_dir}/si"
 
 build_si "${SOURCE_DIR}" "${go_bin}" "${out_bin}"
 install_bin "${out_bin}" "${INSTALL_PATH}"
+
+if [[ "${GO_BIN_KIND}" != "system" ]]; then
+  if [[ "${LINK_GO_MODE}" == "always" ]] || [[ "${LINK_GO_MODE}" == "auto" ]]; then
+    # If we had to download/cached Go, make it available next to si so:
+    # - 'si build self' works in a fresh machine
+    # - users can choose to add the install dir to PATH (we don't modify rc files)
+    go_dir="$(dirname "${go_bin}")"
+    install_symlink "${go_bin}" "$(dirname "${INSTALL_PATH}")/go"
+    if [[ -x "${go_dir}/gofmt" ]]; then
+      install_symlink "${go_dir}/gofmt" "$(dirname "${INSTALL_PATH}")/gofmt"
+    fi
+  fi
+fi
+
+ensure_docker_buildx "${OS}" "${ARCH}"
 post_install "${INSTALL_PATH}"
