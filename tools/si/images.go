@@ -53,6 +53,14 @@ func runDockerBuild(spec imageBuildSpec) error {
 		warnf("docker buildx is not available; using legacy docker build path")
 	}
 	secrets := spec.secrets
+	if enableBuildx && len(secrets) > 0 {
+		for _, s := range secrets {
+			if strings.Contains(s, "id=si_host_codex_config") {
+				infof("including host codex config.toml in image build via build secret")
+				break
+			}
+		}
+	}
 	if len(secrets) > 0 && !enableBuildx {
 		warnf("building without host build secrets because BuildKit/buildx is unavailable")
 		secrets = nil
@@ -140,6 +148,7 @@ func dockerBuildxAvailable() (bool, error) {
 		lower := strings.ToLower(trimmed)
 		if strings.Contains(lower, "not a docker command") ||
 			strings.Contains(lower, "unknown command \"buildx\"") ||
+			strings.Contains(lower, "unknown command: docker buildx") ||
 			strings.Contains(lower, "buildx: command not found") {
 			return false, nil
 		}
@@ -228,7 +237,6 @@ func hostCodexConfigBuildSecrets() []string {
 	if raw == "" {
 		return nil
 	}
-	infof("including host codex config.toml in image build via build secret")
 	return []string{"id=si_host_codex_config,src=" + path}
 }
 
