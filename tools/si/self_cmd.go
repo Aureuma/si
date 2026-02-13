@@ -83,7 +83,7 @@ func cmdSelfRun(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	runArgs := []string{"run", "-buildvcs=false", "./tools/si"}
+	runArgs := []string{"run", "-trimpath", "-buildvcs=false", "./tools/si"}
 	runArgs = append(runArgs, forward...)
 	// #nosec G204 -- goPath is resolved via exec.LookPath and args are constructed locally.
 	cmd := exec.Command(goPath, runArgs...)
@@ -139,7 +139,7 @@ func selfBuildBinary(root string, output string, goBin string, quiet bool) error
 	tmp := filepath.Join(dir, fmt.Sprintf(".si-build-%d-%d", os.Getpid(), time.Now().UnixNano()))
 	defer os.Remove(tmp)
 
-	buildArgs := []string{"build", "-buildvcs=false", "-o", tmp, "./tools/si"}
+	buildArgs := []string{"build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w", "-o", tmp, "./tools/si"}
 	if !quiet {
 		infof("running: %s %s", goPath, strings.Join(buildArgs, " "))
 	}

@@ -216,6 +216,7 @@ func ensureGoToolchainCached(root string) error {
 	shaURL := url + ".sha256"
 
 	// Download to temp dir.
+	infof("downloading Go toolchain %s for si self build...", want)
 	base, err := goCacheDir()
 	if err != nil {
 		return err

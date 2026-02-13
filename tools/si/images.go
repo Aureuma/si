@@ -19,6 +19,7 @@ type imageBuildSpec struct {
 }
 
 var dockerBuildxAvailableFn = dockerBuildxAvailable
+var dockerBuildKitAvailableFn = dockerBuildKitAvailable
 var runDockerBuildCommandFn = runDockerBuildCommand
 
 func cmdBuildImage(args []string) {
@@ -44,13 +45,13 @@ func runDockerBuild(spec imageBuildSpec) error {
 		return fmt.Errorf("image tag and context required")
 	}
 	enableBuildKit := false
-	buildxOK, buildxErr := dockerBuildxAvailableFn()
-	if buildxErr != nil {
-		warnf("docker buildx detection failed; using legacy docker build path: %v", buildxErr)
-	} else if buildxOK {
+	buildKitOK, buildKitErr := dockerBuildKitAvailableFn()
+	if buildKitErr != nil {
+		warnf("docker BuildKit detection failed; using legacy docker build path: %v", buildKitErr)
+	} else if buildKitOK {
 		enableBuildKit = true
 	} else {
-		warnf("docker buildx is not available; using legacy docker build path")
+		warnf("Docker BuildKit is not available; using legacy docker build path")
 	}
 	secrets := spec.secrets
 	if len(secrets) > 0 && !enableBuildKit {
@@ -144,6 +145,42 @@ func dockerBuildxAvailable() (bool, error) {
 	return true, nil
 }
 
+func dockerBuildKitAvailable() (bool, error) {
+	// Primary signal: buildx plugin presence.
+	ok, err := dockerBuildxAvailableFn()
+	if err == nil && ok {
+		return true, nil
+	}
+	// Next-best: some Docker installs support BuildKit/--secret without a buildx plugin.
+	secretOK, secretErr := dockerBuildSecretsFlagAvailable()
+	if secretErr != nil {
+		if err != nil {
+			// Include the buildx probe error as extra context.
+			return false, fmt.Errorf("%v; %w", err, secretErr)
+		}
+		return false, secretErr
+	}
+	return secretOK, nil
+}
+
+func dockerBuildSecretsFlagAvailable() (bool, error) {
+	// This is a CLI capability check; it does not require a daemon connection.
+	cmd := dockerCommandWithEnv([]string{"DOCKER_BUILDKIT=1"}, "build", "--help")
+	cmd.Stdin = nil
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	if err := cmd.Run(); err != nil {
+		trimmed := strings.TrimSpace(output.String())
+		if trimmed == "" {
+			return false, err
+		}
+		return false, fmt.Errorf("docker build --help probe failed: %s", trimmed)
+	}
+	out := output.String()
+	return strings.Contains(out, "--secret") || strings.Contains(out, " --secret "), nil
+}
+
 type dockerBuildCommandError struct {
 	err    error
 	output string
@@ -186,6 +223,19 @@ func shouldRetryLegacyBuild(err error) bool {
 		return true
 	}
 	if strings.Contains(lower, "error exporting to image") && strings.Contains(lower, "snapshot") {
+		return true
+	}
+	// Capability/config mismatches: treat as recoverable and retry legacy.
+	if strings.Contains(lower, "unknown flag") && strings.Contains(lower, "--secret") {
+		return true
+	}
+	if strings.Contains(lower, "unknown flag") && strings.Contains(lower, "--mount") {
+		return true
+	}
+	if strings.Contains(lower, "requires buildkit") {
+		return true
+	}
+	if strings.Contains(lower, "buildkit is currently disabled") {
 		return true
 	}
 	return false
