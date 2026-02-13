@@ -155,12 +155,34 @@ func GenerateIdentity() (*age.X25519Identity, error) {
 
 func decodeCiphertextPayload(ciphertext string) ([]byte, error) {
 	ciphertext = strings.TrimSpace(ciphertext)
+	decodeAny := func(payload string) ([]byte, error) {
+		// Backwards-compat: older versions (and some users) may have stored ciphertext
+		// using StdEncoding/URLEncoding (with padding) rather than RawURLEncoding.
+		payload = strings.TrimSpace(payload)
+		if payload == "" {
+			return nil, fmt.Errorf("invalid ciphertext payload: empty")
+		}
+		var lastErr error
+		for _, enc := range []*base64.Encoding{
+			base64.RawURLEncoding,
+			base64.URLEncoding,
+			base64.RawStdEncoding,
+			base64.StdEncoding,
+		} {
+			raw, err := enc.DecodeString(payload)
+			if err == nil {
+				return raw, nil
+			}
+			lastErr = err
+		}
+		return nil, fmt.Errorf("invalid ciphertext payload: %w", lastErr)
+	}
 	switch {
 	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV2):
 		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV2)
-		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		raw, err := decodeAny(payload)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ciphertext payload: %w", err)
+			return nil, err
 		}
 		prefix := []byte(ageMagicLine + ageStanzaX25519Prefix)
 		out := make([]byte, 0, len(prefix)+len(raw))
@@ -169,9 +191,9 @@ func decodeCiphertextPayload(ciphertext string) ([]byte, error) {
 		return out, nil
 	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV2Legacy):
 		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV2Legacy)
-		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		raw, err := decodeAny(payload)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ciphertext payload: %w", err)
+			return nil, err
 		}
 		prefix := []byte(ageMagicLine + ageStanzaX25519Prefix)
 		out := make([]byte, 0, len(prefix)+len(raw))
@@ -180,9 +202,9 @@ func decodeCiphertextPayload(ciphertext string) ([]byte, error) {
 		return out, nil
 	case strings.HasPrefix(ciphertext, EncryptedValuePrefixV1):
 		payload := strings.TrimPrefix(ciphertext, EncryptedValuePrefixV1)
-		raw, err := base64.RawURLEncoding.DecodeString(payload)
+		raw, err := decodeAny(payload)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ciphertext payload: %w", err)
+			return nil, err
 		}
 		return raw, nil
 	default:
