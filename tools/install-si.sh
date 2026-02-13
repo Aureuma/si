@@ -319,8 +319,23 @@ parse_go_mod_required_version() {
   local root="$1"
   local gomod="${root}/tools/si/go.mod"
   [[ -f "${gomod}" ]] || die "go.mod not found at ${gomod}"
+  # Prefer the go.mod toolchain directive when present, else fall back to the "go" directive.
+  # Examples:
+  #   go 1.25.0
+  #   toolchain go1.25.7
+  local tc
+  tc="$(grep -E '^toolchain[[:space:]]+go[0-9]+\.[0-9]+\.[0-9]+' "${gomod}" | head -n 1 | awk '{print $2}')"
+  tc="$(trim "${tc}")"
+  if [[ -n "${tc}" ]]; then
+    tc="${tc#go}"
+    tc="$(trim "${tc}")"
+    [[ -n "${tc}" ]] || die "failed to parse toolchain Go version from ${gomod}"
+    printf '%s' "${tc}"
+    return 0
+  fi
+
   local ver
-  ver="$(grep -E '^go[[:space:]]+[0-9]+\.[0-9]+' "${gomod}" | head -n 1 | awk '{print $2}')"
+  ver="$(grep -E '^go[[:space:]]+[0-9]+\.[0-9]+(\.[0-9]+)?' "${gomod}" | head -n 1 | awk '{print $2}')"
   ver="$(trim "${ver}")"
   [[ -n "${ver}" ]] || die "failed to parse required Go version from ${gomod}"
   printf '%s' "${ver}"
