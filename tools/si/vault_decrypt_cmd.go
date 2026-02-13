@@ -15,8 +15,10 @@ func cmdVaultDecrypt(args []string) {
 	fs := flag.NewFlagSet("vault decrypt", flag.ExitOnError)
 	var files multiFlag
 	fs.Var(&files, "file", "explicit env file path (repeatable; defaults to the configured vault.file when omitted)")
+	inPlace := fs.Bool("in-place", false, "decrypt in place to plaintext on disk (DANGEROUS)")
 	yes := fs.Bool("yes", false, "do not prompt (required for in-place decrypt in non-interactive mode)")
-	stdout := fs.Bool("stdout", false, "write decrypted file to stdout (does not modify the file)")
+	// Default is stdout. This flag remains for compatibility and explicitness.
+	stdout := fs.Bool("stdout", false, "write decrypted file to stdout (default; does not modify the file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -33,8 +35,17 @@ func cmdVaultDecrypt(args []string) {
 		keys = append(keys, k)
 	}
 
-	if *stdout && len(files) > 1 {
-		fatal(fmt.Errorf("--stdout does not support multiple --file values"))
+	modeStdout := true
+	if *inPlace {
+		modeStdout = false
+	}
+	// --stdout is accepted but is redundant; if both are set, stdout wins.
+	if *stdout {
+		modeStdout = true
+	}
+
+	if modeStdout && len(files) > 1 {
+		fatal(fmt.Errorf("stdout mode does not support multiple --file values (use --in-place for multi-file)"))
 	}
 
 	if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
@@ -67,7 +78,7 @@ func cmdVaultDecrypt(args []string) {
 			fatal(err)
 		}
 
-		if *stdout {
+		if modeStdout {
 			vaultAuditEvent(settings, target, "decrypt_stdout", map[string]any{
 				"envFile":        filepath.Clean(target.File),
 				"decryptedCount": len(res.DecryptedKeys),
@@ -95,14 +106,14 @@ func cmdVaultDecrypt(args []string) {
 	}
 
 	// If doing an in-place decrypt for multiple files, confirm once up-front.
-	if !*stdout && len(files) > 1 && !*yes {
+	if !modeStdout && len(files) > 1 && !*yes {
 		prompt := fmt.Sprintf("Decrypt %d files in place to plaintext? This will write secrets to disk.", len(files))
 		if len(keys) > 0 {
 			prompt = fmt.Sprintf("Decrypt selected keys in %d files in place to plaintext? This will write secrets to disk.", len(files))
 		}
 		confirmed, ok := confirmYN(prompt, false)
 		if !ok {
-			fatal(fmt.Errorf("non-interactive: re-run with --yes, or use --stdout"))
+			fatal(fmt.Errorf("non-interactive: re-run with --in-place --yes"))
 		}
 		if !confirmed {
 			fatal(fmt.Errorf("canceled"))
@@ -110,14 +121,14 @@ func cmdVaultDecrypt(args []string) {
 	}
 
 	if len(files) == 0 {
-		if !*stdout && !*yes {
+		if !modeStdout && !*yes {
 			prompt := "Decrypt in place to plaintext? This will write secrets to disk."
 			if len(keys) > 0 {
 				prompt = "Decrypt selected keys in place to plaintext? This will write secrets to disk."
 			}
 			confirmed, ok := confirmYN(prompt, false)
 			if !ok {
-				fatal(fmt.Errorf("non-interactive: re-run with --yes, or use --stdout"))
+				fatal(fmt.Errorf("non-interactive: re-run with --in-place --yes"))
 			}
 			if !confirmed {
 				fatal(fmt.Errorf("canceled"))
@@ -127,14 +138,14 @@ func cmdVaultDecrypt(args []string) {
 		return
 	}
 
-	if !*stdout && len(files) == 1 && !*yes {
+	if !modeStdout && len(files) == 1 && !*yes {
 		prompt := "Decrypt in place to plaintext? This will write secrets to disk."
 		if len(keys) > 0 {
 			prompt = "Decrypt selected keys in place to plaintext? This will write secrets to disk."
 		}
 		confirmed, ok := confirmYN(prompt, false)
 		if !ok {
-			fatal(fmt.Errorf("non-interactive: re-run with --yes, or use --stdout"))
+			fatal(fmt.Errorf("non-interactive: re-run with --in-place --yes"))
 		}
 		if !confirmed {
 			fatal(fmt.Errorf("canceled"))
