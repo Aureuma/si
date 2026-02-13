@@ -136,9 +136,9 @@ func TestVaultE2E_EncryptDecryptReencryptFlows(t *testing.T) {
 	}
 
 	// Decrypt to stdout, without modifying disk.
-	plainStdout, plainStderr, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--stdout")
+	plainStdout, plainStderr, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile)
 	if err != nil {
-		t.Fatalf("vault decrypt --stdout failed: %v\nstdout=%s\nstderr=%s", err, plainStdout, plainStderr)
+		t.Fatalf("vault decrypt (default stdout) failed: %v\nstdout=%s\nstderr=%s", err, plainStdout, plainStderr)
 	}
 	outDoc := vault.ParseDotenv([]byte(plainStdout))
 	gotRes, err := vault.DecryptEnv(outDoc, nil)
@@ -165,9 +165,9 @@ func TestVaultE2E_EncryptDecryptReencryptFlows(t *testing.T) {
 	}
 
 	// In-place decrypt to disk (guarded by --yes).
-	stdout3, stderr3, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--yes")
+	stdout3, stderr3, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--in-place", "--yes")
 	if err != nil {
-		t.Fatalf("vault decrypt --yes failed: %v\nstdout=%s\nstderr=%s", err, stdout3, stderr3)
+		t.Fatalf("vault decrypt --in-place --yes failed: %v\nstdout=%s\nstderr=%s", err, stdout3, stderr3)
 	}
 	diskBytes, err := os.ReadFile(envFile)
 	if err != nil {
@@ -239,9 +239,9 @@ func TestVaultE2E_DecryptBackCompatCiphertextEncodings(t *testing.T) {
 	}
 
 	// Decrypt should succeed (even though the ciphertext isn't the current encoding).
-	stdout, stderr, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--stdout")
+	stdout, stderr, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile)
 	if err != nil {
-		t.Fatalf("vault decrypt --stdout failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+		t.Fatalf("vault decrypt (default stdout) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 	outDoc := vault.ParseDotenv([]byte(stdout))
 	gotRes, err := vault.DecryptEnv(outDoc, nil)
@@ -299,9 +299,9 @@ func TestVaultE2E_DecryptSelectiveKeys(t *testing.T) {
 	}
 
 	// Decrypt only KEY1 to stdout; KEY2 should remain encrypted in output, and disk should remain encrypted.
-	stdout, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--stdout", "KEY1")
+	stdout, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "KEY1")
 	if err != nil {
-		t.Fatalf("vault decrypt --stdout KEY1 failed: %v\nstdout=%s", err, stdout)
+		t.Fatalf("vault decrypt (default stdout) KEY1 failed: %v\nstdout=%s", err, stdout)
 	}
 	outDoc := vault.ParseDotenv([]byte(stdout))
 	v1Raw, ok := outDoc.Lookup("KEY1")
@@ -337,8 +337,8 @@ func TestVaultE2E_DecryptSelectiveKeys(t *testing.T) {
 	}
 
 	// In-place decrypt only KEY2.
-	if _, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--yes", "KEY2"); err != nil {
-		t.Fatalf("vault decrypt --yes KEY2 failed: %v", err)
+	if _, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--in-place", "--yes", "KEY2"); err != nil {
+		t.Fatalf("vault decrypt --in-place --yes KEY2 failed: %v", err)
 	}
 	onDiskBytes3, err := os.ReadFile(envFile)
 	if err != nil {
@@ -367,5 +367,94 @@ func TestVaultE2E_DecryptSelectiveKeys(t *testing.T) {
 	}
 	if !vault.IsEncryptedValueV1(k1) {
 		t.Fatalf("expected KEY1 to remain encrypted on disk, got %q\nfile:\n%s", k1, onDisk3)
+	}
+}
+
+func TestVaultE2E_DecryptDefaultStdoutInPlaceRequiresFlag(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	tempState := t.TempDir()
+	targetRoot := t.TempDir()
+	envFile := filepath.Join(targetRoot, ".env.default-stdout")
+	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
+	trustFile := filepath.Join(tempState, "vault", "trust.json")
+
+	env := map[string]string{
+		"HOME":                 tempState,
+		"GOFLAGS":              "-modcacherw",
+		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
+		"SI_VAULT_KEY_BACKEND": "file",
+		"SI_VAULT_KEY_FILE":    keyFile,
+		"SI_VAULT_TRUST_STORE": trustFile,
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envFile); err != nil {
+		t.Fatalf("vault init failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "set", "K", "v", "--file", envFile); err != nil {
+		t.Fatalf("vault set failed: %v", err)
+	}
+
+	encBefore, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env file: %v", err)
+	}
+
+	// --yes alone should NOT decrypt on disk anymore (stdout is default).
+	stdout, stderr, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--yes", "K")
+	if err != nil {
+		t.Fatalf("vault decrypt (default stdout) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	outDoc := vault.ParseDotenv([]byte(stdout))
+	kRaw, ok := outDoc.Lookup("K")
+	if !ok {
+		t.Fatalf("expected K in stdout")
+	}
+	k, err := vault.NormalizeDotenvValue(kRaw)
+	if err != nil {
+		t.Fatalf("NormalizeDotenvValue(K): %v", err)
+	}
+	if k != "v" {
+		t.Fatalf("expected K plaintext %q, got %q", "v", k)
+	}
+
+	encAfter, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env file after stdout decrypt: %v", err)
+	}
+	if !bytes.Equal(encBefore, encAfter) {
+		t.Fatalf("expected disk file to be unchanged in default stdout mode")
+	}
+
+	// In-place without --yes should fail in this non-interactive test harness.
+	_, stderr2, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--in-place", "K")
+	if err == nil {
+		t.Fatalf("expected vault decrypt --in-place without --yes to fail in non-interactive mode")
+	}
+	if !strings.Contains(stderr2, "non-interactive") {
+		t.Fatalf("expected non-interactive error, got stderr=%q", stderr2)
+	}
+
+	// In-place with --yes should succeed and mutate disk.
+	if _, _, err := runSICommand(t, env, "vault", "decrypt", "--file", envFile, "--in-place", "--yes", "K"); err != nil {
+		t.Fatalf("vault decrypt --in-place --yes failed: %v", err)
+	}
+	plainBytes, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatalf("read env file after in-place decrypt: %v", err)
+	}
+	plainDoc := vault.ParseDotenv(plainBytes)
+	pRaw, ok := plainDoc.Lookup("K")
+	if !ok {
+		t.Fatalf("expected K on disk")
+	}
+	p, err := vault.NormalizeDotenvValue(pRaw)
+	if err != nil {
+		t.Fatalf("NormalizeDotenvValue(K) on disk: %v", err)
+	}
+	if p != "v" {
+		t.Fatalf("expected K plaintext on disk %q, got %q", "v", p)
 	}
 }
