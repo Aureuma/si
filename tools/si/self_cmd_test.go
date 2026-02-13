@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 )
@@ -40,6 +41,40 @@ func TestSelfBuildBinary(t *testing.T) {
 	}
 	if info.IsDir() {
 		t.Fatalf("expected file, got directory")
+	}
+}
+
+func TestSelfBuildBinaryUsesSiblingGoWhenGoNotInPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip binary build in short mode")
+	}
+	root, err := resolveSelfRepoRoot("")
+	if err != nil {
+		t.Fatalf("resolve root: %v", err)
+	}
+	sysGo, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatalf("expected go in PATH for test harness: %v", err)
+	}
+	tmp := t.TempDir()
+	binDir := filepath.Join(tmp, "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// Place a "go" shim next to output to simulate installer behavior.
+	if err := os.Symlink(sysGo, filepath.Join(binDir, "go")); err != nil {
+		t.Fatalf("symlink go: %v", err)
+	}
+	out := filepath.Join(binDir, "si-test")
+	origPath := os.Getenv("PATH")
+	t.Setenv("PATH", "/usr/bin:/bin")
+	defer t.Setenv("PATH", origPath)
+
+	if err := selfBuildBinary(root, out, "go", true); err != nil {
+		t.Fatalf("selfBuildBinary failed: %v", err)
+	}
+	if _, err := os.Stat(out); err != nil {
+		t.Fatalf("expected built binary: %v", err)
 	}
 }
 

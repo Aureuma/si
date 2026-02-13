@@ -27,13 +27,16 @@ func TestDockerBuildArgsIncludesSecretWhenProvided(t *testing.T) {
 
 func TestRunDockerBuildSkipsSecretsWhenBuildxMissing(t *testing.T) {
 	origCheck := dockerBuildxAvailableFn
+	origKit := dockerBuildKitAvailableFn
 	origRun := runDockerBuildCommandFn
 	defer func() {
 		dockerBuildxAvailableFn = origCheck
+		dockerBuildKitAvailableFn = origKit
 		runDockerBuildCommandFn = origRun
 	}()
 
 	dockerBuildxAvailableFn = func() (bool, error) { return false, nil }
+	dockerBuildKitAvailableFn = func() (bool, error) { return false, nil }
 	var captured []string
 	gotBuildKit := true
 	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
@@ -67,13 +70,16 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxMissing(t *testing.T) {
 
 func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
 	origCheck := dockerBuildxAvailableFn
+	origKit := dockerBuildKitAvailableFn
 	origRun := runDockerBuildCommandFn
 	defer func() {
 		dockerBuildxAvailableFn = origCheck
+		dockerBuildKitAvailableFn = origKit
 		runDockerBuildCommandFn = origRun
 	}()
 
 	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
+	dockerBuildKitAvailableFn = func() (bool, error) { return true, nil }
 	var captured []string
 	gotBuildKit := false
 	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
@@ -112,13 +118,16 @@ func TestRunDockerBuildKeepsSecretsWhenBuildxAvailable(t *testing.T) {
 
 func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 	origCheck := dockerBuildxAvailableFn
+	origKit := dockerBuildKitAvailableFn
 	origRun := runDockerBuildCommandFn
 	defer func() {
 		dockerBuildxAvailableFn = origCheck
+		dockerBuildKitAvailableFn = origKit
 		runDockerBuildCommandFn = origRun
 	}()
 
 	dockerBuildxAvailableFn = func() (bool, error) { return false, assertErr("probe failed") }
+	dockerBuildKitAvailableFn = func() (bool, error) { return false, assertErr("probe failed") }
 	var captured []string
 	gotBuildKit := true
 	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
@@ -152,13 +161,16 @@ func TestRunDockerBuildSkipsSecretsWhenBuildxCheckErrors(t *testing.T) {
 
 func TestRunDockerBuildRetriesLegacyOnRecoverableBuildKitError(t *testing.T) {
 	origCheck := dockerBuildxAvailableFn
+	origKit := dockerBuildKitAvailableFn
 	origRun := runDockerBuildCommandFn
 	defer func() {
 		dockerBuildxAvailableFn = origCheck
+		dockerBuildKitAvailableFn = origKit
 		runDockerBuildCommandFn = origRun
 	}()
 
 	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
+	dockerBuildKitAvailableFn = func() (bool, error) { return true, nil }
 	var calls []struct {
 		args           []string
 		enableBuildKit bool
@@ -211,13 +223,16 @@ func TestRunDockerBuildRetriesLegacyOnRecoverableBuildKitError(t *testing.T) {
 
 func TestRunDockerBuildDoesNotRetryLegacyOnNonRecoverableBuildKitError(t *testing.T) {
 	origCheck := dockerBuildxAvailableFn
+	origKit := dockerBuildKitAvailableFn
 	origRun := runDockerBuildCommandFn
 	defer func() {
 		dockerBuildxAvailableFn = origCheck
+		dockerBuildKitAvailableFn = origKit
 		runDockerBuildCommandFn = origRun
 	}()
 
 	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
+	dockerBuildKitAvailableFn = func() (bool, error) { return true, nil }
 	attempts := 0
 	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
 		attempts++
@@ -238,6 +253,48 @@ func TestRunDockerBuildDoesNotRetryLegacyOnNonRecoverableBuildKitError(t *testin
 	}
 	if attempts != 1 {
 		t.Fatalf("expected exactly 1 attempt for non-recoverable error, got %d", attempts)
+	}
+}
+
+func TestRunDockerBuildKeepsSecretsWhenBuildKitAvailableWithoutBuildx(t *testing.T) {
+	origCheck := dockerBuildxAvailableFn
+	origKit := dockerBuildKitAvailableFn
+	origRun := runDockerBuildCommandFn
+	defer func() {
+		dockerBuildxAvailableFn = origCheck
+		dockerBuildKitAvailableFn = origKit
+		runDockerBuildCommandFn = origRun
+	}()
+
+	// buildx is missing, but BuildKit is still available (e.g. Docker CLI supports --secret).
+	dockerBuildxAvailableFn = func() (bool, error) { return false, nil }
+	dockerBuildKitAvailableFn = func() (bool, error) { return true, nil }
+
+	var captured []string
+	gotBuildKit := false
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
+		captured = append([]string(nil), args...)
+		gotBuildKit = enableBuildKit
+		return nil
+	}
+
+	err := runDockerBuild(imageBuildSpec{
+		tag:        "aureuma/si:local",
+		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
+		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
+	})
+	if err != nil {
+		t.Fatalf("runDockerBuild returned error: %v", err)
+	}
+	if !gotBuildKit {
+		t.Fatalf("expected buildkit to be enabled when buildkit is available without buildx")
+	}
+	if !argsContainKey(captured, "--secret") {
+		t.Fatalf("expected --secret args to be present, got %v", captured)
+	}
+	if !argsContain(captured, "-f", "/workspace/tools/si-image/Dockerfile") {
+		t.Fatalf("expected default dockerfile, args=%v", captured)
 	}
 }
 
