@@ -100,7 +100,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 			usage()
 			os.Exit(1)
 		}
-	}, "spawn", "respawn", "list", "ps", "status", "report", "login", "logout", "exec", "run", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start", "warmup")
+	}, "spawn", "respawn", "list", "ps", "status", "report", "login", "logout", "swap", "exec", "run", "logs", "tail", "clone", "remove", "rm", "delete", "stop", "start", "warmup")
 	register(func(_ string, args []string) { cmdAnalyze(args) }, "analyze", "lint")
 	register(newLazyRootHandler(loadStripeRootHandler), "stripe")
 	register(newLazyRootHandler(loadVaultRootHandler), "vault", "creds")
