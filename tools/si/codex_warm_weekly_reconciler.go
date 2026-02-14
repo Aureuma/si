@@ -279,6 +279,9 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 }
 
 func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warmWeeklyProfileState, opts warmWeeklyReconcileOptions, execOpts weeklyWarmExecOptions) string {
+	prevReset := parseWarmWeeklyTime(entry.LastWeeklyReset)
+	prevResult := strings.TrimSpace(strings.ToLower(entry.LastResult))
+
 	entry.ProfileID = profile.ID
 	entry.LastAttempt = now.UTC().Format(time.RFC3339)
 
@@ -318,7 +321,8 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	entry.LastWeeklyUsedPct = usedBefore
 	entry.LastWeeklyUsedOK = usedKnown
 
-	needsWarm := warmWeeklyNeedsBootstrap(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown)
+	windowAdvanced := warmWeeklyResetWindowAdvanced(prevReset, resetAt, resetKnown)
+	needsWarm := warmWeeklyNeedsWarmAttempt(opts.ForceBootstrap, usedKnown, resetKnown, windowAdvanced, prevResult)
 	if !needsWarm {
 		entry.Paused = false
 		entry.LastResult = "ready"
@@ -379,7 +383,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 			resetAfterKnown = false
 		}
 
-		if ok := warmWeeklyBootstrapSucceeded(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown, usedAfter, usedAfterKnown, resetAfterKnown); ok {
+		if ok := warmWeeklyBootstrapSucceeded(opts.ForceBootstrap, windowAdvanced, usedBefore, usedKnown, resetKnown, usedAfter, usedAfterKnown, resetAfterKnown); ok {
 			success = true
 			break
 		}
@@ -455,23 +459,32 @@ func warmWeeklyPromptForAttempt(base string, attempt int) string {
 	}
 }
 
-func warmWeeklyNeedsBootstrap(force bool, usedBefore float64, usedKnown bool, resetKnown bool) bool {
-	_ = usedBefore
+func warmWeeklyNeedsWarmAttempt(force bool, usedKnown bool, resetKnown bool, windowAdvanced bool, prevResult string) bool {
 	if force {
 		return true
 	}
-	// If reset timing is present and usage data is readable, the weekly window is
-	// already active even if rounded display still shows 100%.
-	return !usedKnown || !resetKnown
+	if !usedKnown || !resetKnown {
+		return true
+	}
+	if windowAdvanced {
+		return true
+	}
+	// Retry within the same window if our previous warm attempt failed.
+	return strings.EqualFold(strings.TrimSpace(prevResult), "failed")
 }
 
-func warmWeeklyBootstrapSucceeded(force bool, before float64, beforeUsedOK bool, beforeResetOK bool, after float64, afterUsedOK bool, afterResetOK bool) bool {
+func warmWeeklyBootstrapSucceeded(force bool, windowAdvanced bool, before float64, beforeUsedOK bool, beforeResetOK bool, after float64, afterUsedOK bool, afterResetOK bool) bool {
 	// Primary goal: make the weekly window "real" (reset/time metadata becomes available),
 	// which starts/advances the timer even if percent deltas are too small to observe.
 	if !beforeResetOK {
 		// If we were missing reset/timer information, only treat the bootstrap as
 		// successful once that information appears.
 		return afterResetOK
+	}
+	if windowAdvanced && afterResetOK {
+		// After a window rollover we only need one successful warm execution;
+		// percentage deltas can remain unchanged due coarse server-side rounding.
+		return true
 	}
 	if afterResetOK && force {
 		// When force is requested, avoid marking failures just because percent moved
@@ -485,6 +498,13 @@ func warmWeeklyBootstrapSucceeded(force bool, before float64, beforeUsedOK bool,
 		return true
 	}
 	return false
+}
+
+func warmWeeklyResetWindowAdvanced(previousReset time.Time, currentReset time.Time, currentResetKnown bool) bool {
+	if !currentResetKnown || currentReset.IsZero() || previousReset.IsZero() {
+		return false
+	}
+	return previousReset.UTC().Unix() != currentReset.UTC().Unix()
 }
 
 func warmWeeklyNextDue(now, resetAt time.Time, resetKnown bool) time.Time {
@@ -779,7 +799,7 @@ func ensureWarmWeeklyReconcileConfig(configPath string, executablePath string, s
 	if image == "" {
 		image = "aureuma/si:local"
 	}
-	command := fmt.Sprintf("/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; %s warmup reconcile --quiet'", shellSingleQuote("/usr/local/bin/si"))
+	command := "/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; /usr/local/bin/si warmup reconcile --quiet'"
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("[job-run \"%s\"]\n", warmWeeklyReconcileJobName))
