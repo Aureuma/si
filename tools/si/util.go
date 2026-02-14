@@ -22,7 +22,7 @@ Holistic CLI for si. This help includes all commands, flags, and core features.
 
 Features:
   - Dyads: spawn paired actor/critic containers with a critic-driven closed loop, exec into them, manage logs.
-  - Codex containers: spawn/respawn/list/status/report/login/ps/run/logs/tail/clone/remove/stop/start.
+  - Codex containers: spawn/respawn/list/status/report/login/logout/swap/ps/run/logs/tail/clone/remove/stop/start.
   - Vault: encrypted dotenv secrets; format, encrypt, and inject into processes/containers.
   - Stripe bridge: account context, CRUD, reporting, raw API access, and live-to-sandbox sync.
   - GitHub bridge: App/OAuth-auth context, REST/GraphQL access, and repository automation commands.
@@ -52,7 +52,7 @@ Usage:
 
 Core:
   si dyad spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup
-  si spawn|respawn|list|status|report|login|logout|ps|run|logs|tail|clone|remove|stop|start
+  si spawn|respawn|list|status|report|login|logout|swap|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|doctor|object|raw|report|sync>
   si github <auth|context|doctor|repo|branch|pr|issue|workflow|release|secret|raw|graphql>
@@ -77,6 +77,7 @@ Build:
 
 Profiles:
   si status [profile]      (codex profiles)
+  si swap [profile]        (swap host ~/.codex auth to a configured codex profile)
   si persona <profile-name> (markdown profiles)
   si skill <role>
 
