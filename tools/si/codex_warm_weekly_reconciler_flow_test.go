@@ -113,6 +113,47 @@ func TestReconcileWarmWeeklyProfile_VerifyPollRetriesTransientErrors(t *testing.
 	}
 }
 
+func TestReconcileWarmWeeklyProfile_WarmsWhenWindowAdvances(t *testing.T) {
+	runCalls := 0
+	nextReset := time.Date(2026, 2, 21, 1, 32, 26, 0, time.UTC)
+	restore := stubWarmupDeps(t, stubWarmupDepsOptions{
+		auth: profileAuthTokens{AccessToken: "x"},
+		fetchPayloads: []fetchPayloadResult{
+			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
+				UsedPercent:        0.0,
+				ResetAt:            ptrInt64(nextReset.Unix()),
+				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
+			}}}},
+			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
+				UsedPercent:        0.0,
+				ResetAt:            ptrInt64(nextReset.Unix()),
+				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
+			}}}},
+		},
+		runCalls: &runCalls,
+	})
+	defer restore()
+
+	now := time.Date(2026, 2, 14, 1, 0, 0, 0, time.UTC)
+	entry := &warmWeeklyProfileState{
+		LastWeeklyReset: "2026-02-13T14:33:56Z",
+		LastResult:      "ready",
+	}
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "einsteina"}, entry, warmWeeklyReconcileOptions{
+		ForceBootstrap: false,
+		MaxAttempts:    1,
+		Prompt:         weeklyWarmPrompt,
+		Trigger:        "test",
+	}, weeklyWarmExecOptions{Quiet: true})
+
+	if out != "warmed" {
+		t.Fatalf("expected warmed on weekly window advance, got %q (err=%q)", out, entry.LastError)
+	}
+	if runCalls != 1 {
+		t.Fatalf("expected one warm run, got %d", runCalls)
+	}
+}
+
 type fetchPayloadResult struct {
 	payload usagePayload
 	err     error
@@ -121,6 +162,8 @@ type fetchPayloadResult struct {
 type stubWarmupDepsOptions struct {
 	auth          profileAuthTokens
 	fetchPayloads []fetchPayloadResult
+	runErr        error
+	runCalls      *int
 }
 
 func stubWarmupDeps(t *testing.T, opts stubWarmupDepsOptions) func() {
@@ -134,7 +177,10 @@ func stubWarmupDeps(t *testing.T, opts stubWarmupDepsOptions) func() {
 		return opts.auth, nil
 	}
 	runWeeklyWarmPromptFn = func(profile codexProfile, prompt string, execOpts weeklyWarmExecOptions) error {
-		return nil
+		if opts.runCalls != nil {
+			*opts.runCalls = *opts.runCalls + 1
+		}
+		return opts.runErr
 	}
 
 	queue := append([]fetchPayloadResult(nil), opts.fetchPayloads...)
