@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"os"
-	"path/filepath"
+	"path"
 	"regexp"
 	"strings"
 	"time"
@@ -78,20 +78,13 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	}
 	env = append(env, opts.Env...)
 
-	configHostDir := ""
 	configTargetDir := ""
+	configData := []byte(nil)
 	if opts.DisableMCP {
-		var err error
-		configHostDir, err = writeNoMcpConfig(opts.Model, opts.Effort)
-		if err != nil {
-			return err
-		}
 		configTargetDir = "/tmp/si-codex-config"
 		env = append(env, "CODEX_CONFIG_DIR="+configTargetDir)
 		env = append(env, "CODEX_MCP_DISABLED=1")
-	}
-	if configHostDir != "" {
-		defer os.RemoveAll(configHostDir)
+		configData = []byte(buildNoMcpConfig(opts.Model, opts.Effort))
 	}
 
 	client, err := shared.NewClient()
@@ -132,14 +125,6 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		IncludeHostSi:          true,
 		HostVaultEnvFile:       opts.VaultEnvFile,
 	})...)
-	if configHostDir != "" && configTargetDir != "" {
-		mounts = append(mounts, mount.Mount{
-			Type:     mount.TypeBind,
-			Source:   configHostDir,
-			Target:   configTargetDir,
-			ReadOnly: true,
-		})
-	}
 	if opts.DockerSocket {
 		if socketMount, ok := shared.DockerSocketMount(); ok {
 			mounts = append(mounts, socketMount)
@@ -180,6 +165,11 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	}
 	if opts.Profile != nil {
 		seedCodexAuth(ctx, client, id, false, *opts.Profile)
+	}
+	if len(configData) > 0 && configTargetDir != "" {
+		if err := writeNoMcpConfigToContainer(ctx, client, id, configTargetDir, configData); err != nil {
+			return err
+		}
 	}
 
 	cmd := buildCodexExecCommand(opts, prompt)
@@ -240,20 +230,6 @@ func codexExecContainerName() string {
 		n = int(h.Sum32() % 10_000)
 	}
 	return fmt.Sprintf("si-codex-exec-%d-%d", time.Now().Unix(), n)
-}
-
-func writeNoMcpConfig(model, effort string) (string, error) {
-	dir, err := os.MkdirTemp("", "si-codex-exec-config-")
-	if err != nil {
-		return "", err
-	}
-	config := buildNoMcpConfig(model, effort)
-	path := filepath.Join(dir, "config.toml")
-	if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
-		_ = os.RemoveAll(dir)
-		return "", err
-	}
-	return dir, nil
 }
 
 func buildNoMcpConfig(model, effort string) string {
@@ -324,6 +300,24 @@ func extractCodexExecOutput(raw string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.Join(blocks[len(blocks)-1], "\n"))
+}
+
+func writeNoMcpConfigToContainer(ctx context.Context, client *shared.Client, containerID string, configDir string, config []byte) error {
+	configDir = strings.TrimSpace(configDir)
+	if configDir == "" {
+		return fmt.Errorf("config dir required")
+	}
+	if len(config) == 0 {
+		return fmt.Errorf("config content required")
+	}
+	if err := client.Exec(ctx, containerID, []string{"mkdir", "-p", configDir}, shared.ExecOptions{}, nil, nil, nil); err != nil {
+		return fmt.Errorf("prepare config dir: %w", err)
+	}
+	configPath := path.Join(configDir, "config.toml")
+	if err := client.CopyFileToContainer(ctx, containerID, configPath, config, 0o600); err != nil {
+		return fmt.Errorf("copy config to container: %w", err)
+	}
+	return nil
 }
 
 func extractCodexExecOutputFromRoleBlocks(clean string) (string, bool) {
