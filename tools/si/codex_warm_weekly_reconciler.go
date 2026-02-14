@@ -16,6 +16,9 @@ import (
 	"time"
 
 	shared "si/agents/shared/docker"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 )
 
 var (
@@ -28,6 +31,9 @@ const (
 	warmWeeklyStateVersion        = 2
 	warmWeeklyReconcileSchedule   = "0 0 * * * *"
 	warmWeeklyReconcileJobName    = "si-warmup-reconcile"
+	warmWeeklyBinaryVolumeName    = "si-warmup-bin"
+	warmWeeklyBinaryDir           = "/opt/si-warmup/bin"
+	warmWeeklyBinaryPath          = warmWeeklyBinaryDir + "/si"
 	warmWeeklyMinUsageDelta       = 0.05
 	warmWeeklyResetJitterMinutes  = 2
 	warmWeeklyAutostartMarkerName = "autostart.v1"
@@ -765,7 +771,15 @@ func ensureWarmWeeklyReconcileScheduler() error {
 		return err
 	}
 	siHome := filepath.Join(home, ".si")
-	if err := ensureWarmWeeklyReconcileConfig(configPath, exePath, siHome); err != nil {
+	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "aureuma/si:local"))
+	if image == "" {
+		image = "aureuma/si:local"
+	}
+	if err := ensureWarmWeeklyBinaryVolume(exePath, image); err != nil {
+		return err
+	}
+	inlineConfig, err := ensureWarmWeeklyReconcileConfig(configPath, siHome, image)
+	if err != nil {
 		return err
 	}
 
@@ -778,38 +792,107 @@ func ensureWarmWeeklyReconcileScheduler() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	return ensureOfeliaWarmContainer(ctx, ofeliaWarmOptions{
-		Name:        defaultOfeliaName,
-		OfeliaImage: defaultOfeliaImage,
-		ConfigPath:  configPath,
-		TZ:          tz,
+		Name:         defaultOfeliaName,
+		OfeliaImage:  defaultOfeliaImage,
+		ConfigPath:   configPath,
+		InlineConfig: inlineConfig,
+		TZ:           tz,
 	})
 }
 
-func ensureWarmWeeklyReconcileConfig(configPath string, executablePath string, siHome string) error {
+func ensureWarmWeeklyReconcileConfig(configPath string, siHome string, image string) (string, error) {
 	configPath = strings.TrimSpace(configPath)
-	executablePath = strings.TrimSpace(executablePath)
 	siHome = strings.TrimSpace(siHome)
-	if configPath == "" || executablePath == "" || siHome == "" {
-		return fmt.Errorf("reconcile scheduler paths are required")
+	image = strings.TrimSpace(image)
+	if configPath == "" || siHome == "" || image == "" {
+		return "", fmt.Errorf("reconcile scheduler paths are required")
 	}
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
-		return err
+		return "", err
 	}
-	image := strings.TrimSpace(envOr("SI_CODEX_IMAGE", "aureuma/si:local"))
-	if image == "" {
-		image = "aureuma/si:local"
+	config := renderWarmWeeklyReconcileConfig(siHome, image)
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		return "", err
 	}
-	command := "/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; /usr/local/bin/si warmup reconcile --quiet'"
+	return config, nil
+}
+
+func renderWarmWeeklyReconcileConfig(siHome string, image string) string {
+	command := fmt.Sprintf("/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; if [ -x %s ]; then %s warmup reconcile --quiet; else /usr/local/bin/si warmup reconcile --quiet; fi'", warmWeeklyBinaryPath, warmWeeklyBinaryPath)
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("[job-run \"%s\"]\n", warmWeeklyReconcileJobName))
 	b.WriteString(fmt.Sprintf("schedule = %s\n", warmWeeklyReconcileSchedule))
 	b.WriteString(fmt.Sprintf("image = %s\n", image))
 	b.WriteString(fmt.Sprintf("command = %s\n", command))
-	b.WriteString(fmt.Sprintf("volume = %s:/usr/local/bin/si:ro\n", executablePath))
+	b.WriteString(fmt.Sprintf("volume = %s:%s\n", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir))
 	b.WriteString(fmt.Sprintf("volume = %s:/home/si/.si\n", siHome))
 	b.WriteString("\n")
-	return os.WriteFile(configPath, []byte(b.String()), 0o600)
+	return b.String()
+}
+
+func ensureWarmWeeklyBinaryVolume(executablePath string, image string) error {
+	executablePath = strings.TrimSpace(executablePath)
+	image = strings.TrimSpace(image)
+	if executablePath == "" || image == "" {
+		return fmt.Errorf("warmup binary sync requires executable and image")
+	}
+	bin, err := os.ReadFile(filepath.Clean(executablePath))
+	if err != nil {
+		return err
+	}
+	if len(bin) == 0 {
+		return fmt.Errorf("warmup binary is empty: %s", executablePath)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	client, err := shared.NewClient()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	_, _ = client.EnsureVolume(ctx, warmWeeklyBinaryVolumeName, map[string]string{
+		codexLabelKey: codexLabelValue,
+	})
+
+	hostCfg := &container.HostConfig{
+		AutoRemove: true,
+		Mounts: []mount.Mount{{
+			Type:   mount.TypeVolume,
+			Source: warmWeeklyBinaryVolumeName,
+			Target: warmWeeklyBinaryDir,
+		}},
+	}
+	cfg := &container.Config{
+		Image: image,
+		Cmd:   []string{"bash", "-lc", "sleep 60"},
+		Labels: map[string]string{
+			"si.component": "warmup",
+		},
+	}
+
+	id, err := client.CreateContainer(ctx, cfg, hostCfg, nil, "")
+	if err != nil {
+		if strings.Contains(err.Error(), "No such image") || strings.Contains(err.Error(), "not found") {
+			if pullErr := execDockerCLI("pull", image); pullErr == nil {
+				id, err = client.CreateContainer(ctx, cfg, hostCfg, nil, "")
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if err := client.StartContainer(ctx, id); err != nil {
+		return err
+	}
+	defer func() {
+		_ = client.RemoveContainer(context.Background(), id, true)
+	}()
+	if err := client.CopyFileToContainer(ctx, id, warmWeeklyBinaryPath, bin, 0o755); err != nil {
+		return err
+	}
+	return nil
 }
 
 func triggerWarmupAfterLogin(profile codexProfile) {

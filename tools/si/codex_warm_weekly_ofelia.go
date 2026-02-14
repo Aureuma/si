@@ -22,16 +22,17 @@ const (
 )
 
 type ofeliaWarmOptions struct {
-	Name        string
-	Image       string
-	OfeliaImage string
-	ConfigPath  string
-	PromptPath  string
-	TZ          string
-	Model       string
-	Effort      string
-	JitterMin   int
-	JitterMax   int
+	Name         string
+	Image        string
+	OfeliaImage  string
+	ConfigPath   string
+	InlineConfig string
+	PromptPath   string
+	TZ           string
+	Model        string
+	Effort       string
+	JitterMin    int
+	JitterMax    int
 }
 
 type ofeliaWarmJob struct {
@@ -101,16 +102,31 @@ func ensureOfeliaWarmContainer(ctx context.Context, opts ofeliaWarmOptions) erro
 	if socket, ok := shared.DockerSocketMount(); ok {
 		mounts = append(mounts, socket)
 	}
-	mounts = append(mounts, mount.Mount{
-		Type:     mount.TypeBind,
-		Source:   opts.ConfigPath,
-		Target:   "/etc/ofelia/config.ini",
-		ReadOnly: true,
-	})
+	inlineConfig := strings.TrimSpace(opts.InlineConfig)
+	configPath := strings.TrimSpace(opts.ConfigPath)
+	if inlineConfig == "" {
+		if configPath == "" {
+			return fmt.Errorf("ofelia config path required")
+		}
+		mounts = append(mounts, mount.Mount{
+			Type:     mount.TypeBind,
+			Source:   configPath,
+			Target:   "/etc/ofelia/config.ini",
+			ReadOnly: true,
+		})
+	}
+
+	cmd := []string{"daemon", "--config", "/etc/ofelia/config.ini"}
+	entrypoint := []string{}
+	if inlineConfig != "" {
+		entrypoint = []string{"/bin/sh", "-lc"}
+		cmd = []string{ofeliaInlineConfigCommand(inlineConfig)}
+	}
 
 	cfg := &container.Config{
-		Image: image,
-		Cmd:   []string{"daemon", "--config", "/etc/ofelia/config.ini"},
+		Image:      image,
+		Entrypoint: entrypoint,
+		Cmd:        cmd,
 		Labels: map[string]string{
 			"si.component": "ofelia",
 			"si.name":      name,
@@ -252,4 +268,23 @@ func printOfeliaWarmJobs(jobs []ofeliaWarmJob, opts ofeliaWarmOptions) {
 	if strings.TrimSpace(opts.PromptPath) != "" {
 		fmt.Printf("  %s %s\n", styleSection("Prompt:"), styleArg(opts.PromptPath))
 	}
+}
+
+func ofeliaInlineConfigCommand(config string) string {
+	config = strings.TrimSpace(config)
+	if config == "" {
+		return "exec ofelia daemon --config /etc/ofelia/config.ini"
+	}
+	const marker = "__SI_OFELIA_CONFIG__"
+	var b strings.Builder
+	b.WriteString("mkdir -p /etc/ofelia\n")
+	b.WriteString("cat > /etc/ofelia/config.ini <<'")
+	b.WriteString(marker)
+	b.WriteString("'\n")
+	b.WriteString(config)
+	b.WriteString("\n")
+	b.WriteString(marker)
+	b.WriteString("\n")
+	b.WriteString("exec ofelia daemon --config /etc/ofelia/config.ini")
+	return b.String()
 }
