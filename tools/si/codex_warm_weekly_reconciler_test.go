@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -89,5 +91,15 @@ func TestWeeklyUsedPercent(t *testing.T) {
 	used, ok := weeklyUsedPercent(payload)
 	if !ok || used != 12.34 {
 		t.Fatalf("unexpected used percent: ok=%v used=%v", ok, used)
+	}
+}
+
+func TestRenderWarmWeeklyReconcileConfig(t *testing.T) {
+	cfg := renderWarmWeeklyReconcileConfig("/home/si/.si", "aureuma/si:local")
+	if !strings.Contains(cfg, fmt.Sprintf("volume = %s:%s", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir)) {
+		t.Fatalf("expected binary volume mount in config, got: %q", cfg)
+	}
+	if !strings.Contains(cfg, "if [ -x "+warmWeeklyBinaryPath+" ]; then "+warmWeeklyBinaryPath+" warmup reconcile --quiet; else /usr/local/bin/si warmup reconcile --quiet; fi") {
+		t.Fatalf("expected fallback command in config, got: %q", cfg)
 	}
 }
