@@ -170,3 +170,47 @@ func TestSummarizeProfileStatusError(t *testing.T) {
 		t.Fatalf("unexpected token-expired summary: %q", got)
 	}
 }
+
+func TestProfileNameForTable(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "emoji_prefixed_name", in: "❇️ Berylla", want: "❇️ Berylla"},
+		{name: "ascii_name_unchanged", in: "Berylla", want: "Berylla"},
+		{name: "single_token_emoji_unchanged", in: "❇️", want: "❇️"},
+		{name: "leading_spaces_trimmed", in: "   🧲 Gadolina  ", want: "🧲 Gadolina"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := profileNameForTable(tc.in)
+			if got != tc.want {
+				t.Fatalf("profileNameForTable(%q)=%q want=%q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestProfileEmailForTable(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "standard_email", in: "7shayan7@gmail.com", want: "7shayan7@g…"},
+		{name: "subdomain_email", in: "name@mail.example.com", want: "name@m…"},
+		{name: "missing_at", in: "not-an-email", want: "not-an-email"},
+		{name: "empty_domain", in: "name@", want: "name@"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			got := profileEmailForTable(tc.in)
+			if got != tc.want {
+				t.Fatalf("profileEmailForTable(%q)=%q want=%q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

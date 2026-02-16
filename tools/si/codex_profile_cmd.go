@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 func splitProfileNameAndFlags(args []string) (string, []string) {
@@ -38,7 +40,7 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 		return
 	}
 
-	printCodexProfilesTable(items, withStatus)
+	printCodexProfilesTable(items, withStatus, false)
 	if withStatus {
 		for _, msg := range profileStatusWarnings(items) {
 			fmt.Printf("%s %s\n", styleWarn("warning:"), msg)
@@ -121,81 +123,88 @@ func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult
 	item.WeeklyRemaining = res.Status.WeeklyRemaining
 }
 
-func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
+func printCodexProfilesTable(items []codexProfileSummary, withStatus bool, includeProfile bool) {
 	if len(items) == 0 {
 		return
 	}
-	widthID := displayWidth("PROFILE")
-	widthName := displayWidth("NAME")
-	widthEmail := displayWidth("EMAIL")
-	widthAuth := displayWidth("AUTH")
-	width5h := displayWidth("5H")
-	widthWeekly := displayWidth("WEEKLY")
+	rows := make([][]string, 0, len(items))
 	for _, item := range items {
-		if w := displayWidth(item.ID); w > widthID {
-			widthID = w
-		}
-		if w := displayWidth(item.Name); w > widthName {
-			widthName = w
-		}
-		if w := displayWidth(item.Email); w > widthEmail {
-			widthEmail = w
-		}
+		name := profileNameForTable(item.Name)
 		auth := profileAuthLabel(item)
-		if w := displayWidth(auth); w > widthAuth {
-			widthAuth = w
-		}
+		email := profileEmailForTable(item.Email)
 		if withStatus {
-			limit := profileFiveHourDisplay(item)
-			if w := displayWidth(limit); w > width5h {
-				width5h = w
+			if includeProfile {
+				rows = append(rows, []string{
+					item.ID,
+					name,
+					email,
+					auth,
+					profileFiveHourDisplay(item),
+					profileWeeklyDisplay(item),
+				})
+				continue
 			}
-			limit = profileWeeklyDisplay(item)
-			if w := displayWidth(limit); w > widthWeekly {
-				widthWeekly = w
-			}
+			rows = append(rows, []string{
+				name,
+				email,
+				auth,
+				profileFiveHourDisplay(item),
+				profileWeeklyDisplay(item),
+			})
+			continue
 		}
+		if includeProfile {
+			rows = append(rows, []string{item.ID, name, email, auth})
+			continue
+		}
+		rows = append(rows, []string{name, email, auth})
 	}
 
-	if withStatus {
-		fmt.Printf("%s  %s  %s  %s  %s  %s\n",
-			padRightANSI(styleHeading("PROFILE"), widthID),
-			padRightANSI(styleHeading("NAME"), widthName),
-			padRightANSI(styleHeading("EMAIL"), widthEmail),
-			padRightANSI(styleHeading("AUTH"), widthAuth),
-			padRightANSI(styleHeading("5H"), width5h),
-			padRightANSI(styleHeading("WEEKLY"), widthWeekly),
-		)
-	} else {
-		fmt.Printf("%s  %s  %s  %s\n",
-			padRightANSI(styleHeading("PROFILE"), widthID),
-			padRightANSI(styleHeading("NAME"), widthName),
-			padRightANSI(styleHeading("EMAIL"), widthEmail),
-			padRightANSI(styleHeading("AUTH"), widthAuth),
-		)
-	}
-	for _, item := range items {
-		auth := profileAuthLabel(item)
-		if withStatus {
-			fiveHour := profileFiveHourDisplay(item)
-			weekly := profileWeeklyDisplay(item)
-			fmt.Printf("%s  %s  %s  %s  %s  %s\n",
-				padRightANSI(item.ID, widthID),
-				padRightANSI(item.Name, widthName),
-				padRightANSI(item.Email, widthEmail),
-				padRightANSI(auth, widthAuth),
-				padRightANSI(fiveHour, width5h),
-				padRightANSI(weekly, widthWeekly),
-			)
-		} else {
-			fmt.Printf("%s  %s  %s  %s\n",
-				padRightANSI(item.ID, widthID),
-				padRightANSI(item.Name, widthName),
-				padRightANSI(item.Email, widthEmail),
-				padRightANSI(auth, widthAuth),
-			)
+	headers := []string{styleHeading("NAME"), styleHeading("EMAIL"), styleHeading("AUTH")}
+	if includeProfile {
+		headers = []string{
+			styleHeading("PROFILE"),
+			styleHeading("NAME"),
+			styleHeading("EMAIL"),
+			styleHeading("AUTH"),
 		}
 	}
+	if withStatus {
+		headers = append(headers, styleHeading("5H"), styleHeading("WEEKLY"))
+	}
+	for _, line := range renderAlignedTable(headers, rows, 2) {
+		fmt.Println(line)
+	}
+}
+
+func profileNameForTable(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return name
+	}
+	first, _ := utf8.DecodeRuneInString(name)
+	if first == utf8.RuneError || unicode.IsLetter(first) || unicode.IsNumber(first) {
+		return name
+	}
+	parts := strings.SplitN(name, " ", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return name
+	}
+	return parts[0] + " " + parts[1]
+}
+
+func profileEmailForTable(email string) string {
+	email = strings.TrimSpace(email)
+	at := strings.Index(email, "@")
+	if at <= 0 || at >= len(email)-1 {
+		return email
+	}
+	domain := email[at+1:]
+	first, size := utf8.DecodeRuneInString(domain)
+	if first == utf8.RuneError && size == 0 {
+		return email
+	}
+	return email[:at+1] + string(first) + "…"
 }
 
 func profileAuthLabel(item codexProfileSummary) string {
