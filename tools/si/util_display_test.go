@@ -14,6 +14,9 @@ func TestDisplayWidth(t *testing.T) {
 		{name: "wide_cjk", input: "界", want: 2},
 		{name: "combining_mark", input: "e\u0301", want: 1},
 		{name: "emoji", input: "🙂", want: 2},
+		{name: "emoji_variation_selector_dingbat", input: "❇️", want: 2},
+		{name: "emoji_variation_selector_heart", input: "❤️", want: 2},
+		{name: "dingbat_without_variation_selector", input: "❇", want: 1},
 	}
 	for _, tc := range cases {
 		tc := tc

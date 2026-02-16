@@ -848,12 +848,19 @@ func displayWidth(s string) int {
 	width := 0
 	for len(s) > 0 {
 		r, n := utf8.DecodeRuneInString(s)
-		s = s[n:]
+		rest := s[n:]
+		s = rest
 		if r == utf8.RuneError && n == 1 {
 			width++
 			continue
 		}
 		if isZeroWidthRune(r) {
+			continue
+		}
+		// Many symbols become emoji-style double-width when followed by
+		// VARIATION SELECTOR-16 (U+FE0F), even if their base rune is narrow.
+		if hasEmojiVariationSelector(rest) {
+			width += 2
 			continue
 		}
 		if isWideRune(r) {
@@ -877,6 +884,14 @@ func isZeroWidthRune(r rune) bool {
 		return true
 	}
 	return unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r)
+}
+
+func hasEmojiVariationSelector(s string) bool {
+	if len(s) == 0 {
+		return false
+	}
+	r, n := utf8.DecodeRuneInString(s)
+	return n > 0 && r == 0xfe0f
 }
 
 func isWideRune(r rune) bool {
