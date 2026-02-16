@@ -130,7 +130,7 @@ func printPublicDoctorResult(label string, result publicDoctorResult, jsonOut bo
 	if !result.Check.OK {
 		icon = styleError("ERR")
 	}
-	fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(result.Check.Name, 16), strings.TrimSpace(result.Check.Detail))
+	printAlignedRows([][]string{{icon, result.Check.Name, strings.TrimSpace(result.Check.Detail)}}, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}

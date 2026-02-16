@@ -552,13 +552,15 @@ func cmdCloudflareDoctor(args []string) {
 		fmt.Printf("%s %s\n", styleHeading("Cloudflare doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatCloudflareContext(runtime))
+	rows := make([][]string, 0, len(checks))
 	for _, entry := range checks {
 		icon := styleSuccess("OK")
 		if !entry.OK {
 			icon = styleError("ERR")
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(entry.Name, 16), strings.TrimSpace(entry.Detail))
+		rows = append(rows, []string{icon, entry.Name, strings.TrimSpace(entry.Detail)})
 	}
+	printAlignedRows(rows, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}
