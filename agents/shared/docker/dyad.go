@@ -166,6 +166,8 @@ func (c *Client) EnsureDyad(ctx context.Context, opts DyadOptions) (string, stri
 	// inside both members.
 	if !HasHostSiMount(actorInfo, "/root") ||
 		!HasHostSiMount(criticInfo, "/root") ||
+		!HasDevelopmentMount(actorInfo, opts.WorkspaceHost, "/root") ||
+		!HasDevelopmentMount(criticInfo, opts.WorkspaceHost, "/root") ||
 		!HasHostVaultEnvFileMount(actorInfo, opts.VaultEnvFile) ||
 		!HasHostVaultEnvFileMount(criticInfo, opts.VaultEnvFile) {
 		if actorID != "" {
@@ -306,7 +308,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		User:         "root",
 	}
 	actorMirrorTarget := ""
-	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost, "/root"); ok && target != "/workspace" {
 		actorMirrorTarget = target
 	}
 	actorMounts := []mount.Mount{
@@ -345,7 +347,7 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		User:       "root",
 	}
 	criticMirrorTarget := ""
-	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost); ok && target != "/workspace" {
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost, "/root"); ok && target != "/workspace" {
 		criticMirrorTarget = target
 	}
 	criticMounts := []mount.Mount{
