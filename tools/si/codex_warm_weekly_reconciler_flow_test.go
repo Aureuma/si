@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-func TestReconcileWarmWeeklyProfile_ReadyWhenSignalsPresent(t *testing.T) {
+func TestReconcileWarmWeeklyProfile_WarmsFreshZeroUsageWindow(t *testing.T) {
+	runCalls := 0
 	restore := stubWarmupDeps(t, stubWarmupDepsOptions{
 		auth: profileAuthTokens{AccessToken: "x"},
 		fetchPayloads: []fetchPayloadResult{
@@ -16,7 +17,13 @@ func TestReconcileWarmWeeklyProfile_ReadyWhenSignalsPresent(t *testing.T) {
 				ResetAfterSeconds:  ptrInt64(3600),
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},
+			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
+				UsedPercent:        0.0,
+				ResetAfterSeconds:  ptrInt64(3600),
+				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
+			}}}},
 		},
+		runCalls: &runCalls,
 	})
 	defer restore()
 
@@ -29,11 +36,11 @@ func TestReconcileWarmWeeklyProfile_ReadyWhenSignalsPresent(t *testing.T) {
 		Trigger:        "test",
 	}, weeklyWarmExecOptions{Quiet: true})
 
-	if out != "ready" {
-		t.Fatalf("expected ready, got %q (err=%q)", out, entry.LastError)
+	if out != "warmed" {
+		t.Fatalf("expected warmed, got %q (err=%q)", out, entry.LastError)
 	}
-	if entry.LastResult != "ready" {
-		t.Fatalf("expected entry ready, got %q", entry.LastResult)
+	if entry.LastResult != "warmed" {
+		t.Fatalf("expected entry warmed, got %q", entry.LastResult)
 	}
 	if entry.NextDue == "" {
 		t.Fatalf("expected next due to be set")
@@ -41,8 +48,48 @@ func TestReconcileWarmWeeklyProfile_ReadyWhenSignalsPresent(t *testing.T) {
 	if entry.LastWeeklyReset == "" {
 		t.Fatalf("expected last weekly reset to be set")
 	}
+	if entry.LastWarmedReset == "" {
+		t.Fatalf("expected last warmed reset to be set")
+	}
 	if !entry.LastWeeklyUsedOK {
 		t.Fatalf("expected used ok to be true")
+	}
+	if runCalls != 1 {
+		t.Fatalf("expected one warm run, got %d", runCalls)
+	}
+}
+
+func TestReconcileWarmWeeklyProfile_ReadyAfterWindowAlreadyWarmed(t *testing.T) {
+	reset := time.Date(2026, 2, 17, 1, 46, 21, 0, time.UTC)
+	restore := stubWarmupDeps(t, stubWarmupDepsOptions{
+		auth: profileAuthTokens{AccessToken: "x"},
+		fetchPayloads: []fetchPayloadResult{
+			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
+				UsedPercent:        0.0,
+				ResetAt:            ptrInt64(reset.Unix()),
+				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
+			}}}},
+		},
+	})
+	defer restore()
+
+	now := time.Date(2026, 2, 16, 1, 0, 0, 0, time.UTC)
+	entry := &warmWeeklyProfileState{
+		LastWarmedReset: reset.UTC().Format(time.RFC3339),
+		LastResult:      "warmed",
+	}
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "america"}, entry, warmWeeklyReconcileOptions{
+		ForceBootstrap: false,
+		MaxAttempts:    1,
+		Prompt:         weeklyWarmPrompt,
+		Trigger:        "test",
+	}, weeklyWarmExecOptions{Quiet: true})
+
+	if out != "ready" {
+		t.Fatalf("expected ready, got %q (err=%q)", out, entry.LastError)
+	}
+	if entry.LastResult != "ready" {
+		t.Fatalf("expected entry ready, got %q", entry.LastResult)
 	}
 }
 
