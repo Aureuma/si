@@ -217,7 +217,7 @@ func profileFiveHourDisplay(item codexProfileSummary) string {
 		return "-"
 	}
 	if strings.TrimSpace(item.StatusError) == "" {
-		return formatLimitColumn(item.FiveHourLeftPct, item.FiveHourReset, item.FiveHourRemaining)
+		return formatFiveHourLimitCompact(item.FiveHourLeftPct, item.FiveHourRemaining)
 	}
 	return "ERR"
 }
@@ -227,9 +227,60 @@ func profileWeeklyDisplay(item codexProfileSummary) string {
 		return "-"
 	}
 	if strings.TrimSpace(item.StatusError) == "" {
-		return formatLimitColumn(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
+		return formatWeeklyLimitCompact(item.WeeklyLeftPct, item.WeeklyReset, item.WeeklyRemaining)
 	}
 	return "ERR"
+}
+
+func formatFiveHourLimitCompact(pct float64, remainingMinutes int) string {
+	if pct < 0 {
+		return "-"
+	}
+	base := fmt.Sprintf("%.0f%%", pct)
+	remaining := formatRemainingDurationCompact(remainingMinutes)
+	if remaining != "" {
+		return styleLimitTextByPct(fmt.Sprintf("%s ⏰ %s", base, remaining), pct)
+	}
+	return styleLimitTextByPct(base, pct)
+}
+
+func formatWeeklyLimitCompact(pct float64, reset string, remainingMinutes int) string {
+	if pct < 0 {
+		return "-"
+	}
+	base := fmt.Sprintf("%.0f%%", pct)
+	parts := []string{base}
+	if date := extractResetDateLabel(reset); date != "" {
+		parts = append(parts, "🗓️ "+date)
+	}
+	if remaining := formatRemainingDurationCompact(remainingMinutes); remaining != "" {
+		parts = append(parts, "⏱️ "+remaining)
+	}
+	return styleLimitTextByPct(strings.Join(parts, " "), pct)
+}
+
+func extractResetDateLabel(reset string) string {
+	reset = strings.TrimSpace(reset)
+	if reset == "" {
+		return ""
+	}
+	datePart, _, _ := strings.Cut(reset, ",")
+	return strings.TrimSpace(datePart)
+}
+
+func formatRemainingDurationCompact(minutes int) string {
+	if minutes <= 0 {
+		return ""
+	}
+	if minutes >= 24*60 {
+		days := (minutes + (24*60 - 1)) / (24 * 60)
+		return fmt.Sprintf("%dd", days)
+	}
+	hours := (minutes + 59) / 60
+	if hours >= 1 {
+		return fmt.Sprintf("%dh", hours)
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func profileStatusWarnings(items []codexProfileSummary) []string {

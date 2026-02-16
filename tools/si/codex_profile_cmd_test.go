@@ -214,3 +214,22 @@ func TestProfileEmailForTable(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatLimitCompactExamples(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = false
+	defer func() { ansiEnabled = prev }()
+
+	if got := formatFiveHourLimitCompact(100, 300); got != "100% ⏰ 5h" {
+		t.Fatalf("unexpected 5h compact format: %q", got)
+	}
+	if got := formatWeeklyLimitCompact(0, "Feb 17, in 10 hours", 600); got != "0% 🗓️ Feb 17 ⏱️ 10h" {
+		t.Fatalf("unexpected weekly compact format (10h): %q", got)
+	}
+	if got := formatFiveHourLimitCompact(99, 300); got != "99% ⏰ 5h" {
+		t.Fatalf("unexpected 5h compact format (99): %q", got)
+	}
+	if got := formatWeeklyLimitCompact(98, "Feb 22, in 7 days", 7*24*60); got != "98% 🗓️ Feb 22 ⏱️ 7d" {
+		t.Fatalf("unexpected weekly compact format (7d): %q", got)
+	}
+}
