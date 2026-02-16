@@ -35,6 +35,8 @@ const (
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
+	maybeAutoRepairWarmupScheduler(cmd)
+
 	switch cmd {
 	case "spawn":
 		cmdCodexSpawn(args)
