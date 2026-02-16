@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -48,23 +51,29 @@ func TestWarmWeeklyBootstrapSucceeded(t *testing.T) {
 }
 
 func TestWarmWeeklyNeedsWarmAttempt(t *testing.T) {
-	if !warmWeeklyNeedsWarmAttempt(true, true, true, false, "ready") {
+	if !warmWeeklyNeedsWarmAttempt(true, 5, true, true, false, "ready", false) {
 		t.Fatalf("expected force mode to always warm")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, false, true, false, "ready") {
+	if !warmWeeklyNeedsWarmAttempt(false, 0, false, true, false, "ready", false) {
 		t.Fatalf("expected warm when usage signal is missing")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, true, false, false, "ready") {
+	if !warmWeeklyNeedsWarmAttempt(false, 0, true, false, false, "ready", false) {
 		t.Fatalf("expected warm when reset signal is missing")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, true, true, true, "ready") {
+	if !warmWeeklyNeedsWarmAttempt(false, 0, true, true, true, "ready", false) {
 		t.Fatalf("expected warm when weekly window advances")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, true, true, false, "failed") {
+	if !warmWeeklyNeedsWarmAttempt(false, 1, true, true, false, "failed", true) {
 		t.Fatalf("expected retry when prior attempt failed")
 	}
-	if warmWeeklyNeedsWarmAttempt(false, true, true, false, "ready") {
-		t.Fatalf("expected no warm when signals are stable and prior result was ready")
+	if !warmWeeklyNeedsWarmAttempt(false, 0, true, true, false, "ready", false) {
+		t.Fatalf("expected first zero-usage window to warm")
+	}
+	if warmWeeklyNeedsWarmAttempt(false, 0, true, true, false, "ready", true) {
+		t.Fatalf("expected no warm when this reset was already warmed")
+	}
+	if warmWeeklyNeedsWarmAttempt(false, 2, true, true, false, "ready", false) {
+		t.Fatalf("expected no warm when usage already consumed in this reset")
 	}
 }
 
@@ -95,11 +104,76 @@ func TestWeeklyUsedPercent(t *testing.T) {
 }
 
 func TestRenderWarmWeeklyReconcileConfig(t *testing.T) {
-	cfg := renderWarmWeeklyReconcileConfig("/home/si/.si", "aureuma/si:local")
+	cfg := renderWarmWeeklyReconcileConfig("/home/si/.si", "aureuma/si:local", 1001, 1001)
 	if !strings.Contains(cfg, fmt.Sprintf("volume = %s:%s", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir)) {
 		t.Fatalf("expected binary volume mount in config, got: %q", cfg)
 	}
-	if !strings.Contains(cfg, "if [ -x "+warmWeeklyBinaryPath+" ]; then "+warmWeeklyBinaryPath+" warmup reconcile --quiet; else /usr/local/bin/si warmup reconcile --quiet; fi") {
-		t.Fatalf("expected fallback command in config, got: %q", cfg)
+	if !strings.Contains(cfg, "command = "+warmWeeklyReconcileScriptPath) {
+		t.Fatalf("expected wrapper script command in config, got: %q", cfg)
+	}
+	if !strings.Contains(cfg, "environment = SI_HOST_UID=1001") || !strings.Contains(cfg, "environment = SI_HOST_GID=1001") {
+		t.Fatalf("expected host uid/gid env in config, got: %q", cfg)
+	}
+}
+
+func TestWarmWeeklyReconcileConfigCurrent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath, err := defaultWarmWeeklyReconcileConfigPath()
+	if err != nil {
+		t.Fatalf("defaultWarmWeeklyReconcileConfigPath: %v", err)
+	}
+	if warmWeeklyReconcileConfigCurrent() {
+		t.Fatalf("expected missing config to be treated as stale")
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+
+	legacy := "[job-run \"si-warmup-reconcile\"]\nschedule = 0 0 * * * *\nimage = aureuma/si:local\ncommand = /usr/local/bin/si warmup reconcile --quiet\nvolume = /tmp/si:/usr/local/bin/si:ro\n"
+	if err := os.WriteFile(configPath, []byte(legacy), 0o600); err != nil {
+		t.Fatalf("write legacy config: %v", err)
+	}
+	if warmWeeklyReconcileConfigCurrent() {
+		t.Fatalf("expected legacy config without binary volume to be stale")
+	}
+
+	current := renderWarmWeeklyReconcileConfig(filepath.Join(home, ".si"), "aureuma/si:local", 1001, 1001)
+	if err := os.WriteFile(configPath, []byte(current), 0o600); err != nil {
+		t.Fatalf("write current config: %v", err)
+	}
+	if !warmWeeklyReconcileConfigCurrent() {
+		t.Fatalf("expected current config to be healthy")
+	}
+}
+
+func TestMaybeAutoRepairWarmupSchedulerLaunchesEnable(t *testing.T) {
+	origRequested := warmWeeklyAutostartRequestedFn
+	origHealth := warmWeeklySchedulerHealthFn
+	origLaunch := launchWarmupCommandAsyncFn
+	origArg0 := os.Args[0]
+	defer func() {
+		warmWeeklyAutostartRequestedFn = origRequested
+		warmWeeklySchedulerHealthFn = origHealth
+		launchWarmupCommandAsyncFn = origLaunch
+		os.Args[0] = origArg0
+	}()
+	os.Args[0] = "si"
+
+	warmWeeklyAutostartRequestedFn = func() (bool, string) { return true, "marker" }
+	warmWeeklySchedulerHealthFn = func() (bool, string, error) { return false, "container_missing", nil }
+	launches := make([][]string, 0, 1)
+	launchWarmupCommandAsyncFn = func(args ...string) error {
+		launches = append(launches, append([]string(nil), args...))
+		return nil
+	}
+
+	maybeAutoRepairWarmupScheduler("status")
+	if len(launches) != 1 {
+		t.Fatalf("expected one launch, got %d", len(launches))
+	}
+	want := []string{"warmup", "enable", "--quiet", "--no-reconcile"}
+	if !reflect.DeepEqual(launches[0], want) {
+		t.Fatalf("unexpected launch args: got=%v want=%v", launches[0], want)
 	}
 }

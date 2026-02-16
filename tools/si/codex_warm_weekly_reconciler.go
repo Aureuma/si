@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"math"
 	"os"
 	"os/exec"
@@ -22,18 +21,23 @@ import (
 )
 
 var (
-	loadProfileAuthTokensFn = loadProfileAuthTokens
-	fetchUsagePayloadFn     = fetchUsagePayload
-	runWeeklyWarmPromptFn   = runWeeklyWarmPrompt
+	loadProfileAuthTokensFn        = loadProfileAuthTokens
+	fetchUsagePayloadFn            = fetchUsagePayload
+	runWeeklyWarmPromptFn          = runWeeklyWarmPrompt
+	warmWeeklyAutostartRequestedFn = warmWeeklyAutostartRequested
+	warmWeeklySchedulerHealthFn    = warmWeeklySchedulerHealthy
+	launchWarmupCommandAsyncFn     = launchWarmupCommand
 )
 
 const (
-	warmWeeklyStateVersion        = 2
-	warmWeeklyReconcileSchedule   = "0 0 * * * *"
+	warmWeeklyStateVersion        = 3
+	warmWeeklyReconcileSchedule   = "0 */5 * * * *"
 	warmWeeklyReconcileJobName    = "si-warmup-reconcile"
 	warmWeeklyBinaryVolumeName    = "si-warmup-bin"
 	warmWeeklyBinaryDir           = "/opt/si-warmup/bin"
 	warmWeeklyBinaryPath          = warmWeeklyBinaryDir + "/si"
+	warmWeeklyReconcileScriptName = "warmup-reconcile.sh"
+	warmWeeklyReconcileScriptPath = warmWeeklyBinaryDir + "/" + warmWeeklyReconcileScriptName
 	warmWeeklyMinUsageDelta       = 0.05
 	warmWeeklyResetJitterMinutes  = 2
 	warmWeeklyAutostartMarkerName = "autostart.v1"
@@ -55,6 +59,7 @@ type warmWeeklyProfileState struct {
 	LastWeeklyUsedPct float64 `json:"last_weekly_used_pct,omitempty"`
 	LastWeeklyUsedOK  bool    `json:"last_weekly_used_ok,omitempty"`
 	LastWeeklyReset   string  `json:"last_weekly_reset,omitempty"`
+	LastWarmedReset   string  `json:"last_warmed_reset,omitempty"`
 	LastUsageDelta    float64 `json:"last_usage_delta,omitempty"`
 	NextDue           string  `json:"next_due,omitempty"`
 	FailureCount      int     `json:"failure_count,omitempty"`
@@ -286,6 +291,7 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 
 func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warmWeeklyProfileState, opts warmWeeklyReconcileOptions, execOpts weeklyWarmExecOptions) string {
 	prevReset := parseWarmWeeklyTime(entry.LastWeeklyReset)
+	prevWarmedReset := parseWarmWeeklyTime(entry.LastWarmedReset)
 	prevResult := strings.TrimSpace(strings.ToLower(entry.LastResult))
 
 	entry.ProfileID = profile.ID
@@ -328,7 +334,8 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	entry.LastWeeklyUsedOK = usedKnown
 
 	windowAdvanced := warmWeeklyResetWindowAdvanced(prevReset, resetAt, resetKnown)
-	needsWarm := warmWeeklyNeedsWarmAttempt(opts.ForceBootstrap, usedKnown, resetKnown, windowAdvanced, prevResult)
+	warmedThisWindow := warmWeeklySameReset(prevWarmedReset, resetAt, resetKnown)
+	needsWarm := warmWeeklyNeedsWarmAttempt(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown, windowAdvanced, prevResult, warmedThisWindow)
 	if !needsWarm {
 		entry.Paused = false
 		entry.LastResult = "ready"
@@ -410,6 +417,11 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 		entry.LastResult = "warmed"
 		entry.LastError = ""
 		entry.FailureCount = 0
+		if resetAfterKnown {
+			entry.LastWarmedReset = resetAtAfter.UTC().Format(time.RFC3339)
+		} else if resetKnown {
+			entry.LastWarmedReset = resetAt.UTC().Format(time.RFC3339)
+		}
 		entry.NextDue = warmWeeklyNextDue(now, resetAtAfter, resetAfterKnown).UTC().Format(time.RFC3339)
 		appendWarmWeeklyLog("info", "profile_warmed", profile.ID, map[string]interface{}{"weekly_used_before": usedBefore, "weekly_used_after": usedAfter, "delta": delta, "next_due": entry.NextDue})
 		return "warmed"
@@ -465,7 +477,7 @@ func warmWeeklyPromptForAttempt(base string, attempt int) string {
 	}
 }
 
-func warmWeeklyNeedsWarmAttempt(force bool, usedKnown bool, resetKnown bool, windowAdvanced bool, prevResult string) bool {
+func warmWeeklyNeedsWarmAttempt(force bool, usedBefore float64, usedKnown bool, resetKnown bool, windowAdvanced bool, prevResult string, warmedThisWindow bool) bool {
 	if force {
 		return true
 	}
@@ -476,7 +488,11 @@ func warmWeeklyNeedsWarmAttempt(force bool, usedKnown bool, resetKnown bool, win
 		return true
 	}
 	// Retry within the same window if our previous warm attempt failed.
-	return strings.EqualFold(strings.TrimSpace(prevResult), "failed")
+	if strings.EqualFold(strings.TrimSpace(prevResult), "failed") {
+		return true
+	}
+	// Fresh weekly windows (100% left / 0% used) should still be warmed once.
+	return usedBefore <= 0 && !warmedThisWindow
 }
 
 func warmWeeklyBootstrapSucceeded(force bool, windowAdvanced bool, before float64, beforeUsedOK bool, beforeResetOK bool, after float64, afterUsedOK bool, afterResetOK bool) bool {
@@ -500,6 +516,12 @@ func warmWeeklyBootstrapSucceeded(force bool, windowAdvanced bool, before float6
 	if beforeResetOK && !beforeUsedOK && afterUsedOK {
 		return true
 	}
+	if beforeResetOK && beforeUsedOK && before <= 0 && afterResetOK && afterUsedOK {
+		// Some accounts expose coarse weekly percentages (0.00/1.00 steps), so
+		// a real warm execution may keep both reads at 0.00%. Treat this as
+		// success when reset/usage signals are stable.
+		return true
+	}
 	if afterUsedOK && beforeUsedOK && after-before >= warmWeeklyMinUsageDelta {
 		return true
 	}
@@ -511,6 +533,13 @@ func warmWeeklyResetWindowAdvanced(previousReset time.Time, currentReset time.Ti
 		return false
 	}
 	return previousReset.UTC().Unix() != currentReset.UTC().Unix()
+}
+
+func warmWeeklySameReset(previousReset time.Time, currentReset time.Time, currentResetKnown bool) bool {
+	if !currentResetKnown || currentReset.IsZero() || previousReset.IsZero() {
+		return false
+	}
+	return previousReset.UTC().Unix() == currentReset.UTC().Unix()
 }
 
 func warmWeeklyNextDue(now, resetAt time.Time, resetKnown bool) time.Time {
@@ -580,8 +609,7 @@ func loadWarmWeeklyState() (warmWeeklyState, error) {
 	if state.Profiles == nil {
 		state.Profiles = map[string]*warmWeeklyProfileState{}
 	}
-	// v1 did not track whether a 0.00% reading was "known" vs "unknown"; infer
-	// a best-effort value from the presence of reset metadata.
+	// v1/v2 did not fully track warm-window state and known-zero semantics.
 	if state.Version < warmWeeklyStateVersion {
 		for _, row := range state.Profiles {
 			if row == nil {
@@ -592,6 +620,9 @@ func loadWarmWeeklyState() (warmWeeklyState, error) {
 			}
 			if strings.TrimSpace(row.LastWeeklyReset) != "" || row.LastWeeklyUsedPct != 0 {
 				row.LastWeeklyUsedOK = true
+			}
+			if state.Version < 3 && strings.EqualFold(strings.TrimSpace(row.LastResult), "warmed") && strings.TrimSpace(row.LastWarmedReset) == "" {
+				row.LastWarmedReset = strings.TrimSpace(row.LastWeeklyReset)
 			}
 		}
 		state.Version = warmWeeklyStateVersion
@@ -778,7 +809,7 @@ func ensureWarmWeeklyReconcileScheduler() error {
 	if err := ensureWarmWeeklyBinaryVolume(exePath, image); err != nil {
 		return err
 	}
-	inlineConfig, err := ensureWarmWeeklyReconcileConfig(configPath, siHome, image)
+	inlineConfig, err := ensureWarmWeeklyReconcileConfig(configPath, siHome, image, os.Getuid(), os.Getgid())
 	if err != nil {
 		return err
 	}
@@ -800,7 +831,7 @@ func ensureWarmWeeklyReconcileScheduler() error {
 	})
 }
 
-func ensureWarmWeeklyReconcileConfig(configPath string, siHome string, image string) (string, error) {
+func ensureWarmWeeklyReconcileConfig(configPath string, siHome string, image string, hostUID int, hostGID int) (string, error) {
 	configPath = strings.TrimSpace(configPath)
 	siHome = strings.TrimSpace(siHome)
 	image = strings.TrimSpace(image)
@@ -810,25 +841,43 @@ func ensureWarmWeeklyReconcileConfig(configPath string, siHome string, image str
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		return "", err
 	}
-	config := renderWarmWeeklyReconcileConfig(siHome, image)
+	config := renderWarmWeeklyReconcileConfig(siHome, image, hostUID, hostGID)
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		return "", err
 	}
 	return config, nil
 }
 
-func renderWarmWeeklyReconcileConfig(siHome string, image string) string {
-	command := fmt.Sprintf("/bin/bash -lc 'export HOME=/home/si CODEX_HOME=/home/si/.codex; if [ -x %s ]; then %s warmup reconcile --quiet; else /usr/local/bin/si warmup reconcile --quiet; fi'", warmWeeklyBinaryPath, warmWeeklyBinaryPath)
-
+func renderWarmWeeklyReconcileConfig(siHome string, image string, hostUID int, hostGID int) string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("[job-run \"%s\"]\n", warmWeeklyReconcileJobName))
 	b.WriteString(fmt.Sprintf("schedule = %s\n", warmWeeklyReconcileSchedule))
 	b.WriteString(fmt.Sprintf("image = %s\n", image))
-	b.WriteString(fmt.Sprintf("command = %s\n", command))
+	b.WriteString(fmt.Sprintf("command = %s\n", warmWeeklyReconcileScriptPath))
 	b.WriteString(fmt.Sprintf("volume = %s:%s\n", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir))
 	b.WriteString(fmt.Sprintf("volume = %s:/home/si/.si\n", siHome))
+	if hostUID > 0 {
+		b.WriteString(fmt.Sprintf("environment = SI_HOST_UID=%d\n", hostUID))
+	}
+	if hostGID > 0 {
+		b.WriteString(fmt.Sprintf("environment = SI_HOST_GID=%d\n", hostGID))
+	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+func renderWarmWeeklyReconcileScript() []byte {
+	return []byte(strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"export HOME=/home/si",
+		"export CODEX_HOME=/home/si/.codex",
+		fmt.Sprintf("if [ -x %s ]; then", warmWeeklyBinaryPath),
+		fmt.Sprintf("  exec %s warmup reconcile --quiet", warmWeeklyBinaryPath),
+		"fi",
+		"exec /usr/local/bin/si warmup reconcile --quiet",
+		"",
+	}, "\n"))
 }
 
 func ensureWarmWeeklyBinaryVolume(executablePath string, image string) error {
@@ -892,7 +941,136 @@ func ensureWarmWeeklyBinaryVolume(executablePath string, image string) error {
 	if err := client.CopyFileToContainer(ctx, id, warmWeeklyBinaryPath, bin, 0o755); err != nil {
 		return err
 	}
+	if err := client.CopyFileToContainer(ctx, id, warmWeeklyReconcileScriptPath, renderWarmWeeklyReconcileScript(), 0o755); err != nil {
+		return err
+	}
 	return nil
+}
+
+func maybeAutoRepairWarmupScheduler(trigger string) {
+	if isGoTestBinary() {
+		return
+	}
+	trigger = strings.ToLower(strings.TrimSpace(trigger))
+	switch trigger {
+	case "", "warmup", "login":
+		return
+	}
+
+	autostartRequested, autostartReason := warmWeeklyAutostartRequestedFn()
+	if !autostartRequested {
+		return
+	}
+
+	healthy, healthReason, err := warmWeeklySchedulerHealthFn()
+	if err != nil {
+		appendWarmWeeklyLog("debug", "warmup_scheduler_healthcheck_failed", "", map[string]interface{}{
+			"trigger": trigger,
+			"error":   err.Error(),
+		})
+		return
+	}
+	if healthy {
+		return
+	}
+
+	if autostartReason == "legacy_state" {
+		_ = writeWarmWeeklyAutostartMarker()
+	}
+
+	appendWarmWeeklyLog("warn", "warmup_scheduler_auto_repair", "", map[string]interface{}{
+		"trigger":          trigger,
+		"autostart_reason": autostartReason,
+		"health_reason":    healthReason,
+	})
+	if err := launchWarmupCommandAsyncFn("warmup", "enable", "--quiet", "--no-reconcile"); err != nil {
+		appendWarmWeeklyLog("warn", "warmup_scheduler_auto_repair_launch_failed", "", map[string]interface{}{
+			"trigger": trigger,
+			"error":   err.Error(),
+		})
+		return
+	}
+	appendWarmWeeklyLog("info", "warmup_scheduler_auto_repair_launched", "", map[string]interface{}{
+		"trigger":          trigger,
+		"autostart_reason": autostartReason,
+		"health_reason":    healthReason,
+	})
+}
+
+func isGoTestBinary() bool {
+	return strings.HasSuffix(filepath.Base(os.Args[0]), ".test")
+}
+
+func warmWeeklyAutostartRequested() (bool, string) {
+	if warmWeeklyDisabled() {
+		return false, "disabled"
+	}
+	if path, err := warmWeeklyAutostartMarkerPath(); err == nil {
+		if _, statErr := os.Stat(path); statErr == nil {
+			return true, "marker"
+		}
+	}
+	// Legacy fallback: previous releases could have warmup state without
+	// an autostart marker; keep scheduler self-healing for those installs.
+	state, err := loadWarmWeeklyState()
+	if err != nil {
+		return false, "none"
+	}
+	if len(state.Profiles) > 0 {
+		return true, "legacy_state"
+	}
+	return false, "none"
+}
+
+func warmWeeklySchedulerHealthy() (bool, string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client, err := shared.NewClient()
+	if err != nil {
+		return false, "docker_unavailable", err
+	}
+	defer client.Close()
+
+	id, info, err := client.ContainerByName(ctx, defaultOfeliaName)
+	if err != nil {
+		return false, "inspect_failed", err
+	}
+	if strings.TrimSpace(id) == "" || info == nil {
+		return false, "container_missing", nil
+	}
+	if info.State == nil || !info.State.Running {
+		return false, "container_not_running", nil
+	}
+	if !warmWeeklyReconcileConfigCurrent() {
+		return false, "config_stale", nil
+	}
+	return true, "running", nil
+}
+
+func warmWeeklyReconcileConfigCurrent() bool {
+	configPath, err := defaultWarmWeeklyReconcileConfigPath()
+	if err != nil {
+		return false
+	}
+	raw, err := readLocalFile(configPath)
+	if err != nil {
+		return false
+	}
+	cfg := string(raw)
+	required := []string{
+		fmt.Sprintf("[job-run \"%s\"]", warmWeeklyReconcileJobName),
+		fmt.Sprintf("schedule = %s", warmWeeklyReconcileSchedule),
+		fmt.Sprintf("volume = %s:%s", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir),
+		fmt.Sprintf("command = %s", warmWeeklyReconcileScriptPath),
+		"environment = SI_HOST_UID=",
+		"environment = SI_HOST_GID=",
+	}
+	for _, token := range required {
+		if !strings.Contains(cfg, token) {
+			return false
+		}
+	}
+	return true
 }
 
 func triggerWarmupAfterLogin(profile codexProfile) {
@@ -914,13 +1092,21 @@ func launchWarmupCommand(args ...string) error {
 	if err != nil {
 		return err
 	}
+	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer devNull.Close()
 	// #nosec G204 -- exePath is from os.Executable and args are fixed subcommands.
 	cmd := exec.Command(exePath, args...)
 	cmd.Env = os.Environ()
-	cmd.Stdin = nil
-	cmd.Stdout = io.Discard
-	cmd.Stderr = io.Discard
-	return cmd.Start()
+	cmd.Stdin = devNull
+	cmd.Stdout = devNull
+	cmd.Stderr = devNull
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
 }
 
 func warmWeeklyDir() (string, error) {
