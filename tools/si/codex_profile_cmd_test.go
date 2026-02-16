@@ -177,7 +177,7 @@ func TestProfileNameForTable(t *testing.T) {
 		in   string
 		want string
 	}{
-		{name: "emoji_prefixed_name", in: "❇️ Berylla", want: "❇️ Berylla"},
+		{name: "emoji_prefixed_name", in: "🌲 Berylla", want: "🌲 Berylla"},
 		{name: "ascii_name_unchanged", in: "Berylla", want: "Berylla"},
 		{name: "single_token_emoji_unchanged", in: "❇️", want: "❇️"},
 		{name: "leading_spaces_trimmed", in: "   🧲 Gadolina  ", want: "🧲 Gadolina"},
