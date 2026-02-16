@@ -9,9 +9,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"unicode"
-	"unicode/utf8"
 
+	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -845,71 +844,20 @@ func stripANSIForPad(s string) string {
 
 func displayWidth(s string) int {
 	s = stripANSIForPad(s)
-	width := 0
-	for len(s) > 0 {
-		r, n := utf8.DecodeRuneInString(s)
-		rest := s[n:]
-		s = rest
-		if r == utf8.RuneError && n == 1 {
+	width := runewidth.StringWidth(s)
+	if width == 0 || !strings.ContainsRune(s, '\ufe0f') {
+		return width
+	}
+	// Some emoji-presentation sequences (base + VS16) are rendered as wide in
+	// terminals while runewidth still reports the base symbol width.
+	prev := rune(0)
+	for _, r := range s {
+		if r == '\ufe0f' && prev != 0 && runewidth.RuneWidth(prev) == 1 {
 			width++
-			continue
 		}
-		if isZeroWidthRune(r) {
-			continue
-		}
-		// Many symbols become emoji-style double-width when followed by
-		// VARIATION SELECTOR-16 (U+FE0F), even if their base rune is narrow.
-		if hasEmojiVariationSelector(rest) {
-			width += 2
-			continue
-		}
-		if isWideRune(r) {
-			width += 2
-			continue
-		}
-		width++
+		prev = r
 	}
 	return width
-}
-
-func isZeroWidthRune(r rune) bool {
-	switch {
-	case r == 0:
-		return true
-	case r == 0x200b || r == 0x200c || r == 0x200d:
-		return true
-	case r >= 0xfe00 && r <= 0xfe0f:
-		return true
-	case r >= 0xe0100 && r <= 0xe01ef:
-		return true
-	}
-	return unicode.Is(unicode.Mn, r) || unicode.Is(unicode.Me, r) || unicode.Is(unicode.Cf, r)
-}
-
-func hasEmojiVariationSelector(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-	r, n := utf8.DecodeRuneInString(s)
-	return n > 0 && r == 0xfe0f
-}
-
-func isWideRune(r rune) bool {
-	if r < 0x1100 {
-		return false
-	}
-	return (r >= 0x1100 && r <= 0x115f) ||
-		r == 0x2329 || r == 0x232a ||
-		(r >= 0x2e80 && r <= 0xa4cf && r != 0x303f) ||
-		(r >= 0xac00 && r <= 0xd7a3) ||
-		(r >= 0xf900 && r <= 0xfaff) ||
-		(r >= 0xfe10 && r <= 0xfe19) ||
-		(r >= 0xfe30 && r <= 0xfe6f) ||
-		(r >= 0xff00 && r <= 0xff60) ||
-		(r >= 0xffe0 && r <= 0xffe6) ||
-		(r >= 0x1f300 && r <= 0x1f64f) ||
-		(r >= 0x1f900 && r <= 0x1f9ff) ||
-		(r >= 0x20000 && r <= 0x3fffd)
 }
 
 func padRightANSI(s string, width int) string {
