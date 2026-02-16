@@ -355,25 +355,27 @@ func cmdGooglePlacesContextList(args []string) {
 		infof("no google accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("PROJECT"), 28),
-		padRightANSI(styleHeading("LANGUAGE"), 10),
-		padRightANSI(styleHeading("REGION"), 8),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("PROJECT"),
+		styleHeading("LANGUAGE"),
+		styleHeading("REGION"),
 		styleHeading("NAME"),
-	)
-	sort.Slice(rows, func(i, j int) bool { return rows[i]["alias"] < rows[j]["alias"] })
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["project"]), 28),
-			padRightANSI(orDash(row["language"]), 10),
-			padRightANSI(orDash(row["region"]), 8),
-			orDash(row["name"]),
-		)
 	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i]["alias"] < rows[j]["alias"] })
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["project"]),
+			orDash(row["language"]),
+			orDash(row["region"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdGooglePlacesContextCurrent(args []string) {
