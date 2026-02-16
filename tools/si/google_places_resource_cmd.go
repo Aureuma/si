@@ -1187,15 +1187,22 @@ func printGooglePlacesUsageReport(report map[string]any) {
 		}
 		sort.Strings(keys)
 		fmt.Printf("%s\n", styleHeading("Status buckets:"))
+		rows := make([][]string, 0, len(keys))
 		for _, key := range keys {
-			fmt.Printf("  %s %d\n", padRightANSI(key, 4), buckets[key])
+			rows = append(rows, []string{key, fmt.Sprintf("%d", buckets[key])})
 		}
+		printAlignedRows(rows, 2, "  ")
 	}
 	if top, ok := report["top_endpoints"].([]map[string]any); ok && len(top) > 0 {
 		fmt.Printf("%s\n", styleHeading("Top endpoints:"))
+		rows := make([][]string, 0, len(top))
 		for _, item := range top {
-			fmt.Printf("  %s %s\n", padRightANSI(stringifyGooglePlacesAny(item["count"]), 4), stringifyGooglePlacesAny(item["endpoint"]))
+			rows = append(rows, []string{
+				stringifyGooglePlacesAny(item["count"]),
+				stringifyGooglePlacesAny(item["endpoint"]),
+			})
 		}
+		printAlignedRows(rows, 2, "  ")
 	}
 }
 
@@ -1208,13 +1215,15 @@ func printGooglePlacesSessionsReport(report map[string]any) {
 		return
 	}
 	fmt.Printf("%s\n", styleHeading("Sessions:"))
+	rows := make([][]string, 0, len(sessions))
 	for _, item := range sessions {
 		status := "active"
 		if strings.TrimSpace(item.EndedAt) != "" {
 			status = "ended"
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(item.Token, 38), padRightANSI(status, 8), formatISODateWithGitHubRelativeNow(item.CreatedAt))
+		rows = append(rows, []string{item.Token, status, formatISODateWithGitHubRelativeNow(item.CreatedAt)})
 	}
+	printAlignedRows(rows, 2, "  ")
 }
 
 func googleStatusBucket(statusCode int) string {

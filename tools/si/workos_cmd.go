@@ -487,13 +487,15 @@ func cmdWorkOSDoctor(args []string) {
 		fmt.Printf("%s %s\n", styleHeading("WorkOS doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatWorkOSContext(runtime))
+	rows := make([][]string, 0, len(checks))
 	for _, check := range checks {
 		icon := styleSuccess("OK")
 		if !check.OK {
 			icon = styleError("ERR")
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(check.Name, 16), strings.TrimSpace(check.Detail))
+		rows = append(rows, []string{icon, check.Name, strings.TrimSpace(check.Detail)})
 	}
+	printAlignedRows(rows, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}
@@ -1683,10 +1685,12 @@ func printWorkOSResponse(resp workosResponse, jsonOut bool, raw bool) {
 		if limit > 20 {
 			limit = 20
 		}
+		rows := make([][]string, 0, limit)
 		for i := 0; i < limit; i++ {
 			item := resp.List[i]
-			fmt.Printf("  %s %s\n", padRightANSI(orDash(workosItemID(item)), 32), orDash(workosItemLabel(item)))
+			rows = append(rows, []string{orDash(workosItemID(item)), orDash(workosItemLabel(item))})
 		}
+		printAlignedRows(rows, 2, "  ")
 		if len(resp.List) > limit {
 			fmt.Printf("  %s\n", styleDim(fmt.Sprintf("... %d more", len(resp.List)-limit)))
 		}

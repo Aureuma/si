@@ -504,13 +504,15 @@ func cmdGithubDoctor(args []string) {
 		fmt.Printf("%s %s\n", styleHeading("GitHub doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatGithubContext(runtime))
+	rows := make([][]string, 0, len(checks))
 	for _, item := range checks {
 		icon := styleSuccess("OK")
 		if !item.OK {
 			icon = styleError("ERR")
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(item.Name, 16), strings.TrimSpace(item.Detail))
+		rows = append(rows, []string{icon, item.Name, strings.TrimSpace(item.Detail)})
 	}
+	printAlignedRows(rows, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}
