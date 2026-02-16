@@ -44,6 +44,9 @@ func BuildContainerCoreMounts(plan ContainerCoreMountPlan) []mount.Mount {
 			Target: mirror,
 		})
 	}
+	if m, ok := InferDevelopmentMount(workspaceHost, plan.ContainerHome); ok {
+		appendUniqueMount(&mounts, m)
+	}
 	if plan.IncludeHostSi {
 		for _, m := range HostSiCodexProfileMounts(plan.ContainerHome) {
 			appendUniqueMount(&mounts, m)

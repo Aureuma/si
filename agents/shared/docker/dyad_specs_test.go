@@ -126,3 +126,37 @@ func TestBuildDyadSpecsIncludesVaultEnvFileMount(t *testing.T) {
 		t.Fatalf("critic spec missing vault env file mount: %+v", critic.HostConfig.Mounts)
 	}
 }
+
+func TestBuildDyadSpecsIncludesDevelopmentMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := filepath.Join(home, "Development", "si")
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "mounttest-dev",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+
+	developmentHost := filepath.Join(home, "Development")
+	if !mountExists(actor.HostConfig.Mounts, developmentHost, "/root/Development") {
+		t.Fatalf("actor spec missing host ~/Development mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, developmentHost, "/root/Development") {
+		t.Fatalf("critic spec missing host ~/Development mount: %+v", critic.HostConfig.Mounts)
+	}
+}
