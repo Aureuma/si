@@ -18,7 +18,7 @@ func TestReconcileWarmWeeklyProfile_WarmsFreshZeroUsageWindow(t *testing.T) {
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},
 			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
-				UsedPercent:        0.0,
+				UsedPercent:        1.0,
 				ResetAfterSeconds:  ptrInt64(3600),
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},
@@ -61,6 +61,7 @@ func TestReconcileWarmWeeklyProfile_WarmsFreshZeroUsageWindow(t *testing.T) {
 
 func TestReconcileWarmWeeklyProfile_ReadyAfterWindowAlreadyWarmed(t *testing.T) {
 	reset := time.Date(2026, 2, 17, 1, 46, 21, 0, time.UTC)
+	runCalls := 0
 	restore := stubWarmupDeps(t, stubWarmupDepsOptions{
 		auth: profileAuthTokens{AccessToken: "x"},
 		fetchPayloads: []fetchPayloadResult{
@@ -69,7 +70,13 @@ func TestReconcileWarmWeeklyProfile_ReadyAfterWindowAlreadyWarmed(t *testing.T) 
 				ResetAt:            ptrInt64(reset.Unix()),
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},
+			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
+				UsedPercent:        1.0,
+				ResetAt:            ptrInt64(reset.Unix()),
+				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
+			}}}},
 		},
+		runCalls: &runCalls,
 	})
 	defer restore()
 
@@ -85,23 +92,26 @@ func TestReconcileWarmWeeklyProfile_ReadyAfterWindowAlreadyWarmed(t *testing.T) 
 		Trigger:        "test",
 	}, weeklyWarmExecOptions{Quiet: true})
 
-	if out != "ready" {
-		t.Fatalf("expected ready, got %q (err=%q)", out, entry.LastError)
+	if out != "warmed" {
+		t.Fatalf("expected warmed, got %q (err=%q)", out, entry.LastError)
 	}
-	if entry.LastResult != "ready" {
-		t.Fatalf("expected entry ready, got %q", entry.LastResult)
+	if entry.LastResult != "warmed" {
+		t.Fatalf("expected entry warmed, got %q", entry.LastResult)
+	}
+	if runCalls != 1 {
+		t.Fatalf("expected one warm run while usage was still 100%%, got %d", runCalls)
 	}
 }
 
-func TestReconcileWarmWeeklyProfile_BootstrapSucceedsWhenResetAppears(t *testing.T) {
+func TestReconcileWarmWeeklyProfile_FailsWhenResetAppearsButUsageStillFull(t *testing.T) {
 	restore := stubWarmupDeps(t, stubWarmupDepsOptions{
 		auth: profileAuthTokens{AccessToken: "x"},
 		fetchPayloads: []fetchPayloadResult{
-			// Before: reset info missing, forcing bootstrap.
+			// Before: still at full weekly usage with rolling/missing reset.
 			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
 				UsedPercent: 0.0,
 			}}}},
-			// After: reset info appears (even if used percent is unchanged).
+			// After: reset info appears, but usage is still 0.0.
 			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
 				UsedPercent:        0.0,
 				ResetAfterSeconds:  ptrInt64(3600),
@@ -120,11 +130,14 @@ func TestReconcileWarmWeeklyProfile_BootstrapSucceedsWhenResetAppears(t *testing
 		Trigger:        "test",
 	}, weeklyWarmExecOptions{Quiet: true})
 
-	if out != "warmed" {
-		t.Fatalf("expected warmed, got %q (err=%q)", out, entry.LastError)
+	if out != "failed" {
+		t.Fatalf("expected failed, got %q (err=%q)", out, entry.LastError)
 	}
-	if entry.LastWeeklyReset == "" {
-		t.Fatalf("expected last weekly reset to be set")
+	if entry.LastWeeklyReset != "" {
+		t.Fatalf("expected last weekly reset to remain unset while usage stays at 100%%")
+	}
+	if entry.LastResult != "failed" {
+		t.Fatalf("expected entry failed, got %q", entry.LastResult)
 	}
 }
 
@@ -138,7 +151,7 @@ func TestReconcileWarmWeeklyProfile_VerifyPollRetriesTransientErrors(t *testing.
 			{err: errors.New("transient")},
 			{err: errors.New("transient")},
 			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
-				UsedPercent:        0.0,
+				UsedPercent:        1.0,
 				ResetAfterSeconds:  ptrInt64(3600),
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},
@@ -167,12 +180,12 @@ func TestReconcileWarmWeeklyProfile_WarmsWhenWindowAdvances(t *testing.T) {
 		auth: profileAuthTokens{AccessToken: "x"},
 		fetchPayloads: []fetchPayloadResult{
 			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
-				UsedPercent:        0.0,
+				UsedPercent:        27.0,
 				ResetAt:            ptrInt64(nextReset.Unix()),
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},
 			{payload: usagePayload{RateLimit: &usageRateLimit{Secondary: &usageWindow{
-				UsedPercent:        0.0,
+				UsedPercent:        27.0,
 				ResetAt:            ptrInt64(nextReset.Unix()),
 				LimitWindowSeconds: ptrInt64(int64((7 * 24 * time.Hour).Seconds())),
 			}}}},

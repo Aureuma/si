@@ -22,6 +22,21 @@ func TestWarmWeeklyBackoffDuration(t *testing.T) {
 	}
 }
 
+func TestSetWarmWeeklyFullLimitFailure(t *testing.T) {
+	now := time.Date(2026, 2, 16, 17, 0, 0, 0, time.UTC)
+	entry := &warmWeeklyProfileState{}
+	setWarmWeeklyFullLimitFailure(entry, now, fmt.Errorf("x"))
+	if entry.LastResult != "failed" {
+		t.Fatalf("expected failed result, got %q", entry.LastResult)
+	}
+	if entry.FailureCount != 1 {
+		t.Fatalf("expected failure count 1, got %d", entry.FailureCount)
+	}
+	if got := parseWarmWeeklyTime(entry.NextDue); got.IsZero() || !got.Equal(now.Add(warmWeeklyFullRetryInterval)) {
+		t.Fatalf("expected next_due at fixed retry interval, got %q", entry.NextDue)
+	}
+}
+
 func TestWarmWeeklyBootstrapSucceeded(t *testing.T) {
 	// Non-force: delta can be a valid success signal when both readings are known.
 	if !warmWeeklyBootstrapSucceeded(false, false, 0.0, true, true, 0.2, true, true) {
@@ -31,48 +46,48 @@ func TestWarmWeeklyBootstrapSucceeded(t *testing.T) {
 		t.Fatalf("expected warm failure when reset timing is still unavailable")
 	}
 
-	// Bootstrapping: becoming aware of reset timing is success even if percent deltas are tiny/zero.
-	if !warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 0.0, true, true) {
-		t.Fatalf("expected warm success when reset timing becomes available")
+	// Full weekly (100% remaining): reset timing alone is not enough; usage must drop.
+	if warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 0.0, true, true) {
+		t.Fatalf("expected warm failure when usage is still 100%%")
 	}
-	if warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 0.0, true, false) {
+	if !warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 1.0, true, true) {
+		t.Fatalf("expected warm success once usage drops below 100%% with reset timing available")
+	}
+	if warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 1.0, true, false) {
 		t.Fatalf("expected warm failure when reset timing is still unavailable")
 	}
 
 	// Weekly rollover: a successful warm run should count even when deltas are 0.
-	if !warmWeeklyBootstrapSucceeded(false, true, 0.0, true, true, 0.0, true, true) {
+	if !warmWeeklyBootstrapSucceeded(false, true, 27.0, true, true, 27.0, true, true) {
 		t.Fatalf("expected warm success on weekly rollover with stable percentages")
 	}
 
-	// Force mode: avoid false failures when the endpoint is too coarse-grained to show deltas.
-	if !warmWeeklyBootstrapSucceeded(true, false, 0.0, true, true, 0.0, true, true) {
-		t.Fatalf("expected force warm to treat stable reset/usage signals as success")
+	// Force mode should not bypass the strict 100%-weekly rule.
+	if warmWeeklyBootstrapSucceeded(true, false, 0.0, true, true, 0.0, true, true) {
+		t.Fatalf("expected force warm to fail when usage is still at 100%%")
+	}
+	if !warmWeeklyBootstrapSucceeded(true, false, 20.0, true, true, 20.0, true, true) {
+		t.Fatalf("expected force warm to treat stable non-full usage signals as success")
 	}
 }
 
 func TestWarmWeeklyNeedsWarmAttempt(t *testing.T) {
-	if !warmWeeklyNeedsWarmAttempt(true, 5, true, true, false, "ready", false) {
+	if !warmWeeklyNeedsWarmAttempt(true, 5, true, true, false) {
 		t.Fatalf("expected force mode to always warm")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, 0, false, true, false, "ready", false) {
+	if !warmWeeklyNeedsWarmAttempt(false, 0, false, true, false) {
 		t.Fatalf("expected warm when usage signal is missing")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, 0, true, false, false, "ready", false) {
-		t.Fatalf("expected warm when reset signal is missing")
+	if !warmWeeklyNeedsWarmAttempt(false, 0, true, true, false) {
+		t.Fatalf("expected warm while weekly remains at 100%%")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, 0, true, true, true, "ready", false) {
+	if !warmWeeklyNeedsWarmAttempt(false, 10, true, true, true) {
 		t.Fatalf("expected warm when weekly window advances")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, 1, true, true, false, "failed", true) {
-		t.Fatalf("expected retry when prior attempt failed")
+	if !warmWeeklyNeedsWarmAttempt(false, 10, true, false, false) {
+		t.Fatalf("expected warm when reset signal is missing")
 	}
-	if !warmWeeklyNeedsWarmAttempt(false, 0, true, true, false, "ready", false) {
-		t.Fatalf("expected first zero-usage window to warm")
-	}
-	if warmWeeklyNeedsWarmAttempt(false, 0, true, true, false, "ready", true) {
-		t.Fatalf("expected no warm when this reset was already warmed")
-	}
-	if warmWeeklyNeedsWarmAttempt(false, 2, true, true, false, "ready", false) {
+	if warmWeeklyNeedsWarmAttempt(false, 10, true, true, false) {
 		t.Fatalf("expected no warm when usage already consumed in this reset")
 	}
 }
