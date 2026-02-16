@@ -172,9 +172,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool, inclu
 	if withStatus {
 		headers = append(headers, styleHeading("5H"), styleHeading("WEEKLY"))
 	}
-	for _, line := range renderAlignedTable(headers, rows, 2) {
-		fmt.Println(line)
-	}
+	printAlignedTable(headers, rows, 2)
 }
 
 func profileNameForTable(name string) string {

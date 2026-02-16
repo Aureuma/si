@@ -285,24 +285,26 @@ func cmdOCIContextList(args []string) {
 		infof("no oci accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("PROFILE"), 14),
-		padRightANSI(styleHeading("REGION"), 16),
-		padRightANSI(styleHeading("CONFIG FILE"), 30),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("PROFILE"),
+		styleHeading("REGION"),
+		styleHeading("CONFIG FILE"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["profile"]), 14),
-			padRightANSI(orDash(row["region"]), 16),
-			padRightANSI(orDash(row["config_file"]), 30),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["profile"]),
+			orDash(row["region"]),
+			orDash(row["config_file"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdOCIContextCurrent(args []string) {

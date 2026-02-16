@@ -743,26 +743,28 @@ func cmdAppleAppStoreContextList(args []string) {
 		infof("no apple appstore accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("PROJECT"), 24),
-		padRightANSI(styleHeading("BUNDLE ID"), 28),
-		padRightANSI(styleHeading("PLATFORM"), 10),
-		padRightANSI(styleHeading("LANG"), 8),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("PROJECT"),
+		styleHeading("BUNDLE ID"),
+		styleHeading("PLATFORM"),
+		styleHeading("LANG"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["project"]), 24),
-			padRightANSI(orDash(row["bundle_id"]), 28),
-			padRightANSI(orDash(row["platform"]), 10),
-			padRightANSI(orDash(row["language"]), 8),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["project"]),
+			orDash(row["bundle_id"]),
+			orDash(row["platform"]),
+			orDash(row["language"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdAppleAppStoreContextCurrent(args []string) {

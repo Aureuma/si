@@ -137,26 +137,28 @@ func cmdPublishCatalogList(args []string) {
 		infof("no publish platforms matched filter")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s\n",
-		padRightANSI(styleHeading("PLATFORM"), 28),
-		padRightANSI(styleHeading("PRICING"), 14),
-		padRightANSI(styleHeading("ACCOUNT"), 12),
-		padRightANSI(styleHeading("API"), 12),
+	headers := []string{
+		styleHeading("PLATFORM"),
+		styleHeading("PRICING"),
+		styleHeading("ACCOUNT"),
+		styleHeading("API"),
 		styleHeading("URL"),
-	)
+	}
+	tableRows := make([][]string, 0, len(filtered))
 	for _, entry := range filtered {
 		api := "-"
 		if entry.APIAvailable {
 			api = entry.APIProvider
 		}
-		fmt.Printf("%s %s %s %s %s\n",
-			padRightANSI(orDash(entry.Name), 28),
-			padRightANSI(orDash(entry.Pricing), 14),
-			padRightANSI(orDash(entry.Account), 12),
-			padRightANSI(orDash(api), 12),
+		tableRows = append(tableRows, []string{
+			orDash(entry.Name),
+			orDash(entry.Pricing),
+			orDash(entry.Account),
+			orDash(api),
 			orDash(entry.URL),
-		)
+		})
 	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdPublishDevTo(args []string) {

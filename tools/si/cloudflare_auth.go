@@ -341,27 +341,29 @@ func cmdCloudflareContextList(args []string) {
 		infof("no cloudflare accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("ACCOUNT"), 24),
-		padRightANSI(styleHeading("PROD"), 16),
-		padRightANSI(styleHeading("STAGING"), 16),
-		padRightANSI(styleHeading("DEV"), 16),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("ACCOUNT"),
+		styleHeading("PROD"),
+		styleHeading("STAGING"),
+		styleHeading("DEV"),
 		styleHeading("NAME"),
-	)
-	sort.Slice(rows, func(i, j int) bool { return rows[i]["alias"] < rows[j]["alias"] })
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["account_id"]), 24),
-			padRightANSI(orDash(row["prod_zone"]), 16),
-			padRightANSI(orDash(row["staging_zone"]), 16),
-			padRightANSI(orDash(row["dev_zone"]), 16),
-			orDash(row["name"]),
-		)
 	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i]["alias"] < rows[j]["alias"] })
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["account_id"]),
+			orDash(row["prod_zone"]),
+			orDash(row["staging_zone"]),
+			orDash(row["dev_zone"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdCloudflareContextCurrent(args []string) {

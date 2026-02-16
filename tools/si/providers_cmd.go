@@ -107,14 +107,15 @@ func cmdProvidersCharacteristics(args []string) {
 		return
 	}
 	fmt.Printf("%s %s\n", styleHeading("Policy:"), "built-in defaults + runtime adaptive feedback")
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("PROVIDER"), 18),
-		padRightANSI(styleHeading("RATE"), 8),
-		padRightANSI(styleHeading("BURST"), 6),
-		padRightANSI(styleHeading("AUTH"), 8),
-		padRightANSI(styleHeading("CAPS"), 8),
+	headers := []string{
+		styleHeading("PROVIDER"),
+		styleHeading("RATE"),
+		styleHeading("BURST"),
+		styleHeading("AUTH"),
+		styleHeading("CAPS"),
 		styleHeading("PUBLIC PROBE"),
-	)
+	}
+	tableRows := make([][]string, 0, len(rows))
 	for _, entry := range rows {
 		probe := "-"
 		if entry.PublicProbe != nil {
@@ -133,15 +134,16 @@ func cmdProvidersCharacteristics(args []string) {
 		if entry.Capabilities.SupportsRaw {
 			capsText += "r"
 		}
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(entry.Provider, 18),
-			padRightANSI(formatRate(entry.RatePerSecond), 8),
-			padRightANSI(strconv.Itoa(entry.Burst), 6),
-			padRightANSI(orDash(entry.AuthStyle), 8),
-			padRightANSI(capsText, 8),
+		tableRows = append(tableRows, []string{
+			entry.Provider,
+			formatRate(entry.RatePerSecond),
+			strconv.Itoa(entry.Burst),
+			orDash(entry.AuthStyle),
+			capsText,
 			probe,
-		)
+		})
 	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func formatRate(value float64) string {
@@ -219,17 +221,18 @@ func cmdProvidersHealth(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("PROVIDER"), 16),
-		padRightANSI(styleHeading("SUBJECT"), 14),
-		padRightANSI(styleHeading("REQ"), 6),
-		padRightANSI(styleHeading("2XX"), 6),
-		padRightANSI(styleHeading("429"), 6),
-		padRightANSI(styleHeading("5XX"), 6),
-		padRightANSI(styleHeading("P50"), 6),
-		padRightANSI(styleHeading("P95"), 6),
+	headers := []string{
+		styleHeading("PROVIDER"),
+		styleHeading("SUBJECT"),
+		styleHeading("REQ"),
+		styleHeading("2XX"),
+		styleHeading("429"),
+		styleHeading("5XX"),
+		styleHeading("P50"),
+		styleHeading("P95"),
 		styleHeading("CIRCUIT"),
-	)
+	}
+	tableRows := make([][]string, 0, len(entries))
 	for _, entry := range entries {
 		circuit := entry.CircuitState
 		if strings.TrimSpace(circuit) == "" {
@@ -238,18 +241,19 @@ func cmdProvidersHealth(args []string) {
 		if circuit == "open" && !entry.OpenUntil.IsZero() {
 			circuit = fmt.Sprintf("open until %s", formatDateWithGitHubRelativeNow(entry.OpenUntil))
 		}
-		fmt.Printf("%s %s %s %s %s %s %s %s %s\n",
-			padRightANSI(string(entry.Provider), 16),
-			padRightANSI(orDash(entry.Subject), 14),
-			padRightANSI(strconv.FormatInt(entry.Requests, 10), 6),
-			padRightANSI(strconv.FormatInt(entry.Success, 10), 6),
-			padRightANSI(strconv.FormatInt(entry.TooManyRequests, 10), 6),
-			padRightANSI(strconv.FormatInt(entry.ServerErrors5xx, 10), 6),
-			padRightANSI(strconv.FormatInt(entry.P50LatencyMS, 10), 6),
-			padRightANSI(strconv.FormatInt(entry.P95LatencyMS, 10), 6),
+		tableRows = append(tableRows, []string{
+			string(entry.Provider),
+			orDash(entry.Subject),
+			strconv.FormatInt(entry.Requests, 10),
+			strconv.FormatInt(entry.Success, 10),
+			strconv.FormatInt(entry.TooManyRequests, 10),
+			strconv.FormatInt(entry.ServerErrors5xx, 10),
+			strconv.FormatInt(entry.P50LatencyMS, 10),
+			strconv.FormatInt(entry.P95LatencyMS, 10),
 			circuit,
-		)
+		})
 	}
+	printAlignedTable(headers, tableRows, 2)
 	for _, entry := range guardrails {
 		fmt.Printf("%s provider=%s subject=%s feedback_without_acquire=%d release_without_acquire=%d\n",
 			styleHeading("Guardrail warning:"),

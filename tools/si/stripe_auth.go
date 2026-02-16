@@ -303,25 +303,27 @@ func cmdStripeContextList(args []string) {
 		infof("no stripe accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("ACCOUNT"), 22),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("LIVE"), 6),
-		padRightANSI(styleHeading("SANDBOX"), 8),
-		styleHeading("NAME"),
-	)
 	sort.Slice(rows, func(i, j int) bool { return rows[i]["alias"] < rows[j]["alias"] })
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(row["alias"], 18),
-			padRightANSI(orDash(row["id"]), 22),
-			padRightANSI(row["default"], 8),
-			padRightANSI(row["live_key_config"], 6),
-			padRightANSI(row["sandbox_key_config"], 8),
-			orDash(row["name"]),
-		)
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("ACCOUNT"),
+		styleHeading("DEFAULT"),
+		styleHeading("LIVE"),
+		styleHeading("SANDBOX"),
+		styleHeading("NAME"),
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			row["alias"],
+			orDash(row["id"]),
+			row["default"],
+			row["live_key_config"],
+			row["sandbox_key_config"],
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdStripeContextCurrent(args []string) {

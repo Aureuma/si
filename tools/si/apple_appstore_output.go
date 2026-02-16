@@ -131,18 +131,14 @@ func printAppleAppStoreKeyValueMap(data map[string]any) {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	maxWidth := 0
-	for _, key := range keys {
-		if len(key) > maxWidth {
-			maxWidth = len(key)
-		}
-	}
+	rows := make([][2]string, 0, len(keys))
 	for _, key := range keys {
 		value := parseAppleAnyString(data[key])
 		if value == "" {
 			raw, _ := json.Marshal(data[key])
 			value = string(raw)
 		}
-		fmt.Printf("%s %s\n", padRightANSI(styleHeading(key+":"), maxWidth+1), value)
+		rows = append(rows, [2]string{styleHeading(key + ":"), value})
 	}
+	printKeyValueTable(rows)
 }

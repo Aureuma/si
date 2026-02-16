@@ -271,28 +271,22 @@ func buildDyadRows(containers []types.Container) []dyadRow {
 }
 
 func printDyadRows(rows []dyadRow) {
-	widths := map[string]int{"dyad": 4, "role": 4, "actor": 5, "critic": 6}
-	for _, row := range rows {
-		widths["dyad"] = max(widths["dyad"], len(row.Dyad))
-		widths["role"] = max(widths["role"], len(row.Role))
-		widths["actor"] = max(widths["actor"], len(row.Actor))
-		widths["critic"] = max(widths["critic"], len(row.Critic))
+	headers := []string{
+		styleHeading("DYAD"),
+		styleHeading("ROLE"),
+		styleHeading("ACTOR"),
+		styleHeading("CRITIC"),
 	}
-
-	fmt.Printf("%s  %s  %s  %s\n",
-		padRightANSI(styleHeading("DYAD"), widths["dyad"]),
-		padRightANSI(styleHeading("ROLE"), widths["role"]),
-		padRightANSI(styleHeading("ACTOR"), widths["actor"]),
-		padRightANSI(styleHeading("CRITIC"), widths["critic"]),
-	)
+	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
-		fmt.Printf("%s  %s  %s  %s\n",
-			padRightANSI(row.Dyad, widths["dyad"]),
-			padRightANSI(row.Role, widths["role"]),
-			padRightANSI(styleStatus(row.Actor), widths["actor"]),
-			padRightANSI(styleStatus(row.Critic), widths["critic"]),
-		)
+		tableRows = append(tableRows, []string{
+			row.Dyad,
+			row.Role,
+			styleStatus(row.Actor),
+			styleStatus(row.Critic),
+		})
 	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func selectDyadName(action string) (string, bool) {

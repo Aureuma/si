@@ -645,20 +645,18 @@ func cmdCodexList(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%s %s %s\n",
-		padRightANSI(styleHeading("CONTAINER"), 28),
-		padRightANSI(styleHeading("STATE"), 10),
-		padRightANSI(styleHeading("IMAGE"), 20),
-	)
+	headers := []string{
+		styleHeading("CONTAINER"),
+		styleHeading("STATE"),
+		styleHeading("IMAGE"),
+	}
+	rows := make([][]string, 0, len(containers))
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
 		image := codexImageDisplay(c.Image)
-		fmt.Printf("%s %s %s\n",
-			padRightANSI(name, 28),
-			padRightANSI(styleStatus(c.State), 10),
-			padRightANSI(image, 20),
-		)
+		rows = append(rows, []string{name, styleStatus(c.State), image})
 	}
+	printAlignedTable(headers, rows, 2)
 }
 
 func cmdCodexExec(args []string) {
@@ -1029,18 +1027,16 @@ func selectCodexContainerFromList(action string) (string, bool) {
 		})
 	}
 
-	fmt.Printf("%s %s %s\n",
-		padRightANSI(styleHeading("CONTAINER"), 28),
-		padRightANSI(styleHeading("STATE"), 10),
-		padRightANSI(styleHeading("IMAGE"), 20),
-	)
-	for _, item := range items {
-		fmt.Printf("%s %s %s\n",
-			padRightANSI(item.Name, 28),
-			padRightANSI(styleStatus(item.State), 10),
-			padRightANSI(item.Image, 20),
-		)
+	headers := []string{
+		styleHeading("CONTAINER"),
+		styleHeading("STATE"),
+		styleHeading("IMAGE"),
 	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{item.Name, styleStatus(item.State), item.Image})
+	}
+	printAlignedTable(headers, rows, 2)
 
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Println(styleDim("re-run with: si " + action + " <name>"))

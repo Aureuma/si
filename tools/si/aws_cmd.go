@@ -270,22 +270,24 @@ func cmdAWSContextList(args []string) {
 		infof("no aws accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("REGION"), 14),
-		padRightANSI(styleHeading("ACCESS KEY ENV"), 32),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("REGION"),
+		styleHeading("ACCESS KEY ENV"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["region"]), 14),
-			padRightANSI(orDash(row["access_key_env"]), 32),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["region"]),
+			orDash(row["access_key_env"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdAWSContextCurrent(args []string) {

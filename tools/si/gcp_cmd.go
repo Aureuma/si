@@ -259,26 +259,28 @@ func cmdGCPContextList(args []string) {
 		infof("no gcp accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("PROJECT ID"), 18),
-		padRightANSI(styleHeading("PROJECT ENV"), 24),
-		padRightANSI(styleHeading("TOKEN ENV"), 24),
-		padRightANSI(styleHeading("API KEY ENV"), 24),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("PROJECT ID"),
+		styleHeading("PROJECT ENV"),
+		styleHeading("TOKEN ENV"),
+		styleHeading("API KEY ENV"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["project_id"]), 18),
-			padRightANSI(orDash(row["project_id_env"]), 24),
-			padRightANSI(orDash(row["token_env"]), 24),
-			padRightANSI(orDash(row["api_key_env"]), 24),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["project_id"]),
+			orDash(row["project_id_env"]),
+			orDash(row["token_env"]),
+			orDash(row["api_key_env"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdGCPContextCurrent(args []string) {

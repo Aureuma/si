@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // renderAlignedTable renders a fixed-width text table using displayWidth-based
 // cell measurement so each column starts at a stable offset.
@@ -33,6 +36,28 @@ func renderAlignedTable(headers []string, rows [][]string, gutter int) []string 
 		out = append(out, renderAlignedTableRow(row, widths, sep))
 	}
 	return out
+}
+
+func printAlignedTable(headers []string, rows [][]string, gutter int) {
+	for _, line := range renderAlignedTable(headers, rows, gutter) {
+		fmt.Println(line)
+	}
+}
+
+func printKeyValueTable(rows [][2]string) {
+	if len(rows) == 0 {
+		return
+	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{row[0], row[1]})
+	}
+	for _, line := range renderAlignedTable([]string{"", ""}, tableRows, 1) {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		fmt.Println(line)
+	}
 }
 
 func renderAlignedTableRow(row []string, widths []int, sep string) string {
