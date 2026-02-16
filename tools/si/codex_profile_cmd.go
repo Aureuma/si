@@ -158,7 +158,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 	}
 
 	if withStatus {
-		fmt.Printf("%s %s %s %s %s %s\n",
+		fmt.Printf("%s  %s  %s  %s  %s  %s\n",
 			padRightANSI(styleHeading("PROFILE"), widthID),
 			padRightANSI(styleHeading("NAME"), widthName),
 			padRightANSI(styleHeading("EMAIL"), widthEmail),
@@ -167,7 +167,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 			padRightANSI(styleHeading("WEEKLY"), widthWeekly),
 		)
 	} else {
-		fmt.Printf("%s %s %s %s\n",
+		fmt.Printf("%s  %s  %s  %s\n",
 			padRightANSI(styleHeading("PROFILE"), widthID),
 			padRightANSI(styleHeading("NAME"), widthName),
 			padRightANSI(styleHeading("EMAIL"), widthEmail),
@@ -179,7 +179,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 		if withStatus {
 			fiveHour := profileFiveHourDisplay(item)
 			weekly := profileWeeklyDisplay(item)
-			fmt.Printf("%s %s %s %s %s %s\n",
+			fmt.Printf("%s  %s  %s  %s  %s  %s\n",
 				padRightANSI(item.ID, widthID),
 				padRightANSI(item.Name, widthName),
 				padRightANSI(item.Email, widthEmail),
@@ -188,7 +188,7 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool) {
 				padRightANSI(weekly, widthWeekly),
 			)
 		} else {
-			fmt.Printf("%s %s %s %s\n",
+			fmt.Printf("%s  %s  %s  %s\n",
 				padRightANSI(item.ID, widthID),
 				padRightANSI(item.Name, widthName),
 				padRightANSI(item.Email, widthEmail),
