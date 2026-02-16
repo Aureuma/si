@@ -38,6 +38,7 @@ const (
 	warmWeeklyBinaryPath          = warmWeeklyBinaryDir + "/si"
 	warmWeeklyReconcileScriptName = "warmup-reconcile.sh"
 	warmWeeklyReconcileScriptPath = warmWeeklyBinaryDir + "/" + warmWeeklyReconcileScriptName
+	warmWeeklyFullRetryInterval   = 5 * time.Minute
 	warmWeeklyMinUsageDelta       = 0.05
 	warmWeeklyResetJitterMinutes  = 2
 	warmWeeklyAutostartMarkerName = "autostart.v1"
@@ -261,7 +262,8 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 			state.Profiles[profile.ID] = entry
 		}
 		nextDue := parseWarmWeeklyTime(entry.NextDue)
-		if !opts.ForceBootstrap && !selectedProfilesOnly && !nextDue.IsZero() && nextDue.After(now) {
+		forceRunForFullWeekly := entry.LastWeeklyUsedOK && entry.LastWeeklyUsedPct <= 0
+		if !opts.ForceBootstrap && !selectedProfilesOnly && !forceRunForFullWeekly && !nextDue.IsZero() && nextDue.After(now) {
 			summary.Skipped++
 			appendWarmWeeklyLog("debug", "skip_not_due", profile.ID, map[string]interface{}{"next_due": entry.NextDue, "trigger": opts.Trigger})
 			continue
@@ -291,8 +293,6 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 
 func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warmWeeklyProfileState, opts warmWeeklyReconcileOptions, execOpts weeklyWarmExecOptions) string {
 	prevReset := parseWarmWeeklyTime(entry.LastWeeklyReset)
-	prevWarmedReset := parseWarmWeeklyTime(entry.LastWarmedReset)
-	prevResult := strings.TrimSpace(strings.ToLower(entry.LastResult))
 
 	entry.ProfileID = profile.ID
 	entry.LastAttempt = now.UTC().Format(time.RFC3339)
@@ -323,19 +323,21 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	}
 
 	usedBefore, usedKnown := weeklyUsedPercent(payloadBefore)
+	fullBefore := usedKnown && usedBefore <= 0
 	resetAt, windowSeconds, resetKnown := weeklyResetTime(payloadBefore, now)
-	if resetKnown {
+	if resetKnown && !fullBefore {
 		resetAt = normalizeResetTime(resetAt, windowSeconds, now)
 		entry.LastWeeklyReset = resetAt.UTC().Format(time.RFC3339)
 	} else {
+		resetAt = time.Time{}
+		resetKnown = false
 		entry.LastWeeklyReset = ""
 	}
 	entry.LastWeeklyUsedPct = usedBefore
 	entry.LastWeeklyUsedOK = usedKnown
 
 	windowAdvanced := warmWeeklyResetWindowAdvanced(prevReset, resetAt, resetKnown)
-	warmedThisWindow := warmWeeklySameReset(prevWarmedReset, resetAt, resetKnown)
-	needsWarm := warmWeeklyNeedsWarmAttempt(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown, windowAdvanced, prevResult, warmedThisWindow)
+	needsWarm := warmWeeklyNeedsWarmAttempt(opts.ForceBootstrap, usedBefore, usedKnown, resetKnown, windowAdvanced)
 	if !needsWarm {
 		entry.Paused = false
 		entry.LastResult = "ready"
@@ -406,9 +408,12 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	entry.LastUsageDelta = delta
 	entry.LastWeeklyUsedPct = usedAfter
 	entry.LastWeeklyUsedOK = usedAfterKnown
-	if resetAfterKnown {
+	fullAfter := usedAfterKnown && usedAfter <= 0
+	if resetAfterKnown && !fullAfter {
 		entry.LastWeeklyReset = resetAtAfter.UTC().Format(time.RFC3339)
 	} else {
+		resetAtAfter = time.Time{}
+		resetAfterKnown = false
 		entry.LastWeeklyReset = ""
 	}
 
@@ -428,9 +433,17 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	}
 
 	if lastErr == nil {
-		lastErr = fmt.Errorf("warm did not consume enough usage (before=%.3f after=%.3f delta=%.3f)", usedBefore, usedAfter, delta)
+		if fullBefore {
+			lastErr = fmt.Errorf("weekly remained at 100%% after warm attempts (used_before=%.3f used_after=%.3f); ignoring rolling reset until usage drops", usedBefore, usedAfter)
+		} else {
+			lastErr = fmt.Errorf("warm did not consume enough usage (before=%.3f after=%.3f delta=%.3f)", usedBefore, usedAfter, delta)
+		}
 	}
-	setWarmWeeklyFailure(entry, now, lastErr)
+	if fullBefore {
+		setWarmWeeklyFullLimitFailure(entry, now, lastErr)
+	} else {
+		setWarmWeeklyFailure(entry, now, lastErr)
+	}
 	appendWarmWeeklyLog("warn", "profile_warm_failed", profile.ID, map[string]interface{}{"weekly_used_before": usedBefore, "weekly_used_after": usedAfter, "delta": delta, "error": lastErr.Error()})
 	return "failed"
 }
@@ -477,25 +490,34 @@ func warmWeeklyPromptForAttempt(base string, attempt int) string {
 	}
 }
 
-func warmWeeklyNeedsWarmAttempt(force bool, usedBefore float64, usedKnown bool, resetKnown bool, windowAdvanced bool, prevResult string, warmedThisWindow bool) bool {
+func warmWeeklyNeedsWarmAttempt(force bool, usedBefore float64, usedKnown bool, resetKnown bool, windowAdvanced bool) bool {
 	if force {
 		return true
 	}
-	if !usedKnown || !resetKnown {
+	if !usedKnown {
+		return true
+	}
+	// 100% weekly remaining must be actively warmed; do not trust reset metadata yet.
+	if usedBefore <= 0 {
+		return true
+	}
+	if !resetKnown {
 		return true
 	}
 	if windowAdvanced {
 		return true
 	}
-	// Retry within the same window if our previous warm attempt failed.
-	if strings.EqualFold(strings.TrimSpace(prevResult), "failed") {
-		return true
-	}
-	// Fresh weekly windows (100% left / 0% used) should still be warmed once.
-	return usedBefore <= 0 && !warmedThisWindow
+	return false
 }
 
 func warmWeeklyBootstrapSucceeded(force bool, windowAdvanced bool, before float64, beforeUsedOK bool, beforeResetOK bool, after float64, afterUsedOK bool, afterResetOK bool) bool {
+	fullBefore := beforeUsedOK && before <= 0
+	if fullBefore {
+		// While weekly remains at 100%, OpenAI reset timestamps can roll and are not
+		// stable; only trust the window once usage actually drops below 100%.
+		return afterUsedOK && after > 0 && afterResetOK
+	}
+
 	// Primary goal: make the weekly window "real" (reset/time metadata becomes available),
 	// which starts/advances the timer even if percent deltas are too small to observe.
 	if !beforeResetOK {
@@ -514,12 +536,6 @@ func warmWeeklyBootstrapSucceeded(force bool, windowAdvanced bool, before float6
 		return true
 	}
 	if beforeResetOK && !beforeUsedOK && afterUsedOK {
-		return true
-	}
-	if beforeResetOK && beforeUsedOK && before <= 0 && afterResetOK && afterUsedOK {
-		// Some accounts expose coarse weekly percentages (0.00/1.00 steps), so
-		// a real warm execution may keep both reads at 0.00%. Treat this as
-		// success when reset/usage signals are stable.
 		return true
 	}
 	if afterUsedOK && beforeUsedOK && after-before >= warmWeeklyMinUsageDelta {
@@ -574,6 +590,19 @@ func setWarmWeeklyFailure(entry *warmWeeklyProfileState, now time.Time, err erro
 	}
 	entry.FailureCount++
 	entry.NextDue = now.Add(warmWeeklyBackoffDuration(entry.FailureCount)).UTC().Format(time.RFC3339)
+}
+
+func setWarmWeeklyFullLimitFailure(entry *warmWeeklyProfileState, now time.Time, err error) {
+	if entry == nil {
+		return
+	}
+	entry.Paused = false
+	entry.LastResult = "failed"
+	if err != nil {
+		entry.LastError = err.Error()
+	}
+	entry.FailureCount++
+	entry.NextDue = now.Add(warmWeeklyFullRetryInterval).UTC().Format(time.RFC3339)
 }
 
 func weeklyUsedPercent(payload usagePayload) (float64, bool) {
