@@ -79,3 +79,24 @@ func TestBuildContainerCoreMountsIncludesVaultEnvFileMount(t *testing.T) {
 		t.Fatalf("unexpected vault mount: %+v", mounts[1])
 	}
 }
+
+func TestBuildContainerCoreMountsIncludesDevelopmentMirrorMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	workspace := filepath.Join(home, "Development", "si")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	mounts := BuildContainerCoreMounts(ContainerCoreMountPlan{
+		WorkspaceHost:          workspace,
+		WorkspacePrimaryTarget: "/workspace",
+		WorkspaceMirrorTarget:  "/home/si/Development/si",
+		ContainerHome:          "/home/si",
+	})
+	if len(mounts) != 3 {
+		t.Fatalf("expected 3 mounts, got %d: %+v", len(mounts), mounts)
+	}
+	if mounts[2].Source != filepath.Join(home, "Development") || mounts[2].Target != "/home/si/Development" {
+		t.Fatalf("unexpected development mount: %+v", mounts[2])
+	}
+}

@@ -279,3 +279,38 @@ func TestCodexContainerWorkspaceMatchesRequiresVaultEnvFileMount(t *testing.T) {
 		t.Fatalf("expected match when vault env file mount is present")
 	}
 }
+
+func TestCodexContainerWorkspaceMatchesRequiresDevelopmentMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	desiredHost := filepath.Join(home, "Development", "si")
+	mirror := "/home/si/Development/si"
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			WorkingDir: mirror,
+			Env: []string{
+				"SI_WORKSPACE_MIRROR=" + mirror,
+				"SI_WORKSPACE_HOST=" + desiredHost,
+			},
+		},
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: desiredHost, Destination: "/workspace"},
+			{Type: "bind", Source: desiredHost, Destination: mirror},
+			{Type: "bind", Source: filepath.Join(home, ".si"), Destination: "/home/si/.si"},
+		},
+	}
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
+		t.Fatalf("expected match to fail when ~/Development mount is missing")
+	}
+	info.Mounts = append(info.Mounts, types.MountPoint{
+		Type:        "bind",
+		Source:      filepath.Join(home, "Development"),
+		Destination: "/home/si/Development",
+	})
+	if !codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
+		t.Fatalf("expected match when ~/Development mount is present")
+	}
+}

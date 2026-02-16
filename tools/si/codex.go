@@ -286,11 +286,18 @@ func cmdCodexSpawn(args []string) {
 		*flags.workspaceHost = abs
 	}
 
-	// Always mount the host workspace at /workspace (stable) and also mirror it at the same absolute path
-	// as the host (e.g. /home/shawn/Development/si). Default the container working dir to the mirrored path
-	// so `si run` and `si run --tmux` land in the expected directory.
+	// Always mount the host workspace at /workspace (stable) and mirror it under
+	// the container home when possible (for example /home/si/Development/si).
+	// Default the container working dir to the mirrored path so `si run` and
+	// `si run --tmux` land in the expected directory.
 	workspaceTargetPrimary := "/workspace"
-	workspaceTargetMirror := filepath.ToSlash(strings.TrimSpace(*flags.workspaceHost))
+	workspaceTargetMirror := ""
+	if target, ok := shared.InferWorkspaceTarget(*flags.workspaceHost, "/home/si"); ok {
+		workspaceTargetMirror = target
+	}
+	if workspaceTargetMirror == "" {
+		workspaceTargetMirror = filepath.ToSlash(strings.TrimSpace(*flags.workspaceHost))
+	}
 	if workspaceTargetMirror == "" || !strings.HasPrefix(workspaceTargetMirror, "/") {
 		workspaceTargetMirror = workspaceTargetPrimary
 	}
@@ -1368,7 +1375,9 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 	if info == nil {
 		return false
 	}
-	if !shared.HasHostSiMount(info, "/home/si") || !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
+	if !shared.HasHostSiMount(info, "/home/si") ||
+		!shared.HasDevelopmentMount(info, desiredHost, "/home/si") ||
+		!shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
 		return false
 	}
 	desiredHost = filepath.Clean(strings.TrimSpace(desiredHost))
