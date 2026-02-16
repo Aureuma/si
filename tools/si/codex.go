@@ -1594,7 +1594,7 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 	defaultKey = strings.TrimSpace(defaultKey)
 
 	fmt.Println(styleHeading("Available codex profiles:"))
-	printCodexProfilesTable(items, false)
+	printCodexProfilesTable(items, false, true)
 
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Println(styleDim("re-run with: si " + action + " <profile>"))
