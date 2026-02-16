@@ -277,24 +277,26 @@ func cmdWorkOSContextList(args []string) {
 		infof("no workos accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("API KEY ENV"), 34),
-		padRightANSI(styleHeading("CLIENT ID ENV"), 28),
-		padRightANSI(styleHeading("ORG ID"), 24),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("API KEY ENV"),
+		styleHeading("CLIENT ID ENV"),
+		styleHeading("ORG ID"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["api_key_env"]), 34),
-			padRightANSI(orDash(row["client_id_env"]), 28),
-			padRightANSI(orDash(row["org_id"]), 24),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["api_key_env"]),
+			orDash(row["client_id_env"]),
+			orDash(row["org_id"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdWorkOSContextCurrent(args []string) {

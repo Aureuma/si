@@ -575,24 +575,26 @@ func cmdGithubContextList(args []string) {
 		infof("no github accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("AUTH"), 7),
-		padRightANSI(styleHeading("OWNER"), 20),
-		padRightANSI(styleHeading("BASE URL"), 32),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("AUTH"),
+		styleHeading("OWNER"),
+		styleHeading("BASE URL"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(row["alias"], 18),
-			padRightANSI(row["default"], 8),
-			padRightANSI(orDash(row["auth_mode"]), 7),
-			padRightANSI(orDash(row["owner"]), 20),
-			padRightANSI(orDash(row["api_base_url"]), 32),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			row["alias"],
+			row["default"],
+			orDash(row["auth_mode"]),
+			orDash(row["owner"]),
+			orDash(row["api_base_url"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdGithubContextCurrent(args []string) {
