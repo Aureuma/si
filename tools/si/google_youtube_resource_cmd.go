@@ -2659,14 +2659,21 @@ func printGoogleYouTubeUsageReport(report map[string]any) {
 		}
 		sort.Strings(keys)
 		fmt.Printf("%s\n", styleHeading("Status buckets:"))
+		rows := make([][]string, 0, len(keys))
 		for _, key := range keys {
-			fmt.Printf("  %s %d\n", padRightANSI(key, 4), buckets[key])
+			rows = append(rows, []string{key, fmt.Sprintf("%d", buckets[key])})
 		}
+		printAlignedRows(rows, 2, "  ")
 	}
 	if top, ok := report["top_endpoints"].([]map[string]any); ok && len(top) > 0 {
 		fmt.Printf("%s\n", styleHeading("Top endpoints:"))
+		rows := make([][]string, 0, len(top))
 		for _, item := range top {
-			fmt.Printf("  %s %s\n", padRightANSI(stringifyGoogleYouTubeAny(item["count"]), 4), stringifyGoogleYouTubeAny(item["endpoint"]))
+			rows = append(rows, []string{
+				stringifyGoogleYouTubeAny(item["count"]),
+				stringifyGoogleYouTubeAny(item["endpoint"]),
+			})
 		}
+		printAlignedRows(rows, 2, "  ")
 	}
 }

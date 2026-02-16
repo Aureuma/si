@@ -195,13 +195,15 @@ func buildSyncPlanWithClients(account string, liveKey string, sandboxKey string,
 func printSyncPlan(plan stripebridge.SyncPlan) {
 	fmt.Printf("%s %s\n", styleHeading("Sync plan generated:"), formatDateWithGitHubRelativeNow(plan.GeneratedAt))
 	fmt.Printf("%s %d actions\n", styleHeading("Total actions:"), len(plan.Actions))
+	rows := make([][]string, 0, len(plan.Actions))
 	for _, action := range plan.Actions {
-		fmt.Printf("  %s %-8s live=%s sandbox=%s %s\n",
-			padRightANSI(string(action.Family), 16),
+		rows = append(rows, []string{
+			string(action.Family),
 			string(action.Action),
-			orDash(action.LiveID),
-			orDash(action.SandboxID),
+			"live=" + orDash(action.LiveID),
+			"sandbox=" + orDash(action.SandboxID),
 			orDash(action.Reason),
-		)
+		})
 	}
+	printAlignedRows(rows, 2, "  ")
 }

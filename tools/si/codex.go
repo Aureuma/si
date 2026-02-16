@@ -933,32 +933,25 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 		return containers[i].Names[0] < containers[j].Names[0]
 	})
 
-	nameWidth := 0
 	items := make([]codexContainerItem, 0, len(containers))
 	for _, c := range containers {
 		name := strings.TrimPrefix(c.Names[0], "/")
-		if len(name) > nameWidth {
-			nameWidth = len(name)
-		}
 		items = append(items, codexContainerItem{
 			Name:  name,
 			State: c.State,
 			Image: codexImageDisplay(c.Image),
 		})
 	}
-	if nameWidth < 10 {
-		nameWidth = 10
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{item.Name, styleStatus(item.State), item.Image})
 	}
+	rendered := renderAlignedRows(rows, 2)
 
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Println(styleHeading("Available codex containers:"))
-		for i, item := range items {
-			fmt.Printf("  %2d) %s %s %s\n",
-				i+1,
-				padRightANSI(item.Name, nameWidth),
-				padRightANSI(styleStatus(item.State), 10),
-				item.Image,
-			)
+		for i, line := range rendered {
+			fmt.Printf("  %2d) %s\n", i+1, line)
 		}
 		hint := "re-run with: si " + action
 		if nameHint {
@@ -969,13 +962,8 @@ func selectCodexContainer(action string, nameHint bool) (string, bool) {
 	}
 
 	fmt.Println(styleHeading("Available codex containers:"))
-	for i, item := range items {
-		fmt.Printf("  %2d) %s %s %s\n",
-			i+1,
-			padRightANSI(item.Name, nameWidth),
-			padRightANSI(styleStatus(item.State), 10),
-			item.Image,
-		)
+	for i, line := range rendered {
+		fmt.Printf("  %2d) %s\n", i+1, line)
 	}
 
 	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] (Enter/Esc to cancel):", len(items))))

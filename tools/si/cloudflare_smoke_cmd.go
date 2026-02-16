@@ -111,6 +111,7 @@ func cmdCloudflareSmoke(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatCloudflareContext(runtime))
 	fmt.Printf("%s pass=%d fail=%d skip=%d\n", styleHeading("Summary:"), passCount, failCount, skipCount)
 
+	rows := make([][]string, 0, len(results))
 	for _, result := range results {
 		status := styleSuccess("PASS")
 		if result.Skipped {
@@ -126,13 +127,9 @@ func cmdCloudflareSmoke(args []string) {
 		if result.StatusCode > 0 {
 			codeText = fmt.Sprintf("%d", result.StatusCode)
 		}
-		fmt.Printf("  %s %s %s %s\n",
-			padRightANSI(status, 5),
-			padRightANSI(result.Name, 17),
-			padRightANSI(codeText, 4),
-			detail,
-		)
+		rows = append(rows, []string{status, result.Name, codeText, detail})
 	}
+	printAlignedRows(rows, 2, "  ")
 
 	if !allOK && !*noFail {
 		os.Exit(1)

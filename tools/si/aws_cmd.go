@@ -452,13 +452,15 @@ func cmdAWSDoctor(args []string) {
 		fmt.Printf("%s %s\n", styleHeading("AWS doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatAWSContext(runtime))
+	rows := make([][]string, 0, len(checks))
 	for _, check := range checks {
 		icon := styleSuccess("OK")
 		if !check.OK {
 			icon = styleError("ERR")
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(check.Name, 14), strings.TrimSpace(check.Detail))
+		rows = append(rows, []string{icon, check.Name, strings.TrimSpace(check.Detail)})
 	}
+	printAlignedRows(rows, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}

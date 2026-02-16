@@ -60,6 +60,38 @@ func printKeyValueTable(rows [][2]string) {
 	}
 }
 
+func renderAlignedRows(rows [][]string, gutter int) []string {
+	if len(rows) == 0 {
+		return nil
+	}
+	if gutter < 1 {
+		gutter = 1
+	}
+	widths := make([]int, 0, len(rows[0]))
+	for _, row := range rows {
+		if len(row) > len(widths) {
+			widths = append(widths, make([]int, len(row)-len(widths))...)
+		}
+		for i, cell := range row {
+			if w := displayWidth(cell); w > widths[i] {
+				widths[i] = w
+			}
+		}
+	}
+	sep := strings.Repeat(" ", gutter)
+	out := make([]string, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, renderAlignedTableRow(row, widths, sep))
+	}
+	return out
+}
+
+func printAlignedRows(rows [][]string, gutter int, prefix string) {
+	for _, line := range renderAlignedRows(rows, gutter) {
+		fmt.Printf("%s%s\n", prefix, line)
+	}
+}
+
 func renderAlignedTableRow(row []string, widths []int, sep string) string {
 	cells := make([]string, len(widths))
 	for i, width := range widths {

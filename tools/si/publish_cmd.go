@@ -705,12 +705,14 @@ func cmdPublishHackerNewsTop(args []string) {
 		printJSON(payload)
 		return
 	}
+	rows := make([][]string, 0, len(items))
 	for _, item := range items {
 		id := formatAny(item["id"])
 		title := formatAny(item["title"])
 		href := formatAny(item["url"])
-		fmt.Printf("%s %s %s\n", padRightANSI(id, 8), padRightANSI(title, 64), href)
+		rows = append(rows, []string{id, title, href})
 	}
+	printAlignedRows(rows, 2, "")
 }
 
 func cmdPublishHackerNewsItem(args []string) {

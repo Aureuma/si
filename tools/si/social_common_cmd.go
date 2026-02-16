@@ -361,13 +361,15 @@ func cmdSocialPlatformDoctor(platform socialPlatform, args []string) {
 		fmt.Printf("%s %s\n", styleHeading(strings.Title(socialPlatformLabel(platform))+" doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatSocialContext(runtime))
+	rows := make([][]string, 0, len(checks))
 	for _, item := range checks {
 		icon := styleSuccess("OK")
 		if !item.OK {
 			icon = styleError("ERR")
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(item.Name, 16), strings.TrimSpace(item.Detail))
+		rows = append(rows, []string{icon, item.Name, strings.TrimSpace(item.Detail)})
 	}
+	printAlignedRows(rows, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}
@@ -617,14 +619,16 @@ func cmdSocialReportErrors(platform socialPlatform, events []map[string]any, lim
 	}
 	fmt.Printf("%s %s\n", styleHeading("Social error report:"), socialPlatformLabel(platform))
 	fmt.Printf("%s %d\n", styleHeading("Rows:"), len(rows))
+	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
-		fmt.Printf("  %s %s %s %s\n",
-			padRightANSI(orDash(stringifySocialAny(row["ts"])), 32),
-			padRightANSI(orDash(stringifySocialAny(row["method"])), 8),
-			padRightANSI(orDash(stringifySocialAny(row["path"])), 36),
+		tableRows = append(tableRows, []string{
+			orDash(stringifySocialAny(row["ts"])),
+			orDash(stringifySocialAny(row["method"])),
+			orDash(stringifySocialAny(row["path"])),
 			orDash(stringifySocialAny(row["error"])),
-		)
+		})
 	}
+	printAlignedRows(tableRows, 2, "  ")
 }
 
 func socialEventInRange(event map[string]any, since *time.Time, until *time.Time) bool {

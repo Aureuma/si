@@ -453,13 +453,15 @@ func cmdGCPDoctor(args []string) {
 		fmt.Printf("%s %s\n", styleHeading("GCP doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatGCPContext(runtime))
+	rows := make([][]string, 0, len(checks))
 	for _, check := range checks {
 		icon := styleSuccess("OK")
 		if !check.OK {
 			icon = styleError("ERR")
 		}
-		fmt.Printf("  %s %s %s\n", padRightANSI(icon, 4), padRightANSI(check.Name, 14), strings.TrimSpace(check.Detail))
+		rows = append(rows, []string{icon, check.Name, strings.TrimSpace(check.Detail)})
 	}
+	printAlignedRows(rows, 2, "  ")
 	if !ok {
 		os.Exit(1)
 	}
@@ -1154,10 +1156,15 @@ func printGCPResponse(resp gcpResponse, jsonOut bool, raw bool) {
 		if limit > 20 {
 			limit = 20
 		}
+		rows := make([][]string, 0, limit)
 		for i := 0; i < limit; i++ {
 			item := resp.List[i]
-			fmt.Printf("  %s %s\n", padRightANSI(orDash(stringifyWorkOSAny(item["name"])), 48), orDash(stringifyWorkOSAny(item["state"])))
+			rows = append(rows, []string{
+				orDash(stringifyWorkOSAny(item["name"])),
+				orDash(stringifyWorkOSAny(item["state"])),
+			})
 		}
+		printAlignedRows(rows, 2, "  ")
 		if len(resp.List) > limit {
 			fmt.Printf("  %s\n", styleDim(fmt.Sprintf("... %d more", len(resp.List)-limit)))
 		}

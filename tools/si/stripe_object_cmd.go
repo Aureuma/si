@@ -81,11 +81,13 @@ func cmdStripeObjectList(args []string) {
 		return
 	}
 	fmt.Printf("%s %s (%d)\n", styleHeading("Object list:"), spec.Name, len(items))
+	rows := make([][]string, 0, len(items))
 	for _, item := range items {
 		id, _ := item["id"].(string)
 		name := inferStripeObjectName(item)
-		fmt.Printf("  %s %s\n", padRightANSI(orDash(id), 24), orDash(name))
+		rows = append(rows, []string{orDash(id), orDash(name)})
 	}
+	printAlignedRows(rows, 2, "  ")
 }
 
 func cmdStripeObjectGet(args []string) {
