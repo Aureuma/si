@@ -183,15 +183,11 @@ func printGoogleYouTubeKeyValueMap(data map[string]any) {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	maxWidth := 0
+	rows := make([][2]string, 0, len(keys))
 	for _, key := range keys {
-		if len(key) > maxWidth {
-			maxWidth = len(key)
-		}
+		rows = append(rows, [2]string{styleHeading(key + ":"), stringifyGoogleYouTubeAny(data[key])})
 	}
-	for _, key := range keys {
-		fmt.Printf("%s %s\n", padRightANSI(styleHeading(key+":"), maxWidth+1), stringifyGoogleYouTubeAny(data[key]))
-	}
+	printKeyValueTable(rows)
 }
 
 func previewGoogleYouTubeSecret(secret string) string {

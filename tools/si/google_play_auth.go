@@ -816,26 +816,28 @@ func cmdGooglePlayContextList(args []string) {
 		infof("no google play accounts configured in settings")
 		return
 	}
-	fmt.Printf("%s %s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("PROJECT"), 24),
-		padRightANSI(styleHeading("DEV ACCOUNT"), 16),
-		padRightANSI(styleHeading("PACKAGE"), 24),
-		padRightANSI(styleHeading("LANG"), 8),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("PROJECT"),
+		styleHeading("DEV ACCOUNT"),
+		styleHeading("PACKAGE"),
+		styleHeading("LANG"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["project"]), 24),
-			padRightANSI(orDash(row["developer_account"]), 16),
-			padRightANSI(orDash(row["default_package"]), 24),
-			padRightANSI(orDash(row["default_language"]), 8),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["project"]),
+			orDash(row["developer_account"]),
+			orDash(row["default_package"]),
+			orDash(row["default_language"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdGooglePlayContextCurrent(args []string) {

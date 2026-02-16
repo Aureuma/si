@@ -192,22 +192,24 @@ func cmdGooglePlacesSessionList(args []string) {
 		infof("no google places sessions tracked")
 		return
 	}
-	fmt.Printf("%s %s %s %s\n",
-		padRightANSI(styleHeading("TOKEN"), 40),
-		padRightANSI(styleHeading("STATUS"), 8),
-		padRightANSI(styleHeading("ACCOUNT"), 12),
+	headers := []string{
+		styleHeading("TOKEN"),
+		styleHeading("STATUS"),
+		styleHeading("ACCOUNT"),
 		styleHeading("CREATED"),
-	)
+	}
+	tableRows := make([][]string, 0, len(rows))
 	for _, item := range rows {
 		status := "active"
 		if strings.TrimSpace(item.EndedAt) != "" {
 			status = "ended"
 		}
-		fmt.Printf("%s %s %s %s\n",
-			padRightANSI(item.Token, 40),
-			padRightANSI(status, 8),
-			padRightANSI(orDash(item.AccountAlias), 12),
+		tableRows = append(tableRows, []string{
+			item.Token,
+			status,
+			orDash(item.AccountAlias),
 			formatISODateWithGitHubRelativeNow(item.CreatedAt),
-		)
+		})
 	}
+	printAlignedTable(headers, tableRows, 2)
 }

@@ -157,22 +157,24 @@ func cmdSocialPlatformContextList(platform socialPlatform, args []string) {
 		return
 	}
 	sort.Slice(rows, func(i, j int) bool { return rows[i]["alias"] < rows[j]["alias"] })
-	fmt.Printf("%s %s %s %s %s\n",
-		padRightANSI(styleHeading("ALIAS"), 18),
-		padRightANSI(styleHeading("DEFAULT"), 8),
-		padRightANSI(styleHeading("TOKEN ENV"), 34),
-		padRightANSI(styleHeading("DEFAULT ID"), 28),
+	headers := []string{
+		styleHeading("ALIAS"),
+		styleHeading("DEFAULT"),
+		styleHeading("TOKEN ENV"),
+		styleHeading("DEFAULT ID"),
 		styleHeading("NAME"),
-	)
-	for _, row := range rows {
-		fmt.Printf("%s %s %s %s %s\n",
-			padRightANSI(orDash(row["alias"]), 18),
-			padRightANSI(orDash(row["default"]), 8),
-			padRightANSI(orDash(row["token_env"]), 34),
-			padRightANSI(orDash(row["default_id"]), 28),
-			orDash(row["name"]),
-		)
 	}
+	tableRows := make([][]string, 0, len(rows))
+	for _, row := range rows {
+		tableRows = append(tableRows, []string{
+			orDash(row["alias"]),
+			orDash(row["default"]),
+			orDash(row["token_env"]),
+			orDash(row["default_id"]),
+			orDash(row["name"]),
+		})
+	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func cmdSocialPlatformContextCurrent(platform socialPlatform, args []string) {

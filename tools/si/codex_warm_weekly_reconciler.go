@@ -692,45 +692,15 @@ func printWarmWeeklyState(state warmWeeklyState) {
 		infof("warmup state is empty")
 		return
 	}
-	widthProfile := displayWidth("PROFILE")
-	widthResult := displayWidth("RESULT")
-	widthUsed := displayWidth("USED")
-	widthDelta := displayWidth("DELTA")
-	widthNext := displayWidth("NEXT")
-	for _, row := range rows {
-		if w := displayWidth(row.ProfileID); w > widthProfile {
-			widthProfile = w
-		}
-		if w := displayWidth(row.LastResult); w > widthResult {
-			widthResult = w
-		}
-		used := "-"
-		if row.LastWeeklyUsedOK {
-			used = fmt.Sprintf("%.2f%%", row.LastWeeklyUsedPct)
-		}
-		if w := displayWidth(used); w > widthUsed {
-			widthUsed = w
-		}
-		delta := "-"
-		if row.LastUsageDelta != 0 {
-			delta = fmt.Sprintf("%.3f", row.LastUsageDelta)
-		}
-		if w := displayWidth(delta); w > widthDelta {
-			widthDelta = w
-		}
-		next := formatISODateWithGitHubRelativeNow(row.NextDue)
-		if w := displayWidth(next); w > widthNext {
-			widthNext = w
-		}
-	}
-	fmt.Printf("%s %s %s %s %s %s\n",
-		padRightANSI(styleHeading("PROFILE"), widthProfile),
-		padRightANSI(styleHeading("RESULT"), widthResult),
-		padRightANSI(styleHeading("USED"), widthUsed),
-		padRightANSI(styleHeading("DELTA"), widthDelta),
-		padRightANSI(styleHeading("NEXT"), widthNext),
+	headers := []string{
+		styleHeading("PROFILE"),
+		styleHeading("RESULT"),
+		styleHeading("USED"),
+		styleHeading("DELTA"),
+		styleHeading("NEXT"),
 		styleHeading("ERROR"),
-	)
+	}
+	tableRows := make([][]string, 0, len(rows))
 	for _, row := range rows {
 		used := "-"
 		if row.LastWeeklyUsedOK {
@@ -746,15 +716,16 @@ func printWarmWeeklyState(state warmWeeklyState) {
 			result = "-"
 		}
 		errMsg := strings.TrimSpace(row.LastError)
-		fmt.Printf("%s %s %s %s %s %s\n",
-			padRightANSI(row.ProfileID, widthProfile),
-			padRightANSI(styleStatus(result), widthResult),
-			padRightANSI(used, widthUsed),
-			padRightANSI(delta, widthDelta),
-			padRightANSI(next, widthNext),
+		tableRows = append(tableRows, []string{
+			row.ProfileID,
+			styleStatus(result),
+			used,
+			delta,
+			next,
 			errMsg,
-		)
+		})
 	}
+	printAlignedTable(headers, tableRows, 2)
 }
 
 func appendWarmWeeklyLog(level string, event string, profileID string, extra map[string]interface{}) {
