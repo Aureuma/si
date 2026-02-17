@@ -15,6 +15,9 @@ func cmdPaasDeploy(args []string) {
 		case "prune":
 			cmdPaasDeployPrune(args[1:])
 			return
+		case "reconcile":
+			cmdPaasDeployReconcile(args[1:])
+			return
 		}
 	}
 	args, jsonOut := parsePaasJSONFlag(args)

@@ -516,6 +516,93 @@ func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
 	}
 }
 
+func TestPaasDeployReconcileDetectsDriftAndOrphans(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	vaultFile := filepath.Join(t.TempDir(), ".env")
+	trustStore := filepath.Join(t.TempDir(), "trust.json")
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	composeBody := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    environment:",
+		"      - API_TOKEN=${API_TOKEN}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault: %v", err)
+	}
+	deployRaw := captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "--app", "billing-api", "--compose-file", composePath, "--allow-untrusted-vault", "--json"})
+	})
+	deployEnv := parsePaasEnvelope(t, deployRaw)
+	currentRelease := strings.TrimSpace(deployEnv.Fields["release"])
+	if currentRelease == "" {
+		t.Fatalf("expected release identifier after deploy: %#v", deployEnv.Fields)
+	}
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	sshContent := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"printf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog),
+		"cmd=\"$*\"",
+		"if [[ \"$cmd\" == *\"ls -1\"* ]]; then",
+		"  echo " + shellSingleQuote(sanitizePaasReleasePathSegment(currentRelease)),
+		"  echo rel-old-orphan",
+		"  exit 0",
+		"fi",
+		"if [[ \"$cmd\" == *\"test -d\"* ]]; then",
+		"  echo present",
+		"  exit 0",
+		"fi",
+		"if [[ \"$cmd\" == *\"ps --status running --services\"* ]]; then",
+		"  echo simulated-unhealthy >&2",
+		"  exit 1",
+		"fi",
+		"exit 0",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshContent), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+	out := captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "reconcile", "--app", "billing-api", "--target", "edge-a", "--json"})
+	})
+	var payload struct {
+		Command string                `json:"command"`
+		Data    []paasReconcileResult `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("decode reconcile output: %v output=%q", err, out)
+	}
+	if payload.Command != "deploy reconcile" || len(payload.Data) != 1 {
+		t.Fatalf("unexpected reconcile payload: %#v", payload)
+	}
+	row := payload.Data[0]
+	if row.Status != "drifted" {
+		t.Fatalf("expected drifted status, got %#v", row)
+	}
+	if len(row.Orphaned) == 0 || row.Orphaned[0] != "rel-old-orphan" {
+		t.Fatalf("expected orphan detection, got %#v", row.Orphaned)
+	}
+}
+
 func TestPaasDeployCreatesReleaseBundleMetadata(t *testing.T) {
 	stateRoot := t.TempDir()
 	composePath := filepath.Join(t.TempDir(), "compose.yaml")
