@@ -26,7 +26,7 @@ Status legend:
 | WS-05 | Vault and secret workflows | WS-02, WS-03 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS05-01..WS05-07 completed, including scrubbed context metadata export/import (`si paas context export|import`) with secret-like payload rejection guardrails |
 | WS-06 | Logs/health/Telegram alerts + audit/event model | WS-04 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS06-01..WS06-07 complete (live logs/events, Telegram setup/test/send, severity routing policy, deploy/health alert wiring, unified audit model, callback hooks, ingress TLS observability) |
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
-| WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
+| WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS12-01 completed: incident schema, severity taxonomy, and dedupe strategy published with code primitives/tests; remaining WS12-02..10 pending |
 | WS-08 | Cloud-hosted paid edition (solo-dev simple billing model) | WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Linked ticket: `paas-monetization-solo-dev.md` (MON-01..MON-07) |
 | WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01..WS09-06 completed, including test matrix, failure drills, security checklist/threat model, incident runbook, state-isolation regressions, and compatibility regression suite |
 | WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS11-01..WS11-05 completed, including classification policy, context layout/init, `si paas doctor`, backup/restore policy, and operational context runbook |
@@ -38,7 +38,7 @@ Status legend:
 | --- | --- | --- | --- | --- |
 | Gate A: Research complete | WS-01 | Done | Codex | Primary set analyzed, evidence corpus linked, shortlist approved |
 | Gate B: Terminal MVP functional | WS-02, WS-03, WS-04, WS-05, WS-06 | Done | Codex | WS02-06 streams completed with deploy engine, secrets, observability, webhook, blue/green, add-on contract, and magic-variable/merge validation coverage |
-| Gate C: AI operations integrated | WS-07, WS-12 | Not Started | Unassigned | Requires reliable event-driven long-running agent loop |
+| Gate C: AI operations integrated | WS-07, WS-12 | In Progress | Codex | WS12-01 foundation complete; remaining WS07 + WS12 runtime/approval pipeline required |
 | Gate D: Managed cloud foundation | WS-08 | Not Started | Unassigned | |
 | Gate E: Hardening and release readiness | WS-09 | Done | Codex | WS09 hardening scope completed with QA/security/reliability artifacts and regression coverage |
 | Gate E2: State isolation hard gate | WS-11 | Done | Codex | WS11 scope complete (`WS11-01..05`); state-isolation hard gate passed for dogfood rollout readiness |
@@ -102,6 +102,7 @@ Status legend:
 | 2026-02-17 | Codex | WS-11 | Completed WS11-03 by implementing `si paas doctor` with live policy checks for repo-local state-root contamination, context vault path policy, repository private-state artifact leakage, and plaintext secret exposure across detected artifacts. Added dedicated doctor checks/unit tests and contamination/failure e2e validation. | WS11-04/05 remain pending. | Continue with WS11-04 backup/restore policy definition next. |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-04 by publishing `docs/PAAS_BACKUP_RESTORE_POLICY.md` defining mandatory backup scope, exclusions, retention, reference backup/restore procedures, and post-restore validation gates (including `si paas doctor`). Linked policy from `docs/testing.md`. | WS11-05 remains pending. | Continue with WS11-05 operational runbook for internal dogfood vs OSS demo contexts. |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-05 by publishing `docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md` with day-2 operating procedures and strict separation rules for `internal-dogfood` vs `oss-demo`, including explicit context usage, deployment/incident rules, and weekly isolation checklist. | None | Shift execution focus to WS12 event-runtime backlog (`WS12-01` onward). |
+| 2026-02-17 | Codex | WS-12 | Completed WS12-01 by defining the incident event schema/severity taxonomy/dedupe strategy in code (`tools/si/paas_incident_schema.go`) and documentation (`docs/PAAS_INCIDENT_EVENT_SCHEMA.md`), with deterministic unit coverage for normalization, dedupe, windowing, and correlation defaults. | WS12-02..10 remain pending. | Continue with WS12-02 event bridge collectors next. |
 
 ## 4. Blocker Register
 

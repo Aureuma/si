@@ -804,7 +804,7 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS12-01 | Define incident event schema, severity taxonomy, and dedupe strategy | Not Started | Unassigned | |
+| WS12-01 | Define incident event schema, severity taxonomy, and dedupe strategy | Done | Codex | Added incident schema primitives and dedupe/correlation logic in `tools/si/paas_incident_schema.go` with coverage in `tools/si/paas_incident_schema_test.go`; published `docs/PAAS_INCIDENT_EVENT_SCHEMA.md` |
 | WS12-02 | Implement event bridge collectors (deploy hooks, health polls, runtime events) | Not Started | Unassigned | |
 | WS12-03 | Implement context-scoped incident queue storage and retention policies | Not Started | Unassigned | |
 | WS12-04 | Implement `si paas agent` command family (`enable/disable/status/logs/run-once`) | Not Started | Unassigned | |
@@ -1077,12 +1077,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-11 | Completed WS11-03 by implementing `si paas doctor` policy checks for repo-state contamination and secret exposure, including state-root boundary validation, context vault policy validation, repository private-state artifact detection, and plaintext secret exposure detection with actionable failure output | WS11-04/05 remain pending | Implement WS11-04 backup/restore policy for private state roots and audit logs next |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-04 by publishing `docs/PAAS_BACKUP_RESTORE_POLICY.md` with mandatory backup scope/exclusions, retention policy, reference backup+restore procedures, and post-restore validation requirements anchored on `si paas doctor` and context/event checks | WS11-05 remains pending | Implement WS11-05 operational runbook for internal dogfood vs OSS demo contexts next |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-05 by publishing `docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md` defining operational procedures for `internal-dogfood` vs `oss-demo`, explicit context-use requirements, separation guardrails, and incident/backup coupling rules; WS11 isolation-governance stream is now complete | None | Shift to WS12-01 incident event schema/taxonomy and WS12-02 event bridge collectors |
+| 2026-02-17 | Codex | WS-12 | Completed WS12-01 by implementing a canonical incident event schema with severity/category normalization, dedupe window strategy, stable dedupe keys, and correlation ID derivation (`tools/si/paas_incident_schema.go` + tests), and by publishing the contract in `docs/PAAS_INCIDENT_EVENT_SCHEMA.md` | WS12-02..10 remain pending | Implement WS12-02 event bridge collectors next |
 
 ## 12. Immediate Next Actions
 
-1. Start WS12-01 incident event schema, severity taxonomy, and dedupe strategy.
-2. Start WS12-02 event bridge collectors (deploy hooks, health polls, runtime events).
-3. Start WS12-03 context-scoped incident queue storage and retention policies.
+1. Implement WS12-02 event bridge collectors (deploy hooks, health polls, runtime events).
+2. Implement WS12-03 context-scoped incident queue storage and retention policies.
+3. Implement WS12-04 live `si paas agent` command family backend.
 
 ## 13. Reference Links
 
