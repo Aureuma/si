@@ -722,7 +722,7 @@ Work items:
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
 | WS04-01 | Define release bundle format and metadata | Done | Codex | `si paas deploy` now materializes context-scoped release bundle directories with bundled `compose.yaml` and `release.json` metadata (release id, digest, targets, strategy, guardrail summary) |
-| WS04-02 | Implement remote upload and compose apply | Not Started | Unassigned | |
+| WS04-02 | Implement remote upload and compose apply | Done | Codex | Added `si paas deploy --apply` path with target resolution, SCP artifact upload (`compose.yaml`, `release.json`), and SSH compose pull/up execution |
 | WS04-03 | Implement health checks and rollback orchestration | Not Started | Unassigned | |
 | WS04-04 | Implement deployment logs and event recording | Not Started | Unassigned | |
 | WS04-05 | Implement runtime reconciler and drift repair planning | Not Started | Unassigned | |
@@ -1046,12 +1046,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-05 | Completed WS05-01 and WS05-02 by adding standardized vault key naming and `si paas secret` command family (`set|get|unset|list|key`) wired to context/app/target namespaces | `--json` for mutating secret operations is deferred; currently supported for `secret key` and `secret list` | Proceed with WS05-03 plaintext leakage guardrails and WS04 deploy engine work |
 | 2026-02-17 | Codex | WS-05 | Completed WS05-03 and WS05-04 by adding deploy plaintext-secret leakage detection/redaction, explicit plaintext reveal acknowledgement guardrail, and deploy/rollback vault trust+recipient preflight checks with an unsafe override escape hatch | Context-scoped vault mapping and export/no-secret guardrails (WS05-05..07) remain pending | Start WS04-01 release bundle/metadata scaffolding and WS04-11 deterministic failure taxonomy |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-01 by implementing release bundle materialization in `si paas deploy`: context-scoped bundle root, copied compose artifact, and structured `release.json` metadata with digest + guardrail snapshot | WS04-02/03 upload/apply and rollback execution are still pending | Implement WS04-02 remote upload/apply path and WS04-11 deterministic failure taxonomy next |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-02 by implementing remote upload/compose apply execution (`--apply`) with context target resolution, SCP artifact transfer, and SSH compose pull/up run sequence plus fake-transport E2E tests | WS04-03 health/rollback orchestration and WS04-11 deterministic failure taxonomy are still pending | Implement WS04-03 health/rollback orchestration and WS04-11 diagnostics contract next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS04-02 remote upload and Compose apply execution path.
+1. Implement WS04-03 health checks and rollback orchestration.
 2. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
-3. Implement WS04-03 health checks and rollback orchestration.
+3. Implement WS04-04 deployment logs and event recording contract.
 4. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
 5. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
 6. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
