@@ -67,6 +67,9 @@ var (
 	loadBuildRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdBuild(args) }
 	}
+	loadPaasRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdPaas(args) }
+	}
 	loadPersonaRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdPersona(args) }
 	}
@@ -120,6 +123,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadDockerRootHandler), "docker")
 	register(newLazyRootHandler(loadDyadRootHandler), "dyad")
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
+	register(newLazyRootHandler(loadPaasRootHandler), "paas")
 	register(newLazyRootHandler(loadPersonaRootHandler), "persona")
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
 	register(func(_ string, _ []string) { usage() }, "help", "-h", "--help")

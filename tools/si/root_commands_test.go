@@ -27,6 +27,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"docker",
 		"dyad",
 		"build",
+		"paas",
 		"persona",
 		"skill",
 		"help", "-h", "--help",
