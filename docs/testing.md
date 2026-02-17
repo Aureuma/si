@@ -27,6 +27,13 @@ To validate the `si` installer script end-to-end, run:
 
 Use `./tools/test-install-si.sh --help` for a quick usage reminder.
 
+## PaaS matrix
+For `si paas` quality-gate coverage (unit/integration/e2e regression matrix), use:
+
+```bash
+cat docs/PAAS_TEST_MATRIX.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
