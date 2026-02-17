@@ -302,7 +302,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "agent", "events"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove"})
-	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "policy", "ingress-tls"})
+	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "acknowledge", "policy", "ingress-tls"})
 	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
 	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove", "export", "import"})
@@ -1387,8 +1387,8 @@ func TestPaasAlertTestSendsTelegramMessage(t *testing.T) {
 		if got := r.Form.Get("chat_id"); got != "12345" {
 			t.Errorf("expected chat_id=12345, got %q", got)
 		}
-		if got := r.Form.Get("text"); got != "ws06-02 test alert" {
-			t.Errorf("unexpected telegram text: %q", got)
+		if got := r.Form.Get("text"); !strings.Contains(got, "ws06-02 test alert") {
+			t.Errorf("expected telegram text to include alert message, got %q", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
@@ -1556,6 +1556,50 @@ func TestEmitPaasOperationalAlertSendsTelegram(t *testing.T) {
 	last := rows[len(rows)-1]
 	if last.Status != "sent" || last.Fields["channel"] != "telegram" {
 		t.Fatalf("unexpected sent alert row: %#v", last)
+	}
+	if strings.TrimSpace(last.Fields["callback_acknowledge"]) == "" {
+		t.Fatalf("expected callback acknowledge hint in alert fields, got %#v", last.Fields)
+	}
+}
+
+func TestPaasAlertAcknowledgeRecordsHistory(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"alert", "acknowledge",
+			"--target", "edge-a",
+			"--command", "deploy failure",
+			"--note", "acked by operator",
+			"--json",
+		})
+	})
+	env := parsePaasEnvelope(t, raw)
+	if env.Command != "alert acknowledge" {
+		t.Fatalf("expected alert acknowledge envelope, got %#v", env)
+	}
+	if env.Fields["target"] != "edge-a" || env.Fields["note"] != "acked by operator" {
+		t.Fatalf("unexpected acknowledge fields: %#v", env.Fields)
+	}
+	historyRaw := captureStdout(t, func() {
+		cmdPaas([]string{"alert", "history", "--json"})
+	})
+	var payload struct {
+		Data []paasAlertEntry `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(historyRaw), &payload); err != nil {
+		t.Fatalf("decode alert history payload: %v output=%q", err, historyRaw)
+	}
+	found := false
+	for _, row := range payload.Data {
+		if row.Command == "alert acknowledge" && row.Status == "acknowledged" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected acknowledged history entry, got %#v", payload.Data)
 	}
 }
 

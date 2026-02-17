@@ -12,12 +12,14 @@ const (
 	paasAlertSetupTelegramUsageText = "usage: si paas alert setup-telegram --bot-token <token> --chat-id <id> [--dry-run] [--json]"
 	paasAlertTestUsageText          = "usage: si paas alert test [--severity <info|warning|critical>] [--message <text>] [--dry-run] [--json]"
 	paasAlertHistoryUsageText       = "usage: si paas alert history [--limit <n>] [--severity <info|warning|critical>] [--json]"
+	paasAlertAcknowledgeUsageText   = "usage: si paas alert acknowledge [--target <id>] [--command <name>] [--note <text>] [--json]"
 )
 
 var paasAlertActions = []subcommandAction{
 	{Name: "setup-telegram", Description: "configure telegram notifier"},
 	{Name: "test", Description: "send test alert"},
 	{Name: "history", Description: "show recent alerts"},
+	{Name: "acknowledge", Description: "record operator acknowledgement"},
 	{Name: "policy", Description: "manage severity routing policy"},
 	{Name: "ingress-tls", Description: "inspect Traefik/ACME retry signals and emit alerts"},
 }
@@ -43,6 +45,8 @@ func cmdPaasAlert(args []string) {
 		cmdPaasAlertTest(rest)
 	case "history":
 		cmdPaasAlertHistory(rest)
+	case "acknowledge", "ack":
+		cmdPaasAlertAcknowledge(rest)
 	case "policy":
 		cmdPaasAlertPolicy(rest)
 	case "ingress-tls":
@@ -128,6 +132,10 @@ func cmdPaasAlertTest(args []string) {
 		"channel":     routeChannel,
 		"policy_path": policyPath,
 	}
+	callbackHints := buildPaasAlertCallbackHints("alert test", "", map[string]string{}, fields["severity"])
+	for key, value := range callbackHints {
+		fields[key] = value
+	}
 	status := "dry_run"
 	if !*dryRun {
 		if routeChannel == "disabled" {
@@ -144,7 +152,9 @@ func cmdPaasAlertTest(args []string) {
 				), fields)
 			}
 			fields["config_path"] = configPath
-			if err := sendPaasTelegramMessage(cfg, fields["message"]); err != nil {
+			messageBody := formatPaasOperationalAlertMessage(fields["severity"], "alert test", "", fields["message"])
+			messageBody = appendPaasAlertCallbackHintsToMessage(messageBody, callbackHints)
+			if err := sendPaasTelegramMessage(cfg, messageBody); err != nil {
 				status = "failed"
 				if historyPath := recordPaasAlertEntry(paasAlertEntry{
 					Command:  "alert test",
@@ -179,6 +189,38 @@ func cmdPaasAlertTest(args []string) {
 	}
 	fields["status"] = status
 	printPaasScaffold("alert test", fields, jsonOut)
+}
+
+func cmdPaasAlertAcknowledge(args []string) {
+	args, jsonOut := parsePaasJSONFlag(args)
+	fs := flag.NewFlagSet("paas alert acknowledge", flag.ExitOnError)
+	target := fs.String("target", "", "target identifier")
+	command := fs.String("command", "", "related command")
+	note := fs.String("note", "acknowledged", "acknowledgement note")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage(paasAlertAcknowledgeUsageText)
+		return
+	}
+	fields := map[string]string{
+		"target":  strings.TrimSpace(*target),
+		"command": strings.TrimSpace(*command),
+		"note":    strings.TrimSpace(*note),
+	}
+	if historyPath := recordPaasAlertEntry(paasAlertEntry{
+		Command:  "alert acknowledge",
+		Severity: "info",
+		Status:   "acknowledged",
+		Target:   fields["target"],
+		Message:  fields["note"],
+		Guidance: "Operator acknowledgement recorded.",
+		Fields: map[string]string{
+			"ack_command": fields["command"],
+		},
+	}); strings.TrimSpace(historyPath) != "" {
+		fields["alert_history"] = historyPath
+	}
+	printPaasScaffold("alert acknowledge", fields, jsonOut)
 }
 
 func cmdPaasAlertHistory(args []string) {
