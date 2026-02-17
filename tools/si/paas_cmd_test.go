@@ -1259,6 +1259,147 @@ func TestPaasAlertIngressTLSRecordsRetryAlert(t *testing.T) {
 	}
 }
 
+func TestPaasLogsLiveJSONContract(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.50", "--user", "root"})
+	})
+	if err := recordPaasSuccessfulRelease("billing-api", "rel-20260217T020304"); err != nil {
+		t.Fatalf("record release history: %v", err)
+	}
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"echo 'api log line 1'",
+		"echo 'api log line 2'",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"logs",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--service", "api",
+			"--tail", "20",
+			"--since", "15m",
+			"--json",
+		})
+	})
+	var payload struct {
+		OK      bool            `json:"ok"`
+		Command string          `json:"command"`
+		Mode    string          `json:"mode"`
+		Count   int             `json:"count"`
+		Data    []paasLogResult `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("decode logs payload: %v output=%q", err, raw)
+	}
+	if !payload.OK || payload.Command != "logs" || payload.Mode != "live" {
+		t.Fatalf("unexpected logs payload envelope: %#v", payload)
+	}
+	if payload.Count != 1 || len(payload.Data) != 1 {
+		t.Fatalf("expected exactly one log row: %#v", payload)
+	}
+	row := payload.Data[0]
+	if row.Target != "edge-a" || row.Status != "ok" {
+		t.Fatalf("unexpected log row target/status: %#v", row)
+	}
+	if row.Release != "rel-20260217T020304" {
+		t.Fatalf("expected resolved release in log row, got %#v", row)
+	}
+	if !strings.Contains(row.Command, "docker") || !strings.Contains(row.Command, "compose") || !strings.Contains(row.Command, "logs") {
+		t.Fatalf("expected compose logs command in row, got %#v", row)
+	}
+	if row.LineCount != 2 || !strings.Contains(row.Output, "api log line 1") {
+		t.Fatalf("expected collected logs output, got %#v", row)
+	}
+}
+
+func TestPaasEventsListMergesDeployAndAlertSources(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	deployFields := map[string]string{
+		"app":    "billing-api",
+		"target": "edge-a",
+	}
+	if eventPath := recordPaasDeployEvent("deploy", "failed", deployFields, fmt.Errorf("deploy timeout")); strings.TrimSpace(eventPath) == "" {
+		t.Fatalf("expected deploy event to be recorded")
+	}
+	if alertPath := recordPaasAlertEntry(paasAlertEntry{
+		Command:  "alert test",
+		Severity: "warning",
+		Status:   "sent",
+		Target:   "edge-a",
+		Message:  "high restart rate",
+	}); strings.TrimSpace(alertPath) == "" {
+		t.Fatalf("expected alert event to be recorded")
+	}
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{"events", "list", "--limit", "10", "--json"})
+	})
+	var payload struct {
+		OK      bool              `json:"ok"`
+		Command string            `json:"command"`
+		Mode    string            `json:"mode"`
+		Count   int               `json:"count"`
+		Data    []paasEventRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("decode events list payload: %v output=%q", err, raw)
+	}
+	if !payload.OK || payload.Command != "events list" || payload.Mode != "live" {
+		t.Fatalf("unexpected events list payload envelope: %#v", payload)
+	}
+	if payload.Count < 2 || len(payload.Data) < 2 {
+		t.Fatalf("expected merged deploy+alert rows, got %#v", payload)
+	}
+	foundDeployFailure := false
+	foundAlert := false
+	for _, row := range payload.Data {
+		if row.Command == "deploy" && row.Status == "failed" && row.Severity == "critical" {
+			foundDeployFailure = true
+		}
+		if row.Command == "alert test" && row.Status == "sent" && row.Severity == "warning" {
+			foundAlert = true
+		}
+	}
+	if !foundDeployFailure || !foundAlert {
+		t.Fatalf("expected both deploy failure and alert rows, got %#v", payload.Data)
+	}
+
+	criticalRaw := captureStdout(t, func() {
+		cmdPaas([]string{"events", "list", "--severity", "critical", "--limit", "10", "--json"})
+	})
+	var criticalPayload struct {
+		Count int               `json:"count"`
+		Data  []paasEventRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(criticalRaw), &criticalPayload); err != nil {
+		t.Fatalf("decode critical events payload: %v output=%q", err, criticalRaw)
+	}
+	if criticalPayload.Count < 1 || len(criticalPayload.Data) < 1 {
+		t.Fatalf("expected at least one critical row, got %#v", criticalPayload)
+	}
+	for _, row := range criticalPayload.Data {
+		if row.Severity != "critical" {
+			t.Fatalf("expected critical-only rows, got %#v", criticalPayload.Data)
+		}
+	}
+}
+
 func TestPaasRegressionUpgradeDeployRollbackPath(t *testing.T) {
 	stateRoot := t.TempDir()
 	composePath := filepath.Join(t.TempDir(), "compose.yaml")
