@@ -214,6 +214,12 @@ func cmdPaasAlertHistory(args []string) {
 		if err := enc.Encode(payload); err != nil {
 			fatal(err)
 		}
+		_ = recordPaasAuditEvent("alert history", "succeeded", "live", map[string]string{
+			"count":    intString(len(rows)),
+			"limit":    intString(*limit),
+			"severity": strings.ToLower(strings.TrimSpace(*severity)),
+			"path":     path,
+		}, nil)
 		return
 	}
 	printPaasScaffold("alert history", map[string]string{

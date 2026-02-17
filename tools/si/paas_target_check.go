@@ -158,6 +158,15 @@ func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, imagePlatf
 		if err := enc.Encode(payload); err != nil {
 			fatal(err)
 		}
+		status := "succeeded"
+		if hasFailure {
+			status = "failed"
+		}
+		_ = recordPaasAuditEvent("target check", status, "live", map[string]string{
+			"count":               intString(len(results)),
+			"timeout":             timeout.String(),
+			"image_platform_arch": imagePlatformArch,
+		}, nil)
 		if hasFailure {
 			os.Exit(1)
 		}
@@ -174,6 +183,15 @@ func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, imagePlatf
 			fmt.Printf("    %s\n", styleDim(row.Error))
 		}
 	}
+	status := "succeeded"
+	if hasFailure {
+		status = "failed"
+	}
+	_ = recordPaasAuditEvent("target check", status, "live", map[string]string{
+		"count":               intString(len(results)),
+		"timeout":             timeout.String(),
+		"image_platform_arch": imagePlatformArch,
+	}, nil)
 	if hasFailure {
 		os.Exit(1)
 	}

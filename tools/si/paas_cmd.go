@@ -126,6 +126,7 @@ func printPaasScaffold(command string, fields map[string]string, jsonOut bool) {
 		if err := enc.Encode(envelope); err != nil {
 			fatal(err)
 		}
+		_ = recordPaasAuditEvent(command, "succeeded", "scaffold", fields, nil)
 		return
 	}
 	fmt.Printf("%s %s\n", styleHeading("si paas:"), command)
@@ -141,6 +142,7 @@ func printPaasScaffold(command string, fields map[string]string, jsonOut bool) {
 	for _, key := range keys {
 		fmt.Printf("  %s=%s\n", key, fields[key])
 	}
+	_ = recordPaasAuditEvent(command, "succeeded", "scaffold", fields, nil)
 }
 
 func parsePaasJSONFlag(args []string) ([]string, bool) {

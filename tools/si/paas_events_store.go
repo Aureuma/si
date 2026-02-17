@@ -36,6 +36,7 @@ func loadPaasEventRecords(limit int, severityFilter, statusFilter string) ([]paa
 	paths := []string{
 		filepath.Join(contextDir, "events", "deployments.jsonl"),
 		filepath.Join(contextDir, "events", "alerts.jsonl"),
+		filepath.Join(contextDir, "events", "audit.jsonl"),
 	}
 	rows := make([]paasEventRecord, 0, limit)
 	for _, path := range paths {
@@ -168,7 +169,7 @@ func normalizePaasEventSource(value string) string {
 	switch v {
 	case "", "si paas":
 		return "event"
-	case "alert", "deploy", "event":
+	case "alert", "deploy", "event", "audit":
 		return v
 	default:
 		if strings.Contains(v, "alert") {
@@ -176,6 +177,9 @@ func normalizePaasEventSource(value string) string {
 		}
 		if strings.Contains(v, "deploy") {
 			return "deploy"
+		}
+		if strings.Contains(v, "audit") {
+			return "audit"
 		}
 		return v
 	}

@@ -69,6 +69,13 @@ func cmdPaasAlertPolicyShow(args []string) {
 		if err := enc.Encode(payload); err != nil {
 			fatal(err)
 		}
+		_ = recordPaasAuditEvent("alert policy show", "succeeded", "live", map[string]string{
+			"path":            path,
+			"default_channel": policy.DefaultChannel,
+			"info":            policy.Severity["info"],
+			"warning":         policy.Severity["warning"],
+			"critical":        policy.Severity["critical"],
+		}, nil)
 		return
 	}
 	printPaasScaffold("alert policy show", map[string]string{

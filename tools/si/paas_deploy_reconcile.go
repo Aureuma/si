@@ -148,6 +148,18 @@ func cmdPaasDeployReconcile(args []string) {
 		if err := enc.Encode(payload); err != nil {
 			fatal(err)
 		}
+		status := "succeeded"
+		if errorCount > 0 {
+			status = "failed"
+		}
+		_ = recordPaasAuditEvent("deploy reconcile", status, "live", map[string]string{
+			"app":             strings.TrimSpace(*app),
+			"target_count":    intString(len(results)),
+			"ok_count":        intString(okCount),
+			"drift_count":     intString(driftCount),
+			"error_count":     intString(errorCount),
+			"desired_release": desiredRelease,
+		}, nil)
 		if errorCount > 0 {
 			os.Exit(1)
 		}
@@ -165,6 +177,18 @@ func cmdPaasDeployReconcile(args []string) {
 			fmt.Printf("    %s\n", styleDim(row.Error))
 		}
 	}
+	status := "succeeded"
+	if errorCount > 0 {
+		status = "failed"
+	}
+	_ = recordPaasAuditEvent("deploy reconcile", status, "live", map[string]string{
+		"app":             strings.TrimSpace(*app),
+		"target_count":    intString(len(results)),
+		"ok_count":        intString(okCount),
+		"drift_count":     intString(driftCount),
+		"error_count":     intString(errorCount),
+		"desired_release": desiredRelease,
+	}, nil)
 	if errorCount > 0 {
 		os.Exit(1)
 	}
