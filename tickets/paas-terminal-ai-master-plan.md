@@ -724,7 +724,7 @@ Work items:
 | WS04-01 | Define release bundle format and metadata | Done | Codex | `si paas deploy` now materializes context-scoped release bundle directories with bundled `compose.yaml` and `release.json` metadata (release id, digest, targets, strategy, guardrail summary) |
 | WS04-02 | Implement remote upload and compose apply | Done | Codex | Added `si paas deploy --apply` path with target resolution, SCP artifact upload (`compose.yaml`, `release.json`), and SSH compose pull/up execution |
 | WS04-03 | Implement health checks and rollback orchestration | Done | Codex | Added deploy health checks (`--health-cmd/--health-timeout`) and rollback-on-failure orchestration to previous known-good release with deploy history tracking |
-| WS04-04 | Implement deployment logs and event recording | Not Started | Unassigned | |
+| WS04-04 | Implement deployment logs and event recording | Done | Codex | Added context-scoped deployment event sink (`events/deployments.jsonl`) and success/failure event emission for deploy/rollback commands |
 | WS04-05 | Implement runtime reconciler and drift repair planning | Not Started | Unassigned | |
 | WS04-06 | Define and implement Compose-only blue/green cutover and rollback policy per node | Not Started | Unassigned | |
 | WS04-07 | Define service-pack/add-on contract (DB/cache/queue) and lifecycle operations | Not Started | Unassigned | |
@@ -1048,11 +1048,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-01 by implementing release bundle materialization in `si paas deploy`: context-scoped bundle root, copied compose artifact, and structured `release.json` metadata with digest + guardrail snapshot | WS04-02/03 upload/apply and rollback execution are still pending | Implement WS04-02 remote upload/apply path and WS04-11 deterministic failure taxonomy next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-02 by implementing remote upload/compose apply execution (`--apply`) with context target resolution, SCP artifact transfer, and SSH compose pull/up run sequence plus fake-transport E2E tests | WS04-03 health/rollback orchestration and WS04-11 deterministic failure taxonomy are still pending | Implement WS04-03 health/rollback orchestration and WS04-11 diagnostics contract next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-03 and WS04-11 by adding health-gated deploy orchestration with automatic rollback to known-good release and deterministic failure taxonomy/remediation contracts for both text and JSON paths | Deployment event recording (WS04-04) and retention/pruning lifecycle (WS04-12) remain pending | Implement WS04-04 deployment logs/events and WS04-12 retention controls next |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-04 by implementing deployment event recording to context-scoped JSONL logs with success/failure lifecycle entries for deploy and rollback operations | Retention/pruning lifecycle (WS04-12) and reconciler work (WS04-05) remain pending | Implement WS04-12 retention/pruning controls and WS04-05 reconciler planning next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS04-04 deployment logs and event recording contract.
-2. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+1. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+2. Implement WS04-05 runtime reconciler and drift repair planning.
 3. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
 4. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
 5. Implement WS05-05 context-scoped vault file resolution and namespace controls.

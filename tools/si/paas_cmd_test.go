@@ -556,6 +556,17 @@ func TestPaasDeployApplyUsesRemoteTransport(t *testing.T) {
 	if env.Fields["applied_targets"] != "edge-a" {
 		t.Fatalf("expected applied target edge-a, got %#v", env.Fields)
 	}
+	eventPath := strings.TrimSpace(env.Fields["event_log"])
+	if eventPath == "" {
+		t.Fatalf("expected event log path in deploy fields, got %#v", env.Fields)
+	}
+	eventRaw, err := os.ReadFile(eventPath)
+	if err != nil {
+		t.Fatalf("read deploy event log: %v", err)
+	}
+	if !strings.Contains(string(eventRaw), "\"command\":\"deploy\"") {
+		t.Fatalf("expected deploy command event entry, got %q", string(eventRaw))
+	}
 	sshRaw, err := os.ReadFile(sshLog)
 	if err != nil {
 		t.Fatalf("read ssh log: %v", err)
