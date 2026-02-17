@@ -2,7 +2,7 @@
 
 Date: 2026-02-17
 Owner: Codex
-Status: In Progress
+Status: Done
 Priority: Critical
 
 ## 1. Objective
@@ -127,7 +127,7 @@ Vault backup follows vault policy, not PaaS state backup tooling.
 | ISO-05 | Add secret redaction middleware for events and logs | Done | Codex | Redaction middleware applied across scaffold/failure/audit/event emission paths (`WS05-03`, `WS05-06`, `WS06-05`) |
 | ISO-06 | Add context isolation integration tests | Done | Codex | WS09-05 complete: context-boundary isolation regression suite + dedicated e2e validation |
 | ISO-07 | Add `si paas doctor` policy checks | Done | Codex | WS11-03 complete: `si paas doctor` now enforces/report checks for state-root boundary, context vault policy, repo private-state contamination, and plaintext secret exposure |
-| ISO-08 | Document dogfood runbook and backup policy | In Progress | Codex | WS11-04 backup/restore policy published in `docs/PAAS_BACKUP_RESTORE_POLICY.md`; WS11-05 operational runbook remains to complete ISO-08 |
+| ISO-08 | Document dogfood runbook and backup policy | Done | Codex | WS11-04/05 complete: published `docs/PAAS_BACKUP_RESTORE_POLICY.md` and `docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md` for backup/restore governance and context operating procedures |
 
 ## 12. Decisions and Deferred Items
 
