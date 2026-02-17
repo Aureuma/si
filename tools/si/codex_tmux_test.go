@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -174,6 +179,172 @@ func TestIsTmuxPaneDeadOutput(t *testing.T) {
 	}
 	if isTmuxPaneDeadOutput("0\n") {
 		t.Fatalf("expected pane_dead output to be false")
+	}
+}
+
+func TestCodexTmuxShouldResetSession(t *testing.T) {
+	if !codexTmuxShouldResetSession(true, false, false) {
+		t.Fatalf("expected pane dead to force reset")
+	}
+	if codexTmuxShouldResetSession(false, true, false) {
+		t.Fatalf("expected cmd hash drift to preserve live session")
+	}
+	if codexTmuxShouldResetSession(false, false, true) {
+		t.Fatalf("expected host cwd drift to preserve live session")
+	}
+	if codexTmuxShouldResetSession(false, true, true) {
+		t.Fatalf("expected metadata drift to preserve live session")
+	}
+}
+
+func TestCodexRunShouldRecreateContainerForMissingVaultMounts(t *testing.T) {
+	if codexRunShouldRecreateContainerForMissingVaultMounts(true) {
+		t.Fatalf("expected tmux mode to preserve container for session continuity")
+	}
+	if !codexRunShouldRecreateContainerForMissingVaultMounts(false) {
+		t.Fatalf("expected non-tmux mode to reconcile container mounts")
+	}
+}
+
+func TestReconcileCodexRunMountDriftTmuxPreservesSession(t *testing.T) {
+	called := false
+	err := reconcileCodexRunMountDrift(true, "si-codex-cadma", "cadma", func() error {
+		called = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if called {
+		t.Fatalf("expected tmux mode to skip recreate callback")
+	}
+}
+
+func TestReconcileCodexRunMountDriftNonTmuxRecreates(t *testing.T) {
+	called := false
+	err := reconcileCodexRunMountDrift(false, "si-codex-cadma", "cadma", func() error {
+		called = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Fatalf("expected non-tmux mode to execute recreate callback")
+	}
+}
+
+func TestReconcileCodexRunMountDriftPropagatesRecreateError(t *testing.T) {
+	expected := errors.New("boom")
+	err := reconcileCodexRunMountDrift(false, "si-codex-cadma", "cadma", func() error {
+		return expected
+	})
+	if !errors.Is(err, expected) {
+		t.Fatalf("expected recreate error propagation, got %v", err)
+	}
+}
+
+func TestEnsureCodexTmuxSessionPreservesLiveSessionOnHostCwdChange(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session := fmt.Sprintf("si-test-codex-cwd-%d", time.Now().UnixNano())
+	target := session + ":0.0"
+	defer func() {
+		_, _ = tmuxOutput(context.Background(), "kill-session", "-t", session)
+	}()
+
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-one", "/tmp/si-tmux-a"); err != nil {
+		t.Fatalf("first ensure failed: %v", err)
+	}
+	pidA, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
+	if err != nil {
+		t.Fatalf("failed to fetch pane pid: %v", err)
+	}
+
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-one", "/tmp/si-tmux-b"); err != nil {
+		t.Fatalf("second ensure failed: %v", err)
+	}
+	pidB, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
+	if err != nil {
+		t.Fatalf("failed to fetch pane pid after cwd change: %v", err)
+	}
+
+	if strings.TrimSpace(pidA) == "" || strings.TrimSpace(pidB) == "" {
+		t.Fatalf("expected non-empty pane pids, got %q and %q", pidA, pidB)
+	}
+	if strings.TrimSpace(pidA) != strings.TrimSpace(pidB) {
+		t.Fatalf("expected live tmux session to persist across cwd changes; pane pid changed from %q to %q", pidA, pidB)
+	}
+}
+
+func TestEnsureCodexTmuxSessionPreservesLiveSessionOnCmdHashChange(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session := fmt.Sprintf("si-test-codex-hash-%d", time.Now().UnixNano())
+	target := session + ":0.0"
+	defer func() {
+		_, _ = tmuxOutput(context.Background(), "kill-session", "-t", session)
+	}()
+
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-before", "/tmp/si-tmux-hash"); err != nil {
+		t.Fatalf("first ensure failed: %v", err)
+	}
+	pidA, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
+	if err != nil {
+		t.Fatalf("failed to fetch pane pid: %v", err)
+	}
+
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-after", "/tmp/si-tmux-hash"); err != nil {
+		t.Fatalf("second ensure failed: %v", err)
+	}
+	pidB, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
+	if err != nil {
+		t.Fatalf("failed to fetch pane pid after hash change: %v", err)
+	}
+
+	if strings.TrimSpace(pidA) == "" || strings.TrimSpace(pidB) == "" {
+		t.Fatalf("expected non-empty pane pids, got %q and %q", pidA, pidB)
+	}
+	if strings.TrimSpace(pidA) != strings.TrimSpace(pidB) {
+		t.Fatalf("expected live tmux session to persist across hash changes; pane pid changed from %q to %q", pidA, pidB)
+	}
+}
+
+func TestApplyTmuxSessionDefaultsSetsDestroyUnattachedOff(t *testing.T) {
+	if _, err := exec.LookPath("tmux"); err != nil {
+		t.Skip("tmux not available")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	session := fmt.Sprintf("si-test-tmux-defaults-%d", time.Now().UnixNano())
+	defer func() {
+		_, _ = tmuxOutput(context.Background(), "kill-session", "-t", session)
+	}()
+
+	if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "sleep", "120"); err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	applyTmuxSessionDefaults(ctx, session)
+
+	out, err := tmuxOutput(ctx, "show-options", "-v", "-t", session, "destroy-unattached")
+	if err != nil {
+		t.Fatalf("failed to read destroy-unattached option: %v", err)
+	}
+	if strings.TrimSpace(out) != "off" {
+		t.Fatalf("expected destroy-unattached off, got %q", out)
 	}
 }
 
