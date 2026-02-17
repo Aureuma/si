@@ -721,7 +721,7 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS04-01 | Define release bundle format and metadata | Not Started | Unassigned | |
+| WS04-01 | Define release bundle format and metadata | Done | Codex | `si paas deploy` now materializes context-scoped release bundle directories with bundled `compose.yaml` and `release.json` metadata (release id, digest, targets, strategy, guardrail summary) |
 | WS04-02 | Implement remote upload and compose apply | Not Started | Unassigned | |
 | WS04-03 | Implement health checks and rollback orchestration | Not Started | Unassigned | |
 | WS04-04 | Implement deployment logs and event recording | Not Started | Unassigned | |
@@ -748,8 +748,8 @@ Work items:
 | --- | --- | --- | --- | --- |
 | WS05-01 | Define vault key naming conventions for PaaS | Done | Codex | Implemented convention: `PAAS__CTX_<ctx>__APP_<app>__TARGET_<target>__VAR_<name>` with deterministic segment normalization |
 | WS05-02 | Implement `si paas secret` command family | Done | Codex | Added `si paas secret set|get|unset|list|key` with vault-key mapping and vault command delegation |
-| WS05-03 | Prevent plaintext leakage in logs/artifacts | Not Started | Unassigned | |
-| WS05-04 | Add vault trust/recipient guardrail checks in deploy flow | Not Started | Unassigned | |
+| WS05-03 | Prevent plaintext leakage in logs/artifacts | Done | Codex | Added deploy compose secret-literal detection with redacted diagnostics and explicit unsafe bypass, plus plaintext reveal acknowledgement guardrail for `secret get --reveal` |
+| WS05-04 | Add vault trust/recipient guardrail checks in deploy flow | Done | Codex | Added deploy/rollback vault recipient + trust fingerprint preflight checks with explicit `--allow-untrusted-vault` override |
 | WS05-05 | Implement context-scoped secret namespaces and vault file resolution | Not Started | Unassigned | |
 | WS05-06 | Enforce no-state-in-repo and no-secret-in-output guardrails | Not Started | Unassigned | |
 | WS05-07 | Implement scrubbed export/import path for non-secret metadata only | Not Started | Unassigned | |
@@ -1044,16 +1044,18 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-03 | Completed WS03-06 by adding architecture compatibility preflights (`uname -m` normalization and `--image-platform` arch matching) to live target checks | Traefik ingress baseline (WS03-05) still pending | Implement WS03-05 Traefik baseline next, then advance WS-04 deploy engine |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-05 by adding Traefik ingress baseline rendering (`docker-compose.traefik.yaml`, static/dynamic config, README) plus per-target DNS/LB metadata persistence | None | Start WS-04 deploy engine and WS-05 secret workflows in parallel |
 | 2026-02-17 | Codex | WS-05 | Completed WS05-01 and WS05-02 by adding standardized vault key naming and `si paas secret` command family (`set|get|unset|list|key`) wired to context/app/target namespaces | `--json` for mutating secret operations is deferred; currently supported for `secret key` and `secret list` | Proceed with WS05-03 plaintext leakage guardrails and WS04 deploy engine work |
+| 2026-02-17 | Codex | WS-05 | Completed WS05-03 and WS05-04 by adding deploy plaintext-secret leakage detection/redaction, explicit plaintext reveal acknowledgement guardrail, and deploy/rollback vault trust+recipient preflight checks with an unsafe override escape hatch | Context-scoped vault mapping and export/no-secret guardrails (WS05-05..07) remain pending | Start WS04-01 release bundle/metadata scaffolding and WS04-11 deterministic failure taxonomy |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-01 by implementing release bundle materialization in `si paas deploy`: context-scoped bundle root, copied compose artifact, and structured `release.json` metadata with digest + guardrail snapshot | WS04-02/03 upload/apply and rollback execution are still pending | Implement WS04-02 remote upload/apply path and WS04-11 deterministic failure taxonomy next |
 
 ## 12. Immediate Next Actions
 
-1. Start WS-04 deploy engine scaffolding (`release bundle`, upload/apply, and health/rollback path).
-2. Implement WS05-03 plaintext leakage guardrails across logs/artifacts for secret and deploy paths.
-3. Implement WS05-04 vault trust/recipient guardrails in deploy flow.
-4. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
-5. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
-6. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
-7. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+1. Implement WS04-02 remote upload and Compose apply execution path.
+2. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
+3. Implement WS04-03 health checks and rollback orchestration.
+4. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
+5. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+6. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+7. Implement WS05-05 context-scoped vault file resolution and namespace controls.
 8. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
 9. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 

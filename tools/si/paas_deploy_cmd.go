@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,7 +19,11 @@ func cmdPaasDeploy(args []string) {
 	continueOnError := fs.Bool("continue-on-error", false, "continue deployment on target errors")
 	release := fs.String("release", "", "release identifier")
 	composeFile := fs.String("compose-file", "compose.yaml", "compose file path")
+	bundleRoot := fs.String("bundle-root", "", "release bundle root path (defaults to context-scoped state root)")
 	waitTimeout := fs.String("wait-timeout", "5m", "deployment wait timeout")
+	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
+	allowPlaintextSecrets := fs.Bool("allow-plaintext-secrets", false, "allow plaintext secret assignments in compose file (unsafe)")
+	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "allow deploy with untrusted vault fingerprint (unsafe)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasDeployUsageText)
@@ -36,16 +41,53 @@ func cmdPaasDeploy(args []string) {
 		printUsage(paasDeployUsageText)
 		return
 	}
-	printPaasScaffold("deploy", map[string]string{
-		"app":               strings.TrimSpace(*app),
-		"compose_file":      strings.TrimSpace(*composeFile),
-		"continue_on_error": boolString(*continueOnError),
-		"max_parallel":      intString(*maxParallel),
-		"release":           strings.TrimSpace(*release),
-		"strategy":          resolvedStrategy,
-		"targets":           formatTargets(resolvedTargets),
-		"wait_timeout":      strings.TrimSpace(*waitTimeout),
-	}, jsonOut)
+	composeGuardrail, err := enforcePaasPlaintextSecretGuardrail(strings.TrimSpace(*composeFile), *allowPlaintextSecrets)
+	if err != nil {
+		fatal(err)
+	}
+	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
+	if err != nil {
+		fatal(err)
+	}
+	bundleDir, bundleMetaPath, err := ensurePaasReleaseBundle(
+		strings.TrimSpace(*app),
+		strings.TrimSpace(*release),
+		strings.TrimSpace(*composeFile),
+		strings.TrimSpace(*bundleRoot),
+		resolvedStrategy,
+		resolvedTargets,
+		map[string]string{
+			"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
+			"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
+			"vault_file":               vaultGuardrail.File,
+			"vault_recipients":         intString(vaultGuardrail.RecipientCount),
+			"vault_trust":              boolString(vaultGuardrail.Trusted),
+		},
+	)
+	if err != nil {
+		fatal(err)
+	}
+	fields := map[string]string{
+		"app":                      strings.TrimSpace(*app),
+		"bundle_dir":               bundleDir,
+		"bundle_metadata":          bundleMetaPath,
+		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
+		"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
+		"compose_file":             strings.TrimSpace(*composeFile),
+		"continue_on_error":        boolString(*continueOnError),
+		"max_parallel":             intString(*maxParallel),
+		"release":                  filepath.Base(bundleDir),
+		"strategy":                 resolvedStrategy,
+		"targets":                  formatTargets(resolvedTargets),
+		"vault_file":               vaultGuardrail.File,
+		"vault_recipients":         intString(vaultGuardrail.RecipientCount),
+		"vault_trust":              boolString(vaultGuardrail.Trusted),
+		"wait_timeout":             strings.TrimSpace(*waitTimeout),
+	}
+	if !vaultGuardrail.Trusted {
+		fields["vault_trust_warning"] = vaultGuardrail.TrustWarning
+	}
+	printPaasScaffold("deploy", fields, jsonOut)
 }
 
 func cmdPaasRollback(args []string) {
@@ -59,6 +101,8 @@ func cmdPaasRollback(args []string) {
 	maxParallel := fs.Int("max-parallel", 1, "maximum parallel target operations")
 	continueOnError := fs.Bool("continue-on-error", false, "continue rollback on target errors")
 	waitTimeout := fs.String("wait-timeout", "5m", "rollback wait timeout")
+	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
+	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "allow rollback with untrusted vault fingerprint (unsafe)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasRollbackUsageText)
@@ -76,15 +120,26 @@ func cmdPaasRollback(args []string) {
 		printUsage(paasRollbackUsageText)
 		return
 	}
-	printPaasScaffold("rollback", map[string]string{
+	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
+	if err != nil {
+		fatal(err)
+	}
+	fields := map[string]string{
 		"app":               strings.TrimSpace(*app),
 		"continue_on_error": boolString(*continueOnError),
 		"max_parallel":      intString(*maxParallel),
 		"strategy":          resolvedStrategy,
 		"targets":           formatTargets(resolvedTargets),
 		"to_release":        strings.TrimSpace(*toRelease),
+		"vault_file":        vaultGuardrail.File,
+		"vault_recipients":  intString(vaultGuardrail.RecipientCount),
+		"vault_trust":       boolString(vaultGuardrail.Trusted),
 		"wait_timeout":      strings.TrimSpace(*waitTimeout),
-	}, jsonOut)
+	}
+	if !vaultGuardrail.Trusted {
+		fields["vault_trust_warning"] = vaultGuardrail.TrustWarning
+	}
+	printPaasScaffold("rollback", fields, jsonOut)
 }
 
 func cmdPaasLogs(args []string) {
