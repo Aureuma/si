@@ -10,6 +10,13 @@ import (
 )
 
 func cmdPaasDeploy(args []string) {
+	if len(args) > 0 {
+		switch strings.ToLower(strings.TrimSpace(args[0])) {
+		case "prune":
+			cmdPaasDeployPrune(args[1:])
+			return
+		}
+	}
 	args, jsonOut := parsePaasJSONFlag(args)
 	fs := flag.NewFlagSet("paas deploy", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
