@@ -20,7 +20,11 @@ type paasAppDeployHistory struct {
 }
 
 func resolvePaasDeployHistoryPath() (string, error) {
-	contextDir, err := resolvePaasContextDir(currentPaasContext())
+	return resolvePaasDeployHistoryPathForContext(currentPaasContext())
+}
+
+func resolvePaasDeployHistoryPathForContext(contextName string) (string, error) {
+	contextDir, err := resolvePaasContextDir(contextName)
 	if err != nil {
 		return "", err
 	}
@@ -28,7 +32,11 @@ func resolvePaasDeployHistoryPath() (string, error) {
 }
 
 func loadPaasDeployHistoryStore() (paasDeployHistoryStore, error) {
-	path, err := resolvePaasDeployHistoryPath()
+	return loadPaasDeployHistoryStoreForContext(currentPaasContext())
+}
+
+func loadPaasDeployHistoryStoreForContext(contextName string) (paasDeployHistoryStore, error) {
+	path, err := resolvePaasDeployHistoryPathForContext(contextName)
 	if err != nil {
 		return paasDeployHistoryStore{}, err
 	}
@@ -50,7 +58,11 @@ func loadPaasDeployHistoryStore() (paasDeployHistoryStore, error) {
 }
 
 func savePaasDeployHistoryStore(store paasDeployHistoryStore) error {
-	path, err := resolvePaasDeployHistoryPath()
+	return savePaasDeployHistoryStoreForContext(currentPaasContext(), store)
+}
+
+func savePaasDeployHistoryStoreForContext(contextName string, store paasDeployHistoryStore) error {
+	path, err := resolvePaasDeployHistoryPathForContext(contextName)
 	if err != nil {
 		return err
 	}
