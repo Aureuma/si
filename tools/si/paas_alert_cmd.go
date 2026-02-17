@@ -12,11 +12,22 @@ const (
 	paasAlertHistoryUsageText       = "usage: si paas alert history [--limit <n>] [--json]"
 )
 
+var paasAlertActions = []subcommandAction{
+	{Name: "setup-telegram", Description: "configure telegram notifier"},
+	{Name: "test", Description: "send test alert"},
+	{Name: "history", Description: "show recent alerts"},
+}
+
 func cmdPaasAlert(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasAlertAction)
+	if showUsage {
 		printUsage(paasAlertUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -33,6 +44,10 @@ func cmdPaasAlert(args []string) {
 		printUsage(paasAlertUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasAlertAction() (string, bool) {
+	return selectSubcommandAction("PaaS alert commands:", paasAlertActions)
 }
 
 func cmdPaasAlertSetupTelegram(args []string) {
