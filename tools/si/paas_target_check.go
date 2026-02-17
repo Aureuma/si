@@ -19,6 +19,7 @@ type paasTargetCheckResult struct {
 	User           string `json:"user"`
 	Host           string `json:"host"`
 	Port           int    `json:"port"`
+	CPUArch        string `json:"cpu_arch,omitempty"`
 	Reachable      bool   `json:"reachable"`
 	SSHOK          bool   `json:"ssh_ok"`
 	DockerOK       bool   `json:"docker_ok"`
@@ -30,7 +31,7 @@ type paasTargetCheckResult struct {
 	ComposeVersion string `json:"compose_version,omitempty"`
 }
 
-func runPaasTargetCheck(target paasTarget, timeout time.Duration) paasTargetCheckResult {
+func runPaasTargetCheck(target paasTarget, timeout time.Duration, imagePlatformArch string) paasTargetCheckResult {
 	started := time.Now()
 	result := paasTargetCheckResult{
 		Target: target.Name,
@@ -55,6 +56,19 @@ func runPaasTargetCheck(target paasTarget, timeout time.Duration) paasTargetChec
 		return result
 	}
 	result.SSHOK = true
+
+	if out, err := runPaasSSHCommand(ctx, target, "uname -m"); err != nil {
+		result.Error = "architecture check failed: " + err.Error()
+		result.DurationMs = time.Since(started).Milliseconds()
+		return result
+	} else {
+		result.CPUArch = normalizeCPUArch(out)
+	}
+	if imagePlatformArch != "" && result.CPUArch != "" && result.CPUArch != imagePlatformArch {
+		result.Error = fmt.Sprintf("architecture mismatch: target %s is not compatible with requested image platform arch %s", result.CPUArch, imagePlatformArch)
+		result.DurationMs = time.Since(started).Milliseconds()
+		return result
+	}
 
 	if out, err := runPaasSSHCommand(ctx, target, "docker version --format '{{.Server.Version}}'"); err != nil {
 		result.Error = "docker check failed: " + err.Error()
@@ -120,7 +134,7 @@ func runPaasSSHCommand(ctx context.Context, target paasTarget, remoteCmd string)
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, results []paasTargetCheckResult) {
+func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, imagePlatformArch string, results []paasTargetCheckResult) {
 	hasFailure := false
 	for _, row := range results {
 		if row.Status != "ok" {
@@ -130,13 +144,14 @@ func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, results []
 	}
 	if jsonOut {
 		payload := map[string]any{
-			"ok":      !hasFailure,
-			"command": "target check",
-			"context": currentPaasContext(),
-			"mode":    "live",
-			"timeout": timeout.String(),
-			"count":   len(results),
-			"data":    results,
+			"ok":                  !hasFailure,
+			"command":             "target check",
+			"context":             currentPaasContext(),
+			"mode":                "live",
+			"timeout":             timeout.String(),
+			"image_platform_arch": imagePlatformArch,
+			"count":               len(results),
+			"data":                results,
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -162,4 +177,28 @@ func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, results []
 	if hasFailure {
 		os.Exit(1)
 	}
+}
+
+func normalizeCPUArch(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	switch value {
+	case "x86_64", "amd64":
+		return "amd64"
+	case "aarch64", "arm64":
+		return "arm64"
+	default:
+		return value
+	}
+}
+
+func normalizeImagePlatformArch(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return ""
+	}
+	parts := strings.Split(value, "/")
+	if len(parts) > 0 {
+		value = strings.TrimSpace(parts[len(parts)-1])
+	}
+	return normalizeCPUArch(value)
 }

@@ -204,6 +204,22 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas events", paasEventsActions, []string{"list"})
 }
 
+func TestNormalizeImagePlatformArch(t *testing.T) {
+	tests := map[string]string{
+		"":              "",
+		"linux/amd64":   "amd64",
+		"amd64":         "amd64",
+		"linux/aarch64": "arm64",
+		"arm64":         "arm64",
+	}
+	for input, expected := range tests {
+		got := normalizeImagePlatformArch(input)
+		if got != expected {
+			t.Fatalf("normalizeImagePlatformArch(%q) = %q, expected %q", input, got, expected)
+		}
+	}
+}
+
 func parsePaasEnvelope(t *testing.T, raw string) paasTestEnvelope {
 	t.Helper()
 	var env paasTestEnvelope
