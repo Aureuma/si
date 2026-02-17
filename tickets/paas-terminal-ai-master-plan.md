@@ -772,7 +772,7 @@ Work items:
 | WS06-04 | Add deploy failure and health degradation alerts | Not Started | Unassigned | |
 | WS06-05 | Define audit/event log model for all `si paas` actions | Not Started | Unassigned | |
 | WS06-06 | Add Telegram action hooks for operator callbacks (view logs, rollback, acknowledge) | Not Started | Unassigned | |
-| WS06-07 | Add ingress/TLS (Traefik + ACME) retry observability, alerting, and operator recovery guidance | Not Started | Unassigned | Research-driven reliability requirement |
+| WS06-07 | Add ingress/TLS (Traefik + ACME) retry observability, alerting, and operator recovery guidance | Done | Codex | Added `si paas alert ingress-tls` live checks with Traefik/ACME retry/failure detection, alert history recording (`events/alerts.jsonl`), and recovery guidance output |
 
 ### WS-07 AI-First Automation (Codex Core)
 
@@ -1053,14 +1053,14 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-05 by implementing runtime reconcile/drift planning via `si paas deploy reconcile`, including desired-vs-remote release checks, runtime health validation, orphan release detection, and repair-plan output | Parallel fan-out strategy controls and webhook ingestion remain pending | Implement WS04-08 parallel deploy fan-out strategy execution next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-08 by implementing strategy-aware fan-out orchestration for deploy/rollback with canary gating, rolling/parallel batching, continue-on-error handling, and deterministic target status/fanout-plan output contracts | Webhook ingestion and add-on/blue-green tracks remain pending | Implement WS04-09 webhook ingestion with auth validation and app/branch trigger mapping next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-09 by implementing Git webhook ingestion under `si paas deploy webhook`, including signature verification (`PAAS_WEBHOOK_AUTH_FAILED`), GitHub push payload parsing, and context-scoped app/branch mapping CRUD with optional deploy dispatch | Blue/green and service-pack/add-on scopes remain pending | Implement WS06-07 TLS/ACME retry observability and WS05-05 context-scoped vault namespace controls next |
+| 2026-02-17 | Codex | WS-06 | Completed WS06-07 by implementing `si paas alert ingress-tls` for Traefik/ACME retry observability, alert emission to context-scoped history, and explicit operator recovery guidance for DNS/port/challenge failures | Remaining WS06 slices (logs/notifier/routing/policy) are still pending | Implement WS09-06 upgrade/compatibility regression coverage and WS05-05 vault namespace controls next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
-2. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
-3. Implement WS05-05 context-scoped vault file resolution and namespace controls.
-4. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
-5. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
+1. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+2. Implement WS05-05 context-scoped vault file resolution and namespace controls.
+3. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+4. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 
