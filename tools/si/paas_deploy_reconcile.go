@@ -90,6 +90,44 @@ func cmdPaasDeployReconcile(args []string) {
 			driftCount++
 		}
 	}
+	for _, row := range results {
+		emitAlert := false
+		severity := "warning"
+		switch row.Status {
+		case "error":
+			emitAlert = true
+			severity = "critical"
+		case "drifted":
+			emitAlert = true
+		default:
+			if !row.RuntimeHealthy && row.RemotePresent {
+				emitAlert = true
+			}
+		}
+		if !emitAlert {
+			continue
+		}
+		message := strings.TrimSpace(row.Error)
+		if message == "" {
+			message = "health degradation detected during reconcile"
+		}
+		guidance := ""
+		if len(row.Plan) > 0 {
+			guidance = row.Plan[0]
+		}
+		_ = emitPaasOperationalAlert(
+			"deploy reconcile",
+			severity,
+			row.Target,
+			message,
+			guidance,
+			map[string]string{
+				"app":             strings.TrimSpace(*app),
+				"status":          row.Status,
+				"desired_release": row.DesiredRelease,
+			},
+		)
+	}
 
 	if jsonOut {
 		payload := map[string]any{

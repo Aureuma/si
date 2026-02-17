@@ -434,11 +434,47 @@ func cmdPaasRollback(args []string) {
 }
 
 func failPaasDeploy(jsonOut bool, err error, fields map[string]string) {
+	failure := asPaasOperationFailure(err)
+	alertFields := copyPaasFields(fields)
+	alertFields = appendPaasAlertDispatchField(alertFields, "error_code", failure.Code)
+	alertFields = appendPaasAlertDispatchField(alertFields, "error_stage", failure.Stage)
+	alertFields = appendPaasAlertDispatchField(alertFields, "error_target", failure.Target)
+	if historyPath := emitPaasOperationalAlert(
+		"deploy failure",
+		"critical",
+		failure.Target,
+		errString(failure.Err),
+		failure.Remediation,
+		alertFields,
+	); strings.TrimSpace(historyPath) != "" {
+		if fields == nil {
+			fields = map[string]string{}
+		}
+		fields["alert_history"] = historyPath
+	}
 	_ = recordPaasDeployEvent("deploy", "failed", fields, err)
 	failPaasCommand("deploy", jsonOut, err, fields)
 }
 
 func failPaasRollback(jsonOut bool, err error, fields map[string]string) {
+	failure := asPaasOperationFailure(err)
+	alertFields := copyPaasFields(fields)
+	alertFields = appendPaasAlertDispatchField(alertFields, "error_code", failure.Code)
+	alertFields = appendPaasAlertDispatchField(alertFields, "error_stage", failure.Stage)
+	alertFields = appendPaasAlertDispatchField(alertFields, "error_target", failure.Target)
+	if historyPath := emitPaasOperationalAlert(
+		"rollback failure",
+		"critical",
+		failure.Target,
+		errString(failure.Err),
+		failure.Remediation,
+		alertFields,
+	); strings.TrimSpace(historyPath) != "" {
+		if fields == nil {
+			fields = map[string]string{}
+		}
+		fields["alert_history"] = historyPath
+	}
 	_ = recordPaasDeployEvent("rollback", "failed", fields, err)
 	failPaasCommand("rollback", jsonOut, err, fields)
 }
