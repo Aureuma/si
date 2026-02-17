@@ -727,7 +727,7 @@ Work items:
 | WS04-04 | Implement deployment logs and event recording | Done | Codex | Added context-scoped deployment event sink (`events/deployments.jsonl`) and success/failure event emission for deploy/rollback commands |
 | WS04-05 | Implement runtime reconciler and drift repair planning | Done | Codex | Added `si paas deploy reconcile` with per-target drift detection (`ok|drifted|missing|orphaned|unmanaged`), health verification, and repair plan hints |
 | WS04-06 | Define and implement Compose-only blue/green cutover and rollback policy per node | Done | Codex | Added `si paas deploy bluegreen` with per-target slot policy store (`bluegreen.json`), compose-project cutover flow, post-cutover health gate, and automatic rollback-to-previous-slot policy on failure |
-| WS04-07 | Define service-pack/add-on contract (DB/cache/queue) and lifecycle operations | Not Started | Unassigned | |
+| WS04-07 | Define service-pack/add-on contract (DB/cache/queue) and lifecycle operations | Done | Codex | Added `si paas app addon` contract/lifecycle commands (`contract|enable|list|disable`) with persisted add-on catalog state (`addons.json`) and rendered compose fragment artifacts for `postgres|redis|nats` packs |
 | WS04-08 | Implement parallel deploy fan-out engine and strategy flags (`serial`, `rolling`, `canary`, `parallel`) | Done | Codex | Added strategy-aware fan-out execution for deploy/rollback (`serial`, `rolling`, `canary`, `parallel`) with deterministic per-target status summaries and batch-plan output |
 | WS04-09 | Implement Git webhook ingestion with auth validation and app/branch trigger mapping | Done | Codex | Added `si paas deploy webhook` ingestion flow with HMAC auth validation, context-scoped repo/branch mapping store (`map add|list|remove`), and mapped deploy trigger command generation/dispatch |
 | WS04-10 | Implement magic-variable resolution and add-on compose-fragment merge validation | Not Started | Unassigned | |
@@ -1065,12 +1065,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-06 | Completed WS06-05 by defining a unified audit/event model (`events/audit.jsonl`) for `si paas` actions, wiring central scaffold/failure/live command audit emission, and extending `si paas events list` ingestion to include audit records alongside deploy/alert streams | WS06-06 Telegram callback hooks remain pending | Implement WS06-06 operator callback hooks for log/rollback/ack actions |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-06 by adding Telegram/operator callback hook surfaces: callback command hints embedded in alert records/messages (`view_logs`, `rollback`, `acknowledge`) and new `si paas alert acknowledge` command for explicit operator acknowledgement workflow capture | WS06 stream is now complete; remaining Gate B backlog is WS04 architecture gaps | Continue WS04-06/07/10 implementation sequence and remaining WS09 hardening slices |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-06 by implementing compose-only blue/green rollout orchestration under `si paas deploy bluegreen`, including per-target active-slot policy persistence, deterministic cutover command templating, post-cutover health validation, and rollback-to-previous-slot execution when cutover validation fails | WS04-07 service-pack/add-on contract and WS04-10 magic-variable/merge validation remain pending | Implement WS04-07 add-on lifecycle operations next, then WS04-10 magic-variable/merge validation |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-07 by defining add-on/service-pack contract coverage for `postgres|redis|nats` (`db|cache|queue`) and implementing lifecycle operations via `si paas app addon contract|enable|list|disable`, including persisted context-scoped add-on state and generated compose fragment artifacts with explicit merge strategy metadata | WS04-10 magic-variable resolution and add-on merge validation remains pending before WS09 hardening backlog | Implement WS04-10 magic-variable resolution and add-on compose-fragment merge validation next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS04-07 service-pack/add-on contract and lifecycle operations.
-2. Implement WS04-10 magic-variable resolution and add-on compose-fragment merge validation.
-3. Continue WS09 hardening backlog (`WS09-01/02/03/04/05`) after WS04 architecture slices.
+1. Implement WS04-10 magic-variable resolution and add-on compose-fragment merge validation.
+2. Continue WS09 hardening backlog (`WS09-01/02/03/04/05`) after WS04 architecture slices.
 
 ## 13. Reference Links
 
