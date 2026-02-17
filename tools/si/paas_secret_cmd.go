@@ -20,11 +20,11 @@ var paasSecretActions = []subcommandAction{
 }
 
 const (
-	paasSecretSetUsageText   = "usage: si paas secret set --app <slug> [--target <id>] --name <key> --value <text> [--file <path>] [--json]"
-	paasSecretGetUsageText   = "usage: si paas secret get --app <slug> [--target <id>] --name <key> [--reveal --allow-plaintext] [--file <path>] [--json]"
-	paasSecretUnsetUsageText = "usage: si paas secret unset --app <slug> [--target <id>] --name <key> [--file <path>] [--json]"
-	paasSecretListUsageText  = "usage: si paas secret list --app <slug> [--target <id>] [--file <path>] [--json]"
-	paasSecretKeyUsageText   = "usage: si paas secret key --app <slug> [--target <id>] --name <key> [--json]"
+	paasSecretSetUsageText   = "usage: si paas secret set --app <slug> [--target <id>] [--namespace <name>] --name <key> --value <text> [--file <path>] [--json]"
+	paasSecretGetUsageText   = "usage: si paas secret get --app <slug> [--target <id>] [--namespace <name>] --name <key> [--reveal --allow-plaintext] [--file <path>] [--json]"
+	paasSecretUnsetUsageText = "usage: si paas secret unset --app <slug> [--target <id>] [--namespace <name>] --name <key> [--file <path>] [--json]"
+	paasSecretListUsageText  = "usage: si paas secret list --app <slug> [--target <id>] [--namespace <name>] [--file <path>] [--json]"
+	paasSecretKeyUsageText   = "usage: si paas secret key --app <slug> [--target <id>] [--namespace <name>] --name <key> [--json]"
 )
 
 func cmdPaasSecret(args []string) {
@@ -67,6 +67,7 @@ func cmdPaasSecretSet(args []string) {
 	fs := flag.NewFlagSet("paas secret set", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id (default current)")
+	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	name := fs.String("name", "", "logical secret key name")
 	value := fs.String("value", "", "plaintext value (will be encrypted)")
 	fileFlag := fs.String("file", "", "explicit vault file")
@@ -81,13 +82,14 @@ func cmdPaasSecretSet(args []string) {
 	if jsonOut {
 		fatal(fmt.Errorf("--json is not supported for secret set; use `si paas secret key --json` for machine-readable key mapping"))
 	}
-	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, *name)
+	resolvedNamespace := resolvePaasSecretNamespace(*namespace)
+	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, resolvedNamespace, *name)
 	vaultArgs := []string{vaultKey, *value}
-	if strings.TrimSpace(*fileFlag) != "" {
-		vaultArgs = append(vaultArgs, "--file", strings.TrimSpace(*fileFlag))
+	if resolvedVaultFile := resolvePaasContextVaultFile(*fileFlag); strings.TrimSpace(resolvedVaultFile) != "" {
+		vaultArgs = append(vaultArgs, "--file", strings.TrimSpace(resolvedVaultFile))
 	}
 	cmdVaultSet(vaultArgs)
-	fmt.Printf("paas secret set: app=%s target=%s key=%s vault_key=%s\n", strings.TrimSpace(*app), resolvedTarget, strings.TrimSpace(*name), vaultKey)
+	fmt.Printf("paas secret set: app=%s target=%s namespace=%s key=%s vault_key=%s\n", strings.TrimSpace(*app), resolvedTarget, resolvedNamespace, strings.TrimSpace(*name), vaultKey)
 }
 
 func cmdPaasSecretGet(args []string) {
@@ -95,6 +97,7 @@ func cmdPaasSecretGet(args []string) {
 	fs := flag.NewFlagSet("paas secret get", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id (default current)")
+	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	name := fs.String("name", "", "logical secret key name")
 	reveal := fs.Bool("reveal", false, "reveal decrypted value")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "required with --reveal to acknowledge plaintext output risk")
@@ -113,13 +116,14 @@ func cmdPaasSecretGet(args []string) {
 	if jsonOut {
 		fatal(fmt.Errorf("--json is not supported for secret get"))
 	}
-	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, *name)
+	resolvedNamespace := resolvePaasSecretNamespace(*namespace)
+	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, resolvedNamespace, *name)
 	vaultArgs := []string{vaultKey}
 	if *reveal {
 		vaultArgs = append(vaultArgs, "--reveal")
 	}
-	if strings.TrimSpace(*fileFlag) != "" {
-		vaultArgs = append(vaultArgs, "--file", strings.TrimSpace(*fileFlag))
+	if resolvedVaultFile := resolvePaasContextVaultFile(*fileFlag); strings.TrimSpace(resolvedVaultFile) != "" {
+		vaultArgs = append(vaultArgs, "--file", strings.TrimSpace(resolvedVaultFile))
 	}
 	cmdVaultGet(vaultArgs)
 	_ = resolvedTarget
@@ -130,6 +134,7 @@ func cmdPaasSecretUnset(args []string) {
 	fs := flag.NewFlagSet("paas secret unset", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id (default current)")
+	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	name := fs.String("name", "", "logical secret key name")
 	fileFlag := fs.String("file", "", "explicit vault file")
 	_ = fs.Parse(args)
@@ -143,10 +148,11 @@ func cmdPaasSecretUnset(args []string) {
 	if jsonOut {
 		fatal(fmt.Errorf("--json is not supported for secret unset"))
 	}
-	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, *name)
+	resolvedNamespace := resolvePaasSecretNamespace(*namespace)
+	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, resolvedNamespace, *name)
 	vaultArgs := []string{vaultKey}
-	if strings.TrimSpace(*fileFlag) != "" {
-		vaultArgs = append(vaultArgs, "--file", strings.TrimSpace(*fileFlag))
+	if resolvedVaultFile := resolvePaasContextVaultFile(*fileFlag); strings.TrimSpace(resolvedVaultFile) != "" {
+		vaultArgs = append(vaultArgs, "--file", strings.TrimSpace(resolvedVaultFile))
 	}
 	cmdVaultUnset(vaultArgs)
 	_ = resolvedTarget
@@ -157,6 +163,7 @@ func cmdPaasSecretList(args []string) {
 	fs := flag.NewFlagSet("paas secret list", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id (default current)")
+	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	fileFlag := fs.String("file", "", "explicit vault file")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -166,11 +173,12 @@ func cmdPaasSecretList(args []string) {
 	if !requirePaasValue(*app, "app", paasSecretListUsageText) {
 		return
 	}
+	resolvedNamespace := resolvePaasSecretNamespace(*namespace)
 	resolvedTarget := resolvePaasSecretTarget(strings.TrimSpace(*target))
-	prefix := paasSecretKeyPrefix(strings.TrimSpace(*app), resolvedTarget)
+	prefix := paasSecretKeyPrefix(resolvedNamespace, strings.TrimSpace(*app), resolvedTarget)
 
 	settings := loadSettingsOrDefault()
-	targetPath, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	targetPath, err := vaultResolveTarget(settings, resolvePaasContextVaultFile(strings.TrimSpace(*fileFlag)), false)
 	if err != nil {
 		fatal(err)
 	}
@@ -195,6 +203,7 @@ func cmdPaasSecretList(args []string) {
 			"context":    currentPaasContext(),
 			"mode":       "live",
 			"app":        strings.TrimSpace(*app),
+			"namespace":  resolvedNamespace,
 			"target":     resolvedTarget,
 			"key_prefix": prefix,
 			"count":      len(matches),
@@ -207,7 +216,7 @@ func cmdPaasSecretList(args []string) {
 		}
 		return
 	}
-	fmt.Printf("paas secret list: app=%s target=%s file=%s\n", strings.TrimSpace(*app), resolvedTarget, filepath.Clean(targetPath.File))
+	fmt.Printf("paas secret list: app=%s target=%s namespace=%s file=%s\n", strings.TrimSpace(*app), resolvedTarget, resolvedNamespace, filepath.Clean(targetPath.File))
 	for _, key := range matches {
 		fmt.Printf("  %s\n", key)
 	}
@@ -218,6 +227,7 @@ func cmdPaasSecretKey(args []string) {
 	fs := flag.NewFlagSet("paas secret key", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id (default current)")
+	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	name := fs.String("name", "", "logical secret key name")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -227,25 +237,27 @@ func cmdPaasSecretKey(args []string) {
 	if !requirePaasValue(*app, "app", paasSecretKeyUsageText) || !requirePaasValue(*name, "name", paasSecretKeyUsageText) {
 		return
 	}
-	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, *name)
+	resolvedNamespace := resolvePaasSecretNamespace(*namespace)
+	vaultKey, resolvedTarget := mustPaasSecretVaultKey(*app, *target, resolvedNamespace, *name)
 	if jsonOut {
-		emitPaasSecretJSON("key", *app, resolvedTarget, *name, vaultKey, true)
+		emitPaasSecretJSON("key", *app, resolvedNamespace, resolvedTarget, *name, vaultKey, true)
 		return
 	}
 	fmt.Printf("%s\n", vaultKey)
 }
 
-func mustPaasSecretVaultKey(app string, target string, name string) (string, string) {
+func mustPaasSecretVaultKey(app string, target string, namespace string, name string) (string, string) {
 	appSlug := sanitizePaasSecretSegment(app)
 	if appSlug == "" {
 		fatal(fmt.Errorf("invalid app value %q", strings.TrimSpace(app)))
 	}
+	namespaceSlug := resolvePaasSecretNamespace(namespace)
 	resolvedTarget := resolvePaasSecretTarget(target)
 	segment := sanitizePaasSecretSegment(name)
 	if segment == "" {
 		fatal(fmt.Errorf("invalid name value %q", strings.TrimSpace(name)))
 	}
-	vaultKey := fmt.Sprintf("%sVAR_%s", paasSecretKeyPrefix(appSlug, resolvedTarget), segment)
+	vaultKey := fmt.Sprintf("%sVAR_%s", paasSecretKeyPrefix(namespaceSlug, appSlug, resolvedTarget), segment)
 	if err := vault.ValidateKeyName(vaultKey); err != nil {
 		fatal(err)
 	}
@@ -264,8 +276,29 @@ func resolvePaasSecretTarget(raw string) string {
 	return "GLOBAL"
 }
 
-func paasSecretKeyPrefix(app string, target string) string {
-	return fmt.Sprintf("PAAS__CTX_%s__APP_%s__TARGET_%s__", sanitizePaasSecretSegment(currentPaasContext()), sanitizePaasSecretSegment(app), sanitizePaasSecretSegment(target))
+func paasSecretKeyPrefix(namespace string, app string, target string) string {
+	return fmt.Sprintf("PAAS__CTX_%s__NS_%s__APP_%s__TARGET_%s__", sanitizePaasSecretSegment(currentPaasContext()), sanitizePaasSecretSegment(namespace), sanitizePaasSecretSegment(app), sanitizePaasSecretSegment(target))
+}
+
+func resolvePaasSecretNamespace(raw string) string {
+	if value := sanitizePaasSecretSegment(raw); value != "" {
+		return value
+	}
+	return "DEFAULT"
+}
+
+func resolvePaasContextVaultFile(fileFlag string) string {
+	if strings.TrimSpace(fileFlag) != "" {
+		return strings.TrimSpace(fileFlag)
+	}
+	if strings.TrimSpace(os.Getenv("SI_VAULT_FILE")) != "" {
+		return ""
+	}
+	contextDir, err := resolvePaasContextDir(currentPaasContext())
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(contextDir, "vault", "secrets.env")
 }
 
 func sanitizePaasSecretSegment(raw string) string {
@@ -294,13 +327,14 @@ func sanitizePaasSecretSegment(raw string) string {
 	return out
 }
 
-func emitPaasSecretJSON(op string, app string, target string, name string, vaultKey string, ok bool) {
+func emitPaasSecretJSON(op string, app string, namespace string, target string, name string, vaultKey string, ok bool) {
 	payload := map[string]any{
 		"ok":        ok,
 		"command":   "secret " + op,
 		"context":   currentPaasContext(),
 		"mode":      "live",
 		"app":       strings.TrimSpace(app),
+		"namespace": strings.TrimSpace(namespace),
 		"target":    target,
 		"name":      strings.TrimSpace(name),
 		"vault_key": vaultKey,

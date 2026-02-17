@@ -295,9 +295,44 @@ func TestPaasSecretKeyConvention(t *testing.T) {
 		cmdPaas([]string{"secret", "key", "--app", "billing-api", "--name", "stripe_api_key"})
 	})
 	got := strings.TrimSpace(out)
-	want := "PAAS__CTX_DEFAULT__APP_BILLING_API__TARGET_EDGE_A__VAR_STRIPE_API_KEY"
+	want := "PAAS__CTX_DEFAULT__NS_DEFAULT__APP_BILLING_API__TARGET_EDGE_A__VAR_STRIPE_API_KEY"
 	if got != want {
 		t.Fatalf("unexpected vault key convention: got=%q want=%q", got, want)
+	}
+}
+
+func TestPaasSecretKeyNamespaceSegment(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "10.0.0.7", "--user", "root"})
+	})
+	out := captureStdout(t, func() {
+		cmdPaas([]string{"secret", "key", "--app", "billing-api", "--namespace", "production", "--name", "stripe_api_key"})
+	})
+	got := strings.TrimSpace(out)
+	want := "PAAS__CTX_DEFAULT__NS_PRODUCTION__APP_BILLING_API__TARGET_EDGE_A__VAR_STRIPE_API_KEY"
+	if got != want {
+		t.Fatalf("unexpected namespaced vault key convention: got=%q want=%q", got, want)
+	}
+}
+
+func TestResolvePaasContextVaultFile(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", "")
+	got := resolvePaasContextVaultFile("")
+	want := filepath.Join(stateRoot, "contexts", "default", "vault", "secrets.env")
+	if got != want {
+		t.Fatalf("expected context-scoped default vault file: got=%q want=%q", got, want)
+	}
+	explicit := resolvePaasContextVaultFile("/tmp/custom.env")
+	if explicit != "/tmp/custom.env" {
+		t.Fatalf("expected explicit vault file to win, got=%q", explicit)
+	}
+	t.Setenv("SI_VAULT_FILE", "/tmp/global.env")
+	if resolved := resolvePaasContextVaultFile(""); resolved != "" {
+		t.Fatalf("expected env-driven vault resolution passthrough, got=%q", resolved)
 	}
 }
 
