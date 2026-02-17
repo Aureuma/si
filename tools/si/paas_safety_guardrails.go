@@ -10,7 +10,7 @@ import (
 const paasAllowRepoStateEnvKey = "SI_PAAS_ALLOW_REPO_STATE"
 
 func enforcePaasStateRootIsolationGuardrail() error {
-	if allow := strings.ToLower(strings.TrimSpace(os.Getenv(paasAllowRepoStateEnvKey))); allow == "1" || allow == "true" || allow == "yes" || allow == "on" {
+	if isTruthyFlagValue(os.Getenv(paasAllowRepoStateEnvKey)) {
 		return nil
 	}
 	stateRoot, err := resolvePaasStateRoot()
@@ -27,6 +27,15 @@ func enforcePaasStateRootIsolationGuardrail() error {
 		return nil
 	}
 	return fmt.Errorf("unsafe state root %q is inside repository %q; move SI_PAAS_STATE_ROOT outside repo or set %s=true to override (unsafe)", cleanState, cleanRepo, paasAllowRepoStateEnvKey)
+}
+
+func isTruthyFlagValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func resolveGitRepoRoot() (string, bool) {

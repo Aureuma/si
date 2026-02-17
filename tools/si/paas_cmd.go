@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|agent|events> [args...]"
+const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events> [args...]"
 
 const defaultPaasContext = "default"
 
@@ -25,6 +25,7 @@ var paasActions = []subcommandAction{
 	{Name: "secret", Description: "manage app secrets via si vault"},
 	{Name: "ai", Description: "run Codex-assisted operations"},
 	{Name: "context", Description: "manage isolated paas contexts"},
+	{Name: "doctor", Description: "run isolation and secret exposure checks"},
 	{Name: "agent", Description: "manage long-running agents"},
 	{Name: "events", Description: "query operational events"},
 }
@@ -39,17 +40,20 @@ const (
 	paasSecretUsageText   = "usage: si paas secret <set|get|unset|list|key> [args...]"
 	paasAIUsageText       = "usage: si paas ai <plan|inspect|fix> [args...]"
 	paasContextUsageText  = "usage: si paas context <create|init|list|use|show|remove|export|import> [args...]"
+	paasDoctorUsageText   = "usage: si paas doctor [--json]"
 	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
 	paasEventsUsageText   = "usage: si paas events <list> [args...]"
 )
 
 func cmdPaas(args []string) {
-	if err := enforcePaasStateRootIsolationGuardrail(); err != nil {
-		fatal(err)
-	}
 	filtered, contextName, ok := parsePaasContextFlag(args)
 	if !ok {
 		return
+	}
+	if !isPaasDoctorInvocation(filtered) {
+		if err := enforcePaasStateRootIsolationGuardrail(); err != nil {
+			fatal(err)
+		}
 	}
 	resolved, showUsage, ok := resolveSubcommandDispatchArgs(filtered, isInteractiveTerminal(), selectPaasAction)
 	if showUsage {
@@ -88,6 +92,8 @@ func cmdPaas(args []string) {
 		cmdPaasAI(rest)
 	case "context":
 		cmdPaasContext(rest)
+	case "doctor":
+		cmdPaasDoctor(rest)
 	case "agent":
 		cmdPaasAgent(rest)
 	case "events":
@@ -284,4 +290,12 @@ func parsePaasContextFlag(args []string) ([]string, string, bool) {
 		contextName = defaultPaasContext
 	}
 	return filtered, contextName, true
+}
+
+func isPaasDoctorInvocation(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	return sub == "doctor"
 }
