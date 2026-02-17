@@ -766,7 +766,7 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS06-01 | Implement `si paas logs` and `si paas events` | Not Started | Unassigned | |
+| WS06-01 | Implement `si paas logs` and `si paas events` | Done | Codex | Implemented live remote log retrieval and merged event query backends with severity/status filters and stable JSON/text contracts |
 | WS06-02 | Implement Telegram notifier setup/test/send | Not Started | Unassigned | |
 | WS06-03 | Define severity policy and alert routing | Not Started | Unassigned | |
 | WS06-04 | Add deploy failure and health degradation alerts | Not Started | Unassigned | |
@@ -1057,11 +1057,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-09 | Completed WS09-06 by adding an upgrade/compatibility regression suite across arch checks, deploy/apply, health rollback, fan-out, webhook ingestion, and ingress TLS alerting paths (unit + e2e harness) | Remaining WS09 tracks (failure drills, threat model, runbook, isolation regressions) are still pending | Implement WS05-05 context-scoped vault namespace controls next |
 | 2026-02-17 | Codex | WS-05 | Completed WS05-05 by implementing context-scoped secret namespaces and vault file resolution defaults for secret/deploy flows, including namespaced key conventions and per-context vault path fallback | WS05-06 and WS05-07 guardrail/export slices remain pending | Implement WS05-06 no-state/no-secret output guardrails and WS06-01 logs/events live model next |
 | 2026-02-17 | Codex | WS-05 | Completed WS05-06 by enforcing repo-state guardrails (`SI_PAAS_STATE_ROOT` cannot reside under repo unless explicit unsafe override) and redacting sensitive scaffold/failure output fields to reduce accidental secret exposure in terminal/JSON output | WS05-07 scrubbed export/import path remains pending | Implement WS06-01 live logs/events backend and WS05-07 metadata export/import next |
+| 2026-02-17 | Codex | WS-06 | Completed WS06-01 by replacing scaffold-only `si paas logs`/`si paas events list` with live backends: remote log retrieval over SSH (compose-aware app release resolution plus service fallback), merged context event ingestion (`deployments.jsonl` + `alerts.jsonl`), severity/status filtering, and stable live JSON/text contracts | WS06-02..06 notifier/routing/audit slices remain pending | Implement WS05-07 scrubbed metadata export/import, then continue WS06 notifier/routing tasks |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS06-01 logs/events live backends and output contracts.
-2. Implement WS05-07 scrubbed export/import path for non-secret metadata.
+1. Implement WS05-07 scrubbed export/import path for non-secret metadata.
+2. Implement WS06-02 Telegram notifier setup/test/send and routing contract slices.
 3. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
 4. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 

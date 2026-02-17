@@ -462,14 +462,30 @@ func cmdPaasLogs(args []string) {
 		printUsage(paasLogsUsageText)
 		return
 	}
-	printPaasScaffold("logs", map[string]string{
-		"app":     strings.TrimSpace(*app),
-		"follow":  boolString(*follow),
-		"service": strings.TrimSpace(*service),
-		"since":   strings.TrimSpace(*since),
-		"tail":    intString(*tail),
-		"target":  strings.TrimSpace(*target),
-	}, jsonOut)
+	resolvedSince := strings.TrimSpace(*since)
+	if resolvedSince != "" {
+		if _, err := time.ParseDuration(resolvedSince); err != nil {
+			failPaasCommand("logs", jsonOut, newPaasOperationFailure(
+				paasFailureInvalidArgument,
+				"flag_validation",
+				"",
+				"pass a valid --since duration (for example 30m or 2h)",
+				fmt.Errorf("invalid --since %q", resolvedSince),
+			), nil)
+		}
+	}
+	results, err := runPaasLogs(strings.TrimSpace(*app), strings.TrimSpace(*target), strings.TrimSpace(*service), *tail, resolvedSince, *follow)
+	if err != nil {
+		failPaasCommand("logs", jsonOut, err, map[string]string{
+			"app":     strings.TrimSpace(*app),
+			"follow":  boolString(*follow),
+			"service": strings.TrimSpace(*service),
+			"since":   resolvedSince,
+			"tail":    intString(*tail),
+			"target":  strings.TrimSpace(*target),
+		})
+	}
+	printPaasLogsResults(jsonOut, strings.TrimSpace(*app), strings.TrimSpace(*target), strings.TrimSpace(*service), resolvedSince, *tail, *follow, results)
 }
 
 func isValidDeployStrategy(value string) bool {
