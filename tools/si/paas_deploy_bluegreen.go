@@ -120,20 +120,46 @@ func cmdPaasDeployBlueGreen(args []string) {
 	if resolvedApp == "" {
 		resolvedApp = "default-app"
 	}
+	resolvedRelease := strings.TrimSpace(*release)
+	if resolvedRelease == "" {
+		resolvedRelease = generatePaasReleaseID()
+	}
 	selectedTargets := normalizeTargets(*target, *targets)
+	preparedCompose, err := preparePaasComposeForDeploy(paasComposePrepareOptions{
+		App:         resolvedApp,
+		ReleaseID:   resolvedRelease,
+		ComposeFile: strings.TrimSpace(*composeFile),
+		Strategy:    "bluegreen",
+		Targets:     selectedTargets,
+	})
+	if err != nil {
+		failPaasDeployBlueGreen(jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"compose_resolve",
+			"",
+			"fix compose magic-variable placeholders/add-on merge conflicts and retry deploy",
+			err,
+		), nil)
+	}
+	defer func() {
+		_ = os.Remove(strings.TrimSpace(preparedCompose.ResolvedComposePath))
+	}()
 	bundleDir, bundleMetaPath, err := ensurePaasReleaseBundle(
 		resolvedApp,
-		strings.TrimSpace(*release),
-		strings.TrimSpace(*composeFile),
+		resolvedRelease,
+		strings.TrimSpace(preparedCompose.ResolvedComposePath),
 		strings.TrimSpace(*bundleRoot),
 		"bluegreen",
 		selectedTargets,
 		map[string]string{
-			"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
-			"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
-			"vault_file":               vaultGuardrail.File,
-			"vault_recipients":         intString(vaultGuardrail.RecipientCount),
-			"vault_trust":              boolString(vaultGuardrail.Trusted),
+			"compose_secret_guardrail":  composeGuardrail["compose_secret_guardrail"],
+			"compose_secret_findings":   composeGuardrail["compose_secret_findings"],
+			"magic_variable_resolution": "validated",
+			"addon_merge_validation":    "validated",
+			"addon_fragments":           intString(len(preparedCompose.AddonArtifacts)),
+			"vault_file":                vaultGuardrail.File,
+			"vault_recipients":          intString(vaultGuardrail.RecipientCount),
+			"vault_trust":               boolString(vaultGuardrail.Trusted),
 		},
 	)
 	if err != nil {
@@ -142,6 +168,15 @@ func cmdPaasDeployBlueGreen(args []string) {
 			"bundle_create",
 			"",
 			"verify compose file path and state root permissions",
+			err,
+		), nil)
+	}
+	if err := materializePaasComposeBundleArtifacts(bundleDir, preparedCompose); err != nil {
+		failPaasDeployBlueGreen(jsonOut, newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_materialize",
+			"",
+			"verify bundle write permissions and rerun deploy",
 			err,
 		), nil)
 	}
@@ -292,9 +327,12 @@ func cmdPaasDeployBlueGreen(args []string) {
 		"apply_timeout":            applyTimeoutValue.String(),
 		"bundle_dir":               bundleDir,
 		"bundle_metadata":          bundleMetaPath,
+		"compose_files":            strings.Join(preparedCompose.ComposeFiles, ","),
 		"compose_file":             strings.TrimSpace(*composeFile),
 		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
 		"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
+		"magic_variable_count":     intString(len(preparedCompose.MagicVariables)),
+		"addon_fragments":          intString(len(preparedCompose.AddonArtifacts)),
 		"cutover_timeout":          cutoverTimeoutValue.String(),
 		"health_cmd":               strings.TrimSpace(*healthCmd),
 		"health_timeout":           healthTimeoutValue.String(),
@@ -349,8 +387,19 @@ func runPaasBlueGreenDeployOnTarget(opts paasBlueGreenDeployTargetOptions) paasB
 		ToSlot:   normalizePaasBlueGreenSlot(opts.ToSlot),
 	}
 	releaseDir, stateDir, stateFile, project := resolvePaasBlueGreenRemotePaths(opts.RemoteRoot, opts.App, opts.Target.Name, result.ToSlot, opts.ReleaseID)
+	composeFiles, err := readPaasComposeFilesManifest(opts.BundleDir)
+	if err != nil {
+		result.Err = newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_manifest",
+			opts.Target.Name,
+			"fix compose bundle manifest and rerun deploy",
+			err,
+		)
+		return result
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), opts.ApplyTimeout)
-	err := runPaasRemoteBlueGreenComposeApply(ctx, opts.Target, opts.BundleDir, releaseDir, project)
+	err = runPaasRemoteBlueGreenComposeApply(ctx, opts.Target, opts.BundleDir, releaseDir, project, composeFiles)
 	cancel()
 	if err != nil {
 		result.Err = err
@@ -359,7 +408,7 @@ func runPaasBlueGreenDeployOnTarget(opts paasBlueGreenDeployTargetOptions) paasB
 	result.Applied = true
 
 	ctx, cancel = context.WithTimeout(context.Background(), opts.HealthTimeout)
-	err = runPaasRemoteBlueGreenHealthCheck(ctx, opts.Target, releaseDir, opts.HealthCommand, project)
+	err = runPaasRemoteBlueGreenHealthCheck(ctx, opts.Target, releaseDir, opts.HealthCommand, project, composeFiles)
 	cancel()
 	if err != nil {
 		result.Err = err
@@ -383,7 +432,7 @@ func runPaasBlueGreenDeployOnTarget(opts paasBlueGreenDeployTargetOptions) paasB
 	result.Cutover = true
 
 	ctx, cancel = context.WithTimeout(context.Background(), opts.HealthTimeout)
-	err = runPaasRemoteBlueGreenHealthCheck(ctx, opts.Target, releaseDir, opts.HealthCommand, project)
+	err = runPaasRemoteBlueGreenHealthCheck(ctx, opts.Target, releaseDir, opts.HealthCommand, project, composeFiles)
 	cancel()
 	if err != nil {
 		rollbackProject := buildPaasBlueGreenProjectName(opts.App, opts.Target.Name, result.FromSlot)
@@ -424,7 +473,7 @@ func runPaasBlueGreenDeployOnTarget(opts paasBlueGreenDeployTargetOptions) paasB
 	return result
 }
 
-func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, localBundleDir, remoteReleaseDir, projectName string) error {
+func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, localBundleDir, remoteReleaseDir, projectName string, composeFiles []string) error {
 	if strings.TrimSpace(remoteReleaseDir) == "" {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -434,6 +483,17 @@ func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, 
 			fmt.Errorf("invalid remote release directory"),
 		)
 	}
+	bundleFiles, err := resolvePaasBundleUploadFiles(localBundleDir)
+	if err != nil {
+		return newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_discover",
+			target.Name,
+			"verify local release bundle contents and retry",
+			err,
+		)
+	}
+	composeArgs := buildPaasComposeFileArgs(composeFiles)
 	if _, err := runPaasSSHCommand(ctx, target, fmt.Sprintf("mkdir -p %s", quoteSingle(remoteReleaseDir))); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -443,11 +503,8 @@ func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, 
 			err,
 		)
 	}
-	paths := []string{
-		filepath.Join(strings.TrimSpace(localBundleDir), "compose.yaml"),
-		filepath.Join(strings.TrimSpace(localBundleDir), "release.json"),
-	}
-	for _, src := range paths {
+	for _, fileName := range bundleFiles {
+		src := filepath.Join(strings.TrimSpace(localBundleDir), fileName)
 		if err := runPaasSCPUpload(ctx, target, src, remoteReleaseDir); err != nil {
 			return newPaasOperationFailure(
 				paasFailureRemoteUpload,
@@ -458,7 +515,7 @@ func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, 
 			)
 		}
 	}
-	remoteCmd := fmt.Sprintf("cd %s && docker compose -p %s -f compose.yaml pull && docker compose -p %s -f compose.yaml up -d --remove-orphans", quoteSingle(remoteReleaseDir), quoteSingle(projectName), quoteSingle(projectName))
+	remoteCmd := fmt.Sprintf("cd %s && docker compose -p %s %s pull && docker compose -p %s %s up -d --remove-orphans", quoteSingle(remoteReleaseDir), quoteSingle(projectName), composeArgs, quoteSingle(projectName), composeArgs)
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -471,8 +528,11 @@ func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, 
 	return nil
 }
 
-func runPaasRemoteBlueGreenHealthCheck(ctx context.Context, target paasTarget, releaseDir, healthCommand, project string) error {
+func runPaasRemoteBlueGreenHealthCheck(ctx context.Context, target paasTarget, releaseDir, healthCommand, project string, composeFiles []string) error {
 	command := resolvePaasBlueGreenHealthCommand(healthCommand, project)
+	if strings.TrimSpace(healthCommand) == "" || strings.TrimSpace(healthCommand) == defaultPaasHealthCheckCommand {
+		command = fmt.Sprintf("docker compose -p %s %s ps --status running --services | grep -q .", quoteSingle(project), buildPaasComposeFileArgs(composeFiles))
+	}
 	remoteCmd := fmt.Sprintf("cd %s && %s", quoteSingle(releaseDir), command)
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
 		return newPaasOperationFailure(

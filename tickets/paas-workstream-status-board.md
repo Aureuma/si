@@ -22,7 +22,7 @@ Status legend:
 | WS-01 | Competitive research and synthesis (expanded set incl. SwiftWave/Kamal) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Evidence corpus and synthesis completed in `paas-competitive-research-board.md` |
 | WS-02 | `si paas` CLI-only MVP surface (non-TUI) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Root command, non-interactive flags, `--json`, `--context`, command tests, and optional prompt pickers completed |
 | WS-03 | Multi-VPS SSH target management + ingress baseline decision | WS-02 | Done | Codex | 2026-02-17 | 2026-02-17 | None | WS03-01..WS03-06 complete, including Traefik ingress baseline and compatibility preflight checks |
-| WS-04 | Compose deployment engine + reconciler + blue/green + service packs + webhook + fan-out | WS-02, WS-03 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS04-01/02/03/04/05/06/07/08/09/11/12 completed (bundle metadata, remote apply, health+rollback orchestration, compose-only blue/green cutover/rollback policy, add-on/service-pack contract + lifecycle ops, deterministic failure taxonomy, deploy event recording, reconciler+drift planning, retention/pruning controls, fan-out strategy execution, webhook ingestion with auth+mapping); magic-variable merge-validation slice pending |
+| WS-04 | Compose deployment engine + reconciler + blue/green + service packs + webhook + fan-out | WS-02, WS-03 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS04-01..WS04-12 completed, including compose-only blue/green policy, service-pack/add-on lifecycle contracts, and deploy-time magic-variable/add-on merge validation with compose manifest artifacts |
 | WS-05 | Vault and secret workflows | WS-02, WS-03 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS05-01..WS05-07 completed, including scrubbed context metadata export/import (`si paas context export|import`) with secret-like payload rejection guardrails |
 | WS-06 | Logs/health/Telegram alerts + audit/event model | WS-04 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS06-01..WS06-07 complete (live logs/events, Telegram setup/test/send, severity routing policy, deploy/health alert wiring, unified audit model, callback hooks, ingress TLS observability) |
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
@@ -37,7 +37,7 @@ Status legend:
 | Milestone | Required Workstreams | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
 | Gate A: Research complete | WS-01 | Done | Codex | Primary set analyzed, evidence corpus linked, shortlist approved |
-| Gate B: Terminal MVP functional | WS-02, WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | Phase B kickoff started via WS-02 |
+| Gate B: Terminal MVP functional | WS-02, WS-03, WS-04, WS-05, WS-06 | Done | Codex | WS02-06 streams completed with deploy engine, secrets, observability, webhook, blue/green, add-on contract, and magic-variable/merge validation coverage |
 | Gate C: AI operations integrated | WS-07, WS-12 | Not Started | Unassigned | Requires reliable event-driven long-running agent loop |
 | Gate D: Managed cloud foundation | WS-08 | Not Started | Unassigned | |
 | Gate E: Hardening and release readiness | WS-09 | Not Started | Unassigned | |
@@ -91,6 +91,7 @@ Status legend:
 | 2026-02-17 | Codex | WS-06 | Completed WS06-06 by adding operator callback hooks for Telegram/CLI workflows (`callback_view_logs`, `callback_rollback`, `callback_acknowledge`) and a concrete `si paas alert acknowledge` command to persist acknowledgement actions in alert history. | WS06 stream is complete. | Continue WS04 architecture gaps (WS04-06/07/10) and remaining WS09 hardening backlog. |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-06 by implementing compose-only blue/green rollout orchestration via `si paas deploy bluegreen`, including per-target active-slot policy persistence, compose project isolation per slot, post-cutover health validation, and automatic rollback-to-previous-slot when post-cutover checks fail. | WS04-07 service-pack lifecycle contract and WS04-10 magic-variable/merge validation remain pending. | Continue WS04-07 add-on contract/lifecycle operations next, then WS04-10 magic-variable and compose-fragment merge validation. |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-07 by defining service-pack/add-on contracts for `postgres|redis|nats` and implementing lifecycle operations under `si paas app addon` (`contract|enable|list|disable`) with context-scoped add-on state persistence and generated compose-fragment artifacts carrying explicit merge-strategy metadata. | WS04-10 magic-variable and compose-fragment merge validation remains pending. | Continue WS04-10 implementation next, then shift into WS09 hardening backlog. |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-10 by adding deterministic magic-variable expansion and add-on compose-fragment merge validation to deploy-time bundle preparation, plus compose manifest artifact wiring consumed by deploy/apply and blue/green apply paths. | WS04 stream is now complete. | Shift execution to WS09-01..05 hardening backlog in order. |
 
 ## 4. Blocker Register
 
