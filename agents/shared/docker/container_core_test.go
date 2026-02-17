@@ -93,10 +93,13 @@ func TestBuildContainerCoreMountsIncludesDevelopmentMirrorMount(t *testing.T) {
 		WorkspaceMirrorTarget:  "/home/si/Development/si",
 		ContainerHome:          "/home/si",
 	})
-	if len(mounts) != 3 {
-		t.Fatalf("expected 3 mounts, got %d: %+v", len(mounts), mounts)
+	if len(mounts) != 4 {
+		t.Fatalf("expected 4 mounts, got %d: %+v", len(mounts), mounts)
 	}
 	if mounts[2].Source != filepath.Join(home, "Development") || mounts[2].Target != "/home/si/Development" {
 		t.Fatalf("unexpected development mount: %+v", mounts[2])
+	}
+	if mounts[3].Source != filepath.Join(home, "Development") || mounts[3].Target != filepath.ToSlash(filepath.Join(home, "Development")) {
+		t.Fatalf("unexpected host development mount: %+v", mounts[3])
 	}
 }
