@@ -810,7 +810,7 @@ Work items:
 | WS12-04 | Implement `si paas agent` command family (`enable/disable/status/logs/run-once`) | Done | Codex | Added live agent backend (`tools/si/paas_agent_store.go`, `tools/si/paas_agent_cmd.go`) with context-scoped config persistence, run-log storage, queue sync in `run-once`, and status/log output contracts; covered by `TestPaasAgentEnableStatusRunOnceLogsDisable` and documented in `docs/PAAS_AGENT_RUNTIME_COMMANDS.md` |
 | WS12-05 | Implement dyad-style agent runtime adapter using Codex profile auth path | Done | Codex | Added Codex-profile runtime adapter (`tools/si/paas_agent_runtime_adapter.go`) with profile/auth-cache readiness planning and integrated it into `agent run-once`; adapter behavior documented in `docs/PAAS_AGENT_RUNTIME_ADAPTER.md` |
 | WS12-06 | Implement remediation policy engine (`auto-allow`, `approval-required`, `deny`) | Done | Codex | Added context-scoped remediation policy engine (`tools/si/paas_agent_policy_engine.go`) with default/override evaluation and persistence, integrated into `agent run-once` state transitions; documented in `docs/PAAS_REMEDIATION_POLICY_ENGINE.md` |
-| WS12-07 | Implement approval flow (`si paas agent approve/deny`) and Telegram callback linkage | Not Started | Unassigned | |
+| WS12-07 | Implement approval flow (`si paas agent approve/deny`) and Telegram callback linkage | Done | Codex | Implemented live `agent approve/deny` decision flow with approval store persistence, run-log status updates, and callback-linked alert emission; documented in `docs/PAAS_AGENT_APPROVAL_FLOW.md` |
 | WS12-08 | Implement scheduler/self-heal for agent workers (lock, health check, auto-recover) | Not Started | Unassigned | |
 | WS12-09 | Add offline fake-codex and deterministic smoke tests for event-to-action loop | Not Started | Unassigned | |
 | WS12-10 | Add audit artifacts per agent run and incident correlation IDs | Not Started | Unassigned | |
@@ -1083,12 +1083,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-12 | Completed WS12-04 by implementing live `si paas agent` backend operations (`enable/disable/status/logs/run-once`) with context-scoped agent store persistence, run-log event sink, and incident queue sync integration for `run-once` | WS12-05..10 remain pending | Implement WS12-05 dyad-style runtime adapter using Codex profile path next |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-05 by implementing a Codex-profile runtime adapter that resolves profile identity/auth-cache readiness and wiring runtime-plan ready/blocked states into `agent run-once` outputs and run-log persistence | WS12-06..10 remain pending | Implement WS12-06 remediation policy engine (`auto-allow`, `approval-required`, `deny`) next |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-06 by implementing remediation policy evaluation (`auto-allow`, `approval-required`, `deny`) with context policy persistence and severity-based overrides, then wiring policy action into run-once decision statuses and run-log metadata | WS12-07..10 remain pending | Implement WS12-07 approval flow and Telegram callback linkage next |
+| 2026-02-17 | Codex | WS-12 | Completed WS12-07 by implementing `si paas agent approve/deny` as live commands with run lookup, approval decision persistence, run-log state updates, and callback-linked alert emission for Telegram/operator workflows | WS12-08..10 remain pending | Implement WS12-08 scheduler/self-heal for agent workers next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS12-07 approval flow and Telegram callback linkage.
-2. Implement WS12-08 scheduler/self-heal for agent workers.
-3. Implement WS12-09 offline fake-codex deterministic smoke tests.
+1. Implement WS12-08 scheduler/self-heal for agent workers.
+2. Implement WS12-09 offline fake-codex deterministic smoke tests.
+3. Implement WS12-10 audit artifacts per agent run and incident correlation IDs.
 
 ## 13. Reference Links
 
