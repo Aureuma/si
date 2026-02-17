@@ -77,6 +77,12 @@ For incident event schema and dedupe taxonomy, use:
 cat docs/PAAS_INCIDENT_EVENT_SCHEMA.md
 ```
 
+For event bridge collector behavior and mapping rules, use:
+
+```bash
+cat docs/PAAS_EVENT_BRIDGE_COLLECTORS.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
