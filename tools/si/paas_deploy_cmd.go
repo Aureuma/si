@@ -51,7 +51,7 @@ func cmdPaasDeploy(args []string) {
 	}
 	applyTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*applyTimeout))
 	if err != nil || applyTimeoutValue <= 0 {
-		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
 			paasFailureInvalidArgument,
 			"flag_validation",
 			"",
@@ -61,7 +61,7 @@ func cmdPaasDeploy(args []string) {
 	}
 	healthTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*healthTimeout))
 	if err != nil || healthTimeoutValue <= 0 {
-		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
 			paasFailureInvalidArgument,
 			"flag_validation",
 			"",
@@ -71,7 +71,7 @@ func cmdPaasDeploy(args []string) {
 	}
 	rollbackTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*rollbackTimeout))
 	if err != nil || rollbackTimeoutValue <= 0 {
-		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
 			paasFailureInvalidArgument,
 			"flag_validation",
 			"",
@@ -81,7 +81,7 @@ func cmdPaasDeploy(args []string) {
 	}
 	composeGuardrail, err := enforcePaasPlaintextSecretGuardrail(strings.TrimSpace(*composeFile), *allowPlaintextSecrets)
 	if err != nil {
-		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
 			paasFailurePlaintextSecrets,
 			"precheck",
 			"",
@@ -91,7 +91,7 @@ func cmdPaasDeploy(args []string) {
 	}
 	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
 	if err != nil {
-		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
 			paasFailureVaultTrust,
 			"precheck",
 			"",
@@ -119,7 +119,7 @@ func cmdPaasDeploy(args []string) {
 		},
 	)
 	if err != nil {
-		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
 			paasFailureBundleCreate,
 			"bundle_create",
 			"",
@@ -165,7 +165,7 @@ func cmdPaasDeploy(args []string) {
 		RollbackApplyTimeout: rollbackTimeoutValue,
 	})
 	if err != nil {
-		failPaasCommand("deploy", jsonOut, err, map[string]string{
+		failPaasDeploy(jsonOut, err, map[string]string{
 			"release":            releaseID,
 			"bundle_dir":         bundleDir,
 			"rollback_candidate": rollbackReleaseID,
@@ -173,7 +173,7 @@ func cmdPaasDeploy(args []string) {
 	}
 	if *applyRemote && len(applyResult.AppliedTargets) > 0 {
 		if err := recordPaasSuccessfulRelease(resolvedApp, releaseID); err != nil {
-			failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			failPaasDeploy(jsonOut, newPaasOperationFailure(
 				paasFailureUnknown,
 				"state_record",
 				"",
@@ -212,6 +212,9 @@ func cmdPaasDeploy(args []string) {
 	}
 	if !vaultGuardrail.Trusted {
 		fields["vault_trust_warning"] = vaultGuardrail.TrustWarning
+	}
+	if eventPath := recordPaasDeployEvent("deploy", "succeeded", fields, nil); strings.TrimSpace(eventPath) != "" {
+		fields["event_log"] = eventPath
 	}
 	printPaasScaffold("deploy", fields, jsonOut)
 }
@@ -254,7 +257,7 @@ func cmdPaasRollback(args []string) {
 	}
 	applyTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*applyTimeout))
 	if err != nil || applyTimeoutValue <= 0 {
-		failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+		failPaasRollback(jsonOut, newPaasOperationFailure(
 			paasFailureInvalidArgument,
 			"flag_validation",
 			"",
@@ -264,7 +267,7 @@ func cmdPaasRollback(args []string) {
 	}
 	healthTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*healthTimeout))
 	if err != nil || healthTimeoutValue <= 0 {
-		failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+		failPaasRollback(jsonOut, newPaasOperationFailure(
 			paasFailureInvalidArgument,
 			"flag_validation",
 			"",
@@ -274,7 +277,7 @@ func cmdPaasRollback(args []string) {
 	}
 	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
 	if err != nil {
-		failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+		failPaasRollback(jsonOut, newPaasOperationFailure(
 			paasFailureVaultTrust,
 			"precheck",
 			"",
@@ -290,7 +293,7 @@ func cmdPaasRollback(args []string) {
 	if *applyRemote && resolvedRelease == "" {
 		resolvedRelease, err = resolvePaasPreviousRelease(resolvedApp)
 		if err != nil {
-			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			failPaasRollback(jsonOut, newPaasOperationFailure(
 				paasFailureRollbackResolve,
 				"rollback_resolve",
 				"",
@@ -303,7 +306,7 @@ func cmdPaasRollback(args []string) {
 			resolvedRelease, _ = resolveLatestPaasReleaseID(strings.TrimSpace(*bundleRoot), resolvedApp, strings.TrimSpace(current))
 		}
 		if strings.TrimSpace(resolvedRelease) == "" {
-			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			failPaasRollback(jsonOut, newPaasOperationFailure(
 				paasFailureRollbackResolve,
 				"rollback_resolve",
 				"",
@@ -317,7 +320,7 @@ func cmdPaasRollback(args []string) {
 	if *applyRemote {
 		bundleDir, err := resolvePaasReleaseBundleDir(strings.TrimSpace(*bundleRoot), resolvedApp, resolvedRelease)
 		if err != nil {
-			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			failPaasRollback(jsonOut, newPaasOperationFailure(
 				paasFailureRollbackBundle,
 				"rollback_bundle_resolve",
 				"",
@@ -340,7 +343,7 @@ func cmdPaasRollback(args []string) {
 			RollbackApplyTimeout: applyTimeoutValue,
 		})
 		if err != nil {
-			failPaasCommand("rollback", jsonOut, err, map[string]string{
+			failPaasRollback(jsonOut, err, map[string]string{
 				"to_release": resolvedRelease,
 				"bundle_dir": bundleDir,
 			})
@@ -348,7 +351,7 @@ func cmdPaasRollback(args []string) {
 		appliedTargets = applyResult.AppliedTargets
 		healthyTargets = applyResult.HealthyTargets
 		if err := recordPaasSuccessfulRelease(resolvedApp, resolvedRelease); err != nil {
-			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			failPaasRollback(jsonOut, newPaasOperationFailure(
 				paasFailureUnknown,
 				"state_record",
 				"",
@@ -380,7 +383,20 @@ func cmdPaasRollback(args []string) {
 	if !vaultGuardrail.Trusted {
 		fields["vault_trust_warning"] = vaultGuardrail.TrustWarning
 	}
+	if eventPath := recordPaasDeployEvent("rollback", "succeeded", fields, nil); strings.TrimSpace(eventPath) != "" {
+		fields["event_log"] = eventPath
+	}
 	printPaasScaffold("rollback", fields, jsonOut)
+}
+
+func failPaasDeploy(jsonOut bool, err error, fields map[string]string) {
+	_ = recordPaasDeployEvent("deploy", "failed", fields, err)
+	failPaasCommand("deploy", jsonOut, err, fields)
+}
+
+func failPaasRollback(jsonOut bool, err error, fields map[string]string) {
+	_ = recordPaasDeployEvent("rollback", "failed", fields, err)
+	failPaasCommand("rollback", jsonOut, err, fields)
 }
 
 func cmdPaasLogs(args []string) {
