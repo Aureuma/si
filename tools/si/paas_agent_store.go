@@ -37,6 +37,8 @@ type paasAgentRunRecord struct {
 	RuntimeProfile string `json:"runtime_profile,omitempty"`
 	RuntimeAuth    string `json:"runtime_auth_path,omitempty"`
 	RuntimeReady   bool   `json:"runtime_ready"`
+	LockPath       string `json:"lock_path,omitempty"`
+	LockRecovered  bool   `json:"lock_recovered,omitempty"`
 	PolicyAction   string `json:"policy_action,omitempty"`
 	Collected      int    `json:"collected"`
 	Inserted       int    `json:"inserted"`
@@ -160,6 +162,7 @@ func appendPaasAgentRunRecord(record paasAgentRunRecord) (string, error) {
 	row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
 	row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
 	row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
+	row.LockPath = strings.TrimSpace(row.LockPath)
 	row.PolicyAction = strings.TrimSpace(row.PolicyAction)
 	row.QueuePath = strings.TrimSpace(row.QueuePath)
 	row.Message = strings.TrimSpace(row.Message)
@@ -221,6 +224,7 @@ func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, strin
 		row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
 		row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
 		row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
+		row.LockPath = strings.TrimSpace(row.LockPath)
 		row.PolicyAction = strings.TrimSpace(row.PolicyAction)
 		row.QueuePath = strings.TrimSpace(row.QueuePath)
 		row.Message = strings.TrimSpace(row.Message)

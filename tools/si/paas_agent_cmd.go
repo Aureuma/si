@@ -266,7 +266,7 @@ func cmdPaasAgentLogs(args []string) {
 	}
 	fmt.Printf("%s %d\n", styleHeading("paas agent logs:"), len(rows))
 	for _, row := range rows {
-		fmt.Printf("  - %s run=%s status=%s incident=%s runtime=%s profile=%s policy=%s message=%s\n",
+		fmt.Printf("  - %s run=%s status=%s incident=%s runtime=%s profile=%s policy=%s lock=%s recovered=%s message=%s\n",
 			row.Timestamp,
 			row.RunID,
 			row.Status,
@@ -274,6 +274,8 @@ func cmdPaasAgentLogs(args []string) {
 			row.RuntimeMode,
 			row.RuntimeProfile,
 			row.PolicyAction,
+			row.LockPath,
+			boolString(row.LockRecovered),
 			row.Message,
 		)
 	}
@@ -308,6 +310,43 @@ func cmdPaasAgentRunOnce(args []string) {
 	if index < 0 {
 		failPaasCommand("agent run-once", jsonOut, fmt.Errorf("agent %q was not found", selectedName), nil)
 	}
+	runID := "run-" + time.Now().UTC().Format("20060102T150405.000000000Z07:00")
+	lockResult, err := acquirePaasAgentLock(selectedName, runID, time.Now().UTC())
+	if err != nil {
+		failPaasCommand("agent run-once", jsonOut, err, nil)
+	}
+	if !lockResult.Acquired {
+		message := "agent lock unavailable: " + strings.TrimSpace(lockResult.Reason)
+		_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
+			Agent:       selectedName,
+			RunID:       runID,
+			Status:      "blocked",
+			LockPath:    lockResult.Path,
+			Message:     message,
+		})
+		now := time.Now().UTC().Format(time.RFC3339)
+		store.Agents[index].LastRunAt = now
+		store.Agents[index].LastRunID = runID
+		store.Agents[index].LastRunState = "blocked"
+		store.Agents[index].UpdatedAt = now
+		storePath, saveErr := savePaasAgentStore(currentPaasContext(), store)
+		if saveErr != nil {
+			failPaasCommand("agent run-once", jsonOut, saveErr, nil)
+		}
+		printPaasLiveAgentScaffold("agent run-once", map[string]string{
+			"name":           selectedName,
+			"run_id":         runID,
+			"status":         "blocked",
+			"message":        message,
+			"lock_path":      lockResult.Path,
+			"lock_recovered": boolString(lockResult.Recovered),
+			"store_path":     storePath,
+		}, jsonOut)
+		return
+	}
+	defer func() {
+		_ = releasePaasAgentLock(selectedName)
+	}()
 
 	syncResult, err := syncPaasIncidentQueueFromCollectors(paasIncidentQueueDefaultCollectLimit, paasIncidentQueueDefaultMaxEntries, paasIncidentQueueDefaultMaxAge)
 	if err != nil {
@@ -381,7 +420,6 @@ func cmdPaasAgentRunOnce(args []string) {
 			}
 		}
 	}
-	runID := "run-" + time.Now().UTC().Format("20060102T150405.000000000Z07:00")
 	_, err = appendPaasAgentRunRecord(paasAgentRunRecord{
 		Agent:          selectedName,
 		RunID:          runID,
@@ -391,6 +429,8 @@ func cmdPaasAgentRunOnce(args []string) {
 		RuntimeProfile: plan.ProfileID,
 		RuntimeAuth:    plan.AuthPath,
 		RuntimeReady:   plan.Ready,
+		LockPath:       lockResult.Path,
+		LockRecovered:  lockResult.Recovered,
 		PolicyAction:   policyAction,
 		Collected:      syncResult.Collected,
 		Inserted:       syncResult.Inserted,
@@ -427,6 +467,8 @@ func cmdPaasAgentRunOnce(args []string) {
 		"runtime_auth":    plan.AuthPath,
 		"runtime_ready":   boolString(plan.Ready),
 		"runtime_reason":  runtimeReason,
+		"lock_path":       lockResult.Path,
+		"lock_recovered":  boolString(lockResult.Recovered),
 		"policy_action":   policyAction,
 		"collected":       intString(syncResult.Collected),
 		"queue_inserted":  intString(syncResult.Inserted),
