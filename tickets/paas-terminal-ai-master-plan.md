@@ -806,7 +806,7 @@ Work items:
 | --- | --- | --- | --- | --- |
 | WS12-01 | Define incident event schema, severity taxonomy, and dedupe strategy | Done | Codex | Added incident schema primitives and dedupe/correlation logic in `tools/si/paas_incident_schema.go` with coverage in `tools/si/paas_incident_schema_test.go`; published `docs/PAAS_INCIDENT_EVENT_SCHEMA.md` |
 | WS12-02 | Implement event bridge collectors (deploy hooks, health polls, runtime events) | Done | Codex | Added collector pipeline in `tools/si/paas_incident_collectors.go` mapping deploy/alert/audit events to canonical incidents with dedupe-window gating; covered by `tools/si/paas_incident_collectors_test.go` and documented in `docs/PAAS_EVENT_BRIDGE_COLLECTORS.md` |
-| WS12-03 | Implement context-scoped incident queue storage and retention policies | Not Started | Unassigned | |
+| WS12-03 | Implement context-scoped incident queue storage and retention policies | Done | Codex | Added context-scoped queue store/retention pipeline (`tools/si/paas_incident_queue_store.go`) with upsert, dedupe-window identity, severity merge escalation, and age/count pruning; covered by `tools/si/paas_incident_queue_store_test.go` and documented in `docs/PAAS_INCIDENT_QUEUE_POLICY.md` |
 | WS12-04 | Implement `si paas agent` command family (`enable/disable/status/logs/run-once`) | Not Started | Unassigned | |
 | WS12-05 | Implement dyad-style agent runtime adapter using Codex profile auth path | Not Started | Unassigned | |
 | WS12-06 | Implement remediation policy engine (`auto-allow`, `approval-required`, `deny`) | Not Started | Unassigned | |
@@ -1079,12 +1079,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-11 | Completed WS11-05 by publishing `docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md` defining operational procedures for `internal-dogfood` vs `oss-demo`, explicit context-use requirements, separation guardrails, and incident/backup coupling rules; WS11 isolation-governance stream is now complete | None | Shift to WS12-01 incident event schema/taxonomy and WS12-02 event bridge collectors |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-01 by implementing a canonical incident event schema with severity/category normalization, dedupe window strategy, stable dedupe keys, and correlation ID derivation (`tools/si/paas_incident_schema.go` + tests), and by publishing the contract in `docs/PAAS_INCIDENT_EVENT_SCHEMA.md` | WS12-02..10 remain pending | Implement WS12-02 event bridge collectors next |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-02 by implementing deploy/health/runtime event bridge collectors (`tools/si/paas_incident_collectors.go`) that convert existing context event streams into canonical incidents with dedupe-window suppression, plus deterministic collector regression tests and collector contract docs | WS12-03..10 remain pending | Implement WS12-03 context-scoped incident queue storage and retention policies next |
+| 2026-02-17 | Codex | WS-12 | Completed WS12-03 by implementing context-scoped incident queue storage with queue-key upsert semantics and retention controls (max-age/max-entries), including sync wiring from collector output and queue-specific regression tests/docs | WS12-04..10 remain pending | Implement WS12-04 live agent command backend next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS12-03 context-scoped incident queue storage and retention policies.
-2. Implement WS12-04 live `si paas agent` command family backend.
-3. Implement WS12-05 dyad-style agent runtime adapter using Codex profile auth path.
+1. Implement WS12-04 live `si paas agent` command family backend.
+2. Implement WS12-05 dyad-style agent runtime adapter using Codex profile auth path.
+3. Implement WS12-06 remediation policy engine (`auto-allow`, `approval-required`, `deny`).
 
 ## 13. Reference Links
 
