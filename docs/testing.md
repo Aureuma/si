@@ -34,6 +34,13 @@ For `si paas` quality-gate coverage (unit/integration/e2e regression matrix), us
 cat docs/PAAS_TEST_MATRIX.md
 ```
 
+For failure-injection and rollback drill procedures, use:
+
+```bash
+cat docs/PAAS_FAILURE_DRILLS.md
+./tools/paas-failure-drills.sh
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
