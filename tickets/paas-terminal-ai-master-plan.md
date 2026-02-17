@@ -752,7 +752,7 @@ Work items:
 | WS05-04 | Add vault trust/recipient guardrail checks in deploy flow | Done | Codex | Added deploy/rollback vault recipient + trust fingerprint preflight checks with explicit `--allow-untrusted-vault` override |
 | WS05-05 | Implement context-scoped secret namespaces and vault file resolution | Done | Codex | Added `--namespace` support across `si paas secret` commands (`NS_<namespace>` key segment) and context-scoped default vault resolution to `<state>/contexts/<ctx>/vault/secrets.env` when no explicit/global vault file is set |
 | WS05-06 | Enforce no-state-in-repo and no-secret-in-output guardrails | Done | Codex | Added repo-state isolation guardrail (`SI_PAAS_ALLOW_REPO_STATE` override) and automatic sensitive-field redaction in scaffold/failure outputs (`token/password/secret/credential` keys) |
-| WS05-07 | Implement scrubbed export/import path for non-secret metadata only | Not Started | Unassigned | |
+| WS05-07 | Implement scrubbed export/import path for non-secret metadata only | Done | Codex | Added `si paas context export|import` scrubbed metadata transfer (`targets`, deploy history, webhook mappings) with secret-like key rejection guardrails on import |
 
 ### WS-06 Observability and Telegram Alerts
 
@@ -1058,11 +1058,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-05 | Completed WS05-05 by implementing context-scoped secret namespaces and vault file resolution defaults for secret/deploy flows, including namespaced key conventions and per-context vault path fallback | WS05-06 and WS05-07 guardrail/export slices remain pending | Implement WS05-06 no-state/no-secret output guardrails and WS06-01 logs/events live model next |
 | 2026-02-17 | Codex | WS-05 | Completed WS05-06 by enforcing repo-state guardrails (`SI_PAAS_STATE_ROOT` cannot reside under repo unless explicit unsafe override) and redacting sensitive scaffold/failure output fields to reduce accidental secret exposure in terminal/JSON output | WS05-07 scrubbed export/import path remains pending | Implement WS06-01 live logs/events backend and WS05-07 metadata export/import next |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-01 by replacing scaffold-only `si paas logs`/`si paas events list` with live backends: remote log retrieval over SSH (compose-aware app release resolution plus service fallback), merged context event ingestion (`deployments.jsonl` + `alerts.jsonl`), severity/status filtering, and stable live JSON/text contracts | WS06-02..06 notifier/routing/audit slices remain pending | Implement WS05-07 scrubbed metadata export/import, then continue WS06 notifier/routing tasks |
+| 2026-02-17 | Codex | WS-05 | Completed WS05-07 by implementing scrubbed context metadata export/import (`si paas context export|import`) for non-secret artifacts only (targets, deploy history, webhook mappings), including secret-like payload key rejection, replace/merge controls, and context-scoped persistence | WS05 scope is now complete; downstream isolation/runbook tracks remain under WS11/WS09 | Continue WS06-02 notifier setup/test/send, then WS06-03 routing/severity policy |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS05-07 scrubbed export/import path for non-secret metadata.
-2. Implement WS06-02 Telegram notifier setup/test/send and routing contract slices.
+1. Implement WS06-02 Telegram notifier setup/test/send and routing contract slices.
+2. Implement WS06-03 severity policy and alert routing contracts.
 3. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
 4. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 

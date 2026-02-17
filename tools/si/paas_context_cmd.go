@@ -12,6 +12,8 @@ const (
 	paasContextUseUsageText    = "usage: si paas context use --name <name> [--json]"
 	paasContextShowUsageText   = "usage: si paas context show [--name <name>] [--json]"
 	paasContextRemoveUsageText = "usage: si paas context remove --name <name> [--force] [--json]"
+	paasContextExportUsageText = "usage: si paas context export --output <path> [--name <name>] [--force] [--json]"
+	paasContextImportUsageText = "usage: si paas context import --input <path> [--name <name>] [--replace] [--json]"
 )
 
 var paasContextActions = []subcommandAction{
@@ -20,6 +22,8 @@ var paasContextActions = []subcommandAction{
 	{Name: "use", Description: "set active context"},
 	{Name: "show", Description: "show context settings"},
 	{Name: "remove", Description: "remove a context"},
+	{Name: "export", Description: "export non-secret metadata"},
+	{Name: "import", Description: "import non-secret metadata"},
 }
 
 func cmdPaasContext(args []string) {
@@ -47,6 +51,10 @@ func cmdPaasContext(args []string) {
 		cmdPaasContextShow(rest)
 	case "remove", "rm", "delete":
 		cmdPaasContextRemove(rest)
+	case "export":
+		cmdPaasContextExport(rest)
+	case "import":
+		cmdPaasContextImport(rest)
 	default:
 		printUnknown("paas context", sub)
 		printUsage(paasContextUsageText)
