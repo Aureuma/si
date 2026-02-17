@@ -141,7 +141,7 @@ func enforcePaasPlaintextSecretGuardrail(composeFile string, allowPlaintextSecre
 
 func runPaasVaultDeployGuardrail(vaultFile string, allowUntrustedVault bool) (paasVaultGuardrailResult, error) {
 	settings := loadSettingsOrDefault()
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(vaultFile), false)
+	target, err := vaultResolveTarget(settings, resolvePaasContextVaultFile(strings.TrimSpace(vaultFile)), false)
 	if err != nil {
 		return paasVaultGuardrailResult{}, err
 	}
