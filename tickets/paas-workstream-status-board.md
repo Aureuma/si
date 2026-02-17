@@ -28,7 +28,7 @@ Status legend:
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
 | WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
 | WS-08 | Cloud-hosted paid edition (solo-dev simple billing model) | WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Linked ticket: `paas-monetization-solo-dev.md` (MON-01..MON-07) |
-| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01 test matrix, WS09-02 failure-injection drills, WS09-03 security threat model/checklist, and WS09-06 compatibility regression suite completed; remaining WS09 hardening items pending |
+| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01 test matrix, WS09-02 failure-injection drills, WS09-03 security threat model/checklist, WS09-04 incident runbook, and WS09-06 compatibility regression suite completed; WS09-05 remains pending |
 | WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | Not Started | Unassigned | | | | Linked ticket: `paas-state-isolation-model.md` (ISO-01..ISO-08) |
 | WS-10 | Optional post-MVP TUI layer (deferred) | WS-02, WS-04, WS-06, WS-09 | Not Started | Unassigned | | | | Deferred until after MVP |
 
@@ -95,6 +95,7 @@ Status legend:
 | 2026-02-17 | Codex | WS-09 | Completed WS09-01 by building a runnable PaaS test matrix (`docs/PAAS_TEST_MATRIX.md`) across unit/integration/e2e regression/smoke layers, linking it from `docs/testing.md`, and executing each matrix command successfully in containerized runs. | WS09-02/03/04/05 remain pending. | Continue with WS09-02 failure-injection and rollback drills next. |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-02 by defining and executing failure-injection rollback drills with committed artifacts (`docs/PAAS_FAILURE_DRILLS.md`, `tools/paas-failure-drills.sh`) covering canary gating, deploy health rollback regression, and blue/green post-cutover rollback safety paths. | WS09-03/04/05 remain pending. | Continue with WS09-03 security checklist and threat model next. |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-03 by adding the PaaS security review checklist and threat model (`docs/PAAS_SECURITY_THREAT_MODEL.md`) with trust boundaries, STRIDE mapping, mitigation coverage, and PR review output template requirements. | WS09-04/05 remain pending. | Continue with WS09-04 incident response ops runbook next. |
+| 2026-02-17 | Codex | WS-09 | Completed WS09-04 by adding `docs/PAAS_INCIDENT_RUNBOOK.md` with severity classification, response workflow, and scenario playbooks for deploy/bluegreen/webhook/vault incident classes. | WS09-05 remains pending. | Continue with WS09-05 state-isolation regression tests next. |
 
 ## 4. Blocker Register
 
