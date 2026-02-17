@@ -268,7 +268,7 @@ func cmdPublishDevToArticle(args []string) {
 			"body_markdown": strings.TrimSpace(*body),
 		},
 	}
-	if values := parseCSV(strings.TrimSpace(*tags)); len(values) > 0 {
+	if values := parsePublishCSV(strings.TrimSpace(*tags)); len(values) > 0 {
 		payload["article"].(map[string]any)["tags"] = values
 	}
 	if value := strings.TrimSpace(*canonicalURL); value != "" {
@@ -402,7 +402,7 @@ func cmdPublishHashnodePost(args []string) {
 		fatal(fmt.Errorf("--publication-id, --title, and --content-markdown are required"))
 	}
 	tagInputs := make([]map[string]string, 0, 8)
-	for _, tag := range parseCSV(strings.TrimSpace(*tags)) {
+	for _, tag := range parsePublishCSV(strings.TrimSpace(*tags)) {
 		tagInputs = append(tagInputs, map[string]string{"name": tag})
 	}
 	query := "mutation PublishPost($input: PublishPostInput!){publishPost(input:$input){post{id title url slug}}}"
@@ -1122,7 +1122,7 @@ func normalizePublishPricing(raw string) string {
 	}
 }
 
-func parseCSV(raw string) []string {
+func parsePublishCSV(raw string) []string {
 	parts := strings.Split(raw, ",")
 	out := make([]string, 0, len(parts))
 	seen := map[string]bool{}

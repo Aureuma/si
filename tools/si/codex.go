@@ -32,6 +32,8 @@ const (
 	codexLabelKey          = "si.component"
 	codexLabelValue        = "codex"
 	codexTmuxSessionPrefix = "si-codex-pane-"
+	codexTmuxCmdShaOpt     = "@si_codex_cmd_sha"
+	codexTmuxHostCwdOpt    = "@si_codex_host_cwd"
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -813,32 +815,36 @@ func cmdCodexExec(args []string) {
 				if strings.TrimSpace(slug) == "" {
 					fatal(fmt.Errorf("codex container %s is missing required host `si vault` mounts; run `si respawn %s`", containerName, containerName))
 				}
-				warnf("codex container %s is missing required host `si vault` mounts; recreating for full `si`/`si vault` support", containerName)
-				spawnArgs := []string{slug}
-				if workspace := codexContainerWorkspaceSource(containerInfo); workspace != "" {
-					spawnArgs = append(spawnArgs, "--workspace", workspace)
-				}
-				if containerInfo.Config != nil {
-					if image := strings.TrimSpace(containerInfo.Config.Image); image != "" {
-						spawnArgs = append(spawnArgs, "--image", image)
+				if err := reconcileCodexRunMountDrift(tmuxMode, containerName, slug, func() error {
+					spawnArgs := []string{slug}
+					if workspace := codexContainerWorkspaceSource(containerInfo); workspace != "" {
+						spawnArgs = append(spawnArgs, "--workspace", workspace)
 					}
-				}
-				if profileID != "" && strings.EqualFold(strings.TrimSpace(slug), strings.TrimSpace(profileID)) {
-					spawnArgs = append(spawnArgs, "--profile", strings.TrimSpace(profileID))
-				}
-				cmdCodexSpawn(spawnArgs)
-				id, info, err = client.ContainerByName(ctx, containerName)
-				if err != nil {
+					if containerInfo.Config != nil {
+						if image := strings.TrimSpace(containerInfo.Config.Image); image != "" {
+							spawnArgs = append(spawnArgs, "--image", image)
+						}
+					}
+					if profileID != "" && strings.EqualFold(strings.TrimSpace(slug), strings.TrimSpace(profileID)) {
+						spawnArgs = append(spawnArgs, "--profile", strings.TrimSpace(profileID))
+					}
+					cmdCodexSpawn(spawnArgs)
+					id, info, err = client.ContainerByName(ctx, containerName)
+					if err != nil {
+						return err
+					}
+					if id == "" || info == nil {
+						return fmt.Errorf("codex container %s recreation failed", containerName)
+					}
+					if !shared.HasHostSiMount(info, "/home/si") || !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
+						return fmt.Errorf("codex container %s recreation missing required host `si vault` mounts; run `si respawn %s`", containerName, codexContainerSlug(containerName))
+					}
+					containerID = id
+					containerInfo = info
+					return nil
+				}); err != nil {
 					fatal(err)
 				}
-				if id == "" || info == nil {
-					fatal(fmt.Errorf("codex container %s recreation failed", containerName))
-				}
-				if !shared.HasHostSiMount(info, "/home/si") || !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
-					fatal(fmt.Errorf("codex container %s recreation missing required host `si vault` mounts; run `si respawn %s`", containerName, codexContainerSlug(containerName)))
-				}
-				containerID = id
-				containerInfo = info
 			}
 			seedCodexConfig(ctx, client, containerID, false)
 			if profileID != "" {
@@ -1212,45 +1218,8 @@ func attachCodexTmuxPane(containerName string) error {
 	cmdHashShape := buildCodexTmuxCommand(containerName, "__SI_START_DIR__")
 	cmdHash := sha256.Sum256([]byte(cmdHashShape))
 	cmdHashHex := hex.EncodeToString(cmdHash[:])
-
-	// If a tmux session already exists but was created with a different command, recreate it to
-	// ensure we land in the intended directory (and pick up newer spawn/mount behavior).
-	if _, err := tmuxOutput(ctx, "has-session", "-t", session); err == nil {
-		out, optErr := tmuxOutput(ctx, "show-options", "-v", "-t", session, "@si_codex_cmd_sha")
-		if optErr != nil || strings.TrimSpace(out) != cmdHashHex {
-			_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
-		}
-	}
-	// If the session exists but was created from a different host cwd, recreate it so the pane
-	// always starts in the caller's current directory in tmux mode.
-	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
-		if _, err := tmuxOutput(ctx, "has-session", "-t", session); err == nil {
-			out, optErr := tmuxOutput(ctx, "show-options", "-v", "-t", session, "@si_codex_host_cwd")
-			if optErr != nil || strings.TrimSpace(out) != hostCwd {
-				_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
-			}
-		}
-	}
-	if _, err := tmuxOutput(ctx, "has-session", "-t", session); err != nil {
-		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
-			return err
-		}
-		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
-		if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
-			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
-		}
-	}
-	applyTmuxSessionDefaults(ctx, session)
-	if out, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_dead}"); err == nil && isTmuxPaneDeadOutput(out) {
-		_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
-		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
-			return err
-		}
-		applyTmuxSessionDefaults(ctx, session)
-		_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_cmd_sha", cmdHashHex)
-		if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
-			_, _ = tmuxOutput(ctx, "set-option", "-t", session, "@si_codex_host_cwd", hostCwd)
-		}
+	if err := ensureCodexTmuxSession(ctx, session, target, cmd, cmdHashHex, hostCwd); err != nil {
+		return err
 	}
 	tmuxTryLabelCodexPane(ctx, session, target, containerName)
 	// #nosec G204 -- fixed tmux binary and session target generated by si.
@@ -1259,6 +1228,87 @@ func attachCodexTmuxPane(containerName string) error {
 	tmuxCmd.Stderr = os.Stderr
 	tmuxCmd.Stdin = os.Stdin
 	return tmuxCmd.Run()
+}
+
+func ensureCodexTmuxSession(ctx context.Context, session string, target string, cmd string, cmdHashHex string, hostCwd string) error {
+	_, hasSessionErr := tmuxOutput(ctx, "has-session", "-t", session)
+	hasSession := hasSessionErr == nil
+	cmdChanged := false
+	hostCwdChanged := false
+	if hasSession {
+		if out, err := tmuxOutput(ctx, "show-options", "-v", "-t", session, codexTmuxCmdShaOpt); err == nil {
+			stored := strings.TrimSpace(out)
+			if stored != "" && strings.TrimSpace(cmdHashHex) != "" && stored != strings.TrimSpace(cmdHashHex) {
+				cmdChanged = true
+			}
+		}
+		if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+			if out, err := tmuxOutput(ctx, "show-options", "-v", "-t", session, codexTmuxHostCwdOpt); err == nil {
+				stored := strings.TrimSpace(out)
+				if stored != "" && stored != hostCwd {
+					hostCwdChanged = true
+				}
+			}
+		}
+	}
+
+	if !hasSession {
+		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
+			return err
+		}
+	}
+	applyTmuxSessionDefaults(ctx, session)
+
+	paneDead := false
+	if out, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_dead}"); err == nil {
+		paneDead = isTmuxPaneDeadOutput(out)
+	}
+	if codexTmuxShouldResetSession(paneDead, cmdChanged, hostCwdChanged) {
+		_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
+		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
+			return err
+		}
+		applyTmuxSessionDefaults(ctx, session)
+	}
+	recordCodexTmuxSessionMetadata(ctx, session, cmdHashHex, hostCwd)
+	return nil
+}
+
+func codexTmuxShouldResetSession(paneDead bool, cmdChanged bool, hostCwdChanged bool) bool {
+	if paneDead {
+		return true
+	}
+	// A live Codex pane should survive reconnects and path/metadata drift.
+	_ = cmdChanged
+	_ = hostCwdChanged
+	return false
+}
+
+func codexRunShouldRecreateContainerForMissingVaultMounts(tmuxMode bool) bool {
+	// In tmux mode, preserving the existing container keeps the live Codex pane
+	// and conversation state intact across reconnects.
+	return !tmuxMode
+}
+
+func reconcileCodexRunMountDrift(tmuxMode bool, containerName string, slug string, recreate func() error) error {
+	if codexRunShouldRecreateContainerForMissingVaultMounts(tmuxMode) {
+		warnf("codex container %s is missing required host `si vault` mounts; recreating for full `si`/`si vault` support", containerName)
+		if recreate == nil {
+			return errors.New("recreate callback required")
+		}
+		return recreate()
+	}
+	warnf("codex container %s is missing required host `si vault` mounts; preserving running container and tmux session (run `si respawn %s` to reconcile mounts)", containerName, slug)
+	return nil
+}
+
+func recordCodexTmuxSessionMetadata(ctx context.Context, session string, cmdHashHex string, hostCwd string) {
+	if strings.TrimSpace(cmdHashHex) != "" {
+		_, _ = tmuxOutput(ctx, "set-option", "-t", session, codexTmuxCmdShaOpt, strings.TrimSpace(cmdHashHex))
+	}
+	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
+		_, _ = tmuxOutput(ctx, "set-option", "-t", session, codexTmuxHostCwdOpt, hostCwd)
+	}
 }
 
 func tmuxTryLabelCodexPane(ctx context.Context, session string, target string, containerName string) {

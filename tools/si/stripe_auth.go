@@ -288,9 +288,9 @@ func cmdStripeContextList(args []string) {
 			"alias":              alias,
 			"id":                 strings.TrimSpace(account.ID),
 			"name":               strings.TrimSpace(account.Name),
-			"default":            boolString(alias == strings.TrimSpace(settings.Stripe.DefaultAccount)),
-			"live_key_config":    boolString(hasStripeEnvKey(account.LiveKey, account.LiveKeyEnv)),
-			"sandbox_key_config": boolString(hasStripeEnvKey(account.SandboxKey, account.SandboxKeyEnv)),
+			"default":            boolYesNo(alias == strings.TrimSpace(settings.Stripe.DefaultAccount)),
+			"live_key_config":    boolYesNo(hasStripeEnvKey(account.LiveKey, account.LiveKeyEnv)),
+			"sandbox_key_config": boolYesNo(hasStripeEnvKey(account.SandboxKey, account.SandboxKeyEnv)),
 		})
 	}
 	if *jsonOut {
@@ -391,7 +391,7 @@ func cmdStripeContextUse(args []string) {
 	successf("stripe context set: account=%s env=%s", selected, parsedEnv)
 }
 
-func boolString(v bool) string {
+func boolYesNo(v bool) string {
 	if v {
 		return "yes"
 	}
