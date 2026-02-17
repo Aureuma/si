@@ -110,6 +110,45 @@ func TestPaasContextFlagPropagatesAndResets(t *testing.T) {
 	}
 }
 
+func TestPaasStateRootGuardrailRejectsRepoState(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Setenv(paasStateRootEnvKey, filepath.Join(cwd, ".tmp", "paas-guardrail-state"))
+	t.Setenv(paasAllowRepoStateEnvKey, "")
+	if err := enforcePaasStateRootIsolationGuardrail(); err == nil {
+		t.Fatalf("expected guardrail failure for repo-local state root")
+	}
+	t.Setenv(paasAllowRepoStateEnvKey, "true")
+	if err := enforcePaasStateRootIsolationGuardrail(); err != nil {
+		t.Fatalf("expected override to bypass repo-state guardrail: %v", err)
+	}
+}
+
+func TestRedactPaasSensitiveFields(t *testing.T) {
+	fields := map[string]string{
+		"api_token":                "abc",
+		"db_password":              "super-secret",
+		"compose_secret_guardrail": "ok",
+		"compose_secret_findings":  "2",
+		"vault_file":               "/tmp/vault.env",
+	}
+	redacted := redactPaasSensitiveFields(fields)
+	if redacted["api_token"] != "<redacted>" {
+		t.Fatalf("expected api_token redaction, got %#v", redacted)
+	}
+	if redacted["db_password"] != "<redacted>" {
+		t.Fatalf("expected db_password redaction, got %#v", redacted)
+	}
+	if redacted["compose_secret_guardrail"] != "ok" || redacted["compose_secret_findings"] != "2" {
+		t.Fatalf("expected compose guardrail fields to remain visible, got %#v", redacted)
+	}
+	if redacted["vault_file"] != "/tmp/vault.env" {
+		t.Fatalf("expected non-sensitive field unchanged, got %#v", redacted)
+	}
+}
+
 func TestPaasTargetCRUDWithLocalStore(t *testing.T) {
 	stateRoot := t.TempDir()
 	t.Setenv(paasStateRootEnvKey, stateRoot)
