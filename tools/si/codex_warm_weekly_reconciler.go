@@ -40,6 +40,8 @@ const (
 	warmWeeklyReconcileScriptPath = warmWeeklyBinaryDir + "/" + warmWeeklyReconcileScriptName
 	warmWeeklyFullRetryInterval   = 5 * time.Minute
 	warmWeeklyMinUsageDelta       = 0.05
+	// Require at least 1% consumed so status drops below 100% remaining.
+	warmWeeklyMinConsumedForReset = 1.0
 	warmWeeklyResetJitterMinutes  = 2
 	warmWeeklyAutostartMarkerName = "autostart.v1"
 	warmWeeklyDisabledMarkerName  = "disabled.v1"
@@ -262,7 +264,7 @@ func runWarmWeeklyReconcile(opts warmWeeklyReconcileOptions) (warmWeeklyReconcil
 			state.Profiles[profile.ID] = entry
 		}
 		nextDue := parseWarmWeeklyTime(entry.NextDue)
-		forceRunForFullWeekly := entry.LastWeeklyUsedOK && entry.LastWeeklyUsedPct <= 0
+		forceRunForFullWeekly := entry.LastWeeklyUsedOK && warmWeeklyAtFullLimit(entry.LastWeeklyUsedPct)
 		if !opts.ForceBootstrap && !selectedProfilesOnly && !forceRunForFullWeekly && !nextDue.IsZero() && nextDue.After(now) {
 			summary.Skipped++
 			appendWarmWeeklyLog("debug", "skip_not_due", profile.ID, map[string]interface{}{"next_due": entry.NextDue, "trigger": opts.Trigger})
@@ -323,7 +325,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	}
 
 	usedBefore, usedKnown := weeklyUsedPercent(payloadBefore)
-	fullBefore := usedKnown && usedBefore <= 0
+	fullBefore := usedKnown && warmWeeklyAtFullLimit(usedBefore)
 	resetAt, windowSeconds, resetKnown := weeklyResetTime(payloadBefore, now)
 	if resetKnown && !fullBefore {
 		resetAt = normalizeResetTime(resetAt, windowSeconds, now)
@@ -408,7 +410,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 	entry.LastUsageDelta = delta
 	entry.LastWeeklyUsedPct = usedAfter
 	entry.LastWeeklyUsedOK = usedAfterKnown
-	fullAfter := usedAfterKnown && usedAfter <= 0
+	fullAfter := usedAfterKnown && warmWeeklyAtFullLimit(usedAfter)
 	if resetAfterKnown && !fullAfter {
 		entry.LastWeeklyReset = resetAtAfter.UTC().Format(time.RFC3339)
 	} else {
@@ -434,7 +436,7 @@ func reconcileWarmWeeklyProfile(now time.Time, profile codexProfile, entry *warm
 
 	if lastErr == nil {
 		if fullBefore {
-			lastErr = fmt.Errorf("weekly remained at 100%% after warm attempts (used_before=%.3f used_after=%.3f); ignoring rolling reset until usage drops", usedBefore, usedAfter)
+			lastErr = fmt.Errorf("weekly remained effectively at 100%% after warm attempts (used_before=%.3f used_after=%.3f); ignoring rolling reset until usage drops to <=99%% remaining", usedBefore, usedAfter)
 		} else {
 			lastErr = fmt.Errorf("warm did not consume enough usage (before=%.3f after=%.3f delta=%.3f)", usedBefore, usedAfter, delta)
 		}
@@ -497,8 +499,9 @@ func warmWeeklyNeedsWarmAttempt(force bool, usedBefore float64, usedKnown bool, 
 	if !usedKnown {
 		return true
 	}
-	// 100% weekly remaining must be actively warmed; do not trust reset metadata yet.
-	if usedBefore <= 0 {
+	// 100% weekly remaining (or rounding-equivalent, e.g. 99.6%) must be actively
+	// warmed; do not trust reset metadata yet.
+	if warmWeeklyAtFullLimit(usedBefore) {
 		return true
 	}
 	if !resetKnown {
@@ -511,11 +514,11 @@ func warmWeeklyNeedsWarmAttempt(force bool, usedBefore float64, usedKnown bool, 
 }
 
 func warmWeeklyBootstrapSucceeded(force bool, windowAdvanced bool, before float64, beforeUsedOK bool, beforeResetOK bool, after float64, afterUsedOK bool, afterResetOK bool) bool {
-	fullBefore := beforeUsedOK && before <= 0
+	fullBefore := beforeUsedOK && warmWeeklyAtFullLimit(before)
 	if fullBefore {
 		// While weekly remains at 100%, OpenAI reset timestamps can roll and are not
 		// stable; only trust the window once usage actually drops below 100%.
-		return afterUsedOK && after > 0 && afterResetOK
+		return afterUsedOK && !warmWeeklyAtFullLimit(after) && afterResetOK
 	}
 
 	// Primary goal: make the weekly window "real" (reset/time metadata becomes available),
@@ -614,6 +617,10 @@ func weeklyUsedPercent(payload usagePayload) (float64, bool) {
 		return 0, false
 	}
 	return used, true
+}
+
+func warmWeeklyAtFullLimit(used float64) bool {
+	return used < warmWeeklyMinConsumedForReset
 }
 
 func loadWarmWeeklyState() (warmWeeklyState, error) {
@@ -856,6 +863,7 @@ func renderWarmWeeklyReconcileConfig(siHome string, image string, hostUID int, h
 	b.WriteString(fmt.Sprintf("command = %s\n", warmWeeklyReconcileScriptPath))
 	b.WriteString(fmt.Sprintf("volume = %s:%s\n", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir))
 	b.WriteString(fmt.Sprintf("volume = %s:/home/si/.si\n", siHome))
+	b.WriteString("volume = /var/run/docker.sock:/var/run/docker.sock\n")
 	if hostUID > 0 {
 		b.WriteString(fmt.Sprintf("environment = SI_HOST_UID=%d\n", hostUID))
 	}
@@ -1061,6 +1069,7 @@ func warmWeeklyReconcileConfigCurrent() bool {
 		fmt.Sprintf("[job-run \"%s\"]", warmWeeklyReconcileJobName),
 		fmt.Sprintf("schedule = %s", warmWeeklyReconcileSchedule),
 		fmt.Sprintf("volume = %s:%s", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir),
+		"volume = /var/run/docker.sock:/var/run/docker.sock",
 		fmt.Sprintf("command = %s", warmWeeklyReconcileScriptPath),
 		"environment = SI_HOST_UID=",
 		"environment = SI_HOST_GID=",
