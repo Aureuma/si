@@ -732,7 +732,7 @@ Work items:
 | WS04-09 | Implement Git webhook ingestion with auth validation and app/branch trigger mapping | Not Started | Unassigned | |
 | WS04-10 | Implement magic-variable resolution and add-on compose-fragment merge validation | Not Started | Unassigned | |
 | WS04-11 | Implement deterministic deploy failure taxonomy + remediation hint output contract | Done | Codex | Added stable `PAAS_*` failure codes with stage/target/remediation hints and machine-readable JSON failure envelopes for deploy/rollback |
-| WS04-12 | Implement deployment retention/pruning lifecycle controls for stale releases/artifacts | Not Started | Unassigned | Research-driven lifecycle requirement |
+| WS04-12 | Implement deployment retention/pruning lifecycle controls for stale releases/artifacts | Done | Codex | Added `si paas deploy prune` lifecycle controls with keep-count/age policy, dry-run mode, and deploy event-log pruning |
 
 ### WS-05 Secrets, Vault, and Credential Safety
 
@@ -1049,11 +1049,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-02 by implementing remote upload/compose apply execution (`--apply`) with context target resolution, SCP artifact transfer, and SSH compose pull/up run sequence plus fake-transport E2E tests | WS04-03 health/rollback orchestration and WS04-11 deterministic failure taxonomy are still pending | Implement WS04-03 health/rollback orchestration and WS04-11 diagnostics contract next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-03 and WS04-11 by adding health-gated deploy orchestration with automatic rollback to known-good release and deterministic failure taxonomy/remediation contracts for both text and JSON paths | Deployment event recording (WS04-04) and retention/pruning lifecycle (WS04-12) remain pending | Implement WS04-04 deployment logs/events and WS04-12 retention controls next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-04 by implementing deployment event recording to context-scoped JSONL logs with success/failure lifecycle entries for deploy and rollback operations | Retention/pruning lifecycle (WS04-12) and reconciler work (WS04-05) remain pending | Implement WS04-12 retention/pruning controls and WS04-05 reconciler planning next |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-12 by implementing retention/pruning lifecycle controls via `si paas deploy prune`, including stale release cleanup, event-log pruning, dry-run, and keep/age policy controls | Reconciler and fan-out/webhook tracks are still pending | Implement WS04-05 runtime reconciler/drift planning and WS04-08 fan-out strategy controls next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
-2. Implement WS04-05 runtime reconciler and drift repair planning.
+1. Implement WS04-05 runtime reconciler and drift repair planning.
+2. Implement WS04-08 parallel deploy fan-out strategy controls (`serial|rolling|canary|parallel`) with deterministic execution output.
 3. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
 4. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
 5. Implement WS05-05 context-scoped vault file resolution and namespace controls.

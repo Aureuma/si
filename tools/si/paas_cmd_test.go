@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"si/tools/si/internal/vault"
 )
@@ -426,6 +427,92 @@ func TestEnforcePaasSecretRevealGuardrail(t *testing.T) {
 	}
 	if err := enforcePaasSecretRevealGuardrail(true, true); err != nil {
 		t.Fatalf("unexpected error when reveal allowed: %v", err)
+	}
+}
+
+func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	vaultFile := filepath.Join(t.TempDir(), ".env")
+	trustStore := filepath.Join(t.TempDir(), "trust.json")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	composeBody := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    environment:",
+		"      - API_TOKEN=${API_TOKEN}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault: %v", err)
+	}
+	// Create multiple releases.
+	captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "--app", "billing-api", "--compose-file", composePath, "--allow-untrusted-vault"})
+	})
+	time.Sleep(3 * time.Millisecond)
+	captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "--app", "billing-api", "--compose-file", composePath, "--allow-untrusted-vault"})
+	})
+	time.Sleep(3 * time.Millisecond)
+	captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "--app", "billing-api", "--compose-file", composePath, "--allow-untrusted-vault"})
+	})
+
+	eventsPath, err := resolvePaasContextDir(currentPaasContext())
+	if err != nil {
+		t.Fatalf("resolve context dir: %v", err)
+	}
+	eventsFile := filepath.Join(eventsPath, "events", "deployments.jsonl")
+	oldEvent := fmt.Sprintf("{\"timestamp\":\"%s\",\"command\":\"deploy\",\"status\":\"succeeded\"}\n", time.Now().UTC().Add(-48*time.Hour).Format(time.RFC3339Nano))
+	newEvent := fmt.Sprintf("{\"timestamp\":\"%s\",\"command\":\"deploy\",\"status\":\"succeeded\"}\n", time.Now().UTC().Format(time.RFC3339Nano))
+	if err := os.WriteFile(eventsFile, []byte(oldEvent+newEvent), 0o600); err != nil {
+		t.Fatalf("seed events file: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "prune", "--app", "billing-api", "--keep", "1", "--events-max-age", "24h", "--json"})
+	})
+	env := parsePaasEnvelope(t, out)
+	if env.Command != "deploy prune" {
+		t.Fatalf("expected deploy prune command output, got %#v", env)
+	}
+	if env.Fields["releases_removed"] != "2" {
+		t.Fatalf("expected two releases removed, got %#v", env.Fields)
+	}
+	if env.Fields["events_removed"] != "1" {
+		t.Fatalf("expected one old event removed, got %#v", env.Fields)
+	}
+	root, err := resolvePaasReleaseBundleRoot("")
+	if err != nil {
+		t.Fatalf("resolve release root: %v", err)
+	}
+	releasesDir := filepath.Join(root, "billing-api")
+	entries, err := os.ReadDir(releasesDir)
+	if err != nil {
+		t.Fatalf("read releases dir: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected one release directory after prune, got %d", len(entries))
+	}
+	eventRaw, err := os.ReadFile(eventsFile)
+	if err != nil {
+		t.Fatalf("read pruned events: %v", err)
+	}
+	eventText := string(eventRaw)
+	if strings.Contains(eventText, "2025-") {
+		t.Fatalf("expected old event to be pruned, got %q", eventText)
+	}
+	if strings.Count(strings.TrimSpace(eventText), "\n")+1 != 2 {
+		t.Fatalf("expected two event lines (kept deploy + prune event), got %q", eventText)
 	}
 }
 
