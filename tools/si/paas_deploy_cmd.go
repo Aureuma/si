@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 func cmdPaasDeploy(args []string) {
@@ -20,6 +21,9 @@ func cmdPaasDeploy(args []string) {
 	release := fs.String("release", "", "release identifier")
 	composeFile := fs.String("compose-file", "compose.yaml", "compose file path")
 	bundleRoot := fs.String("bundle-root", "", "release bundle root path (defaults to context-scoped state root)")
+	applyRemote := fs.Bool("apply", false, "upload bundle and apply docker compose on remote targets")
+	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
+	applyTimeout := fs.String("apply-timeout", "2m", "per-target remote apply timeout")
 	waitTimeout := fs.String("wait-timeout", "5m", "deployment wait timeout")
 	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
 	allowPlaintextSecrets := fs.Bool("allow-plaintext-secrets", false, "allow plaintext secret assignments in compose file (unsafe)")
@@ -40,6 +44,10 @@ func cmdPaasDeploy(args []string) {
 		fmt.Fprintln(os.Stderr, "--max-parallel must be >= 1")
 		printUsage(paasDeployUsageText)
 		return
+	}
+	applyTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*applyTimeout))
+	if err != nil || applyTimeoutValue <= 0 {
+		fatal(fmt.Errorf("invalid --apply-timeout %q", strings.TrimSpace(*applyTimeout)))
 	}
 	composeGuardrail, err := enforcePaasPlaintextSecretGuardrail(strings.TrimSpace(*composeFile), *allowPlaintextSecrets)
 	if err != nil {
@@ -67,8 +75,16 @@ func cmdPaasDeploy(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	releaseID := filepath.Base(bundleDir)
+	appliedTargets, err := applyPaasReleaseToTargets(*applyRemote, resolvedTargets, bundleDir, releaseID, strings.TrimSpace(*remoteDir), applyTimeoutValue)
+	if err != nil {
+		fatal(err)
+	}
 	fields := map[string]string{
 		"app":                      strings.TrimSpace(*app),
+		"apply":                    boolString(*applyRemote),
+		"apply_timeout":            applyTimeoutValue.String(),
+		"applied_targets":          formatTargets(appliedTargets),
 		"bundle_dir":               bundleDir,
 		"bundle_metadata":          bundleMetaPath,
 		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
@@ -76,7 +92,8 @@ func cmdPaasDeploy(args []string) {
 		"compose_file":             strings.TrimSpace(*composeFile),
 		"continue_on_error":        boolString(*continueOnError),
 		"max_parallel":             intString(*maxParallel),
-		"release":                  filepath.Base(bundleDir),
+		"release":                  releaseID,
+		"remote_dir":               strings.TrimSpace(*remoteDir),
 		"strategy":                 resolvedStrategy,
 		"targets":                  formatTargets(resolvedTargets),
 		"vault_file":               vaultGuardrail.File,
