@@ -175,6 +175,20 @@ func printPaasLogsResults(jsonOut bool, app, target, service, since string, tail
 		if err := enc.Encode(payload); err != nil {
 			fatal(err)
 		}
+		fields := map[string]string{
+			"app":     strings.TrimSpace(app),
+			"target":  strings.TrimSpace(target),
+			"service": strings.TrimSpace(service),
+			"tail":    intString(tail),
+			"since":   strings.TrimSpace(since),
+			"follow":  boolString(follow),
+			"count":   intString(len(results)),
+		}
+		status := "succeeded"
+		if failed > 0 {
+			status = "failed"
+		}
+		_ = recordPaasAuditEvent("logs", status, "live", fields, nil)
 		if failed > 0 {
 			os.Exit(1)
 		}
@@ -209,6 +223,20 @@ func printPaasLogsResults(jsonOut bool, app, target, service, since string, tail
 			}
 		}
 	}
+	fields := map[string]string{
+		"app":     strings.TrimSpace(app),
+		"target":  strings.TrimSpace(target),
+		"service": strings.TrimSpace(service),
+		"tail":    intString(tail),
+		"since":   strings.TrimSpace(since),
+		"follow":  boolString(follow),
+		"count":   intString(len(results)),
+	}
+	status := "succeeded"
+	if failed > 0 {
+		status = "failed"
+	}
+	_ = recordPaasAuditEvent("logs", status, "live", fields, nil)
 	if failed > 0 {
 		os.Exit(1)
 	}
