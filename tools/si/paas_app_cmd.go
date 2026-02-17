@@ -11,6 +11,7 @@ var paasAppActions = []subcommandAction{
 	{Name: "list", Description: "list apps"},
 	{Name: "status", Description: "show app status"},
 	{Name: "remove", Description: "remove app metadata"},
+	{Name: "addon", Description: "manage add-on/service-pack lifecycle"},
 }
 
 func cmdPaasApp(args []string) {
@@ -36,6 +37,8 @@ func cmdPaasApp(args []string) {
 		cmdPaasAppStatus(rest)
 	case "remove", "rm", "delete":
 		cmdPaasAppRemove(rest)
+	case "addon":
+		cmdPaasAppAddon(rest)
 	default:
 		printUnknown("paas app", sub)
 		printUsage(paasAppUsageText)
