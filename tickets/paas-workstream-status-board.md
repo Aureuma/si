@@ -28,7 +28,7 @@ Status legend:
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
 | WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
 | WS-08 | Cloud-hosted paid edition (solo-dev simple billing model) | WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Linked ticket: `paas-monetization-solo-dev.md` (MON-01..MON-07) |
-| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01 test matrix, WS09-02 failure-injection drills, WS09-03 security threat model/checklist, WS09-04 incident runbook, and WS09-06 compatibility regression suite completed; WS09-05 remains pending |
+| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01..WS09-06 completed, including test matrix, failure drills, security checklist/threat model, incident runbook, state-isolation regressions, and compatibility regression suite |
 | WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | Not Started | Unassigned | | | | Linked ticket: `paas-state-isolation-model.md` (ISO-01..ISO-08) |
 | WS-10 | Optional post-MVP TUI layer (deferred) | WS-02, WS-04, WS-06, WS-09 | Not Started | Unassigned | | | | Deferred until after MVP |
 
@@ -40,7 +40,7 @@ Status legend:
 | Gate B: Terminal MVP functional | WS-02, WS-03, WS-04, WS-05, WS-06 | Done | Codex | WS02-06 streams completed with deploy engine, secrets, observability, webhook, blue/green, add-on contract, and magic-variable/merge validation coverage |
 | Gate C: AI operations integrated | WS-07, WS-12 | Not Started | Unassigned | Requires reliable event-driven long-running agent loop |
 | Gate D: Managed cloud foundation | WS-08 | Not Started | Unassigned | |
-| Gate E: Hardening and release readiness | WS-09 | Not Started | Unassigned | |
+| Gate E: Hardening and release readiness | WS-09 | Done | Codex | WS09 hardening scope completed with QA/security/reliability artifacts and regression coverage |
 | Gate E2: State isolation hard gate | WS-11 | Not Started | Unassigned | Must pass before production dogfood rollout |
 | Gate F: Optional TUI completion (post-MVP) | WS-10 | Not Started | Unassigned | Deferred until after MVP |
 
@@ -96,12 +96,13 @@ Status legend:
 | 2026-02-17 | Codex | WS-09 | Completed WS09-02 by defining and executing failure-injection rollback drills with committed artifacts (`docs/PAAS_FAILURE_DRILLS.md`, `tools/paas-failure-drills.sh`) covering canary gating, deploy health rollback regression, and blue/green post-cutover rollback safety paths. | WS09-03/04/05 remain pending. | Continue with WS09-03 security checklist and threat model next. |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-03 by adding the PaaS security review checklist and threat model (`docs/PAAS_SECURITY_THREAT_MODEL.md`) with trust boundaries, STRIDE mapping, mitigation coverage, and PR review output template requirements. | WS09-04/05 remain pending. | Continue with WS09-04 incident response ops runbook next. |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-04 by adding `docs/PAAS_INCIDENT_RUNBOOK.md` with severity classification, response workflow, and scenario playbooks for deploy/bluegreen/webhook/vault incident classes. | WS09-05 remains pending. | Continue with WS09-05 state-isolation regression tests next. |
+| 2026-02-17 | Codex | WS-09 | Completed WS09-05 by adding context-boundary leakage regression coverage (`TestPaasRegressionStateIsolationContextBoundaries`) plus dedicated e2e isolation harness execution; WS09 stream is now complete. | None | Shift to WS11 isolation governance backlog next. |
 
 ## 4. Blocker Register
 
 | Date | Workstream | Blocker | Severity | Owner | Mitigation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-02-17 | WS-09 | Remaining hardening slices (`WS09-01/02/03/04/05`) are unassigned after WS09-06 completion. | Medium | Unassigned | Assign owners/dates before Gate E execution sprint. | Open |
+| 2026-02-17 | WS-09 | Remaining hardening slices (`WS09-01/02/03/04/05`) are unassigned after WS09-06 completion. | Medium | Unassigned | Assign owners/dates before Gate E execution sprint. | Closed |
 
 ## 5. Handoff Checklist (For New Agents)
 

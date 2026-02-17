@@ -2328,6 +2328,108 @@ func TestPaasRegressionUpgradeDeployRollbackPath(t *testing.T) {
 	}
 }
 
+func TestPaasRegressionStateIsolationContextBoundaries(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"--context", "alpha", "target", "add", "--name", "edge-shared", "--host", "10.0.0.1", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"--context", "beta", "target", "add", "--name", "edge-shared", "--host", "10.0.0.2", "--user", "root"})
+	})
+
+	alphaTargetsRaw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "alpha", "target", "list", "--json"})
+	})
+	betaTargetsRaw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "beta", "target", "list", "--json"})
+	})
+	alphaTargets := parseTargetListPayload(t, alphaTargetsRaw)
+	betaTargets := parseTargetListPayload(t, betaTargetsRaw)
+	if len(alphaTargets.Data) != 1 || len(betaTargets.Data) != 1 {
+		t.Fatalf("expected one target per context: alpha=%#v beta=%#v", alphaTargets.Data, betaTargets.Data)
+	}
+	if alphaTargets.Data[0].Host != "10.0.0.1" {
+		t.Fatalf("expected alpha target host 10.0.0.1, got %#v", alphaTargets.Data[0])
+	}
+	if betaTargets.Data[0].Host != "10.0.0.2" {
+		t.Fatalf("expected beta target host 10.0.0.2, got %#v", betaTargets.Data[0])
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"--context", "alpha",
+			"app", "addon", "enable",
+			"--app", "billing-api",
+			"--pack", "redis",
+			"--name", "cache-alpha",
+			"--json",
+		})
+	})
+	alphaAddonRaw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "alpha", "app", "addon", "list", "--app", "billing-api", "--json"})
+	})
+	betaAddonRaw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "beta", "app", "addon", "list", "--app", "billing-api", "--json"})
+	})
+	var alphaAddons struct {
+		Count int               `json:"count"`
+		Data  []paasAddonRecord `json:"data"`
+	}
+	var betaAddons struct {
+		Count int               `json:"count"`
+		Data  []paasAddonRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(alphaAddonRaw), &alphaAddons); err != nil {
+		t.Fatalf("decode alpha addon list: %v output=%q", err, alphaAddonRaw)
+	}
+	if err := json.Unmarshal([]byte(betaAddonRaw), &betaAddons); err != nil {
+		t.Fatalf("decode beta addon list: %v output=%q", err, betaAddonRaw)
+	}
+	if alphaAddons.Count != 1 || len(alphaAddons.Data) != 1 {
+		t.Fatalf("expected one addon in alpha context, got %#v", alphaAddons)
+	}
+	if betaAddons.Count != 0 || len(betaAddons.Data) != 0 {
+		t.Fatalf("expected no addons in beta context, got %#v", betaAddons)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"--context", "alpha", "app", "list", "--json"})
+	})
+	alphaEventsRaw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "alpha", "events", "list", "--limit", "20", "--json"})
+	})
+	betaEventsRaw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "beta", "events", "list", "--limit", "20", "--json"})
+	})
+	var alphaEvents struct {
+		Count int               `json:"count"`
+		Data  []paasEventRecord `json:"data"`
+	}
+	var betaEvents struct {
+		Count int               `json:"count"`
+		Data  []paasEventRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(alphaEventsRaw), &alphaEvents); err != nil {
+		t.Fatalf("decode alpha events list: %v output=%q", err, alphaEventsRaw)
+	}
+	if err := json.Unmarshal([]byte(betaEventsRaw), &betaEvents); err != nil {
+		t.Fatalf("decode beta events list: %v output=%q", err, betaEventsRaw)
+	}
+	if alphaEvents.Count < 1 || len(alphaEvents.Data) < 1 {
+		t.Fatalf("expected alpha context to contain events, got %#v", alphaEvents)
+	}
+	for _, row := range betaEvents.Data {
+		if row.Fields["host"] == "10.0.0.1" {
+			t.Fatalf("unexpected alpha host leaked into beta event row: %#v", row)
+		}
+		if row.Fields["name"] == "cache-alpha" {
+			t.Fatalf("unexpected alpha addon leaked into beta event row: %#v", row)
+		}
+	}
+}
+
 func seedPaasTestBundleDir(t *testing.T) string {
 	t.Helper()
 	bundleDir := t.TempDir()
