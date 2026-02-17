@@ -303,7 +303,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "ingress-tls"})
 	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
-	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove"})
+	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove", "export", "import"})
 	expectActionNames(t, "paas agent", paasAgentActions, []string{"enable", "disable", "status", "logs", "run-once", "approve", "deny"})
 	expectActionNames(t, "paas events", paasEventsActions, []string{"list"})
 }
@@ -372,6 +372,85 @@ func TestResolvePaasContextVaultFile(t *testing.T) {
 	t.Setenv("SI_VAULT_FILE", "/tmp/global.env")
 	if resolved := resolvePaasContextVaultFile(""); resolved != "" {
 		t.Fatalf("expected env-driven vault resolution passthrough, got=%q", resolved)
+	}
+}
+
+func TestPaasContextMetadataExportImportRoundTrip(t *testing.T) {
+	stateRoot := t.TempDir()
+	exportPath := filepath.Join(t.TempDir(), "default-context-export.json")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.7", "--user", "root"})
+	})
+	if err := recordPaasSuccessfulRelease("billing-api", "rel-roundtrip-001"); err != nil {
+		t.Fatalf("record deploy history: %v", err)
+	}
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy", "webhook", "map", "add",
+			"--provider", "github",
+			"--repo", "acme/billing-api",
+			"--branch", "main",
+			"--app", "billing-api",
+			"--strategy", "rolling",
+		})
+	})
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"context", "export", "--output", exportPath, "--json"})
+	})
+	raw, err := os.ReadFile(exportPath)
+	if err != nil {
+		t.Fatalf("read export file: %v", err)
+	}
+	if key, sensitive := detectPaasSensitiveMetadataKey(raw); sensitive {
+		t.Fatalf("expected scrubbed export metadata, found sensitive key %q", key)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"context", "import", "--name", "customer-42", "--input", exportPath, "--json"})
+	})
+
+	importedTargets, err := loadPaasTargetStore("customer-42")
+	if err != nil {
+		t.Fatalf("load imported target store: %v", err)
+	}
+	if len(importedTargets.Targets) != 1 || importedTargets.Targets[0].Name != "edge-a" {
+		t.Fatalf("unexpected imported targets: %#v", importedTargets.Targets)
+	}
+
+	importedDeploys, err := loadPaasDeployHistoryStoreForContext("customer-42")
+	if err != nil {
+		t.Fatalf("load imported deploy history: %v", err)
+	}
+	appHistory, ok := importedDeploys.Apps["billing-api"]
+	if !ok || appHistory.CurrentRelease != "rel-roundtrip-001" {
+		t.Fatalf("expected imported deploy history for billing-api, got %#v", importedDeploys.Apps)
+	}
+
+	importedMappings, err := loadPaasWebhookMappingStore("customer-42")
+	if err != nil {
+		t.Fatalf("load imported webhook mappings: %v", err)
+	}
+	if len(importedMappings.Mappings) != 1 {
+		t.Fatalf("expected one imported webhook mapping, got %#v", importedMappings.Mappings)
+	}
+	if importedMappings.Mappings[0].Repo != "acme/billing-api" || importedMappings.Mappings[0].App != "billing-api" {
+		t.Fatalf("unexpected imported webhook mapping: %#v", importedMappings.Mappings[0])
+	}
+}
+
+func TestPaasContextImportRejectsSecretKeys(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	importPath := filepath.Join(t.TempDir(), "bad-import.json")
+	body := []byte("{\"schema_version\":1,\"context\":\"default\",\"metadata\":{\"secrets\":{\"db_password\":\"top-secret\"}}}\n")
+	if err := os.WriteFile(importPath, body, 0o600); err != nil {
+		t.Fatalf("write import payload: %v", err)
+	}
+	if _, err := importPaasContextMetadata("", importPath, false); err == nil {
+		t.Fatalf("expected import rejection for secret-like keys")
 	}
 }
 

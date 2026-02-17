@@ -38,7 +38,7 @@ const (
 	paasAlertUsageText    = "usage: si paas alert <setup-telegram|test|history|ingress-tls> [args...]"
 	paasSecretUsageText   = "usage: si paas secret <set|get|unset|list|key> [args...]"
 	paasAIUsageText       = "usage: si paas ai <plan|inspect|fix> [args...]"
-	paasContextUsageText  = "usage: si paas context <create|list|use|show|remove> [args...]"
+	paasContextUsageText  = "usage: si paas context <create|list|use|show|remove|export|import> [args...]"
 	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
 	paasEventsUsageText   = "usage: si paas events <list> [args...]"
 )
