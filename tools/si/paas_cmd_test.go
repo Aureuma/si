@@ -1474,6 +1474,91 @@ func TestPaasAlertPolicySetAndSuppressedRouting(t *testing.T) {
 	}
 }
 
+func TestEmitPaasOperationalAlertSuppressedByPolicy(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	if _, err := savePaasAlertRoutingPolicy(currentPaasContext(), paasAlertRoutingPolicy{
+		DefaultChannel: "telegram",
+		Severity: map[string]string{
+			"critical": "disabled",
+		},
+	}); err != nil {
+		t.Fatalf("save alert policy: %v", err)
+	}
+	historyPath := emitPaasOperationalAlert(
+		"deploy failure",
+		"critical",
+		"edge-a",
+		"health check failed",
+		"inspect remote service logs",
+		nil,
+	)
+	if strings.TrimSpace(historyPath) == "" {
+		t.Fatalf("expected alert history path")
+	}
+	rows, _, err := loadPaasAlertHistory(10, "critical")
+	if err != nil {
+		t.Fatalf("load alert history: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("expected suppressed alert history row")
+	}
+	last := rows[len(rows)-1]
+	if last.Command != "deploy failure" || last.Status != "suppressed" || last.Fields["channel"] != "disabled" {
+		t.Fatalf("unexpected suppressed alert row: %#v", last)
+	}
+}
+
+func TestEmitPaasOperationalAlertSendsTelegram(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("parse form: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+	t.Setenv(paasTelegramAPIBaseEnvKey, server.URL)
+	if _, err := savePaasTelegramConfig(currentPaasContext(), paasTelegramNotifierConfig{
+		BotToken: "token-send",
+		ChatID:   "111",
+	}); err != nil {
+		t.Fatalf("save telegram config: %v", err)
+	}
+
+	historyPath := emitPaasOperationalAlert(
+		"deploy reconcile",
+		"warning",
+		"edge-b",
+		"runtime unhealthy",
+		"re-run deploy reconcile",
+		nil,
+	)
+	if strings.TrimSpace(historyPath) == "" {
+		t.Fatalf("expected alert history path")
+	}
+	if callCount != 1 {
+		t.Fatalf("expected one telegram send call, got %d", callCount)
+	}
+	rows, _, err := loadPaasAlertHistory(10, "warning")
+	if err != nil {
+		t.Fatalf("load alert history: %v", err)
+	}
+	if len(rows) == 0 {
+		t.Fatalf("expected warning alert history row")
+	}
+	last := rows[len(rows)-1]
+	if last.Status != "sent" || last.Fields["channel"] != "telegram" {
+		t.Fatalf("unexpected sent alert row: %#v", last)
+	}
+}
+
 func TestPaasLogsLiveJSONContract(t *testing.T) {
 	stateRoot := t.TempDir()
 	fakeBinDir := t.TempDir()
