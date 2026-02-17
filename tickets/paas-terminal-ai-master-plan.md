@@ -683,12 +683,12 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS02-01 | Add `paas` root command wiring in `root_commands.go` | In Progress | Codex | Phase B kickoff: command surface implementation started |
-| WS02-02 | Implement complete non-interactive command and flag surfaces for all MVP operations | In Progress | Codex | Phase B kickoff: define command/flag contracts first |
-| WS02-03 | Add stable machine-readable output modes (`--json`) for operational commands | In Progress | Codex | Phase B kickoff: enforce machine-output contract from start |
+| WS02-01 | Add `paas` root command wiring in `root_commands.go` | Done | Codex | Root dispatch + top-level usage wired (`root_commands.go`, `util.go`) |
+| WS02-02 | Implement complete non-interactive command and flag surfaces for all MVP operations | Done | Codex | Added full subcommand scaffolding for target/app/deploy/rollback/logs/alert/ai/context/agent/events |
+| WS02-03 | Add stable machine-readable output modes (`--json`) for operational commands | Done | Codex | Added shared scaffold JSON envelope and `--json` flag handling across MVP `si paas` command surfaces |
 | WS02-04 | Add command tests for dispatch, non-interactive behavior, and output contracts | Not Started | Unassigned | |
 | WS02-05 | Add optional prompt helpers only where they do not block non-interactive execution | Not Started | Unassigned | |
-| WS02-06 | Add context command surface and global `--context` routing | In Progress | Codex | Begin early due to WS11 isolation dependency |
+| WS02-06 | Add context command surface and global `--context` routing | Done | Codex | Global `--context` parsing added at `si paas` root with context propagated in text/JSON output envelopes |
 
 ### WS-03 Multi-VPS Target Management (SSH)
 
@@ -1033,6 +1033,9 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-01 | Completed Phase A research baseline: cloned/indexed primary repos, filled evidence corpus, published synthesis matrix, and approved feature shortlist | None | Begin WS-02 CLI surface implementation |
 | 2026-02-17 | Codex | WS-02 | Started Phase B kickoff and moved core CLI workstream items (root command, non-interactive flags, `--json`, and context routing) to in-progress planning state | None | Execute WS02-01/02/03/06 implementation and tests |
 | 2026-02-17 | Codex | WS-00 | Propagated research shortlist into implementation plan: added diagnostics, compatibility preflight, TLS retry observability, retention/pruning, and upgrade-regression tasks plus Phase B exit criteria updates | None | Execute WS03-06, WS04-11/12, WS06-07, and WS09-06 alongside core Phase B delivery |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-01: added `si paas` root command registration, alias coverage in root dispatch tests, and usage entry in global help output | None | Implement WS02-02 non-interactive command/flag surfaces |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-02: implemented non-interactive `si paas` command/flag scaffolding for all MVP command families and required subcommands | None | Implement WS02-03 stable `--json` output contracts |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-03: added shared machine-readable scaffold envelope (`ok`, `command`, `mode`, `fields`) and `--json` support across operational `si paas` commands | None | Implement WS02-06 context command surface and global context routing |
 
 ## 12. Immediate Next Actions
 

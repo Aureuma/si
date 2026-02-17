@@ -58,6 +58,9 @@ Status legend:
 | 2026-02-17 | Codex | WS-01 | Completed Phase A research baseline: cloned/indexed primary repos, captured categorized evidence links, synthesized strengths/weaknesses, and approved feature shortlist. | Secondary set (Easypanel/Portainer/Tsuru) deep analysis still pending future scope. | Start WS-02 implementation and keep secondary baselines for later refinement. |
 | 2026-02-17 | Codex | WS-02 | Phase B kickoff started: moved CLI surface workstream to in-progress and set Gate B to in-progress. Prioritized root command, non-interactive flags, `--json` contracts, and global `--context` routing as first delivery slice. | Remaining WS-02+ streams still unowned beyond kickoff. | Execute WS02-01/02/03/06 implementation and assign WS-03/WS-05 co-owners for parallelization. |
 | 2026-02-17 | Codex | WS-00 | Applied Phase A research outcomes to downstream planning: added diagnostics/retention/TLS-retry/compatibility priorities and corresponding implementation tasks in master plan. | Need explicit owners for WS03/WS04/WS06/WS09 research-priority slices. | Assign owners for WS03-06, WS04-11/12, WS06-07, and WS09-06 before next execution sprint. |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-01 by wiring `si paas` root dispatch and top-level usage visibility. | Subcommand surfaces still pending. | Execute WS02-02 non-interactive command/flag contracts. |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-02 with full non-interactive scaffolding for all planned MVP `si paas` subcommand families and required subcommands. | JSON contract and context routing still pending. | Execute WS02-03 (`--json`) then WS02-06 (`--context`). |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-03 by adding a shared JSON response envelope and `--json` handling across `si paas` operational commands. | Context routing and CLI tests still pending. | Execute WS02-06 (`--context`) and WS02-04 tests next. |
 
 ## 4. Blocker Register
 
