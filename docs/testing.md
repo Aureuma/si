@@ -71,6 +71,12 @@ For context operating model and day-2 procedures, use:
 cat docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md
 ```
 
+For incident event schema and dedupe taxonomy, use:
+
+```bash
+cat docs/PAAS_INCIDENT_EVENT_SCHEMA.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
