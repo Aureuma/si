@@ -83,3 +83,35 @@ func TestInferDevelopmentMountRequiresHomeDevelopmentSubtree(t *testing.T) {
 		t.Fatalf("expected development mount inference to fail outside ~/Development")
 	}
 }
+
+func TestInferHostDevelopmentMountReturnsHostPathTarget(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	hostPath := filepath.Join(home, "Development", "si")
+	m, ok := InferHostDevelopmentMount(hostPath)
+	if !ok {
+		t.Fatalf("expected host development mount inference to succeed")
+	}
+	if m.Source != filepath.Join(home, "Development") {
+		t.Fatalf("unexpected development source: %q", m.Source)
+	}
+	if m.Target != filepath.ToSlash(filepath.Join(home, "Development")) {
+		t.Fatalf("unexpected development target: %q", m.Target)
+	}
+}
+
+func TestHasHostDevelopmentMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	hostPath := filepath.Join(home, "Development", "si")
+	requiredSource := filepath.Join(home, "Development")
+	requiredTarget := filepath.ToSlash(requiredSource)
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: requiredSource, Destination: requiredTarget},
+		},
+	}
+	if !HasHostDevelopmentMount(info, hostPath) {
+		t.Fatalf("expected host development mount requirement to be satisfied")
+	}
+}

@@ -286,18 +286,13 @@ func cmdCodexSpawn(args []string) {
 		*flags.workspaceHost = abs
 	}
 
-	// Always mount the host workspace at /workspace (stable) and mirror it under
-	// the container home when possible (for example /home/si/Development/si).
-	// Default the container working dir to the mirrored path so `si run` and
-	// `si run --tmux` land in the expected directory.
+	// Always mount the host workspace at /workspace (stable) and also at the same
+	// absolute host path inside the container (for example
+	// /home/shawn/Development/si). Default the container working dir to that
+	// mirrored host path so `si run` and `si run --tmux` land in the expected
+	// directory.
 	workspaceTargetPrimary := "/workspace"
-	workspaceTargetMirror := ""
-	if target, ok := shared.InferWorkspaceTarget(*flags.workspaceHost, "/home/si"); ok {
-		workspaceTargetMirror = target
-	}
-	if workspaceTargetMirror == "" {
-		workspaceTargetMirror = filepath.ToSlash(strings.TrimSpace(*flags.workspaceHost))
-	}
+	workspaceTargetMirror := filepath.ToSlash(strings.TrimSpace(*flags.workspaceHost))
 	if workspaceTargetMirror == "" || !strings.HasPrefix(workspaceTargetMirror, "/") {
 		workspaceTargetMirror = workspaceTargetPrimary
 	}
@@ -1340,7 +1335,20 @@ func containerCwdForHostCwd(info *types.ContainerJSON, hostCwd string) (string, 
 		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
 			return
 		}
-		if len(src) > bestSrcLen {
+		candidate := dest
+		if rel != "" && rel != "." {
+			candidate = path.Join(dest, filepath.ToSlash(rel))
+		}
+		bestCandidate := bestDest
+		if bestRel != "" && bestRel != "." && bestDest != "" {
+			bestCandidate = path.Join(bestDest, filepath.ToSlash(bestRel))
+		}
+		cwdSlash := filepath.ToSlash(cwd)
+		candidateMatchesCwd := candidate == cwdSlash
+		bestMatchesCwd := bestCandidate == cwdSlash
+		if len(src) > bestSrcLen ||
+			(len(src) == bestSrcLen && candidateMatchesCwd && !bestMatchesCwd) ||
+			(len(src) == bestSrcLen && candidateMatchesCwd == bestMatchesCwd && bestDest == "/workspace" && dest != "/workspace") {
 			bestSrcLen = len(src)
 			bestDest = dest
 			bestRel = rel
@@ -1377,6 +1385,7 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 	}
 	if !shared.HasHostSiMount(info, "/home/si") ||
 		!shared.HasDevelopmentMount(info, desiredHost, "/home/si") ||
+		!shared.HasHostDevelopmentMount(info, desiredHost) ||
 		!shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
 		return false
 	}
