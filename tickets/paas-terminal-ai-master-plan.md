@@ -770,7 +770,7 @@ Work items:
 | WS06-02 | Implement Telegram notifier setup/test/send | Done | Codex | Added persisted context-scoped Telegram notifier config (`alerts/telegram.json`) plus live send path for `alert test` with HTTP delivery and dry-run support |
 | WS06-03 | Define severity policy and alert routing | Done | Codex | Added persisted per-context routing policy (`alert policy show|set`) with severity-to-channel mapping (`info|warning|critical` -> `telegram|disabled`) and policy-aware alert test routing |
 | WS06-04 | Add deploy failure and health degradation alerts | Done | Codex | Added automatic policy-routed operational alert emission for deploy/rollback failures and reconcile-detected health degradation/error conditions |
-| WS06-05 | Define audit/event log model for all `si paas` actions | Not Started | Unassigned | |
+| WS06-05 | Define audit/event log model for all `si paas` actions | Done | Codex | Added unified context-scoped audit model (`events/audit.jsonl`) with success/failure metadata and integrated visibility via `si paas events list` |
 | WS06-06 | Add Telegram action hooks for operator callbacks (view logs, rollback, acknowledge) | Not Started | Unassigned | |
 | WS06-07 | Add ingress/TLS (Traefik + ACME) retry observability, alerting, and operator recovery guidance | Done | Codex | Added `si paas alert ingress-tls` live checks with Traefik/ACME retry/failure detection, alert history recording (`events/alerts.jsonl`), and recovery guidance output |
 
@@ -1062,11 +1062,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-06 | Completed WS06-02 by implementing live Telegram notifier setup/test/send: context-scoped config persistence (`alerts/telegram.json`), `alert test` delivery via Telegram Bot API, dry-run mode, send failure handling, and alert history emission with channel metadata | WS06-03..06 routing/policy/callback/audit slices remain pending | Implement WS06-03 severity policy + routing contracts, then WS06-04 deploy/health degradation alert wiring |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-03 by adding explicit severity routing policy controls (`si paas alert policy show|set`) with context-scoped persistence (`alerts/policy.json`) and policy-aware routing in `alert test` (including suppressed/dry-run status modes) | WS06-04..06 deploy/health alert wiring, callback hooks, and full audit model remain pending | Implement WS06-04 deploy failure + health degradation alert emission next, then WS06-05 audit/event model consolidation |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-04 by wiring operational alert emission into deploy/rollback failure paths and reconcile health degradation/error detection, with policy-aware delivery routing and alert history records for `sent|suppressed|failed` outcomes | WS06-05/06 unified audit model and Telegram callback hooks remain pending | Implement WS06-05 audit/event model unification next, then WS06-06 operator callback hooks |
+| 2026-02-17 | Codex | WS-06 | Completed WS06-05 by defining a unified audit/event model (`events/audit.jsonl`) for `si paas` actions, wiring central scaffold/failure/live command audit emission, and extending `si paas events list` ingestion to include audit records alongside deploy/alert streams | WS06-06 Telegram callback hooks remain pending | Implement WS06-06 operator callback hooks for log/rollback/ack actions |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS06-05 audit/event log model for all `si paas` actions.
-2. Implement WS06-06 Telegram action hooks for operator callbacks.
+1. Implement WS06-06 Telegram action hooks for operator callbacks.
+2. Continue WS04 architecture gaps (WS04-06/07/10) after WS06 callback completion.
 3. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
 4. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
