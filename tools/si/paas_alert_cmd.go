@@ -18,6 +18,7 @@ var paasAlertActions = []subcommandAction{
 	{Name: "setup-telegram", Description: "configure telegram notifier"},
 	{Name: "test", Description: "send test alert"},
 	{Name: "history", Description: "show recent alerts"},
+	{Name: "policy", Description: "manage severity routing policy"},
 	{Name: "ingress-tls", Description: "inspect Traefik/ACME retry signals and emit alerts"},
 }
 
@@ -42,6 +43,8 @@ func cmdPaasAlert(args []string) {
 		cmdPaasAlertTest(rest)
 	case "history":
 		cmdPaasAlertHistory(rest)
+	case "policy":
+		cmdPaasAlertPolicy(rest)
 	case "ingress-tls":
 		cmdPaasAlertIngressTLS(rest)
 	default:
@@ -108,13 +111,13 @@ func cmdPaasAlertTest(args []string) {
 		printUsage(paasAlertTestUsageText)
 		return
 	}
-	cfg, configPath, err := loadPaasTelegramConfig(currentPaasContext())
+	routeChannel, policyPath, err := resolvePaasAlertRoute(strings.TrimSpace(*severity))
 	if err != nil {
 		failPaasCommand("alert test", jsonOut, newPaasOperationFailure(
 			paasFailureUnknown,
-			"alert_config_load",
+			"alert_route_resolve",
 			"",
-			"verify alert config file permissions and run setup again if needed",
+			"verify alert policy configuration and retry",
 			err,
 		), nil)
 	}
@@ -122,30 +125,46 @@ func cmdPaasAlertTest(args []string) {
 		"message":     strings.TrimSpace(*message),
 		"severity":    strings.ToLower(strings.TrimSpace(*severity)),
 		"dry_run":     boolString(*dryRun),
-		"channel":     "telegram",
-		"config_path": configPath,
+		"channel":     routeChannel,
+		"policy_path": policyPath,
 	}
-	status := "sent"
+	status := "dry_run"
 	if !*dryRun {
-		if err := sendPaasTelegramMessage(cfg, fields["message"]); err != nil {
-			status = "failed"
-			if historyPath := recordPaasAlertEntry(paasAlertEntry{
-				Command:  "alert test",
-				Severity: fields["severity"],
-				Status:   status,
-				Message:  fields["message"],
-				Guidance: "Verify Telegram bot token/chat id and outbound network access.",
-				Fields:   map[string]string{"channel": "telegram"},
-			}); strings.TrimSpace(historyPath) != "" {
-				fields["alert_history"] = historyPath
+		if routeChannel == "disabled" {
+			status = "suppressed"
+		} else {
+			cfg, configPath, cfgErr := loadPaasTelegramConfig(currentPaasContext())
+			if cfgErr != nil {
+				failPaasCommand("alert test", jsonOut, newPaasOperationFailure(
+					paasFailureUnknown,
+					"alert_config_load",
+					"",
+					"verify alert config file permissions and run setup again if needed",
+					cfgErr,
+				), fields)
 			}
-			failPaasCommand("alert test", jsonOut, newPaasOperationFailure(
-				paasFailureUnknown,
-				"alert_send",
-				"",
-				"run `si paas alert setup-telegram` with valid credentials and retry",
-				err,
-			), fields)
+			fields["config_path"] = configPath
+			if err := sendPaasTelegramMessage(cfg, fields["message"]); err != nil {
+				status = "failed"
+				if historyPath := recordPaasAlertEntry(paasAlertEntry{
+					Command:  "alert test",
+					Severity: fields["severity"],
+					Status:   status,
+					Message:  fields["message"],
+					Guidance: "Verify Telegram bot token/chat id and outbound network access.",
+					Fields:   map[string]string{"channel": routeChannel},
+				}); strings.TrimSpace(historyPath) != "" {
+					fields["alert_history"] = historyPath
+				}
+				failPaasCommand("alert test", jsonOut, newPaasOperationFailure(
+					paasFailureUnknown,
+					"alert_send",
+					"",
+					"run `si paas alert setup-telegram` with valid credentials and retry",
+					err,
+				), fields)
+			}
+			status = "sent"
 		}
 	}
 	if historyPath := recordPaasAlertEntry(paasAlertEntry{
@@ -154,7 +173,7 @@ func cmdPaasAlertTest(args []string) {
 		Status:   status,
 		Message:  fields["message"],
 		Guidance: "Verify notifier routing and escalation paths.",
-		Fields:   map[string]string{"channel": "telegram"},
+		Fields:   map[string]string{"channel": routeChannel},
 	}); strings.TrimSpace(historyPath) != "" {
 		fields["alert_history"] = historyPath
 	}

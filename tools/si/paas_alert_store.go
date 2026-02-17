@@ -28,6 +28,12 @@ type paasTelegramNotifierConfig struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+type paasAlertRoutingPolicy struct {
+	DefaultChannel string            `json:"default_channel"`
+	Severity       map[string]string `json:"severity,omitempty"`
+	UpdatedAt      string            `json:"updated_at"`
+}
+
 func resolvePaasAlertHistoryPath(contextName string) (string, error) {
 	contextDir, err := resolvePaasContextDir(contextName)
 	if err != nil {
@@ -76,6 +82,113 @@ func savePaasTelegramConfig(contextName string, cfg paasTelegramNotifierConfig) 
 	row.ChatID = strings.TrimSpace(row.ChatID)
 	if row.BotToken == "" || row.ChatID == "" {
 		return "", fmt.Errorf("telegram bot token and chat id are required")
+	}
+	row.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	raw, err := json.MarshalIndent(row, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	raw = append(raw, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func resolvePaasAlertPolicyPath(contextName string) (string, error) {
+	contextDir, err := resolvePaasContextDir(contextName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(contextDir, "alerts", "policy.json"), nil
+}
+
+func defaultPaasAlertRoutingPolicy() paasAlertRoutingPolicy {
+	return paasAlertRoutingPolicy{
+		DefaultChannel: "telegram",
+		Severity: map[string]string{
+			"info":     "telegram",
+			"warning":  "telegram",
+			"critical": "telegram",
+		},
+	}
+}
+
+func normalizePaasAlertChannel(value string) string {
+	channel := strings.ToLower(strings.TrimSpace(value))
+	switch channel {
+	case "", "telegram":
+		return "telegram"
+	case "none", "disabled", "off":
+		return "disabled"
+	default:
+		return ""
+	}
+}
+
+func loadPaasAlertRoutingPolicy(contextName string) (paasAlertRoutingPolicy, string, error) {
+	path, err := resolvePaasAlertPolicyPath(contextName)
+	if err != nil {
+		return paasAlertRoutingPolicy{}, "", err
+	}
+	raw, err := os.ReadFile(path) // #nosec G304 -- context-scoped local state path.
+	if err != nil {
+		if os.IsNotExist(err) {
+			return defaultPaasAlertRoutingPolicy(), path, nil
+		}
+		return paasAlertRoutingPolicy{}, path, err
+	}
+	var policy paasAlertRoutingPolicy
+	if err := json.Unmarshal(raw, &policy); err != nil {
+		return paasAlertRoutingPolicy{}, path, fmt.Errorf("invalid alert policy config: %w", err)
+	}
+	normalized := defaultPaasAlertRoutingPolicy()
+	if channel := normalizePaasAlertChannel(policy.DefaultChannel); channel != "" {
+		normalized.DefaultChannel = channel
+	}
+	if normalized.Severity == nil {
+		normalized.Severity = map[string]string{}
+	}
+	for severity, channel := range policy.Severity {
+		key := strings.ToLower(strings.TrimSpace(severity))
+		if key == "" {
+			continue
+		}
+		normalizedChannel := normalizePaasAlertChannel(channel)
+		if normalizedChannel == "" {
+			continue
+		}
+		normalized.Severity[key] = normalizedChannel
+	}
+	normalized.UpdatedAt = strings.TrimSpace(policy.UpdatedAt)
+	return normalized, path, nil
+}
+
+func savePaasAlertRoutingPolicy(contextName string, policy paasAlertRoutingPolicy) (string, error) {
+	path, err := resolvePaasAlertPolicyPath(contextName)
+	if err != nil {
+		return "", err
+	}
+	row := defaultPaasAlertRoutingPolicy()
+	if channel := normalizePaasAlertChannel(policy.DefaultChannel); channel != "" {
+		row.DefaultChannel = channel
+	}
+	if row.Severity == nil {
+		row.Severity = map[string]string{}
+	}
+	for severity, channel := range policy.Severity {
+		key := strings.ToLower(strings.TrimSpace(severity))
+		if key == "" {
+			continue
+		}
+		normalizedChannel := normalizePaasAlertChannel(channel)
+		if normalizedChannel == "" {
+			return "", fmt.Errorf("unsupported alert channel %q for severity %q", strings.TrimSpace(channel), key)
+		}
+		row.Severity[key] = normalizedChannel
 	}
 	row.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	raw, err := json.MarshalIndent(row, "", "  ")
