@@ -95,6 +95,12 @@ For live agent command runtime behavior, use:
 cat docs/PAAS_AGENT_RUNTIME_COMMANDS.md
 ```
 
+For Codex-profile runtime adapter behavior, use:
+
+```bash
+cat docs/PAAS_AGENT_RUNTIME_ADAPTER.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 

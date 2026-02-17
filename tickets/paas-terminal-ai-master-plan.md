@@ -808,7 +808,7 @@ Work items:
 | WS12-02 | Implement event bridge collectors (deploy hooks, health polls, runtime events) | Done | Codex | Added collector pipeline in `tools/si/paas_incident_collectors.go` mapping deploy/alert/audit events to canonical incidents with dedupe-window gating; covered by `tools/si/paas_incident_collectors_test.go` and documented in `docs/PAAS_EVENT_BRIDGE_COLLECTORS.md` |
 | WS12-03 | Implement context-scoped incident queue storage and retention policies | Done | Codex | Added context-scoped queue store/retention pipeline (`tools/si/paas_incident_queue_store.go`) with upsert, dedupe-window identity, severity merge escalation, and age/count pruning; covered by `tools/si/paas_incident_queue_store_test.go` and documented in `docs/PAAS_INCIDENT_QUEUE_POLICY.md` |
 | WS12-04 | Implement `si paas agent` command family (`enable/disable/status/logs/run-once`) | Done | Codex | Added live agent backend (`tools/si/paas_agent_store.go`, `tools/si/paas_agent_cmd.go`) with context-scoped config persistence, run-log storage, queue sync in `run-once`, and status/log output contracts; covered by `TestPaasAgentEnableStatusRunOnceLogsDisable` and documented in `docs/PAAS_AGENT_RUNTIME_COMMANDS.md` |
-| WS12-05 | Implement dyad-style agent runtime adapter using Codex profile auth path | Not Started | Unassigned | |
+| WS12-05 | Implement dyad-style agent runtime adapter using Codex profile auth path | Done | Codex | Added Codex-profile runtime adapter (`tools/si/paas_agent_runtime_adapter.go`) with profile/auth-cache readiness planning and integrated it into `agent run-once`; adapter behavior documented in `docs/PAAS_AGENT_RUNTIME_ADAPTER.md` |
 | WS12-06 | Implement remediation policy engine (`auto-allow`, `approval-required`, `deny`) | Not Started | Unassigned | |
 | WS12-07 | Implement approval flow (`si paas agent approve/deny`) and Telegram callback linkage | Not Started | Unassigned | |
 | WS12-08 | Implement scheduler/self-heal for agent workers (lock, health check, auto-recover) | Not Started | Unassigned | |
@@ -1081,12 +1081,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-12 | Completed WS12-02 by implementing deploy/health/runtime event bridge collectors (`tools/si/paas_incident_collectors.go`) that convert existing context event streams into canonical incidents with dedupe-window suppression, plus deterministic collector regression tests and collector contract docs | WS12-03..10 remain pending | Implement WS12-03 context-scoped incident queue storage and retention policies next |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-03 by implementing context-scoped incident queue storage with queue-key upsert semantics and retention controls (max-age/max-entries), including sync wiring from collector output and queue-specific regression tests/docs | WS12-04..10 remain pending | Implement WS12-04 live agent command backend next |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-04 by implementing live `si paas agent` backend operations (`enable/disable/status/logs/run-once`) with context-scoped agent store persistence, run-log event sink, and incident queue sync integration for `run-once` | WS12-05..10 remain pending | Implement WS12-05 dyad-style runtime adapter using Codex profile path next |
+| 2026-02-17 | Codex | WS-12 | Completed WS12-05 by implementing a Codex-profile runtime adapter that resolves profile identity/auth-cache readiness and wiring runtime-plan ready/blocked states into `agent run-once` outputs and run-log persistence | WS12-06..10 remain pending | Implement WS12-06 remediation policy engine (`auto-allow`, `approval-required`, `deny`) next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS12-05 dyad-style agent runtime adapter using Codex profile auth path.
-2. Implement WS12-06 remediation policy engine (`auto-allow`, `approval-required`, `deny`).
-3. Implement WS12-07 approval flow and Telegram callback linkage.
+1. Implement WS12-06 remediation policy engine (`auto-allow`, `approval-required`, `deny`).
+2. Implement WS12-07 approval flow and Telegram callback linkage.
+3. Implement WS12-08 scheduler/self-heal for agent workers.
 
 ## 13. Reference Links
 
