@@ -851,7 +851,7 @@ Work items:
 | --- | --- | --- | --- | --- |
 | WS09-01 | Build unit/integration/e2e test matrix | Done | Codex | Added `docs/PAAS_TEST_MATRIX.md` with executable unit/integration/e2e/broad-smoke command matrix and linked it from `docs/testing.md` |
 | WS09-02 | Define failure-injection and rollback drills | Done | Codex | Added committed drill runbook (`docs/PAAS_FAILURE_DRILLS.md`) and executable runner (`tools/paas-failure-drills.sh`) covering canary-failure gating, deploy rollback regression, and blue/green post-cutover rollback behavior |
-| WS09-03 | Add security review checklist and threat model | Not Started | Unassigned | |
+| WS09-03 | Add security review checklist and threat model | Done | Codex | Added `docs/PAAS_SECURITY_THREAT_MODEL.md` with trust boundaries, STRIDE threat table, review checklist, and review-output template; linked from `docs/testing.md` |
 | WS09-04 | Write ops runbook for incident response | Not Started | Unassigned | |
 | WS09-05 | Add state-isolation regression tests (context boundary and leakage checks) | Not Started | Unassigned | |
 | WS09-06 | Add upgrade and compatibility regression suite (arch/runtime/deploy-path coverage) | Done | Codex | Added compatibility regression coverage via `TestPaasRegressionUpgradeDeployRollbackPath` plus dedicated end-to-end harness execution spanning arch/runtime/deploy/rollback/webhook/ingress-alert paths |
@@ -1069,12 +1069,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-10 by adding deterministic deploy-time magic-variable expansion (`${SI_PAAS_*}` and `{{paas.*}}`), add-on compose-fragment merge conflict validation, and compose bundle manifest/materialization (`compose.files` + add-on fragment files) wired through standard deploy and blue/green apply paths | WS04 stream is now fully complete; remaining near-term backlog is WS09 hardening slices | Continue WS09-01/02/03/04/05 hardening backlog in order |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-01 by publishing an executable PaaS quality matrix in `docs/PAAS_TEST_MATRIX.md` (unit/integration/e2e regression + broad smoke command sets) and linking it from `docs/testing.md`; validated each matrix command in containerized runs | Remaining WS09-02/03/04/05 hardening items are pending | Implement WS09-02 failure-injection and rollback drills next |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-02 by defining a committed failure-injection drill set and adding `tools/paas-failure-drills.sh` to execute rollback-critical scenarios (canary failure gating, deploy health rollback regression path, blue/green post-cutover rollback), with successful drill execution captured in this sprint | Remaining WS09-03/04/05 hardening items are pending | Implement WS09-03 security review checklist and threat model next |
+| 2026-02-17 | Codex | WS-09 | Completed WS09-03 by adding a PaaS-specific security review checklist and threat model (`docs/PAAS_SECURITY_THREAT_MODEL.md`) covering trust boundaries, asset classes, STRIDE threats, mitigation mapping, and required review outputs for PRs touching `si paas` | Remaining WS09-04/05 hardening items are pending | Implement WS09-04 incident-response ops runbook next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS09-03 security review checklist and threat model.
-2. Implement WS09-04 ops runbook for incident response.
-3. Implement WS09-05 state-isolation regression tests.
+1. Implement WS09-04 ops runbook for incident response.
+2. Implement WS09-05 state-isolation regression tests.
 
 ## 13. Reference Links
 

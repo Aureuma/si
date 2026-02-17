@@ -41,6 +41,12 @@ cat docs/PAAS_FAILURE_DRILLS.md
 ./tools/paas-failure-drills.sh
 ```
 
+For PaaS security review checklist and threat model guidance, use:
+
+```bash
+cat docs/PAAS_SECURITY_THREAT_MODEL.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
