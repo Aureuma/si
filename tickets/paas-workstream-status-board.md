@@ -28,7 +28,7 @@ Status legend:
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
 | WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
 | WS-08 | Cloud-hosted paid edition (solo-dev simple billing model) | WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Linked ticket: `paas-monetization-solo-dev.md` (MON-01..MON-07) |
-| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01 test matrix and WS09-06 compatibility regression suite completed; remaining WS09 hardening items pending |
+| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01 test matrix, WS09-02 failure-injection drills, and WS09-06 compatibility regression suite completed; remaining WS09 hardening items pending |
 | WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | Not Started | Unassigned | | | | Linked ticket: `paas-state-isolation-model.md` (ISO-01..ISO-08) |
 | WS-10 | Optional post-MVP TUI layer (deferred) | WS-02, WS-04, WS-06, WS-09 | Not Started | Unassigned | | | | Deferred until after MVP |
 
@@ -93,6 +93,7 @@ Status legend:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-07 by defining service-pack/add-on contracts for `postgres|redis|nats` and implementing lifecycle operations under `si paas app addon` (`contract|enable|list|disable`) with context-scoped add-on state persistence and generated compose-fragment artifacts carrying explicit merge-strategy metadata. | WS04-10 magic-variable and compose-fragment merge validation remains pending. | Continue WS04-10 implementation next, then shift into WS09 hardening backlog. |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-10 by adding deterministic magic-variable expansion and add-on compose-fragment merge validation to deploy-time bundle preparation, plus compose manifest artifact wiring consumed by deploy/apply and blue/green apply paths. | WS04 stream is now complete. | Shift execution to WS09-01..05 hardening backlog in order. |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-01 by building a runnable PaaS test matrix (`docs/PAAS_TEST_MATRIX.md`) across unit/integration/e2e regression/smoke layers, linking it from `docs/testing.md`, and executing each matrix command successfully in containerized runs. | WS09-02/03/04/05 remain pending. | Continue with WS09-02 failure-injection and rollback drills next. |
+| 2026-02-17 | Codex | WS-09 | Completed WS09-02 by defining and executing failure-injection rollback drills with committed artifacts (`docs/PAAS_FAILURE_DRILLS.md`, `tools/paas-failure-drills.sh`) covering canary gating, deploy health rollback regression, and blue/green post-cutover rollback safety paths. | WS09-03/04/05 remain pending. | Continue with WS09-03 security checklist and threat model next. |
 
 ## 4. Blocker Register
 
