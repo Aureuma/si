@@ -14,25 +14,107 @@ import (
 
 const paasSCPBinEnvKey = "SI_PAAS_SCP_BIN"
 
-func applyPaasReleaseToTargets(apply bool, selectedTargets []string, bundleDir, releaseID, remoteRoot string, timeout time.Duration) ([]string, error) {
-	if !apply {
-		return nil, nil
+const defaultPaasHealthCheckCommand = "docker compose -f compose.yaml ps --status running --services | grep -q ."
+
+type paasApplyOptions struct {
+	Enabled              bool
+	SelectedTargets      []string
+	BundleDir            string
+	ReleaseID            string
+	RemoteRoot           string
+	ApplyTimeout         time.Duration
+	HealthTimeout        time.Duration
+	HealthCommand        string
+	RollbackOnFailure    bool
+	RollbackBundleDir    string
+	RollbackReleaseID    string
+	RollbackApplyTimeout time.Duration
+}
+
+type paasApplyResult struct {
+	AppliedTargets      []string
+	HealthyTargets      []string
+	RolledBackTargets   []string
+	RollbackReleaseID   string
+	HealthCommand       string
+	HealthChecksEnabled bool
+}
+
+func applyPaasReleaseToTargets(opts paasApplyOptions) (paasApplyResult, error) {
+	result := paasApplyResult{
+		AppliedTargets:      []string{},
+		HealthyTargets:      []string{},
+		RolledBackTargets:   []string{},
+		RollbackReleaseID:   strings.TrimSpace(opts.RollbackReleaseID),
+		HealthCommand:       strings.TrimSpace(opts.HealthCommand),
+		HealthChecksEnabled: strings.TrimSpace(opts.HealthCommand) != "",
 	}
-	targets, err := resolvePaasDeployTargets(selectedTargets)
+	if !opts.Enabled {
+		return result, nil
+	}
+	targets, err := resolvePaasDeployTargets(opts.SelectedTargets)
 	if err != nil {
-		return nil, err
+		return result, newPaasOperationFailure(
+			paasFailureTargetResolution,
+			"target_resolve",
+			"",
+			"verify --target/--targets values or set a default via `si paas target use`",
+			err,
+		)
 	}
-	applied := make([]string, 0, len(targets))
 	for _, target := range targets {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		err := runPaasRemoteComposeApply(ctx, target, bundleDir, releaseID, remoteRoot)
+		ctx, cancel := context.WithTimeout(context.Background(), opts.ApplyTimeout)
+		err := runPaasRemoteComposeApply(ctx, target, opts.BundleDir, opts.ReleaseID, opts.RemoteRoot)
 		cancel()
 		if err != nil {
-			return applied, fmt.Errorf("target %s apply failed: %w", target.Name, err)
+			return result, err
 		}
-		applied = append(applied, target.Name)
+		result.AppliedTargets = append(result.AppliedTargets, target.Name)
+
+		if strings.TrimSpace(opts.HealthCommand) == "" {
+			continue
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), opts.HealthTimeout)
+		err = runPaasRemoteHealthCheck(ctx, target, opts.ReleaseID, opts.RemoteRoot, opts.HealthCommand)
+		cancel()
+		if err == nil {
+			result.HealthyTargets = append(result.HealthyTargets, target.Name)
+			continue
+		}
+		if !opts.RollbackOnFailure {
+			return result, err
+		}
+		if strings.TrimSpace(opts.RollbackReleaseID) == "" || strings.TrimSpace(opts.RollbackBundleDir) == "" {
+			return result, newPaasOperationFailure(
+				paasFailureRollbackResolve,
+				"rollback_resolve",
+				target.Name,
+				"provide a valid previous release to rollback or deploy a known-good baseline first",
+				fmt.Errorf("health check failed and no rollback release is available: %w", err),
+			)
+		}
+		ctx, cancel = context.WithTimeout(context.Background(), opts.RollbackApplyTimeout)
+		rollbackErr := runPaasRemoteComposeApply(ctx, target, opts.RollbackBundleDir, opts.RollbackReleaseID, opts.RemoteRoot)
+		cancel()
+		if rollbackErr != nil {
+			return result, newPaasOperationFailure(
+				paasFailureRollbackApply,
+				"rollback_apply",
+				target.Name,
+				"fix rollback transport/runtime failure on the target and rerun `si paas rollback`",
+				fmt.Errorf("health check failed and rollback to %s failed: %w", opts.RollbackReleaseID, rollbackErr),
+			)
+		}
+		result.RolledBackTargets = append(result.RolledBackTargets, target.Name)
+		return result, newPaasOperationFailure(
+			paasFailureHealthCheck,
+			"health_check",
+			target.Name,
+			"inspect target logs and service health, then redeploy after fixing readiness failures",
+			fmt.Errorf("health check failed and rollback to %s was applied: %w", opts.RollbackReleaseID, err),
+		)
 	}
-	return applied, nil
+	return result, nil
 }
 
 func resolvePaasDeployTargets(selectedTargets []string) ([]paasTarget, error) {
@@ -78,10 +160,22 @@ func resolvePaasDeployTargets(selectedTargets []string) ([]paasTarget, error) {
 func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBundleDir, releaseID, remoteRoot string) error {
 	releaseDir := path.Join(strings.TrimSpace(remoteRoot), sanitizePaasReleasePathSegment(releaseID))
 	if strings.TrimSpace(releaseDir) == "" {
-		return fmt.Errorf("invalid remote release directory")
+		return newPaasOperationFailure(
+			paasFailureRemoteApply,
+			"remote_apply",
+			target.Name,
+			"verify remote release path and retry",
+			fmt.Errorf("invalid remote release directory"),
+		)
 	}
 	if _, err := runPaasSSHCommand(ctx, target, fmt.Sprintf("mkdir -p %s", quoteSingle(releaseDir))); err != nil {
-		return err
+		return newPaasOperationFailure(
+			paasFailureRemoteApply,
+			"remote_prepare",
+			target.Name,
+			"verify SSH access and remote filesystem permissions",
+			err,
+		)
 	}
 	paths := []string{
 		filepath.Join(strings.TrimSpace(localBundleDir), "compose.yaml"),
@@ -89,12 +183,43 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 	}
 	for _, src := range paths {
 		if err := runPaasSCPUpload(ctx, target, src, releaseDir); err != nil {
-			return err
+			return newPaasOperationFailure(
+				paasFailureRemoteUpload,
+				"remote_upload",
+				target.Name,
+				"verify SCP connectivity, SSH credentials, and remote directory write access",
+				err,
+			)
 		}
 	}
 	remoteCmd := fmt.Sprintf("cd %s && docker compose -f compose.yaml pull && docker compose -f compose.yaml up -d --remove-orphans", quoteSingle(releaseDir))
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
-		return err
+		return newPaasOperationFailure(
+			paasFailureRemoteApply,
+			"remote_apply",
+			target.Name,
+			"validate Docker/Compose runtime state on target and rerun deploy",
+			err,
+		)
+	}
+	return nil
+}
+
+func runPaasRemoteHealthCheck(ctx context.Context, target paasTarget, releaseID, remoteRoot, healthCommand string) error {
+	command := strings.TrimSpace(healthCommand)
+	if command == "" {
+		command = defaultPaasHealthCheckCommand
+	}
+	releaseDir := path.Join(strings.TrimSpace(remoteRoot), sanitizePaasReleasePathSegment(releaseID))
+	remoteCmd := fmt.Sprintf("cd %s && %s", quoteSingle(releaseDir), command)
+	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
+		return newPaasOperationFailure(
+			paasFailureHealthCheck,
+			"health_check",
+			target.Name,
+			"verify service readiness and health command behavior before retrying deploy",
+			err,
+		)
 	}
 	return nil
 }

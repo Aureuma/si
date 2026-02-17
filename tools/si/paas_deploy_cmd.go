@@ -24,6 +24,10 @@ func cmdPaasDeploy(args []string) {
 	applyRemote := fs.Bool("apply", false, "upload bundle and apply docker compose on remote targets")
 	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
 	applyTimeout := fs.String("apply-timeout", "2m", "per-target remote apply timeout")
+	healthCmd := fs.String("health-cmd", defaultPaasHealthCheckCommand, "remote health command executed after apply")
+	healthTimeout := fs.String("health-timeout", "45s", "per-target health check timeout")
+	rollbackOnFailure := fs.Bool("rollback-on-failure", true, "attempt rollback to previous known-good release when health checks fail")
+	rollbackTimeout := fs.String("rollback-timeout", "2m", "per-target rollback apply timeout")
 	waitTimeout := fs.String("wait-timeout", "5m", "deployment wait timeout")
 	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
 	allowPlaintextSecrets := fs.Bool("allow-plaintext-secrets", false, "allow plaintext secret assignments in compose file (unsafe)")
@@ -47,18 +51,60 @@ func cmdPaasDeploy(args []string) {
 	}
 	applyTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*applyTimeout))
 	if err != nil || applyTimeoutValue <= 0 {
-		fatal(fmt.Errorf("invalid --apply-timeout %q", strings.TrimSpace(*applyTimeout)))
+		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass a positive duration for --apply-timeout (for example 2m)",
+			fmt.Errorf("invalid --apply-timeout %q", strings.TrimSpace(*applyTimeout)),
+		), nil)
+	}
+	healthTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*healthTimeout))
+	if err != nil || healthTimeoutValue <= 0 {
+		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass a positive duration for --health-timeout (for example 45s)",
+			fmt.Errorf("invalid --health-timeout %q", strings.TrimSpace(*healthTimeout)),
+		), nil)
+	}
+	rollbackTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*rollbackTimeout))
+	if err != nil || rollbackTimeoutValue <= 0 {
+		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass a positive duration for --rollback-timeout (for example 2m)",
+			fmt.Errorf("invalid --rollback-timeout %q", strings.TrimSpace(*rollbackTimeout)),
+		), nil)
 	}
 	composeGuardrail, err := enforcePaasPlaintextSecretGuardrail(strings.TrimSpace(*composeFile), *allowPlaintextSecrets)
 	if err != nil {
-		fatal(err)
+		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			paasFailurePlaintextSecrets,
+			"precheck",
+			"",
+			"replace inline secret literals with variables and `si paas secret set`",
+			err,
+		), nil)
 	}
 	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
 	if err != nil {
-		fatal(err)
+		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			paasFailureVaultTrust,
+			"precheck",
+			"",
+			"establish trust using `si vault trust accept` or pass --allow-untrusted-vault (unsafe)",
+			err,
+		), nil)
+	}
+	resolvedApp := strings.TrimSpace(*app)
+	if resolvedApp == "" {
+		resolvedApp = "default-app"
 	}
 	bundleDir, bundleMetaPath, err := ensurePaasReleaseBundle(
-		strings.TrimSpace(*app),
+		resolvedApp,
 		strings.TrimSpace(*release),
 		strings.TrimSpace(*composeFile),
 		strings.TrimSpace(*bundleRoot),
@@ -73,18 +119,74 @@ func cmdPaasDeploy(args []string) {
 		},
 	)
 	if err != nil {
-		fatal(err)
+		failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_create",
+			"",
+			"verify compose file path and state root permissions",
+			err,
+		), nil)
 	}
 	releaseID := filepath.Base(bundleDir)
-	appliedTargets, err := applyPaasReleaseToTargets(*applyRemote, resolvedTargets, bundleDir, releaseID, strings.TrimSpace(*remoteDir), applyTimeoutValue)
+	rollbackReleaseID := ""
+	rollbackBundleDir := ""
+	if *applyRemote && *rollbackOnFailure {
+		rollbackReleaseID, err = resolvePaasCurrentRelease(resolvedApp)
+		if err == nil && strings.TrimSpace(rollbackReleaseID) != "" && !strings.EqualFold(strings.TrimSpace(rollbackReleaseID), releaseID) {
+			rollbackBundleDir, err = resolvePaasReleaseBundleDir(strings.TrimSpace(*bundleRoot), resolvedApp, rollbackReleaseID)
+			if err != nil {
+				rollbackReleaseID = ""
+				rollbackBundleDir = ""
+			}
+		}
+		if strings.TrimSpace(rollbackReleaseID) == "" {
+			rollbackReleaseID, _ = resolveLatestPaasReleaseID(strings.TrimSpace(*bundleRoot), resolvedApp, releaseID)
+			if strings.TrimSpace(rollbackReleaseID) != "" {
+				rollbackBundleDir, err = resolvePaasReleaseBundleDir(strings.TrimSpace(*bundleRoot), resolvedApp, rollbackReleaseID)
+				if err != nil {
+					rollbackReleaseID = ""
+					rollbackBundleDir = ""
+				}
+			}
+		}
+	}
+	applyResult, err := applyPaasReleaseToTargets(paasApplyOptions{
+		Enabled:              *applyRemote,
+		SelectedTargets:      resolvedTargets,
+		BundleDir:            bundleDir,
+		ReleaseID:            releaseID,
+		RemoteRoot:           strings.TrimSpace(*remoteDir),
+		ApplyTimeout:         applyTimeoutValue,
+		HealthTimeout:        healthTimeoutValue,
+		HealthCommand:        strings.TrimSpace(*healthCmd),
+		RollbackOnFailure:    *rollbackOnFailure,
+		RollbackBundleDir:    rollbackBundleDir,
+		RollbackReleaseID:    rollbackReleaseID,
+		RollbackApplyTimeout: rollbackTimeoutValue,
+	})
 	if err != nil {
-		fatal(err)
+		failPaasCommand("deploy", jsonOut, err, map[string]string{
+			"release":            releaseID,
+			"bundle_dir":         bundleDir,
+			"rollback_candidate": rollbackReleaseID,
+		})
+	}
+	if *applyRemote && len(applyResult.AppliedTargets) > 0 {
+		if err := recordPaasSuccessfulRelease(resolvedApp, releaseID); err != nil {
+			failPaasCommand("deploy", jsonOut, newPaasOperationFailure(
+				paasFailureUnknown,
+				"state_record",
+				"",
+				"verify local state permissions and rerun deploy",
+				err,
+			), nil)
+		}
 	}
 	fields := map[string]string{
-		"app":                      strings.TrimSpace(*app),
+		"app":                      resolvedApp,
 		"apply":                    boolString(*applyRemote),
 		"apply_timeout":            applyTimeoutValue.String(),
-		"applied_targets":          formatTargets(appliedTargets),
+		"applied_targets":          formatTargets(applyResult.AppliedTargets),
 		"bundle_dir":               bundleDir,
 		"bundle_metadata":          bundleMetaPath,
 		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
@@ -94,11 +196,18 @@ func cmdPaasDeploy(args []string) {
 		"max_parallel":             intString(*maxParallel),
 		"release":                  releaseID,
 		"remote_dir":               strings.TrimSpace(*remoteDir),
+		"rollback_on_failure":      boolString(*rollbackOnFailure),
+		"rollback_release":         rollbackReleaseID,
+		"rollback_targets":         formatTargets(applyResult.RolledBackTargets),
+		"rollback_timeout":         rollbackTimeoutValue.String(),
 		"strategy":                 resolvedStrategy,
 		"targets":                  formatTargets(resolvedTargets),
 		"vault_file":               vaultGuardrail.File,
 		"vault_recipients":         intString(vaultGuardrail.RecipientCount),
 		"vault_trust":              boolString(vaultGuardrail.Trusted),
+		"health_cmd":               applyResult.HealthCommand,
+		"health_checked_targets":   formatTargets(applyResult.HealthyTargets),
+		"health_timeout":           healthTimeoutValue.String(),
 		"wait_timeout":             strings.TrimSpace(*waitTimeout),
 	}
 	if !vaultGuardrail.Trusted {
@@ -117,6 +226,12 @@ func cmdPaasRollback(args []string) {
 	strategy := fs.String("strategy", "serial", "fan-out strategy (serial|rolling|canary|parallel)")
 	maxParallel := fs.Int("max-parallel", 1, "maximum parallel target operations")
 	continueOnError := fs.Bool("continue-on-error", false, "continue rollback on target errors")
+	bundleRoot := fs.String("bundle-root", "", "release bundle root path (defaults to context-scoped state root)")
+	applyRemote := fs.Bool("apply", false, "upload release bundle and apply docker compose on targets")
+	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
+	applyTimeout := fs.String("apply-timeout", "2m", "per-target remote apply timeout")
+	healthCmd := fs.String("health-cmd", defaultPaasHealthCheckCommand, "remote health command executed after rollback")
+	healthTimeout := fs.String("health-timeout", "45s", "per-target health check timeout")
 	waitTimeout := fs.String("wait-timeout", "5m", "rollback wait timeout")
 	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
 	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "allow rollback with untrusted vault fingerprint (unsafe)")
@@ -137,21 +252,130 @@ func cmdPaasRollback(args []string) {
 		printUsage(paasRollbackUsageText)
 		return
 	}
+	applyTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*applyTimeout))
+	if err != nil || applyTimeoutValue <= 0 {
+		failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass a positive duration for --apply-timeout (for example 2m)",
+			fmt.Errorf("invalid --apply-timeout %q", strings.TrimSpace(*applyTimeout)),
+		), nil)
+	}
+	healthTimeoutValue, err := time.ParseDuration(strings.TrimSpace(*healthTimeout))
+	if err != nil || healthTimeoutValue <= 0 {
+		failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass a positive duration for --health-timeout (for example 45s)",
+			fmt.Errorf("invalid --health-timeout %q", strings.TrimSpace(*healthTimeout)),
+		), nil)
+	}
 	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
 	if err != nil {
-		fatal(err)
+		failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+			paasFailureVaultTrust,
+			"precheck",
+			"",
+			"establish trust using `si vault trust accept` or pass --allow-untrusted-vault (unsafe)",
+			err,
+		), nil)
+	}
+	resolvedApp := strings.TrimSpace(*app)
+	if resolvedApp == "" {
+		resolvedApp = "default-app"
+	}
+	resolvedRelease := strings.TrimSpace(*toRelease)
+	if *applyRemote && resolvedRelease == "" {
+		resolvedRelease, err = resolvePaasPreviousRelease(resolvedApp)
+		if err != nil {
+			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+				paasFailureRollbackResolve,
+				"rollback_resolve",
+				"",
+				"provide --to-release explicitly or ensure deploy history exists for this app",
+				err,
+			), nil)
+		}
+		if strings.TrimSpace(resolvedRelease) == "" {
+			current, _ := resolvePaasCurrentRelease(resolvedApp)
+			resolvedRelease, _ = resolveLatestPaasReleaseID(strings.TrimSpace(*bundleRoot), resolvedApp, strings.TrimSpace(current))
+		}
+		if strings.TrimSpace(resolvedRelease) == "" {
+			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+				paasFailureRollbackResolve,
+				"rollback_resolve",
+				"",
+				"provide --to-release explicitly or run at least two successful deployments first",
+				fmt.Errorf("no rollback release resolved for app %q", resolvedApp),
+			), nil)
+		}
+	}
+	appliedTargets := []string{}
+	healthyTargets := []string{}
+	if *applyRemote {
+		bundleDir, err := resolvePaasReleaseBundleDir(strings.TrimSpace(*bundleRoot), resolvedApp, resolvedRelease)
+		if err != nil {
+			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+				paasFailureRollbackBundle,
+				"rollback_bundle_resolve",
+				"",
+				"verify bundle root and release ID; ensure compose.yaml and release.json exist for the target release",
+				err,
+			), nil)
+		}
+		applyResult, err := applyPaasReleaseToTargets(paasApplyOptions{
+			Enabled:              true,
+			SelectedTargets:      resolvedTargets,
+			BundleDir:            bundleDir,
+			ReleaseID:            resolvedRelease,
+			RemoteRoot:           strings.TrimSpace(*remoteDir),
+			ApplyTimeout:         applyTimeoutValue,
+			HealthTimeout:        healthTimeoutValue,
+			HealthCommand:        strings.TrimSpace(*healthCmd),
+			RollbackOnFailure:    false,
+			RollbackBundleDir:    "",
+			RollbackReleaseID:    "",
+			RollbackApplyTimeout: applyTimeoutValue,
+		})
+		if err != nil {
+			failPaasCommand("rollback", jsonOut, err, map[string]string{
+				"to_release": resolvedRelease,
+				"bundle_dir": bundleDir,
+			})
+		}
+		appliedTargets = applyResult.AppliedTargets
+		healthyTargets = applyResult.HealthyTargets
+		if err := recordPaasSuccessfulRelease(resolvedApp, resolvedRelease); err != nil {
+			failPaasCommand("rollback", jsonOut, newPaasOperationFailure(
+				paasFailureUnknown,
+				"state_record",
+				"",
+				"verify local state permissions and retry rollback recording",
+				err,
+			), nil)
+		}
 	}
 	fields := map[string]string{
-		"app":               strings.TrimSpace(*app),
-		"continue_on_error": boolString(*continueOnError),
-		"max_parallel":      intString(*maxParallel),
-		"strategy":          resolvedStrategy,
-		"targets":           formatTargets(resolvedTargets),
-		"to_release":        strings.TrimSpace(*toRelease),
-		"vault_file":        vaultGuardrail.File,
-		"vault_recipients":  intString(vaultGuardrail.RecipientCount),
-		"vault_trust":       boolString(vaultGuardrail.Trusted),
-		"wait_timeout":      strings.TrimSpace(*waitTimeout),
+		"app":                    resolvedApp,
+		"apply":                  boolString(*applyRemote),
+		"apply_timeout":          applyTimeoutValue.String(),
+		"applied_targets":        formatTargets(appliedTargets),
+		"bundle_root":            strings.TrimSpace(*bundleRoot),
+		"continue_on_error":      boolString(*continueOnError),
+		"health_cmd":             strings.TrimSpace(*healthCmd),
+		"health_checked_targets": formatTargets(healthyTargets),
+		"health_timeout":         healthTimeoutValue.String(),
+		"max_parallel":           intString(*maxParallel),
+		"remote_dir":             strings.TrimSpace(*remoteDir),
+		"strategy":               resolvedStrategy,
+		"targets":                formatTargets(resolvedTargets),
+		"to_release":             resolvedRelease,
+		"vault_file":             vaultGuardrail.File,
+		"vault_recipients":       intString(vaultGuardrail.RecipientCount),
+		"vault_trust":            boolString(vaultGuardrail.Trusted),
+		"wait_timeout":           strings.TrimSpace(*waitTimeout),
 	}
 	if !vaultGuardrail.Trusted {
 		fields["vault_trust_warning"] = vaultGuardrail.TrustWarning
