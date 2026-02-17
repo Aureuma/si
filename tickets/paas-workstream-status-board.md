@@ -20,7 +20,7 @@ Status legend:
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | WS-00 | Program setup and conventions | None | In Progress | Codex | 2026-02-17 | 2026-02-18 | None | Master plan and trackers created |
 | WS-01 | Competitive research and synthesis (expanded set incl. SwiftWave/Kamal) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Evidence corpus and synthesis completed in `paas-competitive-research-board.md` |
-| WS-02 | `si paas` CLI-only MVP surface (non-TUI) | WS-00 | In Progress | Codex | 2026-02-17 | 2026-02-19 | None | Phase B kickoff started (root command/flags/json/context contracts) |
+| WS-02 | `si paas` CLI-only MVP surface (non-TUI) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Root command, non-interactive flags, `--json`, `--context`, command tests, and optional prompt pickers completed |
 | WS-03 | Multi-VPS SSH target management + ingress baseline decision | WS-02 | Not Started | Unassigned | | | | Research priority: architecture/runtime preflight gates before rollout |
 | WS-04 | Compose deployment engine + reconciler + blue/green + service packs + webhook + fan-out | WS-02, WS-03 | Not Started | Unassigned | | | | Research priority: deterministic diagnostics + retention/pruning lifecycle |
 | WS-05 | Vault and secret workflows | WS-02, WS-03 | Not Started | Unassigned | | | | |
@@ -61,6 +61,8 @@ Status legend:
 | 2026-02-17 | Codex | WS-02 | Completed WS02-01 by wiring `si paas` root dispatch and top-level usage visibility. | Subcommand surfaces still pending. | Execute WS02-02 non-interactive command/flag contracts. |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-02 with full non-interactive scaffolding for all planned MVP `si paas` subcommand families and required subcommands. | JSON contract and context routing still pending. | Execute WS02-03 (`--json`) then WS02-06 (`--context`). |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-03 by adding a shared JSON response envelope and `--json` handling across `si paas` operational commands. | Context routing and CLI tests still pending. | Execute WS02-06 (`--context`) and WS02-04 tests next. |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-06 by adding optional interactive subcommand pickers for `si paas` and subcommand groups while keeping non-interactive behavior intact. | Command-contract tests still pending. | Execute WS02-04/05 test and UX coverage. |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-04 and WS02-05 via `paas_cmd_test.go` contract checks and containerized CLI E2E validation for usage, JSON output, and context propagation. | Full `go test ./tools/si` still blocked by unrelated existing `codex_tmux_test.go` compile mismatch. | Start WS03-01 target model + local storage CRUD implementation. |
 
 ## 4. Blocker Register
 

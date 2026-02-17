@@ -686,8 +686,8 @@ Work items:
 | WS02-01 | Add `paas` root command wiring in `root_commands.go` | Done | Codex | Root dispatch + top-level usage wired (`root_commands.go`, `util.go`) |
 | WS02-02 | Implement complete non-interactive command and flag surfaces for all MVP operations | Done | Codex | Added full subcommand scaffolding for target/app/deploy/rollback/logs/alert/ai/context/agent/events |
 | WS02-03 | Add stable machine-readable output modes (`--json`) for operational commands | Done | Codex | Added shared scaffold JSON envelope and `--json` flag handling across MVP `si paas` command surfaces |
-| WS02-04 | Add command tests for dispatch, non-interactive behavior, and output contracts | Not Started | Unassigned | |
-| WS02-05 | Add optional prompt helpers only where they do not block non-interactive execution | Not Started | Unassigned | |
+| WS02-04 | Add command tests for dispatch, non-interactive behavior, and output contracts | Done | Codex | Added `paas_cmd_test.go` coverage for usage behavior, JSON contract envelopes, context propagation, and action-set/dispatch parity |
+| WS02-05 | Add optional prompt helpers only where they do not block non-interactive execution | Done | Codex | Added optional interactive command pickers for `si paas` and subcommand groups while preserving non-interactive usage behavior |
 | WS02-06 | Add context command surface and global `--context` routing | Done | Codex | Global `--context` parsing added at `si paas` root with context propagated in text/JSON output envelopes |
 
 ### WS-03 Multi-VPS Target Management (SSH)
@@ -1036,20 +1036,20 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-02 | Completed WS02-01: added `si paas` root command registration, alias coverage in root dispatch tests, and usage entry in global help output | None | Implement WS02-02 non-interactive command/flag surfaces |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-02: implemented non-interactive `si paas` command/flag scaffolding for all MVP command families and required subcommands | None | Implement WS02-03 stable `--json` output contracts |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-03: added shared machine-readable scaffold envelope (`ok`, `command`, `mode`, `fields`) and `--json` support across operational `si paas` commands | None | Implement WS02-06 context command surface and global context routing |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-06: wired optional interactive subcommand pickers for `si paas` command groups while preserving automation-safe behavior in non-interactive environments | None | Implement WS02-04 command contract tests and validate with CLI E2E checks |
+| 2026-02-17 | Codex | WS-02 | Completed WS02-04 and WS02-05: added `paas` command contract tests plus CLI E2E verification for usage/JSON/context behaviors | Existing unrelated `tools/si` test compile failures in `codex_tmux_test.go` still block full package test run | Begin WS03-01 target model + local storage CRUD implementation |
 
 ## 12. Immediate Next Actions
 
-1. Execute WS02-01/02/03/06 implementation in `tools/si` (root command, flags, `--json`, and context routing).
-2. Add WS02-04 command tests for dispatch, non-interactive behavior, and output contracts.
-3. Start WS-03 target CRUD and SSH preflight implementation once WS-02 command contracts compile.
-4. Start WS-05 secret command surface and redaction guardrails in parallel after WS-02 command skeleton lands.
-5. Stage WS-04 deploy engine scaffolding immediately after WS-03 target model is stable.
-6. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
-7. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
-8. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
-9. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
-10. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
-11. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
+1. Start WS-03 target CRUD and SSH preflight implementation now that WS-02 command contracts are complete.
+2. Start WS-05 secret command surface and redaction guardrails in parallel with WS-03 where interfaces are independent.
+3. Stage WS-04 deploy engine scaffolding immediately after WS-03 target model is stable.
+4. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
+5. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
+6. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+7. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+8. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+9. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 

@@ -15,17 +15,30 @@ const defaultPaasContext = "default"
 
 var paasCommandContext = defaultPaasContext
 
+var paasActions = []subcommandAction{
+	{Name: "target", Description: "manage VPS target inventory"},
+	{Name: "app", Description: "manage app lifecycle metadata"},
+	{Name: "deploy", Description: "deploy app releases"},
+	{Name: "rollback", Description: "rollback app releases"},
+	{Name: "logs", Description: "view app and service logs"},
+	{Name: "alert", Description: "configure and test alerts"},
+	{Name: "ai", Description: "run Codex-assisted operations"},
+	{Name: "context", Description: "manage isolated paas contexts"},
+	{Name: "agent", Description: "manage long-running agents"},
+	{Name: "events", Description: "query operational events"},
+}
+
 const (
-	paasTargetUsageText  = "usage: si paas target <add|list|check|use|remove> [args...]"
-	paasAppUsageText     = "usage: si paas app <init|list|status|remove> [args...]"
-	paasDeployUsageText  = "usage: si paas deploy [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--release <id>] [--compose-file <path>] [--wait-timeout <duration>] [--json]"
+	paasTargetUsageText   = "usage: si paas target <add|list|check|use|remove> [args...]"
+	paasAppUsageText      = "usage: si paas app <init|list|status|remove> [args...]"
+	paasDeployUsageText   = "usage: si paas deploy [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--release <id>] [--compose-file <path>] [--wait-timeout <duration>] [--json]"
 	paasRollbackUsageText = "usage: si paas rollback [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--to-release <id>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--wait-timeout <duration>] [--json]"
-	paasLogsUsageText    = "usage: si paas logs [--app <slug>] [--target <id>] [--service <name>] [--tail <n>] [--follow] [--since <duration>] [--json]"
-	paasAlertUsageText   = "usage: si paas alert <setup-telegram|test|history> [args...]"
-	paasAIUsageText      = "usage: si paas ai <plan|inspect|fix> [args...]"
-	paasContextUsageText = "usage: si paas context <create|list|use|show|remove> [args...]"
-	paasAgentUsageText   = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
-	paasEventsUsageText  = "usage: si paas events <list> [args...]"
+	paasLogsUsageText     = "usage: si paas logs [--app <slug>] [--target <id>] [--service <name>] [--tail <n>] [--follow] [--since <duration>] [--json]"
+	paasAlertUsageText    = "usage: si paas alert <setup-telegram|test|history> [args...]"
+	paasAIUsageText       = "usage: si paas ai <plan|inspect|fix> [args...]"
+	paasContextUsageText  = "usage: si paas context <create|list|use|show|remove> [args...]"
+	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
+	paasEventsUsageText   = "usage: si paas events <list> [args...]"
 )
 
 func cmdPaas(args []string) {
@@ -33,11 +46,15 @@ func cmdPaas(args []string) {
 	if !ok {
 		return
 	}
-	args = filtered
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(filtered, isInteractiveTerminal(), selectPaasAction)
+	if showUsage {
 		printUsage(paasUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	previousContext := paasCommandContext
 	paasCommandContext = contextName
 	defer func() {
@@ -73,6 +90,10 @@ func cmdPaas(args []string) {
 		printUsage(paasUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasAction() (string, bool) {
+	return selectSubcommandAction("PaaS commands:", paasActions)
 }
 
 type paasScaffoldEnvelope struct {
