@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -975,6 +978,118 @@ func TestApplyPaasReleaseToTargetsParallelContinuesOnError(t *testing.T) {
 	sshText := string(sshRaw)
 	if !strings.Contains(sshText, "root@203.0.113.10") || !strings.Contains(sshText, "root@203.0.113.11") {
 		t.Fatalf("expected parallel attempt on both targets, log=%q", sshText)
+	}
+}
+
+func TestPaasDeployWebhookMapAndIngest(t *testing.T) {
+	stateRoot := t.TempDir()
+	payloadFile := filepath.Join(t.TempDir(), "payload.json")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	addRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy", "webhook", "map", "add",
+			"--provider", "github",
+			"--repo", "https://github.com/acme/billing-api.git",
+			"--branch", "main",
+			"--app", "billing-api",
+			"--targets", "all",
+			"--strategy", "rolling",
+			"--max-parallel", "2",
+			"--json",
+		})
+	})
+	addEnv := parsePaasEnvelope(t, addRaw)
+	if addEnv.Command != "deploy webhook map add" {
+		t.Fatalf("expected mapping add command envelope, got %#v", addEnv)
+	}
+	if addEnv.Fields["repo"] != "acme/billing-api" {
+		t.Fatalf("expected normalized repo in mapping output, got %#v", addEnv.Fields)
+	}
+
+	listRaw := captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "webhook", "map", "list", "--json"})
+	})
+	var listPayload struct {
+		Command string               `json:"command"`
+		Count   int                  `json:"count"`
+		Data    []paasWebhookMapping `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(listRaw), &listPayload); err != nil {
+		t.Fatalf("decode webhook map list payload: %v output=%q", err, listRaw)
+	}
+	if listPayload.Command != "deploy webhook map list" || listPayload.Count != 1 || len(listPayload.Data) != 1 {
+		t.Fatalf("unexpected map list payload: %#v", listPayload)
+	}
+	if listPayload.Data[0].Branch != "main" || listPayload.Data[0].App != "billing-api" {
+		t.Fatalf("unexpected mapping row: %#v", listPayload.Data[0])
+	}
+
+	payload := []byte("{\"ref\":\"refs/heads/main\",\"repository\":{\"full_name\":\"acme/billing-api\"}}\n")
+	if err := os.WriteFile(payloadFile, payload, 0o600); err != nil {
+		t.Fatalf("write webhook payload: %v", err)
+	}
+	secret := "webhook-secret"
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(payload)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+
+	ingestRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy", "webhook", "ingest",
+			"--provider", "github",
+			"--event", "push",
+			"--payload-file", payloadFile,
+			"--signature", signature,
+			"--secret", secret,
+			"--json",
+		})
+	})
+	ingestEnv := parsePaasEnvelope(t, ingestRaw)
+	if ingestEnv.Command != "deploy webhook ingest" {
+		t.Fatalf("expected webhook ingest envelope, got %#v", ingestEnv)
+	}
+	if ingestEnv.Fields["mapped_app"] != "billing-api" {
+		t.Fatalf("expected mapping app in ingest output, got %#v", ingestEnv.Fields)
+	}
+	if ingestEnv.Fields["repo"] != "acme/billing-api" || ingestEnv.Fields["branch"] != "main" {
+		t.Fatalf("expected repo/branch from payload, got %#v", ingestEnv.Fields)
+	}
+	if !strings.Contains(ingestEnv.Fields["trigger_command"], "--strategy rolling") {
+		t.Fatalf("expected mapped deploy strategy in trigger command, got %#v", ingestEnv.Fields)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy", "webhook", "map", "remove",
+			"--provider", "github",
+			"--repo", "acme/billing-api",
+			"--branch", "main",
+			"--json",
+		})
+	})
+	afterRemoveRaw := captureStdout(t, func() {
+		cmdPaas([]string{"deploy", "webhook", "map", "list", "--json"})
+	})
+	if err := json.Unmarshal([]byte(afterRemoveRaw), &listPayload); err != nil {
+		t.Fatalf("decode webhook map list after remove: %v output=%q", err, afterRemoveRaw)
+	}
+	if listPayload.Count != 0 || len(listPayload.Data) != 0 {
+		t.Fatalf("expected empty mapping list after remove, got %#v", listPayload)
+	}
+}
+
+func TestVerifyPaasWebhookSignature(t *testing.T) {
+	payload := []byte("{\"status\":\"ok\"}")
+	secret := "abc123"
+	mac := hmac.New(sha256.New, []byte(secret))
+	_, _ = mac.Write(payload)
+	signature := "sha256=" + hex.EncodeToString(mac.Sum(nil))
+	if err := verifyPaasWebhookSignature(payload, secret, signature); err != nil {
+		t.Fatalf("expected valid signature: %v", err)
+	}
+	if err := verifyPaasWebhookSignature(payload, secret, "sha256=0000"); err == nil {
+		t.Fatalf("expected signature mismatch failure")
 	}
 }
 
