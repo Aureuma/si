@@ -401,6 +401,60 @@ func TestPaasAgentEnableStatusRunOnceLogsDisable(t *testing.T) {
 	}
 }
 
+func TestPaasAgentApproveDenyFlowPersistsDecision(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	contextDir := filepath.Join(stateRoot, "contexts", defaultPaasContext)
+	eventsDir := filepath.Join(contextDir, "events")
+	if err := os.MkdirAll(eventsDir, 0o700); err != nil {
+		t.Fatalf("mkdir events dir: %v", err)
+	}
+	deployEvent := []byte("{\"timestamp\":\"2026-02-17T16:00:00Z\",\"source\":\"deploy\",\"command\":\"deploy apply\",\"status\":\"failed\",\"target\":\"edge-a\",\"message\":\"deploy failed\"}\n")
+	if err := os.WriteFile(filepath.Join(eventsDir, "deployments.jsonl"), deployEvent, 0o600); err != nil {
+		t.Fatalf("write deployments event: %v", err)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"agent", "enable", "--name", "ops-agent", "--json"})
+	})
+	runRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "run-once", "--name", "ops-agent", "--json"})
+	})
+	runEnv := parsePaasEnvelope(t, runRaw)
+	runID := strings.TrimSpace(runEnv.Fields["run_id"])
+	if runID == "" {
+		t.Fatalf("expected run_id from run-once, got %#v", runEnv.Fields)
+	}
+
+	approveRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "approve", "--run", runID, "--note", "manual approval", "--json"})
+	})
+	approveEnv := parsePaasEnvelope(t, approveRaw)
+	if approveEnv.Command != "agent approve" || approveEnv.Fields["decision"] != paasApprovalDecisionApproved {
+		t.Fatalf("unexpected approve envelope: %#v", approveEnv)
+	}
+
+	denyRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "deny", "--run", runID, "--note", "rejecting action", "--json"})
+	})
+	denyEnv := parsePaasEnvelope(t, denyRaw)
+	if denyEnv.Command != "agent deny" || denyEnv.Fields["decision"] != paasApprovalDecisionDenied {
+		t.Fatalf("unexpected deny envelope: %#v", denyEnv)
+	}
+
+	store, _, err := loadPaasAgentApprovalStore(currentPaasContext())
+	if err != nil {
+		t.Fatalf("load approval store: %v", err)
+	}
+	if len(store.Decisions) == 0 {
+		t.Fatalf("expected approval decisions in store")
+	}
+	if strings.TrimSpace(store.Decisions[0].RunID) != runID || store.Decisions[0].Decision != paasApprovalDecisionDenied {
+		t.Fatalf("expected latest decision deny for run, got %#v", store.Decisions[0])
+	}
+}
+
 func TestPaasStateRootGuardrailRejectsRepoState(t *testing.T) {
 	cwd, err := os.Getwd()
 	if err != nil {
