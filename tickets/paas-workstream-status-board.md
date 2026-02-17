@@ -21,9 +21,9 @@ Status legend:
 | WS-00 | Program setup and conventions | None | In Progress | Codex | 2026-02-17 | 2026-02-18 | None | Master plan and trackers created |
 | WS-01 | Competitive research and synthesis (expanded set incl. SwiftWave/Kamal) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Evidence corpus and synthesis completed in `paas-competitive-research-board.md` |
 | WS-02 | `si paas` CLI-only MVP surface (non-TUI) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Root command, non-interactive flags, `--json`, `--context`, command tests, and optional prompt pickers completed |
-| WS-03 | Multi-VPS SSH target management + ingress baseline decision | WS-02 | In Progress | Codex | 2026-02-17 | 2026-02-20 | None | WS03-01/02/03/04/06 completed (CRUD, preflight, bootstrap, all-target summary, compatibility checks); WS03-05 pending |
+| WS-03 | Multi-VPS SSH target management + ingress baseline decision | WS-02 | Done | Codex | 2026-02-17 | 2026-02-17 | None | WS03-01..WS03-06 complete, including Traefik ingress baseline and compatibility preflight checks |
 | WS-04 | Compose deployment engine + reconciler + blue/green + service packs + webhook + fan-out | WS-02, WS-03 | Not Started | Unassigned | | | | Research priority: deterministic diagnostics + retention/pruning lifecycle |
-| WS-05 | Vault and secret workflows | WS-02, WS-03 | Not Started | Unassigned | | | | |
+| WS-05 | Vault and secret workflows | WS-02, WS-03 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS05-01/02 completed (key conventions + `si paas secret` command family); guardrails pending |
 | WS-06 | Logs/health/Telegram alerts + audit/event model | WS-04 | Not Started | Unassigned | | | | Research priority: TLS/ACME retry observability + recovery signaling |
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
 | WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
@@ -67,12 +67,14 @@ Status legend:
 | 2026-02-17 | Codex | WS-03 | Completed WS03-02 by implementing live `si paas target check` preflight flow (TCP, SSH, Docker, Compose) with machine-readable diagnostics and fail-fast exit codes. | Password-to-key bootstrap flow still pending. | Execute WS03-03 bootstrap implementation. |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-03 and WS03-04 by adding `si paas target bootstrap` (password-to-key promotion) and aggregate `target check --all` health summaries. | Traefik ingress baseline and compatibility preflight checks remain. | Execute WS03-05 Traefik baseline and WS03-06 compatibility preflight implementation. |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-06 by adding architecture/runtime compatibility checks (`cpu arch` normalization and `--image-platform` matching) with actionable mismatch diagnostics. | Traefik ingress baseline remains pending. | Execute WS03-05 Traefik baseline implementation. |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-05 by implementing `si paas target ingress-baseline` and rendering Traefik baseline artifacts with per-target DNS/LB metadata persistence. | None | Begin WS-04 deploy engine and WS-05 vault/secret workflows. |
+| 2026-02-17 | Codex | WS-05 | Completed WS05-01 and WS05-02 by adding standardized vault naming conventions and `si paas secret` command family (`set|get|unset|list|key`) mapped to context/app/target namespaces. | Secret leakage/trust guardrails still pending (`WS05-03/04`). | Execute WS05-03 plaintext leakage guardrails, then WS05-04 deploy trust checks. |
 
 ## 4. Blocker Register
 
 | Date | Workstream | Blocker | Severity | Owner | Mitigation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-02-17 | WS-03/WS-04/WS-06/WS-09 | Research-priority slices are defined but currently unassigned (`WS03-06`, `WS04-11/12`, `WS06-07`, `WS09-06`). | Medium | Unassigned | Assign owners and target dates before next implementation sprint kickoff. | Open |
+| 2026-02-17 | WS-04/WS-06/WS-09 | Research-priority slices are defined but currently unassigned (`WS04-11/12`, `WS06-07`, `WS09-06`). | Medium | Unassigned | Assign owners and target dates before next implementation sprint kickoff. | Open |
 
 ## 5. Handoff Checklist (For New Agents)
 

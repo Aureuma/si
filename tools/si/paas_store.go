@@ -13,14 +13,18 @@ import (
 const paasStateRootEnvKey = "SI_PAAS_STATE_ROOT"
 
 type paasTarget struct {
-	Name       string   `json:"name"`
-	Host       string   `json:"host"`
-	Port       int      `json:"port"`
-	User       string   `json:"user"`
-	AuthMethod string   `json:"auth_method,omitempty"`
-	Labels     []string `json:"labels,omitempty"`
-	CreatedAt  string   `json:"created_at,omitempty"`
-	UpdatedAt  string   `json:"updated_at,omitempty"`
+	Name             string   `json:"name"`
+	Host             string   `json:"host"`
+	Port             int      `json:"port"`
+	User             string   `json:"user"`
+	AuthMethod       string   `json:"auth_method,omitempty"`
+	Labels           []string `json:"labels,omitempty"`
+	IngressProvider  string   `json:"ingress_provider,omitempty"`
+	IngressDomain    string   `json:"ingress_domain,omitempty"`
+	IngressLBMode    string   `json:"ingress_lb_mode,omitempty"`
+	IngressACMEEmail string   `json:"ingress_acme_email,omitempty"`
+	CreatedAt        string   `json:"created_at,omitempty"`
+	UpdatedAt        string   `json:"updated_at,omitempty"`
 }
 
 type paasTargetStore struct {
@@ -128,9 +132,25 @@ func normalizePaasTarget(target paasTarget) paasTarget {
 		target.Port = 22
 	}
 	target.Labels = parseCSV(strings.Join(target.Labels, ","))
+	target.IngressProvider = strings.ToLower(strings.TrimSpace(target.IngressProvider))
+	target.IngressDomain = strings.ToLower(strings.TrimSpace(target.IngressDomain))
+	target.IngressLBMode = normalizeIngressLBMode(target.IngressLBMode)
+	target.IngressACMEEmail = strings.TrimSpace(target.IngressACMEEmail)
 	target.CreatedAt = strings.TrimSpace(target.CreatedAt)
 	target.UpdatedAt = strings.TrimSpace(target.UpdatedAt)
 	return target
+}
+
+func normalizeIngressLBMode(value string) string {
+	mode := strings.ToLower(strings.TrimSpace(value))
+	switch mode {
+	case "", "dns":
+		return "dns"
+	case "l4", "lb", "loadbalancer", "load-balancer":
+		return "l4"
+	default:
+		return mode
+	}
 }
 
 func utcNowRFC3339() string {

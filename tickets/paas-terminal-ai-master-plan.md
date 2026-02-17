@@ -706,7 +706,7 @@ Work items:
 | WS03-02 | Implement SSH connectivity + preflight checks | Done | Codex | Added live target preflight checks (TCP reachability, SSH, Docker, Compose) with structured diagnostics and non-zero exit on failures |
 | WS03-03 | Implement bootstrap path from password to key auth | Done | Codex | Added `si paas target bootstrap` with password-env + public-key flow and auth-method promotion to `key` on success |
 | WS03-04 | Add `si paas target check --all` health summary | Done | Codex | `target check --all` now executes live per-target preflights with aggregate text/JSON summary and failure exit codes |
-| WS03-05 | Implement Traefik per-node ingress baseline with DNS/LB model; keep Caddy as post-MVP alternative | Not Started | Unassigned | Traefik is locked for MVP |
+| WS03-05 | Implement Traefik per-node ingress baseline with DNS/LB model; keep Caddy as post-MVP alternative | Done | Codex | Added `target ingress-baseline` with Traefik artifact rendering and persisted DNS/LB ingress metadata per target |
 | WS03-06 | Implement architecture/runtime compatibility preflight (`cpu arch`, Docker/Compose version, image platform) with actionable failures | Done | Codex | Added architecture/runtime preflight checks including `--image-platform` compatibility validation and actionable mismatch diagnostics |
 
 ### WS-04 Deployment Engine (Compose-first)
@@ -746,8 +746,8 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS05-01 | Define vault key naming conventions for PaaS | Not Started | Unassigned | |
-| WS05-02 | Implement `si paas secret` command family | Not Started | Unassigned | |
+| WS05-01 | Define vault key naming conventions for PaaS | Done | Codex | Implemented convention: `PAAS__CTX_<ctx>__APP_<app>__TARGET_<target>__VAR_<name>` with deterministic segment normalization |
+| WS05-02 | Implement `si paas secret` command family | Done | Codex | Added `si paas secret set|get|unset|list|key` with vault-key mapping and vault command delegation |
 | WS05-03 | Prevent plaintext leakage in logs/artifacts | Not Started | Unassigned | |
 | WS05-04 | Add vault trust/recipient guardrail checks in deploy flow | Not Started | Unassigned | |
 | WS05-05 | Implement context-scoped secret namespaces and vault file resolution | Not Started | Unassigned | |
@@ -1042,12 +1042,14 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-03 | Completed WS03-02: implemented live preflight execution for `si paas target check` including network reachability, SSH command execution, Docker server check, and Compose availability check | Key bootstrap path (password-to-key flow) still pending | Implement WS03-03 bootstrap path from password auth to key auth |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-03 and WS03-04: added password-to-key bootstrap command and upgraded `target check --all` to aggregate live health diagnostics with machine-readable output | Traefik ingress baseline and compatibility preflight are still pending | Implement WS03-05 Traefik baseline and WS03-06 compatibility preflight checks |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-06 by adding architecture compatibility preflights (`uname -m` normalization and `--image-platform` arch matching) to live target checks | Traefik ingress baseline (WS03-05) still pending | Implement WS03-05 Traefik baseline next, then advance WS-04 deploy engine |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-05 by adding Traefik ingress baseline rendering (`docker-compose.traefik.yaml`, static/dynamic config, README) plus per-target DNS/LB metadata persistence | None | Start WS-04 deploy engine and WS-05 secret workflows in parallel |
+| 2026-02-17 | Codex | WS-05 | Completed WS05-01 and WS05-02 by adding standardized vault key naming and `si paas secret` command family (`set|get|unset|list|key`) wired to context/app/target namespaces | `--json` for mutating secret operations is deferred; currently supported for `secret key` and `secret list` | Proceed with WS05-03 plaintext leakage guardrails and WS04 deploy engine work |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS03-05 Traefik per-node ingress baseline with DNS/LB model (MVP ingress lock).
-2. Start WS-05 secret command surface and redaction guardrails in parallel with remaining WS-03 tasks where interfaces are independent.
-3. Stage WS-04 deploy engine scaffolding immediately after WS-03 task completion.
+1. Start WS-04 deploy engine scaffolding (`release bundle`, upload/apply, and health/rollback path).
+2. Implement WS05-03 plaintext leakage guardrails across logs/artifacts for secret and deploy paths.
+3. Implement WS05-04 vault trust/recipient guardrails in deploy flow.
 4. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
 5. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
 6. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
