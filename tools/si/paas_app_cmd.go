@@ -6,11 +6,23 @@ import (
 	"strings"
 )
 
+var paasAppActions = []subcommandAction{
+	{Name: "init", Description: "initialize app metadata"},
+	{Name: "list", Description: "list apps"},
+	{Name: "status", Description: "show app status"},
+	{Name: "remove", Description: "remove app metadata"},
+}
+
 func cmdPaasApp(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasAppAction)
+	if showUsage {
 		printUsage(paasAppUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -29,6 +41,10 @@ func cmdPaasApp(args []string) {
 		printUsage(paasAppUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasAppAction() (string, bool) {
+	return selectSubcommandAction("PaaS app commands:", paasAppActions)
 }
 
 func cmdPaasAppInit(args []string) {

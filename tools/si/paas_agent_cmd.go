@@ -16,11 +16,26 @@ const (
 	paasAgentDenyUsageText    = "usage: si paas agent deny --run <id> [--json]"
 )
 
+var paasAgentActions = []subcommandAction{
+	{Name: "enable", Description: "enable agent worker"},
+	{Name: "disable", Description: "disable agent worker"},
+	{Name: "status", Description: "show agent status"},
+	{Name: "logs", Description: "show agent logs"},
+	{Name: "run-once", Description: "run a single agent cycle"},
+	{Name: "approve", Description: "approve pending run"},
+	{Name: "deny", Description: "deny pending run"},
+}
+
 func cmdPaasAgent(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasAgentAction)
+	if showUsage {
 		printUsage(paasAgentUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -45,6 +60,10 @@ func cmdPaasAgent(args []string) {
 		printUsage(paasAgentUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasAgentAction() (string, bool) {
+	return selectSubcommandAction("PaaS agent commands:", paasAgentActions)
 }
 
 func cmdPaasAgentEnable(args []string) {

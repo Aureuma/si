@@ -12,11 +12,22 @@ const (
 	paasAIFixUsageText     = "usage: si paas ai fix [--app <slug>] [--target <id>] [--incident <id>] [--profile <codex_profile>] [--prompt <text>] [--dry-run] [--json]"
 )
 
+var paasAIActions = []subcommandAction{
+	{Name: "plan", Description: "produce remediation plan"},
+	{Name: "inspect", Description: "inspect incident context"},
+	{Name: "fix", Description: "propose guarded fix"},
+}
+
 func cmdPaasAI(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasAIAction)
+	if showUsage {
 		printUsage(paasAIUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -33,6 +44,10 @@ func cmdPaasAI(args []string) {
 		printUsage(paasAIUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasAIAction() (string, bool) {
+	return selectSubcommandAction("PaaS AI commands:", paasAIActions)
 }
 
 func cmdPaasAIPlan(args []string) {

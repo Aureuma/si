@@ -9,11 +9,20 @@ import (
 
 const paasEventsListUsageText = "usage: si paas events list [--severity <level>] [--status <state>] [--limit <n>] [--json]"
 
+var paasEventsActions = []subcommandAction{
+	{Name: "list", Description: "list recorded events"},
+}
+
 func cmdPaasEvents(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasEventsAction)
+	if showUsage {
 		printUsage(paasEventsUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -26,6 +35,10 @@ func cmdPaasEvents(args []string) {
 		printUsage(paasEventsUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasEventsAction() (string, bool) {
+	return selectSubcommandAction("PaaS events commands:", paasEventsActions)
 }
 
 func cmdPaasEventsList(args []string) {
