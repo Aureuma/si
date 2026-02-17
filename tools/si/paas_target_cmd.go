@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -75,14 +76,40 @@ func cmdPaasTargetAdd(args []string) {
 	if !requirePaasValue(*user, "user", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password>] [--labels <k:v,...>] [--default] [--json]") {
 		return
 	}
+	store, err := loadPaasTargetStore(currentPaasContext())
+	if err != nil {
+		fatal(err)
+	}
+	selectedName := strings.TrimSpace(*name)
+	if findPaasTarget(store, selectedName) != -1 {
+		fatal(fmt.Errorf("target %q already exists", selectedName))
+	}
+	target := normalizePaasTarget(paasTarget{
+		Name:       selectedName,
+		Host:       strings.TrimSpace(*host),
+		Port:       *port,
+		User:       strings.TrimSpace(*user),
+		AuthMethod: strings.ToLower(strings.TrimSpace(*authMethod)),
+		Labels:     parseCSV(*labels),
+		CreatedAt:  utcNowRFC3339(),
+		UpdatedAt:  utcNowRFC3339(),
+	})
+	store.Targets = append(store.Targets, target)
+	if *setDefault || strings.TrimSpace(store.CurrentTarget) == "" {
+		store.CurrentTarget = target.Name
+	}
+	if err := savePaasTargetStore(currentPaasContext(), store); err != nil {
+		fatal(err)
+	}
 	printPaasScaffold("target add", map[string]string{
-		"auth_method": strings.ToLower(strings.TrimSpace(*authMethod)),
-		"default":     boolString(*setDefault),
-		"host":        strings.TrimSpace(*host),
-		"labels":      strings.Join(parseCSV(*labels), ","),
-		"name":        strings.TrimSpace(*name),
-		"port":        intString(*port),
-		"user":        strings.TrimSpace(*user),
+		"auth_method": target.AuthMethod,
+		"default":     boolString(store.CurrentTarget == target.Name),
+		"host":        target.Host,
+		"labels":      strings.Join(target.Labels, ","),
+		"name":        target.Name,
+		"port":        intString(target.Port),
+		"total":       intString(len(store.Targets)),
+		"user":        target.User,
 	}, jsonOut)
 }
 
@@ -95,7 +122,40 @@ func cmdPaasTargetList(args []string) {
 		printUsage("usage: si paas target list [--all] [--json]")
 		return
 	}
-	printPaasScaffold("target list", map[string]string{"all": boolString(*all)}, jsonOut)
+	store, err := loadPaasTargetStore(currentPaasContext())
+	if err != nil {
+		fatal(err)
+	}
+	if jsonOut {
+		payload := map[string]any{
+			"ok":             true,
+			"command":        "target list",
+			"context":        currentPaasContext(),
+			"mode":           "live",
+			"all":            *all,
+			"current_target": store.CurrentTarget,
+			"count":          len(store.Targets),
+			"data":           store.Targets,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	fmt.Printf("%s %d\n", styleHeading("paas targets:"), len(store.Targets))
+	if len(store.Targets) == 0 {
+		fmt.Println(styleDim("  no targets configured"))
+		return
+	}
+	for _, row := range store.Targets {
+		marker := " "
+		if strings.EqualFold(strings.TrimSpace(row.Name), strings.TrimSpace(store.CurrentTarget)) {
+			marker = "*"
+		}
+		fmt.Printf("  %s %s %s@%s:%d\n", marker, row.Name, row.User, row.Host, row.Port)
+	}
 }
 
 func cmdPaasTargetCheck(args []string) {
@@ -117,6 +177,14 @@ func cmdPaasTargetCheck(args []string) {
 	}
 	if *checkAll {
 		selected = "all"
+	} else {
+		store, err := loadPaasTargetStore(currentPaasContext())
+		if err != nil {
+			fatal(err)
+		}
+		if findPaasTarget(store, selected) == -1 {
+			fatal(fmt.Errorf("target %q not found", selected))
+		}
 	}
 	printPaasScaffold("target check", map[string]string{
 		"target":  selected,
@@ -140,7 +208,19 @@ func cmdPaasTargetUse(args []string) {
 	if !requirePaasValue(selected, "target", "usage: si paas target use --target <id> [--json]") {
 		return
 	}
-	printPaasScaffold("target use", map[string]string{"target": selected}, jsonOut)
+	store, err := loadPaasTargetStore(currentPaasContext())
+	if err != nil {
+		fatal(err)
+	}
+	idx := findPaasTarget(store, selected)
+	if idx == -1 {
+		fatal(fmt.Errorf("target %q not found", selected))
+	}
+	store.CurrentTarget = store.Targets[idx].Name
+	if err := savePaasTargetStore(currentPaasContext(), store); err != nil {
+		fatal(err)
+	}
+	printPaasScaffold("target use", map[string]string{"target": store.CurrentTarget}, jsonOut)
 }
 
 func cmdPaasTargetRemove(args []string) {
@@ -160,8 +240,32 @@ func cmdPaasTargetRemove(args []string) {
 	if !requirePaasValue(selected, "target", "usage: si paas target remove --target <id> [--force] [--json]") {
 		return
 	}
+	store, err := loadPaasTargetStore(currentPaasContext())
+	if err != nil {
+		fatal(err)
+	}
+	idx := findPaasTarget(store, selected)
+	if idx == -1 {
+		fatal(fmt.Errorf("target %q not found", selected))
+	}
+	normalizedCurrent := strings.TrimSpace(store.CurrentTarget)
+	if !*force && normalizedCurrent != "" && strings.EqualFold(normalizedCurrent, strings.TrimSpace(selected)) {
+		fatal(fmt.Errorf("cannot remove current target %q without --force", store.CurrentTarget))
+	}
+	removed := store.Targets[idx].Name
+	store.Targets = append(store.Targets[:idx], store.Targets[idx+1:]...)
+	if strings.EqualFold(strings.TrimSpace(store.CurrentTarget), strings.TrimSpace(removed)) {
+		store.CurrentTarget = ""
+		if len(store.Targets) > 0 {
+			store.CurrentTarget = store.Targets[0].Name
+		}
+	}
+	if err := savePaasTargetStore(currentPaasContext(), store); err != nil {
+		fatal(err)
+	}
 	printPaasScaffold("target remove", map[string]string{
 		"force":  boolString(*force),
-		"target": selected,
+		"target": removed,
+		"total":  intString(len(store.Targets)),
 	}, jsonOut)
 }
