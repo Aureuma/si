@@ -16,6 +16,7 @@ var paasTargetActions = []subcommandAction{
 	{Name: "use", Description: "set default target"},
 	{Name: "remove", Description: "remove a target"},
 	{Name: "bootstrap", Description: "promote password auth to key auth"},
+	{Name: "ingress-baseline", Description: "render Traefik ingress baseline"},
 }
 
 func cmdPaasTarget(args []string) {
@@ -45,6 +46,8 @@ func cmdPaasTarget(args []string) {
 		cmdPaasTargetRemove(rest)
 	case "bootstrap":
 		cmdPaasTargetBootstrap(rest)
+	case "ingress-baseline":
+		cmdPaasTargetIngressBaseline(rest)
 	default:
 		printUnknown("paas target", sub)
 		printUsage(paasTargetUsageText)
