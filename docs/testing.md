@@ -59,6 +59,12 @@ For state-isolation data classification policy, use:
 cat docs/PAAS_STATE_CLASSIFICATION_POLICY.md
 ```
 
+For private state backup/restore policy, use:
+
+```bash
+cat docs/PAAS_BACKUP_RESTORE_POLICY.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
