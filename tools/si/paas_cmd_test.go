@@ -14,6 +14,16 @@ type paasTestEnvelope struct {
 	Fields  map[string]string `json:"fields"`
 }
 
+type paasTargetListPayload struct {
+	OK            bool         `json:"ok"`
+	Command       string       `json:"command"`
+	Context       string       `json:"context"`
+	Mode          string       `json:"mode"`
+	CurrentTarget string       `json:"current_target"`
+	Count         int          `json:"count"`
+	Data          []paasTarget `json:"data"`
+}
+
 func TestPaasNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas(nil)
@@ -91,6 +101,60 @@ func TestPaasContextFlagPropagatesAndResets(t *testing.T) {
 	}
 }
 
+func TestPaasTargetCRUDWithLocalStore(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-1", "--host", "10.0.0.4", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-2", "--host", "10.0.0.5", "--user", "admin"})
+	})
+
+	listRaw := captureStdout(t, func() {
+		cmdPaas([]string{"target", "list", "--json"})
+	})
+	listPayload := parseTargetListPayload(t, listRaw)
+	if listPayload.Command != "target list" {
+		t.Fatalf("expected command=target list, got %q", listPayload.Command)
+	}
+	if listPayload.Mode != "live" {
+		t.Fatalf("expected mode=live, got %q", listPayload.Mode)
+	}
+	if listPayload.Count != 2 {
+		t.Fatalf("expected count=2, got %d", listPayload.Count)
+	}
+	if listPayload.CurrentTarget != "edge-1" {
+		t.Fatalf("expected current target edge-1, got %q", listPayload.CurrentTarget)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "use", "--target", "edge-2"})
+	})
+	afterUseRaw := captureStdout(t, func() {
+		cmdPaas([]string{"target", "list", "--json"})
+	})
+	afterUse := parseTargetListPayload(t, afterUseRaw)
+	if afterUse.CurrentTarget != "edge-2" {
+		t.Fatalf("expected current target edge-2, got %q", afterUse.CurrentTarget)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "remove", "--target", "edge-1"})
+	})
+	afterRemoveRaw := captureStdout(t, func() {
+		cmdPaas([]string{"target", "list", "--json"})
+	})
+	afterRemove := parseTargetListPayload(t, afterRemoveRaw)
+	if afterRemove.Count != 1 {
+		t.Fatalf("expected count=1 after remove, got %d", afterRemove.Count)
+	}
+	if len(afterRemove.Data) != 1 || afterRemove.Data[0].Name != "edge-2" {
+		t.Fatalf("expected edge-2 remaining, got %#v", afterRemove.Data)
+	}
+}
+
 func TestPaasDeployInvalidStrategyShowsUsage(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas([]string{"deploy", "--strategy", "invalid"})
@@ -131,7 +195,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "ai", "context", "agent", "events"})
-	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove"})
+	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove"})
 	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
@@ -147,4 +211,13 @@ func parsePaasEnvelope(t *testing.T, raw string) paasTestEnvelope {
 		t.Fatalf("decode envelope: %v output=%q", err, raw)
 	}
 	return env
+}
+
+func parseTargetListPayload(t *testing.T, raw string) paasTargetListPayload {
+	t.Helper()
+	var payload paasTargetListPayload
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("decode target list payload: %v output=%q", err, raw)
+	}
+	return payload
 }
