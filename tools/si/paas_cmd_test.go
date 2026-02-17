@@ -261,7 +261,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "agent", "events"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove"})
-	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history"})
+	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "ingress-tls"})
 	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
 	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove"})
@@ -1090,6 +1090,98 @@ func TestVerifyPaasWebhookSignature(t *testing.T) {
 	}
 	if err := verifyPaasWebhookSignature(payload, secret, "sha256=0000"); err == nil {
 		t.Fatalf("expected signature mismatch failure")
+	}
+}
+
+func TestPaasAlertIngressTLSRecordsRetryAlert(t *testing.T) {
+	stateRoot := t.TempDir()
+	artifactsDir := t.TempDir()
+	fakeBinDir := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"target", "ingress-baseline",
+			"--target", "edge-a",
+			"--domain", "apps.example.com",
+			"--acme-email", "ops@example.com",
+			"--output-dir", artifactsDir,
+		})
+	})
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"cmd=\"$*\"",
+		"if [[ \"$cmd\" == *\"docker ps --format\"* ]]; then",
+		"  echo si-traefik-edge-a",
+		"  exit 0",
+		"fi",
+		"if [[ \"$cmd\" == *\"test -s /var/lib/traefik/acme.json\"* ]]; then",
+		"  echo ready",
+		"  exit 0",
+		"fi",
+		"if [[ \"$cmd\" == *\"docker logs --tail\"* ]]; then",
+		"  echo \"acme challenge failed for domain; retrying in 30s\"",
+		"  exit 0",
+		"fi",
+		"exit 0",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+
+	alertRaw := captureStdout(t, func() {
+		cmdPaas([]string{"alert", "ingress-tls", "--target", "edge-a", "--json"})
+	})
+	var alertPayload struct {
+		Command string                 `json:"command"`
+		Count   int                    `json:"count"`
+		Data    []paasIngressTLSResult `json:"data"`
+		Fields  map[string]string      `json:"fields"`
+	}
+	if err := json.Unmarshal([]byte(alertRaw), &alertPayload); err != nil {
+		t.Fatalf("decode ingress tls alert payload: %v output=%q", err, alertRaw)
+	}
+	if alertPayload.Command != "alert ingress-tls" || alertPayload.Count != 1 || len(alertPayload.Data) != 1 {
+		t.Fatalf("unexpected ingress tls alert payload: %#v", alertPayload)
+	}
+	if alertPayload.Data[0].Status != "retrying" || alertPayload.Data[0].Severity != "warning" {
+		t.Fatalf("expected retrying warning status, got %#v", alertPayload.Data[0])
+	}
+	if alertPayload.Fields["alerts_emitted"] != "1" {
+		t.Fatalf("expected one alert emitted, got %#v", alertPayload.Fields)
+	}
+
+	historyRaw := captureStdout(t, func() {
+		cmdPaas([]string{"alert", "history", "--json"})
+	})
+	var historyPayload struct {
+		Command string           `json:"command"`
+		Count   int              `json:"count"`
+		Data    []paasAlertEntry `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(historyRaw), &historyPayload); err != nil {
+		t.Fatalf("decode alert history payload: %v output=%q", err, historyRaw)
+	}
+	if historyPayload.Command != "alert history" || historyPayload.Count < 1 || len(historyPayload.Data) < 1 {
+		t.Fatalf("expected alert history rows, got %#v", historyPayload)
+	}
+	found := false
+	for _, row := range historyPayload.Data {
+		if row.Command == "alert ingress-tls" && row.Target == "edge-a" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected ingress-tls alert record in history, got %#v", historyPayload.Data)
 	}
 }
 

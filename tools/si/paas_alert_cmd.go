@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -9,13 +11,14 @@ import (
 const (
 	paasAlertSetupTelegramUsageText = "usage: si paas alert setup-telegram --bot-token <token> --chat-id <id> [--dry-run] [--json]"
 	paasAlertTestUsageText          = "usage: si paas alert test [--severity <info|warning|critical>] [--message <text>] [--json]"
-	paasAlertHistoryUsageText       = "usage: si paas alert history [--limit <n>] [--json]"
+	paasAlertHistoryUsageText       = "usage: si paas alert history [--limit <n>] [--severity <info|warning|critical>] [--json]"
 )
 
 var paasAlertActions = []subcommandAction{
 	{Name: "setup-telegram", Description: "configure telegram notifier"},
 	{Name: "test", Description: "send test alert"},
 	{Name: "history", Description: "show recent alerts"},
+	{Name: "ingress-tls", Description: "inspect Traefik/ACME retry signals and emit alerts"},
 }
 
 func cmdPaasAlert(args []string) {
@@ -39,6 +42,8 @@ func cmdPaasAlert(args []string) {
 		cmdPaasAlertTest(rest)
 	case "history":
 		cmdPaasAlertHistory(rest)
+	case "ingress-tls":
+		cmdPaasAlertIngressTLS(rest)
 	default:
 		printUnknown("paas alert", sub)
 		printUsage(paasAlertUsageText)
@@ -84,20 +89,70 @@ func cmdPaasAlertTest(args []string) {
 		printUsage(paasAlertTestUsageText)
 		return
 	}
-	printPaasScaffold("alert test", map[string]string{
+	fields := map[string]string{
 		"message":  strings.TrimSpace(*message),
 		"severity": strings.ToLower(strings.TrimSpace(*severity)),
-	}, jsonOut)
+	}
+	if historyPath := recordPaasAlertEntry(paasAlertEntry{
+		Command:  "alert test",
+		Severity: fields["severity"],
+		Status:   "sent",
+		Message:  fields["message"],
+		Guidance: "Verify notifier routing and escalation paths.",
+	}); strings.TrimSpace(historyPath) != "" {
+		fields["alert_history"] = historyPath
+	}
+	printPaasScaffold("alert test", fields, jsonOut)
 }
 
 func cmdPaasAlertHistory(args []string) {
 	args, jsonOut := parsePaasJSONFlag(args)
 	fs := flag.NewFlagSet("paas alert history", flag.ExitOnError)
 	limit := fs.Int("limit", 20, "max rows")
+	severity := fs.String("severity", "", "severity filter")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasAlertHistoryUsageText)
 		return
 	}
-	printPaasScaffold("alert history", map[string]string{"limit": intString(*limit)}, jsonOut)
+	if *limit < 1 {
+		fatal(fmt.Errorf("--limit must be >= 1"))
+	}
+	rows, path, err := loadPaasAlertHistory(*limit, *severity)
+	if err != nil {
+		fatal(err)
+	}
+	if jsonOut {
+		payload := map[string]any{
+			"ok":       true,
+			"command":  "alert history",
+			"context":  currentPaasContext(),
+			"mode":     "live",
+			"count":    len(rows),
+			"severity": strings.ToLower(strings.TrimSpace(*severity)),
+			"path":     path,
+			"data":     rows,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	printPaasScaffold("alert history", map[string]string{
+		"limit":    intString(*limit),
+		"severity": strings.ToLower(strings.TrimSpace(*severity)),
+		"count":    intString(len(rows)),
+		"path":     path,
+	}, false)
+	for _, row := range rows {
+		fmt.Printf("  - %s [%s] %s target=%s message=%s\n",
+			row.Timestamp,
+			row.Severity,
+			row.Status,
+			row.Target,
+			row.Message,
+		)
+	}
 }
