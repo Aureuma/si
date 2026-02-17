@@ -39,16 +39,19 @@ func TestSetWarmWeeklyFullLimitFailure(t *testing.T) {
 
 func TestWarmWeeklyBootstrapSucceeded(t *testing.T) {
 	// Non-force: delta can be a valid success signal when both readings are known.
-	if !warmWeeklyBootstrapSucceeded(false, false, 0.0, true, true, 0.2, true, true) {
+	if !warmWeeklyBootstrapSucceeded(false, false, 5.0, true, true, 5.2, true, true) {
 		t.Fatalf("expected warm success for positive usage delta")
 	}
-	if warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 0.2, true, false) {
+	if warmWeeklyBootstrapSucceeded(false, false, 5.0, true, false, 5.2, true, false) {
 		t.Fatalf("expected warm failure when reset timing is still unavailable")
 	}
 
 	// Full weekly (100% remaining): reset timing alone is not enough; usage must drop.
 	if warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 0.0, true, true) {
 		t.Fatalf("expected warm failure when usage is still 100%%")
+	}
+	if warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 0.4, true, true) {
+		t.Fatalf("expected warm failure while weekly still rounds to 100%% remaining")
 	}
 	if !warmWeeklyBootstrapSucceeded(false, false, 0.0, true, false, 1.0, true, true) {
 		t.Fatalf("expected warm success once usage drops below 100%% with reset timing available")
@@ -80,6 +83,9 @@ func TestWarmWeeklyNeedsWarmAttempt(t *testing.T) {
 	}
 	if !warmWeeklyNeedsWarmAttempt(false, 0, true, true, false) {
 		t.Fatalf("expected warm while weekly remains at 100%%")
+	}
+	if !warmWeeklyNeedsWarmAttempt(false, 0.7, true, true, false) {
+		t.Fatalf("expected warm while weekly still rounds to 100%%")
 	}
 	if !warmWeeklyNeedsWarmAttempt(false, 10, true, true, true) {
 		t.Fatalf("expected warm when weekly window advances")
@@ -118,10 +124,25 @@ func TestWeeklyUsedPercent(t *testing.T) {
 	}
 }
 
+func TestWarmWeeklyAtFullLimit(t *testing.T) {
+	if !warmWeeklyAtFullLimit(0.0) {
+		t.Fatalf("expected full limit at 0.0")
+	}
+	if !warmWeeklyAtFullLimit(0.9) {
+		t.Fatalf("expected full limit when usage is below 1%%")
+	}
+	if warmWeeklyAtFullLimit(1.0) {
+		t.Fatalf("did not expect full limit at 1.0")
+	}
+}
+
 func TestRenderWarmWeeklyReconcileConfig(t *testing.T) {
 	cfg := renderWarmWeeklyReconcileConfig("/home/si/.si", "aureuma/si:local", 1001, 1001)
 	if !strings.Contains(cfg, fmt.Sprintf("volume = %s:%s", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir)) {
 		t.Fatalf("expected binary volume mount in config, got: %q", cfg)
+	}
+	if !strings.Contains(cfg, "volume = /var/run/docker.sock:/var/run/docker.sock") {
+		t.Fatalf("expected docker socket mount in config, got: %q", cfg)
 	}
 	if !strings.Contains(cfg, "command = "+warmWeeklyReconcileScriptPath) {
 		t.Fatalf("expected wrapper script command in config, got: %q", cfg)
