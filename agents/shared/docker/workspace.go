@@ -39,13 +39,8 @@ func InferDevelopmentMount(hostPath, containerHome string) (mount.Mount, bool) {
 	if hostPath == "" || containerHome == "" || !strings.HasPrefix(hostPath, "/") || !strings.HasPrefix(containerHome, "/") {
 		return mount.Mount{}, false
 	}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return mount.Mount{}, false
-	}
-	developmentHost := filepath.Join(home, "Development")
-	rel, err := filepath.Rel(developmentHost, hostPath)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+	developmentHost, ok := hostDevelopmentDir(hostPath)
+	if !ok {
 		return mount.Mount{}, false
 	}
 	return mount.Mount{
@@ -53,6 +48,38 @@ func InferDevelopmentMount(hostPath, containerHome string) (mount.Mount, bool) {
 		Source: developmentHost,
 		Target: path.Join(containerHome, "Development"),
 	}, true
+}
+
+// InferHostDevelopmentMount returns a bind mount that exposes the host's full
+// ~/Development directory at the exact same absolute path inside the container
+// when hostPath is inside that tree.
+func InferHostDevelopmentMount(hostPath string) (mount.Mount, bool) {
+	hostPath = filepath.Clean(strings.TrimSpace(hostPath))
+	if hostPath == "" || !strings.HasPrefix(hostPath, "/") {
+		return mount.Mount{}, false
+	}
+	developmentHost, ok := hostDevelopmentDir(hostPath)
+	if !ok {
+		return mount.Mount{}, false
+	}
+	return mount.Mount{
+		Type:   mount.TypeBind,
+		Source: developmentHost,
+		Target: filepath.ToSlash(developmentHost),
+	}, true
+}
+
+func hostDevelopmentDir(hostPath string) (string, bool) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "", false
+	}
+	developmentHost := filepath.Join(home, "Development")
+	rel, err := filepath.Rel(developmentHost, hostPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", false
+	}
+	return developmentHost, true
 }
 
 // HasDevelopmentMount reports whether container info includes the host
@@ -63,11 +90,26 @@ func HasDevelopmentMount(info *types.ContainerJSON, hostPath, containerHome stri
 	if !ok {
 		return true
 	}
+	return hasBindMount(info, required.Source, required.Target)
+}
+
+// HasHostDevelopmentMount reports whether container info includes the host
+// ~/Development bind mount at the same absolute host path when required for
+// the given host path.
+func HasHostDevelopmentMount(info *types.ContainerJSON, hostPath string) bool {
+	required, ok := InferHostDevelopmentMount(hostPath)
+	if !ok {
+		return true
+	}
+	return hasBindMount(info, required.Source, required.Target)
+}
+
+func hasBindMount(info *types.ContainerJSON, requiredSource, requiredTarget string) bool {
 	if info == nil {
 		return false
 	}
-	requiredSource := filepath.Clean(strings.TrimSpace(required.Source))
-	requiredTarget := filepath.ToSlash(strings.TrimSpace(required.Target))
+	requiredSource = filepath.Clean(strings.TrimSpace(requiredSource))
+	requiredTarget = filepath.ToSlash(strings.TrimSpace(requiredTarget))
 	for _, point := range info.Mounts {
 		if !strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
 			continue

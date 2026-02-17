@@ -118,6 +118,38 @@ func TestContainerCwdForHostCwdLongestPrefixWins(t *testing.T) {
 	}
 }
 
+func TestContainerCwdForHostCwdPrefersMirrorOverWorkspaceOnTie(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/home/ubuntu/Development/si", Destination: "/workspace"},
+			{Type: "bind", Source: "/home/ubuntu/Development/si", Destination: "/home/ubuntu/Development/si"},
+		},
+	}
+	got, ok := containerCwdForHostCwd(info, "/home/ubuntu/Development/si")
+	if !ok {
+		t.Fatalf("expected mapping to succeed")
+	}
+	if got != "/home/ubuntu/Development/si" {
+		t.Fatalf("unexpected container cwd: %q", got)
+	}
+}
+
+func TestContainerCwdForHostCwdPrefersSamePathOnTie(t *testing.T) {
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: "/home/ubuntu/Development", Destination: "/home/si/Development"},
+			{Type: "bind", Source: "/home/ubuntu/Development", Destination: "/home/ubuntu/Development"},
+		},
+	}
+	got, ok := containerCwdForHostCwd(info, "/home/ubuntu/Development/core")
+	if !ok {
+		t.Fatalf("expected mapping to succeed")
+	}
+	if got != "/home/ubuntu/Development/core" {
+		t.Fatalf("unexpected container cwd: %q", got)
+	}
+}
+
 func TestContainerCwdForHostCwdNoMatch(t *testing.T) {
 	info := &types.ContainerJSON{
 		Mounts: []types.MountPoint{
@@ -287,7 +319,7 @@ func TestCodexContainerWorkspaceMatchesRequiresDevelopmentMount(t *testing.T) {
 		t.Fatalf("mkdir .si: %v", err)
 	}
 	desiredHost := filepath.Join(home, "Development", "si")
-	mirror := "/home/si/Development/si"
+	mirror := filepath.ToSlash(desiredHost)
 	info := &types.ContainerJSON{
 		Config: &container.Config{
 			WorkingDir: mirror,
@@ -309,6 +341,14 @@ func TestCodexContainerWorkspaceMatchesRequiresDevelopmentMount(t *testing.T) {
 		Type:        "bind",
 		Source:      filepath.Join(home, "Development"),
 		Destination: "/home/si/Development",
+	})
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
+		t.Fatalf("expected match to fail when same-path ~/Development mount is missing")
+	}
+	info.Mounts = append(info.Mounts, types.MountPoint{
+		Type:        "bind",
+		Source:      filepath.Join(home, "Development"),
+		Destination: filepath.ToSlash(filepath.Join(home, "Development")),
 	})
 	if !codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
 		t.Fatalf("expected match when ~/Development mount is present")
