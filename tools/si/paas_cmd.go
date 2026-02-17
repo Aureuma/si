@@ -29,7 +29,7 @@ var paasActions = []subcommandAction{
 }
 
 const (
-	paasTargetUsageText   = "usage: si paas target <add|list|check|use|remove> [args...]"
+	paasTargetUsageText   = "usage: si paas target <add|list|check|use|remove|bootstrap> [args...]"
 	paasAppUsageText      = "usage: si paas app <init|list|status|remove> [args...]"
 	paasDeployUsageText   = "usage: si paas deploy [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--release <id>] [--compose-file <path>] [--wait-timeout <duration>] [--json]"
 	paasRollbackUsageText = "usage: si paas rollback [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--to-release <id>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--wait-timeout <duration>] [--json]"

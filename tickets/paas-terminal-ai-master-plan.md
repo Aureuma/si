@@ -703,9 +703,9 @@ Work items:
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
 | WS03-01 | Add target model + local storage CRUD | Done | Codex | Added context-scoped target store (`targets.json`) and live CRUD wiring for `target add/list/use/remove` |
-| WS03-02 | Implement SSH connectivity + preflight checks | Not Started | Unassigned | |
-| WS03-03 | Implement bootstrap path from password to key auth | Not Started | Unassigned | |
-| WS03-04 | Add `si paas target check --all` health summary | Not Started | Unassigned | |
+| WS03-02 | Implement SSH connectivity + preflight checks | Done | Codex | Added live target preflight checks (TCP reachability, SSH, Docker, Compose) with structured diagnostics and non-zero exit on failures |
+| WS03-03 | Implement bootstrap path from password to key auth | Done | Codex | Added `si paas target bootstrap` with password-env + public-key flow and auth-method promotion to `key` on success |
+| WS03-04 | Add `si paas target check --all` health summary | Done | Codex | `target check --all` now executes live per-target preflights with aggregate text/JSON summary and failure exit codes |
 | WS03-05 | Implement Traefik per-node ingress baseline with DNS/LB model; keep Caddy as post-MVP alternative | Not Started | Unassigned | Traefik is locked for MVP |
 | WS03-06 | Implement architecture/runtime compatibility preflight (`cpu arch`, Docker/Compose version, image platform) with actionable failures | Not Started | Unassigned | Research-driven reliability guardrail |
 
@@ -1039,13 +1039,15 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-02 | Completed WS02-06: wired optional interactive subcommand pickers for `si paas` command groups while preserving automation-safe behavior in non-interactive environments | None | Implement WS02-04 command contract tests and validate with CLI E2E checks |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-04 and WS02-05: added `paas` command contract tests plus CLI E2E verification for usage/JSON/context behaviors | Existing unrelated `tools/si` test compile failures in `codex_tmux_test.go` still block full package test run | Begin WS03-01 target model + local storage CRUD implementation |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-01: implemented context-scoped local target persistence and CRUD behavior for `target add/list/use/remove` with JSON + text output support | SSH/preflight and bootstrap are still pending | Implement WS03-02 SSH connectivity and preflight checks next |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-02: implemented live preflight execution for `si paas target check` including network reachability, SSH command execution, Docker server check, and Compose availability check | Key bootstrap path (password-to-key flow) still pending | Implement WS03-03 bootstrap path from password auth to key auth |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-03 and WS03-04: added password-to-key bootstrap command and upgraded `target check --all` to aggregate live health diagnostics with machine-readable output | Traefik ingress baseline and compatibility preflight are still pending | Implement WS03-05 Traefik baseline and WS03-06 compatibility preflight checks |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS03-02 SSH connectivity and target preflight checks on top of the new local target store.
-2. Implement WS03-03 bootstrap path from password to key auth and wire it into target onboarding.
-3. Start WS-05 secret command surface and redaction guardrails in parallel with WS-03 where interfaces are independent.
-4. Stage WS-04 deploy engine scaffolding immediately after WS-03 connectivity/preflight path is stable.
+1. Implement WS03-05 Traefik per-node ingress baseline with DNS/LB model (MVP ingress lock).
+2. Implement WS03-06 architecture/runtime compatibility preflight checks before deployment rollout.
+3. Start WS-05 secret command surface and redaction guardrails in parallel with remaining WS-03 tasks where interfaces are independent.
+4. Stage WS-04 deploy engine scaffolding immediately after WS-03 connectivity/bootstrap path is stable.
 5. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
 6. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
 7. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.

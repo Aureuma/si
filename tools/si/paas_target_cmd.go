@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 var paasTargetActions = []subcommandAction{
@@ -14,6 +15,7 @@ var paasTargetActions = []subcommandAction{
 	{Name: "check", Description: "run target preflight checks"},
 	{Name: "use", Description: "set default target"},
 	{Name: "remove", Description: "remove a target"},
+	{Name: "bootstrap", Description: "promote password auth to key auth"},
 }
 
 func cmdPaasTarget(args []string) {
@@ -41,6 +43,8 @@ func cmdPaasTarget(args []string) {
 		cmdPaasTargetUse(rest)
 	case "remove", "rm", "delete":
 		cmdPaasTargetRemove(rest)
+	case "bootstrap":
+		cmdPaasTargetBootstrap(rest)
 	default:
 		printUnknown("paas target", sub)
 		printUsage(paasTargetUsageText)
@@ -169,27 +173,40 @@ func cmdPaasTargetCheck(args []string) {
 		printUsage("usage: si paas target check [--target <id> | --all] [--timeout <duration>] [--json]")
 		return
 	}
+	store, err := loadPaasTargetStore(currentPaasContext())
+	if err != nil {
+		fatal(err)
+	}
+	if len(store.Targets) == 0 {
+		fatal(fmt.Errorf("no targets configured"))
+	}
+	timeoutValue, err := time.ParseDuration(strings.TrimSpace(*timeout))
+	if err != nil || timeoutValue <= 0 {
+		fatal(fmt.Errorf("invalid --timeout %q", strings.TrimSpace(*timeout)))
+	}
+
 	selected := strings.TrimSpace(*target)
 	if !*checkAll && selected == "" {
 		fmt.Fprintln(os.Stderr, "either --target or --all is required")
 		printUsage("usage: si paas target check [--target <id> | --all] [--timeout <duration>] [--json]")
 		return
 	}
+	targetsToCheck := make([]paasTarget, 0, len(store.Targets))
 	if *checkAll {
-		selected = "all"
+		targetsToCheck = append(targetsToCheck, store.Targets...)
 	} else {
-		store, err := loadPaasTargetStore(currentPaasContext())
-		if err != nil {
-			fatal(err)
-		}
-		if findPaasTarget(store, selected) == -1 {
+		idx := findPaasTarget(store, selected)
+		if idx == -1 {
 			fatal(fmt.Errorf("target %q not found", selected))
 		}
+		targetsToCheck = append(targetsToCheck, store.Targets[idx])
 	}
-	printPaasScaffold("target check", map[string]string{
-		"target":  selected,
-		"timeout": strings.TrimSpace(*timeout),
-	}, jsonOut)
+
+	results := make([]paasTargetCheckResult, 0, len(targetsToCheck))
+	for _, row := range targetsToCheck {
+		results = append(results, runPaasTargetCheck(row, timeoutValue))
+	}
+	printPaasTargetCheckResults(jsonOut, timeoutValue, results)
 }
 
 func cmdPaasTargetUse(args []string) {
