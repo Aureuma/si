@@ -89,6 +89,12 @@ func cmdPaasEventsList(args []string) {
 		if err := enc.Encode(payload); err != nil {
 			fatal(err)
 		}
+		_ = recordPaasAuditEvent("events list", "succeeded", "live", map[string]string{
+			"count":    intString(len(rows)),
+			"limit":    intString(*limit),
+			"severity": filterSeverity,
+			"status":   filterStatus,
+		}, nil)
 		return
 	}
 	printPaasScaffold("events list", map[string]string{

@@ -1700,6 +1700,38 @@ func TestPaasEventsListMergesDeployAndAlertSources(t *testing.T) {
 	}
 }
 
+func TestPaasAuditEventsRecordedAndQueryable(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"app", "list", "--json"})
+	})
+	if path := recordPaasAuditEvent("deploy", "failed", "live", map[string]string{"app": "billing-api"}, fmt.Errorf("boom")); strings.TrimSpace(path) == "" {
+		t.Fatalf("expected audit log path")
+	}
+	rows, _, err := loadPaasEventRecords(20, "", "")
+	if err != nil {
+		t.Fatalf("load event records: %v", err)
+	}
+	foundScaffoldAudit := false
+	foundFailureAudit := false
+	for _, row := range rows {
+		if row.Source != "audit" {
+			continue
+		}
+		if row.Command == "app list" && row.Status == "succeeded" {
+			foundScaffoldAudit = true
+		}
+		if row.Command == "deploy" && row.Status == "failed" && row.Severity == "critical" {
+			foundFailureAudit = true
+		}
+	}
+	if !foundScaffoldAudit || !foundFailureAudit {
+		t.Fatalf("expected scaffold and failure audit rows, got %#v", rows)
+	}
+}
+
 func TestPaasRegressionUpgradeDeployRollbackPath(t *testing.T) {
 	stateRoot := t.TempDir()
 	composePath := filepath.Join(t.TempDir(), "compose.yaml")
