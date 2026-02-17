@@ -21,7 +21,7 @@ Status legend:
 | WS-00 | Program setup and conventions | None | In Progress | Codex | 2026-02-17 | 2026-02-18 | None | Master plan and trackers created |
 | WS-01 | Competitive research and synthesis (expanded set incl. SwiftWave/Kamal) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Evidence corpus and synthesis completed in `paas-competitive-research-board.md` |
 | WS-02 | `si paas` CLI-only MVP surface (non-TUI) | WS-00 | Done | Codex | 2026-02-17 | 2026-02-17 | None | Root command, non-interactive flags, `--json`, `--context`, command tests, and optional prompt pickers completed |
-| WS-03 | Multi-VPS SSH target management + ingress baseline decision | WS-02 | Not Started | Unassigned | | | | Research priority: architecture/runtime preflight gates before rollout |
+| WS-03 | Multi-VPS SSH target management + ingress baseline decision | WS-02 | In Progress | Codex | 2026-02-17 | 2026-02-20 | None | WS03-01 local target model + CRUD completed; SSH/preflight work in progress |
 | WS-04 | Compose deployment engine + reconciler + blue/green + service packs + webhook + fan-out | WS-02, WS-03 | Not Started | Unassigned | | | | Research priority: deterministic diagnostics + retention/pruning lifecycle |
 | WS-05 | Vault and secret workflows | WS-02, WS-03 | Not Started | Unassigned | | | | |
 | WS-06 | Logs/health/Telegram alerts + audit/event model | WS-04 | Not Started | Unassigned | | | | Research priority: TLS/ACME retry observability + recovery signaling |
@@ -63,6 +63,7 @@ Status legend:
 | 2026-02-17 | Codex | WS-02 | Completed WS02-03 by adding a shared JSON response envelope and `--json` handling across `si paas` operational commands. | Context routing and CLI tests still pending. | Execute WS02-06 (`--context`) and WS02-04 tests next. |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-06 by adding optional interactive subcommand pickers for `si paas` and subcommand groups while keeping non-interactive behavior intact. | Command-contract tests still pending. | Execute WS02-04/05 test and UX coverage. |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-04 and WS02-05 via `paas_cmd_test.go` contract checks and containerized CLI E2E validation for usage, JSON output, and context propagation. | Full `go test ./tools/si` still blocked by unrelated existing `codex_tmux_test.go` compile mismatch. | Start WS03-01 target model + local storage CRUD implementation. |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-01 by adding context-scoped local target persistence and live CRUD behavior for `si paas target add/list/use/remove`. | SSH and runtime preflight checks remain pending. | Execute WS03-02 SSH connectivity + preflight checks. |
 
 ## 4. Blocker Register
 

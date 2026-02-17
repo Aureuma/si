@@ -702,7 +702,7 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS03-01 | Add target model + local storage CRUD | Not Started | Unassigned | |
+| WS03-01 | Add target model + local storage CRUD | Done | Codex | Added context-scoped target store (`targets.json`) and live CRUD wiring for `target add/list/use/remove` |
 | WS03-02 | Implement SSH connectivity + preflight checks | Not Started | Unassigned | |
 | WS03-03 | Implement bootstrap path from password to key auth | Not Started | Unassigned | |
 | WS03-04 | Add `si paas target check --all` health summary | Not Started | Unassigned | |
@@ -1038,18 +1038,20 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-02 | Completed WS02-03: added shared machine-readable scaffold envelope (`ok`, `command`, `mode`, `fields`) and `--json` support across operational `si paas` commands | None | Implement WS02-06 context command surface and global context routing |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-06: wired optional interactive subcommand pickers for `si paas` command groups while preserving automation-safe behavior in non-interactive environments | None | Implement WS02-04 command contract tests and validate with CLI E2E checks |
 | 2026-02-17 | Codex | WS-02 | Completed WS02-04 and WS02-05: added `paas` command contract tests plus CLI E2E verification for usage/JSON/context behaviors | Existing unrelated `tools/si` test compile failures in `codex_tmux_test.go` still block full package test run | Begin WS03-01 target model + local storage CRUD implementation |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-01: implemented context-scoped local target persistence and CRUD behavior for `target add/list/use/remove` with JSON + text output support | SSH/preflight and bootstrap are still pending | Implement WS03-02 SSH connectivity and preflight checks next |
 
 ## 12. Immediate Next Actions
 
-1. Start WS-03 target CRUD and SSH preflight implementation now that WS-02 command contracts are complete.
-2. Start WS-05 secret command surface and redaction guardrails in parallel with WS-03 where interfaces are independent.
-3. Stage WS-04 deploy engine scaffolding immediately after WS-03 target model is stable.
-4. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
-5. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
-6. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
-7. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
-8. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
-9. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
+1. Implement WS03-02 SSH connectivity and target preflight checks on top of the new local target store.
+2. Implement WS03-03 bootstrap path from password to key auth and wire it into target onboarding.
+3. Start WS-05 secret command surface and redaction guardrails in parallel with WS-03 where interfaces are independent.
+4. Stage WS-04 deploy engine scaffolding immediately after WS-03 connectivity/preflight path is stable.
+5. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
+6. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
+7. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+8. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+9. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+10. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 
