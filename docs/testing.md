@@ -83,6 +83,12 @@ For event bridge collector behavior and mapping rules, use:
 cat docs/PAAS_EVENT_BRIDGE_COLLECTORS.md
 ```
 
+For incident queue storage and retention policy, use:
+
+```bash
+cat docs/PAAS_INCIDENT_QUEUE_POLICY.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
