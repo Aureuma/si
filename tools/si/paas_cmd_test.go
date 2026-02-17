@@ -35,6 +35,16 @@ type paasTargetListPayload struct {
 	Data          []paasTarget `json:"data"`
 }
 
+type paasContextListPayload struct {
+	OK      bool                `json:"ok"`
+	Command string              `json:"command"`
+	Context string              `json:"context"`
+	Mode    string              `json:"mode"`
+	Current string              `json:"current"`
+	Count   int                 `json:"count"`
+	Data    []paasContextConfig `json:"data"`
+}
+
 func TestPaasNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas(nil)
@@ -109,6 +119,117 @@ func TestPaasContextFlagPropagatesAndResets(t *testing.T) {
 	defaultEnv := parsePaasEnvelope(t, defaultContext)
 	if defaultEnv.Context != defaultPaasContext {
 		t.Fatalf("expected context reset to default, got %q", defaultEnv.Context)
+	}
+}
+
+func TestPaasContextCreateListUseShowRemove(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	createRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"context", "create",
+			"--name", "internal-dogfood",
+			"--type", "internal-dogfood",
+			"--json",
+		})
+	})
+	createEnv := parsePaasEnvelope(t, createRaw)
+	if createEnv.Command != "context create" {
+		t.Fatalf("expected context create envelope, got %#v", createEnv)
+	}
+	contextDir := filepath.Join(stateRoot, "contexts", "internal-dogfood")
+	required := []string{
+		filepath.Join(contextDir, "events"),
+		filepath.Join(contextDir, "cache"),
+		filepath.Join(contextDir, "vault"),
+		filepath.Join(contextDir, "releases"),
+		filepath.Join(contextDir, "addons"),
+		filepath.Join(contextDir, "config.json"),
+	}
+	for _, path := range required {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected context layout path %s: %v", path, err)
+		}
+	}
+
+	listRaw := captureStdout(t, func() {
+		cmdPaas([]string{"context", "list", "--json"})
+	})
+	var listPayload paasContextListPayload
+	if err := json.Unmarshal([]byte(listRaw), &listPayload); err != nil {
+		t.Fatalf("decode context list payload: %v output=%q", err, listRaw)
+	}
+	if listPayload.Command != "context list" || listPayload.Count == 0 || len(listPayload.Data) == 0 {
+		t.Fatalf("unexpected context list payload: %#v", listPayload)
+	}
+	found := false
+	for _, row := range listPayload.Data {
+		if strings.EqualFold(strings.TrimSpace(row.Name), "internal-dogfood") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected context list to include internal-dogfood, got %#v", listPayload.Data)
+	}
+
+	useRaw := captureStdout(t, func() {
+		cmdPaas([]string{"context", "use", "--name", "internal-dogfood", "--json"})
+	})
+	useEnv := parsePaasEnvelope(t, useRaw)
+	if useEnv.Command != "context use" || useEnv.Fields["name"] != "internal-dogfood" {
+		t.Fatalf("unexpected context use output: %#v", useEnv)
+	}
+
+	afterUseRaw := captureStdout(t, func() {
+		cmdPaas([]string{"app", "list", "--json"})
+	})
+	afterUseEnv := parsePaasEnvelope(t, afterUseRaw)
+	if afterUseEnv.Context != "internal-dogfood" {
+		t.Fatalf("expected persisted context selection, got %#v", afterUseEnv)
+	}
+
+	showRaw := captureStdout(t, func() {
+		cmdPaas([]string{"context", "show", "--name", "internal-dogfood", "--json"})
+	})
+	showEnv := parsePaasEnvelope(t, showRaw)
+	if showEnv.Command != "context show" || showEnv.Fields["name"] != "internal-dogfood" {
+		t.Fatalf("unexpected context show output: %#v", showEnv)
+	}
+	if strings.TrimSpace(showEnv.Fields["vault_file"]) == "" {
+		t.Fatalf("expected vault_file in context show output, got %#v", showEnv.Fields)
+	}
+
+	removeRaw := captureStdout(t, func() {
+		cmdPaas([]string{"context", "remove", "--name", "internal-dogfood", "--force", "--json"})
+	})
+	removeEnv := parsePaasEnvelope(t, removeRaw)
+	if removeEnv.Command != "context remove" || removeEnv.Fields["name"] != "internal-dogfood" {
+		t.Fatalf("unexpected context remove output: %#v", removeEnv)
+	}
+	if _, err := os.Stat(contextDir); !os.IsNotExist(err) {
+		t.Fatalf("expected removed context dir to not exist, stat err=%v", err)
+	}
+}
+
+func TestPaasContextInitUsesCurrentContextWhenNameOmitted(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{"--context", "customer-1", "context", "init", "--json"})
+	})
+	env := parsePaasEnvelope(t, raw)
+	if env.Command != "context init" {
+		t.Fatalf("expected context init envelope, got %#v", env)
+	}
+	if env.Fields["name"] != "customer-1" {
+		t.Fatalf("expected context init to use current context customer-1, got %#v", env.Fields)
+	}
+	configPath := filepath.Join(stateRoot, "contexts", "customer-1", "config.json")
+	if _, err := os.Stat(configPath); err != nil {
+		t.Fatalf("expected customer-1 config path: %v", err)
 	}
 }
 
@@ -403,7 +524,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "acknowledge", "policy", "ingress-tls"})
 	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
-	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove", "export", "import"})
+	expectActionNames(t, "paas context", paasContextActions, []string{"create", "init", "list", "use", "show", "remove", "export", "import"})
 	expectActionNames(t, "paas agent", paasAgentActions, []string{"enable", "disable", "status", "logs", "run-once", "approve", "deny"})
 	expectActionNames(t, "paas events", paasEventsActions, []string{"list"})
 }
