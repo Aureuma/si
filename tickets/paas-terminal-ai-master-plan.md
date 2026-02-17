@@ -2,7 +2,7 @@
 
 Date: 2026-02-17
 Owner: Unassigned
-Status: Planned
+Status: In Progress (Phase B kickoff)
 Scope: Design and implementation plan for a self-hosted + cloud-hosted PaaS, with MVP delivered as `si` CLI only (no web dashboard and no full-screen TUI in MVP).
 
 ## 1. Requirements Snapshot
@@ -519,9 +519,10 @@ Agent command contracts (MVP):
 6. `si paas events list [--severity ...] [--status ...] [--json]`
 - Lists normalized incident stream for operators and automation.
 
-## 6. Competitive Research Program (Required Before Locking Final Product Scope)
+## 6. Competitive Research Program (Completed 2026-02-17; Secondary Baselines Ongoing)
 
-This section defines how the deep discovery must be executed by agents.
+This section defined the deep-discovery protocol used for Phase A.
+Primary-set research outputs are complete; secondary-set refinement continues as non-blocking background work.
 
 ### 6.1 Platforms to analyze deeply
 
@@ -618,6 +619,14 @@ For each cloned repo:
 - Mistakes we should avoid
 3. Final comparative matrix and prioritized feature shortlist.
 
+### 6.5 Research-driven plan updates (applied)
+
+1. Reliability priority: deterministic deploy failure taxonomy with remediation hints is now an explicit Phase B deliverable.
+2. Compatibility priority: architecture/runtime preflight checks are now explicit to reduce deploy mismatch and upgrade regressions.
+3. Ingress resilience priority: TLS/ACME retry observability and recovery signaling are now explicit deliverables.
+4. Lifecycle priority: deployment retention/pruning controls are now explicit in deploy engine scope.
+5. Scope control: Easypanel/Portainer/Tsuru remain secondary baselines and are not Phase B blockers.
+
 ## 7. Workstreams (Parallel Execution Plan)
 
 Each workstream is independently executable by a different agent.
@@ -656,11 +665,11 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS01-01 | Clone and index all primary competitor repos | Not Started | Unassigned | |
-| WS01-02 | Collect user feedback evidence corpus | Not Started | Unassigned | |
-| WS01-03 | Analyze strengths/weaknesses per platform | Not Started | Unassigned | |
-| WS01-04 | Publish consolidated findings + feature priority list | Not Started | Unassigned | |
-| WS01-05 | Expand analysis set with SwiftWave and Kamal references | Not Started | Unassigned | |
+| WS01-01 | Clone and index all primary competitor repos | Done | Codex | Cloned under `.tmp/paas-research` |
+| WS01-02 | Collect user feedback evidence corpus | Done | Codex | Evidence log updated in `tickets/paas-competitive-research-board.md` |
+| WS01-03 | Analyze strengths/weaknesses per platform | Done | Codex | Findings sections completed for primary set + SwiftWave/Kamal |
+| WS01-04 | Publish consolidated findings + feature priority list | Done | Codex | Comparative matrix + approved shortlist added |
+| WS01-05 | Expand analysis set with SwiftWave and Kamal references | Done | Codex | Canonical upstreams + evidence captured |
 
 ### WS-02 CLI Domain Model and UX
 
@@ -674,12 +683,12 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS02-01 | Add `paas` root command wiring in `root_commands.go` | Not Started | Unassigned | |
-| WS02-02 | Implement complete non-interactive command and flag surfaces for all MVP operations | Not Started | Unassigned | |
-| WS02-03 | Add stable machine-readable output modes (`--json`) for operational commands | Not Started | Unassigned | |
+| WS02-01 | Add `paas` root command wiring in `root_commands.go` | In Progress | Codex | Phase B kickoff: command surface implementation started |
+| WS02-02 | Implement complete non-interactive command and flag surfaces for all MVP operations | In Progress | Codex | Phase B kickoff: define command/flag contracts first |
+| WS02-03 | Add stable machine-readable output modes (`--json`) for operational commands | In Progress | Codex | Phase B kickoff: enforce machine-output contract from start |
 | WS02-04 | Add command tests for dispatch, non-interactive behavior, and output contracts | Not Started | Unassigned | |
 | WS02-05 | Add optional prompt helpers only where they do not block non-interactive execution | Not Started | Unassigned | |
-| WS02-06 | Add context command surface and global `--context` routing | Not Started | Unassigned | |
+| WS02-06 | Add context command surface and global `--context` routing | In Progress | Codex | Begin early due to WS11 isolation dependency |
 
 ### WS-03 Multi-VPS Target Management (SSH)
 
@@ -698,6 +707,7 @@ Work items:
 | WS03-03 | Implement bootstrap path from password to key auth | Not Started | Unassigned | |
 | WS03-04 | Add `si paas target check --all` health summary | Not Started | Unassigned | |
 | WS03-05 | Implement Traefik per-node ingress baseline with DNS/LB model; keep Caddy as post-MVP alternative | Not Started | Unassigned | Traefik is locked for MVP |
+| WS03-06 | Implement architecture/runtime compatibility preflight (`cpu arch`, Docker/Compose version, image platform) with actionable failures | Not Started | Unassigned | Research-driven reliability guardrail |
 
 ### WS-04 Deployment Engine (Compose-first)
 
@@ -721,6 +731,8 @@ Work items:
 | WS04-08 | Implement parallel deploy fan-out engine and strategy flags (`serial`, `rolling`, `canary`, `parallel`) | Not Started | Unassigned | |
 | WS04-09 | Implement Git webhook ingestion with auth validation and app/branch trigger mapping | Not Started | Unassigned | |
 | WS04-10 | Implement magic-variable resolution and add-on compose-fragment merge validation | Not Started | Unassigned | |
+| WS04-11 | Implement deterministic deploy failure taxonomy + remediation hint output contract | Not Started | Unassigned | Research-driven P0 diagnostics requirement |
+| WS04-12 | Implement deployment retention/pruning lifecycle controls for stale releases/artifacts | Not Started | Unassigned | Research-driven lifecycle requirement |
 
 ### WS-05 Secrets, Vault, and Credential Safety
 
@@ -760,6 +772,7 @@ Work items:
 | WS06-04 | Add deploy failure and health degradation alerts | Not Started | Unassigned | |
 | WS06-05 | Define audit/event log model for all `si paas` actions | Not Started | Unassigned | |
 | WS06-06 | Add Telegram action hooks for operator callbacks (view logs, rollback, acknowledge) | Not Started | Unassigned | |
+| WS06-07 | Add ingress/TLS (Traefik + ACME) retry observability, alerting, and operator recovery guidance | Not Started | Unassigned | Research-driven reliability requirement |
 
 ### WS-07 AI-First Automation (Codex Core)
 
@@ -841,6 +854,7 @@ Work items:
 | WS09-03 | Add security review checklist and threat model | Not Started | Unassigned | |
 | WS09-04 | Write ops runbook for incident response | Not Started | Unassigned | |
 | WS09-05 | Add state-isolation regression tests (context boundary and leakage checks) | Not Started | Unassigned | |
+| WS09-06 | Add upgrade and compatibility regression suite (arch/runtime/deploy-path coverage) | Not Started | Unassigned | Research-driven hardening requirement |
 
 ### WS-11 Dogfood State Isolation and Governance (MVP Critical)
 
@@ -878,6 +892,13 @@ Work items:
 
 ## 8. Phase and Gate Plan
 
+Current phase status (2026-02-17):
+1. Phase A: Done.
+2. Phase B: In Progress.
+3. Phase C: Not Started.
+4. Phase D: Not Started.
+5. Phase E: Deferred post-MVP.
+
 ### Phase A (Research Baseline)
 
 Target:
@@ -904,6 +925,10 @@ Exit criteria:
 8. Webhook-triggered deployment path is implemented with auth checks.
 9. Magic-variable and add-on pack resolution is validated.
 10. Context-scoped state isolation controls are implemented and pass leakage checks.
+11. Deterministic deploy failure diagnostics and remediation hints are shipped.
+12. TLS/ACME retry states are observable and alertable with clear operator recovery path.
+13. Deployment retention/pruning lifecycle controls are implemented and validated.
+14. Architecture/runtime compatibility preflight gates are enforced before rollout.
 
 ### Phase C (AI Ops Layer)
 
@@ -977,6 +1002,15 @@ Mitigation: ship with conservative limits and review conversion/churn/usage quar
 12. Risk: Long-running Codex agent loops stall due to auth/session drift.
 Mitigation: add agent health checks, prompt/auth detection, worker auto-recovery, and explicit operator alerts.
 
+13. Risk: Runtime upgrades introduce hidden deploy-path regressions.
+Mitigation: add compatibility preflight checks + WS09 upgrade regression suite before rollout.
+
+14. Risk: TLS/ACME retry loops stall silently and leave apps unreachable.
+Mitigation: add explicit retry state telemetry, alerting, and guided recovery commands.
+
+15. Risk: Architecture mismatch (host/image/runtime) causes failed rollouts.
+Mitigation: gate deployment on architecture/platform preflight and surface actionable fixes.
+
 ## 10. Progress Update Protocol
 
 Every agent updating this initiative must:
@@ -996,21 +1030,23 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-00 | Initial master plan created | None | Start WS-01 evidence collection |
 | 2026-02-17 | Codex | WS-00 | Added stateful agent runtime architecture and WS-12 (event bridge + policy/approval flows) using Codex subscription path | None | Start WS12-01 schema + WS12-04 command scaffolding |
 | 2026-02-17 | Codex | WS-00 | Fixed context-scoped state model path, locked MVP ingress to Traefik, pinned SwiftWave/Kamal upstreams, and aligned WS08/WS11 linkage notes to MON/ISO tickets | None | Start WS03-05 Traefik baseline and WS08 MON-linked implementation |
+| 2026-02-17 | Codex | WS-01 | Completed Phase A research baseline: cloned/indexed primary repos, filled evidence corpus, published synthesis matrix, and approved feature shortlist | None | Begin WS-02 CLI surface implementation |
+| 2026-02-17 | Codex | WS-02 | Started Phase B kickoff and moved core CLI workstream items (root command, non-interactive flags, `--json`, and context routing) to in-progress planning state | None | Execute WS02-01/02/03/06 implementation and tests |
+| 2026-02-17 | Codex | WS-00 | Propagated research shortlist into implementation plan: added diagnostics, compatibility preflight, TLS retry observability, retention/pruning, and upgrade-regression tasks plus Phase B exit criteria updates | None | Execute WS03-06, WS04-11/12, WS06-07, and WS09-06 alongside core Phase B delivery |
 
 ## 12. Immediate Next Actions
 
-1. Start WS01-01 and clone all primary competitor repos.
-2. Build the evidence corpus template and fill first 100 user feedback entries.
-3. Implement `si paas` command skeleton and usage surface.
-4. Implement target CRUD with vault-backed credential pointers.
-5. Run first remote Compose deploy to a disposable VPS target.
-6. Implement reconciler skeleton and drift-report command early.
-7. Keep MVP strictly non-TUI and enforce `--json` output contracts early.
-8. Define deploy fan-out strategy defaults and webhook auth policy before implementation.
-9. Implement context model and no-state-in-repo guardrails before first production dogfood deploy.
-10. Define incident schema and dedupe keys for `si paas events`.
-11. Scaffold `si paas agent` command family with non-interactive and `--json` contracts first.
-12. Implement event bridge run-once mode before enabling long-running workers.
+1. Execute WS02-01/02/03/06 implementation in `tools/si` (root command, flags, `--json`, and context routing).
+2. Add WS02-04 command tests for dispatch, non-interactive behavior, and output contracts.
+3. Start WS-03 target CRUD and SSH preflight implementation once WS-02 command contracts compile.
+4. Start WS-05 secret command surface and redaction guardrails in parallel after WS-02 command skeleton lands.
+5. Stage WS-04 deploy engine scaffolding immediately after WS-03 target model is stable.
+6. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
+7. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
+8. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+9. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+10. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+11. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 
