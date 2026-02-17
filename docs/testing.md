@@ -113,6 +113,12 @@ For approval decision workflow and Telegram callback linkage, use:
 cat docs/PAAS_AGENT_APPROVAL_FLOW.md
 ```
 
+For scheduler lock/self-heal behavior, use:
+
+```bash
+cat docs/PAAS_AGENT_SCHEDULER_SELF_HEAL.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
