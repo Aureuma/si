@@ -35,7 +35,7 @@ const (
 	paasDeployUsageText   = "usage: si paas deploy [prune ...] [reconcile ...] [webhook ...] [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--release <id>] [--compose-file <path>] [--bundle-root <path>] [--apply] [--remote-dir <path>] [--apply-timeout <duration>] [--health-cmd <command>] [--health-timeout <duration>] [--rollback-on-failure[=true|false]] [--rollback-timeout <duration>] [--vault-file <path>] [--wait-timeout <duration>] [--allow-plaintext-secrets] [--allow-untrusted-vault] [--json]"
 	paasRollbackUsageText = "usage: si paas rollback [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--to-release <id>] [--bundle-root <path>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--apply] [--remote-dir <path>] [--apply-timeout <duration>] [--health-cmd <command>] [--health-timeout <duration>] [--wait-timeout <duration>] [--vault-file <path>] [--allow-untrusted-vault] [--json]"
 	paasLogsUsageText     = "usage: si paas logs [--app <slug>] [--target <id>] [--service <name>] [--tail <n>] [--follow] [--since <duration>] [--json]"
-	paasAlertUsageText    = "usage: si paas alert <setup-telegram|test|history> [args...]"
+	paasAlertUsageText    = "usage: si paas alert <setup-telegram|test|history|ingress-tls> [args...]"
 	paasSecretUsageText   = "usage: si paas secret <set|get|unset|list|key> [args...]"
 	paasAIUsageText       = "usage: si paas ai <plan|inspect|fix> [args...]"
 	paasContextUsageText  = "usage: si paas context <create|list|use|show|remove> [args...]"
