@@ -9,7 +9,7 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 
 Dyads also share a task queue file:
 
-- `/workspace/TASK_BOARD.md` (host path: `TASK_BOARD.md`)
+- `/root/.si/TASK_BOARD.md` (host path: `~/.si/TASK_BOARD.md`)
 
 ## Requirements
 

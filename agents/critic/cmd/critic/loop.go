@@ -23,6 +23,7 @@ const (
 	reportEndMarker      = "<<WORK_REPORT_END>>"
 	dyadTmuxHistoryLimit = "200000"
 	turnIDPrefix         = "si-dyad-turn-id:"
+	taskBoardPath        = "/root/.si/TASK_BOARD.md"
 )
 
 type loopConfig struct {
@@ -292,7 +293,7 @@ func runSingleTurn(ctx context.Context, cfg loopConfig, turn int, state *loopSta
 	if err := writeTurnArtifacts(cfg.StateDir, turn, "actor", actorPrompt, actorRaw, actorReport); err != nil {
 		logger.Printf("actor artifact warning: %v", err)
 	}
-	if err := appendTaskBoardTurnLog("/workspace/TASK_BOARD.md", cfg.DyadName, turn, actorReport); err != nil {
+	if err := appendTaskBoardTurnLog(taskBoardPath, cfg.DyadName, turn, actorReport); err != nil {
 		logger.Printf("task board log warning: %v", err)
 	}
 
@@ -1438,7 +1439,7 @@ Hard rules:
 - Keep it short; refer to /workspace/DYAD_PROTOCOL.md for the exact actor report format.
 
 Task board:
-- Use /workspace/TASK_BOARD.md as the queue.
+- Use /root/.si/TASK_BOARD.md as the queue.
 - Tell the actor to pick ONE task, move it to Doing, and update TASK_BOARD.md each turn.
 
 Vault:

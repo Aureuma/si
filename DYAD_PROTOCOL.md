@@ -11,7 +11,7 @@ Inside dyad containers, the repo is mounted at `/workspace`.
 
 ## Task Source
 
-- Primary queue: `/workspace/TASK_BOARD.md`
+- Primary queue: `/root/.si/TASK_BOARD.md`
 - The actor should pick exactly one task at a time and keep it moving.
 
 ## Actor Output (Required)
@@ -37,7 +37,7 @@ Next Step for Critic:
 Notes:
 - Keep bullets single-level (no nested bullets).
 - If you run commands, include the command names and the key results in `Validation:`.
-- If you touched tasks, update `/workspace/TASK_BOARD.md` and mention it in `Changes:`.
+- If you touched tasks, update `/root/.si/TASK_BOARD.md` and mention it in `Changes:`.
 - Runtime transport note: the critic loop may also request a per-turn tagged variant
   (`<<WORK_REPORT_BEGIN:<turn_id>> ... <<WORK_REPORT_END:<turn_id>>`) to improve
   tmux turn correlation; it is normalized to the standard markers above.

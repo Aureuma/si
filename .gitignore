@@ -22,4 +22,5 @@ data/
 /si
 .si/
 .tmp/
+TASK_BOARD.md
 tools/si/vault.test
