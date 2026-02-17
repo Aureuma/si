@@ -369,7 +369,7 @@ func TestPaasAgentEnableStatusRunOnceLogsDisable(t *testing.T) {
 	if strings.TrimSpace(runEnv.Fields["run_id"]) == "" {
 		t.Fatalf("expected non-empty run_id in run-once output: %#v", runEnv.Fields)
 	}
-	if runEnv.Fields["status"] != "queued" && runEnv.Fields["status"] != "noop" {
+	if runEnv.Fields["status"] != "queued" && runEnv.Fields["status"] != "noop" && runEnv.Fields["status"] != "blocked" {
 		t.Fatalf("unexpected run status %q in %#v", runEnv.Fields["status"], runEnv.Fields)
 	}
 

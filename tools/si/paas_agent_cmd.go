@@ -266,11 +266,13 @@ func cmdPaasAgentLogs(args []string) {
 	}
 	fmt.Printf("%s %d\n", styleHeading("paas agent logs:"), len(rows))
 	for _, row := range rows {
-		fmt.Printf("  - %s run=%s status=%s incident=%s message=%s\n",
+		fmt.Printf("  - %s run=%s status=%s incident=%s runtime=%s profile=%s message=%s\n",
 			row.Timestamp,
 			row.RunID,
 			row.Status,
 			row.IncidentID,
+			row.RuntimeMode,
+			row.RuntimeProfile,
 			row.Message,
 		)
 	}
@@ -315,11 +317,11 @@ func cmdPaasAgentRunOnce(args []string) {
 		failPaasCommand("agent run-once", jsonOut, err, nil)
 	}
 	requestedIncident := strings.TrimSpace(*incident)
-	selectedIncidentID := ""
-	selectedIncidentKey := ""
+	var selectedEntry *paasIncidentQueueEntry
 	status := "noop"
 	message := "no queued incidents available"
-	for _, row := range queueRows {
+	for i := range queueRows {
+		row := queueRows[i]
 		candidateID := strings.TrimSpace(row.Incident.ID)
 		candidateKey := strings.TrimSpace(row.Key)
 		if requestedIncident != "" {
@@ -327,18 +329,40 @@ func cmdPaasAgentRunOnce(args []string) {
 				continue
 			}
 		}
-		selectedIncidentID = candidateID
-		selectedIncidentKey = candidateKey
+		selectedEntry = &queueRows[i]
+		break
+	}
+	if requestedIncident != "" && selectedEntry == nil {
+		status = "blocked"
+		message = "requested incident was not found in queue"
+	}
+	plan, planErr := buildPaasAgentRuntimeAdapterPlan(store.Agents[index], selectedEntry)
+	if planErr != nil {
+		status = "blocked"
+		message = strings.TrimSpace(planErr.Error())
+	}
+	if planErr == nil && !plan.Ready {
+		status = "blocked"
+		if strings.TrimSpace(plan.Reason) != "" {
+			message = strings.TrimSpace(plan.Reason)
+		} else {
+			message = "runtime adapter is not ready"
+		}
+	}
+	if selectedEntry != nil && planErr == nil && plan.Ready {
 		status = "queued"
 		message = "incident queued for remediation policy evaluation"
-		break
 	}
 	runID := "run-" + time.Now().UTC().Format("20060102T150405.000000000Z07:00")
 	_, err = appendPaasAgentRunRecord(paasAgentRunRecord{
 		Agent:          selectedName,
 		RunID:          runID,
 		Status:         status,
-		IncidentID:     firstNonEmptyString(selectedIncidentID, selectedIncidentKey),
+		IncidentID:     plan.IncidentID,
+		RuntimeMode:    plan.Mode,
+		RuntimeProfile: plan.ProfileID,
+		RuntimeAuth:    plan.AuthPath,
+		RuntimeReady:   plan.Ready,
 		Collected:      syncResult.Collected,
 		Inserted:       syncResult.Inserted,
 		Updated:        syncResult.Updated,
@@ -366,9 +390,14 @@ func cmdPaasAgentRunOnce(args []string) {
 		"name":            selectedName,
 		"run_id":          runID,
 		"incident":        requestedIncident,
-		"selected":        firstNonEmptyString(selectedIncidentID, selectedIncidentKey),
+		"selected":        plan.IncidentID,
 		"status":          status,
 		"message":         message,
+		"runtime_mode":    plan.Mode,
+		"runtime_profile": plan.ProfileID,
+		"runtime_auth":    plan.AuthPath,
+		"runtime_ready":   boolString(plan.Ready),
+		"runtime_reason":  plan.Reason,
 		"collected":       intString(syncResult.Collected),
 		"queue_inserted":  intString(syncResult.Inserted),
 		"queue_updated":   intString(syncResult.Updated),

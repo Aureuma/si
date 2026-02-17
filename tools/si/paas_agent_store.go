@@ -33,6 +33,10 @@ type paasAgentRunRecord struct {
 	RunID          string `json:"run_id"`
 	Status         string `json:"status"`
 	IncidentID     string `json:"incident_id,omitempty"`
+	RuntimeMode    string `json:"runtime_mode,omitempty"`
+	RuntimeProfile string `json:"runtime_profile,omitempty"`
+	RuntimeAuth    string `json:"runtime_auth_path,omitempty"`
+	RuntimeReady   bool   `json:"runtime_ready"`
 	Collected      int    `json:"collected"`
 	Inserted       int    `json:"inserted"`
 	Updated        int    `json:"updated"`
@@ -152,6 +156,9 @@ func appendPaasAgentRunRecord(record paasAgentRunRecord) (string, error) {
 	row.RunID = strings.TrimSpace(row.RunID)
 	row.Status = strings.ToLower(strings.TrimSpace(row.Status))
 	row.IncidentID = strings.TrimSpace(row.IncidentID)
+	row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
+	row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
+	row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
 	row.QueuePath = strings.TrimSpace(row.QueuePath)
 	row.Message = strings.TrimSpace(row.Message)
 	if row.Agent == "" || row.RunID == "" || row.Status == "" {
@@ -209,6 +216,9 @@ func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, strin
 		row.RunID = strings.TrimSpace(row.RunID)
 		row.Status = strings.ToLower(strings.TrimSpace(row.Status))
 		row.IncidentID = strings.TrimSpace(row.IncidentID)
+		row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
+		row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
+		row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
 		row.QueuePath = strings.TrimSpace(row.QueuePath)
 		row.Message = strings.TrimSpace(row.Message)
 		rows = append(rows, row)
@@ -226,4 +236,3 @@ func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, strin
 	}
 	return rows, path, nil
 }
-
