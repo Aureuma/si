@@ -47,6 +47,12 @@ For PaaS security review checklist and threat model guidance, use:
 cat docs/PAAS_SECURITY_THREAT_MODEL.md
 ```
 
+For incident-response operational procedures, use:
+
+```bash
+cat docs/PAAS_INCIDENT_RUNBOOK.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
