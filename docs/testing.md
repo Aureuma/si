@@ -89,6 +89,12 @@ For incident queue storage and retention policy, use:
 cat docs/PAAS_INCIDENT_QUEUE_POLICY.md
 ```
 
+For live agent command runtime behavior, use:
+
+```bash
+cat docs/PAAS_AGENT_RUNTIME_COMMANDS.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
