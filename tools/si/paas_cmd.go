@@ -44,6 +44,9 @@ const (
 )
 
 func cmdPaas(args []string) {
+	if err := enforcePaasStateRootIsolationGuardrail(); err != nil {
+		fatal(err)
+	}
 	filtered, contextName, ok := parsePaasContextFlag(args)
 	if !ok {
 		return
@@ -109,6 +112,7 @@ type paasScaffoldEnvelope struct {
 }
 
 func printPaasScaffold(command string, fields map[string]string, jsonOut bool) {
+	fields = redactPaasSensitiveFields(fields)
 	if jsonOut {
 		envelope := paasScaffoldEnvelope{
 			OK:      true,

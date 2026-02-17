@@ -99,6 +99,7 @@ func errString(err error) string {
 
 func failPaasCommand(command string, jsonOut bool, err error, fields map[string]string) {
 	f := asPaasOperationFailure(err)
+	fields = redactPaasSensitiveFields(fields)
 	message := errString(f.Err)
 	if jsonOut {
 		payload := map[string]any{
