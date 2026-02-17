@@ -723,7 +723,7 @@ Work items:
 | --- | --- | --- | --- | --- |
 | WS04-01 | Define release bundle format and metadata | Done | Codex | `si paas deploy` now materializes context-scoped release bundle directories with bundled `compose.yaml` and `release.json` metadata (release id, digest, targets, strategy, guardrail summary) |
 | WS04-02 | Implement remote upload and compose apply | Done | Codex | Added `si paas deploy --apply` path with target resolution, SCP artifact upload (`compose.yaml`, `release.json`), and SSH compose pull/up execution |
-| WS04-03 | Implement health checks and rollback orchestration | Not Started | Unassigned | |
+| WS04-03 | Implement health checks and rollback orchestration | Done | Codex | Added deploy health checks (`--health-cmd/--health-timeout`) and rollback-on-failure orchestration to previous known-good release with deploy history tracking |
 | WS04-04 | Implement deployment logs and event recording | Not Started | Unassigned | |
 | WS04-05 | Implement runtime reconciler and drift repair planning | Not Started | Unassigned | |
 | WS04-06 | Define and implement Compose-only blue/green cutover and rollback policy per node | Not Started | Unassigned | |
@@ -731,7 +731,7 @@ Work items:
 | WS04-08 | Implement parallel deploy fan-out engine and strategy flags (`serial`, `rolling`, `canary`, `parallel`) | Not Started | Unassigned | |
 | WS04-09 | Implement Git webhook ingestion with auth validation and app/branch trigger mapping | Not Started | Unassigned | |
 | WS04-10 | Implement magic-variable resolution and add-on compose-fragment merge validation | Not Started | Unassigned | |
-| WS04-11 | Implement deterministic deploy failure taxonomy + remediation hint output contract | Not Started | Unassigned | Research-driven P0 diagnostics requirement |
+| WS04-11 | Implement deterministic deploy failure taxonomy + remediation hint output contract | Done | Codex | Added stable `PAAS_*` failure codes with stage/target/remediation hints and machine-readable JSON failure envelopes for deploy/rollback |
 | WS04-12 | Implement deployment retention/pruning lifecycle controls for stale releases/artifacts | Not Started | Unassigned | Research-driven lifecycle requirement |
 
 ### WS-05 Secrets, Vault, and Credential Safety
@@ -1047,18 +1047,17 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-05 | Completed WS05-03 and WS05-04 by adding deploy plaintext-secret leakage detection/redaction, explicit plaintext reveal acknowledgement guardrail, and deploy/rollback vault trust+recipient preflight checks with an unsafe override escape hatch | Context-scoped vault mapping and export/no-secret guardrails (WS05-05..07) remain pending | Start WS04-01 release bundle/metadata scaffolding and WS04-11 deterministic failure taxonomy |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-01 by implementing release bundle materialization in `si paas deploy`: context-scoped bundle root, copied compose artifact, and structured `release.json` metadata with digest + guardrail snapshot | WS04-02/03 upload/apply and rollback execution are still pending | Implement WS04-02 remote upload/apply path and WS04-11 deterministic failure taxonomy next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-02 by implementing remote upload/compose apply execution (`--apply`) with context target resolution, SCP artifact transfer, and SSH compose pull/up run sequence plus fake-transport E2E tests | WS04-03 health/rollback orchestration and WS04-11 deterministic failure taxonomy are still pending | Implement WS04-03 health/rollback orchestration and WS04-11 diagnostics contract next |
+| 2026-02-17 | Codex | WS-04 | Completed WS04-03 and WS04-11 by adding health-gated deploy orchestration with automatic rollback to known-good release and deterministic failure taxonomy/remediation contracts for both text and JSON paths | Deployment event recording (WS04-04) and retention/pruning lifecycle (WS04-12) remain pending | Implement WS04-04 deployment logs/events and WS04-12 retention controls next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS04-03 health checks and rollback orchestration.
-2. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
-3. Implement WS04-04 deployment logs and event recording contract.
-4. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
-5. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
-6. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
-7. Implement WS05-05 context-scoped vault file resolution and namespace controls.
-8. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
-9. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
+1. Implement WS04-04 deployment logs and event recording contract.
+2. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+3. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
+4. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+5. Implement WS05-05 context-scoped vault file resolution and namespace controls.
+6. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+7. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 
