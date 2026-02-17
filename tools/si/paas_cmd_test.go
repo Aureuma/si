@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1335,6 +1337,91 @@ func TestPaasAlertIngressTLSRecordsRetryAlert(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected ingress-tls alert record in history, got %#v", historyPayload.Data)
+	}
+}
+
+func TestPaasAlertSetupTelegramPersistsConfig(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"alert", "setup-telegram",
+			"--bot-token", "bot-token-123",
+			"--chat-id", "987654",
+			"--json",
+		})
+	})
+	env := parsePaasEnvelope(t, raw)
+	if env.Command != "alert setup-telegram" {
+		t.Fatalf("expected setup-telegram command envelope, got %#v", env)
+	}
+	if env.Fields["configured"] != "true" {
+		t.Fatalf("expected configured=true, got %#v", env.Fields)
+	}
+	config, path, err := loadPaasTelegramConfig(currentPaasContext())
+	if err != nil {
+		t.Fatalf("load telegram config: %v", err)
+	}
+	if path == "" || config.ChatID != "987654" || config.BotToken != "bot-token-123" {
+		t.Fatalf("unexpected persisted telegram config: path=%q config=%#v", path, config)
+	}
+}
+
+func TestPaasAlertTestSendsTelegramMessage(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST request, got %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/bottest-token/sendMessage") {
+			t.Errorf("unexpected telegram API path: %s", r.URL.Path)
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("parse form: %v", err)
+		}
+		if got := r.Form.Get("chat_id"); got != "12345" {
+			t.Errorf("expected chat_id=12345, got %q", got)
+		}
+		if got := r.Form.Get("text"); got != "ws06-02 test alert" {
+			t.Errorf("unexpected telegram text: %q", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+	t.Setenv(paasTelegramAPIBaseEnvKey, server.URL)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"alert", "setup-telegram",
+			"--bot-token", "test-token",
+			"--chat-id", "12345",
+			"--json",
+		})
+	})
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"alert", "test",
+			"--severity", "critical",
+			"--message", "ws06-02 test alert",
+			"--json",
+		})
+	})
+	env := parsePaasEnvelope(t, raw)
+	if env.Command != "alert test" {
+		t.Fatalf("expected alert test envelope, got %#v", env)
+	}
+	if env.Fields["status"] != "sent" || env.Fields["channel"] != "telegram" {
+		t.Fatalf("expected sent telegram alert fields, got %#v", env.Fields)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected one telegram API call, got %d", callCount)
 	}
 }
 
