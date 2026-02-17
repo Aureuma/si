@@ -45,6 +45,15 @@ type paasContextListPayload struct {
 	Data    []paasContextConfig `json:"data"`
 }
 
+type paasDoctorPayload struct {
+	OK      bool          `json:"ok"`
+	Command string        `json:"command"`
+	Context string        `json:"context"`
+	Mode    string        `json:"mode"`
+	Count   int           `json:"count"`
+	Checks  []doctorCheck `json:"checks"`
+}
+
 func TestPaasNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas(nil)
@@ -230,6 +239,79 @@ func TestPaasContextInitUsesCurrentContextWhenNameOmitted(t *testing.T) {
 	configPath := filepath.Join(stateRoot, "contexts", "customer-1", "config.json")
 	if _, err := os.Stat(configPath); err != nil {
 		t.Fatalf("expected customer-1 config path: %v", err)
+	}
+}
+
+func TestPaasDoctorJSONHealthy(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv(paasAllowRepoStateEnvKey, "")
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{"doctor", "--json"})
+	})
+	var payload paasDoctorPayload
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("decode doctor payload: %v output=%q", err, raw)
+	}
+	if !payload.OK || payload.Command != "doctor" || payload.Mode != "live" {
+		t.Fatalf("unexpected doctor payload: %#v", payload)
+	}
+	if payload.Count == 0 || len(payload.Checks) == 0 {
+		t.Fatalf("expected non-empty doctor checks, got %#v", payload)
+	}
+}
+
+func TestRunPaasDoctorChecksDetectsRepoStateAndSecretExposure(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repoRoot, ".git"), 0o700); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	stateRoot := filepath.Join(repoRoot, ".state")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv(paasAllowRepoStateEnvKey, "")
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(repoRoot); err != nil {
+		t.Fatalf("chdir repo root: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(cwd)
+	})
+
+	if _, err := initializePaasContextLayout("internal-dogfood", "internal-dogfood", "", ""); err != nil {
+		t.Fatalf("initialize context layout: %v", err)
+	}
+	secretFile := filepath.Join(stateRoot, "contexts", "internal-dogfood", "vault", "secrets.env")
+	if err := os.WriteFile(secretFile, []byte("API_TOKEN=super-secret\n"), 0o600); err != nil {
+		t.Fatalf("write secret file: %v", err)
+	}
+
+	checks, failureCount := runPaasDoctorChecks()
+	if failureCount == 0 {
+		t.Fatalf("expected doctor failures, got checks=%#v", checks)
+	}
+	statusByName := make(map[string]bool, len(checks))
+	for _, check := range checks {
+		statusByName[strings.TrimSpace(check.Name)] = check.OK
+	}
+	requiredFailures := []string{
+		"state_root_outside_repo",
+		"context_vault_outside_repo",
+		"repo_private_state_artifacts",
+		"repo_plaintext_secret_exposure",
+	}
+	for _, name := range requiredFailures {
+		ok, exists := statusByName[name]
+		if !exists {
+			t.Fatalf("expected doctor check %q to exist in %#v", name, checks)
+		}
+		if ok {
+			t.Fatalf("expected doctor check %q to fail in %#v", name, checks)
+		}
 	}
 }
 
@@ -517,7 +599,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 }
 
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
-	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "agent", "events"})
+	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove", "addon"})
 	expectActionNames(t, "paas app addon", paasAppAddonActions, []string{"contract", "enable", "list", "disable"})
