@@ -10,7 +10,7 @@ import (
 
 const (
 	paasAlertSetupTelegramUsageText = "usage: si paas alert setup-telegram --bot-token <token> --chat-id <id> [--dry-run] [--json]"
-	paasAlertTestUsageText          = "usage: si paas alert test [--severity <info|warning|critical>] [--message <text>] [--json]"
+	paasAlertTestUsageText          = "usage: si paas alert test [--severity <info|warning|critical>] [--message <text>] [--dry-run] [--json]"
 	paasAlertHistoryUsageText       = "usage: si paas alert history [--limit <n>] [--severity <info|warning|critical>] [--json]"
 )
 
@@ -72,11 +72,29 @@ func cmdPaasAlertSetupTelegram(args []string) {
 	if !requirePaasValue(*chatID, "chat-id", paasAlertSetupTelegramUsageText) {
 		return
 	}
-	printPaasScaffold("alert setup-telegram", map[string]string{
+	fields := map[string]string{
 		"bot_token_set": boolString(strings.TrimSpace(*botToken) != ""),
 		"chat_id":       strings.TrimSpace(*chatID),
 		"dry_run":       boolString(*dryRun),
-	}, jsonOut)
+	}
+	if !*dryRun {
+		configPath, err := savePaasTelegramConfig(currentPaasContext(), paasTelegramNotifierConfig{
+			BotToken: strings.TrimSpace(*botToken),
+			ChatID:   strings.TrimSpace(*chatID),
+		})
+		if err != nil {
+			failPaasCommand("alert setup-telegram", jsonOut, newPaasOperationFailure(
+				paasFailureUnknown,
+				"alert_setup",
+				"",
+				"verify context write permissions and retry setup",
+				err,
+			), nil)
+		}
+		fields["config_path"] = configPath
+		fields["configured"] = boolString(true)
+	}
+	printPaasScaffold("alert setup-telegram", fields, jsonOut)
 }
 
 func cmdPaasAlertTest(args []string) {
@@ -84,24 +102,63 @@ func cmdPaasAlertTest(args []string) {
 	fs := flag.NewFlagSet("paas alert test", flag.ExitOnError)
 	severity := fs.String("severity", "info", "severity level")
 	message := fs.String("message", "si paas alert test", "alert message")
+	dryRun := fs.Bool("dry-run", false, "validate and emit history only")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasAlertTestUsageText)
 		return
 	}
+	cfg, configPath, err := loadPaasTelegramConfig(currentPaasContext())
+	if err != nil {
+		failPaasCommand("alert test", jsonOut, newPaasOperationFailure(
+			paasFailureUnknown,
+			"alert_config_load",
+			"",
+			"verify alert config file permissions and run setup again if needed",
+			err,
+		), nil)
+	}
 	fields := map[string]string{
-		"message":  strings.TrimSpace(*message),
-		"severity": strings.ToLower(strings.TrimSpace(*severity)),
+		"message":     strings.TrimSpace(*message),
+		"severity":    strings.ToLower(strings.TrimSpace(*severity)),
+		"dry_run":     boolString(*dryRun),
+		"channel":     "telegram",
+		"config_path": configPath,
+	}
+	status := "sent"
+	if !*dryRun {
+		if err := sendPaasTelegramMessage(cfg, fields["message"]); err != nil {
+			status = "failed"
+			if historyPath := recordPaasAlertEntry(paasAlertEntry{
+				Command:  "alert test",
+				Severity: fields["severity"],
+				Status:   status,
+				Message:  fields["message"],
+				Guidance: "Verify Telegram bot token/chat id and outbound network access.",
+				Fields:   map[string]string{"channel": "telegram"},
+			}); strings.TrimSpace(historyPath) != "" {
+				fields["alert_history"] = historyPath
+			}
+			failPaasCommand("alert test", jsonOut, newPaasOperationFailure(
+				paasFailureUnknown,
+				"alert_send",
+				"",
+				"run `si paas alert setup-telegram` with valid credentials and retry",
+				err,
+			), fields)
+		}
 	}
 	if historyPath := recordPaasAlertEntry(paasAlertEntry{
 		Command:  "alert test",
 		Severity: fields["severity"],
-		Status:   "sent",
+		Status:   status,
 		Message:  fields["message"],
 		Guidance: "Verify notifier routing and escalation paths.",
+		Fields:   map[string]string{"channel": "telegram"},
 	}); strings.TrimSpace(historyPath) != "" {
 		fields["alert_history"] = historyPath
 	}
+	fields["status"] = status
 	printPaasScaffold("alert test", fields, jsonOut)
 }
 

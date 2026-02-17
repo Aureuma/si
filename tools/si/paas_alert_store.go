@@ -22,12 +22,74 @@ type paasAlertEntry struct {
 	Fields    map[string]string `json:"fields,omitempty"`
 }
 
+type paasTelegramNotifierConfig struct {
+	BotToken  string `json:"bot_token"`
+	ChatID    string `json:"chat_id"`
+	UpdatedAt string `json:"updated_at"`
+}
+
 func resolvePaasAlertHistoryPath(contextName string) (string, error) {
 	contextDir, err := resolvePaasContextDir(contextName)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(contextDir, "events", "alerts.jsonl"), nil
+}
+
+func resolvePaasTelegramConfigPath(contextName string) (string, error) {
+	contextDir, err := resolvePaasContextDir(contextName)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(contextDir, "alerts", "telegram.json"), nil
+}
+
+func loadPaasTelegramConfig(contextName string) (paasTelegramNotifierConfig, string, error) {
+	path, err := resolvePaasTelegramConfigPath(contextName)
+	if err != nil {
+		return paasTelegramNotifierConfig{}, "", err
+	}
+	raw, err := os.ReadFile(path) // #nosec G304 -- context-scoped local state path.
+	if err != nil {
+		if os.IsNotExist(err) {
+			return paasTelegramNotifierConfig{}, path, nil
+		}
+		return paasTelegramNotifierConfig{}, path, err
+	}
+	var cfg paasTelegramNotifierConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return paasTelegramNotifierConfig{}, path, fmt.Errorf("invalid telegram notifier config: %w", err)
+	}
+	cfg.BotToken = strings.TrimSpace(cfg.BotToken)
+	cfg.ChatID = strings.TrimSpace(cfg.ChatID)
+	cfg.UpdatedAt = strings.TrimSpace(cfg.UpdatedAt)
+	return cfg, path, nil
+}
+
+func savePaasTelegramConfig(contextName string, cfg paasTelegramNotifierConfig) (string, error) {
+	path, err := resolvePaasTelegramConfigPath(contextName)
+	if err != nil {
+		return "", err
+	}
+	row := cfg
+	row.BotToken = strings.TrimSpace(row.BotToken)
+	row.ChatID = strings.TrimSpace(row.ChatID)
+	if row.BotToken == "" || row.ChatID == "" {
+		return "", fmt.Errorf("telegram bot token and chat id are required")
+	}
+	row.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	raw, err := json.MarshalIndent(row, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	raw = append(raw, '\n')
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 func recordPaasAlertEntry(entry paasAlertEntry) string {
