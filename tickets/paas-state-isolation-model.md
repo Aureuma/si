@@ -126,7 +126,7 @@ Vault backup follows vault policy, not PaaS state backup tooling.
 | ISO-04 | Add state-root safety checks (`git` workspace refusal) | Done | Codex | Guardrail enforced via `enforcePaasStateRootIsolationGuardrail` with explicit unsafe override and regression coverage |
 | ISO-05 | Add secret redaction middleware for events and logs | Done | Codex | Redaction middleware applied across scaffold/failure/audit/event emission paths (`WS05-03`, `WS05-06`, `WS06-05`) |
 | ISO-06 | Add context isolation integration tests | Done | Codex | WS09-05 complete: context-boundary isolation regression suite + dedicated e2e validation |
-| ISO-07 | Add `si paas doctor` policy checks | Not Started | Unassigned | Linked WS: WS11-03 |
+| ISO-07 | Add `si paas doctor` policy checks | Done | Codex | WS11-03 complete: `si paas doctor` now enforces/report checks for state-root boundary, context vault policy, repo private-state contamination, and plaintext secret exposure |
 | ISO-08 | Document dogfood runbook and backup policy | Not Started | Unassigned | Linked WS: WS11-04, WS11-05 |
 
 ## 12. Decisions and Deferred Items

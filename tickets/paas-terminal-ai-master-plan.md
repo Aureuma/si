@@ -870,7 +870,7 @@ Work items:
 | --- | --- | --- | --- | --- |
 | WS11-01 | Define data classification policy and allowed storage matrix | Done | Codex | Added `docs/PAAS_STATE_CLASSIFICATION_POLICY.md` defining class/location matrix, boundary requirements, and enforcement mapping; linked from `docs/testing.md` |
 | WS11-02 | Implement context-scoped state root layout and initialization | Done | Codex | Implemented context layout/config persistence (`contexts/<ctx>/{events,cache,vault,releases,addons,config.json}`), `context init`, live CRUD/use/show/remove operations, and persisted selected-context resolution when scoped state root is set (`current_context`) |
-| WS11-03 | Implement `si paas doctor` checks for repo-state contamination and secret exposure | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-04/ISO-07 |
+| WS11-03 | Implement `si paas doctor` checks for repo-state contamination and secret exposure | Done | Codex | Added `si paas doctor` live checks for state-root isolation, context vault path policy, repository private-state artifact contamination, and plaintext secret exposure with non-zero failure exit + JSON/text contracts |
 | WS11-04 | Define backup/restore policy for private state roots and audit logs | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-08 |
 | WS11-05 | Publish operational runbook for internal dogfood vs OSS demo contexts | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-08 |
 
@@ -1074,12 +1074,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-09 | Completed WS09-05 by adding dedicated context-boundary/isolation regression coverage (`TestPaasRegressionStateIsolationContextBoundaries`) and end-to-end state-isolation harness validation; WS09 hardening stream is now complete | Remaining backlog shifts to WS11 isolation governance and Phase C/D streams (WS07/WS12/WS08) | Start WS11-01/02/03 to formalize isolation governance guardrails |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-01 by publishing the PaaS state classification policy and allowed-storage matrix (`docs/PAAS_STATE_CLASSIFICATION_POLICY.md`) and aligning ISO ticket ownership/status for ongoing isolation-governance implementation | WS11-02/03/04/05 remain pending | Implement WS11-02 context state-root layout/init path next, then WS11-03 doctor checks |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-02 by implementing context-scoped layout initialization and config persistence (including active-context selection persistence), and by wiring `si paas context create/init/list/use/show/remove` to live state operations with contract/e2e coverage | WS11-03/04/05 remain pending | Implement WS11-03 `si paas doctor` contamination/secret exposure checks next |
+| 2026-02-17 | Codex | WS-11 | Completed WS11-03 by implementing `si paas doctor` policy checks for repo-state contamination and secret exposure, including state-root boundary validation, context vault policy validation, repository private-state artifact detection, and plaintext secret exposure detection with actionable failure output | WS11-04/05 remain pending | Implement WS11-04 backup/restore policy for private state roots and audit logs next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS11-03 `si paas doctor` contamination/secret exposure checks.
-2. Implement WS11-04 backup/restore policy for private state roots and audit logs.
-3. Implement WS11-05 operational runbook for internal dogfood vs OSS demo contexts.
+1. Implement WS11-04 backup/restore policy for private state roots and audit logs.
+2. Implement WS11-05 operational runbook for internal dogfood vs OSS demo contexts.
+3. Start WS12-01 incident event schema, severity taxonomy, and dedupe strategy.
 
 ## 13. Reference Links
 
