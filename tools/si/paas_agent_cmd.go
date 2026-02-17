@@ -266,13 +266,14 @@ func cmdPaasAgentLogs(args []string) {
 	}
 	fmt.Printf("%s %d\n", styleHeading("paas agent logs:"), len(rows))
 	for _, row := range rows {
-		fmt.Printf("  - %s run=%s status=%s incident=%s runtime=%s profile=%s message=%s\n",
+		fmt.Printf("  - %s run=%s status=%s incident=%s runtime=%s profile=%s policy=%s message=%s\n",
 			row.Timestamp,
 			row.RunID,
 			row.Status,
 			row.IncidentID,
 			row.RuntimeMode,
 			row.RuntimeProfile,
+			row.PolicyAction,
 			row.Message,
 		)
 	}
@@ -320,6 +321,8 @@ func cmdPaasAgentRunOnce(args []string) {
 	var selectedEntry *paasIncidentQueueEntry
 	status := "noop"
 	message := "no queued incidents available"
+	runtimeReason := ""
+	policyAction := ""
 	for i := range queueRows {
 		row := queueRows[i]
 		candidateID := strings.TrimSpace(row.Incident.ID)
@@ -340,6 +343,7 @@ func cmdPaasAgentRunOnce(args []string) {
 	if planErr != nil {
 		status = "blocked"
 		message = strings.TrimSpace(planErr.Error())
+		runtimeReason = strings.TrimSpace(planErr.Error())
 	}
 	if planErr == nil && !plan.Ready {
 		status = "blocked"
@@ -348,10 +352,34 @@ func cmdPaasAgentRunOnce(args []string) {
 		} else {
 			message = "runtime adapter is not ready"
 		}
+		runtimeReason = message
+	} else if planErr == nil {
+		runtimeReason = strings.TrimSpace(plan.Reason)
 	}
 	if selectedEntry != nil && planErr == nil && plan.Ready {
-		status = "queued"
-		message = "incident queued for remediation policy evaluation"
+		policy, _, err := loadPaasRemediationPolicy(currentPaasContext())
+		if err != nil {
+			status = "blocked"
+			message = strings.TrimSpace(err.Error())
+			runtimeReason = message
+		} else {
+			action, reason := evaluatePaasRemediationPolicy(policy, selectedEntry)
+			policyAction = action
+			switch action {
+			case paasRemediationActionAutoAllow:
+				status = "queued"
+				message = "policy auto-allow (" + reason + ")"
+			case paasRemediationActionApprovalRequired:
+				status = "pending-approval"
+				message = "policy requires approval (" + reason + ")"
+			case paasRemediationActionDeny:
+				status = "denied"
+				message = "policy denied remediation (" + reason + ")"
+			default:
+				status = "pending-approval"
+				message = "policy fallback requires approval"
+			}
+		}
 	}
 	runID := "run-" + time.Now().UTC().Format("20060102T150405.000000000Z07:00")
 	_, err = appendPaasAgentRunRecord(paasAgentRunRecord{
@@ -363,6 +391,7 @@ func cmdPaasAgentRunOnce(args []string) {
 		RuntimeProfile: plan.ProfileID,
 		RuntimeAuth:    plan.AuthPath,
 		RuntimeReady:   plan.Ready,
+		PolicyAction:   policyAction,
 		Collected:      syncResult.Collected,
 		Inserted:       syncResult.Inserted,
 		Updated:        syncResult.Updated,
@@ -397,7 +426,8 @@ func cmdPaasAgentRunOnce(args []string) {
 		"runtime_profile": plan.ProfileID,
 		"runtime_auth":    plan.AuthPath,
 		"runtime_ready":   boolString(plan.Ready),
-		"runtime_reason":  plan.Reason,
+		"runtime_reason":  runtimeReason,
+		"policy_action":   policyAction,
 		"collected":       intString(syncResult.Collected),
 		"queue_inserted":  intString(syncResult.Inserted),
 		"queue_updated":   intString(syncResult.Updated),

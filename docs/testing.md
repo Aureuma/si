@@ -101,6 +101,12 @@ For Codex-profile runtime adapter behavior, use:
 cat docs/PAAS_AGENT_RUNTIME_ADAPTER.md
 ```
 
+For remediation policy action evaluation rules, use:
+
+```bash
+cat docs/PAAS_REMEDIATION_POLICY_ENGINE.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
