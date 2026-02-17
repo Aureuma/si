@@ -21,7 +21,7 @@ var paasSecretActions = []subcommandAction{
 
 const (
 	paasSecretSetUsageText   = "usage: si paas secret set --app <slug> [--target <id>] --name <key> --value <text> [--file <path>] [--json]"
-	paasSecretGetUsageText   = "usage: si paas secret get --app <slug> [--target <id>] --name <key> [--reveal] [--file <path>] [--json]"
+	paasSecretGetUsageText   = "usage: si paas secret get --app <slug> [--target <id>] --name <key> [--reveal --allow-plaintext] [--file <path>] [--json]"
 	paasSecretUnsetUsageText = "usage: si paas secret unset --app <slug> [--target <id>] --name <key> [--file <path>] [--json]"
 	paasSecretListUsageText  = "usage: si paas secret list --app <slug> [--target <id>] [--file <path>] [--json]"
 	paasSecretKeyUsageText   = "usage: si paas secret key --app <slug> [--target <id>] --name <key> [--json]"
@@ -97,6 +97,7 @@ func cmdPaasSecretGet(args []string) {
 	target := fs.String("target", "", "target id (default current)")
 	name := fs.String("name", "", "logical secret key name")
 	reveal := fs.Bool("reveal", false, "reveal decrypted value")
+	allowPlaintext := fs.Bool("allow-plaintext", false, "required with --reveal to acknowledge plaintext output risk")
 	fileFlag := fs.String("file", "", "explicit vault file")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -105,6 +106,9 @@ func cmdPaasSecretGet(args []string) {
 	}
 	if !requirePaasValue(*app, "app", paasSecretGetUsageText) || !requirePaasValue(*name, "name", paasSecretGetUsageText) {
 		return
+	}
+	if err := enforcePaasSecretRevealGuardrail(*reveal, *allowPlaintext); err != nil {
+		fatal(err)
 	}
 	if jsonOut {
 		fatal(fmt.Errorf("--json is not supported for secret get"))
