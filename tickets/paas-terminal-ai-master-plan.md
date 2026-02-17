@@ -854,7 +854,7 @@ Work items:
 | WS09-03 | Add security review checklist and threat model | Not Started | Unassigned | |
 | WS09-04 | Write ops runbook for incident response | Not Started | Unassigned | |
 | WS09-05 | Add state-isolation regression tests (context boundary and leakage checks) | Not Started | Unassigned | |
-| WS09-06 | Add upgrade and compatibility regression suite (arch/runtime/deploy-path coverage) | Not Started | Unassigned | Research-driven hardening requirement |
+| WS09-06 | Add upgrade and compatibility regression suite (arch/runtime/deploy-path coverage) | Done | Codex | Added compatibility regression coverage via `TestPaasRegressionUpgradeDeployRollbackPath` plus dedicated end-to-end harness execution spanning arch/runtime/deploy/rollback/webhook/ingress-alert paths |
 
 ### WS-11 Dogfood State Isolation and Governance (MVP Critical)
 
@@ -1054,13 +1054,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-08 by implementing strategy-aware fan-out orchestration for deploy/rollback with canary gating, rolling/parallel batching, continue-on-error handling, and deterministic target status/fanout-plan output contracts | Webhook ingestion and add-on/blue-green tracks remain pending | Implement WS04-09 webhook ingestion with auth validation and app/branch trigger mapping next |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-09 by implementing Git webhook ingestion under `si paas deploy webhook`, including signature verification (`PAAS_WEBHOOK_AUTH_FAILED`), GitHub push payload parsing, and context-scoped app/branch mapping CRUD with optional deploy dispatch | Blue/green and service-pack/add-on scopes remain pending | Implement WS06-07 TLS/ACME retry observability and WS05-05 context-scoped vault namespace controls next |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-07 by implementing `si paas alert ingress-tls` for Traefik/ACME retry observability, alert emission to context-scoped history, and explicit operator recovery guidance for DNS/port/challenge failures | Remaining WS06 slices (logs/notifier/routing/policy) are still pending | Implement WS09-06 upgrade/compatibility regression coverage and WS05-05 vault namespace controls next |
+| 2026-02-17 | Codex | WS-09 | Completed WS09-06 by adding an upgrade/compatibility regression suite across arch checks, deploy/apply, health rollback, fan-out, webhook ingestion, and ingress TLS alerting paths (unit + e2e harness) | Remaining WS09 tracks (failure drills, threat model, runbook, isolation regressions) are still pending | Implement WS05-05 context-scoped vault namespace controls next |
 
 ## 12. Immediate Next Actions
 
-1. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
-2. Implement WS05-05 context-scoped vault file resolution and namespace controls.
-3. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
-4. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
+1. Implement WS05-05 context-scoped vault file resolution and namespace controls.
+2. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+3. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 

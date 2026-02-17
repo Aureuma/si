@@ -28,7 +28,7 @@ Status legend:
 | WS-07 | AI automation (Codex-first) + strict action schema/safety | WS-02, WS-04, WS-06 | Not Started | Unassigned | | | | |
 | WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
 | WS-08 | Cloud-hosted paid edition (solo-dev simple billing model) | WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Linked ticket: `paas-monetization-solo-dev.md` (MON-01..MON-07) |
-| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Research priority: upgrade/compatibility regression suite |
+| WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS09-06 compatibility regression suite completed (arch/runtime/deploy-path matrix); remaining WS09 hardening items pending |
 | WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | Not Started | Unassigned | | | | Linked ticket: `paas-state-isolation-model.md` (ISO-01..ISO-08) |
 | WS-10 | Optional post-MVP TUI layer (deferred) | WS-02, WS-04, WS-06, WS-09 | Not Started | Unassigned | | | | Deferred until after MVP |
 
@@ -79,12 +79,13 @@ Status legend:
 | 2026-02-17 | Codex | WS-04 | Completed WS04-08 by implementing deploy/rollback fan-out strategy execution (`serial|rolling|canary|parallel`) with canary gating, continue-on-error behavior, and deterministic target status/fanout-plan output. | Webhook ingestion and remaining WS04 architecture tracks still pending. | Implement WS04-09 webhook ingestion with auth validation and app/branch trigger mapping. |
 | 2026-02-17 | Codex | WS-04 | Completed WS04-09 by implementing `si paas deploy webhook` ingestion with HMAC auth validation, GitHub push payload parsing, and context-scoped repo/branch mapping CRUD (`map add|list|remove`) plus trigger command dispatch support. | WS04-06/07/10 architecture slices remain pending. | Shift to WS06-07 TLS/ACME retry observability and WS05-05 vault namespace controls. |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-07 by adding `si paas alert ingress-tls` live Traefik/ACME retry checks, structured alert history persistence, and operator recovery guidance for DNS/port/challenge issues. | Remaining WS06 command slices (logs, notifier routing/policy, callbacks) remain pending. | Prioritize WS09-06 compatibility regression suite and WS05-05 vault namespace controls. |
+| 2026-02-17 | Codex | WS-09 | Completed WS09-06 by adding an upgrade/compatibility regression suite (`TestPaasRegressionUpgradeDeployRollbackPath` + dedicated end-to-end harness run) covering arch/runtime checks and critical deploy/rollback/webhook/ingress alert paths. | Remaining WS09 hardening items are still pending. | Prioritize WS05-05 context-scoped vault namespace controls next. |
 
 ## 4. Blocker Register
 
 | Date | Workstream | Blocker | Severity | Owner | Mitigation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-02-17 | WS-09 | Research-priority upgrade/compatibility regression suite (`WS09-06`) is still unassigned. | Medium | Unassigned | Assign owner and target date before Gate B closure. | Open |
+| 2026-02-17 | WS-09 | Remaining hardening slices (`WS09-01/02/03/04/05`) are unassigned after WS09-06 completion. | Medium | Unassigned | Assign owners/dates before Gate E execution sprint. | Open |
 
 ## 5. Handoff Checklist (For New Agents)
 
