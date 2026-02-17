@@ -707,7 +707,7 @@ Work items:
 | WS03-03 | Implement bootstrap path from password to key auth | Done | Codex | Added `si paas target bootstrap` with password-env + public-key flow and auth-method promotion to `key` on success |
 | WS03-04 | Add `si paas target check --all` health summary | Done | Codex | `target check --all` now executes live per-target preflights with aggregate text/JSON summary and failure exit codes |
 | WS03-05 | Implement Traefik per-node ingress baseline with DNS/LB model; keep Caddy as post-MVP alternative | Not Started | Unassigned | Traefik is locked for MVP |
-| WS03-06 | Implement architecture/runtime compatibility preflight (`cpu arch`, Docker/Compose version, image platform) with actionable failures | Not Started | Unassigned | Research-driven reliability guardrail |
+| WS03-06 | Implement architecture/runtime compatibility preflight (`cpu arch`, Docker/Compose version, image platform) with actionable failures | Done | Codex | Added architecture/runtime preflight checks including `--image-platform` compatibility validation and actionable mismatch diagnostics |
 
 ### WS-04 Deployment Engine (Compose-first)
 
@@ -1041,19 +1041,19 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-03 | Completed WS03-01: implemented context-scoped local target persistence and CRUD behavior for `target add/list/use/remove` with JSON + text output support | SSH/preflight and bootstrap are still pending | Implement WS03-02 SSH connectivity and preflight checks next |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-02: implemented live preflight execution for `si paas target check` including network reachability, SSH command execution, Docker server check, and Compose availability check | Key bootstrap path (password-to-key flow) still pending | Implement WS03-03 bootstrap path from password auth to key auth |
 | 2026-02-17 | Codex | WS-03 | Completed WS03-03 and WS03-04: added password-to-key bootstrap command and upgraded `target check --all` to aggregate live health diagnostics with machine-readable output | Traefik ingress baseline and compatibility preflight are still pending | Implement WS03-05 Traefik baseline and WS03-06 compatibility preflight checks |
+| 2026-02-17 | Codex | WS-03 | Completed WS03-06 by adding architecture compatibility preflights (`uname -m` normalization and `--image-platform` arch matching) to live target checks | Traefik ingress baseline (WS03-05) still pending | Implement WS03-05 Traefik baseline next, then advance WS-04 deploy engine |
 
 ## 12. Immediate Next Actions
 
 1. Implement WS03-05 Traefik per-node ingress baseline with DNS/LB model (MVP ingress lock).
-2. Implement WS03-06 architecture/runtime compatibility preflight checks before deployment rollout.
-3. Start WS-05 secret command surface and redaction guardrails in parallel with remaining WS-03 tasks where interfaces are independent.
-4. Stage WS-04 deploy engine scaffolding immediately after WS-03 connectivity/bootstrap path is stable.
-5. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
-6. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
-7. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
-8. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
-9. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
-10. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
+2. Start WS-05 secret command surface and redaction guardrails in parallel with remaining WS-03 tasks where interfaces are independent.
+3. Stage WS-04 deploy engine scaffolding immediately after WS-03 task completion.
+4. Implement WS04-11 deterministic deploy failure taxonomy and remediation output contract early in deploy engine work.
+5. Implement WS06-07 TLS/ACME retry observability and alert hooks during first Traefik integration pass.
+6. Implement WS04-12 retention/pruning lifecycle controls before first extended dogfood rollout.
+7. Add WS09-06 upgrade/compatibility regression coverage before marking Gate B complete.
+8. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
+9. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
 ## 13. Reference Links
 

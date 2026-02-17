@@ -168,9 +168,10 @@ func cmdPaasTargetCheck(args []string) {
 	target := fs.String("target", "", "target id")
 	checkAll := fs.Bool("all", false, "check all targets")
 	timeout := fs.String("timeout", "30s", "preflight timeout")
+	imagePlatform := fs.String("image-platform", "", "expected image platform (for example linux/amd64)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas target check [--target <id> | --all] [--timeout <duration>] [--json]")
+		printUsage("usage: si paas target check [--target <id> | --all] [--timeout <duration>] [--image-platform <platform>] [--json]")
 		return
 	}
 	store, err := loadPaasTargetStore(currentPaasContext())
@@ -188,7 +189,7 @@ func cmdPaasTargetCheck(args []string) {
 	selected := strings.TrimSpace(*target)
 	if !*checkAll && selected == "" {
 		fmt.Fprintln(os.Stderr, "either --target or --all is required")
-		printUsage("usage: si paas target check [--target <id> | --all] [--timeout <duration>] [--json]")
+		printUsage("usage: si paas target check [--target <id> | --all] [--timeout <duration>] [--image-platform <platform>] [--json]")
 		return
 	}
 	targetsToCheck := make([]paasTarget, 0, len(store.Targets))
@@ -202,11 +203,12 @@ func cmdPaasTargetCheck(args []string) {
 		targetsToCheck = append(targetsToCheck, store.Targets[idx])
 	}
 
+	expectedArch := normalizeImagePlatformArch(strings.TrimSpace(*imagePlatform))
 	results := make([]paasTargetCheckResult, 0, len(targetsToCheck))
 	for _, row := range targetsToCheck {
-		results = append(results, runPaasTargetCheck(row, timeoutValue))
+		results = append(results, runPaasTargetCheck(row, timeoutValue, expectedArch))
 	}
-	printPaasTargetCheckResults(jsonOut, timeoutValue, results)
+	printPaasTargetCheckResults(jsonOut, timeoutValue, expectedArch, results)
 }
 
 func cmdPaasTargetUse(args []string) {
