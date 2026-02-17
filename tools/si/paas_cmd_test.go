@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -155,6 +157,60 @@ func TestPaasTargetCRUDWithLocalStore(t *testing.T) {
 	}
 }
 
+func TestPaasTargetIngressBaselineRendersArtifactsAndPersistsMetadata(t *testing.T) {
+	stateRoot := t.TempDir()
+	artifactsDir := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-ingress", "--host", "10.0.0.9", "--user", "root"})
+	})
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"target", "ingress-baseline",
+			"--target", "edge-ingress",
+			"--domain", "apps.example.com",
+			"--acme-email", "ops@example.com",
+			"--lb-mode", "dns",
+			"--output-dir", artifactsDir,
+			"--json",
+		})
+	})
+
+	required := []string{
+		"docker-compose.traefik.yaml",
+		"traefik.yaml",
+		"dynamic.yaml",
+		"README.md",
+		"acme.json",
+	}
+	for _, name := range required {
+		path := filepath.Join(artifactsDir, name)
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("expected artifact %s to exist: %v", path, err)
+		}
+	}
+
+	listRaw := captureStdout(t, func() {
+		cmdPaas([]string{"target", "list", "--json"})
+	})
+	listPayload := parseTargetListPayload(t, listRaw)
+	if len(listPayload.Data) != 1 {
+		t.Fatalf("expected 1 target in list payload, got %#v", listPayload.Data)
+	}
+	row := listPayload.Data[0]
+	if row.IngressProvider != paasIngressProviderTraefik {
+		t.Fatalf("expected ingress provider %q, got %q", paasIngressProviderTraefik, row.IngressProvider)
+	}
+	if row.IngressDomain != "apps.example.com" {
+		t.Fatalf("expected ingress domain apps.example.com, got %q", row.IngressDomain)
+	}
+	if row.IngressLBMode != "dns" {
+		t.Fatalf("expected ingress lb mode dns, got %q", row.IngressLBMode)
+	}
+}
+
 func TestPaasDeployInvalidStrategyShowsUsage(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas([]string{"deploy", "--strategy", "invalid"})
@@ -173,6 +229,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 		{name: "paas target", actions: paasTargetActions},
 		{name: "paas app", actions: paasAppActions},
 		{name: "paas alert", actions: paasAlertActions},
+		{name: "paas secret", actions: paasSecretActions},
 		{name: "paas ai", actions: paasAIActions},
 		{name: "paas context", actions: paasContextActions},
 		{name: "paas agent", actions: paasAgentActions},
@@ -194,10 +251,11 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 }
 
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
-	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "ai", "context", "agent", "events"})
-	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap"})
+	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "agent", "events"})
+	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove"})
 	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history"})
+	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
 	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove"})
 	expectActionNames(t, "paas agent", paasAgentActions, []string{"enable", "disable", "status", "logs", "run-once", "approve", "deny"})
@@ -217,6 +275,22 @@ func TestNormalizeImagePlatformArch(t *testing.T) {
 		if got != expected {
 			t.Fatalf("normalizeImagePlatformArch(%q) = %q, expected %q", input, got, expected)
 		}
+	}
+}
+
+func TestPaasSecretKeyConvention(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "10.0.0.7", "--user", "root"})
+	})
+	out := captureStdout(t, func() {
+		cmdPaas([]string{"secret", "key", "--app", "billing-api", "--name", "stripe_api_key"})
+	})
+	got := strings.TrimSpace(out)
+	want := "PAAS__CTX_DEFAULT__APP_BILLING_API__TARGET_EDGE_A__VAR_STRIPE_API_KEY"
+	if got != want {
+		t.Fatalf("unexpected vault key convention: got=%q want=%q", got, want)
 	}
 }
 

@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|ai|context|agent|events> [args...]"
+const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|agent|events> [args...]"
 
 const defaultPaasContext = "default"
 
@@ -22,6 +22,7 @@ var paasActions = []subcommandAction{
 	{Name: "rollback", Description: "rollback app releases"},
 	{Name: "logs", Description: "view app and service logs"},
 	{Name: "alert", Description: "configure and test alerts"},
+	{Name: "secret", Description: "manage app secrets via si vault"},
 	{Name: "ai", Description: "run Codex-assisted operations"},
 	{Name: "context", Description: "manage isolated paas contexts"},
 	{Name: "agent", Description: "manage long-running agents"},
@@ -29,12 +30,13 @@ var paasActions = []subcommandAction{
 }
 
 const (
-	paasTargetUsageText   = "usage: si paas target <add|list|check|use|remove|bootstrap> [args...]"
+	paasTargetUsageText   = "usage: si paas target <add|list|check|use|remove|bootstrap|ingress-baseline> [args...]"
 	paasAppUsageText      = "usage: si paas app <init|list|status|remove> [args...]"
 	paasDeployUsageText   = "usage: si paas deploy [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--release <id>] [--compose-file <path>] [--wait-timeout <duration>] [--json]"
 	paasRollbackUsageText = "usage: si paas rollback [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--to-release <id>] [--strategy <serial|rolling|canary|parallel>] [--max-parallel <n>] [--continue-on-error] [--wait-timeout <duration>] [--json]"
 	paasLogsUsageText     = "usage: si paas logs [--app <slug>] [--target <id>] [--service <name>] [--tail <n>] [--follow] [--since <duration>] [--json]"
 	paasAlertUsageText    = "usage: si paas alert <setup-telegram|test|history> [args...]"
+	paasSecretUsageText   = "usage: si paas secret <set|get|unset|list|key> [args...]"
 	paasAIUsageText       = "usage: si paas ai <plan|inspect|fix> [args...]"
 	paasContextUsageText  = "usage: si paas context <create|list|use|show|remove> [args...]"
 	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
@@ -77,6 +79,8 @@ func cmdPaas(args []string) {
 		cmdPaasLogs(rest)
 	case "alert":
 		cmdPaasAlert(rest)
+	case "secret":
+		cmdPaasSecret(rest)
 	case "ai":
 		cmdPaasAI(rest)
 	case "context":

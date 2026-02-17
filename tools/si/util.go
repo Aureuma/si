@@ -67,7 +67,7 @@ Core:
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
-  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|ai|context|agent|events> [args...]
+  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|agent|events> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
