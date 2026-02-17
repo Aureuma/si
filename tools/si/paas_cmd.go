@@ -38,7 +38,7 @@ const (
 	paasAlertUsageText    = "usage: si paas alert <setup-telegram|test|history|acknowledge|policy|ingress-tls> [args...]"
 	paasSecretUsageText   = "usage: si paas secret <set|get|unset|list|key> [args...]"
 	paasAIUsageText       = "usage: si paas ai <plan|inspect|fix> [args...]"
-	paasContextUsageText  = "usage: si paas context <create|list|use|show|remove|export|import> [args...]"
+	paasContextUsageText  = "usage: si paas context <create|init|list|use|show|remove|export|import> [args...]"
 	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
 	paasEventsUsageText   = "usage: si paas events <list> [args...]"
 )
@@ -270,6 +270,14 @@ func parsePaasContextFlag(args []string) ([]string, string, bool) {
 			contextName = assigned
 		default:
 			filtered = append(filtered, args[i])
+		}
+	}
+	if strings.TrimSpace(contextName) == "" {
+		// Respect persisted context selection only when state root is explicitly scoped.
+		if strings.TrimSpace(os.Getenv(paasStateRootEnvKey)) != "" {
+			if selected, err := loadPaasSelectedContext(); err == nil {
+				contextName = strings.TrimSpace(selected)
+			}
 		}
 	}
 	if strings.TrimSpace(contextName) == "" {

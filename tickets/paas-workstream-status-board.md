@@ -29,7 +29,7 @@ Status legend:
 | WS-12 | Stateful agent runtime + event bridge + approval policy (Codex subscription path) | WS-02, WS-03, WS-04, WS-06, WS-07 | Not Started | Unassigned | | | | |
 | WS-08 | Cloud-hosted paid edition (solo-dev simple billing model) | WS-04, WS-05, WS-06 | Not Started | Unassigned | | | | Linked ticket: `paas-monetization-solo-dev.md` (MON-01..MON-07) |
 | WS-09 | Security, QA, and reliability | WS-03, WS-04, WS-05, WS-06 | Done | Codex | 2026-02-17 | 2026-02-21 | None | WS09-01..WS09-06 completed, including test matrix, failure drills, security checklist/threat model, incident runbook, state-isolation regressions, and compatibility regression suite |
-| WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS11-01 data classification/storage policy completed; remaining ISO-governance implementation slices pending (`WS11-02/03/04/05`) |
+| WS-11 | Dogfood state isolation and governance (MVP critical) | WS-02, WS-05, WS-09 | In Progress | Codex | 2026-02-17 | 2026-02-21 | None | WS11-01 data classification/storage policy and WS11-02 context layout/init implementation completed; remaining ISO-governance slices pending (`WS11-03/04/05`) |
 | WS-10 | Optional post-MVP TUI layer (deferred) | WS-02, WS-04, WS-06, WS-09 | Not Started | Unassigned | | | | Deferred until after MVP |
 
 ## 2. Milestone Gates
@@ -41,7 +41,7 @@ Status legend:
 | Gate C: AI operations integrated | WS-07, WS-12 | Not Started | Unassigned | Requires reliable event-driven long-running agent loop |
 | Gate D: Managed cloud foundation | WS-08 | Not Started | Unassigned | |
 | Gate E: Hardening and release readiness | WS-09 | Done | Codex | WS09 hardening scope completed with QA/security/reliability artifacts and regression coverage |
-| Gate E2: State isolation hard gate | WS-11 | Not Started | Unassigned | Must pass before production dogfood rollout |
+| Gate E2: State isolation hard gate | WS-11 | In Progress | Codex | WS11-01/02 completed; must finish WS11-03/04/05 before production dogfood rollout |
 | Gate F: Optional TUI completion (post-MVP) | WS-10 | Not Started | Unassigned | Deferred until after MVP |
 
 ## 3. Weekly Update Log
@@ -98,6 +98,7 @@ Status legend:
 | 2026-02-17 | Codex | WS-09 | Completed WS09-04 by adding `docs/PAAS_INCIDENT_RUNBOOK.md` with severity classification, response workflow, and scenario playbooks for deploy/bluegreen/webhook/vault incident classes. | WS09-05 remains pending. | Continue with WS09-05 state-isolation regression tests next. |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-05 by adding context-boundary leakage regression coverage (`TestPaasRegressionStateIsolationContextBoundaries`) plus dedicated e2e isolation harness execution; WS09 stream is now complete. | None | Shift to WS11 isolation governance backlog next. |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-01 by publishing `docs/PAAS_STATE_CLASSIFICATION_POLICY.md` with enforced data-class/storage matrix and context-boundary policy requirements, and by setting the linked ISO state-isolation ticket into active execution. | WS11-02/03/04/05 remain pending. | Continue with WS11-02 context state-root layout/init implementation next. |
+| 2026-02-17 | Codex | WS-11 | Completed WS11-02 by implementing context-scoped layout/config persistence and lifecycle operations (`context create/init/list/use/show/remove`) backed by live state-root directories and persisted active-context selection. Added command-contract tests and context-init e2e validation. | WS11-03/04/05 remain pending. | Continue with WS11-03 `si paas doctor` isolation/secret exposure checks next. |
 
 ## 4. Blocker Register
 

@@ -120,12 +120,12 @@ Vault backup follows vault policy, not PaaS state backup tooling.
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| ISO-01 | Add context config schema and persistence | In Progress | Codex | WS11-01 data classification/storage policy published in `docs/PAAS_STATE_CLASSIFICATION_POLICY.md`; context schema/init implementation continues under WS11-02 |
-| ISO-02 | Add global `--context` resolution pipeline | Not Started | Unassigned | Linked WS: WS02-06 |
-| ISO-03 | Add context CRUD commands | Not Started | Unassigned | Linked WS: WS11-02 |
-| ISO-04 | Add state-root safety checks (`git` workspace refusal) | Not Started | Unassigned | Linked WS: WS11-03 |
-| ISO-05 | Add secret redaction middleware for events and logs | Not Started | Unassigned | Linked WS: WS05-03, WS11-03 |
-| ISO-06 | Add context isolation integration tests | Not Started | Unassigned | Linked WS: WS09-05 |
+| ISO-01 | Add context config schema and persistence | Done | Codex | WS11-01/02 complete: context config schema + persistence (`config.json`) and layout initialization wired into `context create/init` |
+| ISO-02 | Add global `--context` resolution pipeline | Done | Codex | WS02-06 complete: global `--context` routing implemented across `si paas` command dispatch and live state operations |
+| ISO-03 | Add context CRUD commands | Done | Codex | WS11-02 complete: `context create/init/list/use/show/remove` backed by live context directories/config plus selected-context persistence |
+| ISO-04 | Add state-root safety checks (`git` workspace refusal) | Done | Codex | Guardrail enforced via `enforcePaasStateRootIsolationGuardrail` with explicit unsafe override and regression coverage |
+| ISO-05 | Add secret redaction middleware for events and logs | Done | Codex | Redaction middleware applied across scaffold/failure/audit/event emission paths (`WS05-03`, `WS05-06`, `WS06-05`) |
+| ISO-06 | Add context isolation integration tests | Done | Codex | WS09-05 complete: context-boundary isolation regression suite + dedicated e2e validation |
 | ISO-07 | Add `si paas doctor` policy checks | Not Started | Unassigned | Linked WS: WS11-03 |
 | ISO-08 | Document dogfood runbook and backup policy | Not Started | Unassigned | Linked WS: WS11-04, WS11-05 |
 
