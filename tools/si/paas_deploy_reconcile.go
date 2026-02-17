@@ -241,7 +241,7 @@ func runPaasTargetReconcile(ctx context.Context, target paasTarget, remoteRoot, 
 		return result
 	}
 
-	healthErr := runPaasRemoteHealthCheck(ctx, target, desired, remoteRoot, defaultPaasHealthCheckCommand)
+	healthErr := runPaasRemoteHealthCheck(ctx, target, "", desired, remoteRoot, defaultPaasHealthCheckCommand)
 	if healthErr != nil {
 		result.Status = "drifted"
 		result.RuntimeHealthy = false

@@ -1013,11 +1013,170 @@ func TestPaasDeployApplyUsesRemoteTransport(t *testing.T) {
 	}
 	sshText := string(sshRaw)
 	scpText := string(scpRaw)
-	if !strings.Contains(sshText, "docker compose -f compose.yaml up -d --remove-orphans") {
+	if !strings.Contains(sshText, "docker compose -f 'compose.yaml' up -d --remove-orphans") {
 		t.Fatalf("expected compose apply command in ssh log, got %q", sshText)
 	}
 	if strings.Count(scpText, "root@203.0.113.10") < 2 {
 		t.Fatalf("expected compose and metadata uploads in scp log, got %q", scpText)
+	}
+}
+
+func TestPaasDeployResolvesMagicVariablesAndAddonComposeManifest(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	vaultFile := filepath.Join(t.TempDir(), ".env")
+	trustStore := filepath.Join(t.TempDir(), "trust.json")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	composeBody := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    labels:",
+		"      - app={{paas.app}}",
+		"      - context={{paas.context}}",
+		"      - release=${SI_PAAS_RELEASE}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault: %v", err)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"app", "addon", "enable",
+			"--app", "billing-api",
+			"--pack", "redis",
+			"--name", "cache-main",
+			"--json",
+		})
+	})
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy",
+			"--app", "billing-api",
+			"--release", "rel-magic-001",
+			"--compose-file", composePath,
+			"--target", "edge-a",
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	env := parsePaasEnvelope(t, raw)
+	if env.Command != "deploy" {
+		t.Fatalf("expected deploy command output, got %#v", env)
+	}
+	if env.Fields["addon_fragments"] != "1" {
+		t.Fatalf("expected one addon fragment in deploy output, got %#v", env.Fields)
+	}
+	if !strings.Contains(env.Fields["compose_files"], "compose.addon.cache-main.yaml") {
+		t.Fatalf("expected addon compose file in deploy output, got %#v", env.Fields)
+	}
+	bundleDir := strings.TrimSpace(env.Fields["bundle_dir"])
+	manifestPath := filepath.Join(bundleDir, paasComposeFilesManifestName)
+	manifestRaw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("read compose manifest: %v", err)
+	}
+	manifest := string(manifestRaw)
+	if !strings.Contains(manifest, "compose.yaml") || !strings.Contains(manifest, "compose.addon.cache-main.yaml") {
+		t.Fatalf("expected compose manifest entries, got %q", manifest)
+	}
+	resolvedComposeRaw, err := os.ReadFile(filepath.Join(bundleDir, "compose.yaml"))
+	if err != nil {
+		t.Fatalf("read resolved compose bundle: %v", err)
+	}
+	resolvedCompose := string(resolvedComposeRaw)
+	if strings.Contains(resolvedCompose, "{{paas.") || strings.Contains(resolvedCompose, "${SI_PAAS_RELEASE}") {
+		t.Fatalf("expected magic variables resolved in bundled compose, got %q", resolvedCompose)
+	}
+	if !strings.Contains(resolvedCompose, "app=billing-api") || !strings.Contains(resolvedCompose, "context="+defaultPaasContext) || !strings.Contains(resolvedCompose, "release=rel-magic-001") {
+		t.Fatalf("expected resolved magic values in compose output, got %q", resolvedCompose)
+	}
+	addonRaw, err := os.ReadFile(filepath.Join(bundleDir, "compose.addon.cache-main.yaml"))
+	if err != nil {
+		t.Fatalf("read addon compose artifact: %v", err)
+	}
+	if !strings.Contains(string(addonRaw), "image: redis:7") {
+		t.Fatalf("expected redis addon artifact, got %q", string(addonRaw))
+	}
+}
+
+func TestPreparePaasComposeForDeployRejectsAddonMergeConflicts(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	baseCompose := strings.Join([]string{
+		"services:",
+		"  redis-cache-main:",
+		"    image: nginx:latest",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(baseCompose), 0o600); err != nil {
+		t.Fatalf("write base compose: %v", err)
+	}
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"app", "addon", "enable",
+			"--app", "billing-api",
+			"--pack", "redis",
+			"--name", "cache-main",
+			"--json",
+		})
+	})
+
+	_, err := preparePaasComposeForDeploy(paasComposePrepareOptions{
+		App:         "billing-api",
+		ReleaseID:   "rel-conflict-001",
+		ComposeFile: composePath,
+		Strategy:    "serial",
+		Targets:     []string{"edge-a"},
+	})
+	if err == nil {
+		t.Fatalf("expected merge conflict validation error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "merge conflict") {
+		t.Fatalf("expected merge conflict message, got %v", err)
+	}
+}
+
+func TestPreparePaasComposeForDeployRejectsUnknownMagicVariable(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	body := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    labels:",
+		"      - unknown={{paas.unknown}}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(body), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+
+	_, err := preparePaasComposeForDeploy(paasComposePrepareOptions{
+		App:         "billing-api",
+		ReleaseID:   "rel-magic-invalid-1",
+		ComposeFile: composePath,
+		Strategy:    "serial",
+		Targets:     []string{"edge-a"},
+	})
+	if err == nil {
+		t.Fatalf("expected unresolved magic variable validation error")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "unresolved magic variable") {
+		t.Fatalf("expected unresolved magic variable failure, got %v", err)
 	}
 }
 
@@ -1127,10 +1286,10 @@ func TestPaasDeployBlueGreenApplyUsesComposeOnlyCutoverPolicy(t *testing.T) {
 	}
 	sshText := string(sshRaw)
 	scpText := string(scpRaw)
-	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-green' -f compose.yaml up -d --remove-orphans") {
+	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-green' -f 'compose.yaml' up -d --remove-orphans") {
 		t.Fatalf("expected green project apply command in ssh log, got %q", sshText)
 	}
-	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-blue' -f compose.yaml up -d --remove-orphans") {
+	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-blue' -f 'compose.yaml' up -d --remove-orphans") {
 		t.Fatalf("expected blue project apply command in ssh log, got %q", sshText)
 	}
 	if strings.Count(scpText, "root@203.0.113.10") < 4 {
@@ -1149,7 +1308,7 @@ func TestRunPaasBlueGreenDeployOnTargetRollsBackOnPostCutoverHealthFailure(t *te
 		"set -euo pipefail",
 		"printf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog),
 		"cmd=\"$*\"",
-		"if [[ \"$cmd\" == *\"docker compose -p 'billing-api-edge-a-green' -f compose.yaml ps --status running --services | grep -q .\"* ]]; then",
+		"if [[ \"$cmd\" == *\"docker compose -p 'billing-api-edge-a-green' -f 'compose.yaml' ps --status running --services | grep -q .\"* ]]; then",
 		"  count=0",
 		"  if [[ -f " + shellSingleQuote(healthCountPath) + " ]]; then count=$(cat " + shellSingleQuote(healthCountPath) + "); fi",
 		"  count=$((count+1))",

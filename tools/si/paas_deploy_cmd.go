@@ -119,19 +119,45 @@ func cmdPaasDeploy(args []string) {
 	if resolvedApp == "" {
 		resolvedApp = "default-app"
 	}
+	resolvedRelease := strings.TrimSpace(*release)
+	if resolvedRelease == "" {
+		resolvedRelease = generatePaasReleaseID()
+	}
+	preparedCompose, err := preparePaasComposeForDeploy(paasComposePrepareOptions{
+		App:         resolvedApp,
+		ReleaseID:   resolvedRelease,
+		ComposeFile: strings.TrimSpace(*composeFile),
+		Strategy:    resolvedStrategy,
+		Targets:     resolvedTargets,
+	})
+	if err != nil {
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"compose_resolve",
+			"",
+			"fix compose magic-variable placeholders/add-on merge conflicts and retry deploy",
+			err,
+		), nil)
+	}
+	defer func() {
+		_ = os.Remove(strings.TrimSpace(preparedCompose.ResolvedComposePath))
+	}()
 	bundleDir, bundleMetaPath, err := ensurePaasReleaseBundle(
 		resolvedApp,
-		strings.TrimSpace(*release),
-		strings.TrimSpace(*composeFile),
+		resolvedRelease,
+		strings.TrimSpace(preparedCompose.ResolvedComposePath),
 		strings.TrimSpace(*bundleRoot),
 		resolvedStrategy,
 		resolvedTargets,
 		map[string]string{
-			"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
-			"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
-			"vault_file":               vaultGuardrail.File,
-			"vault_recipients":         intString(vaultGuardrail.RecipientCount),
-			"vault_trust":              boolString(vaultGuardrail.Trusted),
+			"compose_secret_guardrail":  composeGuardrail["compose_secret_guardrail"],
+			"compose_secret_findings":   composeGuardrail["compose_secret_findings"],
+			"magic_variable_resolution": "validated",
+			"addon_merge_validation":    "validated",
+			"addon_fragments":           intString(len(preparedCompose.AddonArtifacts)),
+			"vault_file":                vaultGuardrail.File,
+			"vault_recipients":          intString(vaultGuardrail.RecipientCount),
+			"vault_trust":               boolString(vaultGuardrail.Trusted),
 		},
 	)
 	if err != nil {
@@ -140,6 +166,15 @@ func cmdPaasDeploy(args []string) {
 			"bundle_create",
 			"",
 			"verify compose file path and state root permissions",
+			err,
+		), nil)
+	}
+	if err := materializePaasComposeBundleArtifacts(bundleDir, preparedCompose); err != nil {
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_materialize",
+			"",
+			"verify bundle write permissions and rerun deploy",
 			err,
 		), nil)
 	}
@@ -216,8 +251,11 @@ func cmdPaasDeploy(args []string) {
 		"applied_targets":          formatTargets(applyResult.AppliedTargets),
 		"bundle_dir":               bundleDir,
 		"bundle_metadata":          bundleMetaPath,
+		"compose_files":            strings.Join(preparedCompose.ComposeFiles, ","),
+		"addon_fragments":          intString(len(preparedCompose.AddonArtifacts)),
 		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
 		"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
+		"magic_variable_count":     intString(len(preparedCompose.MagicVariables)),
 		"compose_file":             strings.TrimSpace(*composeFile),
 		"continue_on_error":        boolString(*continueOnError),
 		"max_parallel":             intString(*maxParallel),
