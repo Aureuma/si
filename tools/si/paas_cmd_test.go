@@ -1185,6 +1185,111 @@ func TestPaasAlertIngressTLSRecordsRetryAlert(t *testing.T) {
 	}
 }
 
+func TestPaasRegressionUpgradeDeployRollbackPath(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	vaultFile := filepath.Join(t.TempDir(), ".env")
+	trustStore := filepath.Join(t.TempDir(), "trust.json")
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	scpLog := filepath.Join(fakeBinDir, "scp.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	composeBody := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    environment:",
+		"      - API_TOKEN=${API_TOKEN}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault: %v", err)
+	}
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	scpScript := filepath.Join(fakeBinDir, "fake-scp")
+	sshContent := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog) + "\n"
+	scpContent := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> " + shellSingleQuote(scpLog) + "\n"
+	if err := os.WriteFile(sshScript, []byte(sshContent), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	if err := os.WriteFile(scpScript, []byte(scpContent), 0o700); err != nil {
+		t.Fatalf("write fake scp: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	t.Setenv(paasSCPBinEnvKey, scpScript)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+
+	deploy1Raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--compose-file", composePath,
+			"--apply",
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	deploy1 := parsePaasEnvelope(t, deploy1Raw)
+	release1 := strings.TrimSpace(deploy1.Fields["release"])
+	if release1 == "" {
+		t.Fatalf("expected first release id: %#v", deploy1.Fields)
+	}
+
+	time.Sleep(3 * time.Millisecond)
+	deploy2Raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--compose-file", composePath,
+			"--apply",
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	deploy2 := parsePaasEnvelope(t, deploy2Raw)
+	release2 := strings.TrimSpace(deploy2.Fields["release"])
+	if release2 == "" || release2 == release1 {
+		t.Fatalf("expected second distinct release id: first=%q second=%q", release1, release2)
+	}
+
+	rollbackRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"rollback",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--to-release", release1,
+			"--apply",
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	rollbackEnv := parsePaasEnvelope(t, rollbackRaw)
+	if rollbackEnv.Command != "rollback" {
+		t.Fatalf("expected rollback command envelope, got %#v", rollbackEnv)
+	}
+	if rollbackEnv.Fields["to_release"] != release1 {
+		t.Fatalf("expected rollback to first release %q, got %#v", release1, rollbackEnv.Fields)
+	}
+	if rollbackEnv.Fields["applied_targets"] != "edge-a" {
+		t.Fatalf("expected rollback apply on edge-a, got %#v", rollbackEnv.Fields)
+	}
+	if rollbackEnv.Fields["health_checked_targets"] != "edge-a" {
+		t.Fatalf("expected rollback health check target edge-a, got %#v", rollbackEnv.Fields)
+	}
+}
+
 func seedPaasTestBundleDir(t *testing.T) string {
 	t.Helper()
 	bundleDir := t.TempDir()
