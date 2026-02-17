@@ -274,7 +274,7 @@ func runPaasApplyOnTarget(opts paasApplyOptions, target paasTarget) paasSingleTa
 		return result
 	}
 	ctx, cancel = context.WithTimeout(context.Background(), opts.HealthTimeout)
-	err = runPaasRemoteHealthCheck(ctx, target, opts.ReleaseID, opts.RemoteRoot, opts.HealthCommand)
+	err = runPaasRemoteHealthCheck(ctx, target, opts.BundleDir, opts.ReleaseID, opts.RemoteRoot, opts.HealthCommand)
 	cancel()
 	if err == nil {
 		result.Healthy = true
@@ -446,6 +446,27 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			fmt.Errorf("invalid remote release directory"),
 		)
 	}
+	bundleFiles, err := resolvePaasBundleUploadFiles(localBundleDir)
+	if err != nil {
+		return newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_discover",
+			target.Name,
+			"verify local release bundle contents and retry",
+			err,
+		)
+	}
+	composeFiles, err := readPaasComposeFilesManifest(localBundleDir)
+	if err != nil {
+		return newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_manifest",
+			target.Name,
+			"fix compose bundle manifest and rerun deploy",
+			err,
+		)
+	}
+	composeArgs := buildPaasComposeFileArgs(composeFiles)
 	if _, err := runPaasSSHCommand(ctx, target, fmt.Sprintf("mkdir -p %s", quoteSingle(releaseDir))); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -455,11 +476,8 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			err,
 		)
 	}
-	paths := []string{
-		filepath.Join(strings.TrimSpace(localBundleDir), "compose.yaml"),
-		filepath.Join(strings.TrimSpace(localBundleDir), "release.json"),
-	}
-	for _, src := range paths {
+	for _, fileName := range bundleFiles {
+		src := filepath.Join(strings.TrimSpace(localBundleDir), fileName)
 		if err := runPaasSCPUpload(ctx, target, src, releaseDir); err != nil {
 			return newPaasOperationFailure(
 				paasFailureRemoteUpload,
@@ -470,7 +488,7 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			)
 		}
 	}
-	remoteCmd := fmt.Sprintf("cd %s && docker compose -f compose.yaml pull && docker compose -f compose.yaml up -d --remove-orphans", quoteSingle(releaseDir))
+	remoteCmd := fmt.Sprintf("cd %s && docker compose %s pull && docker compose %s up -d --remove-orphans", quoteSingle(releaseDir), composeArgs, composeArgs)
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -483,10 +501,24 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 	return nil
 }
 
-func runPaasRemoteHealthCheck(ctx context.Context, target paasTarget, releaseID, remoteRoot, healthCommand string) error {
+func runPaasRemoteHealthCheck(ctx context.Context, target paasTarget, localBundleDir, releaseID, remoteRoot, healthCommand string) error {
 	command := strings.TrimSpace(healthCommand)
-	if command == "" {
-		command = defaultPaasHealthCheckCommand
+	if command == "" || command == defaultPaasHealthCheckCommand {
+		composeFiles := []string{"compose.yaml"}
+		if strings.TrimSpace(localBundleDir) != "" {
+			resolved, err := readPaasComposeFilesManifest(localBundleDir)
+			if err != nil {
+				return newPaasOperationFailure(
+					paasFailureBundleCreate,
+					"bundle_manifest",
+					target.Name,
+					"fix compose bundle manifest and rerun deploy",
+					err,
+				)
+			}
+			composeFiles = resolved
+		}
+		command = buildPaasDefaultHealthCheckCommand(composeFiles)
 	}
 	releaseDir := path.Join(strings.TrimSpace(remoteRoot), sanitizePaasReleasePathSegment(releaseID))
 	remoteCmd := fmt.Sprintf("cd %s && %s", quoteSingle(releaseDir), command)
