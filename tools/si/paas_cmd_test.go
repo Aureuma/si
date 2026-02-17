@@ -315,6 +315,92 @@ func TestRunPaasDoctorChecksDetectsRepoStateAndSecretExposure(t *testing.T) {
 	}
 }
 
+func TestPaasAgentEnableStatusRunOnceLogsDisable(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	contextDir := filepath.Join(stateRoot, "contexts", defaultPaasContext)
+	eventsDir := filepath.Join(contextDir, "events")
+	if err := os.MkdirAll(eventsDir, 0o700); err != nil {
+		t.Fatalf("mkdir events dir: %v", err)
+	}
+	deployEvent := []byte("{\"timestamp\":\"2026-02-17T16:00:00Z\",\"source\":\"deploy\",\"command\":\"deploy apply\",\"status\":\"failed\",\"target\":\"edge-a\",\"message\":\"deploy failed\"}\n")
+	if err := os.WriteFile(filepath.Join(eventsDir, "deployments.jsonl"), deployEvent, 0o600); err != nil {
+		t.Fatalf("write deployments event: %v", err)
+	}
+
+	enableRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "enable", "--name", "ops-agent", "--targets", "all", "--profile", "default", "--json"})
+	})
+	enableEnv := parsePaasEnvelope(t, enableRaw)
+	if enableEnv.Command != "agent enable" || enableEnv.Mode != "live" {
+		t.Fatalf("unexpected agent enable envelope: %#v", enableEnv)
+	}
+	if enableEnv.Fields["name"] != "ops-agent" || enableEnv.Fields["enabled"] != "true" {
+		t.Fatalf("unexpected agent enable fields: %#v", enableEnv.Fields)
+	}
+
+	statusRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "status", "--name", "ops-agent", "--json"})
+	})
+	var statusPayload struct {
+		Command string            `json:"command"`
+		Mode    string            `json:"mode"`
+		Count   int               `json:"count"`
+		Data    []paasAgentConfig `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(statusRaw), &statusPayload); err != nil {
+		t.Fatalf("decode agent status payload: %v output=%q", err, statusRaw)
+	}
+	if statusPayload.Command != "agent status" || statusPayload.Mode != "live" || statusPayload.Count != 1 || len(statusPayload.Data) != 1 {
+		t.Fatalf("unexpected agent status payload: %#v", statusPayload)
+	}
+	if !statusPayload.Data[0].Enabled || statusPayload.Data[0].Name != "ops-agent" {
+		t.Fatalf("unexpected agent row: %#v", statusPayload.Data[0])
+	}
+
+	runRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "run-once", "--name", "ops-agent", "--json"})
+	})
+	runEnv := parsePaasEnvelope(t, runRaw)
+	if runEnv.Command != "agent run-once" || runEnv.Mode != "live" {
+		t.Fatalf("unexpected agent run-once envelope: %#v", runEnv)
+	}
+	if strings.TrimSpace(runEnv.Fields["run_id"]) == "" {
+		t.Fatalf("expected non-empty run_id in run-once output: %#v", runEnv.Fields)
+	}
+	if runEnv.Fields["status"] != "queued" && runEnv.Fields["status"] != "noop" {
+		t.Fatalf("unexpected run status %q in %#v", runEnv.Fields["status"], runEnv.Fields)
+	}
+
+	logsRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "logs", "--name", "ops-agent", "--tail", "20", "--json"})
+	})
+	var logsPayload struct {
+		Command string               `json:"command"`
+		Mode    string               `json:"mode"`
+		Count   int                  `json:"count"`
+		Data    []paasAgentRunRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(logsRaw), &logsPayload); err != nil {
+		t.Fatalf("decode agent logs payload: %v output=%q", err, logsRaw)
+	}
+	if logsPayload.Command != "agent logs" || logsPayload.Mode != "live" || logsPayload.Count < 1 || len(logsPayload.Data) < 1 {
+		t.Fatalf("unexpected logs payload: %#v", logsPayload)
+	}
+	if logsPayload.Data[0].Agent != "ops-agent" {
+		t.Fatalf("expected logs for ops-agent, got %#v", logsPayload.Data[0])
+	}
+
+	disableRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "disable", "--name", "ops-agent", "--json"})
+	})
+	disableEnv := parsePaasEnvelope(t, disableRaw)
+	if disableEnv.Command != "agent disable" || disableEnv.Fields["enabled"] != "false" {
+		t.Fatalf("unexpected disable envelope: %#v", disableEnv)
+	}
+}
+
 func TestPaasStateRootGuardrailRejectsRepoState(t *testing.T) {
 	cwd, err := os.Getwd()
 	if err != nil {
