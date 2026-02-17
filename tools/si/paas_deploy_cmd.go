@@ -163,6 +163,9 @@ func cmdPaasDeploy(args []string) {
 	applyResult, err := applyPaasReleaseToTargets(paasApplyOptions{
 		Enabled:              *applyRemote,
 		SelectedTargets:      resolvedTargets,
+		Strategy:             resolvedStrategy,
+		MaxParallel:          *maxParallel,
+		ContinueOnError:      *continueOnError,
 		BundleDir:            bundleDir,
 		ReleaseID:            releaseID,
 		RemoteRoot:           strings.TrimSpace(*remoteDir),
@@ -175,11 +178,19 @@ func cmdPaasDeploy(args []string) {
 		RollbackApplyTimeout: rollbackTimeoutValue,
 	})
 	if err != nil {
-		failPaasDeploy(jsonOut, err, map[string]string{
+		failureFields := map[string]string{
 			"release":            releaseID,
 			"bundle_dir":         bundleDir,
 			"rollback_candidate": rollbackReleaseID,
-		})
+			"strategy":           resolvedStrategy,
+			"max_parallel":       intString(*maxParallel),
+			"continue_on_error":  boolString(*continueOnError),
+			"failed_targets":     formatTargets(applyResult.FailedTargets),
+			"skipped_targets":    formatTargets(applyResult.SkippedTargets),
+			"target_statuses":    formatPaasTargetStatuses(applyResult.TargetStatuses),
+			"fanout_plan":        applyResult.FanoutPlan,
+		}
+		failPaasDeploy(jsonOut, err, failureFields)
 	}
 	if *applyRemote && len(applyResult.AppliedTargets) > 0 {
 		if err := recordPaasSuccessfulRelease(resolvedApp, releaseID); err != nil {
@@ -218,6 +229,10 @@ func cmdPaasDeploy(args []string) {
 		"health_cmd":               applyResult.HealthCommand,
 		"health_checked_targets":   formatTargets(applyResult.HealthyTargets),
 		"health_timeout":           healthTimeoutValue.String(),
+		"failed_targets":           formatTargets(applyResult.FailedTargets),
+		"skipped_targets":          formatTargets(applyResult.SkippedTargets),
+		"target_statuses":          formatPaasTargetStatuses(applyResult.TargetStatuses),
+		"fanout_plan":              applyResult.FanoutPlan,
 		"wait_timeout":             strings.TrimSpace(*waitTimeout),
 	}
 	if !vaultGuardrail.Trusted {
@@ -327,6 +342,7 @@ func cmdPaasRollback(args []string) {
 	}
 	appliedTargets := []string{}
 	healthyTargets := []string{}
+	applyResult := paasApplyResult{}
 	if *applyRemote {
 		bundleDir, err := resolvePaasReleaseBundleDir(strings.TrimSpace(*bundleRoot), resolvedApp, resolvedRelease)
 		if err != nil {
@@ -338,9 +354,12 @@ func cmdPaasRollback(args []string) {
 				err,
 			), nil)
 		}
-		applyResult, err := applyPaasReleaseToTargets(paasApplyOptions{
+		applyResult, err = applyPaasReleaseToTargets(paasApplyOptions{
 			Enabled:              true,
 			SelectedTargets:      resolvedTargets,
+			Strategy:             resolvedStrategy,
+			MaxParallel:          *maxParallel,
+			ContinueOnError:      *continueOnError,
 			BundleDir:            bundleDir,
 			ReleaseID:            resolvedRelease,
 			RemoteRoot:           strings.TrimSpace(*remoteDir),
@@ -353,10 +372,18 @@ func cmdPaasRollback(args []string) {
 			RollbackApplyTimeout: applyTimeoutValue,
 		})
 		if err != nil {
-			failPaasRollback(jsonOut, err, map[string]string{
-				"to_release": resolvedRelease,
-				"bundle_dir": bundleDir,
-			})
+			failureFields := map[string]string{
+				"to_release":        resolvedRelease,
+				"bundle_dir":        bundleDir,
+				"strategy":          resolvedStrategy,
+				"max_parallel":      intString(*maxParallel),
+				"continue_on_error": boolString(*continueOnError),
+				"failed_targets":    formatTargets(applyResult.FailedTargets),
+				"skipped_targets":   formatTargets(applyResult.SkippedTargets),
+				"target_statuses":   formatPaasTargetStatuses(applyResult.TargetStatuses),
+				"fanout_plan":       applyResult.FanoutPlan,
+			}
+			failPaasRollback(jsonOut, err, failureFields)
 		}
 		appliedTargets = applyResult.AppliedTargets
 		healthyTargets = applyResult.HealthyTargets
@@ -383,6 +410,10 @@ func cmdPaasRollback(args []string) {
 		"max_parallel":           intString(*maxParallel),
 		"remote_dir":             strings.TrimSpace(*remoteDir),
 		"strategy":               resolvedStrategy,
+		"failed_targets":         formatTargets(applyResult.FailedTargets),
+		"skipped_targets":        formatTargets(applyResult.SkippedTargets),
+		"target_statuses":        formatPaasTargetStatuses(applyResult.TargetStatuses),
+		"fanout_plan":            applyResult.FanoutPlan,
 		"targets":                formatTargets(resolvedTargets),
 		"to_release":             resolvedRelease,
 		"vault_file":             vaultGuardrail.File,
