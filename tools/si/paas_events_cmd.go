@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -57,9 +58,54 @@ func cmdPaasEventsList(args []string) {
 		printUsage(paasEventsListUsageText)
 		return
 	}
+	rows, paths, err := loadPaasEventRecords(*limit, *severity, *status)
+	if err != nil {
+		failPaasCommand("events list", jsonOut, newPaasOperationFailure(
+			paasFailureUnknown,
+			"event_query",
+			"",
+			"verify context state permissions and event file integrity, then retry",
+			err,
+		), nil)
+	}
+	filterSeverity := strings.ToLower(strings.TrimSpace(*severity))
+	filterStatus := strings.ToLower(strings.TrimSpace(*status))
+	pathValue := strings.Join(paths, ",")
+	if jsonOut {
+		payload := map[string]any{
+			"ok":       true,
+			"command":  "events list",
+			"context":  currentPaasContext(),
+			"mode":     "live",
+			"limit":    *limit,
+			"severity": filterSeverity,
+			"status":   filterStatus,
+			"count":    len(rows),
+			"paths":    paths,
+			"data":     rows,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
 	printPaasScaffold("events list", map[string]string{
+		"count":    intString(len(rows)),
 		"limit":    intString(*limit),
-		"severity": strings.ToLower(strings.TrimSpace(*severity)),
-		"status":   strings.ToLower(strings.TrimSpace(*status)),
-	}, jsonOut)
+		"paths":    pathValue,
+		"severity": filterSeverity,
+		"status":   filterStatus,
+	}, false)
+	for _, row := range rows {
+		fmt.Printf("  - %s [%s] %s source=%s target=%s message=%s\n",
+			row.Timestamp,
+			row.Severity,
+			row.Status,
+			row.Source,
+			row.Target,
+			row.Message,
+		)
+	}
 }
