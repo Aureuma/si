@@ -307,6 +307,10 @@ vault:
   Alias:
     si creds ...
 
+paas:
+  Running si paas with no subcommand opens an interactive command picker.
+  Running si paas target/app/alert/ai/context/agent/events with no subcommand opens an interactive command picker.
+
 github:
   si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]
   si github context list|current|use [--account <alias>] [--owner <owner>] [--base-url <url>] [--auth-mode <app|oauth>] [--token-env <env_key>]

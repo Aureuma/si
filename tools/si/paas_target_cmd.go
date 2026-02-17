@@ -7,11 +7,24 @@ import (
 	"strings"
 )
 
+var paasTargetActions = []subcommandAction{
+	{Name: "add", Description: "add a target node"},
+	{Name: "list", Description: "list configured targets"},
+	{Name: "check", Description: "run target preflight checks"},
+	{Name: "use", Description: "set default target"},
+	{Name: "remove", Description: "remove a target"},
+}
+
 func cmdPaasTarget(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasTargetAction)
+	if showUsage {
 		printUsage(paasTargetUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -32,6 +45,10 @@ func cmdPaasTarget(args []string) {
 		printUsage(paasTargetUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasTargetAction() (string, bool) {
+	return selectSubcommandAction("PaaS target commands:", paasTargetActions)
 }
 
 func cmdPaasTargetAdd(args []string) {

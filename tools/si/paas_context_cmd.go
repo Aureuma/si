@@ -14,11 +14,24 @@ const (
 	paasContextRemoveUsageText = "usage: si paas context remove --name <name> [--force] [--json]"
 )
 
+var paasContextActions = []subcommandAction{
+	{Name: "create", Description: "create a context"},
+	{Name: "list", Description: "list contexts"},
+	{Name: "use", Description: "set active context"},
+	{Name: "show", Description: "show context settings"},
+	{Name: "remove", Description: "remove a context"},
+}
+
 func cmdPaasContext(args []string) {
-	if len(args) == 0 {
+	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectPaasContextAction)
+	if showUsage {
 		printUsage(paasContextUsageText)
 		return
 	}
+	if !ok {
+		return
+	}
+	args = resolved
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
@@ -39,6 +52,10 @@ func cmdPaasContext(args []string) {
 		printUsage(paasContextUsageText)
 		os.Exit(1)
 	}
+}
+
+func selectPaasContextAction() (string, bool) {
+	return selectSubcommandAction("PaaS context commands:", paasContextActions)
 }
 
 func cmdPaasContextCreate(args []string) {
