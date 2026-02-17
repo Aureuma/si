@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"si/tools/si/internal/vault"
 )
 
 type paasTestEnvelope struct {
@@ -291,6 +294,204 @@ func TestPaasSecretKeyConvention(t *testing.T) {
 	want := "PAAS__CTX_DEFAULT__APP_BILLING_API__TARGET_EDGE_A__VAR_STRIPE_API_KEY"
 	if got != want {
 		t.Fatalf("unexpected vault key convention: got=%q want=%q", got, want)
+	}
+}
+
+func TestResolvePaasComposePlaintextFindings(t *testing.T) {
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	content := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    environment:",
+		"      - DB_PASSWORD=super-secret",
+		"      - API_TOKEN=${API_TOKEN}",
+		"      SECRET_TOKEN: ${SECRET_TOKEN}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	findings, err := resolvePaasComposePlaintextFindings(composePath)
+	if err != nil {
+		t.Fatalf("resolve findings: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("expected exactly one plaintext finding, got %#v", findings)
+	}
+	if findings[0].Key != "DB_PASSWORD" {
+		t.Fatalf("expected DB_PASSWORD finding, got %#v", findings[0])
+	}
+}
+
+func TestEnforcePaasPlaintextSecretGuardrailDoesNotLeakValue(t *testing.T) {
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	secretValue := "super-secret-value-123"
+	content := "services:\n  api:\n    environment:\n      - DB_PASSWORD=" + secretValue + "\n"
+	if err := os.WriteFile(composePath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	_, err := enforcePaasPlaintextSecretGuardrail(composePath, false)
+	if err == nil {
+		t.Fatalf("expected guardrail error for plaintext secret value")
+	}
+	if strings.Contains(err.Error(), secretValue) {
+		t.Fatalf("guardrail error leaked secret value: %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), "<redacted>") {
+		t.Fatalf("expected redaction marker in guardrail error: %q", err.Error())
+	}
+}
+
+func TestRunPaasVaultDeployGuardrailTrusted(t *testing.T) {
+	root := t.TempDir()
+	vaultFile := filepath.Join(root, ".env")
+	trustStore := filepath.Join(root, "trust.json")
+	doc := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(doc), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	settings := loadSettingsOrDefault()
+	target, err := vaultResolveTarget(settings, "", false)
+	if err != nil {
+		t.Fatalf("resolve target: %v", err)
+	}
+	parsedDoc, err := vault.ReadDotenvFile(target.File)
+	if err != nil {
+		t.Fatalf("read dotenv: %v", err)
+	}
+	fp, err := vaultTrustFingerprint(parsedDoc)
+	if err != nil {
+		t.Fatalf("fingerprint: %v", err)
+	}
+	store, err := vault.LoadTrustStore(trustStore)
+	if err != nil {
+		t.Fatalf("load trust store: %v", err)
+	}
+	store.Upsert(vault.TrustEntry{
+		RepoRoot:    target.RepoRoot,
+		File:        target.File,
+		Fingerprint: fp,
+	})
+	if err := store.Save(trustStore); err != nil {
+		t.Fatalf("save trust store: %v", err)
+	}
+
+	result, err := runPaasVaultDeployGuardrail("", false)
+	if err != nil {
+		t.Fatalf("run vault guardrail: %v", err)
+	}
+	if !result.Trusted {
+		t.Fatalf("expected trusted vault guardrail result, got %#v", result)
+	}
+	if result.RecipientCount != 1 {
+		t.Fatalf("expected one recipient, got %#v", result)
+	}
+}
+
+func TestRunPaasVaultDeployGuardrailAllowUntrusted(t *testing.T) {
+	root := t.TempDir()
+	vaultFile := filepath.Join(root, ".env")
+	trustStore := filepath.Join(root, "trust.json")
+	doc := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(doc), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	if _, err := runPaasVaultDeployGuardrail("", false); err == nil {
+		t.Fatalf("expected trust error without allow-untrusted override")
+	}
+	result, err := runPaasVaultDeployGuardrail("", true)
+	if err != nil {
+		t.Fatalf("expected allow-untrusted to bypass trust mismatch: %v", err)
+	}
+	if result.Trusted {
+		t.Fatalf("expected untrusted status with override, got %#v", result)
+	}
+	if strings.TrimSpace(result.TrustWarning) == "" {
+		t.Fatalf("expected trust warning message, got %#v", result)
+	}
+}
+
+func TestEnforcePaasSecretRevealGuardrail(t *testing.T) {
+	if err := enforcePaasSecretRevealGuardrail(false, false); err != nil {
+		t.Fatalf("unexpected error when reveal=false: %v", err)
+	}
+	if err := enforcePaasSecretRevealGuardrail(true, false); err == nil {
+		t.Fatalf("expected error when reveal=true without allow-plaintext")
+	}
+	if err := enforcePaasSecretRevealGuardrail(true, true); err != nil {
+		t.Fatalf("unexpected error when reveal allowed: %v", err)
+	}
+}
+
+func TestPaasDeployCreatesReleaseBundleMetadata(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	vaultFile := filepath.Join(t.TempDir(), ".env")
+	trustStore := filepath.Join(t.TempDir(), "trust.json")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	composeBody := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    environment:",
+		"      - API_TOKEN=${API_TOKEN}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault: %v", err)
+	}
+
+	out := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--compose-file", composePath,
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	env := parsePaasEnvelope(t, out)
+	if env.Command != "deploy" {
+		t.Fatalf("expected deploy command, got %#v", env)
+	}
+	bundleDir := strings.TrimSpace(env.Fields["bundle_dir"])
+	metaPath := strings.TrimSpace(env.Fields["bundle_metadata"])
+	if bundleDir == "" || metaPath == "" {
+		t.Fatalf("expected bundle fields in deploy output, got %#v", env.Fields)
+	}
+	if _, err := os.Stat(filepath.Join(bundleDir, "compose.yaml")); err != nil {
+		t.Fatalf("expected bundled compose file: %v", err)
+	}
+	rawMeta, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+	var meta paasReleaseBundleMetadata
+	if err := json.Unmarshal(rawMeta, &meta); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if meta.App != "billing-api" {
+		t.Fatalf("unexpected bundle app: %#v", meta)
+	}
+	if meta.ReleaseID != env.Fields["release"] {
+		t.Fatalf("release mismatch between output and metadata: output=%q meta=%q", env.Fields["release"], meta.ReleaseID)
+	}
+	if strings.TrimSpace(meta.ComposeSHA256) == "" {
+		t.Fatalf("expected compose digest in metadata: %#v", meta)
 	}
 }
 
