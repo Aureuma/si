@@ -258,7 +258,7 @@ func TestEnsureCodexTmuxSessionPreservesLiveSessionOnHostCwdChange(t *testing.T)
 		_, _ = tmuxOutput(context.Background(), "kill-session", "-t", session)
 	}()
 
-	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-one", "/tmp/si-tmux-a"); err != nil {
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "", "hash-one", "/tmp/si-tmux-a", "", ""); err != nil {
 		t.Fatalf("first ensure failed: %v", err)
 	}
 	pidA, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
@@ -266,7 +266,7 @@ func TestEnsureCodexTmuxSessionPreservesLiveSessionOnHostCwdChange(t *testing.T)
 		t.Fatalf("failed to fetch pane pid: %v", err)
 	}
 
-	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-one", "/tmp/si-tmux-b"); err != nil {
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "", "hash-one", "/tmp/si-tmux-b", "", ""); err != nil {
 		t.Fatalf("second ensure failed: %v", err)
 	}
 	pidB, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
@@ -296,7 +296,7 @@ func TestEnsureCodexTmuxSessionPreservesLiveSessionOnCmdHashChange(t *testing.T)
 		_, _ = tmuxOutput(context.Background(), "kill-session", "-t", session)
 	}()
 
-	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-before", "/tmp/si-tmux-hash"); err != nil {
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "", "hash-before", "/tmp/si-tmux-hash", "", ""); err != nil {
 		t.Fatalf("first ensure failed: %v", err)
 	}
 	pidA, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")
@@ -304,7 +304,7 @@ func TestEnsureCodexTmuxSessionPreservesLiveSessionOnCmdHashChange(t *testing.T)
 		t.Fatalf("failed to fetch pane pid: %v", err)
 	}
 
-	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "hash-after", "/tmp/si-tmux-hash"); err != nil {
+	if err := ensureCodexTmuxSession(ctx, session, target, "sleep 120", "", "hash-after", "/tmp/si-tmux-hash", "", ""); err != nil {
 		t.Fatalf("second ensure failed: %v", err)
 	}
 	pidB, err := tmuxOutput(ctx, "display-message", "-p", "-t", target, "#{pane_pid}")

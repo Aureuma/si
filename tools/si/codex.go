@@ -781,6 +781,8 @@ func cmdCodexExec(args []string) {
 
 	profileID := ""
 	profileName := ""
+	resumeProfileKey := codexResumeProfileKey("", containerName)
+	resumeRecord := codexSessionRecord{}
 	var containerID string
 	var containerInfo *types.ContainerJSON
 	client, clientErr := shared.NewClient()
@@ -804,6 +806,7 @@ func cmdCodexExec(args []string) {
 				} else {
 					profileName = profileID
 				}
+				resumeProfileKey = codexResumeProfileKey(profileID, containerName)
 			}
 		} else if *tmuxAttach {
 			fatal(fmt.Errorf("codex container %s not found", containerName))
@@ -852,14 +855,33 @@ func cmdCodexExec(args []string) {
 					seedCodexAuth(ctx, client, containerID, false, profile)
 				}
 			}
+			if record, err := syncCodexProfileSessionRecordFromContainer(ctx, client, containerID, resumeProfileKey); err == nil && strings.TrimSpace(record.SessionID) != "" {
+				resumeRecord = record
+			} else if err != nil {
+				warnf("codex session metadata capture failed for %s: %v", containerName, err)
+			}
+		}
+		if resumeProfileKey != "" && strings.TrimSpace(resumeRecord.SessionID) == "" {
+			record, err := loadCodexProfileSessionRecord(resumeProfileKey)
+			if err != nil {
+				warnf("codex session metadata load failed for profile %s: %v", resumeProfileKey, err)
+			} else {
+				resumeRecord = record
+			}
 		}
 	} else if tmuxMode {
 		fatal(fmt.Errorf("docker client unavailable: %w", clientErr))
 	}
 
 	if tmuxMode {
-		if err := attachCodexTmuxPane(containerName); err != nil {
+		if err := attachCodexTmuxPane(containerName, resumeProfileKey, resumeRecord); err != nil {
 			fatal(err)
+		}
+		if client != nil && strings.TrimSpace(containerID) != "" && strings.TrimSpace(resumeProfileKey) != "" {
+			ctx := context.Background()
+			if _, err := syncCodexProfileSessionRecordFromContainer(ctx, client, containerID, resumeProfileKey); err != nil {
+				warnf("codex session metadata update failed for %s: %v", containerName, err)
+			}
 		}
 		return
 	}
@@ -1183,7 +1205,7 @@ func codexTmuxSessionName(codexContainerName string) string {
 	return codexTmuxSessionPrefix + slug
 }
 
-func attachCodexTmuxPane(containerName string) error {
+func attachCodexTmuxPane(containerName string, resumeProfileKey string, resumeRecord codexSessionRecord) error {
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		return errors.New("--tmux requires an interactive terminal")
 	}
@@ -1213,12 +1235,14 @@ func attachCodexTmuxPane(containerName string) error {
 		}
 	}
 	cmd := buildCodexTmuxCommand(containerName, startDir)
+	resumeSessionID := strings.TrimSpace(resumeRecord.SessionID)
+	resumeCmd := buildCodexTmuxResumeCommand(containerName, startDir, resumeSessionID, resumeProfileKey)
 	// Hash a stable "shape" of the command so we don't thrash sessions just because the user attached
 	// from a different host subdirectory.
 	cmdHashShape := buildCodexTmuxCommand(containerName, "__SI_START_DIR__")
 	cmdHash := sha256.Sum256([]byte(cmdHashShape))
 	cmdHashHex := hex.EncodeToString(cmdHash[:])
-	if err := ensureCodexTmuxSession(ctx, session, target, cmd, cmdHashHex, hostCwd); err != nil {
+	if err := ensureCodexTmuxSession(ctx, session, target, cmd, resumeCmd, cmdHashHex, hostCwd, resumeSessionID, resumeProfileKey); err != nil {
 		return err
 	}
 	tmuxTryLabelCodexPane(ctx, session, target, containerName)
@@ -1230,7 +1254,17 @@ func attachCodexTmuxPane(containerName string) error {
 	return tmuxCmd.Run()
 }
 
-func ensureCodexTmuxSession(ctx context.Context, session string, target string, cmd string, cmdHashHex string, hostCwd string) error {
+func ensureCodexTmuxSession(
+	ctx context.Context,
+	session string,
+	target string,
+	cmd string,
+	resumeCmd string,
+	cmdHashHex string,
+	hostCwd string,
+	resumeSessionID string,
+	resumeProfileKey string,
+) error {
 	_, hasSessionErr := tmuxOutput(ctx, "has-session", "-t", session)
 	hasSession := hasSessionErr == nil
 	cmdChanged := false
@@ -1253,7 +1287,11 @@ func ensureCodexTmuxSession(ctx context.Context, session string, target string, 
 	}
 
 	if !hasSession {
-		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
+		launchCmd, resumed := codexSelectTmuxLaunchCommand(cmd, resumeCmd)
+		if resumed {
+			warnf("tmux session %s unavailable; resuming codex session %s for profile %s", session, strings.TrimSpace(resumeSessionID), firstNonEmpty(strings.TrimSpace(resumeProfileKey), "unknown"))
+		}
+		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", launchCmd); err != nil {
 			return err
 		}
 	}
@@ -1265,7 +1303,11 @@ func ensureCodexTmuxSession(ctx context.Context, session string, target string, 
 	}
 	if codexTmuxShouldResetSession(paneDead, cmdChanged, hostCwdChanged) {
 		_, _ = tmuxOutput(ctx, "kill-session", "-t", session)
-		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", cmd); err != nil {
+		launchCmd, resumed := codexSelectTmuxLaunchCommand(cmd, resumeCmd)
+		if resumed {
+			warnf("tmux session %s could not be recovered; resuming codex session %s for profile %s", session, strings.TrimSpace(resumeSessionID), firstNonEmpty(strings.TrimSpace(resumeProfileKey), "unknown"))
+		}
+		if _, err := tmuxOutput(ctx, "new-session", "-d", "-s", session, "bash", "-lc", launchCmd); err != nil {
 			return err
 		}
 		applyTmuxSessionDefaults(ctx, session)
@@ -1343,6 +1385,39 @@ func buildCodexTmuxCommand(containerName string, hostCwd string) string {
 		"exec bash -il"
 	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
+}
+
+func buildCodexTmuxResumeCommand(containerName string, hostCwd string, sessionID string, profileKey string) string {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return ""
+	}
+	startDir := strings.TrimSpace(hostCwd)
+	cdStart := ""
+	if startDir != "" && strings.HasPrefix(startDir, "/") {
+		cdStart = fmt.Sprintf("cd %s 2>/dev/null || ", shellSingleQuote(startDir))
+	}
+	profileLabel := strings.TrimSpace(profileKey)
+	if profileLabel == "" {
+		profileLabel = codexContainerSlug(containerName)
+	}
+	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; " +
+		cdStart +
+		"cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; " +
+		"printf '\\n[si] tmux session unavailable; attempting codex resume %s for profile %s.\\n' " + shellSingleQuote(sessionID) + " " + shellSingleQuote(profileLabel) + "; " +
+		"codex resume " + shellSingleQuote(sessionID) + " --dangerously-bypass-approvals-and-sandbox || codex --dangerously-bypass-approvals-and-sandbox; status=$?; " +
+		"printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; " +
+		"exec bash -il"
+	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
+	return fmt.Sprintf("%s || sudo -n %s", base, base)
+}
+
+func codexSelectTmuxLaunchCommand(cmd string, resumeCmd string) (string, bool) {
+	resumeCmd = strings.TrimSpace(resumeCmd)
+	if resumeCmd == "" {
+		return cmd, false
+	}
+	return resumeCmd, true
 }
 
 func containerCwdForHostCwd(info *types.ContainerJSON, hostCwd string) (string, bool) {
