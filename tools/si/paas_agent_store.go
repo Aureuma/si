@@ -239,3 +239,46 @@ func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, strin
 	}
 	return rows, path, nil
 }
+
+func findPaasAgentRunRecordByID(runID string) (paasAgentRunRecord, bool, error) {
+	targetRunID := strings.TrimSpace(runID)
+	if targetRunID == "" {
+		return paasAgentRunRecord{}, false, nil
+	}
+	path, err := resolvePaasAgentRunLogPath(currentPaasContext())
+	if err != nil {
+		return paasAgentRunRecord{}, false, err
+	}
+	file, err := os.Open(path) // #nosec G304 -- context-scoped path.
+	if err != nil {
+		if os.IsNotExist(err) {
+			return paasAgentRunRecord{}, false, nil
+		}
+		return paasAgentRunRecord{}, false, err
+	}
+	defer file.Close()
+	var matched *paasAgentRunRecord
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var row paasAgentRunRecord
+		if err := json.Unmarshal([]byte(line), &row); err != nil {
+			continue
+		}
+		if strings.TrimSpace(row.RunID) != targetRunID {
+			continue
+		}
+		copyRow := row
+		matched = &copyRow
+	}
+	if err := scanner.Err(); err != nil {
+		return paasAgentRunRecord{}, false, err
+	}
+	if matched == nil {
+		return paasAgentRunRecord{}, false, nil
+	}
+	return *matched, true, nil
+}

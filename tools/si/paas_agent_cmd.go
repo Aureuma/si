@@ -16,8 +16,8 @@ const (
 	paasAgentStatusUsageText  = "usage: si paas agent status [--name <agent>] [--json]"
 	paasAgentLogsUsageText    = "usage: si paas agent logs --name <agent> [--tail <n>] [--follow] [--json]"
 	paasAgentRunOnceUsageText = "usage: si paas agent run-once --name <agent> [--incident <id>] [--json]"
-	paasAgentApproveUsageText = "usage: si paas agent approve --run <id> [--json]"
-	paasAgentDenyUsageText    = "usage: si paas agent deny --run <id> [--json]"
+	paasAgentApproveUsageText = "usage: si paas agent approve --run <id> [--note <text>] [--json]"
+	paasAgentDenyUsageText    = "usage: si paas agent deny --run <id> [--note <text>] [--json]"
 )
 
 var paasAgentActions = []subcommandAction{
@@ -444,6 +444,7 @@ func cmdPaasAgentApprove(args []string) {
 	args, jsonOut := parsePaasJSONFlag(args)
 	fs := flag.NewFlagSet("paas agent approve", flag.ExitOnError)
 	runID := fs.String("run", "", "agent run identifier")
+	note := fs.String("note", "", "approval note")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasAgentApproveUsageText)
@@ -452,13 +453,56 @@ func cmdPaasAgentApprove(args []string) {
 	if !requirePaasValue(*runID, "run", paasAgentApproveUsageText) {
 		return
 	}
-	printPaasScaffold("agent approve", map[string]string{"run": strings.TrimSpace(*runID)}, jsonOut)
+	run, found, err := findPaasAgentRunRecordByID(*runID)
+	if err != nil {
+		failPaasCommand("agent approve", jsonOut, err, nil)
+	}
+	if !found {
+		failPaasCommand("agent approve", jsonOut, fmt.Errorf("run %q was not found", strings.TrimSpace(*runID)), nil)
+	}
+	store, _, err := loadPaasAgentApprovalStore(currentPaasContext())
+	if err != nil {
+		failPaasCommand("agent approve", jsonOut, err, nil)
+	}
+	store = upsertPaasAgentApprovalDecision(store, paasAgentApprovalDecision{
+		RunID:    strings.TrimSpace(*runID),
+		Agent:    strings.TrimSpace(run.Agent),
+		Decision: paasApprovalDecisionApproved,
+		Note:     strings.TrimSpace(*note),
+		Actor:    "operator",
+		Source:   "cli",
+	})
+	path, err := savePaasAgentApprovalStore(currentPaasContext(), store)
+	if err != nil {
+		failPaasCommand("agent approve", jsonOut, err, nil)
+	}
+	_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
+		Agent:        strings.TrimSpace(run.Agent),
+		RunID:        strings.TrimSpace(*runID),
+		Status:       "approved",
+		IncidentID:   strings.TrimSpace(run.IncidentID),
+		RuntimeMode:  strings.TrimSpace(run.RuntimeMode),
+		RuntimeReady: run.RuntimeReady,
+		PolicyAction: paasApprovalDecisionApproved,
+		Message:      strings.TrimSpace(*note),
+	})
+	alertPath := notifyPaasAgentApprovalTelegramLinkage(strings.TrimSpace(*runID), strings.TrimSpace(run.Agent), paasApprovalDecisionApproved, strings.TrimSpace(*note))
+	printPaasLiveAgentScaffold("agent approve", map[string]string{
+		"run":         strings.TrimSpace(*runID),
+		"agent":       strings.TrimSpace(run.Agent),
+		"decision":    paasApprovalDecisionApproved,
+		"note":        strings.TrimSpace(*note),
+		"store_path":  path,
+		"alert_path":  alertPath,
+		"status":      "applied",
+	}, jsonOut)
 }
 
 func cmdPaasAgentDeny(args []string) {
 	args, jsonOut := parsePaasJSONFlag(args)
 	fs := flag.NewFlagSet("paas agent deny", flag.ExitOnError)
 	runID := fs.String("run", "", "agent run identifier")
+	note := fs.String("note", "", "deny note")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasAgentDenyUsageText)
@@ -467,7 +511,49 @@ func cmdPaasAgentDeny(args []string) {
 	if !requirePaasValue(*runID, "run", paasAgentDenyUsageText) {
 		return
 	}
-	printPaasScaffold("agent deny", map[string]string{"run": strings.TrimSpace(*runID)}, jsonOut)
+	run, found, err := findPaasAgentRunRecordByID(*runID)
+	if err != nil {
+		failPaasCommand("agent deny", jsonOut, err, nil)
+	}
+	if !found {
+		failPaasCommand("agent deny", jsonOut, fmt.Errorf("run %q was not found", strings.TrimSpace(*runID)), nil)
+	}
+	store, _, err := loadPaasAgentApprovalStore(currentPaasContext())
+	if err != nil {
+		failPaasCommand("agent deny", jsonOut, err, nil)
+	}
+	store = upsertPaasAgentApprovalDecision(store, paasAgentApprovalDecision{
+		RunID:    strings.TrimSpace(*runID),
+		Agent:    strings.TrimSpace(run.Agent),
+		Decision: paasApprovalDecisionDenied,
+		Note:     strings.TrimSpace(*note),
+		Actor:    "operator",
+		Source:   "cli",
+	})
+	path, err := savePaasAgentApprovalStore(currentPaasContext(), store)
+	if err != nil {
+		failPaasCommand("agent deny", jsonOut, err, nil)
+	}
+	_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
+		Agent:        strings.TrimSpace(run.Agent),
+		RunID:        strings.TrimSpace(*runID),
+		Status:       "denied",
+		IncidentID:   strings.TrimSpace(run.IncidentID),
+		RuntimeMode:  strings.TrimSpace(run.RuntimeMode),
+		RuntimeReady: run.RuntimeReady,
+		PolicyAction: paasApprovalDecisionDenied,
+		Message:      strings.TrimSpace(*note),
+	})
+	alertPath := notifyPaasAgentApprovalTelegramLinkage(strings.TrimSpace(*runID), strings.TrimSpace(run.Agent), paasApprovalDecisionDenied, strings.TrimSpace(*note))
+	printPaasLiveAgentScaffold("agent deny", map[string]string{
+		"run":        strings.TrimSpace(*runID),
+		"agent":      strings.TrimSpace(run.Agent),
+		"decision":   paasApprovalDecisionDenied,
+		"note":       strings.TrimSpace(*note),
+		"store_path": path,
+		"alert_path": alertPath,
+		"status":     "applied",
+	}, jsonOut)
 }
 
 func printPaasAgentEnvelope(command string, row paasAgentConfig, path string, jsonOut bool) {

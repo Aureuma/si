@@ -107,6 +107,12 @@ For remediation policy action evaluation rules, use:
 cat docs/PAAS_REMEDIATION_POLICY_ENGINE.md
 ```
 
+For approval decision workflow and Telegram callback linkage, use:
+
+```bash
+cat docs/PAAS_AGENT_APPROVAL_FLOW.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
