@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -122,7 +123,8 @@ func sanitizePaasReleasePathSegment(raw string) string {
 }
 
 func generatePaasReleaseID() string {
-	return "rel-" + time.Now().UTC().Format("20060102T150405")
+	now := time.Now().UTC()
+	return fmt.Sprintf("rel-%s-%09d", now.Format("20060102T150405"), now.Nanosecond())
 }
 
 func copyPaasFields(in map[string]string) map[string]string {
@@ -134,4 +136,66 @@ func copyPaasFields(in map[string]string) map[string]string {
 		out[key] = value
 	}
 	return out
+}
+
+func resolvePaasReleaseBundleDir(bundleRoot, app, releaseID string) (string, error) {
+	root, err := resolvePaasReleaseBundleRoot(bundleRoot)
+	if err != nil {
+		return "", err
+	}
+	release := sanitizePaasReleasePathSegment(releaseID)
+	if release == "" || release == "unknown" {
+		return "", fmt.Errorf("release identifier is required")
+	}
+	appSlug := sanitizePaasReleasePathSegment(app)
+	dir := filepath.Join(root, appSlug, release)
+	composePath := filepath.Join(dir, "compose.yaml")
+	metaPath := filepath.Join(dir, "release.json")
+	if _, err := os.Stat(composePath); err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(metaPath); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func resolveLatestPaasReleaseID(bundleRoot, app, exclude string) (string, error) {
+	root, err := resolvePaasReleaseBundleRoot(bundleRoot)
+	if err != nil {
+		return "", err
+	}
+	appDir := filepath.Join(root, sanitizePaasReleasePathSegment(app))
+	entries, err := os.ReadDir(appDir) // #nosec G304 -- path derived from context state root.
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	candidates := make([]string, 0, len(entries))
+	excluded := strings.TrimSpace(exclude)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name())
+		if name == "" || strings.EqualFold(name, excluded) {
+			continue
+		}
+		composePath := filepath.Join(appDir, name, "compose.yaml")
+		metaPath := filepath.Join(appDir, name, "release.json")
+		if _, err := os.Stat(composePath); err != nil {
+			continue
+		}
+		if _, err := os.Stat(metaPath); err != nil {
+			continue
+		}
+		candidates = append(candidates, name)
+	}
+	if len(candidates) == 0 {
+		return "", nil
+	}
+	sort.Strings(candidates)
+	return candidates[len(candidates)-1], nil
 }
