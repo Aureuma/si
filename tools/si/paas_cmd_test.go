@@ -455,6 +455,46 @@ func TestPaasAgentApproveDenyFlowPersistsDecision(t *testing.T) {
 	}
 }
 
+func TestPaasAgentRunOnceBlockedByActiveLock(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"agent", "enable", "--name", "ops-agent", "--json"})
+	})
+	lockPath, err := resolvePaasAgentLockPath(currentPaasContext(), "ops-agent")
+	if err != nil {
+		t.Fatalf("resolve lock path: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o700); err != nil {
+		t.Fatalf("mkdir lock dir: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := savePaasAgentLockState(lockPath, paasAgentLockState{
+		Agent:       "ops-agent",
+		Owner:       "lock-owner",
+		PID:         1234,
+		AcquiredAt:  now.Format(time.RFC3339Nano),
+		HeartbeatAt: now.Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("seed active lock: %v", err)
+	}
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "run-once", "--name", "ops-agent", "--json"})
+	})
+	env := parsePaasEnvelope(t, raw)
+	if env.Command != "agent run-once" {
+		t.Fatalf("unexpected run-once envelope: %#v", env)
+	}
+	if env.Fields["status"] != "blocked" {
+		t.Fatalf("expected blocked status for active lock, got %#v", env.Fields)
+	}
+	if !strings.Contains(env.Fields["message"], "lock unavailable") {
+		t.Fatalf("expected lock unavailable message, got %#v", env.Fields)
+	}
+}
+
 func TestPaasStateRootGuardrailRejectsRepoState(t *testing.T) {
 	cwd, err := os.Getwd()
 	if err != nil {
