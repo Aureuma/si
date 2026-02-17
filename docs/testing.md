@@ -65,6 +65,12 @@ For private state backup/restore policy, use:
 cat docs/PAAS_BACKUP_RESTORE_POLICY.md
 ```
 
+For context operating model and day-2 procedures, use:
+
+```bash
+cat docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 
