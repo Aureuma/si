@@ -18,6 +18,9 @@ func cmdPaasDeploy(args []string) {
 		case "reconcile":
 			cmdPaasDeployReconcile(args[1:])
 			return
+		case "webhook":
+			cmdPaasDeployWebhook(args[1:])
+			return
 		}
 	}
 	args, jsonOut := parsePaasJSONFlag(args)
