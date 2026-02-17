@@ -259,6 +259,103 @@ func TestPaasTargetIngressBaselineRendersArtifactsAndPersistsMetadata(t *testing
 	}
 }
 
+func TestPaasAppAddonContractEnableListDisable(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	contractRaw := captureStdout(t, func() {
+		cmdPaas([]string{"app", "addon", "contract", "--json"})
+	})
+	var contractPayload struct {
+		Command string                  `json:"command"`
+		Count   int                     `json:"count"`
+		Data    []paasAddonPackContract `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(contractRaw), &contractPayload); err != nil {
+		t.Fatalf("decode addon contract payload: %v output=%q", err, contractRaw)
+	}
+	if contractPayload.Command != "app addon contract" || contractPayload.Count != 3 {
+		t.Fatalf("unexpected addon contract payload: %#v", contractPayload)
+	}
+	if len(contractPayload.Data) == 0 || contractPayload.Data[0].MergeStrategy != paasAddonMergeStrategyAdditiveNoOverride {
+		t.Fatalf("expected merge strategy contract in response, got %#v", contractPayload.Data)
+	}
+
+	enableRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"app", "addon", "enable",
+			"--app", "billing-api",
+			"--pack", "postgres",
+			"--name", "db-main",
+			"--set", "POSTGRES_DB=billing,POSTGRES_USER=svc",
+			"--json",
+		})
+	})
+	enableEnv := parsePaasEnvelope(t, enableRaw)
+	if enableEnv.Command != "app addon enable" {
+		t.Fatalf("expected addon enable envelope, got %#v", enableEnv)
+	}
+	if enableEnv.Fields["merge_strategy"] != paasAddonMergeStrategyAdditiveNoOverride {
+		t.Fatalf("expected merge strategy in addon enable output, got %#v", enableEnv.Fields)
+	}
+	fragmentPath := strings.TrimSpace(enableEnv.Fields["fragment_path"])
+	if fragmentPath == "" {
+		t.Fatalf("expected fragment path in enable output, got %#v", enableEnv.Fields)
+	}
+	fragmentRaw, err := os.ReadFile(fragmentPath)
+	if err != nil {
+		t.Fatalf("read addon fragment: %v", err)
+	}
+	fragment := string(fragmentRaw)
+	if !strings.Contains(fragment, "image: postgres:16") || !strings.Contains(fragment, "POSTGRES_DB: \"billing\"") {
+		t.Fatalf("expected rendered postgres fragment content, got %q", fragment)
+	}
+
+	listRaw := captureStdout(t, func() {
+		cmdPaas([]string{"app", "addon", "list", "--app", "billing-api", "--json"})
+	})
+	var listPayload struct {
+		Command string            `json:"command"`
+		Count   int               `json:"count"`
+		Data    []paasAddonRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(listRaw), &listPayload); err != nil {
+		t.Fatalf("decode addon list payload: %v output=%q", err, listRaw)
+	}
+	if listPayload.Command != "app addon list" || listPayload.Count != 1 || len(listPayload.Data) != 1 {
+		t.Fatalf("unexpected addon list payload: %#v", listPayload)
+	}
+	if listPayload.Data[0].App != "billing-api" || listPayload.Data[0].Pack != "postgres" || listPayload.Data[0].Name != "db-main" {
+		t.Fatalf("unexpected addon row: %#v", listPayload.Data[0])
+	}
+
+	disableRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"app", "addon", "disable",
+			"--app", "billing-api",
+			"--name", "db-main",
+			"--json",
+		})
+	})
+	disableEnv := parsePaasEnvelope(t, disableRaw)
+	if disableEnv.Command != "app addon disable" || disableEnv.Fields["removed"] != "true" {
+		t.Fatalf("unexpected addon disable output: %#v", disableEnv)
+	}
+	if _, err := os.Stat(fragmentPath); !os.IsNotExist(err) {
+		t.Fatalf("expected fragment file removal for disabled add-on, stat err=%v", err)
+	}
+
+	afterRaw := captureStdout(t, func() {
+		cmdPaas([]string{"app", "addon", "list", "--app", "billing-api", "--json"})
+	})
+	if err := json.Unmarshal([]byte(afterRaw), &listPayload); err != nil {
+		t.Fatalf("decode addon list after disable: %v output=%q", err, afterRaw)
+	}
+	if listPayload.Count != 0 || len(listPayload.Data) != 0 {
+		t.Fatalf("expected empty addon list after disable, got %#v", listPayload)
+	}
+}
+
 func TestPaasDeployInvalidStrategyShowsUsage(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas([]string{"deploy", "--strategy", "invalid"})
@@ -301,7 +398,8 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "agent", "events"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
-	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove"})
+	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove", "addon"})
+	expectActionNames(t, "paas app addon", paasAppAddonActions, []string{"contract", "enable", "list", "disable"})
 	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "acknowledge", "policy", "ingress-tls"})
 	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
