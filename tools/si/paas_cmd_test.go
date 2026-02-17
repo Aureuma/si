@@ -302,7 +302,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "agent", "events"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove"})
-	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "ingress-tls"})
+	expectActionNames(t, "paas alert", paasAlertActions, []string{"setup-telegram", "test", "history", "policy", "ingress-tls"})
 	expectActionNames(t, "paas secret", paasSecretActions, []string{"set", "get", "unset", "list", "key"})
 	expectActionNames(t, "paas ai", paasAIActions, []string{"plan", "inspect", "fix"})
 	expectActionNames(t, "paas context", paasContextActions, []string{"create", "list", "use", "show", "remove", "export", "import"})
@@ -1422,6 +1422,55 @@ func TestPaasAlertTestSendsTelegramMessage(t *testing.T) {
 	}
 	if callCount != 1 {
 		t.Fatalf("expected one telegram API call, got %d", callCount)
+	}
+}
+
+func TestPaasAlertPolicySetAndSuppressedRouting(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	setRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"alert", "policy", "set",
+			"--critical", "disabled",
+			"--warning", "telegram",
+			"--info", "telegram",
+			"--json",
+		})
+	})
+	setEnv := parsePaasEnvelope(t, setRaw)
+	if setEnv.Command != "alert policy set" {
+		t.Fatalf("expected alert policy set envelope, got %#v", setEnv)
+	}
+	if setEnv.Fields["critical"] != "disabled" {
+		t.Fatalf("expected critical route disabled, got %#v", setEnv.Fields)
+	}
+
+	showRaw := captureStdout(t, func() {
+		cmdPaas([]string{"alert", "policy", "show", "--json"})
+	})
+	var showPayload struct {
+		Command string                 `json:"command"`
+		Data    paasAlertRoutingPolicy `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(showRaw), &showPayload); err != nil {
+		t.Fatalf("decode alert policy show payload: %v output=%q", err, showRaw)
+	}
+	if showPayload.Command != "alert policy show" || showPayload.Data.Severity["critical"] != "disabled" {
+		t.Fatalf("unexpected alert policy show payload: %#v", showPayload)
+	}
+
+	alertRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"alert", "test",
+			"--severity", "critical",
+			"--message", "suppressed by policy",
+			"--json",
+		})
+	})
+	alertEnv := parsePaasEnvelope(t, alertRaw)
+	if alertEnv.Fields["status"] != "suppressed" || alertEnv.Fields["channel"] != "disabled" {
+		t.Fatalf("expected suppressed status for disabled route, got %#v", alertEnv.Fields)
 	}
 }
 

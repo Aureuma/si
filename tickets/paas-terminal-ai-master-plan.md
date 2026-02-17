@@ -768,7 +768,7 @@ Work items:
 | --- | --- | --- | --- | --- |
 | WS06-01 | Implement `si paas logs` and `si paas events` | Done | Codex | Implemented live remote log retrieval and merged event query backends with severity/status filters and stable JSON/text contracts |
 | WS06-02 | Implement Telegram notifier setup/test/send | Done | Codex | Added persisted context-scoped Telegram notifier config (`alerts/telegram.json`) plus live send path for `alert test` with HTTP delivery and dry-run support |
-| WS06-03 | Define severity policy and alert routing | Not Started | Unassigned | |
+| WS06-03 | Define severity policy and alert routing | Done | Codex | Added persisted per-context routing policy (`alert policy show|set`) with severity-to-channel mapping (`info|warning|critical` -> `telegram|disabled`) and policy-aware alert test routing |
 | WS06-04 | Add deploy failure and health degradation alerts | Not Started | Unassigned | |
 | WS06-05 | Define audit/event log model for all `si paas` actions | Not Started | Unassigned | |
 | WS06-06 | Add Telegram action hooks for operator callbacks (view logs, rollback, acknowledge) | Not Started | Unassigned | |
@@ -1060,11 +1060,12 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-06 | Completed WS06-01 by replacing scaffold-only `si paas logs`/`si paas events list` with live backends: remote log retrieval over SSH (compose-aware app release resolution plus service fallback), merged context event ingestion (`deployments.jsonl` + `alerts.jsonl`), severity/status filtering, and stable live JSON/text contracts | WS06-02..06 notifier/routing/audit slices remain pending | Implement WS05-07 scrubbed metadata export/import, then continue WS06 notifier/routing tasks |
 | 2026-02-17 | Codex | WS-05 | Completed WS05-07 by implementing scrubbed context metadata export/import (`si paas context export|import`) for non-secret artifacts only (targets, deploy history, webhook mappings), including secret-like payload key rejection, replace/merge controls, and context-scoped persistence | WS05 scope is now complete; downstream isolation/runbook tracks remain under WS11/WS09 | Continue WS06-02 notifier setup/test/send, then WS06-03 routing/severity policy |
 | 2026-02-17 | Codex | WS-06 | Completed WS06-02 by implementing live Telegram notifier setup/test/send: context-scoped config persistence (`alerts/telegram.json`), `alert test` delivery via Telegram Bot API, dry-run mode, send failure handling, and alert history emission with channel metadata | WS06-03..06 routing/policy/callback/audit slices remain pending | Implement WS06-03 severity policy + routing contracts, then WS06-04 deploy/health degradation alert wiring |
+| 2026-02-17 | Codex | WS-06 | Completed WS06-03 by adding explicit severity routing policy controls (`si paas alert policy show|set`) with context-scoped persistence (`alerts/policy.json`) and policy-aware routing in `alert test` (including suppressed/dry-run status modes) | WS06-04..06 deploy/health alert wiring, callback hooks, and full audit model remain pending | Implement WS06-04 deploy failure + health degradation alert emission next, then WS06-05 audit/event model consolidation |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS06-03 severity policy and alert routing contracts.
-2. Implement WS06-04 deploy failure and health degradation alerts.
+1. Implement WS06-04 deploy failure and health degradation alerts.
+2. Implement WS06-05 audit/event log model for all `si paas` actions.
 3. Keep MVP non-TUI boundaries and machine-readable contracts enforced in every new command.
 4. Keep secondary competitor deep dives (Easypanel/Portainer/Tsuru) as ongoing background refinement, not a Phase B blocker.
 
