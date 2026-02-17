@@ -871,7 +871,7 @@ Work items:
 | WS11-01 | Define data classification policy and allowed storage matrix | Done | Codex | Added `docs/PAAS_STATE_CLASSIFICATION_POLICY.md` defining class/location matrix, boundary requirements, and enforcement mapping; linked from `docs/testing.md` |
 | WS11-02 | Implement context-scoped state root layout and initialization | Done | Codex | Implemented context layout/config persistence (`contexts/<ctx>/{events,cache,vault,releases,addons,config.json}`), `context init`, live CRUD/use/show/remove operations, and persisted selected-context resolution when scoped state root is set (`current_context`) |
 | WS11-03 | Implement `si paas doctor` checks for repo-state contamination and secret exposure | Done | Codex | Added `si paas doctor` live checks for state-root isolation, context vault path policy, repository private-state artifact contamination, and plaintext secret exposure with non-zero failure exit + JSON/text contracts |
-| WS11-04 | Define backup/restore policy for private state roots and audit logs | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-08 |
+| WS11-04 | Define backup/restore policy for private state roots and audit logs | Done | Codex | Added `docs/PAAS_BACKUP_RESTORE_POLICY.md` with protected data scope, exclusions (no vault plaintext backup), retention, restore validation gates, and governance requirements; linked from `docs/testing.md` |
 | WS11-05 | Publish operational runbook for internal dogfood vs OSS demo contexts | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-08 |
 
 ### WS-10 Optional Post-MVP TUI (Deferred)
@@ -1075,12 +1075,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-11 | Completed WS11-01 by publishing the PaaS state classification policy and allowed-storage matrix (`docs/PAAS_STATE_CLASSIFICATION_POLICY.md`) and aligning ISO ticket ownership/status for ongoing isolation-governance implementation | WS11-02/03/04/05 remain pending | Implement WS11-02 context state-root layout/init path next, then WS11-03 doctor checks |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-02 by implementing context-scoped layout initialization and config persistence (including active-context selection persistence), and by wiring `si paas context create/init/list/use/show/remove` to live state operations with contract/e2e coverage | WS11-03/04/05 remain pending | Implement WS11-03 `si paas doctor` contamination/secret exposure checks next |
 | 2026-02-17 | Codex | WS-11 | Completed WS11-03 by implementing `si paas doctor` policy checks for repo-state contamination and secret exposure, including state-root boundary validation, context vault policy validation, repository private-state artifact detection, and plaintext secret exposure detection with actionable failure output | WS11-04/05 remain pending | Implement WS11-04 backup/restore policy for private state roots and audit logs next |
+| 2026-02-17 | Codex | WS-11 | Completed WS11-04 by publishing `docs/PAAS_BACKUP_RESTORE_POLICY.md` with mandatory backup scope/exclusions, retention policy, reference backup+restore procedures, and post-restore validation requirements anchored on `si paas doctor` and context/event checks | WS11-05 remains pending | Implement WS11-05 operational runbook for internal dogfood vs OSS demo contexts next |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS11-04 backup/restore policy for private state roots and audit logs.
-2. Implement WS11-05 operational runbook for internal dogfood vs OSS demo contexts.
-3. Start WS12-01 incident event schema, severity taxonomy, and dedupe strategy.
+1. Implement WS11-05 operational runbook for internal dogfood vs OSS demo contexts.
+2. Start WS12-01 incident event schema, severity taxonomy, and dedupe strategy.
+3. Start WS12-02 event bridge collectors (deploy hooks, health polls, runtime events).
 
 ## 13. Reference Links
 
