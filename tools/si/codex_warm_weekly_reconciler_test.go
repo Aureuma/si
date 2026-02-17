@@ -147,6 +147,9 @@ func TestRenderWarmWeeklyReconcileConfig(t *testing.T) {
 	if !strings.Contains(cfg, "command = "+warmWeeklyReconcileScriptPath) {
 		t.Fatalf("expected wrapper script command in config, got: %q", cfg)
 	}
+	if !strings.Contains(cfg, "user = root") {
+		t.Fatalf("expected reconcile job to run as root for docker socket access, got: %q", cfg)
+	}
 	if !strings.Contains(cfg, "environment = SI_HOST_UID=1001") || !strings.Contains(cfg, "environment = SI_HOST_GID=1001") {
 		t.Fatalf("expected host uid/gid env in config, got: %q", cfg)
 	}

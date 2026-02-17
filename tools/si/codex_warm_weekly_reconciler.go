@@ -861,6 +861,7 @@ func renderWarmWeeklyReconcileConfig(siHome string, image string, hostUID int, h
 	b.WriteString(fmt.Sprintf("schedule = %s\n", warmWeeklyReconcileSchedule))
 	b.WriteString(fmt.Sprintf("image = %s\n", image))
 	b.WriteString(fmt.Sprintf("command = %s\n", warmWeeklyReconcileScriptPath))
+	b.WriteString("user = root\n")
 	b.WriteString(fmt.Sprintf("volume = %s:%s\n", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir))
 	b.WriteString(fmt.Sprintf("volume = %s:/home/si/.si\n", siHome))
 	b.WriteString("volume = /var/run/docker.sock:/var/run/docker.sock\n")
@@ -1071,6 +1072,7 @@ func warmWeeklyReconcileConfigCurrent() bool {
 		fmt.Sprintf("volume = %s:%s", warmWeeklyBinaryVolumeName, warmWeeklyBinaryDir),
 		"volume = /var/run/docker.sock:/var/run/docker.sock",
 		fmt.Sprintf("command = %s", warmWeeklyReconcileScriptPath),
+		"user = root",
 		"environment = SI_HOST_UID=",
 		"environment = SI_HOST_GID=",
 	}
