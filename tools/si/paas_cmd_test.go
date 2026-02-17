@@ -923,6 +923,196 @@ func TestPaasDeployApplyUsesRemoteTransport(t *testing.T) {
 	}
 }
 
+func TestPaasDeployBlueGreenApplyUsesComposeOnlyCutoverPolicy(t *testing.T) {
+	stateRoot := t.TempDir()
+	composePath := filepath.Join(t.TempDir(), "compose.yaml")
+	vaultFile := filepath.Join(t.TempDir(), ".env")
+	trustStore := filepath.Join(t.TempDir(), "trust.json")
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	scpLog := filepath.Join(fakeBinDir, "scp.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	composeBody := strings.Join([]string{
+		"services:",
+		"  api:",
+		"    image: nginx:latest",
+		"    environment:",
+		"      - API_TOKEN=${API_TOKEN}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(composePath, []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault: %v", err)
+	}
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	scpScript := filepath.Join(fakeBinDir, "fake-scp")
+	sshContent := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog) + "\n"
+	scpContent := "#!/usr/bin/env bash\nset -euo pipefail\nprintf '%s\\n' \"$*\" >> " + shellSingleQuote(scpLog) + "\n"
+	if err := os.WriteFile(sshScript, []byte(sshContent), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	if err := os.WriteFile(scpScript, []byte(scpContent), 0o700); err != nil {
+		t.Fatalf("write fake scp: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	t.Setenv(paasSCPBinEnvKey, scpScript)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+
+	firstRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy", "bluegreen",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--compose-file", composePath,
+			"--apply",
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	firstEnv := parsePaasEnvelope(t, firstRaw)
+	if firstEnv.Command != "deploy bluegreen" {
+		t.Fatalf("expected deploy bluegreen command, got %#v", firstEnv)
+	}
+	if firstEnv.Fields["target_statuses"] != "edge-a:ok" {
+		t.Fatalf("expected edge-a successful blue/green status, got %#v", firstEnv.Fields)
+	}
+	if firstEnv.Fields["active_slots"] != "edge-a:green" || firstEnv.Fields["previous_slots"] != "edge-a:blue" {
+		t.Fatalf("expected slot transition blue->green, got %#v", firstEnv.Fields)
+	}
+	if firstEnv.Fields["rollback_policy"] == "" {
+		t.Fatalf("expected rollback policy field, got %#v", firstEnv.Fields)
+	}
+
+	secondRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"deploy", "bluegreen",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--compose-file", composePath,
+			"--apply",
+			"--allow-untrusted-vault",
+			"--json",
+		})
+	})
+	secondEnv := parsePaasEnvelope(t, secondRaw)
+	if secondEnv.Fields["active_slots"] != "edge-a:blue" || secondEnv.Fields["previous_slots"] != "edge-a:green" {
+		t.Fatalf("expected slot transition green->blue on second rollout, got %#v", secondEnv.Fields)
+	}
+
+	store, err := loadPaasBlueGreenPolicyStore()
+	if err != nil {
+		t.Fatalf("load bluegreen policy store: %v", err)
+	}
+	appPolicy := store.Apps[sanitizePaasReleasePathSegment("billing-api")]
+	targetPolicy := appPolicy.Targets[sanitizePaasReleasePathSegment("edge-a")]
+	if targetPolicy.ActiveSlot != "blue" {
+		t.Fatalf("expected active slot blue after second rollout, got %#v", targetPolicy)
+	}
+
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	scpRaw, err := os.ReadFile(scpLog)
+	if err != nil {
+		t.Fatalf("read scp log: %v", err)
+	}
+	sshText := string(sshRaw)
+	scpText := string(scpRaw)
+	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-green' -f compose.yaml up -d --remove-orphans") {
+		t.Fatalf("expected green project apply command in ssh log, got %q", sshText)
+	}
+	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-blue' -f compose.yaml up -d --remove-orphans") {
+		t.Fatalf("expected blue project apply command in ssh log, got %q", sshText)
+	}
+	if strings.Count(scpText, "root@203.0.113.10") < 4 {
+		t.Fatalf("expected two deploy uploads (compose + metadata) per run in scp log, got %q", scpText)
+	}
+}
+
+func TestRunPaasBlueGreenDeployOnTargetRollsBackOnPostCutoverHealthFailure(t *testing.T) {
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	healthCountPath := filepath.Join(fakeBinDir, "health.count")
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	scpScript := filepath.Join(fakeBinDir, "fake-scp")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"printf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog),
+		"cmd=\"$*\"",
+		"if [[ \"$cmd\" == *\"docker compose -p 'billing-api-edge-a-green' -f compose.yaml ps --status running --services | grep -q .\"* ]]; then",
+		"  count=0",
+		"  if [[ -f " + shellSingleQuote(healthCountPath) + " ]]; then count=$(cat " + shellSingleQuote(healthCountPath) + "); fi",
+		"  count=$((count+1))",
+		"  printf '%s' \"$count\" > " + shellSingleQuote(healthCountPath),
+		"  if [[ \"$count\" -ge 2 ]]; then",
+		"    echo \"simulated post-cutover health failure\" >&2",
+		"    exit 1",
+		"  fi",
+		"fi",
+		"exit 0",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	if err := os.WriteFile(scpScript, []byte("#!/usr/bin/env bash\nset -euo pipefail\n"), 0o700); err != nil {
+		t.Fatalf("write fake scp: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	t.Setenv(paasSCPBinEnvKey, scpScript)
+
+	bundleDir := seedPaasTestBundleDir(t)
+	outcome := runPaasBlueGreenDeployOnTarget(paasBlueGreenDeployTargetOptions{
+		Target:          paasTarget{Name: "edge-a", Host: "203.0.113.10", Port: 22, User: "root"},
+		App:             "billing-api",
+		ReleaseID:       "rel-bluegreen-1",
+		BundleDir:       bundleDir,
+		RemoteRoot:      "/opt/si/paas/releases",
+		FromSlot:        "blue",
+		ToSlot:          "green",
+		PreviousRelease: "rel-bluegood-1",
+		ApplyTimeout:    2 * time.Second,
+		HealthTimeout:   2 * time.Second,
+		CutoverTimeout:  2 * time.Second,
+		HealthCommand:   "",
+		CutoverCommand:  "",
+		KeepStandby:     true,
+	})
+	if outcome.Err == nil {
+		t.Fatalf("expected post-cutover health failure to return error")
+	}
+	if !outcome.RolledBack {
+		t.Fatalf("expected rollback to previous slot on post-cutover failure, got %#v", outcome)
+	}
+	failure := asPaasOperationFailure(outcome.Err)
+	if failure.Stage != "bluegreen_post_cutover_health" {
+		t.Fatalf("expected bluegreen_post_cutover_health stage, got %#v", failure)
+	}
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	sshText := string(sshRaw)
+	if !strings.Contains(sshText, "printf '%s\\n' 'green' > '/opt/si/paas/releases/bluegreen/billing-api/edge-a/state/active_slot'") {
+		t.Fatalf("expected cutover-to-green command in ssh log, got %q", sshText)
+	}
+	if !strings.Contains(sshText, "printf '%s\\n' 'blue' > '/opt/si/paas/releases/bluegreen/billing-api/edge-a/state/active_slot'") {
+		t.Fatalf("expected rollback-to-blue command in ssh log, got %q", sshText)
+	}
+}
+
 func TestApplyPaasReleaseToTargetsRollingPlanAndOrder(t *testing.T) {
 	stateRoot := t.TempDir()
 	fakeBinDir := t.TempDir()

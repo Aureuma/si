@@ -21,6 +21,9 @@ func cmdPaasDeploy(args []string) {
 		case "webhook":
 			cmdPaasDeployWebhook(args[1:])
 			return
+		case "bluegreen":
+			cmdPaasDeployBlueGreen(args[1:])
+			return
 		}
 	}
 	args, jsonOut := parsePaasJSONFlag(args)
