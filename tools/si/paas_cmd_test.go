@@ -730,6 +730,12 @@ func TestPaasDeployApplyUsesRemoteTransport(t *testing.T) {
 	if env.Fields["applied_targets"] != "edge-a" {
 		t.Fatalf("expected applied target edge-a, got %#v", env.Fields)
 	}
+	if env.Fields["target_statuses"] != "edge-a:ok" {
+		t.Fatalf("expected deterministic target status summary, got %#v", env.Fields)
+	}
+	if env.Fields["fanout_plan"] != "serial(edge-a)" {
+		t.Fatalf("expected serial fanout plan, got %#v", env.Fields)
+	}
 	eventPath := strings.TrimSpace(env.Fields["event_log"])
 	if eventPath == "" {
 		t.Fatalf("expected event log path in deploy fields, got %#v", env.Fields)
@@ -757,6 +763,231 @@ func TestPaasDeployApplyUsesRemoteTransport(t *testing.T) {
 	if strings.Count(scpText, "root@203.0.113.10") < 2 {
 		t.Fatalf("expected compose and metadata uploads in scp log, got %q", scpText)
 	}
+}
+
+func TestApplyPaasReleaseToTargetsRollingPlanAndOrder(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-b", "--host", "203.0.113.11", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-c", "--host", "203.0.113.12", "--user", "root"})
+	})
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	scpScript := filepath.Join(fakeBinDir, "fake-scp")
+	if err := os.WriteFile(sshScript, []byte("#!/usr/bin/env bash\nset -euo pipefail\n"), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	if err := os.WriteFile(scpScript, []byte("#!/usr/bin/env bash\nset -euo pipefail\n"), 0o700); err != nil {
+		t.Fatalf("write fake scp: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	t.Setenv(paasSCPBinEnvKey, scpScript)
+
+	bundleDir := seedPaasTestBundleDir(t)
+	result, err := applyPaasReleaseToTargets(paasApplyOptions{
+		Enabled:              true,
+		SelectedTargets:      []string{"all"},
+		Strategy:             "rolling",
+		MaxParallel:          2,
+		ContinueOnError:      false,
+		BundleDir:            bundleDir,
+		ReleaseID:            "rel-rolling",
+		RemoteRoot:           "/opt/si/paas/releases",
+		ApplyTimeout:         2 * time.Second,
+		HealthTimeout:        2 * time.Second,
+		HealthCommand:        "",
+		RollbackOnFailure:    false,
+		RollbackBundleDir:    "",
+		RollbackReleaseID:    "",
+		RollbackApplyTimeout: 2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("apply rolling strategy: %v", err)
+	}
+	if result.FanoutPlan != "rolling(edge-a+edge-b);rolling(edge-c)" {
+		t.Fatalf("unexpected rolling fanout plan: %#v", result.FanoutPlan)
+	}
+	if formatPaasTargetStatuses(result.TargetStatuses) != "edge-a:ok,edge-b:ok,edge-c:ok" {
+		t.Fatalf("unexpected rolling target statuses: %#v", result.TargetStatuses)
+	}
+}
+
+func TestApplyPaasReleaseToTargetsCanaryStopsAfterCanaryFailure(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-b", "--host", "203.0.113.11", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-c", "--host", "203.0.113.12", "--user", "root"})
+	})
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	scpScript := filepath.Join(fakeBinDir, "fake-scp")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"printf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog),
+		"cmd=\"$*\"",
+		"if [[ \"$cmd\" == *\"root@203.0.113.10\"* && \"$cmd\" == *\"up -d --remove-orphans\"* ]]; then",
+		"  echo \"simulated canary apply failure\" >&2",
+		"  exit 1",
+		"fi",
+		"exit 0",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	if err := os.WriteFile(scpScript, []byte("#!/usr/bin/env bash\nset -euo pipefail\n"), 0o700); err != nil {
+		t.Fatalf("write fake scp: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	t.Setenv(paasSCPBinEnvKey, scpScript)
+
+	bundleDir := seedPaasTestBundleDir(t)
+	result, err := applyPaasReleaseToTargets(paasApplyOptions{
+		Enabled:              true,
+		SelectedTargets:      []string{"all"},
+		Strategy:             "canary",
+		MaxParallel:          2,
+		ContinueOnError:      true,
+		BundleDir:            bundleDir,
+		ReleaseID:            "rel-canary",
+		RemoteRoot:           "/opt/si/paas/releases",
+		ApplyTimeout:         2 * time.Second,
+		HealthTimeout:        2 * time.Second,
+		HealthCommand:        "",
+		RollbackOnFailure:    false,
+		RollbackBundleDir:    "",
+		RollbackReleaseID:    "",
+		RollbackApplyTimeout: 2 * time.Second,
+	})
+	if err == nil {
+		t.Fatalf("expected canary failure")
+	}
+	if formatTargets(result.FailedTargets) != "edge-a" {
+		t.Fatalf("expected canary failure target edge-a, got %#v", result.FailedTargets)
+	}
+	if formatTargets(result.SkippedTargets) != "edge-b,edge-c" {
+		t.Fatalf("expected remaining targets skipped after canary failure, got %#v", result.SkippedTargets)
+	}
+	if formatPaasTargetStatuses(result.TargetStatuses) != "edge-a:failed,edge-b:skipped,edge-c:skipped" {
+		t.Fatalf("unexpected canary status summary: %#v", result.TargetStatuses)
+	}
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	sshText := string(sshRaw)
+	if strings.Contains(sshText, "root@203.0.113.11") || strings.Contains(sshText, "root@203.0.113.12") {
+		t.Fatalf("expected canary failure to block later targets, log=%q", sshText)
+	}
+}
+
+func TestApplyPaasReleaseToTargetsParallelContinuesOnError(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.10", "--user", "root"})
+	})
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-b", "--host", "203.0.113.11", "--user", "root"})
+	})
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	scpScript := filepath.Join(fakeBinDir, "fake-scp")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"printf '%s\\n' \"$*\" >> " + shellSingleQuote(sshLog),
+		"cmd=\"$*\"",
+		"if [[ \"$cmd\" == *\"root@203.0.113.11\"* && \"$cmd\" == *\"up -d --remove-orphans\"* ]]; then",
+		"  echo \"simulated parallel apply failure\" >&2",
+		"  exit 1",
+		"fi",
+		"exit 0",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	if err := os.WriteFile(scpScript, []byte("#!/usr/bin/env bash\nset -euo pipefail\n"), 0o700); err != nil {
+		t.Fatalf("write fake scp: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	t.Setenv(paasSCPBinEnvKey, scpScript)
+
+	bundleDir := seedPaasTestBundleDir(t)
+	result, err := applyPaasReleaseToTargets(paasApplyOptions{
+		Enabled:              true,
+		SelectedTargets:      []string{"all"},
+		Strategy:             "parallel",
+		MaxParallel:          2,
+		ContinueOnError:      true,
+		BundleDir:            bundleDir,
+		ReleaseID:            "rel-parallel",
+		RemoteRoot:           "/opt/si/paas/releases",
+		ApplyTimeout:         2 * time.Second,
+		HealthTimeout:        2 * time.Second,
+		HealthCommand:        "",
+		RollbackOnFailure:    false,
+		RollbackBundleDir:    "",
+		RollbackReleaseID:    "",
+		RollbackApplyTimeout: 2 * time.Second,
+	})
+	if err == nil {
+		t.Fatalf("expected aggregate error for partial parallel failure")
+	}
+	if result.FanoutPlan != "parallel(edge-a+edge-b)" {
+		t.Fatalf("unexpected parallel fanout plan: %#v", result.FanoutPlan)
+	}
+	if formatTargets(result.FailedTargets) != "edge-b" {
+		t.Fatalf("expected failed target edge-b, got %#v", result.FailedTargets)
+	}
+	if formatTargets(result.SkippedTargets) != "" {
+		t.Fatalf("expected no skipped targets for parallel strategy, got %#v", result.SkippedTargets)
+	}
+	if formatPaasTargetStatuses(result.TargetStatuses) != "edge-a:ok,edge-b:failed" {
+		t.Fatalf("unexpected parallel status summary: %#v", result.TargetStatuses)
+	}
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	sshText := string(sshRaw)
+	if !strings.Contains(sshText, "root@203.0.113.10") || !strings.Contains(sshText, "root@203.0.113.11") {
+		t.Fatalf("expected parallel attempt on both targets, log=%q", sshText)
+	}
+}
+
+func seedPaasTestBundleDir(t *testing.T) string {
+	t.Helper()
+	bundleDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bundleDir, "compose.yaml"), []byte("services:\n  api:\n    image: nginx:latest\n"), 0o600); err != nil {
+		t.Fatalf("write test compose bundle: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(bundleDir, "release.json"), []byte("{\"release_id\":\"rel-test\"}\n"), 0o600); err != nil {
+		t.Fatalf("write test release metadata: %v", err)
+	}
+	return bundleDir
 }
 
 func parsePaasEnvelope(t *testing.T, raw string) paasTestEnvelope {

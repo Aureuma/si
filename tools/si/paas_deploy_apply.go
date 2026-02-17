@@ -19,6 +19,9 @@ const defaultPaasHealthCheckCommand = "docker compose -f compose.yaml ps --statu
 type paasApplyOptions struct {
 	Enabled              bool
 	SelectedTargets      []string
+	Strategy             string
+	MaxParallel          int
+	ContinueOnError      bool
 	BundleDir            string
 	ReleaseID            string
 	RemoteRoot           string
@@ -31,23 +34,58 @@ type paasApplyOptions struct {
 	RollbackApplyTimeout time.Duration
 }
 
+type paasTargetApplyStatus struct {
+	Target string
+	Status string
+}
+
 type paasApplyResult struct {
 	AppliedTargets      []string
 	HealthyTargets      []string
 	RolledBackTargets   []string
+	FailedTargets       []string
+	SkippedTargets      []string
+	TargetStatuses      []paasTargetApplyStatus
+	FanoutPlan          string
 	RollbackReleaseID   string
 	HealthCommand       string
 	HealthChecksEnabled bool
 }
 
+type paasApplyBatch struct {
+	Phase       string
+	Targets     []paasTarget
+	Parallelism int
+}
+
+type paasSingleTargetApplyResult struct {
+	Target     string
+	Applied    bool
+	Healthy    bool
+	RolledBack bool
+	Err        error
+}
+
 func applyPaasReleaseToTargets(opts paasApplyOptions) (paasApplyResult, error) {
+	resolvedStrategy := strings.ToLower(strings.TrimSpace(opts.Strategy))
+	if !isValidDeployStrategy(resolvedStrategy) {
+		resolvedStrategy = "serial"
+	}
+	resolvedMaxParallel := opts.MaxParallel
+	if resolvedMaxParallel < 1 {
+		resolvedMaxParallel = 1
+	}
 	result := paasApplyResult{
 		AppliedTargets:      []string{},
 		HealthyTargets:      []string{},
 		RolledBackTargets:   []string{},
+		FailedTargets:       []string{},
+		SkippedTargets:      []string{},
+		TargetStatuses:      []paasTargetApplyStatus{},
 		RollbackReleaseID:   strings.TrimSpace(opts.RollbackReleaseID),
 		HealthCommand:       strings.TrimSpace(opts.HealthCommand),
 		HealthChecksEnabled: strings.TrimSpace(opts.HealthCommand) != "",
+		FanoutPlan:          "",
 	}
 	if !opts.Enabled {
 		return result, nil
@@ -62,59 +100,299 @@ func applyPaasReleaseToTargets(opts paasApplyOptions) (paasApplyResult, error) {
 			err,
 		)
 	}
+	statusByTarget := map[string]string{}
 	for _, target := range targets {
-		ctx, cancel := context.WithTimeout(context.Background(), opts.ApplyTimeout)
-		err := runPaasRemoteComposeApply(ctx, target, opts.BundleDir, opts.ReleaseID, opts.RemoteRoot)
-		cancel()
-		if err != nil {
-			return result, err
-		}
-		result.AppliedTargets = append(result.AppliedTargets, target.Name)
+		statusByTarget[target.Name] = "pending"
+	}
+	batches := planPaasApplyBatches(targets, resolvedStrategy, resolvedMaxParallel)
+	result.FanoutPlan = formatPaasApplyFanoutPlan(batches)
 
-		if strings.TrimSpace(opts.HealthCommand) == "" {
-			continue
+	failures := []error{}
+	stopFurtherBatches := false
+	for batchIndex, batch := range batches {
+		if stopFurtherBatches {
+			break
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), opts.HealthTimeout)
-		err = runPaasRemoteHealthCheck(ctx, target, opts.ReleaseID, opts.RemoteRoot, opts.HealthCommand)
-		cancel()
-		if err == nil {
-			result.HealthyTargets = append(result.HealthyTargets, target.Name)
-			continue
+		batchResults := executePaasApplyBatch(opts, batch)
+		batchFailed := false
+		for _, row := range batchResults {
+			if row.Applied {
+				result.AppliedTargets = appendUniqueString(result.AppliedTargets, row.Target)
+			}
+			if row.Healthy {
+				result.HealthyTargets = appendUniqueString(result.HealthyTargets, row.Target)
+			}
+			if row.RolledBack {
+				result.RolledBackTargets = appendUniqueString(result.RolledBackTargets, row.Target)
+			}
+			if row.Err != nil {
+				result.FailedTargets = appendUniqueString(result.FailedTargets, row.Target)
+				failures = append(failures, row.Err)
+				batchFailed = true
+				if row.RolledBack {
+					statusByTarget[row.Target] = "rolled_back"
+				} else {
+					statusByTarget[row.Target] = "failed"
+				}
+				continue
+			}
+			statusByTarget[row.Target] = "ok"
 		}
-		if !opts.RollbackOnFailure {
-			return result, err
+
+		if batchFailed {
+			if resolvedStrategy == "canary" && batchIndex == 0 {
+				markPaasSkippedTargets(statusByTarget, batches[batchIndex+1:], &result.SkippedTargets)
+				stopFurtherBatches = true
+				continue
+			}
+			if !opts.ContinueOnError {
+				markPaasSkippedTargets(statusByTarget, batches[batchIndex+1:], &result.SkippedTargets)
+				stopFurtherBatches = true
+			}
 		}
-		if strings.TrimSpace(opts.RollbackReleaseID) == "" || strings.TrimSpace(opts.RollbackBundleDir) == "" {
-			return result, newPaasOperationFailure(
-				paasFailureRollbackResolve,
-				"rollback_resolve",
-				target.Name,
-				"provide a valid previous release to rollback or deploy a known-good baseline first",
-				fmt.Errorf("health check failed and no rollback release is available: %w", err),
-			)
+	}
+
+	result.TargetStatuses = make([]paasTargetApplyStatus, 0, len(targets))
+	for _, target := range targets {
+		status := strings.TrimSpace(statusByTarget[target.Name])
+		if status == "" || status == "pending" {
+			status = "skipped"
+			result.SkippedTargets = appendUniqueString(result.SkippedTargets, target.Name)
 		}
-		ctx, cancel = context.WithTimeout(context.Background(), opts.RollbackApplyTimeout)
-		rollbackErr := runPaasRemoteComposeApply(ctx, target, opts.RollbackBundleDir, opts.RollbackReleaseID, opts.RemoteRoot)
-		cancel()
-		if rollbackErr != nil {
-			return result, newPaasOperationFailure(
-				paasFailureRollbackApply,
-				"rollback_apply",
-				target.Name,
-				"fix rollback transport/runtime failure on the target and rerun `si paas rollback`",
-				fmt.Errorf("health check failed and rollback to %s failed: %w", opts.RollbackReleaseID, rollbackErr),
-			)
-		}
-		result.RolledBackTargets = append(result.RolledBackTargets, target.Name)
-		return result, newPaasOperationFailure(
-			paasFailureHealthCheck,
-			"health_check",
-			target.Name,
-			"inspect target logs and service health, then redeploy after fixing readiness failures",
-			fmt.Errorf("health check failed and rollback to %s was applied: %w", opts.RollbackReleaseID, err),
-		)
+		result.TargetStatuses = append(result.TargetStatuses, paasTargetApplyStatus{
+			Target: target.Name,
+			Status: status,
+		})
+	}
+	if len(failures) > 0 {
+		return result, aggregatePaasApplyFailures(failures)
 	}
 	return result, nil
+}
+
+func planPaasApplyBatches(targets []paasTarget, strategy string, maxParallel int) []paasApplyBatch {
+	if len(targets) == 0 {
+		return nil
+	}
+	if maxParallel < 1 {
+		maxParallel = 1
+	}
+	batches := make([]paasApplyBatch, 0, len(targets))
+	switch strategy {
+	case "parallel":
+		batches = append(batches, paasApplyBatch{
+			Phase:       "parallel",
+			Targets:     append([]paasTarget(nil), targets...),
+			Parallelism: minInt(maxParallel, len(targets)),
+		})
+	case "rolling":
+		for start := 0; start < len(targets); start += maxParallel {
+			end := minInt(start+maxParallel, len(targets))
+			batches = append(batches, paasApplyBatch{
+				Phase:       "rolling",
+				Targets:     append([]paasTarget(nil), targets[start:end]...),
+				Parallelism: minInt(maxParallel, end-start),
+			})
+		}
+	case "canary":
+		batches = append(batches, paasApplyBatch{
+			Phase:       "canary",
+			Targets:     append([]paasTarget(nil), targets[0]),
+			Parallelism: 1,
+		})
+		if len(targets) > 1 {
+			rest := targets[1:]
+			for start := 0; start < len(rest); start += maxParallel {
+				end := minInt(start+maxParallel, len(rest))
+				batches = append(batches, paasApplyBatch{
+					Phase:       "rolling",
+					Targets:     append([]paasTarget(nil), rest[start:end]...),
+					Parallelism: minInt(maxParallel, end-start),
+				})
+			}
+		}
+	default:
+		for _, target := range targets {
+			batches = append(batches, paasApplyBatch{
+				Phase:       "serial",
+				Targets:     append([]paasTarget(nil), target),
+				Parallelism: 1,
+			})
+		}
+	}
+	return batches
+}
+
+func executePaasApplyBatch(opts paasApplyOptions, batch paasApplyBatch) []paasSingleTargetApplyResult {
+	if len(batch.Targets) == 0 {
+		return nil
+	}
+	parallelism := batch.Parallelism
+	if parallelism < 1 {
+		parallelism = 1
+	}
+	type batchItem struct {
+		Index  int
+		Result paasSingleTargetApplyResult
+	}
+	out := make([]paasSingleTargetApplyResult, len(batch.Targets))
+	sem := make(chan struct{}, parallelism)
+	results := make(chan batchItem, len(batch.Targets))
+	for i, target := range batch.Targets {
+		sem <- struct{}{}
+		go func(index int, row paasTarget) {
+			defer func() {
+				<-sem
+			}()
+			results <- batchItem{
+				Index:  index,
+				Result: runPaasApplyOnTarget(opts, row),
+			}
+		}(i, target)
+	}
+	for i := 0; i < len(batch.Targets); i++ {
+		item := <-results
+		out[item.Index] = item.Result
+	}
+	return out
+}
+
+func runPaasApplyOnTarget(opts paasApplyOptions, target paasTarget) paasSingleTargetApplyResult {
+	result := paasSingleTargetApplyResult{
+		Target: target.Name,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), opts.ApplyTimeout)
+	err := runPaasRemoteComposeApply(ctx, target, opts.BundleDir, opts.ReleaseID, opts.RemoteRoot)
+	cancel()
+	if err != nil {
+		result.Err = err
+		return result
+	}
+	result.Applied = true
+
+	if strings.TrimSpace(opts.HealthCommand) == "" {
+		return result
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), opts.HealthTimeout)
+	err = runPaasRemoteHealthCheck(ctx, target, opts.ReleaseID, opts.RemoteRoot, opts.HealthCommand)
+	cancel()
+	if err == nil {
+		result.Healthy = true
+		return result
+	}
+	if !opts.RollbackOnFailure {
+		result.Err = err
+		return result
+	}
+	if strings.TrimSpace(opts.RollbackReleaseID) == "" || strings.TrimSpace(opts.RollbackBundleDir) == "" {
+		result.Err = newPaasOperationFailure(
+			paasFailureRollbackResolve,
+			"rollback_resolve",
+			target.Name,
+			"provide a valid previous release to rollback or deploy a known-good baseline first",
+			fmt.Errorf("health check failed and no rollback release is available: %w", err),
+		)
+		return result
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), opts.RollbackApplyTimeout)
+	rollbackErr := runPaasRemoteComposeApply(ctx, target, opts.RollbackBundleDir, opts.RollbackReleaseID, opts.RemoteRoot)
+	cancel()
+	if rollbackErr != nil {
+		result.Err = newPaasOperationFailure(
+			paasFailureRollbackApply,
+			"rollback_apply",
+			target.Name,
+			"fix rollback transport/runtime failure on the target and rerun `si paas rollback`",
+			fmt.Errorf("health check failed and rollback to %s failed: %w", opts.RollbackReleaseID, rollbackErr),
+		)
+		return result
+	}
+	result.RolledBack = true
+	result.Err = newPaasOperationFailure(
+		paasFailureHealthCheck,
+		"health_check",
+		target.Name,
+		"inspect target logs and service health, then redeploy after fixing readiness failures",
+		fmt.Errorf("health check failed and rollback to %s was applied: %w", opts.RollbackReleaseID, err),
+	)
+	return result
+}
+
+func aggregatePaasApplyFailures(failures []error) error {
+	if len(failures) == 0 {
+		return nil
+	}
+	first := asPaasOperationFailure(failures[0])
+	if len(failures) == 1 {
+		return newPaasOperationFailure(first.Code, first.Stage, first.Target, first.Remediation, first.Err)
+	}
+	return newPaasOperationFailure(
+		first.Code,
+		first.Stage,
+		first.Target,
+		first.Remediation,
+		fmt.Errorf("%s (and %d additional target failure(s))", errString(first.Err), len(failures)-1),
+	)
+}
+
+func markPaasSkippedTargets(statusByTarget map[string]string, remaining []paasApplyBatch, skippedTargets *[]string) {
+	for _, batch := range remaining {
+		for _, target := range batch.Targets {
+			statusByTarget[target.Name] = "skipped"
+			*skippedTargets = appendUniqueString(*skippedTargets, target.Name)
+		}
+	}
+}
+
+func appendUniqueString(values []string, value string) []string {
+	item := strings.TrimSpace(value)
+	if item == "" {
+		return values
+	}
+	for _, existing := range values {
+		if strings.EqualFold(strings.TrimSpace(existing), item) {
+			return values
+		}
+	}
+	return append(values, item)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func formatPaasApplyFanoutPlan(batches []paasApplyBatch) string {
+	if len(batches) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(batches))
+	for _, batch := range batches {
+		names := make([]string, 0, len(batch.Targets))
+		for _, target := range batch.Targets {
+			names = append(names, target.Name)
+		}
+		parts = append(parts, fmt.Sprintf("%s(%s)", strings.TrimSpace(batch.Phase), strings.Join(names, "+")))
+	}
+	return strings.Join(parts, ";")
+}
+
+func formatPaasTargetStatuses(statuses []paasTargetApplyStatus) string {
+	if len(statuses) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		target := strings.TrimSpace(status.Target)
+		state := strings.TrimSpace(status.Status)
+		if target == "" || state == "" {
+			continue
+		}
+		parts = append(parts, target+":"+state)
+	}
+	return strings.Join(parts, ",")
 }
 
 func resolvePaasDeployTargets(selectedTargets []string) ([]paasTarget, error) {
