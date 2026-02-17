@@ -53,6 +53,12 @@ For incident-response operational procedures, use:
 cat docs/PAAS_INCIDENT_RUNBOOK.md
 ```
 
+For state-isolation data classification policy, use:
+
+```bash
+cat docs/PAAS_STATE_CLASSIFICATION_POLICY.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 

@@ -1,8 +1,8 @@
 # Ticket: PaaS State Isolation Model (Dogfood vs OSS vs Customer Contexts)
 
 Date: 2026-02-17
-Owner: Unassigned
-Status: Planned
+Owner: Codex
+Status: In Progress
 Priority: Critical
 
 ## 1. Objective
@@ -120,7 +120,7 @@ Vault backup follows vault policy, not PaaS state backup tooling.
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| ISO-01 | Add context config schema and persistence | Not Started | Unassigned | Linked WS: WS11-01, WS11-02 |
+| ISO-01 | Add context config schema and persistence | In Progress | Codex | WS11-01 data classification/storage policy published in `docs/PAAS_STATE_CLASSIFICATION_POLICY.md`; context schema/init implementation continues under WS11-02 |
 | ISO-02 | Add global `--context` resolution pipeline | Not Started | Unassigned | Linked WS: WS02-06 |
 | ISO-03 | Add context CRUD commands | Not Started | Unassigned | Linked WS: WS11-02 |
 | ISO-04 | Add state-root safety checks (`git` workspace refusal) | Not Started | Unassigned | Linked WS: WS11-03 |

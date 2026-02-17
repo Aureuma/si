@@ -868,7 +868,7 @@ Work items:
 
 | ID | Task | Status | Owner | Notes |
 | --- | --- | --- | --- | --- |
-| WS11-01 | Define data classification policy and allowed storage matrix | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-01 |
+| WS11-01 | Define data classification policy and allowed storage matrix | Done | Codex | Added `docs/PAAS_STATE_CLASSIFICATION_POLICY.md` defining class/location matrix, boundary requirements, and enforcement mapping; linked from `docs/testing.md` |
 | WS11-02 | Implement context-scoped state root layout and initialization | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-01/ISO-03 |
 | WS11-03 | Implement `si paas doctor` checks for repo-state contamination and secret exposure | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-04/ISO-07 |
 | WS11-04 | Define backup/restore policy for private state roots and audit logs | Not Started | Unassigned | Linked ticket: `paas-state-isolation-model.md` ISO-08 |
@@ -1072,12 +1072,13 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-09 | Completed WS09-03 by adding a PaaS-specific security review checklist and threat model (`docs/PAAS_SECURITY_THREAT_MODEL.md`) covering trust boundaries, asset classes, STRIDE threats, mitigation mapping, and required review outputs for PRs touching `si paas` | Remaining WS09-04/05 hardening items are pending | Implement WS09-04 incident-response ops runbook next |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-04 by publishing `docs/PAAS_INCIDENT_RUNBOOK.md` with severity classification, deterministic incident workflow, and scenario-specific response playbooks (deploy failure, blue/green cutover failure, webhook auth failures, vault trust failures) | WS09-05 state-isolation regression tests remain pending | Implement WS09-05 state-isolation regression tests next |
 | 2026-02-17 | Codex | WS-09 | Completed WS09-05 by adding dedicated context-boundary/isolation regression coverage (`TestPaasRegressionStateIsolationContextBoundaries`) and end-to-end state-isolation harness validation; WS09 hardening stream is now complete | Remaining backlog shifts to WS11 isolation governance and Phase C/D streams (WS07/WS12/WS08) | Start WS11-01/02/03 to formalize isolation governance guardrails |
+| 2026-02-17 | Codex | WS-11 | Completed WS11-01 by publishing the PaaS state classification policy and allowed-storage matrix (`docs/PAAS_STATE_CLASSIFICATION_POLICY.md`) and aligning ISO ticket ownership/status for ongoing isolation-governance implementation | WS11-02/03/04/05 remain pending | Implement WS11-02 context state-root layout/init path next, then WS11-03 doctor checks |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS11-01 data classification policy and allowed storage matrix.
-2. Implement WS11-02 context-scoped state root layout and initialization.
-3. Implement WS11-03 `si paas doctor` contamination/secret exposure checks.
+1. Implement WS11-02 context-scoped state root layout and initialization.
+2. Implement WS11-03 `si paas doctor` contamination/secret exposure checks.
+3. Implement WS11-04 backup/restore policy for private state roots and audit logs.
 
 ## 13. Reference Links
 
