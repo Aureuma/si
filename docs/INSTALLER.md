@@ -101,8 +101,10 @@ Design choices:
 - Docker smoke test: `./tools/test-install-si-docker.sh`
   - Validates installer behavior in root and non-root containers using the local repo checkout.
 - GitHub Actions workflow: `.github/workflows/install-smoke.yml`
+  - Runs Go workspace tests on Ubuntu (`./tools/test.sh`).
   - Runs host smoke checks on `ubuntu-latest` and `macos-latest`.
   - Runs Docker smoke checks on Ubuntu.
+  - Uses docs-only change detection to skip heavy jobs safely.
 
 This layered approach mirrors the OpenClaw pattern: keep fast host regressions and add
 containerized smoke tests so installer behavior remains stable across permission models.
