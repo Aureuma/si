@@ -87,6 +87,9 @@ func TestPaasSubcommandNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 }
 
 func TestPaasJSONOutputContractTargetAdd(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
 	out := captureStdout(t, func() {
 		cmdPaas([]string{"target", "add", "--name", "edge-1", "--host", "10.0.0.4", "--user", "root", "--json"})
 	})

@@ -12,6 +12,7 @@ func applyTmuxSessionDefaults(ctx context.Context, session string) {
 	if session == "" {
 		return
 	}
+	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "destroy-unattached", "off")
 	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "remain-on-exit", "off")
 	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "mouse", "on")
 	_, _ = tmuxOutput(ctx, "set-option", "-t", session, "history-limit", siTmuxHistoryLimit)
