@@ -27,6 +27,15 @@ To validate the `si` installer script end-to-end, run:
 
 Use `./tools/test-install-si.sh --help` for a quick usage reminder.
 
+For containerized smoke coverage (root + non-root installer paths), run:
+
+```bash
+./tools/test-install-si-docker.sh
+```
+
+Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 ./tools/test-install-si-docker.sh` to skip
+the non-root leg during local iteration.
+
 ## PaaS matrix
 For `si paas` quality-gate coverage (unit/integration/e2e regression matrix), use:
 

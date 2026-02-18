@@ -63,6 +63,8 @@ Update release version constants:
 ### 4) Verify and commit the release prep
 ```
 ./tools/test.sh
+./tools/test-install-si.sh
+./tools/test-install-si-docker.sh
 ./si analyze --module tools/si
 git add CHANGELOG.md tools/si/version.go
 git commit -m "Bump version to vX.Y.Z"
