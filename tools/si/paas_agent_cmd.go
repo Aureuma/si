@@ -266,14 +266,16 @@ func cmdPaasAgentLogs(args []string) {
 	}
 	fmt.Printf("%s %d\n", styleHeading("paas agent logs:"), len(rows))
 	for _, row := range rows {
-		fmt.Printf("  - %s run=%s status=%s incident=%s runtime=%s profile=%s policy=%s lock=%s recovered=%s message=%s\n",
+		fmt.Printf("  - %s run=%s status=%s incident=%s corr=%s runtime=%s profile=%s policy=%s exec=%s lock=%s recovered=%s message=%s\n",
 			row.Timestamp,
 			row.RunID,
 			row.Status,
 			row.IncidentID,
+			row.IncidentCorrID,
 			row.RuntimeMode,
 			row.RuntimeProfile,
 			row.PolicyAction,
+			row.ExecutionMode,
 			row.LockPath,
 			boolString(row.LockRecovered),
 			row.Message,
@@ -318,11 +320,11 @@ func cmdPaasAgentRunOnce(args []string) {
 	if !lockResult.Acquired {
 		message := "agent lock unavailable: " + strings.TrimSpace(lockResult.Reason)
 		_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
-			Agent:       selectedName,
-			RunID:       runID,
-			Status:      "blocked",
-			LockPath:    lockResult.Path,
-			Message:     message,
+			Agent:    selectedName,
+			RunID:    runID,
+			Status:   "blocked",
+			LockPath: lockResult.Path,
+			Message:  message,
 		})
 		now := time.Now().UTC().Format(time.RFC3339)
 		store.Agents[index].LastRunAt = now
@@ -362,6 +364,9 @@ func cmdPaasAgentRunOnce(args []string) {
 	message := "no queued incidents available"
 	runtimeReason := ""
 	policyAction := ""
+	incidentCorrelationID := ""
+	executionMode := ""
+	executionNote := ""
 	for i := range queueRows {
 		row := queueRows[i]
 		candidateID := strings.TrimSpace(row.Incident.ID)
@@ -372,6 +377,7 @@ func cmdPaasAgentRunOnce(args []string) {
 			}
 		}
 		selectedEntry = &queueRows[i]
+		incidentCorrelationID = strings.TrimSpace(queueRows[i].Incident.CorrelationID)
 		break
 	}
 	if requestedIncident != "" && selectedEntry == nil {
@@ -420,11 +426,26 @@ func cmdPaasAgentRunOnce(args []string) {
 			}
 		}
 	}
+	if selectedEntry != nil && planErr == nil && plan.Ready && status == "queued" {
+		executionResult, executionErr := executePaasAgentAction(plan)
+		if executionErr != nil {
+			status = "blocked"
+			message = strings.TrimSpace(executionErr.Error())
+			runtimeReason = message
+		} else {
+			executionMode = strings.TrimSpace(executionResult.Mode)
+			executionNote = strings.TrimSpace(executionResult.Note)
+			if executionResult.Executed && executionNote != "" {
+				message = executionNote
+			}
+		}
+	}
 	_, err = appendPaasAgentRunRecord(paasAgentRunRecord{
 		Agent:          selectedName,
 		RunID:          runID,
 		Status:         status,
 		IncidentID:     plan.IncidentID,
+		IncidentCorrID: incidentCorrelationID,
 		RuntimeMode:    plan.Mode,
 		RuntimeProfile: plan.ProfileID,
 		RuntimeAuth:    plan.AuthPath,
@@ -432,6 +453,8 @@ func cmdPaasAgentRunOnce(args []string) {
 		LockPath:       lockResult.Path,
 		LockRecovered:  lockResult.Recovered,
 		PolicyAction:   policyAction,
+		ExecutionMode:  executionMode,
+		ExecutionNote:  executionNote,
 		Collected:      syncResult.Collected,
 		Inserted:       syncResult.Inserted,
 		Updated:        syncResult.Updated,
@@ -456,28 +479,31 @@ func cmdPaasAgentRunOnce(args []string) {
 	}
 
 	fields := map[string]string{
-		"name":            selectedName,
-		"run_id":          runID,
-		"incident":        requestedIncident,
-		"selected":        plan.IncidentID,
-		"status":          status,
-		"message":         message,
-		"runtime_mode":    plan.Mode,
-		"runtime_profile": plan.ProfileID,
-		"runtime_auth":    plan.AuthPath,
-		"runtime_ready":   boolString(plan.Ready),
-		"runtime_reason":  runtimeReason,
-		"lock_path":       lockResult.Path,
-		"lock_recovered":  boolString(lockResult.Recovered),
-		"policy_action":   policyAction,
-		"collected":       intString(syncResult.Collected),
-		"queue_inserted":  intString(syncResult.Inserted),
-		"queue_updated":   intString(syncResult.Updated),
-		"queue_pruned":    intString(syncResult.Pruned),
-		"queue_total":     intString(syncResult.Total),
-		"collector_count": intString(len(syncResult.CollectorStats)),
-		"queue_path":      syncResult.Path,
-		"store_path":      storePath,
+		"name":                    selectedName,
+		"run_id":                  runID,
+		"incident":                requestedIncident,
+		"selected":                plan.IncidentID,
+		"status":                  status,
+		"message":                 message,
+		"runtime_mode":            plan.Mode,
+		"runtime_profile":         plan.ProfileID,
+		"runtime_auth":            plan.AuthPath,
+		"runtime_ready":           boolString(plan.Ready),
+		"runtime_reason":          runtimeReason,
+		"incident_correlation_id": incidentCorrelationID,
+		"lock_path":               lockResult.Path,
+		"lock_recovered":          boolString(lockResult.Recovered),
+		"policy_action":           policyAction,
+		"execution_mode":          executionMode,
+		"execution_note":          executionNote,
+		"collected":               intString(syncResult.Collected),
+		"queue_inserted":          intString(syncResult.Inserted),
+		"queue_updated":           intString(syncResult.Updated),
+		"queue_pruned":            intString(syncResult.Pruned),
+		"queue_total":             intString(syncResult.Total),
+		"collector_count":         intString(len(syncResult.CollectorStats)),
+		"queue_path":              syncResult.Path,
+		"store_path":              storePath,
 	}
 	printPaasLiveAgentScaffold("agent run-once", fields, jsonOut)
 }
@@ -530,13 +556,13 @@ func cmdPaasAgentApprove(args []string) {
 	})
 	alertPath := notifyPaasAgentApprovalTelegramLinkage(strings.TrimSpace(*runID), strings.TrimSpace(run.Agent), paasApprovalDecisionApproved, strings.TrimSpace(*note))
 	printPaasLiveAgentScaffold("agent approve", map[string]string{
-		"run":         strings.TrimSpace(*runID),
-		"agent":       strings.TrimSpace(run.Agent),
-		"decision":    paasApprovalDecisionApproved,
-		"note":        strings.TrimSpace(*note),
-		"store_path":  path,
-		"alert_path":  alertPath,
-		"status":      "applied",
+		"run":        strings.TrimSpace(*runID),
+		"agent":      strings.TrimSpace(run.Agent),
+		"decision":   paasApprovalDecisionApproved,
+		"note":       strings.TrimSpace(*note),
+		"store_path": path,
+		"alert_path": alertPath,
+		"status":     "applied",
 	}, jsonOut)
 }
 
@@ -600,16 +626,16 @@ func cmdPaasAgentDeny(args []string) {
 
 func printPaasAgentEnvelope(command string, row paasAgentConfig, path string, jsonOut bool) {
 	fields := map[string]string{
-		"name":          row.Name,
-		"enabled":       boolString(row.Enabled),
-		"targets":       formatTargets(row.Targets),
-		"profile":       row.Profile,
-		"created_at":    row.CreatedAt,
-		"updated_at":    row.UpdatedAt,
-		"last_run_at":   row.LastRunAt,
-		"last_run_id":   row.LastRunID,
+		"name":           row.Name,
+		"enabled":        boolString(row.Enabled),
+		"targets":        formatTargets(row.Targets),
+		"profile":        row.Profile,
+		"created_at":     row.CreatedAt,
+		"updated_at":     row.UpdatedAt,
+		"last_run_at":    row.LastRunAt,
+		"last_run_id":    row.LastRunID,
 		"last_run_state": row.LastRunState,
-		"path":          path,
+		"path":           path,
 	}
 	printPaasLiveAgentScaffold(command, fields, jsonOut)
 }

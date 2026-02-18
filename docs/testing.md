@@ -119,6 +119,12 @@ For scheduler lock/self-heal behavior, use:
 cat docs/PAAS_AGENT_SCHEDULER_SELF_HEAL.md
 ```
 
+For offline fake-codex deterministic event-to-action smoke coverage, use:
+
+```bash
+cat docs/PAAS_AGENT_OFFLINE_SMOKE_TESTS.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 

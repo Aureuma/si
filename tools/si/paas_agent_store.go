@@ -33,6 +33,7 @@ type paasAgentRunRecord struct {
 	RunID          string `json:"run_id"`
 	Status         string `json:"status"`
 	IncidentID     string `json:"incident_id,omitempty"`
+	IncidentCorrID string `json:"incident_correlation_id,omitempty"`
 	RuntimeMode    string `json:"runtime_mode,omitempty"`
 	RuntimeProfile string `json:"runtime_profile,omitempty"`
 	RuntimeAuth    string `json:"runtime_auth_path,omitempty"`
@@ -40,6 +41,8 @@ type paasAgentRunRecord struct {
 	LockPath       string `json:"lock_path,omitempty"`
 	LockRecovered  bool   `json:"lock_recovered,omitempty"`
 	PolicyAction   string `json:"policy_action,omitempty"`
+	ExecutionMode  string `json:"execution_mode,omitempty"`
+	ExecutionNote  string `json:"execution_note,omitempty"`
 	Collected      int    `json:"collected"`
 	Inserted       int    `json:"inserted"`
 	Updated        int    `json:"updated"`
@@ -159,11 +162,14 @@ func appendPaasAgentRunRecord(record paasAgentRunRecord) (string, error) {
 	row.RunID = strings.TrimSpace(row.RunID)
 	row.Status = strings.ToLower(strings.TrimSpace(row.Status))
 	row.IncidentID = strings.TrimSpace(row.IncidentID)
+	row.IncidentCorrID = strings.TrimSpace(row.IncidentCorrID)
 	row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
 	row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
 	row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
 	row.LockPath = strings.TrimSpace(row.LockPath)
 	row.PolicyAction = strings.TrimSpace(row.PolicyAction)
+	row.ExecutionMode = strings.TrimSpace(row.ExecutionMode)
+	row.ExecutionNote = strings.TrimSpace(row.ExecutionNote)
 	row.QueuePath = strings.TrimSpace(row.QueuePath)
 	row.Message = strings.TrimSpace(row.Message)
 	if row.Agent == "" || row.RunID == "" || row.Status == "" {
@@ -221,11 +227,14 @@ func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, strin
 		row.RunID = strings.TrimSpace(row.RunID)
 		row.Status = strings.ToLower(strings.TrimSpace(row.Status))
 		row.IncidentID = strings.TrimSpace(row.IncidentID)
+		row.IncidentCorrID = strings.TrimSpace(row.IncidentCorrID)
 		row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
 		row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
 		row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
 		row.LockPath = strings.TrimSpace(row.LockPath)
 		row.PolicyAction = strings.TrimSpace(row.PolicyAction)
+		row.ExecutionMode = strings.TrimSpace(row.ExecutionMode)
+		row.ExecutionNote = strings.TrimSpace(row.ExecutionNote)
 		row.QueuePath = strings.TrimSpace(row.QueuePath)
 		row.Message = strings.TrimSpace(row.Message)
 		rows = append(rows, row)

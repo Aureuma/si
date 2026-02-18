@@ -401,6 +401,96 @@ func TestPaasAgentEnableStatusRunOnceLogsDisable(t *testing.T) {
 	}
 }
 
+func TestPaasAgentRunOnceOfflineFakeCodexDeterministicSmoke(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	root, err := repoRoot()
+	if err != nil {
+		t.Fatalf("repoRoot: %v", err)
+	}
+	t.Setenv(paasAgentOfflineFakeCodexEnvKey, "true")
+	t.Setenv(paasAgentOfflineFakeCodexCmdEnvKey, quoteSingle(filepath.Join(root, "tools", "dyad", "fake-codex.sh")))
+
+	prevRequire := requirePaasAgentCodexProfileFn
+	prevAuth := codexProfileAuthStatusFn
+	t.Cleanup(func() {
+		requirePaasAgentCodexProfileFn = prevRequire
+		codexProfileAuthStatusFn = prevAuth
+	})
+	requirePaasAgentCodexProfileFn = func(key string) (codexProfile, error) {
+		return codexProfile{ID: "weekly", Email: "ops@example.com"}, nil
+	}
+	codexProfileAuthStatusFn = func(profile codexProfile) codexAuthCacheStatus {
+		return codexAuthCacheStatus{Path: "/tmp/codex-auth.json", Exists: true}
+	}
+
+	_, err = savePaasRemediationPolicy(currentPaasContext(), paasRemediationPolicy{
+		DefaultAction: paasRemediationActionAutoAllow,
+		Severity: map[string]string{
+			paasIncidentSeverityInfo:     paasRemediationActionAutoAllow,
+			paasIncidentSeverityWarning:  paasRemediationActionAutoAllow,
+			paasIncidentSeverityCritical: paasRemediationActionAutoAllow,
+		},
+	})
+	if err != nil {
+		t.Fatalf("save remediation policy: %v", err)
+	}
+
+	contextDir := filepath.Join(stateRoot, "contexts", defaultPaasContext)
+	eventsDir := filepath.Join(contextDir, "events")
+	if err := os.MkdirAll(eventsDir, 0o700); err != nil {
+		t.Fatalf("mkdir events dir: %v", err)
+	}
+	deployEvent := []byte("{\"timestamp\":\"2026-02-17T17:00:00Z\",\"source\":\"deploy\",\"command\":\"deploy apply\",\"status\":\"failed\",\"target\":\"edge-a\",\"message\":\"deploy failed smoke\"}\n")
+	if err := os.WriteFile(filepath.Join(eventsDir, "deployments.jsonl"), deployEvent, 0o600); err != nil {
+		t.Fatalf("write deployments event: %v", err)
+	}
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"agent", "enable", "--name", "ops-agent", "--profile", "weekly", "--json"})
+	})
+	runRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "run-once", "--name", "ops-agent", "--json"})
+	})
+	runEnv := parsePaasEnvelope(t, runRaw)
+	if runEnv.Command != "agent run-once" {
+		t.Fatalf("unexpected run-once envelope: %#v", runEnv)
+	}
+	if runEnv.Fields["status"] != "queued" {
+		t.Fatalf("expected queued status, got %#v", runEnv.Fields)
+	}
+	if runEnv.Fields["execution_mode"] != paasAgentExecutionModeOfflineFakeCodex {
+		t.Fatalf("expected offline fake-codex execution mode, got %#v", runEnv.Fields)
+	}
+	if !strings.Contains(runEnv.Fields["execution_note"], "member: actor") {
+		t.Fatalf("expected deterministic fake-codex note, got %#v", runEnv.Fields)
+	}
+	if strings.TrimSpace(runEnv.Fields["incident_correlation_id"]) == "" {
+		t.Fatalf("expected incident correlation id, got %#v", runEnv.Fields)
+	}
+
+	logsRaw := captureStdout(t, func() {
+		cmdPaas([]string{"agent", "logs", "--name", "ops-agent", "--tail", "1", "--json"})
+	})
+	var logsPayload struct {
+		Count int                  `json:"count"`
+		Data  []paasAgentRunRecord `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(logsRaw), &logsPayload); err != nil {
+		t.Fatalf("decode logs payload: %v output=%q", err, logsRaw)
+	}
+	if logsPayload.Count != 1 || len(logsPayload.Data) != 1 {
+		t.Fatalf("expected one run log row, got %#v", logsPayload)
+	}
+	if logsPayload.Data[0].ExecutionMode != paasAgentExecutionModeOfflineFakeCodex {
+		t.Fatalf("expected run log execution mode, got %#v", logsPayload.Data[0])
+	}
+	if strings.TrimSpace(logsPayload.Data[0].IncidentCorrID) == "" {
+		t.Fatalf("expected run log incident correlation id, got %#v", logsPayload.Data[0])
+	}
+}
+
 func TestPaasAgentApproveDenyFlowPersistsDecision(t *testing.T) {
 	stateRoot := t.TempDir()
 	t.Setenv(paasStateRootEnvKey, stateRoot)
