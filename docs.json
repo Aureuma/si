@@ -24,6 +24,8 @@
       "pages": [
         "docs/index",
         "docs/CLI_REFERENCE",
+        "docs/INTEGRATIONS_OVERVIEW",
+        "docs/DOCS_STYLE_GUIDE",
         "docs/testing",
         "docs/MINTLIFY"
       ]
@@ -41,11 +43,21 @@
     {
       "group": "Providers",
       "pages": [
+        "docs/PROVIDERS",
         "docs/GITHUB",
         "docs/CLOUDFLARE",
+        "docs/WORKOS",
+        "docs/APPLE_APPSTORE",
         "docs/GCP",
+        "docs/GOOGLE_PLACES",
+        "docs/GOOGLE_PLAY",
+        "docs/GOOGLE_YOUTUBE",
+        "docs/AWS",
+        "docs/OPENAI",
+        "docs/OCI",
         "docs/STRIPE",
-        "docs/SOCIAL"
+        "docs/SOCIAL",
+        "docs/PUBLISH"
       ]
     },
     {
