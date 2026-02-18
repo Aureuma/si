@@ -55,7 +55,7 @@ Usage:
 Core:
   si dyad spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|logout|swap|ps|run|logs|tail|clone|remove|stop|start
-  si vault <init|status|check|hooks|fmt|encrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
+  si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|doctor|object|raw|report|sync>
   si github <auth|context|doctor|repo|branch|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|status|smoke|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>
@@ -306,9 +306,11 @@ vault:
 
   Target selection (most commands):
     --file <path>               (explicit env file path; otherwise uses vault.file from settings or SI_VAULT_FILE)
+    Guardrail: implicit cross-repo defaults emit warnings; set SI_VAULT_STRICT_TARGET_SCOPE=1 to fail-fast, or SI_VAULT_ALLOW_CROSS_REPO=1 to silence.
 
-	  si vault init [--file <path>] [--key-backend <keyring|keychain|file>] [--key-file <path>]
+	  si vault init [--file <path>] [--set-default] [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
+	  si vault use --file <path>
 	  si vault status [--file <path>]
 	  si vault check [--file <path>] [--staged] [--all]
 	  si vault hooks install|status|uninstall [--force]

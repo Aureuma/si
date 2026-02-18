@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -456,5 +457,137 @@ func TestVaultE2E_DecryptDefaultStdoutInPlaceRequiresFlag(t *testing.T) {
 	}
 	if p != "v" {
 		t.Fatalf("expected K plaintext on disk %q, got %q", "v", p)
+	}
+}
+
+func TestVaultE2E_InitDoesNotSwitchDefaultWithoutSetDefault(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	tempState := t.TempDir()
+	targetRoot := t.TempDir()
+	envProd := filepath.Join(targetRoot, ".env.prod")
+	envDev := filepath.Join(targetRoot, ".env.dev")
+	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
+	trustFile := filepath.Join(tempState, "vault", "trust.json")
+
+	env := map[string]string{
+		"HOME":                 tempState,
+		"GOFLAGS":              "-modcacherw",
+		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
+		"SI_VAULT_KEY_BACKEND": "file",
+		"SI_VAULT_KEY_FILE":    keyFile,
+		"SI_VAULT_TRUST_STORE": trustFile,
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envProd); err != nil {
+		t.Fatalf("vault init prod failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envDev); err != nil {
+		t.Fatalf("vault init dev failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "set", "AWS_ACCESS_KEY_ID", "dev-access-key", "--file", envDev); err != nil {
+		t.Fatalf("vault set dev key failed: %v", err)
+	}
+
+	// Default should still point to the first initialized file unless --set-default/use is used.
+	stdout, stderr, err := runSICommand(t, env, "vault", "list")
+	if err != nil {
+		t.Fatalf("vault list failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, filepath.Clean(envProd)) {
+		t.Fatalf("expected default env file to remain prod, got:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "AWS_ACCESS_KEY_ID") {
+		t.Fatalf("did not expect dev key in default prod vault list output:\n%s", stdout)
+	}
+}
+
+func TestVaultE2E_VaultUseSwitchesDefaultFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	tempState := t.TempDir()
+	targetRoot := t.TempDir()
+	envProd := filepath.Join(targetRoot, ".env.prod")
+	envDev := filepath.Join(targetRoot, ".env.dev")
+	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
+	trustFile := filepath.Join(tempState, "vault", "trust.json")
+
+	env := map[string]string{
+		"HOME":                 tempState,
+		"GOFLAGS":              "-modcacherw",
+		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
+		"SI_VAULT_KEY_BACKEND": "file",
+		"SI_VAULT_KEY_FILE":    keyFile,
+		"SI_VAULT_TRUST_STORE": trustFile,
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envProd); err != nil {
+		t.Fatalf("vault init prod failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envDev); err != nil {
+		t.Fatalf("vault init dev failed: %v", err)
+	}
+	if _, _, err := runSICommand(t, env, "vault", "set", "AWS_ACCESS_KEY_ID", "dev-access-key", "--file", envDev); err != nil {
+		t.Fatalf("vault set dev key failed: %v", err)
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "use", "--file", envDev); err != nil {
+		t.Fatalf("vault use failed: %v", err)
+	}
+
+	stdout, stderr, err := runSICommand(t, env, "vault", "list")
+	if err != nil {
+		t.Fatalf("vault list failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, filepath.Clean(envDev)) {
+		t.Fatalf("expected default env file to switch to dev, got:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "AWS_ACCESS_KEY_ID") {
+		t.Fatalf("expected dev key in default vault list output, got:\n%s", stdout)
+	}
+}
+
+func TestVaultE2E_StrictTargetScopeBlocksCrossRepoImplicitDefault(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available for strict cross-repo scope test")
+	}
+
+	tempState := t.TempDir()
+	otherRepo := t.TempDir()
+	envFile := filepath.Join(otherRepo, ".env.dev")
+	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
+	trustFile := filepath.Join(tempState, "vault", "trust.json")
+
+	if out, err := exec.Command("git", "-C", otherRepo, "init").CombinedOutput(); err != nil {
+		t.Fatalf("git init otherRepo failed: %v: %s", err, string(out))
+	}
+
+	env := map[string]string{
+		"HOME":                         tempState,
+		"GOFLAGS":                      "-modcacherw",
+		"GOMODCACHE":                   filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":                      filepath.Join(tempState, "go-build-cache"),
+		"SI_VAULT_KEY_BACKEND":         "file",
+		"SI_VAULT_KEY_FILE":            keyFile,
+		"SI_VAULT_TRUST_STORE":         trustFile,
+		"SI_VAULT_STRICT_TARGET_SCOPE": "1",
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envFile, "--set-default"); err != nil {
+		t.Fatalf("vault init failed: %v", err)
+	}
+	_, stderr, err := runSICommand(t, env, "vault", "list")
+	if err == nil {
+		t.Fatalf("expected strict target scope to fail on implicit cross-repo default")
+	}
+	if !strings.Contains(stderr, "SI_VAULT_ALLOW_CROSS_REPO=1") {
+		t.Fatalf("expected strict target scope guidance in stderr, got: %q", stderr)
 	}
 }

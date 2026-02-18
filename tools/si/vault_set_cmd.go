@@ -13,6 +13,7 @@ import (
 
 func cmdVaultSet(args []string) {
 	settings := loadSettingsOrDefault()
+	args = stripeFlagsFirst(args, map[string]bool{"stdin": true, "format": true})
 	fs := flag.NewFlagSet("vault set", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	section := fs.String("section", "", "section name (e.g. stripe, workos)")

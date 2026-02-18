@@ -27,9 +27,16 @@ si vault keygen
 si vault init
 ```
 
-To bootstrap a specific file path (and set it as the default for future commands), pass `--file`:
+To bootstrap a specific file path without changing your default file, pass `--file`:
 ```bash
 si vault init --file /path/to/.env
+```
+
+To explicitly change the default vault file for future commands:
+```bash
+si vault use --file /path/to/.env
+# or during init:
+si vault init --file /path/to/.env --set-default
 ```
 
 2. Set a secret (prefer `--stdin` to avoid shell history):
@@ -100,6 +107,11 @@ si vault encrypt --file vault/.env.prod --format
 si vault run --file vault/.env.prod -- ./your-command --args
 si vault init --file /path/to/any/.env
 ```
+
+Cross-repo guardrail:
+- If your implicit default file points to a different git repo than your current workspace, `si vault` prints a warning.
+- Set `SI_VAULT_STRICT_TARGET_SCOPE=1` to enforce fail-fast behavior for this mismatch.
+- Use `--file`, run `si vault use --file <path>`, or set `SI_VAULT_ALLOW_CROSS_REPO=1` to suppress cross-repo scope warnings.
 
 ## Formatting
 
