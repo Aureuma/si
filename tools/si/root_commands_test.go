@@ -28,6 +28,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"browser",
 		"dyad",
 		"build",
+		"mintlify",
 		"paas",
 		"persona",
 		"skill",
