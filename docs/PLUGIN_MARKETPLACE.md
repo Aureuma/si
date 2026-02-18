@@ -109,6 +109,22 @@ Install state tracks:
 - `si plugins doctor [--json]`
 - `si plugins register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]`
 - `si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]`
+- `si plugins catalog build --source <path> [--output <path>] [--channel <name>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]`
+- `si plugins catalog validate --source <path> [--json]`
+
+## External Catalog Packs
+
+For large integration ecosystems, keep manifests in a separate repository and generate catalog artifacts for SI consumption.
+
+Example with the sibling `si-integrations` repository:
+
+```bash
+cd ../si-integrations
+npm test
+SI_PLUGIN_CATALOG_PATHS="$(pwd)/catalog/all.json" si plugins list --json
+```
+
+This keeps SI core stable while allowing rapid integration expansion and independent validation.
 
 ## Quick Integration Onboarding Flow
 

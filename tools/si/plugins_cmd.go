@@ -13,7 +13,7 @@ import (
 	"si/tools/si/internal/pluginmarket"
 )
 
-const pluginsUsageText = "usage: si plugins <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>"
+const pluginsUsageText = "usage: si plugins <list|catalog|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>"
 
 func cmdPlugins(args []string) {
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, pluginsUsageText)
@@ -26,8 +26,10 @@ func cmdPlugins(args []string) {
 	switch sub {
 	case "help", "-h", "--help":
 		printUsage(pluginsUsageText)
-	case "list", "ls", "catalog":
+	case "list", "ls":
 		cmdPluginsList(rest)
+	case "catalog":
+		cmdPluginsCatalog(rest)
 	case "info":
 		cmdPluginsInfo(rest)
 	case "install", "add":
@@ -51,6 +53,31 @@ func cmdPlugins(args []string) {
 	default:
 		printUnknown("plugins", sub)
 		printUsage(pluginsUsageText)
+	}
+}
+
+func cmdPluginsCatalog(args []string) {
+	if len(args) == 0 {
+		cmdPluginsList(args)
+		return
+	}
+	first := strings.TrimSpace(args[0])
+	if strings.HasPrefix(first, "-") {
+		cmdPluginsList(args)
+		return
+	}
+	sub := strings.ToLower(first)
+	rest := args[1:]
+	switch sub {
+	case "list", "ls":
+		cmdPluginsList(rest)
+	case "build":
+		cmdPluginsCatalogBuild(rest)
+	case "validate", "check":
+		cmdPluginsCatalogValidate(rest)
+	default:
+		printUnknown("plugins catalog", sub)
+		printUsage("usage: si plugins catalog <list|build|validate>")
 	}
 }
 
@@ -807,6 +834,121 @@ func cmdPluginsPolicySet(args []string) {
 	fmt.Printf("  enabled=%s\n", boolText(state.Policy.Enabled))
 	fmt.Printf("  allow=%s\n", joinOrDash(state.Policy.Allow))
 	fmt.Printf("  deny=%s\n", joinOrDash(state.Policy.Deny))
+}
+
+func cmdPluginsCatalogBuild(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "verified": true})
+	fs := flag.NewFlagSet("plugins catalog build", flag.ExitOnError)
+	source := fs.String("source", "", "manifest file or directory tree")
+	output := fs.String("output", "", "output catalog file path")
+	channel := fs.String("channel", "community", "catalog channel label")
+	addedAt := fs.String("added-at", time.Now().UTC().Format("2006-01-02"), "catalog added_at date (YYYY-MM-DD)")
+	verified := fs.Bool("verified", false, "mark all built entries as verified")
+	jsonOut := fs.Bool("json", false, "output json")
+	var tags multiFlag
+	fs.Var(&tags, "tag", "catalog tag to attach to each entry (repeatable)")
+	_ = fs.Parse(args)
+	if strings.TrimSpace(*source) == "" || fs.NArg() > 0 {
+		printUsage("usage: si plugins catalog build --source <path> [--output <path>] [--channel <label>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]")
+		return
+	}
+	catalog, diagnostics, err := pluginmarket.BuildCatalogFromSource(strings.TrimSpace(*source), pluginmarket.BuildCatalogOptions{
+		Channel:  strings.TrimSpace(*channel),
+		Verified: *verified,
+		AddedAt:  strings.TrimSpace(*addedAt),
+		Tags:     tags,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	outputPath := strings.TrimSpace(*output)
+	if outputPath != "" {
+		resolvedOutput, err := filepath.Abs(outputPath)
+		if err != nil {
+			fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(resolvedOutput), 0o755); err != nil {
+			fatal(err)
+		}
+		raw, err := json.MarshalIndent(catalog, "", "  ")
+		if err != nil {
+			fatal(err)
+		}
+		if err := os.WriteFile(resolvedOutput, append(raw, '\n'), 0o644); err != nil {
+			fatal(err)
+		}
+		outputPath = resolvedOutput
+	}
+	if *jsonOut {
+		payload := map[string]interface{}{
+			"ok":          true,
+			"output":      outputPath,
+			"entries":     len(catalog.Entries),
+			"catalog":     catalog,
+			"diagnostics": diagnostics,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	successf("catalog built with %d entries", len(catalog.Entries))
+	if outputPath != "" {
+		fmt.Printf("  output=%s\n", outputPath)
+	}
+	for _, diagnostic := range diagnostics {
+		fmt.Printf("%s %s\n", styleHeading(strings.ToUpper(diagnostic.Level)+":"), diagnostic.Message)
+	}
+}
+
+func cmdPluginsCatalogValidate(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true})
+	fs := flag.NewFlagSet("plugins catalog validate", flag.ExitOnError)
+	source := fs.String("source", "", "manifest file or directory tree")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if strings.TrimSpace(*source) == "" || fs.NArg() > 0 {
+		printUsage("usage: si plugins catalog validate --source <path> [--json]")
+		return
+	}
+	catalog, diagnostics, err := pluginmarket.BuildCatalogFromSource(strings.TrimSpace(*source), pluginmarket.BuildCatalogOptions{})
+	if err != nil {
+		fatal(err)
+	}
+	counts := map[string]int{"info": 0, "warn": 0, "error": 0}
+	for _, diagnostic := range diagnostics {
+		switch strings.ToLower(strings.TrimSpace(diagnostic.Level)) {
+		case "error", "warn", "info":
+			counts[strings.ToLower(strings.TrimSpace(diagnostic.Level))]++
+		default:
+			counts["info"]++
+		}
+	}
+	ok := counts["error"] == 0
+	if *jsonOut {
+		payload := map[string]interface{}{
+			"ok":          ok,
+			"entries":     len(catalog.Entries),
+			"counts":      counts,
+			"diagnostics": diagnostics,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	fmt.Printf("%s entries=%d warn=%d error=%d\n", styleHeading("plugins catalog validate:"), len(catalog.Entries), counts["warn"], counts["error"])
+	for _, diagnostic := range diagnostics {
+		fmt.Printf("%s %s\n", styleHeading(strings.ToUpper(strings.TrimSpace(diagnostic.Level))+":"), diagnostic.Message)
+	}
+	if !ok {
+		fatal(fmt.Errorf("catalog validation failed"))
+	}
+	successf("catalog validation passed")
 }
 
 func joinOrDash(values []string) string {
