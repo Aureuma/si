@@ -141,3 +141,33 @@ func mustMakeGitRepoRoot(t *testing.T, path string) {
 		t.Fatalf("mkdir .git for %q: %v", path, err)
 	}
 }
+
+func TestBrowserMCPURLFromEnvDefaults(t *testing.T) {
+	t.Setenv("SI_BROWSER_MCP_DISABLED", "")
+	t.Setenv("SI_BROWSER_MCP_URL_INTERNAL", "")
+	t.Setenv("SI_BROWSER_MCP_URL", "")
+	t.Setenv("SI_BROWSER_CONTAINER", "")
+	t.Setenv("SI_BROWSER_MCP_PORT", "")
+	got := browserMCPURLFromEnv()
+	want := "http://si-playwright-mcp-headed:8931/mcp"
+	if got != want {
+		t.Fatalf("browserMCPURLFromEnv()=%q want=%q", got, want)
+	}
+}
+
+func TestBrowserMCPURLFromEnvUsesInternalOverride(t *testing.T) {
+	t.Setenv("SI_BROWSER_MCP_DISABLED", "")
+	t.Setenv("SI_BROWSER_MCP_URL_INTERNAL", "http://custom-browser:9999/mcp")
+	got := browserMCPURLFromEnv()
+	want := "http://custom-browser:9999/mcp"
+	if got != want {
+		t.Fatalf("browserMCPURLFromEnv()=%q want=%q", got, want)
+	}
+}
+
+func TestBrowserMCPURLFromEnvDisabled(t *testing.T) {
+	t.Setenv("SI_BROWSER_MCP_DISABLED", "true")
+	if got := browserMCPURLFromEnv(); got != "" {
+		t.Fatalf("expected empty browser MCP URL when disabled, got %q", got)
+	}
+}
