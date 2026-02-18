@@ -7,6 +7,9 @@ Usage: ./tools/test.sh
 
 Runs Go tests across workspace modules listed in go.work.
 Use --list to print the module list without running tests.
+
+Environment:
+  SI_GO_TEST_TIMEOUT   go test timeout (default: 15m)
 EOF
   exit 0
 fi
@@ -29,6 +32,8 @@ if [[ ! -f go.work ]]; then
 fi
 
 echo "go version: $(go version)"
+go_test_timeout="${SI_GO_TEST_TIMEOUT:-15m}"
+echo "go test timeout: ${go_test_timeout}"
 
 modules=(
   ./agents/critic/...
@@ -51,4 +56,4 @@ if [[ "$#" -eq 1 ]]; then
 fi
 
 echo "Running go test on:" "${modules[@]}"
-go test "${modules[@]}"
+go test -timeout "${go_test_timeout}" "${modules[@]}"
