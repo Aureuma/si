@@ -253,6 +253,59 @@ func TestRunDockerBuildDoesNotRetryLegacyOnNonRecoverableBuildKitError(t *testin
 	}
 }
 
+func TestRunDockerBuildRetriesLegacyWhenBuildxCommandUnavailableAtRuntime(t *testing.T) {
+	origCheck := dockerBuildxAvailableFn
+	origRun := runDockerBuildCommandFn
+	defer func() {
+		dockerBuildxAvailableFn = origCheck
+		runDockerBuildCommandFn = origRun
+	}()
+
+	dockerBuildxAvailableFn = func() (bool, error) { return true, nil }
+	var calls []struct {
+		args           []string
+		enableBuildKit bool
+	}
+	runDockerBuildCommandFn = func(args []string, enableBuildKit bool) error {
+		calls = append(calls, struct {
+			args           []string
+			enableBuildKit bool
+		}{args: append([]string(nil), args...), enableBuildKit: enableBuildKit})
+		if len(calls) == 1 {
+			return &dockerBuildCommandError{
+				err:    assertErr("build failed"),
+				output: "docker: 'buildx' is not a docker command.",
+			}
+		}
+		return nil
+	}
+
+	err := runDockerBuild(imageBuildSpec{
+		tag:        "aureuma/si:local",
+		contextDir: "/workspace",
+		dockerfile: "/workspace/tools/si-image/Dockerfile",
+		secrets:    []string{"id=si_host_codex_config,src=/tmp/config.toml"},
+	})
+	if err != nil {
+		t.Fatalf("runDockerBuild returned error: %v", err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected 2 docker build attempts, got %d", len(calls))
+	}
+	if !calls[0].enableBuildKit {
+		t.Fatalf("expected first attempt to use BuildKit")
+	}
+	if calls[1].enableBuildKit {
+		t.Fatalf("expected second attempt to disable BuildKit")
+	}
+	if !argsContain(calls[1].args, "-f", "/workspace/tools/si-image/Dockerfile.legacy") {
+		t.Fatalf("expected fallback attempt to use legacy dockerfile, args=%v", calls[1].args)
+	}
+	if argsContainKey(calls[1].args, "--secret") {
+		t.Fatalf("did not expect fallback attempt to include --secret, args=%v", calls[1].args)
+	}
+}
+
 func TestShouldRetryLegacyBuild(t *testing.T) {
 	recoverable := &dockerBuildCommandError{
 		err:    errors.New("build failed"),
@@ -270,6 +323,13 @@ func TestShouldRetryLegacyBuild(t *testing.T) {
 	}
 	if shouldRetryLegacyBuild(assertErr("plain error")) {
 		t.Fatalf("did not expect non-build error type to trigger legacy retry")
+	}
+	missingBuildx := &dockerBuildCommandError{
+		err:    errors.New("build failed"),
+		output: "docker: 'buildx' is not a docker command.",
+	}
+	if !shouldRetryLegacyBuild(missingBuildx) {
+		t.Fatalf("expected missing buildx command to trigger legacy retry")
 	}
 }
 
