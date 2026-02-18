@@ -70,6 +70,22 @@ var paasAddonCatalog = map[string]paasAddonPackContract{
 		DefaultService: "nats",
 		MergeStrategy:  paasAddonMergeStrategyAdditiveNoOverride,
 	},
+	"supabase-walg": {
+		Pack:           "supabase-walg",
+		Class:          "backup",
+		Description:    "Supabase WAL-G backup/restore sidecars for object-storage snapshots",
+		DefaultVersion: "latest",
+		DefaultService: "supabase-walg",
+		MergeStrategy:  paasAddonMergeStrategyAdditiveNoOverride,
+	},
+	"databasus": {
+		Pack:           "databasus",
+		Class:          "backup",
+		Description:    "Databasus private metadata service (no host web exposure)",
+		DefaultVersion: "latest",
+		DefaultService: "databasus",
+		MergeStrategy:  paasAddonMergeStrategyAdditiveNoOverride,
+	},
 }
 
 func cmdPaasAppAddon(args []string) {
@@ -150,25 +166,25 @@ func cmdPaasAppAddonEnable(args []string) {
 	fs := flag.NewFlagSet("paas app addon enable", flag.ExitOnError)
 	app := fs.String("app", "", "app slug")
 	name := fs.String("name", "", "addon name (defaults to pack)")
-	pack := fs.String("pack", "", "addon pack (postgres|redis|nats)")
+	pack := fs.String("pack", "", "addon pack (postgres|redis|nats|supabase-walg|databasus)")
 	service := fs.String("service", "", "compose service name override")
 	version := fs.String("version", "", "pack image version override")
 	setVars := fs.String("set", "", "addon variables as key=value CSV")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]")
+		printUsage("usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats|supabase-walg|databasus> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]")
 		return
 	}
-	if !requirePaasValue(*app, "app", "usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]") {
+	if !requirePaasValue(*app, "app", "usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats|supabase-walg|databasus> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]") {
 		return
 	}
-	if !requirePaasValue(*pack, "pack", "usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]") {
+	if !requirePaasValue(*pack, "pack", "usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats|supabase-walg|databasus> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]") {
 		return
 	}
 	contract, ok := resolvePaasAddonContract(*pack)
 	if !ok {
 		printUnknown("paas app addon pack", strings.TrimSpace(*pack))
-		printUsage("usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]")
+		printUsage("usage: si paas app addon enable --app <slug> --pack <postgres|redis|nats|supabase-walg|databasus> [--name <addon>] [--service <name>] [--version <value>] [--set <k=v,...>] [--json]")
 		return
 	}
 	vars, err := parsePaasAddonSetVars(*setVars)
@@ -570,6 +586,90 @@ func renderPaasAddonComposeFragment(record paasAddonRecord) string {
 			"    command: [\"redis-server\", \"--appendonly\", \"yes\"]",
 			"    volumes:",
 			fmt.Sprintf("      - %s-data:/data", service),
+			"volumes:",
+			fmt.Sprintf("  %s-data: {}", service),
+		)
+		return strings.Join(lines, "\n") + "\n"
+	case "supabase-walg":
+		pgService := firstNonEmptyString(record.Vars["POSTGRES_SERVICE"], "postgres")
+		pgDataVolume := firstNonEmptyString(record.Vars["PGDATA_VOLUME"], "postgres-data")
+		pgDataPath := firstNonEmptyString(record.Vars["WALG_PGDATA"], "/var/lib/postgresql/data")
+		backupService := service + "-backup"
+		restoreService := service + "-restore"
+		lines := append(header,
+			fmt.Sprintf("  %s:", backupService),
+			fmt.Sprintf("    image: ghcr.io/wal-g/wal-g:%s", version),
+			"    restart: unless-stopped",
+			"    depends_on:",
+			fmt.Sprintf("      - %s", pgService),
+			"    environment:",
+			"      WALG_S3_PREFIX: ${WALG_S3_PREFIX}",
+			"      AWS_ACCESS_KEY_ID: ${WALG_AWS_ACCESS_KEY_ID}",
+			"      AWS_SECRET_ACCESS_KEY: ${WALG_AWS_SECRET_ACCESS_KEY}",
+			"      AWS_ENDPOINT: ${WALG_AWS_ENDPOINT}",
+			"      AWS_REGION: ${WALG_AWS_REGION:-auto}",
+			"      AWS_S3_FORCE_PATH_STYLE: \"true\"",
+			"      WALG_COMPRESSION_METHOD: ${WALG_COMPRESSION_METHOD:-zstd}",
+			fmt.Sprintf("      WALG_PGDATA: %q", pgDataPath),
+			"    command:",
+			"      - sh",
+			"      - -lc",
+			"      - >-",
+			"        while true; do",
+			"          wal-g backup-push \"${WALG_PGDATA}\";",
+			"          wal-g delete retain FULL \"${WALG_RETAIN_FULL:-14}\" --confirm || true;",
+			"          sleep \"${WALG_BACKUP_INTERVAL_SECONDS:-21600}\";",
+			"        done",
+			"    volumes:",
+			fmt.Sprintf("      - %s:%s:ro", pgDataVolume, pgDataPath),
+			fmt.Sprintf("  %s:", restoreService),
+			fmt.Sprintf("    image: ghcr.io/wal-g/wal-g:%s", version),
+			"    profiles:",
+			"      - restore",
+			"    depends_on:",
+			fmt.Sprintf("      - %s", pgService),
+			"    environment:",
+			"      WALG_S3_PREFIX: ${WALG_S3_PREFIX}",
+			"      AWS_ACCESS_KEY_ID: ${WALG_AWS_ACCESS_KEY_ID}",
+			"      AWS_SECRET_ACCESS_KEY: ${WALG_AWS_SECRET_ACCESS_KEY}",
+			"      AWS_ENDPOINT: ${WALG_AWS_ENDPOINT}",
+			"      AWS_REGION: ${WALG_AWS_REGION:-auto}",
+			"      AWS_S3_FORCE_PATH_STYLE: \"true\"",
+			"      WALG_COMPRESSION_METHOD: ${WALG_COMPRESSION_METHOD:-zstd}",
+			fmt.Sprintf("      WALG_PGDATA: %q", pgDataPath),
+			"      WALG_RESTORE_FROM: ${WALG_RESTORE_FROM:-LATEST}",
+			"      WALG_RESTORE_FORCE: ${WALG_RESTORE_FORCE:-false}",
+			"    command:",
+			"      - sh",
+			"      - -lc",
+			"      - >-",
+			"        restore_from=\"${WALG_RESTORE_FROM}\";",
+			"        force_mode=\"${WALG_RESTORE_FORCE}\";",
+			"        if [ \"$force_mode\" = \"true\" ]; then",
+			"          rm -rf \"${WALG_PGDATA:?}\"/*;",
+			"        fi;",
+			"        wal-g backup-fetch \"${WALG_PGDATA}\" \"$restore_from\";",
+			"        printf \"%s\\n\" \"restore_command = 'wal-g wal-fetch %f %p'\" >> \"${WALG_PGDATA}/postgresql.auto.conf\";",
+			"        : > \"${WALG_PGDATA}/recovery.signal\"",
+			"    volumes:",
+			fmt.Sprintf("      - %s:%s", pgDataVolume, pgDataPath),
+		)
+		return strings.Join(lines, "\n") + "\n"
+	case "databasus":
+		pgService := firstNonEmptyString(record.Vars["POSTGRES_SERVICE"], "postgres")
+		lines := append(header,
+			fmt.Sprintf("  %s:", service),
+			fmt.Sprintf("    image: databasus/databasus:%s", version),
+			"    restart: unless-stopped",
+			"    depends_on:",
+			fmt.Sprintf("      - %s", pgService),
+			"    environment:",
+			"      ENV_MODE: ${DATABASUS_ENV_MODE:-production}",
+			"      NEXT_TELEMETRY_DISABLED: \"1\"",
+			"    expose:",
+			"      - \"4005\"",
+			"    volumes:",
+			fmt.Sprintf("      - %s-data:/databasus-data", service),
 			"volumes:",
 			fmt.Sprintf("  %s-data: {}", service),
 		)

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -46,8 +47,8 @@ func main() {
 		}
 	}
 
-	// Avoid "dubious ownership" errors when running as root in a bind-mounted workspace.
-	ensureGitSafeDirectory("/workspace")
+	// Avoid "dubious ownership" errors when running as root in bind-mounted workspaces.
+	ensureGitSafeDirectories()
 
 	if !quiet {
 		fmt.Printf("codex-init ok (dyad=%s member=%s role=%s)\n",
@@ -78,6 +79,110 @@ func ensureGitSafeDirectory(path string) {
 	}
 	// Best-effort; ignore errors if git isn't available or config can't be written.
 	_ = exec.Command("git", "config", "--global", "--add", "safe.directory", path).Run()
+}
+
+func ensureGitSafeDirectories() {
+	cwd, _ := os.Getwd()
+	for _, path := range collectGitSafeDirectories(listMountPoints("/proc/self/mountinfo"), cwd) {
+		ensureGitSafeDirectory(path)
+	}
+}
+
+func collectGitSafeDirectories(mountPoints []string, cwd string) []string {
+	seen := make(map[string]struct{}, len(mountPoints)+2)
+	addIfRepo := func(path string) {
+		path = filepath.Clean(strings.TrimSpace(path))
+		if path == "" || !strings.HasPrefix(path, "/") {
+			return
+		}
+		if !isGitRepoRoot(path) {
+			return
+		}
+		seen[path] = struct{}{}
+	}
+
+	addIfRepo("/workspace")
+	addIfRepo(cwd)
+
+	for _, mountPoint := range mountPoints {
+		mountPoint = filepath.Clean(strings.TrimSpace(mountPoint))
+		if mountPoint == "" {
+			continue
+		}
+		addIfRepo(mountPoint)
+		if filepath.Base(mountPoint) != "Development" {
+			continue
+		}
+		for _, child := range listChildDirs(mountPoint) {
+			addIfRepo(child)
+		}
+	}
+
+	out := make([]string, 0, len(seen))
+	for path := range seen {
+		out = append(out, path)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func listMountPoints(mountInfoPath string) []string {
+	mountInfoPath = strings.TrimSpace(mountInfoPath)
+	if mountInfoPath == "" {
+		return nil
+	}
+	f, err := os.Open(mountInfoPath)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	mounts := []string{}
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		left := line
+		if idx := strings.Index(line, " - "); idx >= 0 {
+			left = line[:idx]
+		}
+		fields := strings.Fields(left)
+		if len(fields) < 5 {
+			continue
+		}
+		mounts = append(mounts, decodeMountInfoPath(fields[4]))
+	}
+	return mounts
+}
+
+func listChildDirs(path string) []string {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" || !strings.HasPrefix(path, "/") {
+		return nil
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		out = append(out, filepath.Join(path, entry.Name()))
+	}
+	return out
+}
+
+func isGitRepoRoot(path string) bool {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" || !strings.HasPrefix(path, "/") {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(path, ".git"))
+	if err != nil {
+		return false
+	}
+	return info.IsDir() || info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0
 }
 
 func parseArgs(args []string) (bool, []string) {
