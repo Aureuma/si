@@ -148,7 +148,6 @@ func collectGitSafeDirectories(mountPoints []string, cwd string) []string {
 		seen[path] = struct{}{}
 	}
 
-	addIfRepo("/workspace")
 	addIfRepo(cwd)
 
 	for _, mountPoint := range mountPoints {
