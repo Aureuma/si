@@ -559,7 +559,7 @@ providers:
 plugins:
   si plugins list [--installed] [--json]
   si plugins info <id> [--json]
-  si plugins install <id-or-path> [--disabled] [--json]
+  si plugins install <id-or-path> [--disabled] [--json]  (path supports manifest dir/file and .zip/.tgz/.tar.gz/.tar)
   si plugins uninstall <id> [--keep-files] [--json]
   si plugins enable|disable <id> [--json]
   si plugins doctor [--json]

@@ -278,7 +278,7 @@ func cmdPluginsInstall(args []string) {
 	now := time.Now().UTC()
 	var record pluginmarket.InstallRecord
 	if _, statErr := os.Stat(target); statErr == nil {
-		record, err = pluginmarket.InstallFromPath(paths, target, enabled, now)
+		record, err = pluginmarket.InstallFromSource(paths, target, enabled, now)
 		if err != nil {
 			fatal(err)
 		}

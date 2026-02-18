@@ -126,6 +126,13 @@ si plugins install acme/release-mind --disabled
 si plugins enable acme/release-mind
 ```
 
+Local archive install is also supported:
+
+```bash
+si plugins install ./dist/release-mind-plugin.zip
+si plugins install ./dist/release-mind-plugin.tgz
+```
+
 5. Validate:
 
 ```bash

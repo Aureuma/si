@@ -1,7 +1,10 @@
 package pluginmarket
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -427,6 +430,178 @@ func cleanAbsPath(path string) (string, error) {
 	return filepath.Clean(filepath.Join(cwd, path)), nil
 }
 
+func archiveKind(path string) string {
+	lower := strings.ToLower(strings.TrimSpace(path))
+	switch {
+	case strings.HasSuffix(lower, ".zip"):
+		return "zip"
+	case strings.HasSuffix(lower, ".tgz"), strings.HasSuffix(lower, ".tar.gz"):
+		return "targz"
+	case strings.HasSuffix(lower, ".tar"):
+		return "tar"
+	default:
+		return ""
+	}
+}
+
+func extractZIP(zipPath string, destDir string) error {
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	for _, file := range reader.File {
+		target, err := secureArchiveTargetPath(destDir, file.Name)
+		if err != nil {
+			return err
+		}
+		if file.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if file.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("archive contains symlink entry: %s", file.Name)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		in, err := file.Open()
+		if err != nil {
+			return err
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, file.Mode().Perm())
+		if err != nil {
+			_ = in.Close()
+			return err
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			_ = out.Close()
+			_ = in.Close()
+			return err
+		}
+		if err := out.Close(); err != nil {
+			_ = in.Close()
+			return err
+		}
+		if err := in.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func extractTarball(path string, destDir string, compressed bool) error {
+	file, err := os.Open(path) // #nosec G304 -- caller passes a validated archive path.
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	var reader io.Reader = file
+	if compressed {
+		gzReader, err := gzip.NewReader(file)
+		if err != nil {
+			return err
+		}
+		defer gzReader.Close()
+		reader = gzReader
+	}
+	tarReader := tar.NewReader(reader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		target, err := secureArchiveTargetPath(destDir, header.Name)
+		if err != nil {
+			return err
+		}
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.FileMode(header.Mode).Perm())
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(out, tarReader); err != nil {
+				_ = out.Close()
+				return err
+			}
+			if err := out.Close(); err != nil {
+				return err
+			}
+		case tar.TypeSymlink, tar.TypeLink:
+			return fmt.Errorf("archive contains unsupported link entry: %s", header.Name)
+		default:
+			return fmt.Errorf("archive contains unsupported entry type for %s", header.Name)
+		}
+	}
+	return nil
+}
+
+func secureArchiveTargetPath(destDir string, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("archive entry name is empty")
+	}
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || cleanName == ".." || strings.HasPrefix(cleanName, ".."+string(filepath.Separator)) || filepath.IsAbs(cleanName) {
+		return "", fmt.Errorf("archive entry escapes destination: %s", name)
+	}
+	target := filepath.Join(destDir, cleanName)
+	rel, err := filepath.Rel(filepath.Clean(destDir), filepath.Clean(target))
+	if err != nil {
+		return "", err
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("archive entry escapes destination: %s", name)
+	}
+	return target, nil
+}
+
+func findManifestRoot(baseDir string) (string, Manifest, error) {
+	manifestPaths := make([]string, 0)
+	err := filepath.WalkDir(baseDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if strings.EqualFold(entry.Name(), ManifestFileName) {
+			manifestPaths = append(manifestPaths, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", Manifest{}, err
+	}
+	if len(manifestPaths) == 0 {
+		return "", Manifest{}, fmt.Errorf("archive missing %s", ManifestFileName)
+	}
+	sort.Slice(manifestPaths, func(i, j int) bool { return len(manifestPaths[i]) < len(manifestPaths[j]) })
+	manifestPath := manifestPaths[0]
+	raw, err := os.ReadFile(manifestPath) // #nosec G304 -- manifest path is derived from extracted archive walk.
+	if err != nil {
+		return "", Manifest{}, err
+	}
+	manifest, err := ParseManifestBytes(raw)
+	if err != nil {
+		return "", Manifest{}, err
+	}
+	return filepath.Dir(manifestPath), manifest, nil
+}
+
 func LoadCatalog(paths Paths) (Catalog, []Diagnostic, error) {
 	catalogs := make([]Catalog, 0, 4)
 	diagnostics := make([]Diagnostic, 0)
@@ -775,11 +950,81 @@ func UpsertUserCatalogEntry(paths Paths, entry CatalogEntry) error {
 	return SaveUserCatalog(paths, catalog)
 }
 
+func InstallFromSource(paths Paths, sourcePath string, enabled bool, now time.Time) (InstallRecord, error) {
+	sourcePath = strings.TrimSpace(sourcePath)
+	if sourcePath == "" {
+		return InstallRecord{}, fmt.Errorf("source path required")
+	}
+	resolvedSource, err := cleanAbsPath(sourcePath)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	info, err := os.Stat(resolvedSource)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	if info.IsDir() {
+		return InstallFromPath(paths, resolvedSource, enabled, now)
+	}
+	if !info.Mode().IsRegular() {
+		return InstallRecord{}, fmt.Errorf("unsupported source path type: %s", resolvedSource)
+	}
+	if archiveKind(resolvedSource) != "" {
+		return InstallFromArchive(paths, resolvedSource, enabled, now)
+	}
+	return InstallFromPath(paths, resolvedSource, enabled, now)
+}
+
 func InstallFromPath(paths Paths, sourcePath string, enabled bool, now time.Time) (InstallRecord, error) {
 	manifest, rootDir, err := ReadManifestFromPath(sourcePath)
 	if err != nil {
 		return InstallRecord{}, err
 	}
+	resolvedSource, err := cleanAbsPath(sourcePath)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	return installFromResolvedRoot(paths, manifest, rootDir, "path:"+resolvedSource, enabled, now)
+}
+
+func InstallFromArchive(paths Paths, archivePath string, enabled bool, now time.Time) (InstallRecord, error) {
+	resolvedArchive, err := cleanAbsPath(archivePath)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	kind := archiveKind(resolvedArchive)
+	if kind == "" {
+		return InstallRecord{}, fmt.Errorf("unsupported archive: %s", resolvedArchive)
+	}
+	tmpDir, err := os.MkdirTemp("", "si-plugin-archive-*")
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	defer os.RemoveAll(tmpDir)
+	switch kind {
+	case "zip":
+		if err := extractZIP(resolvedArchive, tmpDir); err != nil {
+			return InstallRecord{}, err
+		}
+	case "tar":
+		if err := extractTarball(resolvedArchive, tmpDir, false); err != nil {
+			return InstallRecord{}, err
+		}
+	case "targz":
+		if err := extractTarball(resolvedArchive, tmpDir, true); err != nil {
+			return InstallRecord{}, err
+		}
+	default:
+		return InstallRecord{}, fmt.Errorf("unsupported archive: %s", resolvedArchive)
+	}
+	rootDir, manifest, err := findManifestRoot(tmpDir)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	return installFromResolvedRoot(paths, manifest, rootDir, "archive:"+resolvedArchive, enabled, now)
+}
+
+func installFromResolvedRoot(paths Paths, manifest Manifest, rootDir string, source string, enabled bool, now time.Time) (InstallRecord, error) {
 	if err := os.MkdirAll(paths.InstallsDir, 0o700); err != nil {
 		return InstallRecord{}, err
 	}
@@ -797,14 +1042,10 @@ func InstallFromPath(paths Paths, sourcePath string, enabled bool, now time.Time
 	if installedAt.IsZero() {
 		installedAt = time.Now().UTC()
 	}
-	resolvedSource, err := cleanAbsPath(sourcePath)
-	if err != nil {
-		return InstallRecord{}, err
-	}
 	return InstallRecord{
 		ID:          manifest.ID,
 		Enabled:     enabled,
-		Source:      "path:" + resolvedSource,
+		Source:      source,
 		InstallDir:  targetDir,
 		InstalledAt: installedAt.Format(time.RFC3339),
 		Manifest:    manifest,
