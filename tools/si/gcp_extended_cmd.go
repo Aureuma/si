@@ -817,7 +817,7 @@ func cmdGCPGeminiImageGenerate(args []string) {
 	fs := flag.NewFlagSet("gcp gemini image generate", flag.ExitOnError)
 	flags := bindGCPCommonFlags(fs)
 	apiKey := fs.String("api-key", "", "gemini api key")
-	model := fs.String("model", "gemini-2.0-flash-preview-image-generation", "model id")
+	model := fs.String("model", "gemini-2.5-flash-image", "model id")
 	prompt := fs.String("prompt", "", "image generation prompt")
 	output := fs.String("output", "", "output image path (png)")
 	transparent := fs.Bool("transparent", false, "ask model for transparent background")
