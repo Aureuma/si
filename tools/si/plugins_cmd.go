@@ -805,12 +805,12 @@ func cmdPluginsPolicySet(args []string) {
 	policy.Allow = normalizePluginIDList(policy.Allow)
 	policy.Deny = normalizePluginIDList(policy.Deny)
 	for _, id := range policy.Allow {
-		if err := pluginmarket.ValidatePluginID(id); err != nil {
+		if err := pluginmarket.ValidatePolicySelector(id); err != nil {
 			fatal(fmt.Errorf("invalid --allow id %q: %w", id, err))
 		}
 	}
 	for _, id := range policy.Deny {
-		if err := pluginmarket.ValidatePluginID(id); err != nil {
+		if err := pluginmarket.ValidatePolicySelector(id); err != nil {
 			fatal(fmt.Errorf("invalid --deny id %q: %w", id, err))
 		}
 	}

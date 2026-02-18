@@ -347,3 +347,60 @@ func TestPluginsCatalogBuildAndValidateJSON(t *testing.T) {
 		t.Fatalf("expected 2 validate entries: %#v", validatePayload)
 	}
 }
+
+func TestPluginsPolicySetSupportsNamespaceWildcard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	home := t.TempDir()
+	workspace := t.TempDir()
+	pluginID := "acme/release-mind"
+	pluginPath := filepath.Join(workspace, "acme", "release-mind")
+
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "scaffold", pluginID, "--dir", workspace, "--json")
+	if err != nil {
+		t.Fatalf("scaffold failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "register", pluginPath, "--json")
+	if err != nil {
+		t.Fatalf("register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+
+	// Wildcard allow should keep acme/* plugins active.
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "policy", "set", "--clear-allow", "--clear-deny", "--allow", "acme/*", "--json")
+	if err != nil {
+		t.Fatalf("policy wildcard allow failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var infoAllow map[string]any
+	if err := json.Unmarshal([]byte(stdout), &infoAllow); err != nil {
+		t.Fatalf("info json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if effective, _ := infoAllow["effective_enabled"].(bool); !effective {
+		t.Fatalf("expected effective_enabled=true with wildcard allow: %#v", infoAllow)
+	}
+
+	// Wildcard deny should block acme/* plugins.
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "policy", "set", "--clear-allow", "--clear-deny", "--deny", "acme/*", "--json")
+	if err != nil {
+		t.Fatalf("policy wildcard deny failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var infoDeny map[string]any
+	if err := json.Unmarshal([]byte(stdout), &infoDeny); err != nil {
+		t.Fatalf("info json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if effective, _ := infoDeny["effective_enabled"].(bool); effective {
+		t.Fatalf("expected effective_enabled=false with wildcard deny: %#v", infoDeny)
+	}
+}
