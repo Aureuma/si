@@ -57,15 +57,14 @@ git pull --ff-only
 3. Keep language past tense and user-focused.
 
 ### 3) Bump version strings in code
-Update any version constants used by the CLI or status endpoints (currently):
-- `tools/si/util.go` (`siVersion`)
-- `tools/si/codex_status.go` (`clientInfo.version`)
+Update release version constants:
+- `tools/si/version.go` (`siVersion`)
 
 ### 4) Verify and commit the release prep
 ```
 ./tools/test.sh
 ./si analyze --module tools/si
-git add CHANGELOG.md tools/si/util.go tools/si/codex_status.go
+git add CHANGELOG.md tools/si/version.go
 git commit -m "Bump version to vX.Y.Z"
 ```
 - Keep release prep changes in a dedicated commit.

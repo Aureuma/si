@@ -17,14 +17,16 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 
 1. Edit `CHANGELOG.md`.
 1. Add a new top section for the version/date, e.g.:
-   - `## v0.42.0 (2026-02-09)`
+   - `## [v0.42.0] - 2026-02-09`
 1. Add bullets grouped by area (Dyad, CLI, Image, Docs, Vault, etc.).
 1. Ensure the items are user-facing (what changed) and include important migration notes.
+1. Update `tools/si/version.go`:
+   - `const siVersion = "v0.42.0"`
 
 ## 3. Commit
 
-1. Commit the changelog (and any remaining release prep changes):
-   - `git add CHANGELOG.md`
+1. Commit release prep changes:
+   - `git add CHANGELOG.md tools/si/version.go`
    - `git commit -m "release: v0.42.0"`
 
 ## 4. Tag
@@ -53,8 +55,12 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 
 ## 7. Post-release Checks
 
-- `si version` matches expected build (if your distribution embeds a version).
-- Smoke test:
+- Local version:
+  - `si version`
+- Image version:
   - `si build image`
-  - `si dyad spawn <name> --skip-auth`
-  - `si dyad status <name>`
+  - `docker run --rm aureuma/si:local si version`
+- Dyad smoke:
+  - `HOME=/home/<user> si dyad spawn <name> --skip-auth`
+  - `HOME=/home/<user> si dyad status <name>`
+  - `HOME=/home/<user> si dyad remove <name>`
