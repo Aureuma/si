@@ -1,11 +1,17 @@
 # Social Integrations (`si social`)
 
+![Social](/images/integrations/social.svg)
+
 `si social` provides unified command families for:
 - Facebook Graph API
 - Instagram Graph API
 - X (Twitter API v2)
 - LinkedIn API
 - Reddit API
+
+Related:
+- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Providers](./PROVIDERS)
 
 ## Command Surface
 ```bash
