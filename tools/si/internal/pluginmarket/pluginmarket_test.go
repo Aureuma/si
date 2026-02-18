@@ -21,6 +21,21 @@ func TestValidatePluginIDRequiresNamespace(t *testing.T) {
 	}
 }
 
+func TestValidatePolicySelector(t *testing.T) {
+	valid := []string{"acme/release-mind", "openclaw/*", "saas/*"}
+	for _, selector := range valid {
+		if err := ValidatePolicySelector(selector); err != nil {
+			t.Fatalf("expected valid selector %q, got error: %v", selector, err)
+		}
+	}
+	invalid := []string{"*", "openclaw*", "openclaw/", "/release", "OpenClaw/*"}
+	for _, selector := range invalid {
+		if err := ValidatePolicySelector(selector); err == nil {
+			t.Fatalf("expected invalid selector %q to fail", selector)
+		}
+	}
+}
+
 func TestResolveSafeInstallDirRejectsTraversal(t *testing.T) {
 	base := t.TempDir()
 	resolved, err := resolveSafeInstallDir(base, "acme/release-mind")
@@ -182,6 +197,20 @@ func TestResolveEnableStatePolicy(t *testing.T) {
 	enabled, reason = ResolveEnableState(record.ID, record, policy)
 	if enabled || !strings.Contains(reason, "allowlist") {
 		t.Fatalf("expected allowlist block, got enabled=%v reason=%q", enabled, reason)
+	}
+
+	policy = DefaultPolicy()
+	policy.Allow = []string{"acme/*"}
+	enabled, reason = ResolveEnableState(record.ID, record, policy)
+	if !enabled || reason != "enabled" {
+		t.Fatalf("expected wildcard allow to enable plugin, got enabled=%v reason=%q", enabled, reason)
+	}
+
+	policy = DefaultPolicy()
+	policy.Deny = []string{"acme/*"}
+	enabled, reason = ResolveEnableState(record.ID, record, policy)
+	if enabled || !strings.Contains(reason, "denylist") {
+		t.Fatalf("expected wildcard deny to block plugin, got enabled=%v reason=%q", enabled, reason)
 	}
 
 	policy = DefaultPolicy()
