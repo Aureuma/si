@@ -68,7 +68,7 @@ func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFl
 			if prefix == "" {
 				prefix = "GITHUB_<ACCOUNT>_"
 			}
-			return githubRuntimeContext{}, fmt.Errorf("github oauth token not found (set --token, %sOAUTH_ACCESS_TOKEN, %sTOKEN, GITHUB_TOKEN, or GH_TOKEN)", prefix, prefix)
+			return githubRuntimeContext{}, fmt.Errorf("github oauth token not found (set --token, %sOAUTH_ACCESS_TOKEN, %sTOKEN, GITHUB_TOKEN, GH_TOKEN, GITHUB_PAT, or GH_PAT)", prefix, prefix)
 		}
 		provider, providerErr := githubbridge.NewOAuthProvider(githubbridge.OAuthProviderConfig{
 			AccessToken: accessToken,
@@ -286,6 +286,12 @@ func resolveGitHubOAuthAccessToken(alias string, account GitHubAccountEntry, ove
 	}
 	if value := strings.TrimSpace(os.Getenv("GH_TOKEN")); value != "" {
 		return value, "env:GH_TOKEN"
+	}
+	if value := strings.TrimSpace(os.Getenv("GITHUB_PAT")); value != "" {
+		return value, "env:GITHUB_PAT"
+	}
+	if value := strings.TrimSpace(os.Getenv("GH_PAT")); value != "" {
+		return value, "env:GH_PAT"
 	}
 	return "", ""
 }
