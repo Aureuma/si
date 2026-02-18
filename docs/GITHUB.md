@@ -56,10 +56,42 @@ Use GitHub App tokens through `si vault` as a Git credential helper, then normal
 si vault run -- si github git setup --root ~/Development --account core --owner Aureuma
 ```
 
+Recommended for file-key vault backends (non-interactive git credential helper):
+
+```bash
+si github git setup \
+  --root ~/Development \
+  --account core \
+  --owner Aureuma \
+  --vault-file ~/Development/viva/.env.dev \
+  --vault-identity-file ~/.si/vault/keys/age.key
+```
+
+Common flags:
+- `--remote <name>`: choose a remote other than `origin`
+- `--helper-owner <owner>`: force a fixed owner in helper calls (default derives from remote path)
+- `--no-vault`: use direct env lookup instead of wrapping helper calls with `si vault run`
+- `--dry-run`: preview remote/helper changes without writing
+
 Helper-only usage (for manual git credential helper wiring):
 
 ```bash
 si github git credential get
+```
+
+### Troubleshooting Git App Access
+
+If fetch/push still fails after setup:
+
+- `Repository not found` for private repos usually means the app installation does not include that repo.
+- `github app installation id is required` means owner/repo context could not map to an installation; pass `--owner`/`--helper-owner` or set `GITHUB_<ACCOUNT>_INSTALLATION_ID`.
+
+Useful checks:
+
+```bash
+si github auth status --account core --auth-mode app --json
+si github doctor --account core --owner Aureuma --auth-mode app
+si github git setup --root ~/Development --account core --owner Aureuma --dry-run
 ```
 
 ## Repositories
