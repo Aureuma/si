@@ -54,6 +54,7 @@ si browser start
 # Scaffold and register a plugin integration
 si plugins scaffold acme/release-mind --dir ./integrations
 si plugins register ./integrations/acme/release-mind --channel community
+si plugins policy set --deny acme/release-mind
 ```
 
 ## Security notes

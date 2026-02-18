@@ -13,7 +13,7 @@ import (
 	"si/tools/si/internal/pluginmarket"
 )
 
-const pluginsUsageText = "usage: si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold>"
+const pluginsUsageText = "usage: si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold|policy>"
 
 func cmdPlugins(args []string) {
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, pluginsUsageText)
@@ -44,6 +44,8 @@ func cmdPlugins(args []string) {
 		cmdPluginsRegister(rest)
 	case "scaffold", "init":
 		cmdPluginsScaffold(rest)
+	case "policy":
+		cmdPluginsPolicy(rest)
 	default:
 		printUnknown("plugins", sub)
 		printUsage(pluginsUsageText)
@@ -95,17 +97,19 @@ func cmdPluginsList(args []string) {
 	sort.Strings(ids)
 
 	type row struct {
-		ID          string                      `json:"id"`
-		Installed   bool                        `json:"installed"`
-		Enabled     bool                        `json:"enabled"`
-		Channel     string                      `json:"channel,omitempty"`
-		Verified    bool                        `json:"verified,omitempty"`
-		Kind        string                      `json:"kind,omitempty"`
-		Maturity    string                      `json:"maturity,omitempty"`
-		InstallType string                      `json:"install_type,omitempty"`
-		Summary     string                      `json:"summary,omitempty"`
-		InstalledAt string                      `json:"installed_at,omitempty"`
-		Record      *pluginmarket.InstallRecord `json:"record,omitempty"`
+		ID               string                      `json:"id"`
+		Installed        bool                        `json:"installed"`
+		Enabled          bool                        `json:"enabled"`
+		EffectiveEnabled bool                        `json:"effective_enabled"`
+		EffectiveReason  string                      `json:"effective_reason,omitempty"`
+		Channel          string                      `json:"channel,omitempty"`
+		Verified         bool                        `json:"verified,omitempty"`
+		Kind             string                      `json:"kind,omitempty"`
+		Maturity         string                      `json:"maturity,omitempty"`
+		InstallType      string                      `json:"install_type,omitempty"`
+		Summary          string                      `json:"summary,omitempty"`
+		InstalledAt      string                      `json:"installed_at,omitempty"`
+		Record           *pluginmarket.InstallRecord `json:"record,omitempty"`
 	}
 
 	rows := make([]row, 0, len(ids))
@@ -126,6 +130,7 @@ func cmdPluginsList(args []string) {
 		}
 		if installed {
 			r.Enabled = record.Enabled
+			r.EffectiveEnabled, r.EffectiveReason = pluginmarket.ResolveEnableState(id, record, state.Policy)
 			r.InstalledAt = record.InstalledAt
 			recordCopy := record
 			r.Record = &recordCopy
@@ -142,12 +147,17 @@ func cmdPluginsList(args []string) {
 				r.Summary = record.Manifest.Summary
 			}
 		}
+		if !installed {
+			r.EffectiveEnabled = false
+			r.EffectiveReason = "not installed"
+		}
 		rows = append(rows, r)
 	}
 
 	if *jsonOut {
 		payload := map[string]interface{}{
 			"paths":        paths,
+			"policy":       state.Policy,
 			"catalog_size": len(catalog.Entries),
 			"rows":         rows,
 			"diagnostics":  catalogDiagnostics,
@@ -164,13 +174,14 @@ func cmdPluginsList(args []string) {
 		infof("no plugin entries found")
 		return
 	}
-	headers := []string{styleHeading("ID"), styleHeading("INSTALLED"), styleHeading("ENABLED"), styleHeading("CHANNEL"), styleHeading("TYPE"), styleHeading("MATURITY")}
+	headers := []string{styleHeading("ID"), styleHeading("INSTALLED"), styleHeading("ENABLED"), styleHeading("EFFECTIVE"), styleHeading("CHANNEL"), styleHeading("TYPE"), styleHeading("MATURITY")}
 	tableRows := make([][]string, 0, len(rows))
 	for _, r := range rows {
 		tableRows = append(tableRows, []string{
 			r.ID,
 			boolText(r.Installed),
 			boolText(r.Enabled),
+			boolText(r.EffectiveEnabled),
 			orDash(r.Channel),
 			orDash(r.InstallType),
 			orDash(r.Maturity),
@@ -201,12 +212,20 @@ func cmdPluginsInfo(args []string) {
 	if !inCatalog && !installed {
 		fatal(fmt.Errorf("unknown plugin %q", id))
 	}
+	effectiveEnabled := false
+	effectiveReason := "not installed"
+	if installed {
+		effectiveEnabled, effectiveReason = pluginmarket.ResolveEnableState(id, record, state.Policy)
+	}
 	if *jsonOut {
 		payload := map[string]interface{}{
 			"id":                  id,
 			"paths":               paths,
+			"policy":              state.Policy,
 			"in_catalog":          inCatalog,
 			"installed":           installed,
+			"effective_enabled":   effectiveEnabled,
+			"effective_reason":    effectiveReason,
 			"catalog_entry":       catalogEntry,
 			"installed_record":    record,
 			"catalog_diagnostics": catalogDiagnostics,
@@ -220,6 +239,7 @@ func cmdPluginsInfo(args []string) {
 	}
 	fmt.Printf("%s %s\n", styleHeading("Plugin:"), id)
 	fmt.Printf("  in_catalog=%s installed=%s\n", boolText(inCatalog), boolText(installed))
+	fmt.Printf("  effective_enabled=%s reason=%s\n", boolText(effectiveEnabled), effectiveReason)
 	if inCatalog {
 		fmt.Printf("  channel=%s verified=%s\n", orDash(catalogEntry.Channel), boolText(catalogEntry.Verified))
 		fmt.Printf("  install_type=%s\n", orDash(catalogEntry.Manifest.Install.Type))
@@ -552,6 +572,156 @@ func cmdPluginsScaffold(args []string) {
 	successf("plugin scaffold created: %s", manifest.ID)
 	fmt.Printf("  dir=%s\n", targetDir)
 	fmt.Printf("  manifest=%s\n", manifestPath)
+}
+
+func cmdPluginsPolicy(args []string) {
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si plugins policy <show|set>")
+	if !routedOK {
+		return
+	}
+	args = routedArgs
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	rest := args[1:]
+	switch sub {
+	case "show", "list", "status":
+		cmdPluginsPolicyShow(rest)
+	case "set", "update":
+		cmdPluginsPolicySet(rest)
+	default:
+		printUnknown("plugins policy", sub)
+		printUsage("usage: si plugins policy <show|set>")
+	}
+}
+
+func cmdPluginsPolicyShow(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true})
+	fs := flag.NewFlagSet("plugins policy show", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si plugins policy show [--json]")
+		return
+	}
+	_, _, state, _, err := loadPluginRuntime()
+	if err != nil {
+		fatal(err)
+	}
+	if *jsonOut {
+		payload := map[string]interface{}{
+			"policy": state.Policy,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	fmt.Printf("%s enabled=%s\n", styleHeading("plugins policy:"), boolText(state.Policy.Enabled))
+	fmt.Printf("  allow=%s\n", joinOrDash(state.Policy.Allow))
+	fmt.Printf("  deny=%s\n", joinOrDash(state.Policy.Deny))
+}
+
+func cmdPluginsPolicySet(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "clear-allow": true, "clear-deny": true})
+	fs := flag.NewFlagSet("plugins policy set", flag.ExitOnError)
+	enabled := fs.String("enabled", "", "set global plugin policy enabled state (true|false)")
+	clearAllow := fs.Bool("clear-allow", false, "clear allowlist before applying --allow entries")
+	clearDeny := fs.Bool("clear-deny", false, "clear denylist before applying --deny entries")
+	jsonOut := fs.Bool("json", false, "output json")
+	var allow multiFlag
+	var deny multiFlag
+	fs.Var(&allow, "allow", "allowlist plugin id (repeatable)")
+	fs.Var(&deny, "deny", "denylist plugin id (repeatable)")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si plugins policy set [--enabled <true|false>] [--allow <id>]... [--deny <id>]... [--clear-allow] [--clear-deny] [--json]")
+		return
+	}
+	paths, _, state, _, err := loadPluginRuntime()
+	if err != nil {
+		fatal(err)
+	}
+	policy := state.Policy
+	if strings.TrimSpace(*enabled) != "" {
+		switch strings.ToLower(strings.TrimSpace(*enabled)) {
+		case "true", "1", "yes", "on":
+			policy.Enabled = true
+		case "false", "0", "no", "off":
+			policy.Enabled = false
+		default:
+			fatal(fmt.Errorf("invalid --enabled value %q (expected true|false)", *enabled))
+		}
+	}
+	if *clearAllow {
+		policy.Allow = nil
+	}
+	if *clearDeny {
+		policy.Deny = nil
+	}
+	if len(allow) > 0 {
+		policy.Allow = append(policy.Allow, []string(allow)...)
+	}
+	if len(deny) > 0 {
+		policy.Deny = append(policy.Deny, []string(deny)...)
+	}
+	policy.Allow = normalizePluginIDList(policy.Allow)
+	policy.Deny = normalizePluginIDList(policy.Deny)
+	for _, id := range policy.Allow {
+		if err := pluginmarket.ValidatePluginID(id); err != nil {
+			fatal(fmt.Errorf("invalid --allow id %q: %w", id, err))
+		}
+	}
+	for _, id := range policy.Deny {
+		if err := pluginmarket.ValidatePluginID(id); err != nil {
+			fatal(fmt.Errorf("invalid --deny id %q: %w", id, err))
+		}
+	}
+	state.Policy = policy
+	if err := pluginmarket.SaveState(paths, state); err != nil {
+		fatal(err)
+	}
+	if *jsonOut {
+		payload := map[string]interface{}{
+			"ok":     true,
+			"policy": state.Policy,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	successf("plugins policy updated")
+	fmt.Printf("  enabled=%s\n", boolText(state.Policy.Enabled))
+	fmt.Printf("  allow=%s\n", joinOrDash(state.Policy.Allow))
+	fmt.Printf("  deny=%s\n", joinOrDash(state.Policy.Deny))
+}
+
+func joinOrDash(values []string) string {
+	if len(values) == 0 {
+		return "-"
+	}
+	return strings.Join(values, ", ")
+}
+
+func normalizePluginIDList(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func boolText(v bool) string {

@@ -96,6 +96,8 @@ Install state tracks:
 - `si plugins install <id-or-path> [--disabled] [--json]`
 - `si plugins uninstall <id> [--keep-files] [--json]`
 - `si plugins enable|disable <id> [--json]`
+- `si plugins policy show [--json]`
+- `si plugins policy set [--enabled <true|false>] [--allow <id>]... [--deny <id>]... [--clear-allow] [--clear-deny] [--json]`
 - `si plugins doctor [--json]`
 - `si plugins register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]`
 - `si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]`

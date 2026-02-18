@@ -150,3 +150,43 @@ func TestDoctorReportsEscapingInstallDir(t *testing.T) {
 		t.Fatalf("expected doctor error for escaping install dir, got: %#v", diagnostics)
 	}
 }
+
+func TestResolveEnableStatePolicy(t *testing.T) {
+	record := InstallRecord{
+		ID:      "acme/release-mind",
+		Enabled: true,
+	}
+
+	enabled, reason := ResolveEnableState(record.ID, record, DefaultPolicy())
+	if !enabled || reason != "enabled" {
+		t.Fatalf("expected enabled default state, got enabled=%v reason=%q", enabled, reason)
+	}
+
+	policy := DefaultPolicy()
+	policy.Enabled = false
+	enabled, reason = ResolveEnableState(record.ID, record, policy)
+	if enabled || !strings.Contains(reason, "disabled") {
+		t.Fatalf("expected policy disabled block, got enabled=%v reason=%q", enabled, reason)
+	}
+
+	policy = DefaultPolicy()
+	policy.Deny = []string{"acme/release-mind"}
+	enabled, reason = ResolveEnableState(record.ID, record, policy)
+	if enabled || !strings.Contains(reason, "denylist") {
+		t.Fatalf("expected denylist block, got enabled=%v reason=%q", enabled, reason)
+	}
+
+	policy = DefaultPolicy()
+	policy.Allow = []string{"acme/other"}
+	enabled, reason = ResolveEnableState(record.ID, record, policy)
+	if enabled || !strings.Contains(reason, "allowlist") {
+		t.Fatalf("expected allowlist block, got enabled=%v reason=%q", enabled, reason)
+	}
+
+	policy = DefaultPolicy()
+	record.Enabled = false
+	enabled, reason = ResolveEnableState(record.ID, record, policy)
+	if enabled || !strings.Contains(reason, "install record disabled") {
+		t.Fatalf("expected record disabled block, got enabled=%v reason=%q", enabled, reason)
+	}
+}
