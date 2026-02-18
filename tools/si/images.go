@@ -205,6 +205,18 @@ func shouldRetryLegacyBuild(err error) bool {
 		return true
 	}
 	// Capability/config mismatches: treat as recoverable and retry legacy.
+	if strings.Contains(lower, "not a docker command") && strings.Contains(lower, "buildx") {
+		return true
+	}
+	if strings.Contains(lower, "unknown command \"buildx\"") {
+		return true
+	}
+	if strings.Contains(lower, "unknown command: docker buildx") {
+		return true
+	}
+	if strings.Contains(lower, "buildx: command not found") {
+		return true
+	}
 	if strings.Contains(lower, "unknown flag") && strings.Contains(lower, "--secret") {
 		return true
 	}
