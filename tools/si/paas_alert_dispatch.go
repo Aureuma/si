@@ -21,6 +21,9 @@ func emitPaasOperationalAlert(command, severity, target, message, guidance strin
 	}
 	callbackHints := buildPaasAlertCallbackHints(resolvedCommand, target, fields, resolvedSeverity)
 	fields = copyPaasFields(fields)
+	if fields == nil {
+		fields = map[string]string{}
+	}
 	for key, value := range callbackHints {
 		fields[key] = value
 	}
