@@ -13,7 +13,7 @@ import (
 	"si/tools/si/internal/pluginmarket"
 )
 
-const pluginsUsageText = "usage: si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold|policy>"
+const pluginsUsageText = "usage: si plugins <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>"
 
 func cmdPlugins(args []string) {
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, pluginsUsageText)
@@ -32,6 +32,8 @@ func cmdPlugins(args []string) {
 		cmdPluginsInfo(rest)
 	case "install", "add":
 		cmdPluginsInstall(rest)
+	case "update", "upgrade":
+		cmdPluginsUpdate(rest)
 	case "uninstall", "remove", "rm", "delete":
 		cmdPluginsUninstall(rest)
 	case "enable":
@@ -313,6 +315,114 @@ func cmdPluginsInstall(args []string) {
 		return
 	}
 	successf("plugin installed: %s (enabled=%s)", record.ID, boolText(record.Enabled))
+}
+
+func cmdPluginsUpdate(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "all": true})
+	fs := flag.NewFlagSet("plugins update", flag.ExitOnError)
+	updateAll := fs.Bool("all", false, "update all installed plugins")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 1 {
+		printUsage("usage: si plugins update <id>|--all [--json]")
+		return
+	}
+	paths, catalog, state, catalogDiagnostics, err := loadPluginRuntime()
+	if err != nil {
+		fatal(err)
+	}
+	targetIDs := make([]string, 0)
+	if *updateAll {
+		for id := range state.Installs {
+			targetIDs = append(targetIDs, id)
+		}
+		sort.Strings(targetIDs)
+	} else {
+		if fs.NArg() != 1 {
+			printUsage("usage: si plugins update <id>|--all [--json]")
+			return
+		}
+		targetIDs = append(targetIDs, strings.TrimSpace(fs.Arg(0)))
+	}
+	if len(targetIDs) == 0 {
+		if *jsonOut {
+			payload := map[string]interface{}{
+				"ok":                  true,
+				"updated":             []string{},
+				"errors":              []string{},
+				"catalog_diagnostics": catalogDiagnostics,
+			}
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(payload); err != nil {
+				fatal(err)
+			}
+			return
+		}
+		infof("no installed plugins to update")
+		return
+	}
+	catalogByID := pluginmarket.CatalogByID(catalog)
+	now := time.Now().UTC()
+	updated := make([]string, 0, len(targetIDs))
+	errs := make([]string, 0)
+	for _, id := range targetIDs {
+		record, ok := state.Installs[id]
+		if !ok {
+			errs = append(errs, fmt.Sprintf("%s: not installed", id))
+			continue
+		}
+		var next pluginmarket.InstallRecord
+		source := strings.TrimSpace(record.Source)
+		switch {
+		case strings.HasPrefix(source, "catalog:"):
+			entry, ok := catalogByID[id]
+			if !ok {
+				errs = append(errs, fmt.Sprintf("%s: catalog entry not found", id))
+				continue
+			}
+			next, err = pluginmarket.InstallFromCatalog(paths, entry, record.Enabled, now)
+		case strings.HasPrefix(source, "path:"):
+			next, err = pluginmarket.InstallFromSource(paths, strings.TrimPrefix(source, "path:"), record.Enabled, now)
+		case strings.HasPrefix(source, "archive:"):
+			next, err = pluginmarket.InstallFromSource(paths, strings.TrimPrefix(source, "archive:"), record.Enabled, now)
+		default:
+			err = fmt.Errorf("unsupported install source %q", source)
+		}
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", id, err))
+			continue
+		}
+		state.Installs[id] = next
+		updated = append(updated, id)
+	}
+	if err := pluginmarket.SaveState(paths, state); err != nil {
+		fatal(err)
+	}
+	ok := len(errs) == 0
+	if *jsonOut {
+		payload := map[string]interface{}{
+			"ok":                  ok,
+			"updated":             updated,
+			"errors":              errs,
+			"catalog_diagnostics": catalogDiagnostics,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	for _, id := range updated {
+		successf("plugin updated: %s", id)
+	}
+	for _, item := range errs {
+		warnf("%s", item)
+	}
+	if !ok {
+		fatal(fmt.Errorf("plugins update completed with %d error(s)", len(errs)))
+	}
 }
 
 func cmdPluginsUninstall(args []string) {
