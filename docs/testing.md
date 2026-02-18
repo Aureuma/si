@@ -150,6 +150,18 @@ If you only changed the CLI, this is the fastest local scope:
 ./si analyze --module tools/si
 ```
 
+## CLI help smoke checks
+After CLI command-surface changes, run targeted help checks:
+
+```bash
+./si --help
+./si mintlify --help
+./si paas --help
+./si paas backup --help
+./si gcp gemini image generate --help
+./si browser --help
+```
+
 ## Image build smoke check
 The canonical local image build command is:
 

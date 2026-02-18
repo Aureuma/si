@@ -1,0 +1,43 @@
+---
+title: si Documentation
+description: AI-first CLI docs for dyads, providers, browser runtime, and Docker-native PaaS operations.
+---
+
+# si Documentation
+
+`si` provides one CLI surface for:
+
+- Agent operations (`dyad`, codex container lifecycle)
+- Secure secrets (`vault`)
+- Cloud/provider bridges
+- Docker-native PaaS operations (`si paas ...`)
+- Browser MCP runtime (`si browser ...`)
+- Docs workflow (`si mintlify ...`)
+
+## Start here
+
+1. Build runtime image: `si build image`
+2. Validate credentials/secrets: `si vault status`
+3. Check command map: `si --help`
+4. Review operational runbooks before production deploys.
+
+## Core docs
+
+- [CLI Reference](./CLI_REFERENCE)
+- [Dyad](./DYAD)
+- [Vault](./VAULT)
+- [Browser Runtime](./BROWSER)
+- [Mintlify Docs Workflow](./MINTLIFY)
+
+## PaaS docs
+
+- [PaaS Test Matrix](./PAAS_TEST_MATRIX)
+- [PaaS Context Operations Runbook](./PAAS_CONTEXT_OPERATIONS_RUNBOOK)
+- [PaaS Backup and Restore Policy](./PAAS_BACKUP_RESTORE_POLICY)
+- [PaaS Incident Runbook](./PAAS_INCIDENT_RUNBOOK)
+
+## Release docs
+
+- [Releasing](./RELEASING)
+- [Release Runbook](./RELEASE_RUNBOOK)
+- [Testing](./testing)

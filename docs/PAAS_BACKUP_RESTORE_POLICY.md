@@ -1,16 +1,20 @@
 # PaaS Backup and Restore Policy
 
-Date: 2026-02-17
-Scope: `si paas` private state roots and audit/event logs
+Date: 2026-02-18
+Scope: `si paas` state roots and Supabase self-hosted backup workflows
 Owner: Codex
 
 ## 1. Objective
 
-Define the mandatory backup and restore policy for private `si paas` state so dogfood and customer operations can recover safely without leaking secrets into OSS repositories.
+Define mandatory backup and restore policy for:
 
-## 2. Protected Data (Per Context)
+1. Private `si paas` state.
+2. Supabase self-hosted PostgreSQL backups operated through WAL-G.
+3. Databasus metadata-sidecar support (without public host-web exposure).
 
-Back up the following from `<state_root>/contexts/<context>/`:
+## 2. Protected data (per PaaS context)
+
+Back up from `<state_root>/contexts/<context>/`:
 
 1. `config.json`
 2. `targets.json`
@@ -25,99 +29,105 @@ Back up the following from `<state_root>/contexts/<context>/`:
 
 Optional:
 
-1. `releases/` metadata for recovery acceleration
-2. `cache/` only when needed for local forensic replay
+1. `releases/` metadata (for faster recovery)
+2. `cache/` (only for forensics)
 
-## 3. Explicit Exclusions
+## 3. Explicit exclusions
 
-Never include these in PaaS state backups:
+Never include in PaaS state backup bundles:
 
-1. `vault/secrets.env` (secret material)
-2. Any decrypted secret dumps or plaintext secret export files
-3. Runtime data volumes from target nodes (DB volumes, service volumes)
+1. `vault/secrets.env`
+2. Any plaintext secret exports or debug dumps
+3. Runtime data volumes copied outside backup policy controls
 
-Secrets must be backed up using vault-native policy and encrypted key management controls, not this PaaS state backup policy.
+Secrets remain governed by vault-native controls.
 
-## 4. Backup Frequency and Retention
+## 4. Supabase backup contract
+
+`si` defines the `supabase-self-hosted` backup profile:
+
+- Recommended addon packs: `supabase-walg`, `databasus`
+- Default run service: `supabase-walg-backup`
+- Default restore service: `supabase-walg-restore`
+- Required env: `WALG_S3_PREFIX`, `WALG_AWS_ACCESS_KEY_ID`, `WALG_AWS_SECRET_ACCESS_KEY`, `WALG_AWS_ENDPOINT`
+
+Check contract:
+
+```bash
+si paas backup contract
+si paas backup contract --json
+```
+
+## 5. Backup frequency and retention
 
 Minimum baseline:
 
-1. Hourly incremental snapshots for active contexts (`internal-dogfood`, customer contexts)
-2. Daily full snapshot
-3. Retention: 7 daily + 4 weekly + 3 monthly snapshots
-4. Immutable/offsite copy for daily full snapshots
+1. Hourly WAL-G incremental backup push for active apps.
+2. Daily verified restore test in non-production target.
+3. Retention: 7 daily + 4 weekly + 3 monthly snapshots.
+4. Immutable offsite copy for daily full snapshot lineage.
 
-## 5. Backup Procedure (Reference)
+## 6. Backup procedure (reference)
 
-Inputs:
-
-1. `SI_PAAS_STATE_ROOT`
-2. Context name (`internal-dogfood`, `oss-demo`, `customer-<id>`)
-
-Reference flow:
+Run backup:
 
 ```bash
-STATE_ROOT="${SI_PAAS_STATE_ROOT:-$HOME/.si/paas}"
-CTX="internal-dogfood"
-TS="$(date -u +%Y%m%dT%H%M%SZ)"
-SRC="$STATE_ROOT/contexts/$CTX"
-OUT="$HOME/.si/paas-backups/$CTX/$TS"
-
-mkdir -p "$OUT"
-rsync -a --delete \
-  --exclude 'vault/secrets.env' \
-  --exclude '*.secret' \
-  "$SRC/" "$OUT/"
-
-tar -C "$OUT" -czf "$OUT.tar.gz" .
-sha256sum "$OUT.tar.gz" > "$OUT.tar.gz.sha256"
+si paas backup run --app <slug>
 ```
 
-## 6. Restore Procedure (Reference)
-
-Before restore:
-
-1. Confirm target context and incident ticket ID.
-2. Confirm snapshot checksum.
-3. Confirm vault trust/recipient state separately.
-
-Restore flow:
+Check status:
 
 ```bash
-STATE_ROOT="${SI_PAAS_STATE_ROOT:-$HOME/.si/paas}"
-CTX="internal-dogfood"
-SNAPSHOT="/secure-backups/$CTX/<timestamp>.tar.gz"
-RESTORE_DIR="$STATE_ROOT/contexts/$CTX"
-
-mkdir -p "$RESTORE_DIR"
-tar -C "$RESTORE_DIR" -xzf "$SNAPSHOT"
+si paas backup status --app <slug>
 ```
 
-Post-restore validation (required):
+Example explicit service and timeout:
 
-1. `si paas doctor --json` must return `"ok": true`.
-2. `si paas context show --name <context> --json` must resolve expected context metadata.
-3. `si paas events list --limit 20 --json` must read restored event logs.
-4. Run targeted deploy/reconcile dry-run before production writes.
+```bash
+si paas backup run --app <slug> --service supabase-walg-backup --timeout 3m --json
+```
 
-## 7. Governance Requirements
+## 7. Restore procedure (reference)
 
-1. Backups must remain outside git workspaces.
-2. Backups must use encrypted storage and controlled access.
-3. Every restore must produce an incident artifact with:
-   - snapshot ID and checksum
+Restore latest:
+
+```bash
+si paas backup restore --app <slug> --from LATEST --force
+```
+
+Restore specific backup id:
+
+```bash
+si paas backup restore --app <slug> --from <backup-id> --force --json
+```
+
+Post-restore required checks:
+
+1. `si paas doctor --json` returns `ok=true`.
+2. `si paas app status --app <slug> --json` reflects expected release.
+3. `si paas events list --limit 20 --json` shows restore and verification trail.
+4. App-level health checks pass before production writes resume.
+
+## 8. Governance requirements
+
+1. Backups must be encrypted at rest and in transit.
+2. Backup artifacts must stay outside git workspaces.
+3. Databasus must remain private-only (no host web port exposure).
+4. Every restore must log:
+   - backup id/checksum
    - operator identity
-   - restore start/end timestamps
-   - post-restore doctor result
-4. Quarterly restore drills are mandatory for `internal-dogfood`.
+   - start/end timestamps
+   - post-restore validation outputs
+5. Quarterly restore drills are mandatory for production contexts.
 
-## 8. Failure Modes and Actions
+## 9. Failure modes and actions
 
-1. Missing snapshot checksum:
-   - Do not restore.
-   - Escalate and recover from previous verified snapshot.
-2. `si paas doctor` fails post-restore:
-   - Block deploy and secret-mutating commands.
-   - Resolve contamination/secret findings first.
-3. Vault secret mismatch after restore:
-   - Reconcile with vault backup policy; do not copy plaintext secrets into PaaS state roots.
+1. Missing or unverified backup id/checksum:
+   - block restore
+   - use last verified snapshot
+2. Failed post-restore doctor checks:
+   - block deploy/secret mutations
+   - resolve contamination and rerun checks
+3. Vault mismatch after restore:
+   - reconcile via vault workflows only
+   - never inject plaintext secrets into PaaS state roots
