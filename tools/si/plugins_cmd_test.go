@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -158,5 +159,60 @@ func TestPluginsPolicyAffectsEffectiveState(t *testing.T) {
 	}
 	if effective, _ := row["effective_enabled"].(bool); effective {
 		t.Fatalf("expected list effective_enabled=false: %#v", row)
+	}
+}
+
+func TestPluginsListReadsEnvCatalogPaths(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	home := t.TempDir()
+	catalogPath := filepath.Join(t.TempDir(), "external-catalog.json")
+	content := `{
+  "schema_version": 1,
+  "entries": [
+    {
+      "channel": "community",
+      "manifest": {
+        "schema_version": 1,
+        "id": "acme/release-mind",
+        "namespace": "acme",
+        "name": "Release Mind",
+        "install": { "type": "none" }
+      }
+    }
+  ]
+}`
+	if err := os.WriteFile(catalogPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write catalog: %v", err)
+	}
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"HOME":                    home,
+		"SI_PLUGIN_CATALOG_PATHS": catalogPath,
+	}, "plugins", "list", "--json")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	rows, ok := payload["rows"].([]any)
+	if !ok {
+		t.Fatalf("expected rows array payload, got %#v", payload)
+	}
+	found := false
+	for _, row := range rows {
+		item, ok := row.(map[string]any)
+		if !ok {
+			continue
+		}
+		if item["id"] == "acme/release-mind" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected acme/release-mind row from env catalog: %#v", payload)
 	}
 }

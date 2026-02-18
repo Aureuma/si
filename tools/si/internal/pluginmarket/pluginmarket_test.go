@@ -190,3 +190,53 @@ func TestResolveEnableStatePolicy(t *testing.T) {
 		t.Fatalf("expected record disabled block, got enabled=%v reason=%q", enabled, reason)
 	}
 }
+
+func TestParseCatalogPathList(t *testing.T) {
+	raw := " /tmp/a.json, /tmp/b.json;/tmp/c.json "
+	paths := ParseCatalogPathList(raw)
+	if len(paths) != 3 {
+		t.Fatalf("expected 3 parsed paths, got %#v", paths)
+	}
+}
+
+func TestLoadCatalogIncludesEnvPaths(t *testing.T) {
+	base := t.TempDir()
+	paths := Paths{
+		RootDir:     base,
+		InstallsDir: filepath.Join(base, "installed"),
+		StateFile:   filepath.Join(base, "state.json"),
+		CatalogFile: filepath.Join(base, "catalog.json"),
+		CatalogDir:  filepath.Join(base, "catalog.d"),
+	}
+	externalCatalog := filepath.Join(base, "external.json")
+	content := `{
+  "schema_version": 1,
+  "entries": [
+    {
+      "channel": "community",
+      "verified": false,
+      "manifest": {
+        "schema_version": 1,
+        "id": "acme/release-mind",
+        "namespace": "acme",
+        "name": "Release Mind",
+        "install": { "type": "none" }
+      }
+    }
+  ]
+}`
+	if err := os.WriteFile(externalCatalog, []byte(content), 0o644); err != nil {
+		t.Fatalf("write external catalog: %v", err)
+	}
+	t.Setenv(CatalogPathsEnv, externalCatalog)
+	catalog, diagnostics, err := LoadCatalog(paths)
+	if err != nil {
+		t.Fatalf("load catalog: %v", err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", diagnostics)
+	}
+	if _, ok := CatalogByID(catalog)["acme/release-mind"]; !ok {
+		t.Fatalf("expected env-loaded catalog entry, got %#v", catalog.Entries)
+	}
+}

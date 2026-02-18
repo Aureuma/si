@@ -70,6 +70,7 @@ SI now loads catalog entries from:
 1. Embedded built-in catalog (`si/browser-mcp` seeded as core).
 2. User catalog file: `~/.si/plugins/catalog.json`.
 3. User catalog directory: `~/.si/plugins/catalog.d/*.json`.
+4. Optional env overrides via `SI_PLUGIN_CATALOG_PATHS` (comma/semicolon/path-list separated file/dir paths).
 
 User sources override lower-precedence entries for the same plugin id.
 

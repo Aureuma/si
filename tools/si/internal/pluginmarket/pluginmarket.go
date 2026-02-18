@@ -20,6 +20,7 @@ import (
 const (
 	ManifestFileName = "si.plugin.json"
 	SchemaVersion    = 1
+	CatalogPathsEnv  = "SI_PLUGIN_CATALOG_PATHS"
 )
 
 const (
@@ -471,10 +472,82 @@ func LoadCatalog(paths Paths) (Catalog, []Diagnostic, error) {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return Catalog{}, nil, fmt.Errorf("read catalog dir %s: %w", paths.CatalogDir, err)
 	}
+	for _, envPath := range ParseCatalogPathList(os.Getenv(CatalogPathsEnv)) {
+		envCatalogs, envDiagnostics, err := loadCatalogPathSource(envPath)
+		if err != nil {
+			return Catalog{}, nil, fmt.Errorf("load env catalog path %s: %w", envPath, err)
+		}
+		catalogs = append(catalogs, envCatalogs...)
+		diagnostics = append(diagnostics, envDiagnostics...)
+	}
 
 	merged, mergeDiagnostics := MergeCatalogs(catalogs...)
 	diagnostics = append(diagnostics, mergeDiagnostics...)
 	return merged, diagnostics, nil
+}
+
+func ParseCatalogPathList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	splitter := func(r rune) bool {
+		if r == ',' || r == ';' {
+			return true
+		}
+		return r == rune(os.PathListSeparator)
+	}
+	parts := strings.FieldsFunc(raw, splitter)
+	return normalizeStringList(parts)
+}
+
+func loadCatalogPathSource(path string) ([]Catalog, []Diagnostic, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, nil, nil
+	}
+	resolved, err := cleanAbsPath(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info.IsDir() {
+		entries, err := os.ReadDir(resolved)
+		if err != nil {
+			return nil, nil, err
+		}
+		names := make([]string, 0, len(entries))
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			name := strings.TrimSpace(entry.Name())
+			if strings.HasSuffix(strings.ToLower(name), ".json") {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		catalogs := make([]Catalog, 0, len(names))
+		diagnostics := make([]Diagnostic, 0)
+		for _, name := range names {
+			itemPath := filepath.Join(resolved, name)
+			catalog, itemDiagnostics, err := loadOptionalCatalogFile(itemPath)
+			if err != nil {
+				return nil, nil, err
+			}
+			catalogs = append(catalogs, catalog)
+			diagnostics = append(diagnostics, itemDiagnostics...)
+		}
+		return catalogs, diagnostics, nil
+	}
+	catalog, diagnostics, err := loadOptionalCatalogFile(resolved)
+	if err != nil {
+		return nil, nil, err
+	}
+	return []Catalog{catalog}, diagnostics, nil
 }
 
 func loadOptionalCatalogFile(path string) (Catalog, []Diagnostic, error) {
