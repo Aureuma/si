@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -8,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -361,7 +364,8 @@ func runSICommand(t *testing.T, env map[string]string, args ...string) (string, 
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", append([]string{"run", "."}, args...)...)
+	binPath := siTestBinaryPath(t)
+	cmd := exec.CommandContext(ctx, binPath, args...)
 	cmd.Dir = "."
 	cmd.Env = append([]string{}, os.Environ()...)
 	cmd.Env = append(cmd.Env, "NO_COLOR=1")
@@ -377,6 +381,38 @@ func runSICommand(t *testing.T, env map[string]string, args ...string) (string, 
 		return string(stdout), stderr, err
 	}
 	return strings.TrimSpace(string(stdout)), strings.TrimSpace(stderr), nil
+}
+
+var (
+	siTestBinaryOnce sync.Once
+	siTestBinary     string
+	siTestBinaryErr  error
+)
+
+func siTestBinaryPath(t *testing.T) string {
+	t.Helper()
+	siTestBinaryOnce.Do(func() {
+		tmpDir, err := os.MkdirTemp("", "si-test-binary-*")
+		if err != nil {
+			siTestBinaryErr = err
+			return
+		}
+		siTestBinary = filepath.Join(tmpDir, "si-test")
+		args := []string{"build", "-trimpath", "-buildvcs=false", "-o", siTestBinary, "."}
+		cmd := exec.Command("go", args...)
+		cmd.Dir = "."
+		cmd.Env = append([]string{}, os.Environ()...)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
+		if err := cmd.Run(); err != nil {
+			siTestBinaryErr = fmt.Errorf("build si test binary: %w: %s", err, strings.TrimSpace(stderr.String()))
+			return
+		}
+	})
+	if siTestBinaryErr != nil {
+		t.Fatalf("prepare si test binary: %v", siTestBinaryErr)
+	}
+	return siTestBinary
 }
 
 func testAppPrivateKeyPEM(t *testing.T) string {
