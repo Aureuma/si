@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -918,10 +919,42 @@ func loadSettings() (Settings, error) {
 	return settings, nil
 }
 
+var (
+	loadSettingsForDefault = loadSettings
+	settingsWarnOnceMu     sync.Mutex
+	settingsWarnOnceSeen   = map[string]struct{}{}
+)
+
+func warnSettingsLoadFailedOnce(err error) {
+	if err == nil {
+		return
+	}
+	key := strings.TrimSpace(err.Error())
+	if key == "" {
+		key = "<empty settings error>"
+	}
+	settingsWarnOnceMu.Lock()
+	_, alreadyWarned := settingsWarnOnceSeen[key]
+	if !alreadyWarned {
+		settingsWarnOnceSeen[key] = struct{}{}
+	}
+	settingsWarnOnceMu.Unlock()
+	if alreadyWarned {
+		return
+	}
+	warnf("settings load failed: %v", err)
+}
+
+func resetSettingsWarnOnceStateForTests() {
+	settingsWarnOnceMu.Lock()
+	settingsWarnOnceSeen = map[string]struct{}{}
+	settingsWarnOnceMu.Unlock()
+}
+
 func loadSettingsOrDefault() Settings {
-	settings, err := loadSettings()
+	settings, err := loadSettingsForDefault()
 	if err != nil {
-		warnf("settings load failed: %v", err)
+		warnSettingsLoadFailedOnce(err)
 		fallback := defaultSettings()
 		applySettingsDefaults(&fallback)
 		return fallback

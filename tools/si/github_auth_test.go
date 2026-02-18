@@ -61,6 +61,28 @@ func TestResolveGitHubOAuthAccessTokenFromEnv(t *testing.T) {
 	}
 }
 
+func TestResolveGitHubOAuthAccessTokenFromGitHubPAT(t *testing.T) {
+	t.Setenv("GITHUB_PAT", "pat-token")
+	token, source := resolveGitHubOAuthAccessToken("core", GitHubAccountEntry{}, githubAuthOverrides{})
+	if token != "pat-token" {
+		t.Fatalf("unexpected oauth token: %q", token)
+	}
+	if source != "env:GITHUB_PAT" {
+		t.Fatalf("unexpected source: %q", source)
+	}
+}
+
+func TestResolveGitHubOAuthAccessTokenFromGHPAT(t *testing.T) {
+	t.Setenv("GH_PAT", "gh-pat-token")
+	token, source := resolveGitHubOAuthAccessToken("core", GitHubAccountEntry{}, githubAuthOverrides{})
+	if token != "gh-pat-token" {
+		t.Fatalf("unexpected oauth token: %q", token)
+	}
+	if source != "env:GH_PAT" {
+		t.Fatalf("unexpected source: %q", source)
+	}
+}
+
 func TestResolveGitHubAuthMode_OAuthFromOverride(t *testing.T) {
 	mode, source, err := resolveGitHubAuthMode(Settings{}, "core", GitHubAccountEntry{}, githubAuthOverrides{AuthMode: "oauth"})
 	if err != nil {

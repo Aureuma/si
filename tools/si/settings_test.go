@@ -1,11 +1,38 @@
 package main
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stderr
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("create stderr pipe: %v", err)
+	}
+	os.Stderr = writer
+	defer func() {
+		os.Stderr = orig
+	}()
+	fn()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close stderr pipe writer: %v", err)
+	}
+	out, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("read stderr pipe: %v", err)
+	}
+	if err := reader.Close(); err != nil {
+		t.Fatalf("close stderr pipe reader: %v", err)
+	}
+	return string(out)
+}
 
 func TestSettingsHomeDirUsesOverride(t *testing.T) {
 	tmp := t.TempDir()
@@ -203,5 +230,60 @@ skills_volume = "si-dyad-skills-custom"
 	}
 	if got.Dyad.SkillsVolume != "si-dyad-skills-custom" {
 		t.Fatalf("unexpected dyad.skills_volume: %q", got.Dyad.SkillsVolume)
+	}
+}
+
+func TestLoadSettingsOrDefaultWarnsOnceForRepeatedError(t *testing.T) {
+	original := loadSettingsForDefault
+	t.Cleanup(func() {
+		loadSettingsForDefault = original
+		resetSettingsWarnOnceStateForTests()
+	})
+	resetSettingsWarnOnceStateForTests()
+	loadErr := errors.New("read settings /tmp/.si/settings.toml: open /tmp/.si/settings.toml: permission denied")
+	loadSettingsForDefault = func() (Settings, error) {
+		return Settings{}, loadErr
+	}
+
+	stderr := captureStderr(t, func() {
+		_ = loadSettingsOrDefault()
+		_ = loadSettingsOrDefault()
+	})
+
+	if got := strings.Count(stderr, "warning: settings load failed:"); got != 1 {
+		t.Fatalf("expected one warning, got %d output:\n%s", got, stderr)
+	}
+	if !strings.Contains(stderr, "permission denied") {
+		t.Fatalf("expected warning to include permission denied, got:\n%s", stderr)
+	}
+}
+
+func TestLoadSettingsOrDefaultWarnsOncePerDistinctError(t *testing.T) {
+	original := loadSettingsForDefault
+	t.Cleanup(func() {
+		loadSettingsForDefault = original
+		resetSettingsWarnOnceStateForTests()
+	})
+	resetSettingsWarnOnceStateForTests()
+
+	loadErrs := []error{
+		errors.New("read settings one: permission denied"),
+		errors.New("read settings two: parse failure"),
+	}
+	loadSettingsForDefault = func() (Settings, error) {
+		err := loadErrs[0]
+		if len(loadErrs) > 1 {
+			loadErrs = loadErrs[1:]
+		}
+		return Settings{}, err
+	}
+
+	stderr := captureStderr(t, func() {
+		_ = loadSettingsOrDefault()
+		_ = loadSettingsOrDefault()
+	})
+
+	if got := strings.Count(stderr, "warning: settings load failed:"); got != 2 {
+		t.Fatalf("expected two warnings for distinct errors, got %d output:\n%s", got, stderr)
 	}
 }
