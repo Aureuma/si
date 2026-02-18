@@ -40,10 +40,28 @@ if [[ ! -f "${SOURCE_DIR}/tools/install-si.sh" ]]; then
   exit 1
 fi
 
+docker_build_image() {
+  local image="$1"
+  local dockerfile="$2"
+  local context="$3"
+  if docker buildx version >/dev/null 2>&1; then
+    docker buildx build --load \
+      -t "${image}" \
+      -f "${dockerfile}" \
+      "${context}"
+    return 0
+  fi
+  echo "⚠️  docker buildx is not available; falling back to docker build" >&2
+  docker build \
+    -t "${image}" \
+    -f "${dockerfile}" \
+    "${context}"
+}
+
 echo "==> Build root smoke image: ${SMOKE_IMAGE}"
-docker build \
-  -t "${SMOKE_IMAGE}" \
-  -f "${ROOT_DIR}/tools/docker/install-sh-smoke/Dockerfile" \
+docker_build_image \
+  "${SMOKE_IMAGE}" \
+  "${ROOT_DIR}/tools/docker/install-sh-smoke/Dockerfile" \
   "${ROOT_DIR}/tools/docker/install-sh-smoke"
 
 echo "==> Run root installer smoke"
@@ -58,9 +76,9 @@ if [[ "${SKIP_NONROOT}" == "1" ]]; then
 fi
 
 echo "==> Build non-root smoke image: ${NONROOT_IMAGE}"
-docker build \
-  -t "${NONROOT_IMAGE}" \
-  -f "${ROOT_DIR}/tools/docker/install-sh-nonroot/Dockerfile" \
+docker_build_image \
+  "${NONROOT_IMAGE}" \
+  "${ROOT_DIR}/tools/docker/install-sh-nonroot/Dockerfile" \
   "${ROOT_DIR}/tools/docker/install-sh-nonroot"
 
 echo "==> Run non-root installer smoke"
