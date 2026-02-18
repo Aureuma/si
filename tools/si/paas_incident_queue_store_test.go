@@ -49,6 +49,7 @@ func TestUpsertPaasIncidentQueueEntriesAndRetention(t *testing.T) {
 func TestSyncPaasIncidentQueueFromCollectors(t *testing.T) {
 	stateRoot := t.TempDir()
 	t.Setenv(paasStateRootEnvKey, stateRoot)
+	now := time.Now().UTC()
 
 	contextDir := filepath.Join(stateRoot, "contexts", defaultPaasContext)
 	eventsDir := filepath.Join(contextDir, "events")
@@ -57,7 +58,7 @@ func TestSyncPaasIncidentQueueFromCollectors(t *testing.T) {
 	}
 	mustWriteIncidentQueueJSONL(t, filepath.Join(eventsDir, "deployments.jsonl"), []map[string]any{
 		{
-			"timestamp": "2026-02-17T16:00:00Z",
+			"timestamp": now.Add(-3 * time.Minute).Format(time.RFC3339),
 			"source":    "deploy",
 			"command":   "deploy apply",
 			"status":    "failed",
@@ -67,7 +68,7 @@ func TestSyncPaasIncidentQueueFromCollectors(t *testing.T) {
 	})
 	mustWriteIncidentQueueJSONL(t, filepath.Join(eventsDir, "alerts.jsonl"), []map[string]any{
 		{
-			"timestamp": "2026-02-17T16:01:00Z",
+			"timestamp": now.Add(-2 * time.Minute).Format(time.RFC3339),
 			"source":    "alert",
 			"command":   "alert ingress-tls",
 			"status":    "retrying",
@@ -78,7 +79,7 @@ func TestSyncPaasIncidentQueueFromCollectors(t *testing.T) {
 	})
 	mustWriteIncidentQueueJSONL(t, filepath.Join(eventsDir, "audit.jsonl"), []map[string]any{
 		{
-			"timestamp": "2026-02-17T16:02:00Z",
+			"timestamp": now.Add(-1 * time.Minute).Format(time.RFC3339),
 			"source":    "audit",
 			"command":   "deploy reconcile",
 			"status":    "failed",
@@ -124,4 +125,3 @@ func mustWriteIncidentQueueJSONL(t *testing.T, path string, rows []map[string]an
 		}
 	}
 }
-
