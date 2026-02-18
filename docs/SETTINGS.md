@@ -40,7 +40,9 @@ Warmup scheduling is triggered by `si login` (and explicit `si warmup enable`), 
 Defaults for Codex container commands (spawn/respawn/login/run).
 - `codex.image` (string): docker image for `si spawn` (default: `aureuma/si:local`)
 - `codex.network` (string): docker network name
-- `codex.workspace` (string): host path for workspace bind
+- `codex.workspace` (string): host path for workspace bind.
+  - If unset, `si spawn` resolves from `--workspace` or current directory.
+  - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `codex.workdir` (string): container working directory
 - `codex.repo` (string): default repo in `Org/Repo` form
 - `codex.gh_pat` (string): optional PAT (stored in settings; keep file permissions restrictive)
@@ -89,7 +91,9 @@ Defaults for dyad spawns.
 - `dyad.codex_effort_low` (string)
 - `dyad.codex_effort_medium` (string)
 - `dyad.codex_effort_high` (string)
-- `dyad.workspace` (string): host path for workspace bind
+- `dyad.workspace` (string): host path for workspace bind.
+  - If unset, `si dyad spawn` resolves from `--workspace` or current directory.
+  - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `dyad.configs` (string): host path for configs
 - `dyad.forward_ports` (string): port range, e.g. `1455-1465`
 - `dyad.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
@@ -340,7 +344,7 @@ codex_profiles_dir = "~/.si/codex/profiles"
 [codex]
 image = "aureuma/si:local"
 network = "si"
-workspace = "/home/ubuntu/Development/si"
+workspace = "/path/to/your/repo"
 workdir = "/workspace"
 docker_socket = true
 profile = "america"
@@ -371,7 +375,7 @@ critic_image = "aureuma/si:local"
 codex_model = "gpt-5.2-codex"
 forward_ports = "1455-1465"
 docker_socket = true
-workspace = "/home/ubuntu/Development/si"
+workspace = "/path/to/your/repo"
 
 [stripe]
 organization = "main-org"
