@@ -17,6 +17,13 @@ The script expects to be run from the repo root so it can find `go.work` and wil
 error with a short message if prerequisites are missing.
 Use `./tools/test.sh --help` for a quick usage reminder.
 Use `./tools/test.sh --list` to print the module list without running tests.
+Use `SI_GO_TEST_TIMEOUT=20m ./tools/test.sh` to adjust the go-test timeout when needed.
+
+For one-command local coverage of the standard test stack, run:
+
+```bash
+./tools/test-all.sh
+```
 
 ## Installer smoke tests
 To validate the `si` installer script end-to-end, run:
@@ -35,6 +42,10 @@ For containerized smoke coverage (root + non-root installer paths), run:
 
 Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 ./tools/test-install-si-docker.sh` to skip
 the non-root leg during local iteration.
+
+## CI notes
+GitHub Actions workflows use docs-only change detection to skip heavy test jobs
+when only docs/markdown files are modified.
 
 ## PaaS matrix
 For `si paas` quality-gate coverage (unit/integration/e2e regression matrix), use:
