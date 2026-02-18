@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.46.1] - 2026-02-18
+### Fixed
+- Fixed release version metadata by updating the `si version` output to report `v0.46.1` in built binaries/images.
+
 ## [v0.46.0] - 2026-02-18
 ### Added
 - Added the initial `si paas` platform management surface, including target storage/bootstrap, connectivity checks, compatibility preflight checks, Traefik ingress secret helpers, deploy strategy fan-out, webhook ingest/mapping, and compose-only blue/green cutover policy controls.
