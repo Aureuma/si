@@ -11,7 +11,13 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+
+## [v0.46.0] - 2026-02-18
 ### Added
+- Added the initial `si paas` platform management surface, including target storage/bootstrap, connectivity checks, compatibility preflight checks, Traefik ingress secret helpers, deploy strategy fan-out, webhook ingest/mapping, and compose-only blue/green cutover policy controls.
+- Added PaaS operational workflows for deploy event recording, health rollback orchestration with failure taxonomy, release bundle metadata, scrubbed metadata export/import, context vault namespace controls, logs/events live backends, operational alert routing (including Telegram), and operator callback acknowledge hooks.
+- Added PaaS incident and automation features: unified audit event model, incident queue retention, incident schema taxonomy dedupe, event bridge collectors, codex runtime adapter, live agent command backend, remediation policy engine, scheduler self-heal locks, offline fake-codex smoke loop, and agent-run audit artifact capture.
+- Added PaaS state and governance artifacts, including context state layout/init, state-classification storage policy, isolation guardrails, addon lifecycle/magic-variable merge validation, security checklist and threat model, failure-injection rollback drills, regression coverage, backup/restore policy, and context/incident operations runbooks.
 - Added `si google play` direct API automation with service-account auth/context, custom app creation, listing/details/image management, release-track orchestration, metadata apply workflow, provider telemetry registration, and raw API access.
 - Added `si apple appstore` direct API automation with JWT auth/context, bundle/app onboarding, localized listing updates, metadata apply workflows, provider telemetry registration, and raw App Store Connect API access.
 
@@ -19,7 +25,10 @@ All notable changes to this project will be documented in this file.
 - Defaulted existing-container `si run` to tmux attach mode and added `--no-tmux` as the explicit opt-out for direct shell/custom command execution.
 - Unified user-facing datetime rendering to GitHub-style relative dates and updated `si status`/weekly reset displays to show date-only absolute values plus relative countdowns.
 - Hardened Docker runtime compatibility for Colima-based macOS setups (including profile/context socket detection) and made `si build image` gracefully skip build secrets when `docker buildx` is unavailable.
+
 ### Fixed
+- Fixed a PaaS alerting crash path by guarding nil-map access in operational alert dispatch.
+- Fixed `tools/si` module dependency metadata drift so image builds no longer fail with `go: updates to go.mod needed`.
 - Fixed `si build image` to disable BuildKit (`DOCKER_BUILDKIT=0`) when `docker buildx` is missing or broken, preventing BuildKit hard-fail errors on Colima-only hosts.
 
 ## [v0.45.0] - 2026-02-11
