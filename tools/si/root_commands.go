@@ -67,6 +67,9 @@ var (
 	loadBuildRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdBuild(args) }
 	}
+	loadMintlifyRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdMintlify(args) }
+	}
 	loadBrowserRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdBrowser(args) }
 	}
@@ -127,6 +130,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadBrowserRootHandler), "browser")
 	register(newLazyRootHandler(loadDyadRootHandler), "dyad")
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
+	register(newLazyRootHandler(loadMintlifyRootHandler), "mintlify")
 	register(newLazyRootHandler(loadPaasRootHandler), "paas")
 	register(newLazyRootHandler(loadPersonaRootHandler), "persona")
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
