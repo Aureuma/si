@@ -93,3 +93,16 @@ Design choices:
 - Download verification is strong for Go toolchain downloads (official sha256), but we don’t attempt signature verification for `si` itself.
 - We intentionally avoid editing shell rc files; we only print exact `PATH` lines.
 - Installing Docker buildx is optional and user-scoped; system-wide installation is distro-specific and not handled automatically.
+
+## Test and CI Contract
+
+- Host smoke test: `./tools/test-install-si.sh`
+  - Validates dry-run behavior, install/uninstall flows, and key edge-case regressions.
+- Docker smoke test: `./tools/test-install-si-docker.sh`
+  - Validates installer behavior in root and non-root containers using the local repo checkout.
+- GitHub Actions workflow: `.github/workflows/install-smoke.yml`
+  - Runs host smoke checks on `ubuntu-latest` and `macos-latest`.
+  - Runs Docker smoke checks on Ubuntu.
+
+This layered approach mirrors the OpenClaw pattern: keep fast host regressions and add
+containerized smoke tests so installer behavior remains stable across permission models.

@@ -130,6 +130,7 @@ Run installer smoke tests:
 
 ```bash
 ./tools/test-install-si.sh
+./tools/test-install-si-docker.sh
 ```
 
 Run static analysis:
