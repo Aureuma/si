@@ -469,6 +469,12 @@ func TestPaasAgentRunOnceOfflineFakeCodexDeterministicSmoke(t *testing.T) {
 	if strings.TrimSpace(runEnv.Fields["incident_correlation_id"]) == "" {
 		t.Fatalf("expected incident correlation id, got %#v", runEnv.Fields)
 	}
+	if strings.TrimSpace(runEnv.Fields["artifact_path"]) == "" {
+		t.Fatalf("expected artifact path, got %#v", runEnv.Fields)
+	}
+	if _, err := os.Stat(runEnv.Fields["artifact_path"]); err != nil {
+		t.Fatalf("expected run artifact file: %v", err)
+	}
 
 	logsRaw := captureStdout(t, func() {
 		cmdPaas([]string{"agent", "logs", "--name", "ops-agent", "--tail", "1", "--json"})
@@ -488,6 +494,9 @@ func TestPaasAgentRunOnceOfflineFakeCodexDeterministicSmoke(t *testing.T) {
 	}
 	if strings.TrimSpace(logsPayload.Data[0].IncidentCorrID) == "" {
 		t.Fatalf("expected run log incident correlation id, got %#v", logsPayload.Data[0])
+	}
+	if strings.TrimSpace(logsPayload.Data[0].ArtifactPath) == "" {
+		t.Fatalf("expected run log artifact path, got %#v", logsPayload.Data[0])
 	}
 }
 

@@ -266,7 +266,7 @@ func cmdPaasAgentLogs(args []string) {
 	}
 	fmt.Printf("%s %d\n", styleHeading("paas agent logs:"), len(rows))
 	for _, row := range rows {
-		fmt.Printf("  - %s run=%s status=%s incident=%s corr=%s runtime=%s profile=%s policy=%s exec=%s lock=%s recovered=%s message=%s\n",
+		fmt.Printf("  - %s run=%s status=%s incident=%s corr=%s runtime=%s profile=%s policy=%s exec=%s artifact=%s lock=%s recovered=%s message=%s\n",
 			row.Timestamp,
 			row.RunID,
 			row.Status,
@@ -276,6 +276,7 @@ func cmdPaasAgentLogs(args []string) {
 			row.RuntimeProfile,
 			row.PolicyAction,
 			row.ExecutionMode,
+			row.ArtifactPath,
 			row.LockPath,
 			boolString(row.LockRecovered),
 			row.Message,
@@ -319,7 +320,7 @@ func cmdPaasAgentRunOnce(args []string) {
 	}
 	if !lockResult.Acquired {
 		message := "agent lock unavailable: " + strings.TrimSpace(lockResult.Reason)
-		_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
+		_, artifactPath, _ := appendPaasAgentRunRecord(paasAgentRunRecord{
 			Agent:    selectedName,
 			RunID:    runID,
 			Status:   "blocked",
@@ -342,6 +343,7 @@ func cmdPaasAgentRunOnce(args []string) {
 			"message":        message,
 			"lock_path":      lockResult.Path,
 			"lock_recovered": boolString(lockResult.Recovered),
+			"artifact_path":  artifactPath,
 			"store_path":     storePath,
 		}, jsonOut)
 		return
@@ -440,7 +442,7 @@ func cmdPaasAgentRunOnce(args []string) {
 			}
 		}
 	}
-	_, err = appendPaasAgentRunRecord(paasAgentRunRecord{
+	_, artifactPath, err := appendPaasAgentRunRecord(paasAgentRunRecord{
 		Agent:          selectedName,
 		RunID:          runID,
 		Status:         status,
@@ -502,6 +504,7 @@ func cmdPaasAgentRunOnce(args []string) {
 		"queue_pruned":            intString(syncResult.Pruned),
 		"queue_total":             intString(syncResult.Total),
 		"collector_count":         intString(len(syncResult.CollectorStats)),
+		"artifact_path":           artifactPath,
 		"queue_path":              syncResult.Path,
 		"store_path":              storePath,
 	}
@@ -544,7 +547,7 @@ func cmdPaasAgentApprove(args []string) {
 	if err != nil {
 		failPaasCommand("agent approve", jsonOut, err, nil)
 	}
-	_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
+	_, artifactPath, _ := appendPaasAgentRunRecord(paasAgentRunRecord{
 		Agent:        strings.TrimSpace(run.Agent),
 		RunID:        strings.TrimSpace(*runID),
 		Status:       "approved",
@@ -556,13 +559,14 @@ func cmdPaasAgentApprove(args []string) {
 	})
 	alertPath := notifyPaasAgentApprovalTelegramLinkage(strings.TrimSpace(*runID), strings.TrimSpace(run.Agent), paasApprovalDecisionApproved, strings.TrimSpace(*note))
 	printPaasLiveAgentScaffold("agent approve", map[string]string{
-		"run":        strings.TrimSpace(*runID),
-		"agent":      strings.TrimSpace(run.Agent),
-		"decision":   paasApprovalDecisionApproved,
-		"note":       strings.TrimSpace(*note),
-		"store_path": path,
-		"alert_path": alertPath,
-		"status":     "applied",
+		"run":           strings.TrimSpace(*runID),
+		"agent":         strings.TrimSpace(run.Agent),
+		"decision":      paasApprovalDecisionApproved,
+		"note":          strings.TrimSpace(*note),
+		"store_path":    path,
+		"alert_path":    alertPath,
+		"artifact_path": artifactPath,
+		"status":        "applied",
 	}, jsonOut)
 }
 
@@ -602,7 +606,7 @@ func cmdPaasAgentDeny(args []string) {
 	if err != nil {
 		failPaasCommand("agent deny", jsonOut, err, nil)
 	}
-	_, _ = appendPaasAgentRunRecord(paasAgentRunRecord{
+	_, artifactPath, _ := appendPaasAgentRunRecord(paasAgentRunRecord{
 		Agent:        strings.TrimSpace(run.Agent),
 		RunID:        strings.TrimSpace(*runID),
 		Status:       "denied",
@@ -614,13 +618,14 @@ func cmdPaasAgentDeny(args []string) {
 	})
 	alertPath := notifyPaasAgentApprovalTelegramLinkage(strings.TrimSpace(*runID), strings.TrimSpace(run.Agent), paasApprovalDecisionDenied, strings.TrimSpace(*note))
 	printPaasLiveAgentScaffold("agent deny", map[string]string{
-		"run":        strings.TrimSpace(*runID),
-		"agent":      strings.TrimSpace(run.Agent),
-		"decision":   paasApprovalDecisionDenied,
-		"note":       strings.TrimSpace(*note),
-		"store_path": path,
-		"alert_path": alertPath,
-		"status":     "applied",
+		"run":           strings.TrimSpace(*runID),
+		"agent":         strings.TrimSpace(run.Agent),
+		"decision":      paasApprovalDecisionDenied,
+		"note":          strings.TrimSpace(*note),
+		"store_path":    path,
+		"alert_path":    alertPath,
+		"artifact_path": artifactPath,
+		"status":        "applied",
 	}, jsonOut)
 }
 

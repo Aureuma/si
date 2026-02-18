@@ -125,6 +125,12 @@ For offline fake-codex deterministic event-to-action smoke coverage, use:
 cat docs/PAAS_AGENT_OFFLINE_SMOKE_TESTS.md
 ```
 
+For per-run agent audit artifact persistence and correlation linkage, use:
+
+```bash
+cat docs/PAAS_AGENT_AUDIT_ARTIFACTS.md
+```
+
 ## Static analysis
 Run static analysis from the repo root:
 

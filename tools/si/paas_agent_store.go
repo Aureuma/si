@@ -43,6 +43,7 @@ type paasAgentRunRecord struct {
 	PolicyAction   string `json:"policy_action,omitempty"`
 	ExecutionMode  string `json:"execution_mode,omitempty"`
 	ExecutionNote  string `json:"execution_note,omitempty"`
+	ArtifactPath   string `json:"artifact_path,omitempty"`
 	Collected      int    `json:"collected"`
 	Inserted       int    `json:"inserted"`
 	Updated        int    `json:"updated"`
@@ -146,13 +147,13 @@ func resolvePaasAgentRunLogPath(contextName string) (string, error) {
 	return filepath.Join(contextDir, "events", "agent-runs.jsonl"), nil
 }
 
-func appendPaasAgentRunRecord(record paasAgentRunRecord) (string, error) {
+func appendPaasAgentRunRecord(record paasAgentRunRecord) (string, string, error) {
 	path, err := resolvePaasAgentRunLogPath(currentPaasContext())
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return "", err
+		return "", "", err
 	}
 	row := record
 	if strings.TrimSpace(row.Timestamp) == "" {
@@ -170,24 +171,33 @@ func appendPaasAgentRunRecord(record paasAgentRunRecord) (string, error) {
 	row.PolicyAction = strings.TrimSpace(row.PolicyAction)
 	row.ExecutionMode = strings.TrimSpace(row.ExecutionMode)
 	row.ExecutionNote = strings.TrimSpace(row.ExecutionNote)
+	row.ArtifactPath = strings.TrimSpace(row.ArtifactPath)
 	row.QueuePath = strings.TrimSpace(row.QueuePath)
 	row.Message = strings.TrimSpace(row.Message)
 	if row.Agent == "" || row.RunID == "" || row.Status == "" {
-		return "", fmt.Errorf("agent, run_id, and status are required")
+		return "", "", fmt.Errorf("agent, run_id, and status are required")
+	}
+	artifactPath := strings.TrimSpace(row.ArtifactPath)
+	if artifactPath == "" {
+		artifactPath, err = savePaasAgentRunArtifact(currentPaasContext(), row)
+		if err != nil {
+			return "", "", err
+		}
+		row.ArtifactPath = artifactPath
 	}
 	raw, err := json.Marshal(row)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer file.Close()
 	if _, err := file.Write(append(raw, '\n')); err != nil {
-		return "", err
+		return "", "", err
 	}
-	return path, nil
+	return path, artifactPath, nil
 }
 
 func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, string, error) {
@@ -235,6 +245,7 @@ func loadPaasAgentRunRecords(name string, tail int) ([]paasAgentRunRecord, strin
 		row.PolicyAction = strings.TrimSpace(row.PolicyAction)
 		row.ExecutionMode = strings.TrimSpace(row.ExecutionMode)
 		row.ExecutionNote = strings.TrimSpace(row.ExecutionNote)
+		row.ArtifactPath = strings.TrimSpace(row.ArtifactPath)
 		row.QueuePath = strings.TrimSpace(row.QueuePath)
 		row.Message = strings.TrimSpace(row.Message)
 		rows = append(rows, row)
@@ -284,6 +295,21 @@ func findPaasAgentRunRecordByID(runID string) (paasAgentRunRecord, bool, error) 
 		if strings.TrimSpace(row.RunID) != targetRunID {
 			continue
 		}
+		row.Agent = strings.TrimSpace(row.Agent)
+		row.RunID = strings.TrimSpace(row.RunID)
+		row.Status = strings.ToLower(strings.TrimSpace(row.Status))
+		row.IncidentID = strings.TrimSpace(row.IncidentID)
+		row.IncidentCorrID = strings.TrimSpace(row.IncidentCorrID)
+		row.RuntimeMode = strings.TrimSpace(row.RuntimeMode)
+		row.RuntimeProfile = strings.TrimSpace(row.RuntimeProfile)
+		row.RuntimeAuth = strings.TrimSpace(row.RuntimeAuth)
+		row.LockPath = strings.TrimSpace(row.LockPath)
+		row.PolicyAction = strings.TrimSpace(row.PolicyAction)
+		row.ExecutionMode = strings.TrimSpace(row.ExecutionMode)
+		row.ExecutionNote = strings.TrimSpace(row.ExecutionNote)
+		row.ArtifactPath = strings.TrimSpace(row.ArtifactPath)
+		row.QueuePath = strings.TrimSpace(row.QueuePath)
+		row.Message = strings.TrimSpace(row.Message)
 		copyRow := row
 		matched = &copyRow
 	}
