@@ -112,6 +112,11 @@ Install state tracks:
 - `si plugins catalog build --source <path> [--output <path>] [--channel <name>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]`
 - `si plugins catalog validate --source <path> [--json]`
 
+Catalog metadata now includes source provenance:
+- `catalog_source` in `si plugins list --json`
+- `catalog_source` in `si plugins info --json`
+- override diagnostics report both new and previous source when ids collide
+
 ## External Catalog Packs
 
 For large integration ecosystems, keep manifests in a separate repository and generate catalog artifacts for SI consumption.

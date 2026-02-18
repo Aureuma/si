@@ -269,6 +269,55 @@ func TestLoadCatalogIncludesEnvPaths(t *testing.T) {
 	if _, ok := CatalogByID(catalog)["acme/release-mind"]; !ok {
 		t.Fatalf("expected env-loaded catalog entry, got %#v", catalog.Entries)
 	}
+	entry := CatalogByID(catalog)["acme/release-mind"]
+	if strings.TrimSpace(entry.Source) == "" {
+		t.Fatalf("expected catalog entry source to be populated")
+	}
+}
+
+func TestMergeCatalogsDiagnosticsIncludePreviousSource(t *testing.T) {
+	first := Catalog{
+		SchemaVersion: 1,
+		Entries: []CatalogEntry{
+			{
+				Source: "builtin",
+				Manifest: Manifest{
+					SchemaVersion: 1,
+					ID:            "acme/release-mind",
+					Namespace:     "acme",
+					Install: InstallSpec{
+						Type: InstallTypeNone,
+					},
+				},
+			},
+		},
+	}
+	second := Catalog{
+		SchemaVersion: 1,
+		Entries: []CatalogEntry{
+			{
+				Source: "/tmp/catalog.json",
+				Manifest: Manifest{
+					SchemaVersion: 1,
+					ID:            "acme/release-mind",
+					Namespace:     "acme",
+					Install: InstallSpec{
+						Type: InstallTypeNone,
+					},
+				},
+			},
+		},
+	}
+	_, diagnostics := MergeCatalogs(first, second)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one override diagnostic, got %#v", diagnostics)
+	}
+	if diagnostics[0].Source != "/tmp/catalog.json" {
+		t.Fatalf("expected overriding source in diagnostic, got %#v", diagnostics[0])
+	}
+	if !strings.Contains(diagnostics[0].Message, "previous=builtin") {
+		t.Fatalf("expected diagnostic message to include previous source, got %#v", diagnostics[0])
+	}
 }
 
 func TestInstallFromArchiveZIP(t *testing.T) {
