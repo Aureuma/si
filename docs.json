@@ -1,85 +1,81 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "name": "si",
-  "theme": "venus",
+  "theme": "mint",
   "colors": {
     "primary": "#0f6d5f",
     "light": "#8bf0c9",
     "dark": "#0c4b42"
   },
-  "favicon": "/images/si-hero.png",
+  "favicon": "/docs/images/si-hero.png",
   "logo": {
-    "light": "/images/si-hero.png",
-    "dark": "/images/si-hero.png"
+    "light": "/docs/images/si-hero.png",
+    "dark": "/docs/images/si-hero.png"
   },
-  "tabs": [
-    {
-      "name": "CLI",
-      "url": "https://docs.si.aureuma.ai"
-    }
-  ],
-  "navigation": [
-    {
-      "group": "Overview",
-      "pages": [
-        "docs/index",
-        "docs/CLI_REFERENCE",
-        "docs/INTEGRATIONS_OVERVIEW",
-        "docs/DOCS_STYLE_GUIDE",
-        "docs/testing",
-        "docs/MINTLIFY"
-      ]
-    },
-    {
-      "group": "Core",
-      "pages": [
-        "docs/DYAD",
-        "docs/VAULT",
-        "docs/BROWSER",
-        "docs/PLUGIN_MARKETPLACE",
-        "docs/INTEGRATION_ECOSYSTEM",
-        "docs/SETTINGS"
-      ]
-    },
-    {
-      "group": "Providers",
-      "pages": [
-        "docs/PROVIDERS",
-        "docs/GITHUB",
-        "docs/CLOUDFLARE",
-        "docs/WORKOS",
-        "docs/APPLE_APPSTORE",
-        "docs/GCP",
-        "docs/GOOGLE_PLACES",
-        "docs/GOOGLE_PLAY",
-        "docs/GOOGLE_YOUTUBE",
-        "docs/AWS",
-        "docs/OPENAI",
-        "docs/OCI",
-        "docs/STRIPE",
-        "docs/SOCIAL",
-        "docs/PUBLISH"
-      ]
-    },
-    {
-      "group": "PaaS",
-      "pages": [
-        "docs/PAAS_TEST_MATRIX",
-        "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
-        "docs/PAAS_AUTOMATION_AGENTS",
-        "docs/PAAS_MARKET_TASKBOARD",
-        "docs/PAAS_BACKUP_RESTORE_POLICY",
-        "docs/PAAS_INCIDENT_RUNBOOK",
-        "docs/PAAS_SECURITY_THREAT_MODEL"
-      ]
-    },
-    {
-      "group": "Release",
-      "pages": [
-        "docs/RELEASING",
-        "docs/RELEASE_RUNBOOK",
-        "docs/RELEASE_NOTES_ARCHIVE"
-      ]
-    }
-  ]
+  "navigation": {
+    "groups": [
+      {
+        "group": "Overview",
+        "pages": [
+          "docs/index",
+          "docs/CLI_REFERENCE",
+          "docs/INTEGRATIONS_OVERVIEW",
+          "docs/DOCS_STYLE_GUIDE",
+          "docs/testing",
+          "docs/MINTLIFY"
+        ]
+      },
+      {
+        "group": "Core",
+        "pages": [
+          "docs/DYAD",
+          "docs/VAULT",
+          "docs/BROWSER",
+          "docs/PLUGIN_MARKETPLACE",
+          "docs/INTEGRATION_ECOSYSTEM",
+          "docs/SETTINGS"
+        ]
+      },
+      {
+        "group": "Providers",
+        "pages": [
+          "docs/PROVIDERS",
+          "docs/GITHUB",
+          "docs/CLOUDFLARE",
+          "docs/WORKOS",
+          "docs/APPLE_APPSTORE",
+          "docs/GCP",
+          "docs/GOOGLE_PLACES",
+          "docs/GOOGLE_PLAY",
+          "docs/GOOGLE_YOUTUBE",
+          "docs/AWS",
+          "docs/OPENAI",
+          "docs/OCI",
+          "docs/STRIPE",
+          "docs/SOCIAL",
+          "docs/PUBLISH"
+        ]
+      },
+      {
+        "group": "PaaS",
+        "pages": [
+          "docs/PAAS_TEST_MATRIX",
+          "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
+          "docs/PAAS_AUTOMATION_AGENTS",
+          "docs/PAAS_MARKET_TASKBOARD",
+          "docs/PAAS_BACKUP_RESTORE_POLICY",
+          "docs/PAAS_INCIDENT_RUNBOOK",
+          "docs/PAAS_SECURITY_THREAT_MODEL"
+        ]
+      },
+      {
+        "group": "Release",
+        "pages": [
+          "docs/RELEASING",
+          "docs/RELEASE_RUNBOOK",
+          "docs/RELEASE_NOTES_ARCHIVE"
+        ]
+      }
+    ]
+  }
 }
