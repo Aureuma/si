@@ -111,6 +111,7 @@ type CatalogEntry struct {
 	Verified bool     `json:"verified,omitempty"`
 	AddedAt  string   `json:"added_at,omitempty"`
 	Tags     []string `json:"tags,omitempty"`
+	Source   string   `json:"-"`
 }
 
 type BuildCatalogOptions struct {
@@ -870,6 +871,7 @@ func loadCatalogFromRaw(source string, raw []byte) (Catalog, []Diagnostic, error
 		entry.Channel = strings.TrimSpace(entry.Channel)
 		entry.AddedAt = strings.TrimSpace(entry.AddedAt)
 		entry.Tags = normalizeStringList(entry.Tags)
+		entry.Source = strings.TrimSpace(source)
 		entries = append(entries, entry)
 	}
 	decoded.Entries = entries
@@ -887,10 +889,19 @@ func MergeCatalogs(catalogs ...Catalog) (Catalog, []Diagnostic) {
 			if id == "" {
 				continue
 			}
-			if _, ok := byID[id]; ok {
+			if previous, ok := byID[id]; ok {
+				prevSource := strings.TrimSpace(previous.Source)
+				nextSource := strings.TrimSpace(entry.Source)
+				if prevSource == "" {
+					prevSource = "unknown"
+				}
+				if nextSource == "" {
+					nextSource = "unknown"
+				}
 				diagnostics = append(diagnostics, Diagnostic{
 					Level:   "warn",
-					Message: fmt.Sprintf("catalog entry %q overridden by higher precedence source", id),
+					Source:  nextSource,
+					Message: fmt.Sprintf("catalog entry %q overridden by higher precedence source (previous=%s)", id, prevSource),
 				})
 			} else {
 				order = append(order, id)

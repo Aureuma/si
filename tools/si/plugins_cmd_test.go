@@ -203,6 +203,7 @@ func TestPluginsListReadsEnvCatalogPaths(t *testing.T) {
 		t.Fatalf("expected rows array payload, got %#v", payload)
 	}
 	found := false
+	foundSource := false
 	for _, row := range rows {
 		item, ok := row.(map[string]any)
 		if !ok {
@@ -210,11 +211,17 @@ func TestPluginsListReadsEnvCatalogPaths(t *testing.T) {
 		}
 		if item["id"] == "acme/release-mind" {
 			found = true
+			if source, _ := item["catalog_source"].(string); source == catalogPath {
+				foundSource = true
+			}
 			break
 		}
 	}
 	if !found {
 		t.Fatalf("expected acme/release-mind row from env catalog: %#v", payload)
+	}
+	if !foundSource {
+		t.Fatalf("expected acme/release-mind row to include catalog_source=%s: %#v", catalogPath, payload)
 	}
 }
 
@@ -402,5 +409,24 @@ func TestPluginsPolicySetSupportsNamespaceWildcard(t *testing.T) {
 	}
 	if effective, _ := infoDeny["effective_enabled"].(bool); effective {
 		t.Fatalf("expected effective_enabled=false with wildcard deny: %#v", infoDeny)
+	}
+}
+
+func TestPluginsInfoIncludesCatalogSourceForBuiltin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	home := t.TempDir()
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", "si/browser-mcp", "--json")
+	if err != nil {
+		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("info json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	source, _ := payload["catalog_source"].(string)
+	if source != "builtin" {
+		t.Fatalf("expected builtin catalog source, got %#v", payload)
 	}
 }
