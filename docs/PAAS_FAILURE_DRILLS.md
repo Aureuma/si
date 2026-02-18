@@ -7,9 +7,9 @@ Scope: `si paas` deployment failure paths and rollback behavior
 
 | Drill ID | Failure Injected | Expected Safety Behavior | Validation Command |
 | --- | --- | --- | --- |
-| DRILL-01 | Canary target apply failure in fan-out strategy | Remaining targets are skipped, deterministic status and failure contract returned | `docker run --rm -v /home/shawn/Development/si:/work -w /work golang:1.25 go test ./tools/si -run TestApplyPaasReleaseToTargetsCanaryStopsAfterCanaryFailure -count=1` |
-| DRILL-02 | Deploy health check failure after apply | Automatic rollback to last known-good release candidate, failure envelope preserves remediation hints | `docker run --rm -v /home/shawn/Development/si:/work -w /work golang:1.25 go test ./tools/si -run TestPaasRegressionUpgradeDeployRollbackPath -count=1` |
-| DRILL-03 | Blue/green post-cutover health failure | Cutover rollback command restores previous slot and reports `bluegreen_post_cutover_health` failure stage | `docker run --rm -v /home/shawn/Development/si:/work -w /work golang:1.25 go test ./tools/si -run TestRunPaasBlueGreenDeployOnTargetRollsBackOnPostCutoverHealthFailure -count=1` |
+| DRILL-01 | Canary target apply failure in fan-out strategy | Remaining targets are skipped, deterministic status and failure contract returned | `docker run --rm -v "$PWD:/work" -w /work golang:1.25 go test ./tools/si -run TestApplyPaasReleaseToTargetsCanaryStopsAfterCanaryFailure -count=1` |
+| DRILL-02 | Deploy health check failure after apply | Automatic rollback to last known-good release candidate, failure envelope preserves remediation hints | `docker run --rm -v "$PWD:/work" -w /work golang:1.25 go test ./tools/si -run TestPaasRegressionUpgradeDeployRollbackPath -count=1` |
+| DRILL-03 | Blue/green post-cutover health failure | Cutover rollback command restores previous slot and reports `bluegreen_post_cutover_health` failure stage | `docker run --rm -v "$PWD:/work" -w /work golang:1.25 go test ./tools/si -run TestRunPaasBlueGreenDeployOnTargetRollsBackOnPostCutoverHealthFailure -count=1` |
 
 ## Drill Runner
 

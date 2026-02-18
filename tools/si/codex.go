@@ -291,7 +291,7 @@ func cmdCodexSpawn(args []string) {
 
 	// Always mount the host workspace at /workspace (stable) and also at the same
 	// absolute host path inside the container (for example
-	// /home/shawn/Development/si). Default the container working dir to that
+	// /home/<user>/Development/si). Default the container working dir to that
 	// mirrored host path so `si run` and `si run --tmux` land in the expected
 	// directory.
 	workspaceTargetPrimary := "/workspace"
@@ -303,6 +303,7 @@ func cmdCodexSpawn(args []string) {
 		*flags.workdir = workspaceTargetMirror
 	}
 	desiredWorkspaceHost := filepath.Clean(strings.TrimSpace(*flags.workspaceHost))
+	maybePersistWorkspaceDefault(workspaceScopeCodex, &settings, desiredWorkspaceHost, interactive)
 
 	client, err := shared.NewClient()
 	if err != nil {
