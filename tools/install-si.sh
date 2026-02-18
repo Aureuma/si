@@ -47,6 +47,7 @@ Flags:
   --arch <amd64|arm64>    Override arch detection (primarily for dry-run/testing)
 
   --tmp-dir <dir>         Temporary working directory (default: mktemp)
+  -y, --yes               Assume yes for interactive prompts
   --dry-run               Print actions without changing anything
   --quiet                 Reduce output
   --no-path-hint          Skip PATH guidance after install
@@ -153,6 +154,24 @@ mktemp_dir() {
 
 is_tty() {
   [[ -t 1 ]]
+}
+
+confirm_yes_no() {
+  local prompt="$1"
+  local answer=""
+  if [[ "${ASSUME_YES}" -eq 1 ]]; then
+    return 0
+  fi
+  if ! is_tty; then
+    return 1
+  fi
+  # shellcheck disable=SC2162
+  read -r -p "${prompt} [y/N] " answer
+  answer="$(echo "${answer}" | tr '[:upper:]' '[:lower:]')"
+  case "${answer}" in
+    y|yes) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 trim() {
@@ -457,6 +476,16 @@ clone_repo() {
   local out_dir="$3"
 
   need_cmd git
+  local -a git_cmd=(git)
+  if [[ -d "${repo_url}" ]]; then
+    # Local checkouts mounted into containers may trigger Git's safe.directory checks.
+    git_cmd+=( -c "safe.directory=${repo_url}" )
+  elif [[ "${repo_url}" =~ ^file:// ]]; then
+    local repo_path="${repo_url#file://}"
+    if [[ -d "${repo_path}" ]]; then
+      git_cmd+=( -c "safe.directory=${repo_path}" )
+    fi
+  fi
   if [[ "${DRY_RUN}" -eq 1 ]]; then
     log info "git: would clone ${repo_url} to ${out_dir} (ref ${ref})"
     return 0
@@ -464,11 +493,26 @@ clone_repo() {
 
   # If ref looks like a commit SHA, do a normal clone then checkout.
   if [[ "${ref}" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
-    git clone "${repo_url}" "${out_dir}"
-    git -C "${out_dir}" checkout "${ref}"
+    "${git_cmd[@]}" clone "${repo_url}" "${out_dir}"
+    "${git_cmd[@]}" -C "${out_dir}" checkout "${ref}"
     return 0
   fi
-  git clone --depth 1 --branch "${ref}" "${repo_url}" "${out_dir}"
+  "${git_cmd[@]}" clone --depth 1 --branch "${ref}" "${repo_url}" "${out_dir}"
+}
+
+ensure_build_prereqs() {
+  local -a required
+  required=(awk chmod cp find grep head id mkdir mv sed tr uname)
+  local missing=()
+  local c
+  for c in "${required[@]}"; do
+    if ! command -v "${c}" >/dev/null 2>&1; then
+      missing+=("${c}")
+    fi
+  done
+  if [[ "${#missing[@]}" -gt 0 ]]; then
+    die "missing required commands for installer: ${missing[*]}"
+  fi
 }
 
 build_si() {
@@ -565,6 +609,12 @@ ensure_docker_buildx() {
     log warn "docker buildx is not available (BuildKit features like build secrets may be disabled)"
     log info "💡 Tip: re-run in a TTY to auto-install buildx, or pass --with-buildx."
     return 0
+  fi
+  if [[ "${BUILDX_MODE}" == "auto" && "${DRY_RUN}" -eq 0 ]]; then
+    if ! confirm_yes_no "docker buildx is missing. Install a user-level plugin now?"; then
+      log warn "docker buildx: skipped installation (continue without buildx)"
+      return 0
+    fi
   fi
 
   local os="$1"
@@ -689,6 +739,7 @@ DRY_RUN=0
 FORCE=0
 UNINSTALL=0
 NO_PATH_HINT=0
+ASSUME_YES=0
 LINK_GO_MODE="auto"
 BUILDX_MODE="auto"
 
@@ -710,6 +761,7 @@ TMP_DIR=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
+    -y|--yes) ASSUME_YES=1; shift ;;
     --source-dir) SOURCE_DIR="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --repo-url) REPO_URL="$2"; shift 2 ;;
@@ -757,6 +809,10 @@ if [[ "${DRY_RUN}" -eq 0 ]]; then
   if [[ -n "${OS_OVERRIDE}" || -n "${ARCH_OVERRIDE}" ]]; then
     die "--os/--arch overrides are only supported with --dry-run (they do not make sense for a real install)"
   fi
+fi
+
+if [[ -n "${INSTALL_DIR}" && -n "${INSTALL_PATH}" ]]; then
+  die "--install-dir and --install-path are mutually exclusive; pass only one"
 fi
 
 GO_MODE="$(echo "$(trim "${GO_MODE}")" | tr '[:upper:]' '[:lower:]')"
@@ -826,6 +882,13 @@ if [[ -z "${SOURCE_DIR}" ]]; then
     SOURCE_DIR="${root}"
   fi
 fi
+
+if [[ -n "${SOURCE_DIR}" ]]; then
+  [[ -d "${SOURCE_DIR}" ]] || die "--source-dir does not exist: ${SOURCE_DIR}"
+  [[ -f "${SOURCE_DIR}/tools/si/go.mod" ]] || die "--source-dir is not an si repo root (missing tools/si/go.mod): ${SOURCE_DIR}"
+fi
+
+ensure_build_prereqs
 
 WORKDIR=""
 cleanup() {
