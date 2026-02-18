@@ -32,6 +32,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"paas",
 		"persona",
 		"skill",
+		"plugins", "plugin", "marketplace",
 		"help", "-h", "--help",
 	}
 	for _, cmd := range expected {

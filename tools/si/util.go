@@ -44,6 +44,7 @@ Features:
   - Mintlify docs workflow wrapper.
   - Docker passthrough for raw docker CLI calls.
   - Browser MCP Docker runner for Playwright headed sessions.
+  - Plugin marketplace and integration registry (catalog/install/enable/doctor/scaffold).
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
 Usage:
@@ -68,6 +69,7 @@ Core:
   si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
+  si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]
@@ -553,6 +555,16 @@ providers:
   si providers characteristics [--provider <id>] [--json]
   si providers health [--provider <id>] [--json]
   Aliases: si integrations ..., si apis ...
+
+plugins:
+  si plugins list [--installed] [--json]
+  si plugins info <id> [--json]
+  si plugins install <id-or-path> [--disabled] [--json]
+  si plugins uninstall <id> [--keep-files] [--json]
+  si plugins enable|disable <id> [--json]
+  si plugins doctor [--json]
+  si plugins register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]
+  si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]
 
 	Environment defaults (selected)
 	-------------------------------
