@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	shared "si/agents/shared/docker"
 )
 
 const browserUsageText = "usage: si browser <build|start|stop|status|logs|proxy> [args...]"
@@ -20,6 +22,7 @@ const browserUsageText = "usage: si browser <build|start|stop|status|logs|proxy>
 const (
 	defaultBrowserImage      = "si-playwright-mcp-headed:1.58.2"
 	defaultBrowserContainer  = "si-playwright-mcp-headed"
+	defaultBrowserNetwork    = shared.DefaultNetwork
 	defaultBrowserHostBind   = "127.0.0.1"
 	defaultBrowserMCPPort    = 8931
 	defaultBrowserHostMCP    = 8932
@@ -31,6 +34,7 @@ const (
 type browserConfig struct {
 	ImageName      string `json:"image_name"`
 	ContainerName  string `json:"container_name"`
+	Network        string `json:"network"`
 	ProfileDir     string `json:"profile_dir"`
 	HostBind       string `json:"host_bind"`
 	HostMCPPort    int    `json:"host_mcp_port"`
@@ -101,6 +105,7 @@ func defaultBrowserConfig() browserConfig {
 	return browserConfig{
 		ImageName:      envOr("SI_BROWSER_IMAGE", defaultBrowserImage),
 		ContainerName:  envOr("SI_BROWSER_CONTAINER", defaultBrowserContainer),
+		Network:        envOr("SI_BROWSER_NETWORK", envOr("SI_NETWORK", defaultBrowserNetwork)),
 		ProfileDir:     envOr("SI_BROWSER_PROFILE_DIR", profileDir),
 		HostBind:       envOr("SI_BROWSER_HOST_BIND", defaultBrowserHostBind),
 		HostMCPPort:    envOrInt("SI_BROWSER_HOST_MCP_PORT", defaultBrowserHostMCP),
@@ -129,6 +134,7 @@ func envOrInt(key string, fallback int) int {
 func registerBrowserConfigFlags(fs *flag.FlagSet, cfg *browserConfig) {
 	fs.StringVar(&cfg.ImageName, "image", cfg.ImageName, "docker image name")
 	fs.StringVar(&cfg.ContainerName, "name", cfg.ContainerName, "container name")
+	fs.StringVar(&cfg.Network, "network", cfg.Network, "docker network name")
 	fs.StringVar(&cfg.ProfileDir, "profile-dir", cfg.ProfileDir, "host profile directory for persisted browser state")
 	fs.StringVar(&cfg.HostBind, "host-bind", cfg.HostBind, "host bind address")
 	fs.IntVar(&cfg.HostMCPPort, "host-mcp-port", cfg.HostMCPPort, "host MCP port")
@@ -193,7 +199,7 @@ func cmdBrowserStart(args []string) {
 	registerBrowserConfigFlags(fs, &cfg)
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si browser start [--skip-build] [--repo <path>] [--image <name>] [--name <container>] [--profile-dir <path>] [--host-bind <addr>] [--host-mcp-port <n>] [--host-novnc-port <n>] [--mcp-port <n>] [--novnc-port <n>] [--vnc-password <pwd>] [--mcp-version <ver>] [--browser <name>] [--allowed-hosts <list>] [--json]")
+		printUsage("usage: si browser start [--skip-build] [--repo <path>] [--image <name>] [--name <container>] [--network <name>] [--profile-dir <path>] [--host-bind <addr>] [--host-mcp-port <n>] [--host-novnc-port <n>] [--mcp-port <n>] [--novnc-port <n>] [--vnc-password <pwd>] [--mcp-version <ver>] [--browser <name>] [--allowed-hosts <list>] [--json]")
 		return
 	}
 	if strings.TrimSpace(cfg.ContainerName) == "" {
@@ -204,6 +210,9 @@ func cmdBrowserStart(args []string) {
 	}
 	if strings.TrimSpace(cfg.ProfileDir) == "" {
 		fatal(fmt.Errorf("profile dir is required"))
+	}
+	if strings.TrimSpace(cfg.Network) == "" {
+		fatal(fmt.Errorf("network is required"))
 	}
 	if err := os.MkdirAll(cfg.ProfileDir, 0o700); err != nil {
 		fatal(err)
@@ -217,12 +226,16 @@ func cmdBrowserStart(args []string) {
 	if cfg.ContainerName != "playwright-mcp-headed" {
 		_ = removeDockerContainer("playwright-mcp-headed")
 	}
+	if err := ensureDockerNetwork(cfg.Network); err != nil {
+		fatal(err)
+	}
 	runArgs := []string{
 		"run", "-d",
 		"--name", cfg.ContainerName,
 		"--restart", "unless-stopped",
 		"--init",
 		"--ipc=host",
+		"--network", cfg.Network,
 		"--user", "pwuser",
 		"-e", "VNC_PASSWORD=" + cfg.VNCPassword,
 		"-e", "MCP_VERSION=" + cfg.MCPVersion,
@@ -259,7 +272,7 @@ func cmdBrowserStart(args []string) {
 		return
 	}
 	fmt.Printf("%s %s\n", styleHeading("si browser:"), "start")
-	fmt.Printf("  container=%s image=%s\n", cfg.ContainerName, cfg.ImageName)
+	fmt.Printf("  container=%s image=%s network=%s\n", cfg.ContainerName, cfg.ImageName, cfg.Network)
 	fmt.Printf("  mcp_url=%s\n", browserMCPURL(cfg))
 	fmt.Printf("  novnc_url=%s\n", browserNoVNCURL(cfg))
 	fmt.Printf("  profile_dir=%s\n", cfg.ProfileDir)
@@ -299,7 +312,7 @@ func cmdBrowserStatus(args []string) {
 	registerBrowserConfigFlags(fs, &cfg)
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si browser status [--image <name>] [--name <container>] [--host-bind <addr>] [--host-mcp-port <n>] [--host-novnc-port <n>] [--mcp-port <n>] [--novnc-port <n>] [--json]")
+		printUsage("usage: si browser status [--image <name>] [--name <container>] [--network <name>] [--host-bind <addr>] [--host-mcp-port <n>] [--host-novnc-port <n>] [--mcp-port <n>] [--novnc-port <n>] [--json]")
 		return
 	}
 	status, err := evaluateBrowserStatus(cfg)
@@ -423,6 +436,20 @@ func runDockerOutput(args ...string) (string, error) {
 		return strings.TrimSpace(stdout.String()), fmt.Errorf("%s", message)
 	}
 	return strings.TrimSpace(stdout.String()), nil
+}
+
+func ensureDockerNetwork(name string) error {
+	resolved := strings.TrimSpace(name)
+	if resolved == "" {
+		return fmt.Errorf("network name is required")
+	}
+	if _, err := runDockerOutput("network", "inspect", resolved); err == nil {
+		return nil
+	}
+	if _, err := runDockerOutput("network", "create", resolved); err != nil {
+		return fmt.Errorf("ensure docker network %s: %w", resolved, err)
+	}
+	return nil
 }
 
 func removeDockerContainer(name string) error {
