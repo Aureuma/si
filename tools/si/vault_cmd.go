@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const vaultUsageText = "usage: si vault <init|keygen|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
+const vaultUsageText = "usage: si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>\n\nAlias:\n  si creds ..."
 
 const vaultDockerUsageText = "usage: si vault docker <exec>"
 
@@ -24,6 +24,7 @@ var vaultActions = []subcommandAction{
 	{Name: "trust", Description: "manage trust state for vault files"},
 	{Name: "recipients", Description: "manage recipient keys"},
 	{Name: "keygen", Description: "create or load vault identity key"},
+	{Name: "use", Description: "set the default vault file in settings"},
 }
 
 var vaultDockerActions = []subcommandAction{
@@ -49,6 +50,8 @@ func cmdVault(args []string) {
 		cmdVaultInit(rest)
 	case "keygen":
 		cmdVaultKeygen(rest)
+	case "use":
+		cmdVaultUse(rest)
 	case "status":
 		cmdVaultStatus(rest)
 	case "check":
