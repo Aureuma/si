@@ -715,18 +715,17 @@ func dyadSkipAuthArg(args []string) bool {
 			continue
 		}
 		if raw == "--skip-auth" {
+			if i+1 < len(args) {
+				val := strings.TrimSpace(args[i+1])
+				if isBoolLiteral(val) {
+					val = strings.ToLower(strings.TrimSpace(val))
+					return val == "1" || val == "true" || val == "t"
+				}
+			}
 			return true
 		}
 		if strings.HasPrefix(raw, "--skip-auth=") {
 			val := strings.TrimSpace(strings.TrimPrefix(raw, "--skip-auth="))
-			if !isBoolLiteral(val) {
-				continue
-			}
-			val = strings.ToLower(strings.TrimSpace(val))
-			return val == "1" || val == "true" || val == "t"
-		}
-		if raw == "--skip-auth" && i+1 < len(args) {
-			val := strings.TrimSpace(args[i+1])
 			if !isBoolLiteral(val) {
 				continue
 			}
