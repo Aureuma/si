@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -767,7 +769,7 @@ func cmdGCPIAMRoleGet(args []string) {
 }
 
 func cmdGCPGemini(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp gemini <models|generate|embed|count-tokens|batch-embed|raw>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp gemini <models|generate|embed|count-tokens|batch-embed|image|raw>")
 	if !routedOK {
 		return
 	}
@@ -785,11 +787,185 @@ func cmdGCPGemini(args []string) {
 		cmdGCPGeminiCountTokens(rest)
 	case "batch-embed", "batch", "batch-embed-contents":
 		cmdGCPGeminiBatchEmbed(rest)
+	case "image":
+		cmdGCPGeminiImage(rest)
 	case "raw":
 		cmdGCPGeminiRaw(rest)
 	default:
 		printUnknown("gcp gemini", sub)
 	}
+}
+
+func cmdGCPGeminiImage(args []string) {
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp gemini image <generate>")
+	if !routedOK {
+		return
+	}
+	args = routedArgs
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	rest := args[1:]
+	switch sub {
+	case "generate":
+		cmdGCPGeminiImageGenerate(rest)
+	default:
+		printUnknown("gcp gemini image", sub)
+	}
+}
+
+func cmdGCPGeminiImageGenerate(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true})
+	fs := flag.NewFlagSet("gcp gemini image generate", flag.ExitOnError)
+	flags := bindGCPCommonFlags(fs)
+	apiKey := fs.String("api-key", "", "gemini api key")
+	model := fs.String("model", "gemini-2.0-flash-preview-image-generation", "model id")
+	prompt := fs.String("prompt", "", "image generation prompt")
+	output := fs.String("output", "", "output image path (png)")
+	transparent := fs.Bool("transparent", false, "ask model for transparent background")
+	jsonBody := fs.String("json-body", "", "full request json override")
+	jsonOut := fs.Bool("json", false, "output json")
+	params := multiFlag{}
+	fs.Var(&params, "param", "query parameter key=value (repeatable)")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 || strings.TrimSpace(*output) == "" {
+		printUsage("usage: si gcp gemini image generate --prompt <text> --output <path> [--transparent] [--model <id>] [--api-key <key>] [--json]")
+		return
+	}
+	if strings.TrimSpace(*prompt) == "" && strings.TrimSpace(*jsonBody) == "" {
+		printUsage("usage: si gcp gemini image generate --prompt <text> --output <path> [--transparent] [--model <id>] [--api-key <key>] [--json]")
+		return
+	}
+
+	runtime, key := mustResolveGeminiRuntime(flags, strings.TrimSpace(*apiKey))
+	query := parseGCPParams(params)
+	if key != "" {
+		query["key"] = key
+	}
+
+	requestBody := map[string]any{}
+	if strings.TrimSpace(*jsonBody) != "" {
+		requestBody = parseGCPJSONBody(strings.TrimSpace(*jsonBody), nil)
+	} else {
+		promptText := strings.TrimSpace(*prompt)
+		if *transparent {
+			promptText += "\n\nReturn a PNG with a transparent background (alpha channel) and no canvas fill."
+		}
+		requestBody = map[string]any{
+			"contents": []map[string]any{{
+				"role":  "user",
+				"parts": []map[string]any{{"text": promptText}},
+			}},
+			"generationConfig": map[string]any{
+				"responseModalities": []string{"TEXT", "IMAGE"},
+			},
+		}
+	}
+
+	pathValue := "/v1beta/" + normalizeGeminiModelName(strings.TrimSpace(*model)) + ":generateContent"
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	resp, err := gcpDo(ctx, runtime, gcpRequest{
+		Method:   http.MethodPost,
+		Path:     pathValue,
+		Params:   query,
+		JSONBody: requestBody,
+	})
+	if err != nil {
+		printGCPError(err)
+		return
+	}
+
+	mimeType, encoded, note, err := extractGeminiInlineImage(resp)
+	if err != nil {
+		fatal(err)
+	}
+	rawImage, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
+	if err != nil {
+		fatal(fmt.Errorf("decode gemini image payload: %w", err))
+	}
+
+	outputPath := filepath.Clean(strings.TrimSpace(*output))
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		fatal(err)
+	}
+	if err := os.WriteFile(outputPath, rawImage, 0o644); err != nil {
+		fatal(err)
+	}
+
+	if *jsonOut {
+		payload := map[string]any{
+			"ok":          true,
+			"model":       strings.TrimSpace(*model),
+			"output":      outputPath,
+			"mime_type":   mimeType,
+			"bytes":       len(rawImage),
+			"description": note,
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	successf("gemini image generated: %s", outputPath)
+	fmt.Printf("  model=%s\n", strings.TrimSpace(*model))
+	fmt.Printf("  mime_type=%s\n", mimeType)
+	fmt.Printf("  bytes=%d\n", len(rawImage))
+	if strings.TrimSpace(note) != "" {
+		fmt.Printf("  note=%s\n", note)
+	}
+}
+
+func extractGeminiInlineImage(resp gcpResponse) (string, string, string, error) {
+	data := resp.Data
+	if len(data) == 0 && strings.TrimSpace(resp.Body) != "" {
+		var bodyData map[string]any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(resp.Body)), &bodyData); err == nil {
+			data = bodyData
+		}
+	}
+	candidatesRaw, ok := data["candidates"].([]any)
+	if !ok || len(candidatesRaw) == 0 {
+		return "", "", "", fmt.Errorf("gemini response did not contain candidates")
+	}
+	var firstText string
+	for _, candidate := range candidatesRaw {
+		candidateMap, ok := candidate.(map[string]any)
+		if !ok {
+			continue
+		}
+		contentMap, ok := candidateMap["content"].(map[string]any)
+		if !ok {
+			continue
+		}
+		partsRaw, ok := contentMap["parts"].([]any)
+		if !ok {
+			continue
+		}
+		for _, part := range partsRaw {
+			partMap, ok := part.(map[string]any)
+			if !ok {
+				continue
+			}
+			if textValue := strings.TrimSpace(stringifyWorkOSAny(partMap["text"])); textValue != "" && firstText == "" {
+				firstText = textValue
+			}
+			inlineData, ok := partMap["inlineData"].(map[string]any)
+			if !ok {
+				continue
+			}
+			mimeType := strings.TrimSpace(stringifyWorkOSAny(inlineData["mimeType"]))
+			encoded := strings.TrimSpace(stringifyWorkOSAny(inlineData["data"]))
+			if encoded == "" {
+				continue
+			}
+			if mimeType == "" {
+				mimeType = "image/png"
+			}
+			return mimeType, encoded, firstText, nil
+		}
+	}
+	return "", "", "", fmt.Errorf("gemini response did not contain inline image data")
 }
 
 func cmdGCPGeminiModels(args []string) {
