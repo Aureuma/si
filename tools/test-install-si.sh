@@ -60,6 +60,37 @@ note "dry-run: darwin/arm64 go download URL computation"
 note "dry-run: no-path-hint flag"
 "${INSTALLER}" --dry-run --no-path-hint --source-dir "${ROOT}" --force >/dev/null
 
+note "dry-run: --yes accepted"
+"${INSTALLER}" --dry-run --yes --source-dir "${ROOT}" --force >/dev/null
+
+note "edge: install-dir and install-path are mutually exclusive"
+set +e
+"${INSTALLER}" --dry-run --source-dir "${ROOT}" --install-dir "${tmp}/x" --install-path "${tmp}/y/si" --force >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  fail "expected installer to fail when --install-dir and --install-path are both provided"
+fi
+
+note "edge: invalid source-dir rejected"
+set +e
+"${INSTALLER}" --dry-run --source-dir "${tmp}/missing-source" --force >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  fail "expected installer to fail for missing --source-dir"
+fi
+
+note "edge: non-si source-dir rejected"
+mkdir -p "${tmp}/not-si"
+set +e
+"${INSTALLER}" --dry-run --source-dir "${tmp}/not-si" --force >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  fail "expected installer to fail for --source-dir without tools/si/go.mod"
+fi
+
 note "e2e: install from local checkout into temp bin"
 install_dir="${tmp}/bin"
 mkdir -p "${install_dir}"
@@ -75,6 +106,12 @@ mkdir -p "$(dirname "${install_path}")"
 "${INSTALLER}" --source-dir "${ROOT}" --install-path "${install_path}" --force --quiet
 [[ -x "${install_path}" ]] || fail "expected installed binary at ${install_path}"
 "${install_path}" version >/dev/null
+
+note "e2e: install with explicit tmp-dir (path with spaces)"
+tmp_dir="${tmp}/tmp build"
+mkdir -p "${tmp_dir}"
+"${INSTALLER}" --source-dir "${ROOT}" --tmp-dir "${tmp_dir}" --install-dir "${install_dir}" --force --quiet
+"${install_dir}/si" version >/dev/null
 
 note "e2e: idempotent reinstall over existing binary"
 "${INSTALLER}" --source-dir "${ROOT}" --install-dir "${install_dir}" --force --quiet
@@ -97,16 +134,20 @@ note "edge: uninstall when not installed succeeds"
 "${INSTALLER}" --install-dir "${install_dir}" --uninstall --quiet
 
 note "edge: unwritable install dir"
-ro="${tmp}/ro"
-mkdir -p "${ro}"
-chmod 000 "${ro}"
-set +e
-"${INSTALLER}" --source-dir "${ROOT}" --install-dir "${ro}" --force --quiet >/dev/null 2>&1
-rc=$?
-set -e
-chmod 755 "${ro}"
-if [[ $rc -eq 0 ]]; then
-  fail "expected install to fail for unwritable dir"
+if [[ "$(id -u)" -eq 0 ]]; then
+  note "skip unwritable-dir assertion as root (root bypasses directory permission bits)"
+else
+  ro="${tmp}/ro"
+  mkdir -p "${ro}"
+  chmod 000 "${ro}"
+  set +e
+  "${INSTALLER}" --source-dir "${ROOT}" --install-dir "${ro}" --force --quiet >/dev/null 2>&1
+  rc=$?
+  set -e
+  chmod 755 "${ro}"
+  if [[ $rc -eq 0 ]]; then
+    fail "expected install to fail for unwritable dir"
+  fi
 fi
 
 note "edge: go-mode system fails when go not in PATH"
