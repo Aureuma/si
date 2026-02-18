@@ -9,6 +9,7 @@ Use `si --help` for the full command and flag surface.
 - `si vault ...`: encrypted dotenv management + secure process/container injection.
 - `si stripe|github|cloudflare|google|apple|social|workos|publish|aws|gcp|openai|oci ...`: provider bridge families.
 - `si providers ...`: provider capability and health views.
+- `si plugins ...`: plugin marketplace, catalog, and integration lifecycle.
 - `si browser ...`: Dockerized Playwright MCP runtime.
 - `si paas ...`: Docker-native deployment and operations workflows.
 - `si mintlify ...`: docs bootstrap/validate/dev wrappers via Mintlify CLI.
@@ -49,6 +50,10 @@ si paas backup run --app <slug> --json
 
 # Run browser runtime for MCP clients
 si browser start
+
+# Scaffold and register a plugin integration
+si plugins scaffold acme/release-mind --dir ./integrations
+si plugins register ./integrations/acme/release-mind --channel community
 ```
 
 ## Security notes

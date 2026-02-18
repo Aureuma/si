@@ -82,6 +82,9 @@ var (
 	loadSkillRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdSkill(args) }
 	}
+	loadPluginsRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdPlugins(args) }
+	}
 )
 
 func dispatchRootCommand(cmd string, args []string) bool {
@@ -134,6 +137,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadPaasRootHandler), "paas")
 	register(newLazyRootHandler(loadPersonaRootHandler), "persona")
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
+	register(newLazyRootHandler(loadPluginsRootHandler), "plugins", "plugin", "marketplace")
 	register(func(_ string, _ []string) { usage() }, "help", "-h", "--help")
 
 	return handlers
