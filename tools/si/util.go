@@ -69,7 +69,7 @@ Core:
   si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
-  si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold>
+  si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold|policy>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]
@@ -565,6 +565,7 @@ plugins:
   si plugins doctor [--json]
   si plugins register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]
   si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]
+  si plugins policy show|set ... [--json]
 
 	Environment defaults (selected)
 	-------------------------------

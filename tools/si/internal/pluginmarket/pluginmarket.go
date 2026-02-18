@@ -109,7 +109,14 @@ type CatalogEntry struct {
 
 type State struct {
 	SchemaVersion int                      `json:"schema_version,omitempty"`
+	Policy        Policy                   `json:"policy,omitempty"`
 	Installs      map[string]InstallRecord `json:"installs,omitempty"`
+}
+
+type Policy struct {
+	Enabled bool     `json:"enabled"`
+	Allow   []string `json:"allow,omitempty"`
+	Deny    []string `json:"deny,omitempty"`
 }
 
 type InstallRecord struct {
@@ -149,7 +156,16 @@ func DefaultPaths() (Paths, error) {
 func DefaultState() State {
 	return State{
 		SchemaVersion: SchemaVersion,
+		Policy:        DefaultPolicy(),
 		Installs:      map[string]InstallRecord{},
+	}
+}
+
+func DefaultPolicy() Policy {
+	return Policy{
+		Enabled: true,
+		Allow:   nil,
+		Deny:    nil,
 	}
 }
 
@@ -216,6 +232,14 @@ func normalizeStringList(values []string) []string {
 		return nil
 	}
 	return result
+}
+
+func normalizePolicy(policy *Policy) {
+	if policy == nil {
+		return
+	}
+	policy.Allow = normalizeStringList(policy.Allow)
+	policy.Deny = normalizeStringList(policy.Deny)
 }
 
 func NamespaceFromID(id string) string {
@@ -556,6 +580,7 @@ func LoadState(paths Paths) (State, error) {
 	if state.SchemaVersion == 0 {
 		state.SchemaVersion = SchemaVersion
 	}
+	normalizePolicy(&state.Policy)
 	if state.Installs == nil {
 		state.Installs = map[string]InstallRecord{}
 	}
@@ -581,6 +606,7 @@ func SaveState(paths Paths, state State) error {
 	if state.SchemaVersion == 0 {
 		state.SchemaVersion = SchemaVersion
 	}
+	normalizePolicy(&state.Policy)
 	if state.Installs == nil {
 		state.Installs = map[string]InstallRecord{}
 	}
@@ -847,9 +873,53 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
+func ResolveEnableState(id string, record InstallRecord, policy Policy) (bool, string) {
+	id = strings.TrimSpace(id)
+	if !policy.Enabled {
+		return false, "blocked: plugins policy disabled"
+	}
+	if containsString(policy.Deny, id) {
+		return false, "blocked: denylist"
+	}
+	if len(policy.Allow) > 0 && !containsString(policy.Allow, id) {
+		return false, "blocked: not in allowlist"
+	}
+	if !record.Enabled {
+		return false, "blocked: install record disabled"
+	}
+	return true, "enabled"
+}
+
+func containsString(items []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, item := range items {
+		if strings.TrimSpace(item) == target {
+			return true
+		}
+	}
+	return false
+}
+
 func Doctor(catalog Catalog, state State, paths Paths) []Diagnostic {
 	diagnostics := make([]Diagnostic, 0)
 	catalogByID := CatalogByID(catalog)
+	overlap := overlapStrings(state.Policy.Allow, state.Policy.Deny)
+	for _, id := range overlap {
+		diagnostics = append(diagnostics, Diagnostic{
+			Level:   "warn",
+			Message: fmt.Sprintf("policy overlap: %q is in both allow and deny lists; deny takes precedence", id),
+		})
+	}
+	for _, id := range state.Policy.Allow {
+		if err := ValidatePluginID(id); err != nil {
+			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("policy allow id %q invalid: %v", id, err)})
+		}
+	}
+	for _, id := range state.Policy.Deny {
+		if err := ValidatePluginID(id); err != nil {
+			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("policy deny id %q invalid: %v", id, err)})
+		}
+	}
 	for id, record := range state.Installs {
 		if err := ValidatePluginID(id); err != nil {
 			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("installed id %q invalid: %v", id, err)})
@@ -874,6 +944,12 @@ func Doctor(catalog Catalog, state State, paths Paths) []Diagnostic {
 				diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("install dir for %q missing %s", id, ManifestFileName), Source: manifestPath})
 			}
 		}
+		if enabled, reason := ResolveEnableState(id, record, state.Policy); !enabled {
+			diagnostics = append(diagnostics, Diagnostic{
+				Level:   "info",
+				Message: fmt.Sprintf("plugin %q inactive: %s", id, reason),
+			})
+		}
 	}
 	if len(state.Installs) == 0 {
 		diagnostics = append(diagnostics, Diagnostic{Level: "info", Message: "no plugins installed"})
@@ -895,6 +971,32 @@ func verifyInstallDirWithin(baseDir, targetDir string) error {
 		return fmt.Errorf("path escapes installs dir")
 	}
 	return nil
+}
+
+func overlapStrings(a []string, b []string) []string {
+	if len(a) == 0 || len(b) == 0 {
+		return nil
+	}
+	set := map[string]bool{}
+	for _, item := range a {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		set[item] = true
+	}
+	overlap := make([]string, 0)
+	for _, item := range b {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if set[item] {
+			overlap = append(overlap, item)
+		}
+	}
+	sort.Strings(overlap)
+	return normalizeStringList(overlap)
 }
 
 func ScaffoldManifest(id string) (Manifest, error) {
