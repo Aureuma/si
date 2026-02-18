@@ -1,4 +1,4 @@
-name: Installer Smoke
+name: SI Tests
 
 on:
   push:
@@ -6,9 +6,48 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: si-tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  docs-scope:
+    runs-on: ubuntu-latest
+    outputs:
+      docs_only: ${{ steps.check.outputs.docs_only }}
+      docs_changed: ${{ steps.check.outputs.docs_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect docs-only changes
+        id: check
+        uses: ./.github/actions/detect-docs-changes
+
+  go-tests:
+    name: Go workspace tests (ubuntu)
+    needs: [docs-scope]
+    if: needs.docs-scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
+      - name: Run Go workspace tests
+        run: ./tools/test.sh
+
   host-smoke:
     name: Host installer smoke (${{ matrix.os }})
+    needs: [docs-scope]
+    if: needs.docs-scope.outputs.docs_only != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -23,6 +62,8 @@ jobs:
 
   docker-smoke:
     name: Docker installer smoke (ubuntu)
+    needs: [docs-scope]
+    if: needs.docs-scope.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
