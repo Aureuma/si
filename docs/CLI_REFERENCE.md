@@ -2,6 +2,15 @@
 
 Use `si --help` for the full command and flag surface.
 
+Related:
+- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Documentation Style Guide](./DOCS_STYLE_GUIDE)
+
+Detailed integration guides:
+- [Providers](./PROVIDERS), [GitHub](./GITHUB), [Cloudflare](./CLOUDFLARE), [WorkOS](./WORKOS)
+- [GCP](./GCP), [Google Places](./GOOGLE_PLACES), [Google Play](./GOOGLE_PLAY), [Google YouTube](./GOOGLE_YOUTUBE)
+- [AWS](./AWS), [OpenAI](./OPENAI), [OCI](./OCI), [Apple App Store](./APPLE_APPSTORE), [Stripe](./STRIPE), [Social](./SOCIAL), [Publish](./PUBLISH)
+
 ## Top-level command groups
 
 - `si dyad ...`: actor/critic dyad lifecycle and loop operations.
