@@ -111,6 +111,13 @@ type CatalogEntry struct {
 	Tags     []string `json:"tags,omitempty"`
 }
 
+type BuildCatalogOptions struct {
+	Channel  string
+	Verified bool
+	AddedAt  string
+	Tags     []string
+}
+
 type State struct {
 	SchemaVersion int                      `json:"schema_version,omitempty"`
 	Policy        Policy                   `json:"policy,omitempty"`
@@ -674,6 +681,96 @@ func ParseCatalogPathList(raw string) []string {
 	}
 	parts := strings.FieldsFunc(raw, splitter)
 	return normalizeStringList(parts)
+}
+
+func DiscoverManifestPaths(source string) ([]string, error) {
+	resolved, err := cleanAbsPath(source)
+	if err != nil {
+		return nil, err
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() {
+		paths := make([]string, 0)
+		err := filepath.WalkDir(resolved, func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() {
+				return nil
+			}
+			if strings.EqualFold(entry.Name(), ManifestFileName) {
+				paths = append(paths, path)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		sort.Strings(paths)
+		if len(paths) == 0 {
+			return nil, fmt.Errorf("no %s files found in %s", ManifestFileName, resolved)
+		}
+		return paths, nil
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("unsupported source type: %s", resolved)
+	}
+	if !strings.EqualFold(filepath.Base(resolved), ManifestFileName) {
+		return nil, fmt.Errorf("source file must be %s, got %s", ManifestFileName, resolved)
+	}
+	return []string{resolved}, nil
+}
+
+func BuildCatalogFromSource(source string, options BuildCatalogOptions) (Catalog, []Diagnostic, error) {
+	paths, err := DiscoverManifestPaths(source)
+	if err != nil {
+		return Catalog{}, nil, err
+	}
+	channel := strings.TrimSpace(options.Channel)
+	if channel == "" {
+		channel = "community"
+	}
+	addedAt := strings.TrimSpace(options.AddedAt)
+	if addedAt == "" {
+		addedAt = time.Now().UTC().Format("2006-01-02")
+	}
+	if _, err := time.Parse("2006-01-02", addedAt); err != nil {
+		return Catalog{}, nil, fmt.Errorf("invalid added_at date %q (expected YYYY-MM-DD)", addedAt)
+	}
+	tags := normalizeStringList(options.Tags)
+	diagnostics := make([]Diagnostic, 0)
+	entries := make([]CatalogEntry, 0, len(paths))
+	seen := map[string]string{}
+	for _, path := range paths {
+		manifest, _, err := ReadManifestFromPath(path)
+		if err != nil {
+			return Catalog{}, diagnostics, err
+		}
+		if previous, ok := seen[manifest.ID]; ok {
+			diagnostics = append(diagnostics, Diagnostic{
+				Level:   "warn",
+				Source:  path,
+				Message: fmt.Sprintf("duplicate plugin id %q skipped (already loaded from %s)", manifest.ID, previous),
+			})
+			continue
+		}
+		seen[manifest.ID] = path
+		entry := CatalogEntry{
+			Manifest: manifest,
+			Channel:  channel,
+			Verified: options.Verified,
+			AddedAt:  addedAt,
+			Tags:     tags,
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Manifest.ID < entries[j].Manifest.ID
+	})
+	return Catalog{SchemaVersion: SchemaVersion, Entries: entries}, diagnostics, nil
 }
 
 func loadCatalogPathSource(path string) ([]Catalog, []Diagnostic, error) {

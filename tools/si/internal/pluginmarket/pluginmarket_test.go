@@ -347,3 +347,93 @@ func TestInstallFromSourceRejectsUnsupportedFile(t *testing.T) {
 		t.Fatalf("expected unsupported source to fail")
 	}
 }
+
+func TestDiscoverManifestPathsFromTree(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "openclaw", "discord")
+	second := filepath.Join(root, "openclaw", "slack")
+	for _, dir := range []string{first, second} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(first, ManifestFileName), []byte(`{"schema_version":1,"id":"openclaw/discord","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(second, ManifestFileName), []byte(`{"schema_version":1,"id":"openclaw/slack","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	paths, err := DiscoverManifestPaths(root)
+	if err != nil {
+		t.Fatalf("discover manifests: %v", err)
+	}
+	if len(paths) != 2 {
+		t.Fatalf("expected two manifest paths, got %#v", paths)
+	}
+}
+
+func TestBuildCatalogFromSource(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "openclaw", "discord")
+	second := filepath.Join(root, "openclaw", "slack")
+	for _, dir := range []string{first, second} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(first, ManifestFileName), []byte(`{"schema_version":1,"id":"openclaw/discord","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(second, ManifestFileName), []byte(`{"schema_version":1,"id":"openclaw/slack","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+		t.Fatalf("write manifest: %v", err)
+	}
+	catalog, diagnostics, err := BuildCatalogFromSource(root, BuildCatalogOptions{
+		Channel:  "ecosystem",
+		Verified: true,
+		AddedAt:  "2026-02-18",
+		Tags:     []string{"openclaw", "channel"},
+	})
+	if err != nil {
+		t.Fatalf("build catalog: %v", err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("unexpected diagnostics: %#v", diagnostics)
+	}
+	if len(catalog.Entries) != 2 {
+		t.Fatalf("expected 2 catalog entries, got %#v", catalog.Entries)
+	}
+	if catalog.Entries[0].Channel != "ecosystem" || !catalog.Entries[0].Verified {
+		t.Fatalf("unexpected entry metadata: %#v", catalog.Entries[0])
+	}
+	if catalog.Entries[0].AddedAt != "2026-02-18" {
+		t.Fatalf("expected added_at propagated, got %#v", catalog.Entries[0])
+	}
+}
+
+func TestBuildCatalogFromSourceSkipsDuplicateIDs(t *testing.T) {
+	root := t.TempDir()
+	first := filepath.Join(root, "a")
+	second := filepath.Join(root, "b")
+	for _, dir := range []string{first, second} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", dir, err)
+		}
+	}
+	manifest := `{"schema_version":1,"id":"openclaw/discord","namespace":"openclaw","install":{"type":"none"}}`
+	if err := os.WriteFile(filepath.Join(first, ManifestFileName), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write first manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(second, ManifestFileName), []byte(manifest), 0o644); err != nil {
+		t.Fatalf("write second manifest: %v", err)
+	}
+	catalog, diagnostics, err := BuildCatalogFromSource(root, BuildCatalogOptions{AddedAt: "2026-02-18"})
+	if err != nil {
+		t.Fatalf("build catalog: %v", err)
+	}
+	if len(catalog.Entries) != 1 {
+		t.Fatalf("expected duplicate to be skipped, got %#v", catalog.Entries)
+	}
+	if len(diagnostics) != 1 || diagnostics[0].Level != "warn" {
+		t.Fatalf("expected one warn diagnostic, got %#v", diagnostics)
+	}
+}

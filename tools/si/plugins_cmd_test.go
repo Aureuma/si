@@ -291,3 +291,59 @@ func TestPluginsUpdateCommandJSON(t *testing.T) {
 		t.Fatalf("unexpected updated plugin: %#v", updated)
 	}
 }
+
+func TestPluginsCatalogBuildAndValidateJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	home := t.TempDir()
+	sourceRoot := t.TempDir()
+	outputPath := filepath.Join(t.TempDir(), "ecosystem-catalog.json")
+	discordDir := filepath.Join(sourceRoot, "openclaw", "discord")
+	slackDir := filepath.Join(sourceRoot, "openclaw", "slack")
+	if err := os.MkdirAll(discordDir, 0o755); err != nil {
+		t.Fatalf("mkdir discord dir: %v", err)
+	}
+	if err := os.MkdirAll(slackDir, 0o755); err != nil {
+		t.Fatalf("mkdir slack dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(discordDir, "si.plugin.json"), []byte(`{"schema_version":1,"id":"openclaw/discord","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+		t.Fatalf("write discord manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(slackDir, "si.plugin.json"), []byte(`{"schema_version":1,"id":"openclaw/slack","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+		t.Fatalf("write slack manifest: %v", err)
+	}
+
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "catalog", "build", "--source", sourceRoot, "--output", outputPath, "--channel", "ecosystem", "--verified", "--tag", "openclaw", "--json")
+	if err != nil {
+		t.Fatalf("catalog build failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var buildPayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &buildPayload); err != nil {
+		t.Fatalf("build json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if ok, _ := buildPayload["ok"].(bool); !ok {
+		t.Fatalf("expected build ok=true: %#v", buildPayload)
+	}
+	if entries, _ := buildPayload["entries"].(float64); int(entries) != 2 {
+		t.Fatalf("expected 2 build entries: %#v", buildPayload)
+	}
+	if _, err := os.Stat(outputPath); err != nil {
+		t.Fatalf("expected output file written: %v", err)
+	}
+
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "catalog", "validate", "--source", sourceRoot, "--json")
+	if err != nil {
+		t.Fatalf("catalog validate failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var validatePayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &validatePayload); err != nil {
+		t.Fatalf("validate json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if ok, _ := validatePayload["ok"].(bool); !ok {
+		t.Fatalf("expected validate ok=true: %#v", validatePayload)
+	}
+	if entries, _ := validatePayload["entries"].(float64); int(entries) != 2 {
+		t.Fatalf("expected 2 validate entries: %#v", validatePayload)
+	}
+}
