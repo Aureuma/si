@@ -48,6 +48,20 @@ si github context use --account core --owner Aureuma --auth-mode app --base-url 
 si github context use --account core --auth-mode oauth --token-env GITHUB_CORE_OAUTH_ACCESS_TOKEN
 ```
 
+## Git Remotes (No PAT URLs)
+
+Use GitHub App tokens through `si vault` as a Git credential helper, then normalize remotes to PAT-free HTTPS URLs:
+
+```bash
+si vault run -- si github git setup --root ~/Development --account core --owner Aureuma
+```
+
+Helper-only usage (for manual git credential helper wiring):
+
+```bash
+si github git credential get
+```
+
 ## Repositories
 
 ```bash
