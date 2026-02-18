@@ -1,0 +1,69 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "si",
+  "theme": "venus",
+  "colors": {
+    "primary": "#0f6d5f",
+    "light": "#8bf0c9",
+    "dark": "#0c4b42"
+  },
+  "favicon": "/images/si-hero.png",
+  "logo": {
+    "light": "/images/si-hero.png",
+    "dark": "/images/si-hero.png"
+  },
+  "tabs": [
+    {
+      "name": "CLI",
+      "url": "https://docs.si.aureuma.ai"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Overview",
+      "pages": [
+        "docs/index",
+        "docs/CLI_REFERENCE",
+        "docs/testing",
+        "docs/MINTLIFY"
+      ]
+    },
+    {
+      "group": "Core",
+      "pages": [
+        "docs/DYAD",
+        "docs/VAULT",
+        "docs/BROWSER",
+        "docs/SETTINGS"
+      ]
+    },
+    {
+      "group": "Providers",
+      "pages": [
+        "docs/GITHUB",
+        "docs/CLOUDFLARE",
+        "docs/GCP",
+        "docs/STRIPE",
+        "docs/SOCIAL"
+      ]
+    },
+    {
+      "group": "PaaS",
+      "pages": [
+        "docs/PAAS_TEST_MATRIX",
+        "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
+        "docs/PAAS_BACKUP_RESTORE_POLICY",
+        "docs/PAAS_INCIDENT_RUNBOOK",
+        "docs/PAAS_SECURITY_THREAT_MODEL"
+      ]
+    },
+    {
+      "group": "Release",
+      "pages": [
+        "docs/RELEASING",
+        "docs/RELEASE_RUNBOOK",
+        "docs/RELEASE_NOTES_ARCHIVE"
+      ]
+    }
+  ]
+}
