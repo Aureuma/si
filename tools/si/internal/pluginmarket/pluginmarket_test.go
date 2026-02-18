@@ -329,3 +329,21 @@ func TestInstallFromArchiveRejectsTraversal(t *testing.T) {
 		t.Fatalf("expected traversal error, got: %v", err)
 	}
 }
+
+func TestInstallFromSourceRejectsUnsupportedFile(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		RootDir:     root,
+		InstallsDir: filepath.Join(root, "installed"),
+		StateFile:   filepath.Join(root, "state.json"),
+		CatalogFile: filepath.Join(root, "catalog.json"),
+		CatalogDir:  filepath.Join(root, "catalog.d"),
+	}
+	source := filepath.Join(root, "plugin.bin")
+	if err := os.WriteFile(source, []byte("not-a-plugin"), 0o644); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if _, err := InstallFromSource(paths, source, true, time.Time{}); err == nil {
+		t.Fatalf("expected unsupported source to fail")
+	}
+}

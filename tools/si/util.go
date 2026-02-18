@@ -69,7 +69,7 @@ Core:
   si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
-  si plugins <list|info|install|uninstall|enable|disable|doctor|register|scaffold|policy>
+  si plugins <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]
@@ -560,6 +560,7 @@ plugins:
   si plugins list [--installed] [--json]
   si plugins info <id> [--json]
   si plugins install <id-or-path> [--disabled] [--json]  (path supports manifest dir/file and .zip/.tgz/.tar.gz/.tar)
+  si plugins update <id>|--all [--json]
   si plugins uninstall <id> [--keep-files] [--json]
   si plugins enable|disable <id> [--json]
   si plugins doctor [--json]
