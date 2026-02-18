@@ -150,13 +150,20 @@ else
   fi
 fi
 
-note "edge: go-mode system fails when go not in PATH"
+note "edge: go-mode system fails when go is unavailable"
+fake_go_path="${tmp}/fake-go-path"
+mkdir -p "${fake_go_path}"
+cat > "${fake_go_path}/go" <<'EOF'
+#!/usr/bin/env bash
+exit 127
+EOF
+chmod +x "${fake_go_path}/go"
 set +e
-PATH="/usr/bin:/bin" "${INSTALLER}" --dry-run --source-dir "${ROOT}" --go-mode system --force --quiet >/dev/null 2>&1
+PATH="${fake_go_path}:/usr/bin:/bin" "${INSTALLER}" --dry-run --source-dir "${ROOT}" --go-mode system --force --quiet >/dev/null 2>&1
 rc=$?
 set -e
 if [[ $rc -eq 0 ]]; then
-  fail "expected --go-mode system to fail when go is not in PATH"
+  fail "expected --go-mode system to fail when go is unavailable"
 fi
 
 note "edge: --os/--arch overrides are rejected without --dry-run"

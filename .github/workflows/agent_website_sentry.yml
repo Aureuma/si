@@ -38,18 +38,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          delimiter="SI_SUMMARY_$(date +%s%N)"
           summary_file="${{ steps.sentry.outputs.summary_file }}"
           if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
             {
-              echo "body<<'EOF'"
+              echo "body<<${delimiter}"
               cat "${summary_file}"
-              echo "EOF"
+              echo "${delimiter}"
             } >> "${GITHUB_OUTPUT}"
           else
             {
-              echo "body<<'EOF'"
+              echo "body<<${delimiter}"
               echo "No summary generated."
-              echo "EOF"
+              echo "${delimiter}"
             } >> "${GITHUB_OUTPUT}"
           fi
 
