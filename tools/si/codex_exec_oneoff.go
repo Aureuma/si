@@ -163,6 +163,9 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	if err := client.StartContainer(ctx, id); err != nil {
 		return err
 	}
+	if !opts.DisableMCP {
+		ensureBrowserMCPForContainer(ctx, client, id)
+	}
 	if opts.Profile != nil {
 		seedCodexAuth(ctx, client, id, false, *opts.Profile)
 	}

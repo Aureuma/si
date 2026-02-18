@@ -34,6 +34,7 @@ const (
 	codexTmuxSessionPrefix = "si-codex-pane-"
 	codexTmuxCmdShaOpt     = "@si_codex_cmd_sha"
 	codexTmuxHostCwdOpt    = "@si_codex_host_cwd"
+	codexBrowserMCPName    = "si_browser"
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -2000,23 +2001,63 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 	// #nosec G304 -- hostPath is fixed to user config location under home directory.
 	data, err := os.ReadFile(hostPath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return
+		if !os.IsNotExist(err) {
+			warnf("codex config copy skipped: %v", err)
 		}
-		warnf("codex config copy skipped: %v", err)
+	} else {
+		copied := false
+		for _, target := range codexContainerConfigTargets() {
+			_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(target.Path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+			if err := client.CopyFileToContainer(ctx, containerID, target.Path, data, 0o600); err != nil {
+				continue
+			}
+			copied = true
+			_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+		}
+		if !copied {
+			warnf("codex config copy failed for container %s", strings.TrimSpace(containerID))
+		}
+	}
+	ensureBrowserMCPForContainer(ctx, client, containerID)
+}
+
+func ensureBrowserMCPForContainer(ctx context.Context, client *shared.Client, containerID string) {
+	url := strings.TrimSpace(codexBrowserMCPURL())
+	if url == "" || client == nil || strings.TrimSpace(containerID) == "" {
 		return
 	}
-	copied := false
-	for _, target := range codexContainerConfigTargets() {
-		_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(target.Path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
-		if err := client.CopyFileToContainer(ctx, containerID, target.Path, data, 0o600); err != nil {
-			continue
-		}
-		copied = true
-		_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	rootCmd := []string{"bash", "-lc", fmt.Sprintf("if command -v codex >/dev/null 2>&1; then CODEX_HOME=/root/.codex codex mcp add %s --url %s >/dev/null 2>&1 || true; fi", quoteSingle(codexBrowserMCPName), quoteSingle(url))}
+	_ = client.Exec(ctx, containerID, rootCmd, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+
+	siCmd := []string{"bash", "-lc", fmt.Sprintf("if command -v codex >/dev/null 2>&1; then CODEX_HOME=/home/si/.codex codex mcp add %s --url %s >/dev/null 2>&1 || true; fi", quoteSingle(codexBrowserMCPName), quoteSingle(url))}
+	_ = client.Exec(ctx, containerID, siCmd, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+}
+
+func codexBrowserMCPURL() string {
+	if envIsTrue("SI_BROWSER_MCP_DISABLED") {
+		return ""
 	}
-	if !copied {
-		warnf("codex config copy failed for container %s", strings.TrimSpace(containerID))
+	if explicit := strings.TrimSpace(os.Getenv("SI_BROWSER_MCP_URL_INTERNAL")); explicit != "" {
+		return explicit
+	}
+	if explicit := strings.TrimSpace(os.Getenv("SI_BROWSER_MCP_URL")); explicit != "" {
+		return explicit
+	}
+	containerName := strings.TrimSpace(envOr("SI_BROWSER_CONTAINER", defaultBrowserContainer))
+	port := envOrInt("SI_BROWSER_MCP_PORT", defaultBrowserMCPPort)
+	if containerName == "" || port <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("http://%s:%d/mcp", containerName, port)
+}
+
+func envIsTrue(key string) bool {
+	val := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch val {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 

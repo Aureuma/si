@@ -418,6 +418,16 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 	if effort != "" {
 		env = append(env, "CODEX_REASONING_EFFORT="+effort)
 	}
+	// Forward browser MCP overrides so dyad codex-init can wire the correct MCP endpoint.
+	for _, key := range []string{
+		"SI_BROWSER_MCP_DISABLED",
+		"SI_BROWSER_MCP_URL",
+		"SI_BROWSER_MCP_URL_INTERNAL",
+		"SI_BROWSER_CONTAINER",
+		"SI_BROWSER_MCP_PORT",
+	} {
+		env = appendHostEnvIfSet(env, key)
+	}
 	uid := os.Getuid()
 	gid := os.Getgid()
 	if raw := strings.TrimSpace(os.Getenv("SI_HOST_UID")); raw != "" {

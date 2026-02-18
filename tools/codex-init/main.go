@@ -17,6 +17,12 @@ import (
 	"time"
 )
 
+const (
+	defaultBrowserContainerName = "si-playwright-mcp-headed"
+	defaultBrowserMCPPort       = 8931
+	defaultBrowserMCPName       = "si_browser"
+)
+
 func main() {
 	quiet, execArgs := parseArgs(os.Args[1:])
 
@@ -46,6 +52,7 @@ func main() {
 			fatal(err, quiet)
 		}
 	}
+	ensureBrowserMCPConfig(configDir)
 
 	// Avoid "dubious ownership" errors when running as root in bind-mounted workspaces.
 	ensureGitSafeDirectories()
@@ -85,6 +92,46 @@ func ensureGitSafeDirectories() {
 	cwd, _ := os.Getwd()
 	for _, path := range collectGitSafeDirectories(listMountPoints("/proc/self/mountinfo"), cwd) {
 		ensureGitSafeDirectory(path)
+	}
+}
+
+func ensureBrowserMCPConfig(codexHome string) {
+	codexHome = strings.TrimSpace(codexHome)
+	url := strings.TrimSpace(browserMCPURLFromEnv())
+	if codexHome == "" || url == "" {
+		return
+	}
+	_ = os.MkdirAll(codexHome, 0o700)
+	cmd := exec.Command("codex", "mcp", "add", defaultBrowserMCPName, "--url", url)
+	cmd.Env = append(os.Environ(), "CODEX_HOME="+codexHome)
+	_ = cmd.Run()
+}
+
+func browserMCPURLFromEnv() string {
+	if envIsTrue("SI_BROWSER_MCP_DISABLED") {
+		return ""
+	}
+	if explicit := strings.TrimSpace(os.Getenv("SI_BROWSER_MCP_URL_INTERNAL")); explicit != "" {
+		return explicit
+	}
+	if explicit := strings.TrimSpace(os.Getenv("SI_BROWSER_MCP_URL")); explicit != "" {
+		return explicit
+	}
+	containerName := strings.TrimSpace(envOr("SI_BROWSER_CONTAINER", defaultBrowserContainerName))
+	port := envOrInt("SI_BROWSER_MCP_PORT", defaultBrowserMCPPort)
+	if containerName == "" || port <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("http://%s:%d/mcp", containerName, port)
+}
+
+func envIsTrue(key string) bool {
+	val := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch val {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -443,6 +490,18 @@ func envOr(key, def string) string {
 		return def
 	}
 	return val
+}
+
+func envOrInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func isDir(path string) bool {

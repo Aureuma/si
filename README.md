@@ -93,6 +93,9 @@ Browser runtime:
 ./si browser stop
 ```
 
+When running, SI-managed codex and dyad containers auto-register MCP server `si_browser`
+to the browser runtime endpoint on the shared Docker network.
+
 Mintlify docs tooling:
 
 ```bash
