@@ -46,6 +46,8 @@ var (
 	}
 )
 
+var wildcardPolicyPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*/\*$`)
+
 //go:embed builtin_catalog.json
 var builtinCatalogRaw []byte
 
@@ -283,6 +285,17 @@ func ValidatePluginID(id string) error {
 		}
 	}
 	return nil
+}
+
+func ValidatePolicySelector(selector string) error {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return fmt.Errorf("policy selector required")
+	}
+	if wildcardPolicyPattern.MatchString(selector) {
+		return nil
+	}
+	return ValidatePluginID(selector)
 }
 
 func ValidateManifest(manifest Manifest) error {
@@ -1289,16 +1302,36 @@ func ResolveEnableState(id string, record InstallRecord, policy Policy) (bool, s
 	if !policy.Enabled {
 		return false, "blocked: plugins policy disabled"
 	}
-	if containsString(policy.Deny, id) {
+	if matchPolicySelectors(policy.Deny, id) {
 		return false, "blocked: denylist"
 	}
-	if len(policy.Allow) > 0 && !containsString(policy.Allow, id) {
+	if len(policy.Allow) > 0 && !matchPolicySelectors(policy.Allow, id) {
 		return false, "blocked: not in allowlist"
 	}
 	if !record.Enabled {
 		return false, "blocked: install record disabled"
 	}
 	return true, "enabled"
+}
+
+func matchPolicySelectors(selectors []string, target string) bool {
+	target = strings.TrimSpace(target)
+	for _, selector := range selectors {
+		selector = strings.TrimSpace(selector)
+		if selector == "" {
+			continue
+		}
+		if selector == target {
+			return true
+		}
+		if strings.HasSuffix(selector, "/*") {
+			namespace := strings.TrimSuffix(selector, "/*")
+			if namespace != "" && strings.HasPrefix(target, namespace+"/") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func containsString(items []string, target string) bool {
@@ -1322,12 +1355,12 @@ func Doctor(catalog Catalog, state State, paths Paths) []Diagnostic {
 		})
 	}
 	for _, id := range state.Policy.Allow {
-		if err := ValidatePluginID(id); err != nil {
+		if err := ValidatePolicySelector(id); err != nil {
 			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("policy allow id %q invalid: %v", id, err)})
 		}
 	}
 	for _, id := range state.Policy.Deny {
-		if err := ValidatePluginID(id); err != nil {
+		if err := ValidatePolicySelector(id); err != nil {
 			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("policy deny id %q invalid: %v", id, err)})
 		}
 	}
