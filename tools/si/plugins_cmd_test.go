@@ -93,3 +93,70 @@ func TestPluginsLifecycleViaCatalogJSON(t *testing.T) {
 		t.Fatalf("expected doctor ok=true: %#v", doctorPayload)
 	}
 }
+
+func TestPluginsPolicyAffectsEffectiveState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	home := t.TempDir()
+	workspace := t.TempDir()
+	pluginID := "acme/release-mind"
+	pluginPath := filepath.Join(workspace, "acme", "release-mind")
+
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "scaffold", pluginID, "--dir", workspace, "--json")
+	if err != nil {
+		t.Fatalf("scaffold failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "register", pluginPath, "--json")
+	if err != nil {
+		t.Fatalf("register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "policy", "set", "--deny", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("policy set failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var infoPayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &infoPayload); err != nil {
+		t.Fatalf("info json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if effective, _ := infoPayload["effective_enabled"].(bool); effective {
+		t.Fatalf("expected effective_enabled=false after denylist policy: %#v", infoPayload)
+	}
+	reason, _ := infoPayload["effective_reason"].(string)
+	if reason == "" {
+		t.Fatalf("expected effective_reason in info payload: %#v", infoPayload)
+	}
+
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "list", "--installed", "--json")
+	if err != nil {
+		t.Fatalf("list failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var listPayload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &listPayload); err != nil {
+		t.Fatalf("list json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	rows, ok := listPayload["rows"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("expected one installed row: %#v", listPayload)
+	}
+	row, ok := rows[0].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected row shape: %#v", rows[0])
+	}
+	if row["id"] != pluginID {
+		t.Fatalf("unexpected row id: %#v", row)
+	}
+	if effective, _ := row["effective_enabled"].(bool); effective {
+		t.Fatalf("expected list effective_enabled=false: %#v", row)
+	}
+}
