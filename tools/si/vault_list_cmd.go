@@ -26,6 +26,9 @@ func cmdVaultList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	if err := vaultValidateImplicitTargetRepoScope(target); err != nil {
+		warnf("%v", err)
+	}
 	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)

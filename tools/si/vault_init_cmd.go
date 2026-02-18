@@ -13,14 +13,15 @@ import (
 func cmdVaultInit(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault init", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "env file path to bootstrap (also becomes the default when --file is omitted)")
+	fileFlag := fs.String("file", "", "env file path to bootstrap")
+	setDefault := fs.Bool("set-default", false, "set the target file as vault.file in settings")
 	keyBackend := fs.String("key-backend", "", "override key backend: keyring, keychain, or file")
 	keyFile := fs.String("key-file", "", "override key file path (for key-backend=file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault init [--file <path>] [--key-backend <keyring|keychain|file>] [--key-file <path>]")
+		printUsage("usage: si vault init [--file <path>] [--set-default] [--key-backend <keyring|keychain|file>] [--key-file <path>]")
 		return
 	}
 
@@ -98,13 +99,32 @@ func cmdVaultInit(args []string) {
 
 	// Persist settings changes (default file and key overrides, when provided).
 	settingsChanged := false
+	fileFlagProvided := strings.TrimSpace(*fileFlag) != ""
+	defaults := defaultSettings()
+	applySettingsDefaults(&defaults)
+	defaultVaultPathAbs, defaultVaultPathErr := vault.CleanAbs(defaults.Vault.File)
 	if cur := strings.TrimSpace(settings.Vault.File); cur == "" {
 		settings.Vault.File = target.File
 		settingsChanged = true
-	} else if abs, err := vault.CleanAbs(cur); err != nil || filepath.Clean(abs) != filepath.Clean(target.File) {
-		// Normalize to an absolute path so subsequent commands behave the same from any cwd.
-		settings.Vault.File = target.File
-		settingsChanged = true
+	} else if fileFlagProvided {
+		curAbs, curErr := vault.CleanAbs(cur)
+		curIsImplicitDefault := curErr == nil && defaultVaultPathErr == nil && filepath.Clean(curAbs) == filepath.Clean(defaultVaultPathAbs)
+		curMissing := true
+		if curErr == nil {
+			if info, statErr := os.Stat(curAbs); statErr == nil && info.Mode().IsRegular() {
+				curMissing = false
+			}
+		}
+		if curIsImplicitDefault && curMissing {
+			settings.Vault.File = target.File
+			settingsChanged = true
+		}
+	} else if *setDefault {
+		if abs, err := vault.CleanAbs(cur); err != nil || filepath.Clean(abs) != filepath.Clean(target.File) {
+			// Normalize to an absolute path so subsequent commands behave the same from any cwd.
+			settings.Vault.File = target.File
+			settingsChanged = true
+		}
 	}
 	if keyBackendOverride != "" {
 		settings.Vault.KeyBackend = keyBackendOverride
@@ -126,11 +146,15 @@ func cmdVaultInit(args []string) {
 		"trustFp":    fp,
 		"keyCreated": createdKey,
 		"keyBackend": vault.NormalizeKeyBackend(keyCfg.Backend),
+		"setDefault": *setDefault,
 	})
 
 	fmt.Printf("env file:  %s\n", filepath.Clean(target.File))
 	fmt.Printf("recipient: %s\n", recipient)
 	fmt.Printf("trust fp:  %s\n", fp)
+	if settingsChanged && *setDefault {
+		fmt.Printf("default:   updated\n")
+	}
 	if createdKey {
 		fmt.Printf("key:       created (backend=%s)\n", vault.NormalizeKeyBackend(keyCfg.Backend))
 	} else {

@@ -64,12 +64,19 @@ func vaultDefaultEnvFile(settings Settings) string {
 }
 
 func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
-	return vault.ResolveTarget(vault.ResolveOptions{
+	target, err := vault.ResolveTarget(vault.ResolveOptions{
 		CWD:              "",
 		File:             fileFlag,
 		DefaultFile:      vaultDefaultEnvFile(settings),
 		AllowMissingFile: allowMissingFile,
 	})
+	if err != nil {
+		return vault.Target{}, err
+	}
+	if err := vaultValidateImplicitTargetRepoScope(target); err != nil && isTruthyFlagValue(os.Getenv("SI_VAULT_STRICT_TARGET_SCOPE")) {
+		return vault.Target{}, err
+	}
+	return target, nil
 }
 
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
@@ -142,4 +149,61 @@ func vaultAuditEvent(settings Settings, target vault.Target, typ string, fields 
 		event[k] = v
 	}
 	sink.Log(event)
+}
+
+func vaultValidateImplicitTargetRepoScope(target vault.Target) error {
+	if target.FileIsExplicit {
+		return nil
+	}
+	if isTruthyFlagValue(os.Getenv("SI_VAULT_ALLOW_CROSS_REPO")) {
+		return nil
+	}
+	cwdRepoRoot := ""
+	if cwd, err := os.Getwd(); err == nil {
+		if gitRoot, gitErr := vault.GitRoot(cwd); gitErr == nil {
+			cwdRepoRoot = gitRoot
+		}
+	}
+	if strings.TrimSpace(cwdRepoRoot) == "" {
+		if siRepoRoot, err := repoRoot(); err == nil {
+			cwdRepoRoot = siRepoRoot
+		}
+	}
+	if strings.TrimSpace(cwdRepoRoot) == "" {
+		// Not in a repo layout where scope can be inferred.
+		return nil
+	}
+	targetRepoRoot := filepath.Clean(strings.TrimSpace(target.RepoRoot))
+	if targetRepoRoot == "" {
+		// Target file is outside a git repo, so no cross-repo ambiguity to guard.
+		return nil
+	}
+	targetRepoRoot = absPathOrSelf(targetRepoRoot)
+	cwdRepoRoot = absPathOrSelf(filepath.Clean(strings.TrimSpace(cwdRepoRoot)))
+	targetFile := absPathOrSelf(filepath.Clean(strings.TrimSpace(target.File)))
+	if !isPathWithin(targetFile, targetRepoRoot) {
+		// Target repo root came from cwd fallback (file not inside a git repo).
+		return nil
+	}
+	if cwdRepoRoot == targetRepoRoot {
+		return nil
+	}
+	return fmt.Errorf(
+		"vault default file %s resolves to repo %s while current repo is %s; pass --file explicitly, run `si vault use --file <path>`, or set SI_VAULT_ALLOW_CROSS_REPO=1",
+		filepath.Clean(strings.TrimSpace(target.File)),
+		targetRepoRoot,
+		cwdRepoRoot,
+	)
+}
+
+func absPathOrSelf(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return filepath.Clean(path)
+	}
+	return filepath.Clean(abs)
 }

@@ -135,6 +135,12 @@ Run installer smoke tests:
 ./tools/test-install-si-docker.sh
 ```
 
+Run strict vault-focused tests:
+
+```bash
+./tools/test-vault.sh
+```
+
 Run the full local test stack in one command:
 
 ```bash

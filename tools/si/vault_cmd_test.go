@@ -113,7 +113,7 @@ func TestVaultCommandActionSetsArePopulated(t *testing.T) {
 
 func TestVaultActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "vault", vaultActions, []string{
-		"init", "status", "check", "fmt", "encrypt", "decrypt", "set", "get", "list", "run", "docker", "trust", "recipients", "keygen",
+		"init", "status", "check", "fmt", "encrypt", "decrypt", "set", "get", "list", "run", "docker", "trust", "recipients", "keygen", "use",
 	})
 	expectActionNames(t, "vault docker", vaultDockerActions, []string{"exec"})
 	expectActionNames(t, "vault trust", vaultTrustActions, []string{"status", "accept", "forget"})

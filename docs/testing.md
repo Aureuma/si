@@ -56,6 +56,19 @@ To validate the `si` installer script end-to-end, run:
 
 Use `./tools/test-install-si.sh --help` for a quick usage reminder.
 
+## Vault strict suite
+Run the dedicated strict vault suite:
+
+```bash
+./tools/test-vault.sh
+```
+
+Quick mode (skip subprocess e2e vault tests):
+
+```bash
+./tools/test-vault.sh --quick
+```
+
 For containerized smoke coverage (root + non-root installer paths), run:
 
 ```bash
