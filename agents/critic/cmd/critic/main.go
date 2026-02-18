@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -71,7 +74,68 @@ func ensureCodexBaseConfig(logger *log.Logger) {
 		return
 	}
 	_ = os.Chmod(cfg, 0o600)
+	ensureBrowserMCPConfig(codexConfigDir, logger)
 	logger.Printf("codex base config ensured at %s", cfg)
+}
+
+const (
+	defaultBrowserContainerName = "si-playwright-mcp-headed"
+	defaultBrowserMCPPort       = 8931
+	defaultBrowserMCPName       = "si_browser"
+)
+
+func ensureBrowserMCPConfig(codexHome string, logger *log.Logger) {
+	codexHome = strings.TrimSpace(codexHome)
+	url := strings.TrimSpace(browserMCPURLFromEnv())
+	if codexHome == "" || url == "" {
+		return
+	}
+	_ = os.MkdirAll(codexHome, 0o700)
+	cmd := exec.Command("codex", "mcp", "add", defaultBrowserMCPName, "--url", url)
+	cmd.Env = append(os.Environ(), "CODEX_HOME="+codexHome)
+	if out, err := cmd.CombinedOutput(); err != nil && logger != nil {
+		logger.Printf("codex browser MCP setup skipped: %v (%s)", err, strings.TrimSpace(string(out)))
+	}
+}
+
+func browserMCPURLFromEnv() string {
+	if envIsTrue("SI_BROWSER_MCP_DISABLED") {
+		return ""
+	}
+	if explicit := strings.TrimSpace(os.Getenv("SI_BROWSER_MCP_URL_INTERNAL")); explicit != "" {
+		return explicit
+	}
+	if explicit := strings.TrimSpace(os.Getenv("SI_BROWSER_MCP_URL")); explicit != "" {
+		return explicit
+	}
+	containerName := strings.TrimSpace(envOr("SI_BROWSER_CONTAINER", defaultBrowserContainerName))
+	port := envOrInt("SI_BROWSER_MCP_PORT", defaultBrowserMCPPort)
+	if containerName == "" || port <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("http://%s:%d/mcp", containerName, port)
+}
+
+func envOrInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func envIsTrue(key string) bool {
+	val := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch val {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 const defaultCodexTemplate = `# managed by si-codex-init
