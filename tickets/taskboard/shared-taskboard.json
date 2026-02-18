@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "updated_at": "2026-02-18T11:08:58.753824+00:00",
+  "columns": [
+    {
+      "id": "market-intel",
+      "name": "Market Intel"
+    },
+    {
+      "id": "paas-backlog",
+      "name": "PaaS Backlog"
+    },
+    {
+      "id": "paas-build",
+      "name": "PaaS Build"
+    },
+    {
+      "id": "validate",
+      "name": "Validate"
+    },
+    {
+      "id": "done",
+      "name": "Done"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "mr-33f40448e5",
+      "title": "Claude Sonnet 4.6 is now generally available in GitHub Copilot",
+      "status": "paas-backlog",
+      "priority": "P1",
+      "workstream": "paas",
+      "owner": "market-research-agent",
+      "score": 17,
+      "matched_terms": [
+        "ai",
+        "changelog",
+        "copilot",
+        "github"
+      ],
+      "action_plan": {
+        "opportunity": "AI-first release operations lane",
+        "plan": "Package AI-assisted release generation and post-publish QA checks as a premium workflow.",
+        "experiment": "Build one AI workflow add-on and test adoption with existing active users."
+      },
+      "source": {
+        "link": "https://github.blog/changelog/2026-02-17-claude-sonnet-4-6-is-now-generally-available-in-github-copilot",
+        "feed": "https://github.blog/changelog/feed/",
+        "published_at": "2026-02-17T18:35:17+00:00"
+      },
+      "ticket_path": "tickets/market-research/20260218-claude-sonnet-4-6-is-now-generally-available-in-github-copilot.md",
+      "created_at": "2026-02-18T11:08:58.753425+00:00",
+      "updated_at": "2026-02-18T11:08:58.753427+00:00",
+      "tags": [
+        "market-research",
+        "opportunity",
+        "paas"
+      ]
+    },
+    {
+      "id": "mr-f74ed8f777",
+      "title": "Delegate tasks to Copilot coding agent from Visual Studio",
+      "status": "paas-backlog",
+      "priority": "P1",
+      "workstream": "paas",
+      "owner": "market-research-agent",
+      "score": 17,
+      "matched_terms": [
+        "agent",
+        "changelog",
+        "copilot",
+        "github"
+      ],
+      "action_plan": {
+        "opportunity": "AI-first release operations lane",
+        "plan": "Package AI-assisted release generation and post-publish QA checks as a premium workflow.",
+        "experiment": "Build one AI workflow add-on and test adoption with existing active users."
+      },
+      "source": {
+        "link": "https://github.blog/changelog/2026-02-17-delegate-tasks-to-copilot-coding-agent-from-visual-studio",
+        "feed": "https://github.blog/changelog/feed/",
+        "published_at": "2026-02-17T17:00:11+00:00"
+      },
+      "ticket_path": "tickets/market-research/20260218-delegate-tasks-to-copilot-coding-agent-from-visual-studio.md",
+      "created_at": "2026-02-18T11:08:58.753633+00:00",
+      "updated_at": "2026-02-18T11:08:58.753635+00:00",
+      "tags": [
+        "market-research",
+        "opportunity",
+        "paas"
+      ]
+    },
+    {
+      "id": "mr-affe259caf",
+      "title": "Assign issues to Copilot coding agent from Raycast",
+      "status": "paas-backlog",
+      "priority": "P1",
+      "workstream": "paas",
+      "owner": "market-research-agent",
+      "score": 17,
+      "matched_terms": [
+        "agent",
+        "changelog",
+        "copilot",
+        "github"
+      ],
+      "action_plan": {
+        "opportunity": "AI-first release operations lane",
+        "plan": "Package AI-assisted release generation and post-publish QA checks as a premium workflow.",
+        "experiment": "Build one AI workflow add-on and test adoption with existing active users."
+      },
+      "source": {
+        "link": "https://github.blog/changelog/2026-02-17-assign-issues-to-copilot-coding-agent-from-raycast",
+        "feed": "https://github.blog/changelog/feed/",
+        "published_at": "2026-02-17T16:59:55+00:00"
+      },
+      "ticket_path": "tickets/market-research/20260218-assign-issues-to-copilot-coding-agent-from-raycast.md",
+      "created_at": "2026-02-18T11:08:58.753743+00:00",
+      "updated_at": "2026-02-18T11:08:58.753744+00:00",
+      "tags": [
+        "market-research",
+        "opportunity",
+        "paas"
+      ]
+    }
+  ],
+  "history": [
+    {
+      "ran_at": "2026-02-18T11:08:58.753826+00:00",
+      "signals_scanned": 110,
+      "top_opportunities": 6,
+      "new_tasks": 3
+    }
+  ]
+}

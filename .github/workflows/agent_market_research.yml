@@ -1,0 +1,63 @@
+name: Agent Market Research Scout
+
+on:
+  schedule:
+    - cron: '20 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: agent-market-research-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Agent doctor
+        run: bash tools/agents/doctor.sh
+
+      - name: Run market research scout
+        id: scout
+        run: bash tools/agents/market-research-scout.sh
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary_file="${{ steps.scout.outputs.summary_file }}"
+          if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+            cat "${summary_file}" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-research-scout-logs-${{ github.run_id }}
+          path: .artifacts/agent-logs/market-research-scout/**
+          if-no-files-found: ignore
+
+      - name: Open/update research PR
+        if: steps.scout.outputs.new_tasks != '0'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore(agent): add market opportunities and taskboard updates'
+          branch: agent/market-research-scout
+          title: 'chore(agent): market opportunity scan and PaaS taskboard updates'
+          body: |
+            Automated market-research scout generated new opportunities and tickets.
+
+            - Report: `${{ steps.scout.outputs.report_path }}`
+            - New tasks: `${{ steps.scout.outputs.new_tasks }}`

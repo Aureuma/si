@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]"
+const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]"
 
 const defaultPaasContext = "default"
 
@@ -29,6 +29,7 @@ var paasActions = []subcommandAction{
 	{Name: "agent", Description: "manage long-running agents"},
 	{Name: "events", Description: "query operational events"},
 	{Name: "backup", Description: "manage database backup workflows"},
+	{Name: "taskboard", Description: "manage shared market taskboard"},
 }
 
 const (
@@ -45,6 +46,7 @@ const (
 	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
 	paasEventsUsageText   = "usage: si paas events <list> [args...]"
 	paasBackupUsageText   = "usage: si paas backup <contract|run|restore|status> [args...]"
+	paasTaskboardUsageText = "usage: si paas taskboard <show|list|add|move> [args...]"
 )
 
 func cmdPaas(args []string) {
@@ -102,6 +104,8 @@ func cmdPaas(args []string) {
 		cmdPaasEvents(rest)
 	case "backup":
 		cmdPaasBackup(rest)
+	case "taskboard":
+		cmdPaasTaskboard(rest)
 	default:
 		printUnknown("paas", sub)
 		printUsage(paasUsageText)

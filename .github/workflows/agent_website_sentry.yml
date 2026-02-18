@@ -1,0 +1,123 @@
+name: Agent Website Sentry
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: agent-website-sentry-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sentry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Agent doctor
+        run: bash tools/agents/doctor.sh
+
+      - name: Run website sentry
+        id: sentry
+        continue-on-error: true
+        run: bash tools/agents/website-sentry.sh
+
+      - name: Export sentry summary
+        id: summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary_file="${{ steps.sentry.outputs.summary_file }}"
+          if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+            {
+              echo "body<<'EOF'"
+              cat "${summary_file}"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+          else
+            {
+              echo "body<<'EOF'"
+              echo "No summary generated."
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          summary_file="${{ steps.sentry.outputs.summary_file }}"
+          if [[ -n "${summary_file}" && -f "${summary_file}" ]]; then
+            cat "${summary_file}" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-sentry-logs-${{ github.run_id }}
+          path: .artifacts/agent-logs/website-sentry/**
+          if-no-files-found: ignore
+
+      - name: Open remediation PR
+        if: steps.sentry.outputs.status == 'remediated_with_changes'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: 'chore(agent): website sentry automated remediation'
+          branch: agent/website-sentry
+          title: 'chore(agent): website sentry automated remediation'
+          body: |
+            Automated remediation created by Website Sentry.
+
+            ${{ steps.summary.outputs.body }}
+
+      - name: Open/Update failure issue
+        if: steps.sentry.outputs.status == 'failed'
+        uses: actions/github-script@v7
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BODY: ${{ steps.summary.outputs.body }}
+        with:
+          script: |
+            const title = '[agent] website sentry failed after remediation';
+            const marker = '<!-- agent:website-sentry-failure -->';
+            const body = `${marker}\nWebsite Sentry failed.\n\nRun: ${process.env.RUN_URL}\n\n${process.env.BODY}`;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+            const existing = issues.find((i) => i.title === title);
+            if (existing) {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body
+              });
+            }
+
+      - name: Fail workflow on unresolved sentry failure
+        if: steps.sentry.outputs.status == 'failed'
+        run: |
+          echo "Website sentry failed after remediation."
+          exit 1
