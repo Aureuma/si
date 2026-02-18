@@ -1,6 +1,7 @@
 package pluginmarket
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -238,5 +239,93 @@ func TestLoadCatalogIncludesEnvPaths(t *testing.T) {
 	}
 	if _, ok := CatalogByID(catalog)["acme/release-mind"]; !ok {
 		t.Fatalf("expected env-loaded catalog entry, got %#v", catalog.Entries)
+	}
+}
+
+func TestInstallFromArchiveZIP(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		RootDir:     root,
+		InstallsDir: filepath.Join(root, "installed"),
+		StateFile:   filepath.Join(root, "state.json"),
+		CatalogFile: filepath.Join(root, "catalog.json"),
+		CatalogDir:  filepath.Join(root, "catalog.d"),
+	}
+	archivePath := filepath.Join(root, "plugin.zip")
+	zipFile, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create zip: %v", err)
+	}
+	writer := zip.NewWriter(zipFile)
+	manifestRaw := `{"schema_version":1,"id":"acme/archive-plugin","namespace":"acme","install":{"type":"none"}}`
+	manifestEntry, err := writer.Create("acme/archive-plugin/si.plugin.json")
+	if err != nil {
+		t.Fatalf("create manifest entry: %v", err)
+	}
+	if _, err := manifestEntry.Write([]byte(manifestRaw)); err != nil {
+		t.Fatalf("write manifest entry: %v", err)
+	}
+	readmeEntry, err := writer.Create("acme/archive-plugin/README.md")
+	if err != nil {
+		t.Fatalf("create readme entry: %v", err)
+	}
+	if _, err := readmeEntry.Write([]byte("archive test")); err != nil {
+		t.Fatalf("write readme entry: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close zip writer: %v", err)
+	}
+	if err := zipFile.Close(); err != nil {
+		t.Fatalf("close zip file: %v", err)
+	}
+
+	record, err := InstallFromSource(paths, archivePath, true, time.Time{})
+	if err != nil {
+		t.Fatalf("install from archive: %v", err)
+	}
+	if record.ID != "acme/archive-plugin" {
+		t.Fatalf("unexpected record id: %s", record.ID)
+	}
+	if !strings.HasPrefix(record.Source, "archive:") {
+		t.Fatalf("expected archive source marker, got: %s", record.Source)
+	}
+	if _, err := os.Stat(filepath.Join(record.InstallDir, "README.md")); err != nil {
+		t.Fatalf("installed readme missing: %v", err)
+	}
+}
+
+func TestInstallFromArchiveRejectsTraversal(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		RootDir:     root,
+		InstallsDir: filepath.Join(root, "installed"),
+		StateFile:   filepath.Join(root, "state.json"),
+		CatalogFile: filepath.Join(root, "catalog.json"),
+		CatalogDir:  filepath.Join(root, "catalog.d"),
+	}
+	archivePath := filepath.Join(root, "traversal.zip")
+	zipFile, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create zip: %v", err)
+	}
+	writer := zip.NewWriter(zipFile)
+	entry, err := writer.Create("../si.plugin.json")
+	if err != nil {
+		t.Fatalf("create traversal entry: %v", err)
+	}
+	if _, err := entry.Write([]byte(`{"schema_version":1,"id":"acme/bad","namespace":"acme","install":{"type":"none"}}`)); err != nil {
+		t.Fatalf("write traversal entry: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close zip writer: %v", err)
+	}
+	if err := zipFile.Close(); err != nil {
+		t.Fatalf("close zip file: %v", err)
+	}
+
+	if _, err := InstallFromSource(paths, archivePath, true, time.Time{}); err == nil {
+		t.Fatalf("expected traversal archive install failure")
+	} else if !strings.Contains(err.Error(), "escapes destination") {
+		t.Fatalf("expected traversal error, got: %v", err)
 	}
 }
