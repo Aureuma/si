@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "channel": "core",
+      "verified": true,
+      "added_at": "2026-02-18",
+      "tags": ["mcp", "browser", "playwright"],
+      "manifest": {
+        "schema_version": 1,
+        "id": "si/browser-mcp",
+        "namespace": "si",
+        "name": "SI Browser MCP",
+        "version": "1.0.0",
+        "summary": "Expose Playwright MCP over Docker for Codex and dyad containers.",
+        "description": "Uses `si browser start` to provide a shared MCP endpoint for browser automation.",
+        "homepage": "https://docs.si.aureuma.ai/docs/BROWSER",
+        "terms_url": "https://docs.si.aureuma.ai/docs/BROWSER",
+        "privacy_url": "https://docs.si.aureuma.ai/docs/BROWSER",
+        "license": "AGPL-3.0",
+        "maturity": "ga",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si browser start",
+            "si browser status"
+          ],
+          "mcp_servers": [
+            {
+              "name": "si_browser",
+              "transport": "http",
+              "endpoint": "http://127.0.0.1:8932/mcp"
+            }
+          ],
+          "capabilities": [
+            "playwright",
+            "headed-browser",
+            "cdp-compatible"
+          ]
+        }
+      }
+    }
+  ]
+}
