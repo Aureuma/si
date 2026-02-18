@@ -8,9 +8,11 @@ require (
 	filippo.io/age v1.3.1
 	github.com/docker/docker v26.1.4+incompatible
 	github.com/docker/go-connections v0.5.0
+	github.com/mattn/go-runewidth v0.0.19
 	github.com/pelletier/go-toml/v2 v2.2.4
 	golang.org/x/crypto v0.45.0
 	golang.org/x/term v0.39.0
+	gopkg.in/yaml.v3 v3.0.1
 	si/agents/shared v0.0.0
 )
 
@@ -26,7 +28,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
