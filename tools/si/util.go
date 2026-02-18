@@ -41,6 +41,7 @@ Features:
   - Codex one-off run: run codex in an isolated container (with MCP disabled if desired).
   - Static analysis: run go vet + golangci-lint across go.work modules.
   - Image build for local dev.
+  - Mintlify docs workflow wrapper.
   - Docker passthrough for raw docker CLI calls.
   - Browser MCP Docker runner for Playwright headed sessions.
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
@@ -68,6 +69,7 @@ Core:
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
+  si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]
   si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
@@ -243,6 +245,15 @@ build:
   Typical workflows:
     Stable use: run si build self to upgrade installed si from your checkout.
     Active dev: run si build self --no-upgrade --output ./si or si build self run -- <args...> from your checkout.
+
+mintlify:
+  si mintlify init [--repo <path>] [--docs-dir <path>] [--name <site>] [--site-url <url>] [--force]
+  si mintlify dev [--repo <path>] [-- mint args...]
+  si mintlify validate [--repo <path>] [-- mint args...]
+  si mintlify broken-links [--repo <path>] [-- mint args...]
+  si mintlify openapi-check [--repo <path>] [-- mint args...]
+  si mintlify a11y [--repo <path>] [-- mint args...]
+  si mintlify raw [--repo <path>] -- <mint args...>
 
 persona:
   si persona <name>
@@ -790,7 +801,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
