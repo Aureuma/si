@@ -813,7 +813,7 @@ Work items:
 | WS12-07 | Implement approval flow (`si paas agent approve/deny`) and Telegram callback linkage | Done | Codex | Implemented live `agent approve/deny` decision flow with approval store persistence, run-log status updates, and callback-linked alert emission; documented in `docs/PAAS_AGENT_APPROVAL_FLOW.md` |
 | WS12-08 | Implement scheduler/self-heal for agent workers (lock, health check, auto-recover) | Done | Codex | Added context-scoped scheduler lock lifecycle and stale-lock recovery (`tools/si/paas_agent_scheduler.go`) with run-once integration and explicit lock telemetry; documented in `docs/PAAS_AGENT_SCHEDULER_SELF_HEAL.md` |
 | WS12-09 | Add offline fake-codex and deterministic smoke tests for event-to-action loop | Done | Codex | Added offline fake-codex execution support for `agent run-once` (`SI_PAAS_AGENT_OFFLINE_FAKE_CODEX*`) with deterministic execution metadata (`execution_mode`, `execution_note`, `incident_correlation_id`), smoke coverage in `TestPaasAgentRunOnceOfflineFakeCodexDeterministicSmoke`, and docs in `docs/PAAS_AGENT_OFFLINE_SMOKE_TESTS.md` |
-| WS12-10 | Add audit artifacts per agent run and incident correlation IDs | Not Started | Unassigned | |
+| WS12-10 | Add audit artifacts per agent run and incident correlation IDs | Done | Codex | Added run-artifact persistence (`contexts/<ctx>/events/agent-artifacts/...`) linked from `agent-runs.jsonl` via `artifact_path`, propagated `incident_correlation_id` into artifacts/output, and covered with artifact-store + smoke regression tests (`tools/si/paas_agent_artifact_store_test.go`, `tools/si/paas_cmd_test.go`); documented in `docs/PAAS_AGENT_AUDIT_ARTIFACTS.md` |
 
 ### WS-08 Cloud-Hosted Paid Edition
 
@@ -1086,11 +1086,11 @@ Every agent updating this initiative must:
 | 2026-02-17 | Codex | WS-12 | Completed WS12-07 by implementing `si paas agent approve/deny` as live commands with run lookup, approval decision persistence, run-log state updates, and callback-linked alert emission for Telegram/operator workflows | WS12-08..10 remain pending | Implement WS12-08 scheduler/self-heal for agent workers next |
 | 2026-02-17 | Codex | WS-12 | Completed WS12-08 by implementing run-level scheduler lock and stale-lock auto-recovery controls for agent workers, including blocked-run reporting and lock telemetry persisted in run logs and command output | WS12-09..10 remain pending | Implement WS12-09 offline fake-codex deterministic smoke tests next |
 | 2026-02-18 | Codex | WS-12 | Completed WS12-09 by adding offline fake-codex runtime execution support for `agent run-once` plus deterministic event-to-action smoke validation and run-log execution metadata (`execution_mode`, `execution_note`) with incident correlation propagation | WS12-10 remains pending | Implement WS12-10 audit artifacts per run and correlation linkage next |
+| 2026-02-18 | Codex | WS-12 | Completed WS12-10 by adding per-run audit artifact persistence (`events/agent-artifacts/<run-id>/<timestamp>.json`) automatically on run-log append, linking artifact paths into run outputs/log rows (`artifact_path`), and ensuring incident correlation IDs are persisted across run logs and artifacts | WS12 is complete; only WS07 remains for Gate C | Re-evaluate Gate C against WS07 backlog |
 
 ## 12. Immediate Next Actions
 
-1. Implement WS12-10 audit artifacts per agent run and incident correlation IDs.
-2. Close WS12 and re-evaluate Gate C readiness against WS07 backlog.
+1. Close WS12 and re-evaluate Gate C readiness against WS07 backlog.
 
 ## 13. Reference Links
 
