@@ -352,7 +352,7 @@ github:
     Supports GitHub App auth and OAuth token auth.
     Configure default_auth_mode/auth_mode as app or oauth.
     App credentials use env keys such as GITHUB_<ACCOUNT>_APP_ID and GITHUB_<ACCOUNT>_APP_PRIVATE_KEY_PEM.
-    OAuth credentials use env keys such as GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN or GITHUB_TOKEN.
+    OAuth credentials use env keys such as GITHUB_<ACCOUNT>_OAUTH_ACCESS_TOKEN, GITHUB_TOKEN, GH_TOKEN, GITHUB_PAT, or GH_PAT.
 
 cloudflare:
   si cloudflare auth status [--account <alias>] [--env <prod|staging|dev>] [--json]
