@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-02-18T11:08:58.753824+00:00",
+  "updated_at": "2026-02-18T23:20:40.277184+00:00",
   "columns": [
     {
       "id": "market-intel",
@@ -50,7 +50,7 @@
       },
       "ticket_path": "tickets/market-research/20260218-claude-sonnet-4-6-is-now-generally-available-in-github-copilot.md",
       "created_at": "2026-02-18T11:08:58.753425+00:00",
-      "updated_at": "2026-02-18T11:08:58.753427+00:00",
+      "updated_at": "2026-02-18T23:20:40.276977+00:00",
       "tags": [
         "market-research",
         "opportunity",
@@ -83,7 +83,7 @@
       },
       "ticket_path": "tickets/market-research/20260218-delegate-tasks-to-copilot-coding-agent-from-visual-studio.md",
       "created_at": "2026-02-18T11:08:58.753633+00:00",
-      "updated_at": "2026-02-18T11:08:58.753635+00:00",
+      "updated_at": "2026-02-18T23:20:40.276983+00:00",
       "tags": [
         "market-research",
         "opportunity",
@@ -122,12 +122,117 @@
         "opportunity",
         "paas"
       ]
+    },
+    {
+      "id": "mr-c103abaa39",
+      "title": "Use Copilot coding agent with Windows projects",
+      "status": "paas-backlog",
+      "priority": "P1",
+      "workstream": "paas",
+      "owner": "market-research-agent",
+      "score": 17,
+      "matched_terms": [
+        "agent",
+        "changelog",
+        "copilot",
+        "github"
+      ],
+      "action_plan": {
+        "opportunity": "AI-first release operations lane",
+        "plan": "Package AI-assisted release generation and post-publish QA checks as a premium workflow.",
+        "experiment": "Build one AI workflow add-on and test adoption with existing active users."
+      },
+      "source": {
+        "link": "https://github.blog/changelog/2026-02-18-use-copilot-coding-agent-with-windows-projects",
+        "feed": "https://github.blog/changelog/feed/",
+        "published_at": "2026-02-18T22:04:40+00:00"
+      },
+      "ticket_path": "tickets/market-research/20260218-use-copilot-coding-agent-with-windows-projects.md",
+      "created_at": "2026-02-18T23:20:40.276608+00:00",
+      "updated_at": "2026-02-18T23:20:40.276610+00:00",
+      "tags": [
+        "market-research",
+        "opportunity",
+        "paas"
+      ]
+    },
+    {
+      "id": "mr-80fe4845d0",
+      "title": "Copilot coding agent supports code referencing",
+      "status": "paas-backlog",
+      "priority": "P1",
+      "workstream": "paas",
+      "owner": "market-research-agent",
+      "score": 17,
+      "matched_terms": [
+        "agent",
+        "changelog",
+        "copilot",
+        "github"
+      ],
+      "action_plan": {
+        "opportunity": "AI-first release operations lane",
+        "plan": "Package AI-assisted release generation and post-publish QA checks as a premium workflow.",
+        "experiment": "Build one AI workflow add-on and test adoption with existing active users."
+      },
+      "source": {
+        "link": "https://github.blog/changelog/2026-02-18-copilot-coding-agent-supports-code-referencing",
+        "feed": "https://github.blog/changelog/feed/",
+        "published_at": "2026-02-18T22:02:22+00:00"
+      },
+      "ticket_path": "tickets/market-research/20260218-copilot-coding-agent-supports-code-referencing.md",
+      "created_at": "2026-02-18T23:20:40.276872+00:00",
+      "updated_at": "2026-02-18T23:20:40.276874+00:00",
+      "tags": [
+        "market-research",
+        "opportunity",
+        "paas"
+      ]
+    },
+    {
+      "id": "mr-86228f15e8",
+      "title": "npm bulk trusted publishing config and script security now generally available",
+      "status": "paas-backlog",
+      "priority": "P1",
+      "workstream": "paas",
+      "owner": "market-research-agent",
+      "score": 16,
+      "matched_terms": [
+        "ai",
+        "changelog",
+        "github",
+        "security"
+      ],
+      "action_plan": {
+        "opportunity": "Developer workflow integration expansion",
+        "plan": "Prioritize tighter GitHub/CI integration with faster release-note draft loops.",
+        "experiment": "Ship one integration enhancement and track week-over-week usage lift."
+      },
+      "source": {
+        "link": "https://github.blog/changelog/2026-02-18-npm-bulk-trusted-publishing-config-and-script-security-now-generally-available",
+        "feed": "https://github.blog/changelog/feed/",
+        "published_at": "2026-02-18T18:11:24+00:00"
+      },
+      "ticket_path": "tickets/market-research/20260218-npm-bulk-trusted-publishing-config-and-script-security-now-generally-ava.md",
+      "created_at": "2026-02-18T23:20:40.277082+00:00",
+      "updated_at": "2026-02-18T23:20:40.277084+00:00",
+      "tags": [
+        "market-research",
+        "opportunity",
+        "paas"
+      ]
     }
   ],
   "history": [
     {
       "ran_at": "2026-02-18T11:08:58.753826+00:00",
       "signals_scanned": 110,
+      "top_opportunities": 6,
+      "new_tasks": 3
+    },
+    {
+      "ran_at": "2026-02-18T23:20:40.277189+00:00",
+      "signals_scanned": 120,
       "top_opportunities": 6,
       "new_tasks": 3
     }
