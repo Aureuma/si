@@ -349,11 +349,24 @@ func stripeFlagsFirst(args []string, boolFlags map[string]bool) []string {
 		}
 		if i+1 < len(args) {
 			next := strings.TrimSpace(args[i+1])
-			if next != "" {
+			if next != "" && (!strings.HasPrefix(next, "-") || isSignedNumberToken(next)) {
 				flags = append(flags, next)
+				i++
 			}
-			i++
 		}
 	}
 	return append(flags, positionals...)
+}
+
+func isSignedNumberToken(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	if !strings.HasPrefix(value, "-") {
+		return false
+	}
+	if _, err := strconv.ParseFloat(value, 64); err == nil {
+		return true
+	}
+	return false
 }
