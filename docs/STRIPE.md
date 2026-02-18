@@ -1,6 +1,12 @@
 # Stripe Command Guide (`si stripe`)
 
+![Stripe](/images/integrations/stripe.svg)
+
 `si` includes a first-class Stripe bridge with account context, CRUD helpers, reporting, raw endpoint access, and live-to-sandbox sync.
+
+Related:
+- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Providers](./PROVIDERS)
 
 ## Environment Policy
 - Supported CLI environments: `live`, `sandbox`

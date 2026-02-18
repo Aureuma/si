@@ -1,6 +1,12 @@
 # Cloudflare Command Guide (`si cloudflare`)
 
+![Cloudflare](/images/integrations/cloudflare.svg)
+
 `si cloudflare` is the Cloudflare bridge for account context, operational workflows, and raw API access.
+
+Related:
+- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Providers](./PROVIDERS)
 
 Auth policy:
 - API token only.

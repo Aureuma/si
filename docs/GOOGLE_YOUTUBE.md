@@ -1,7 +1,13 @@
 # Google YouTube (`si google youtube` / `si google youtube-data`)
 
+![YouTube](/images/integrations/youtube.svg)
+
 `si google youtube` provides a YouTube Data API v3 command family with vault-compatible credential resolution, multi-account context, and both API-key and OAuth modes.
 `si google youtube-data` is an alias with identical behavior.
+
+Related:
+- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Providers](./PROVIDERS)
 
 ## Auth Modes
 - `api-key`: public/read operations
