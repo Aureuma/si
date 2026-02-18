@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -210,6 +211,11 @@ func cmdDyadSpawn(args []string) {
 	} else {
 		root = *workspaceHost
 	}
+	if abs, err := filepath.Abs(strings.TrimSpace(*workspaceHost)); err == nil && strings.TrimSpace(abs) != "" {
+		*workspaceHost = abs
+		root = abs
+	}
+	maybePersistWorkspaceDefault(workspaceScopeDyad, &settings, strings.TrimSpace(*workspaceHost), isInteractiveTerminal())
 	if strings.TrimSpace(*configsHost) == "" {
 		resolved, err := resolveConfigsHost(root)
 		if err != nil {
