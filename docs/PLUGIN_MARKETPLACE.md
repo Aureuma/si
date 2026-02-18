@@ -95,6 +95,7 @@ Install state tracks:
 - `si plugins list [--installed] [--json]`
 - `si plugins info <id> [--json]`
 - `si plugins install <id-or-path> [--disabled] [--json]`
+- `si plugins update <id>|--all [--json]`
 - `si plugins uninstall <id> [--keep-files] [--json]`
 - `si plugins enable|disable <id> [--json]`
 - `si plugins policy show [--json]`

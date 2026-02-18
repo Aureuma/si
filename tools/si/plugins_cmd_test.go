@@ -260,3 +260,34 @@ func TestPluginsInstallFromArchivePath(t *testing.T) {
 		t.Fatalf("unexpected record id: %#v", recordRaw)
 	}
 }
+
+func TestPluginsUpdateCommandJSON(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	home := t.TempDir()
+	pluginID := "si/browser-mcp"
+
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "update", pluginID, "--json")
+	if err != nil {
+		t.Fatalf("update failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json parse failed: %v\nstdout=%s", err, stdout)
+	}
+	if ok, _ := payload["ok"].(bool); !ok {
+		t.Fatalf("expected update ok=true payload: %#v", payload)
+	}
+	updated, ok := payload["updated"].([]any)
+	if !ok || len(updated) != 1 {
+		t.Fatalf("expected one updated plugin: %#v", payload)
+	}
+	if updated[0] != pluginID {
+		t.Fatalf("unexpected updated plugin: %#v", updated)
+	}
+}
