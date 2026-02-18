@@ -205,6 +205,21 @@ After CLI command-surface changes, run targeted help checks:
 ```
 
 ## Image build smoke check
+`si build image` now runs a Codex compatibility preflight (dyad/spawn/mount/MCP
+lanes) before building the image.
+
+Run the preflight directly:
+
+```bash
+./tools/si-image/preflight-codex-upgrade.sh
+```
+
+Skip preflight only when you explicitly need a fast local image iteration:
+
+```bash
+./si build image --skip-preflight
+```
+
 The canonical local image build command is:
 
 ```bash

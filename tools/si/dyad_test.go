@@ -299,6 +299,62 @@ func TestDyadProfileArg(t *testing.T) {
 	}
 }
 
+func TestDyadSkipAuthArg(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "bare flag", args: []string{"--skip-auth"}, want: true},
+		{name: "equals true", args: []string{"--skip-auth=true"}, want: true},
+		{name: "equals false", args: []string{"--skip-auth=false"}, want: false},
+		{name: "separate true", args: []string{"--skip-auth", "true"}, want: true},
+		{name: "separate false", args: []string{"--skip-auth", "false"}, want: false},
+		{name: "invalid literal", args: []string{"--skip-auth=maybe"}, want: false},
+		{name: "missing", args: []string{"--profile", "berylla"}, want: false},
+	}
+	for _, tc := range cases {
+		got := dyadSkipAuthArg(tc.args)
+		if got != tc.want {
+			t.Fatalf("%s: dyadSkipAuthArg(%v)=%v want %v", tc.name, tc.args, got, tc.want)
+		}
+	}
+}
+
+func TestDyadLoopBoolEnv(t *testing.T) {
+	t.Setenv("DYAD_LOOP_ENABLED", "true")
+	if got, ok := dyadLoopBoolEnv("DYAD_LOOP_ENABLED"); !ok || !got {
+		t.Fatalf("expected parsed true, got ok=%v val=%v", ok, got)
+	}
+
+	t.Setenv("DYAD_LOOP_ENABLED", "0")
+	if got, ok := dyadLoopBoolEnv("DYAD_LOOP_ENABLED"); !ok || got {
+		t.Fatalf("expected parsed false, got ok=%v val=%v", ok, got)
+	}
+
+	t.Setenv("DYAD_LOOP_ENABLED", "not-a-bool")
+	if _, ok := dyadLoopBoolEnv("DYAD_LOOP_ENABLED"); ok {
+		t.Fatalf("expected invalid value to return ok=false")
+	}
+}
+
+func TestDyadLoopIntSetting(t *testing.T) {
+	t.Setenv("DYAD_LOOP_MAX_TURNS", "7")
+	if got := dyadLoopIntSetting("DYAD_LOOP_MAX_TURNS", 3); got != 7 {
+		t.Fatalf("expected env value 7, got %d", got)
+	}
+
+	t.Setenv("DYAD_LOOP_MAX_TURNS", "invalid")
+	if got := dyadLoopIntSetting("DYAD_LOOP_MAX_TURNS", 3); got != 3 {
+		t.Fatalf("expected fallback value 3, got %d", got)
+	}
+
+	t.Setenv("DYAD_LOOP_MAX_TURNS", "")
+	if got := dyadLoopIntSetting("DYAD_LOOP_MAX_TURNS", 9); got != 9 {
+		t.Fatalf("expected empty env fallback value 9, got %d", got)
+	}
+}
+
 func TestBuildDyadRowsAggregatesAndSorts(t *testing.T) {
 	containers := []types.Container{
 		{

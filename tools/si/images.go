@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -20,19 +21,36 @@ type imageBuildSpec struct {
 
 var dockerBuildxAvailableFn = dockerBuildxAvailable
 var runDockerBuildCommandFn = runDockerBuildCommand
+var runImageBuildPreflightFn = runImageBuildPreflight
+var runDockerBuildSpecFn = runDockerBuild
 
 func cmdBuildImage(args []string) {
-	if len(args) != 0 {
-		printUsage("usage: si build image")
+	fs := flag.NewFlagSet("build image", flag.ExitOnError)
+	skipPreflight := fs.Bool("skip-preflight", envIsTrue("SI_IMAGE_BUILD_SKIP_PREFLIGHT"), "skip codex compatibility preflight tests before build")
+	preflightOnly := fs.Bool("preflight-only", false, "run codex compatibility preflight tests and exit")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() != 0 {
+		printUsage("usage: si build image [--skip-preflight] [--preflight-only]")
 		return
 	}
 	root := mustRepoRoot()
+	if !*skipPreflight {
+		if err := runImageBuildPreflightFn(root); err != nil {
+			fatal(fmt.Errorf("codex image preflight failed: %w", err))
+		}
+	}
+	if *preflightOnly {
+		successf("codex image preflight passed")
+		return
+	}
 	secrets := hostCodexConfigBuildSecrets()
 	specs := []imageBuildSpec{
 		{tag: "aureuma/si:local", contextDir: root, dockerfile: filepath.Join(root, "tools/si-image/Dockerfile"), secrets: secrets},
 	}
 	for _, spec := range specs {
-		if err := runDockerBuild(spec); err != nil {
+		if err := runDockerBuildSpecFn(spec); err != nil {
 			fatal(err)
 		}
 	}

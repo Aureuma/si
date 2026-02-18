@@ -25,6 +25,41 @@ func TestCodexBrowserMCPURLUsesExplicitInternalURL(t *testing.T) {
 	}
 }
 
+func TestCodexBrowserMCPURLUsesExternalURLOverride(t *testing.T) {
+	t.Setenv("SI_BROWSER_MCP_DISABLED", "")
+	t.Setenv("SI_BROWSER_MCP_URL_INTERNAL", "")
+	t.Setenv("SI_BROWSER_MCP_URL", "http://browser-external:9999/mcp")
+	got := codexBrowserMCPURL()
+	want := "http://browser-external:9999/mcp"
+	if got != want {
+		t.Fatalf("codexBrowserMCPURL()=%q want=%q", got, want)
+	}
+}
+
+func TestCodexBrowserMCPURLUsesContainerAndPortOverride(t *testing.T) {
+	t.Setenv("SI_BROWSER_MCP_DISABLED", "")
+	t.Setenv("SI_BROWSER_MCP_URL_INTERNAL", "")
+	t.Setenv("SI_BROWSER_MCP_URL", "")
+	t.Setenv("SI_BROWSER_CONTAINER", "custom-browser")
+	t.Setenv("SI_BROWSER_MCP_PORT", "9998")
+	got := codexBrowserMCPURL()
+	want := "http://custom-browser:9998/mcp"
+	if got != want {
+		t.Fatalf("codexBrowserMCPURL()=%q want=%q", got, want)
+	}
+}
+
+func TestCodexBrowserMCPURLReturnsEmptyWhenPortInvalid(t *testing.T) {
+	t.Setenv("SI_BROWSER_MCP_DISABLED", "")
+	t.Setenv("SI_BROWSER_MCP_URL_INTERNAL", "")
+	t.Setenv("SI_BROWSER_MCP_URL", "")
+	t.Setenv("SI_BROWSER_CONTAINER", "custom-browser")
+	t.Setenv("SI_BROWSER_MCP_PORT", "0")
+	if got := codexBrowserMCPURL(); got != "" {
+		t.Fatalf("expected empty browser MCP URL when port invalid, got %q", got)
+	}
+}
+
 func TestCodexBrowserMCPURLDisabled(t *testing.T) {
 	t.Setenv("SI_BROWSER_MCP_DISABLED", "1")
 	if got := codexBrowserMCPURL(); got != "" {

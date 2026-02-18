@@ -46,8 +46,11 @@ si mintlify --help
 ## High-signal operations
 
 ```bash
-# Build runtime image
+# Build runtime image (runs codex compatibility preflight first)
 si build image
+
+# Run only the codex compatibility preflight lanes
+si build image --preflight-only
 
 # Spawn dyad
 si dyad spawn app-hardening --profile main

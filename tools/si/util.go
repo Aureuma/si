@@ -78,7 +78,7 @@ Core:
   si docker <args...>
 
 Build:
-  si build image                  (builds aureuma/si:local; no extra args)
+  si build image [--skip-preflight] [--preflight-only]   (runs codex compatibility preflight, then builds aureuma/si:local)
   si build self                   (upgrades installed si by default; see "build" below)
 
 Profiles:
@@ -239,7 +239,7 @@ codex:
     si warmup [--profile <profile>] [--ofelia-install|--ofelia-write|--ofelia-remove] ...
 
 build:
-  si build image                  (builds aureuma/si:local; no extra args)
+  si build image [--skip-preflight] [--preflight-only]
   si build self [--repo <path>] [--install-path <path>] [--no-upgrade] [--output <path>]
   si build self upgrade [--repo <path>] [--install-path <path>]
   si build self run [--repo <path>] [--] [si args...]

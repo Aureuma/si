@@ -42,7 +42,7 @@ RUN apt-get update -y \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm i -g @openai/codex@0.101.0
+RUN npm i -g @openai/codex@0.104.0
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
@@ -52,6 +52,7 @@ RUN usermod -l si node \
 
 ENV HOME=/home/si
 ENV CODEX_HOME=/home/si/.codex
+ENV PATH=/usr/local/go/bin:${PATH}
 WORKDIR /workspace
 
 RUN printf '%s\n' 'alias codex="codex --dangerously-bypass-approvals-and-sandbox"' > /etc/profile.d/si-codex-alias.sh \
@@ -93,6 +94,9 @@ COPY --from=codex-stdout-parser-build /out/codex-stdout-parser /usr/local/bin/co
 COPY --from=codex-init-build /out/si-codex-init /usr/local/bin/si-codex-init
 COPY --from=critic-build /out/critic /usr/local/bin/critic
 COPY --from=si-build /out/si /usr/local/bin/si
+COPY --from=si-build /usr/local/go /usr/local/go
+RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go \
+    && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
 ENTRYPOINT ["tini", "-s", "--", "/usr/local/bin/si-entrypoint"]
 CMD ["bash", "-lc", "sleep infinity"]
