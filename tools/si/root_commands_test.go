@@ -25,6 +25,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"publish", "pub",
 		"providers", "provider", "integrations", "apis",
 		"docker",
+		"browser",
 		"dyad",
 		"build",
 		"paas",

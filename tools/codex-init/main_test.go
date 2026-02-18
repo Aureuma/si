@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -84,5 +85,59 @@ func TestDecodeMountInfoPath(t *testing.T) {
 	want := "/home/si/.si with space\ttab\nline\\slash"
 	if got != want {
 		t.Fatalf("decodeMountInfoPath()=%q want=%q", got, want)
+	}
+}
+
+func TestCollectGitSafeDirectoriesIncludesDevelopmentChildren(t *testing.T) {
+	base := t.TempDir()
+	development := filepath.Join(base, "home", "shawn", "Development")
+	viva := filepath.Join(development, "viva")
+	si := filepath.Join(development, "si")
+
+	mustMakeGitRepoRoot(t, viva)
+	mustMakeGitRepoRoot(t, si)
+
+	got := collectGitSafeDirectories([]string{development}, viva)
+	want := []string{si, viva}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("collectGitSafeDirectories()=%v want=%v", got, want)
+	}
+}
+
+func TestCollectGitSafeDirectoriesIncludesMountAndCwdRepos(t *testing.T) {
+	base := t.TempDir()
+	mounted := filepath.Join(base, "workspace", "repo")
+	cwd := filepath.Join(base, "home", "si", "current")
+
+	mustMakeGitRepoRoot(t, mounted)
+	mustMakeGitRepoRoot(t, cwd)
+
+	got := collectGitSafeDirectories([]string{mounted}, cwd)
+	want := []string{cwd, mounted}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("collectGitSafeDirectories()=%v want=%v", got, want)
+	}
+}
+
+func TestCollectGitSafeDirectoriesDeduplicatesEntries(t *testing.T) {
+	base := t.TempDir()
+	development := filepath.Join(base, "home", "shawn", "Development")
+	viva := filepath.Join(development, "viva")
+	mustMakeGitRepoRoot(t, viva)
+
+	got := collectGitSafeDirectories([]string{development, viva, viva}, viva)
+	want := []string{viva}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("collectGitSafeDirectories()=%v want=%v", got, want)
+	}
+}
+
+func mustMakeGitRepoRoot(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("mkdir repo root %q: %v", path, err)
+	}
+	if err := os.MkdirAll(filepath.Join(path, ".git"), 0o755); err != nil {
+		t.Fatalf("mkdir .git for %q: %v", path, err)
 	}
 }

@@ -67,6 +67,9 @@ var (
 	loadBuildRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdBuild(args) }
 	}
+	loadBrowserRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdBrowser(args) }
+	}
 	loadPaasRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdPaas(args) }
 	}
@@ -121,6 +124,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadPublishRootHandler), "publish", "pub")
 	register(newLazyRootHandler(loadProvidersRootHandler), "providers", "provider", "integrations", "apis")
 	register(newLazyRootHandler(loadDockerRootHandler), "docker")
+	register(newLazyRootHandler(loadBrowserRootHandler), "browser")
 	register(newLazyRootHandler(loadDyadRootHandler), "dyad")
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
 	register(newLazyRootHandler(loadPaasRootHandler), "paas")

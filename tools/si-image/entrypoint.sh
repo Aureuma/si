@@ -81,6 +81,45 @@ apply_host_ids() {
   fi
 }
 
+is_git_repo_root() {
+  local path="$1"
+  if [[ -z "$path" ]]; then
+    return 1
+  fi
+  [[ -d "$path/.git" || -f "$path/.git" ]]
+}
+
+add_git_safe_directory() {
+  local identity="$1" path="$2" escaped
+  if ! is_git_repo_root "$path"; then
+    return
+  fi
+  if [[ "$identity" == "root" ]]; then
+    git config --global --add safe.directory "$path" >/dev/null 2>&1 || true
+    return
+  fi
+  printf -v escaped '%q' "$path"
+  su -s /bin/bash si -c "git config --global --add safe.directory $escaped >/dev/null 2>&1 || true" || true
+}
+
+configure_git_safe_directories() {
+  local identity="$1" cwd mountpoint child
+  add_git_safe_directory "$identity" "/workspace"
+  cwd="$(pwd -P 2>/dev/null || pwd)"
+  add_git_safe_directory "$identity" "$cwd"
+  while read -r _ _ _ _ mountpoint _; do
+    mountpoint="$(decode_mountinfo_path "$mountpoint")"
+    add_git_safe_directory "$identity" "$mountpoint"
+    if [[ "${mountpoint##*/}" != "Development" || ! -d "$mountpoint" ]]; then
+      continue
+    fi
+    for child in "$mountpoint"/*; do
+      [[ -d "$child" ]] || continue
+      add_git_safe_directory "$identity" "$child"
+    done
+  done < /proc/self/mountinfo
+}
+
 if [[ "$(id -u)" -eq 0 ]]; then
   apply_host_ids
   sync_codex_skills
@@ -88,9 +127,9 @@ if [[ "$(id -u)" -eq 0 ]]; then
   if ! is_mountpoint "/home/si"; then
     chown si:si /home/si 2>/dev/null || true
   fi
-  # Avoid "dubious ownership" errors in bind-mounted workspaces.
-  git config --global --add safe.directory /workspace >/dev/null 2>&1 || true
-  su -s /bin/bash si -c 'git config --global --add safe.directory /workspace >/dev/null 2>&1 || true' || true
+  # Avoid "dubious ownership" errors in bind-mounted workspaces and mirrored host paths.
+  configure_git_safe_directories root
+  configure_git_safe_directories si
 fi
 
 if [[ -n "${SI_REPO:-}" ]]; then

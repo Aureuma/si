@@ -42,6 +42,7 @@ Features:
   - Static analysis: run go vet + golangci-lint across go.work modules.
   - Image build for local dev.
   - Docker passthrough for raw docker CLI calls.
+  - Browser MCP Docker runner for Playwright headed sessions.
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
 Usage:
@@ -67,7 +68,8 @@ Core:
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si build <image|self>
-  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events> [args...]
+  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]
+  si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
@@ -788,7 +790,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
