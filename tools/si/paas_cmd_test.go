@@ -77,6 +77,7 @@ func TestPaasSubcommandNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 		{name: "agent", invoke: func() { cmdPaasAgent(nil) }, usage: paasAgentUsageText},
 		{name: "events", invoke: func() { cmdPaasEvents(nil) }, usage: paasEventsUsageText},
 		{name: "backup", invoke: func() { cmdPaasBackup(nil) }, usage: paasBackupUsageText},
+		{name: "taskboard", invoke: func() { cmdPaasTaskboard(nil) }, usage: paasTaskboardUsageText},
 	}
 	for _, tc := range tests {
 		out := captureStdout(t, tc.invoke)
@@ -3045,6 +3046,132 @@ func TestPaasRegressionStateIsolationContextBoundaries(t *testing.T) {
 		if row.Fields["name"] == "cache-alpha" {
 			t.Fatalf("unexpected alpha addon leaked into beta event row: %#v", row)
 		}
+	}
+}
+
+func TestPaasTaskboardShowReturnsDefaultWhenMissing(t *testing.T) {
+	boardPath := filepath.Join(t.TempDir(), "shared-taskboard.json")
+	t.Setenv(paasTaskboardPathEnvKey, boardPath)
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{"taskboard", "show", "--json"})
+	})
+	var payload struct {
+		OK      bool          `json:"ok"`
+		Command string        `json:"command"`
+		Count   int           `json:"count"`
+		Data    paasTaskboard `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("decode taskboard show payload: %v output=%q", err, raw)
+	}
+	if !payload.OK || payload.Command != "taskboard show" {
+		t.Fatalf("unexpected payload: %#v", payload)
+	}
+	if payload.Count != 0 || len(payload.Data.Tasks) != 0 {
+		t.Fatalf("expected empty default board, got %#v", payload)
+	}
+	if len(payload.Data.Columns) == 0 {
+		t.Fatalf("expected default columns, got %#v", payload.Data)
+	}
+}
+
+func TestPaasTaskboardAddListMoveFlow(t *testing.T) {
+	tempDir := t.TempDir()
+	boardPath := filepath.Join(tempDir, "shared-taskboard.json")
+	t.Setenv(paasTaskboardPathEnvKey, boardPath)
+
+	addRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"taskboard", "add",
+			"--title", "Evaluate enterprise billing controls",
+			"--status", "paas-backlog",
+			"--priority", "P1",
+			"--owner", "market-research-agent",
+			"--workstream", "paas",
+			"--ticket", "tickets/market-research/20260218-enterprise-billing-controls.md",
+			"--tags", "market-research,opportunity",
+			"--json",
+		})
+	})
+	var addPayload struct {
+		OK      bool              `json:"ok"`
+		Command string            `json:"command"`
+		Data    paasTaskboardTask `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(addRaw), &addPayload); err != nil {
+		t.Fatalf("decode taskboard add payload: %v output=%q", err, addRaw)
+	}
+	if !addPayload.OK || addPayload.Command != "taskboard add" {
+		t.Fatalf("unexpected add payload: %#v", addPayload)
+	}
+	if strings.TrimSpace(addPayload.Data.ID) == "" {
+		t.Fatalf("expected generated task id, got %#v", addPayload.Data)
+	}
+	if addPayload.Data.Status != "paas-backlog" || addPayload.Data.Priority != "P1" {
+		t.Fatalf("unexpected add task fields: %#v", addPayload.Data)
+	}
+
+	listRaw := captureStdout(t, func() {
+		cmdPaas([]string{"taskboard", "list", "--status", "paas-backlog", "--json"})
+	})
+	var listPayload struct {
+		OK      bool                `json:"ok"`
+		Command string              `json:"command"`
+		Count   int                 `json:"count"`
+		Data    []paasTaskboardTask `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(listRaw), &listPayload); err != nil {
+		t.Fatalf("decode taskboard list payload: %v output=%q", err, listRaw)
+	}
+	if !listPayload.OK || listPayload.Command != "taskboard list" {
+		t.Fatalf("unexpected list payload: %#v", listPayload)
+	}
+	if listPayload.Count != 1 || len(listPayload.Data) != 1 {
+		t.Fatalf("expected one task in backlog, got %#v", listPayload)
+	}
+
+	moveRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"taskboard", "move",
+			"--id", addPayload.Data.ID,
+			"--status", "validate",
+			"--json",
+		})
+	})
+	var movePayload struct {
+		OK      bool              `json:"ok"`
+		Command string            `json:"command"`
+		Data    paasTaskboardTask `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(moveRaw), &movePayload); err != nil {
+		t.Fatalf("decode taskboard move payload: %v output=%q", err, moveRaw)
+	}
+	if !movePayload.OK || movePayload.Command != "taskboard move" {
+		t.Fatalf("unexpected move payload: %#v", movePayload)
+	}
+	if movePayload.Data.Status != "validate" {
+		t.Fatalf("expected moved status=validate, got %#v", movePayload.Data)
+	}
+
+	boardRaw, err := os.ReadFile(boardPath)
+	if err != nil {
+		t.Fatalf("read saved taskboard: %v", err)
+	}
+	var board paasTaskboard
+	if err := json.Unmarshal(boardRaw, &board); err != nil {
+		t.Fatalf("decode saved taskboard: %v", err)
+	}
+	index := findPaasTaskboardTaskIndex(board.Tasks, addPayload.Data.ID)
+	if index < 0 {
+		t.Fatalf("expected saved task %q in board", addPayload.Data.ID)
+	}
+	if board.Tasks[index].Status != "validate" {
+		t.Fatalf("expected saved task to be moved to validate, got %#v", board.Tasks[index])
+	}
+	mdPath := filepath.Join(filepath.Dir(boardPath), "SHARED_TASKBOARD.md")
+	if _, err := os.Stat(mdPath); err != nil {
+		t.Fatalf("expected markdown board at %s: %v", mdPath, err)
 	}
 }
 

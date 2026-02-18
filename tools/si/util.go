@@ -72,7 +72,7 @@ Core:
   si plugins <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
-  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]
+  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
   si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>

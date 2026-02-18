@@ -25,6 +25,8 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 - Plugin marketplace: namespaced integration catalog + install/enable/doctor lifecycle (`si plugins ...`).
 - Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
 - PaaS operations: app/target/deploy/rollback/logs/events/alerts/secrets + backup workflows.
+- Sustainable automation agents: PR guardian, website sentry, market scout (`tools/agents/*`).
+- Shared market taskboard control plane (`si paas taskboard ...`).
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
 ## Repo layout

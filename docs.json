@@ -66,6 +66,8 @@
       "pages": [
         "docs/PAAS_TEST_MATRIX",
         "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
+        "docs/PAAS_AUTOMATION_AGENTS",
+        "docs/PAAS_MARKET_TASKBOARD",
         "docs/PAAS_BACKUP_RESTORE_POLICY",
         "docs/PAAS_INCIDENT_RUNBOOK",
         "docs/PAAS_SECURITY_THREAT_MODEL"

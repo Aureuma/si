@@ -21,6 +21,7 @@ Detailed integration guides:
 - `si plugins ...`: plugin marketplace, catalog, and integration lifecycle.
 - `si browser ...`: Dockerized Playwright MCP runtime.
 - `si paas ...`: Docker-native deployment and operations workflows.
+- `si paas taskboard ...`: shared market taskboard operations.
 - `si mintlify ...`: docs bootstrap/validate/dev wrappers via Mintlify CLI.
 - `si build ...`: local runtime image and self-build workflows.
 - `si analyze|lint`: static analysis for `go.work` modules.
@@ -56,6 +57,10 @@ si paas doctor --json
 
 # Trigger Supabase WAL-G backup
 si paas backup run --app <slug> --json
+
+# Review and update shared market taskboard
+si paas taskboard list --status paas-backlog --priority P1 --json
+si paas taskboard move --id <task-id> --status validate --json
 
 # Run browser runtime for MCP clients
 si browser start
