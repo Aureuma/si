@@ -943,7 +943,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 }
 
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
-	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events", "backup"})
+	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events", "backup", "taskboard"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove", "addon"})
 	expectActionNames(t, "paas app addon", paasAppAddonActions, []string{"contract", "enable", "list", "disable"})
