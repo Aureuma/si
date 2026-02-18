@@ -25,6 +25,28 @@ For one-command local coverage of the standard test stack, run:
 ./tools/test-all.sh
 ```
 
+## Plugin runner matrix
+For plugin-system specific regression lanes (inspired by OpenClaw's segmented CI), use:
+
+```bash
+./tools/test-runners/plugins-unit.sh
+./tools/test-runners/plugins-policy.sh
+./tools/test-runners/plugins-catalog.sh
+./tools/test-runners/plugins-e2e.sh
+```
+
+Run the full plugin runner stack:
+
+```bash
+./tools/test-runners/plugins-all.sh
+```
+
+CI coverage for these lanes is defined in:
+
+```bash
+.github/workflows/plugins-runners.yml
+```
+
 ## Installer smoke tests
 To validate the `si` installer script end-to-end, run:
 
