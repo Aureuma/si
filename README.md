@@ -133,6 +133,12 @@ Run installer smoke tests:
 ./tools/test-install-si-docker.sh
 ```
 
+Run the full local test stack in one command:
+
+```bash
+./tools/test-all.sh
+```
+
 Run static analysis:
 
 ```bash
