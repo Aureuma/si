@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
@@ -283,26 +286,26 @@ type AppleSettings struct {
 }
 
 type AppleAppStoreSettings struct {
-	APIBaseURL string                            `toml:"api_base_url,omitempty"`
+	APIBaseURL string                               `toml:"api_base_url,omitempty"`
 	Accounts   map[string]AppleAppStoreAccountEntry `toml:"accounts,omitempty"`
 }
 
 type AppleAppStoreAccountEntry struct {
-	Name               string `toml:"name,omitempty"`
-	ProjectID          string `toml:"project_id,omitempty"`
-	ProjectIDEnv       string `toml:"project_id_env,omitempty"`
-	VaultPrefix        string `toml:"vault_prefix,omitempty"`
-	IssuerID           string `toml:"issuer_id,omitempty"`
-	IssuerIDEnv        string `toml:"issuer_id_env,omitempty"`
-	KeyID              string `toml:"key_id,omitempty"`
-	KeyIDEnv           string `toml:"key_id_env,omitempty"`
-	PrivateKeyPEM      string `toml:"private_key_pem,omitempty"`
-	PrivateKeyEnv      string `toml:"private_key_env,omitempty"`
-	PrivateKeyFile     string `toml:"private_key_file,omitempty"`
-	PrivateKeyFileEnv  string `toml:"private_key_file_env,omitempty"`
-	DefaultBundleID    string `toml:"default_bundle_id,omitempty"`
-	DefaultLanguage    string `toml:"default_language,omitempty"`
-	DefaultPlatform    string `toml:"default_platform,omitempty"`
+	Name              string `toml:"name,omitempty"`
+	ProjectID         string `toml:"project_id,omitempty"`
+	ProjectIDEnv      string `toml:"project_id_env,omitempty"`
+	VaultPrefix       string `toml:"vault_prefix,omitempty"`
+	IssuerID          string `toml:"issuer_id,omitempty"`
+	IssuerIDEnv       string `toml:"issuer_id_env,omitempty"`
+	KeyID             string `toml:"key_id,omitempty"`
+	KeyIDEnv          string `toml:"key_id_env,omitempty"`
+	PrivateKeyPEM     string `toml:"private_key_pem,omitempty"`
+	PrivateKeyEnv     string `toml:"private_key_env,omitempty"`
+	PrivateKeyFile    string `toml:"private_key_file,omitempty"`
+	PrivateKeyFileEnv string `toml:"private_key_file_env,omitempty"`
+	DefaultBundleID   string `toml:"default_bundle_id,omitempty"`
+	DefaultLanguage   string `toml:"default_language,omitempty"`
+	DefaultPlatform   string `toml:"default_platform,omitempty"`
 }
 
 type SocialSettings struct {
@@ -472,7 +475,7 @@ type ShellPromptColors struct {
 }
 
 func settingsPath() (string, error) {
-	home, err := os.UserHomeDir()
+	home, err := settingsHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
 		if err == nil {
 			err = os.ErrNotExist
@@ -480,6 +483,53 @@ func settingsPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(home, ".si", "settings.toml"), nil
+}
+
+func settingsHomeDir() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("SI_SETTINGS_HOME")); override != "" {
+		return override, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return home, err
+	}
+	// Guardrail: avoid writing root-owned settings into a non-root HOME path
+	// when running as root with a preserved user HOME (e.g., sudo -E).
+	if os.Geteuid() == 0 {
+		rootHome, rootErr := homeDirByUID(0)
+		if rootErr == nil && strings.TrimSpace(rootHome) != "" && !pathsEqual(rootHome, home) {
+			if ownedByRoot, ownErr := pathOwnedByUID(home, 0); ownErr != nil || !ownedByRoot {
+				home = rootHome
+			}
+		}
+	}
+	return home, nil
+}
+
+func homeDirByUID(uid int) (string, error) {
+	entry, err := user.LookupId(strconv.Itoa(uid))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(entry.HomeDir), nil
+}
+
+func pathOwnedByUID(path string, uid uint32) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, err
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return false, fmt.Errorf("unsupported file stat type for %s", path)
+	}
+	return stat.Uid == uid, nil
+}
+
+func pathsEqual(a, b string) bool {
+	left := filepath.Clean(strings.TrimSpace(a))
+	right := filepath.Clean(strings.TrimSpace(b))
+	return left == right
 }
 
 func defaultSettings() Settings {

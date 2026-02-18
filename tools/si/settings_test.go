@@ -7,6 +7,44 @@ import (
 	"testing"
 )
 
+func TestSettingsHomeDirUsesOverride(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+	t.Setenv("HOME", "/should/not/be/used")
+
+	got, err := settingsHomeDir()
+	if err != nil {
+		t.Fatalf("settingsHomeDir() unexpected err: %v", err)
+	}
+	if got != tmp {
+		t.Fatalf("expected settings home override %q, got %q", tmp, got)
+	}
+}
+
+func TestSettingsHomeDirRootFallsBackFromForeignHome(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires root euid")
+	}
+	foreignHome := t.TempDir()
+	if err := os.Chown(foreignHome, 1001, 1001); err != nil {
+		t.Fatalf("chown foreign home: %v", err)
+	}
+	t.Setenv("SI_SETTINGS_HOME", "")
+	t.Setenv("HOME", foreignHome)
+
+	got, err := settingsHomeDir()
+	if err != nil {
+		t.Fatalf("settingsHomeDir() unexpected err: %v", err)
+	}
+	rootHome, err := homeDirByUID(0)
+	if err != nil {
+		t.Fatalf("homeDirByUID(0): %v", err)
+	}
+	if got != rootHome {
+		t.Fatalf("expected root home %q, got %q", rootHome, got)
+	}
+}
+
 func TestLoadSettingsCreatesDefaultWhenMissing(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
