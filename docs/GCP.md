@@ -1,8 +1,8 @@
 # GCP Command Guide (`si gcp`)
 
-`si gcp` covers common Google Cloud operations across Service Usage, IAM, API key management, Gemini (Generative Language), and Vertex AI.
+`si gcp` covers Google Cloud Service Usage, IAM, API keys, Gemini (Generative Language), and Vertex AI.
 
-## Auth + Context
+## Auth and context
 
 ```bash
 si gcp auth status --project <project_id>
@@ -27,21 +27,12 @@ si gcp service list --project <project_id> --filter state:ENABLED
 si gcp iam service-account list --project <project_id>
 si gcp iam service-account get <email> --project <project_id>
 si gcp iam service-account create --project <project_id> --account-id app-bot --display-name "App Bot"
-si gcp iam service-account delete <email> --project <project_id> --force
-
 si gcp iam service-account-key list --project <project_id> --service-account <email>
-si gcp iam service-account-key create --project <project_id> --service-account <email>
-si gcp iam service-account-key delete --name projects/<project>/serviceAccounts/<email>/keys/<key_id> --force
-
 si gcp iam policy get --project <project_id>
-si gcp iam policy set --project <project_id> --policy-json '{"bindings":[]}'
-si gcp iam policy test-permissions --project <project_id> --permission resourcemanager.projects.get
-
 si gcp iam role list
-si gcp iam role get roles/viewer
 ```
 
-## API Keys
+## API keys
 
 ```bash
 si gcp apikey list --project <project_id>
@@ -49,20 +40,34 @@ si gcp apikey get <key_id> --project <project_id>
 si gcp apikey create --project <project_id> --display-name "gemini-client"
 si gcp apikey update <key_id> --project <project_id> --display-name "gemini-client-v2"
 si gcp apikey delete <key_id> --project <project_id> --force
-si gcp apikey undelete <key_id> --project <project_id> --force
-si gcp apikey lookup --key-string <api_key_string>
 ```
 
-## Gemini (API Key or OAuth)
+## Gemini text and embeddings
 
 ```bash
 si gcp gemini models list --api-key $GEMINI_API_KEY
-si gcp gemini models get gemini-2.0-flash --api-key $GEMINI_API_KEY
-si gcp gemini generate --api-key $GEMINI_API_KEY --model gemini-2.0-flash --prompt "Draft release notes"
+si gcp gemini models get gemini-2.5-flash --api-key $GEMINI_API_KEY
+si gcp gemini generate --api-key $GEMINI_API_KEY --model gemini-2.5-flash --prompt "Draft release notes"
 si gcp gemini embed --api-key $GEMINI_API_KEY --model text-embedding-004 --text "search phrase"
-si gcp gemini count-tokens --api-key $GEMINI_API_KEY --model gemini-2.0-flash --text "hello world"
+si gcp gemini count-tokens --api-key $GEMINI_API_KEY --model gemini-2.5-flash --text "hello world"
 si gcp gemini batch-embed --api-key $GEMINI_API_KEY --model text-embedding-004 --text "one" --text "two"
 ```
+
+## Gemini image generation
+
+```bash
+si gcp gemini image generate \
+  --api-key $GEMINI_API_KEY \
+  --model gemini-2.5-flash-image \
+  --prompt "Create a transparent PNG hero illustration for si CLI" \
+  --transparent \
+  --output assets/images/si-hero.png
+```
+
+Notes:
+
+- Default image model is `gemini-2.5-flash-image`.
+- Auth can come from `--api-key`, account-scoped `GCP_<ACCOUNT>_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, or OAuth access token.
 
 ## Vertex AI
 
@@ -71,7 +76,6 @@ si gcp vertex model list --project <project_id> --location us-central1
 si gcp vertex endpoint list --project <project_id> --location us-central1
 si gcp vertex endpoint predict <endpoint_id> --project <project_id> --location us-central1 --instances-json '[{"content":"hello"}]'
 si gcp vertex batch list --project <project_id> --location us-central1
-si gcp vertex batch create --project <project_id> --location us-central1 --json-body '{"displayName":"batch-job"}'
 si gcp vertex pipeline list --project <project_id> --location us-central1
 si gcp vertex operation list --project <project_id> --location us-central1
 ```
@@ -83,7 +87,7 @@ si gcp ai gemini generate --api-key $GEMINI_API_KEY --prompt "hello"
 si gcp ai vertex batch list --project <project_id> --location us-central1
 ```
 
-## Raw escape hatch
+## Raw escape hatches
 
 ```bash
 si gcp raw --project <project_id> --method GET --path /v1/projects/<project_id>/services

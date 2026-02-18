@@ -34,7 +34,7 @@ Features:
   - WorkOS bridge: account context, organization/user/member/invitation/directory management, and raw API access.
   - Publish bridge: DistributionKit-backed launch catalog plus publishing workflows for Dev.to, Hashnode, Reddit, Hacker News, and Product Hunt.
   - AWS bridge: auth/context diagnostics plus IAM, STS, S3, EC2, Lambda, ECR, Secrets, KMS, DynamoDB, SSM, CloudWatch, Logs, Bedrock AI/LLM (runtime, batch, agents), and signed raw API access.
-  - GCP bridge: Service Usage API flows (enable/disable/list/get services) and raw access.
+  - GCP bridge: auth/context diagnostics plus Service Usage, IAM, API keys, Gemini (text/embeddings/image), Vertex AI, and raw access.
   - OpenAI bridge: auth/context diagnostics, model/project/admin-key/service-account controls, usage/cost monitoring (including Codex usage views), and raw API access.
   - OCI bridge: signed identity/network/compute orchestration helpers plus raw API access.
   - Self-management: build or upgrade the si binary from the current checkout.
@@ -253,6 +253,11 @@ mintlify:
   si mintlify broken-links [--repo <path>] [-- mint args...]
   si mintlify openapi-check [--repo <path>] [-- mint args...]
   si mintlify a11y [--repo <path>] [-- mint args...]
+  si mintlify rename [--repo <path>] [-- mint args...]
+  si mintlify update [--repo <path>] [-- mint args...]
+  si mintlify upgrade [--repo <path>] [-- mint args...]
+  si mintlify migrate-mdx [--repo <path>] [-- mint args...]
+  si mintlify version [--repo <path>] [-- mint args...]
   si mintlify raw [--repo <path>] -- <mint args...>
 
 persona:
