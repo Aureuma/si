@@ -132,6 +132,7 @@ func cmdPluginsList(args []string) {
 		EffectiveEnabled bool                        `json:"effective_enabled"`
 		EffectiveReason  string                      `json:"effective_reason,omitempty"`
 		Channel          string                      `json:"channel,omitempty"`
+		CatalogSource    string                      `json:"catalog_source,omitempty"`
 		Verified         bool                        `json:"verified,omitempty"`
 		Kind             string                      `json:"kind,omitempty"`
 		Maturity         string                      `json:"maturity,omitempty"`
@@ -151,6 +152,7 @@ func cmdPluginsList(args []string) {
 		r := row{ID: id, Installed: installed, Enabled: installed && record.Enabled}
 		if inCatalog {
 			r.Channel = entry.Channel
+			r.CatalogSource = entry.Source
 			r.Verified = entry.Verified
 			r.Kind = entry.Manifest.Kind
 			r.Maturity = entry.Manifest.Maturity
@@ -255,6 +257,7 @@ func cmdPluginsInfo(args []string) {
 			"installed":           installed,
 			"effective_enabled":   effectiveEnabled,
 			"effective_reason":    effectiveReason,
+			"catalog_source":      catalogEntry.Source,
 			"catalog_entry":       catalogEntry,
 			"installed_record":    record,
 			"catalog_diagnostics": catalogDiagnostics,
@@ -271,6 +274,7 @@ func cmdPluginsInfo(args []string) {
 	fmt.Printf("  effective_enabled=%s reason=%s\n", boolText(effectiveEnabled), effectiveReason)
 	if inCatalog {
 		fmt.Printf("  channel=%s verified=%s\n", orDash(catalogEntry.Channel), boolText(catalogEntry.Verified))
+		fmt.Printf("  catalog_source=%s\n", orDash(catalogEntry.Source))
 		fmt.Printf("  install_type=%s\n", orDash(catalogEntry.Manifest.Install.Type))
 		if summary := strings.TrimSpace(catalogEntry.Manifest.Summary); summary != "" {
 			fmt.Printf("  summary=%s\n", summary)
