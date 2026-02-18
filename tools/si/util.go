@@ -57,7 +57,7 @@ Core:
   si spawn|respawn|list|status|report|login|logout|swap|ps|run|logs|tail|clone|remove|stop|start
   si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
   si stripe <auth|context|doctor|object|raw|report|sync>
-  si github <auth|context|doctor|repo|branch|pr|issue|workflow|release|secret|raw|graphql>
+  si github <auth|context|doctor|git|repo|branch|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|status|smoke|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>
   si google <places|play|youtube|youtube-data>
   si apple <appstore>
