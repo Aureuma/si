@@ -2309,6 +2309,13 @@ func splitNameAndFlags(args []string, boolFlags map[string]bool) (string, []stri
 			continue
 		}
 		if boolFlags[flagName] {
+			if i+1 < len(args) {
+				next := strings.TrimSpace(args[i+1])
+				if isBoolLiteral(next) {
+					out[len(out)-1] = arg + "=" + strings.ToLower(next)
+					i++
+				}
+			}
 			continue
 		}
 		if i+1 < len(args) {
