@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events> [args...]"
+const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup> [args...]"
 
 const defaultPaasContext = "default"
 
@@ -28,6 +28,7 @@ var paasActions = []subcommandAction{
 	{Name: "doctor", Description: "run isolation and secret exposure checks"},
 	{Name: "agent", Description: "manage long-running agents"},
 	{Name: "events", Description: "query operational events"},
+	{Name: "backup", Description: "manage database backup workflows"},
 }
 
 const (
@@ -43,6 +44,7 @@ const (
 	paasDoctorUsageText   = "usage: si paas doctor [--json]"
 	paasAgentUsageText    = "usage: si paas agent <enable|disable|status|logs|run-once|approve|deny> [args...]"
 	paasEventsUsageText   = "usage: si paas events <list> [args...]"
+	paasBackupUsageText   = "usage: si paas backup <contract|run|restore|status> [args...]"
 )
 
 func cmdPaas(args []string) {
@@ -98,6 +100,8 @@ func cmdPaas(args []string) {
 		cmdPaasAgent(rest)
 	case "events":
 		cmdPaasEvents(rest)
+	case "backup":
+		cmdPaasBackup(rest)
 	default:
 		printUnknown("paas", sub)
 		printUsage(paasUsageText)

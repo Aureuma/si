@@ -76,6 +76,7 @@ func TestPaasSubcommandNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 		{name: "context", invoke: func() { cmdPaasContext(nil) }, usage: paasContextUsageText},
 		{name: "agent", invoke: func() { cmdPaasAgent(nil) }, usage: paasAgentUsageText},
 		{name: "events", invoke: func() { cmdPaasEvents(nil) }, usage: paasEventsUsageText},
+		{name: "backup", invoke: func() { cmdPaasBackup(nil) }, usage: paasBackupUsageText},
 	}
 	for _, tc := range tests {
 		out := captureStdout(t, tc.invoke)
@@ -756,7 +757,7 @@ func TestPaasAppAddonContractEnableListDisable(t *testing.T) {
 	if err := json.Unmarshal([]byte(contractRaw), &contractPayload); err != nil {
 		t.Fatalf("decode addon contract payload: %v output=%q", err, contractRaw)
 	}
-	if contractPayload.Command != "app addon contract" || contractPayload.Count != 3 {
+	if contractPayload.Command != "app addon contract" || contractPayload.Count < 5 {
 		t.Fatalf("unexpected addon contract payload: %#v", contractPayload)
 	}
 	if len(contractPayload.Data) == 0 || contractPayload.Data[0].MergeStrategy != paasAddonMergeStrategyAdditiveNoOverride {
@@ -838,6 +839,65 @@ func TestPaasAppAddonContractEnableListDisable(t *testing.T) {
 	}
 }
 
+func TestPaasAppAddonEnableSupabaseWalgAndDatabasus(t *testing.T) {
+	stateRoot := t.TempDir()
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	walgRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"app", "addon", "enable",
+			"--app", "billing-api",
+			"--pack", "supabase-walg",
+			"--name", "backup-main",
+			"--service", "supabase",
+			"--json",
+		})
+	})
+	walgEnv := parsePaasEnvelope(t, walgRaw)
+	if walgEnv.Command != "app addon enable" || walgEnv.Fields["pack"] != "supabase-walg" {
+		t.Fatalf("unexpected supabase-walg enable output: %#v", walgEnv)
+	}
+	walgFragmentPath := strings.TrimSpace(walgEnv.Fields["fragment_path"])
+	walgFragment, err := os.ReadFile(walgFragmentPath)
+	if err != nil {
+		t.Fatalf("read supabase-walg fragment: %v", err)
+	}
+	walgText := string(walgFragment)
+	if !strings.Contains(walgText, "supabase-backup:") || !strings.Contains(walgText, "supabase-restore:") {
+		t.Fatalf("expected backup and restore services, got %q", walgText)
+	}
+	if !strings.Contains(walgText, "WALG_S3_PREFIX") {
+		t.Fatalf("expected WAL-G env placeholders, got %q", walgText)
+	}
+
+	databasusRaw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"app", "addon", "enable",
+			"--app", "billing-api",
+			"--pack", "databasus",
+			"--name", "dbmeta-main",
+			"--service", "dbmeta",
+			"--json",
+		})
+	})
+	databasusEnv := parsePaasEnvelope(t, databasusRaw)
+	if databasusEnv.Command != "app addon enable" || databasusEnv.Fields["pack"] != "databasus" {
+		t.Fatalf("unexpected databasus enable output: %#v", databasusEnv)
+	}
+	databasusFragmentPath := strings.TrimSpace(databasusEnv.Fields["fragment_path"])
+	databasusFragment, err := os.ReadFile(databasusFragmentPath)
+	if err != nil {
+		t.Fatalf("read databasus fragment: %v", err)
+	}
+	databasusText := string(databasusFragment)
+	if !strings.Contains(databasusText, "image: databasus/databasus:latest") {
+		t.Fatalf("expected databasus image reference, got %q", databasusText)
+	}
+	if strings.Contains(databasusText, "ports:") {
+		t.Fatalf("databasus add-on must not expose host ports, got %q", databasusText)
+	}
+}
+
 func TestPaasDeployInvalidStrategyShowsUsage(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas([]string{"deploy", "--strategy", "invalid"})
@@ -861,6 +921,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 		{name: "paas context", actions: paasContextActions},
 		{name: "paas agent", actions: paasAgentActions},
 		{name: "paas events", actions: paasEventsActions},
+		{name: "paas backup", actions: paasBackupActions},
 	}
 	for _, tc := range tests {
 		if len(tc.actions) == 0 {
@@ -878,7 +939,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 }
 
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
-	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events"})
+	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events", "backup"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove", "addon"})
 	expectActionNames(t, "paas app addon", paasAppAddonActions, []string{"contract", "enable", "list", "disable"})
@@ -888,6 +949,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas context", paasContextActions, []string{"create", "init", "list", "use", "show", "remove", "export", "import"})
 	expectActionNames(t, "paas agent", paasAgentActions, []string{"enable", "disable", "status", "logs", "run-once", "approve", "deny"})
 	expectActionNames(t, "paas events", paasEventsActions, []string{"list"})
+	expectActionNames(t, "paas backup", paasBackupActions, []string{"contract", "run", "restore", "status"})
 }
 
 func TestNormalizeImagePlatformArch(t *testing.T) {
@@ -2596,6 +2658,77 @@ func TestPaasLogsLiveJSONContract(t *testing.T) {
 	}
 	if row.LineCount != 2 || !strings.Contains(row.Output, "api log line 1") {
 		t.Fatalf("expected collected logs output, got %#v", row)
+	}
+}
+
+func TestPaasBackupRunJSONContract(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.60", "--user", "root"})
+	})
+	if err := recordPaasSuccessfulRelease("billing-api", "rel-20260218T010203"); err != nil {
+		t.Fatalf("record release history: %v", err)
+	}
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"echo \"$*\" >> " + quoteSingle(sshLog),
+		"echo 'wal-g backup completed'",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+
+	raw := captureStdout(t, func() {
+		cmdPaas([]string{
+			"backup", "run",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--service", "supabase-walg-backup",
+			"--json",
+		})
+	})
+	var payload struct {
+		OK      bool               `json:"ok"`
+		Command string             `json:"command"`
+		Count   int                `json:"count"`
+		Data    []paasBackupResult `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("decode backup run payload: %v output=%q", err, raw)
+	}
+	if !payload.OK || payload.Command != "backup run" {
+		t.Fatalf("unexpected backup payload envelope: %#v", payload)
+	}
+	if payload.Count != 1 || len(payload.Data) != 1 {
+		t.Fatalf("expected single backup row, got %#v", payload)
+	}
+	row := payload.Data[0]
+	if row.Status != "ok" || row.Release != "rel-20260218T010203" || row.Service != "supabase-walg-backup" {
+		t.Fatalf("unexpected backup row fields: %#v", row)
+	}
+	if !strings.Contains(row.Command, "docker compose -f compose.yaml") || !strings.Contains(row.Command, "run --rm") {
+		t.Fatalf("expected compose run command in backup row, got %#v", row)
+	}
+	if !strings.Contains(row.Output, "wal-g backup completed") {
+		t.Fatalf("expected backup output capture, got %#v", row)
+	}
+
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	sshText := string(sshRaw)
+	if !strings.Contains(sshText, "compose.addon.*.yaml") {
+		t.Fatalf("expected addon compose glob in remote command, got %q", sshText)
 	}
 }
 
