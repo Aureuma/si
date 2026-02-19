@@ -14,9 +14,10 @@ type paasDeployHistoryStore struct {
 }
 
 type paasAppDeployHistory struct {
-	CurrentRelease string   `json:"current_release,omitempty"`
-	History        []string `json:"history,omitempty"`
-	UpdatedAt      string   `json:"updated_at,omitempty"`
+	CurrentRelease   string   `json:"current_release,omitempty"`
+	CurrentRemoteDir string   `json:"current_remote_dir,omitempty"`
+	History          []string `json:"history,omitempty"`
+	UpdatedAt        string   `json:"updated_at,omitempty"`
 }
 
 func resolvePaasDeployHistoryPath() (string, error) {
@@ -81,6 +82,14 @@ func savePaasDeployHistoryStoreForContext(contextName string, store paasDeployHi
 }
 
 func recordPaasSuccessfulRelease(app, releaseID string) error {
+	return recordPaasSuccessfulReleaseWithRemoteDir(app, releaseID, defaultPaasReleaseRemoteDir)
+}
+
+func recordPaasSuccessfulReleaseWithRemoteDir(app, releaseID, remoteDir string) error {
+	resolvedRemoteDir, err := resolvePaasRemoteDir(remoteDir)
+	if err != nil {
+		return err
+	}
 	store, err := loadPaasDeployHistoryStore()
 	if err != nil {
 		return err
@@ -88,6 +97,7 @@ func recordPaasSuccessfulRelease(app, releaseID string) error {
 	key := sanitizePaasReleasePathSegment(app)
 	item := store.Apps[key]
 	item.CurrentRelease = strings.TrimSpace(releaseID)
+	item.CurrentRemoteDir = resolvedRemoteDir
 	item.History = appendUniquePaasRelease(item.History, strings.TrimSpace(releaseID))
 	item.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	store.Apps[key] = item
@@ -95,12 +105,25 @@ func recordPaasSuccessfulRelease(app, releaseID string) error {
 }
 
 func resolvePaasCurrentRelease(app string) (string, error) {
+	releaseID, _, err := resolvePaasCurrentReleaseInfo(app)
+	return releaseID, err
+}
+
+func resolvePaasCurrentReleaseInfo(app string) (string, string, error) {
 	store, err := loadPaasDeployHistoryStore()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	item := store.Apps[sanitizePaasReleasePathSegment(app)]
-	return strings.TrimSpace(item.CurrentRelease), nil
+	resolvedRemoteDir := strings.TrimSpace(item.CurrentRemoteDir)
+	if resolvedRemoteDir == "" {
+		resolvedRemoteDir = defaultPaasReleaseRemoteDir
+	}
+	resolvedRemoteDir, err = resolvePaasRemoteDir(resolvedRemoteDir)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid stored remote dir for app %q: %w", strings.TrimSpace(app), err)
+	}
+	return strings.TrimSpace(item.CurrentRelease), resolvedRemoteDir, nil
 }
 
 func resolvePaasPreviousRelease(app string) (string, error) {

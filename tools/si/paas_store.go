@@ -127,7 +127,7 @@ func normalizePaasTarget(target paasTarget) paasTarget {
 	target.Name = strings.TrimSpace(target.Name)
 	target.Host = strings.TrimSpace(target.Host)
 	target.User = strings.TrimSpace(target.User)
-	target.AuthMethod = strings.ToLower(strings.TrimSpace(target.AuthMethod))
+	target.AuthMethod = normalizePaasAuthMethod(target.AuthMethod)
 	if target.Port <= 0 {
 		target.Port = 22
 	}

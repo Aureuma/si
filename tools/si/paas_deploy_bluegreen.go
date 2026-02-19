@@ -47,7 +47,7 @@ func cmdPaasDeployBlueGreen(args []string) {
 	composeFile := fs.String("compose-file", "compose.yaml", "compose file path")
 	bundleRoot := fs.String("bundle-root", "", "release bundle root path (defaults to context-scoped state root)")
 	applyRemote := fs.Bool("apply", false, "upload bundle and apply compose-only blue/green rollout on remote targets")
-	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
+	remoteDir := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "remote release root directory")
 	applyTimeout := fs.String("apply-timeout", "2m", "per-target remote apply timeout")
 	healthCmd := fs.String("health-cmd", defaultPaasHealthCheckCommand, "health command run before and after cutover")
 	healthTimeout := fs.String("health-timeout", "45s", "per-target health check timeout")
@@ -92,6 +92,16 @@ func cmdPaasDeployBlueGreen(args []string) {
 			"",
 			"pass a positive duration for --cutover-timeout (for example 45s)",
 			fmt.Errorf("invalid --cutover-timeout %q", strings.TrimSpace(*cutoverTimeout)),
+		), nil)
+	}
+	resolvedRemoteDir, err := resolvePaasRemoteDir(strings.TrimSpace(*remoteDir))
+	if err != nil {
+		failPaasDeployBlueGreen(jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+			err,
 		), nil)
 	}
 
@@ -237,7 +247,7 @@ func cmdPaasDeployBlueGreen(args []string) {
 				App:             resolvedApp,
 				ReleaseID:       releaseID,
 				BundleDir:       bundleDir,
-				RemoteRoot:      strings.TrimSpace(*remoteDir),
+				RemoteRoot:      resolvedRemoteDir,
 				FromSlot:        fromSlot,
 				ToSlot:          toSlot,
 				PreviousRelease: strings.TrimSpace(policy.Slots[fromSlot]),
@@ -290,7 +300,7 @@ func cmdPaasDeployBlueGreen(args []string) {
 			), nil)
 		}
 		if len(appliedTargets) > 0 {
-			if err := recordPaasSuccessfulRelease(resolvedApp, releaseID); err != nil {
+			if err := recordPaasSuccessfulReleaseWithRemoteDir(resolvedApp, releaseID, resolvedRemoteDir); err != nil {
 				failPaasDeployBlueGreen(jsonOut, newPaasOperationFailure(
 					paasFailureUnknown,
 					"state_record",
@@ -337,7 +347,7 @@ func cmdPaasDeployBlueGreen(args []string) {
 		"health_cmd":               strings.TrimSpace(*healthCmd),
 		"health_timeout":           healthTimeoutValue.String(),
 		"release":                  releaseID,
-		"remote_dir":               strings.TrimSpace(*remoteDir),
+		"remote_dir":               resolvedRemoteDir,
 		"targets":                  formatTargets(selectedTargets),
 		"applied_targets":          formatTargets(appliedTargets),
 		"failed_targets":           formatTargets(failedTargets),
@@ -633,10 +643,7 @@ func sanitizePaasComposeProjectSegment(raw string) string {
 }
 
 func resolvePaasBlueGreenRemotePaths(remoteRoot, app, target, slot, release string) (string, string, string, string) {
-	root := strings.TrimSpace(remoteRoot)
-	if root == "" {
-		root = "/opt/si/paas/releases"
-	}
+	root := normalizePaasRemoteDir(remoteRoot)
 	appSlug := sanitizePaasReleasePathSegment(app)
 	targetSlug := sanitizePaasReleasePathSegment(target)
 	slotSlug := normalizePaasBlueGreenSlot(slot)

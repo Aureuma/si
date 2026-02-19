@@ -49,6 +49,9 @@ func cmdPaasTargetBootstrap(args []string) {
 		fatal(fmt.Errorf("target %q not found", strings.TrimSpace(*targetName)))
 	}
 	target := store.Targets[idx]
+	if isPaasLocalTarget(target) {
+		fatal(fmt.Errorf("target %q uses local transport; bootstrap is not required", target.Name))
+	}
 	password := strings.TrimSpace(os.Getenv(strings.TrimSpace(*passwordEnv)))
 	if password == "" {
 		fatal(fmt.Errorf("environment variable %q is empty or missing", strings.TrimSpace(*passwordEnv)))

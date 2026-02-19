@@ -138,7 +138,7 @@ func cmdPaasBackupRun(args []string) {
 	target := fs.String("target", "", "target id (defaults to current target)")
 	service := fs.String("service", "supabase-walg-backup", "compose service name")
 	releaseID := fs.String("release", "", "release id (defaults to current release)")
-	remoteRoot := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "remote release root")
+	remoteRoot := fs.String("remote-dir", "", "remote release root")
 	timeout := fs.String("timeout", "2m", "execution timeout")
 	command := fs.String("command", "wal-g backup-push \"${WALG_PGDATA:-/var/lib/postgresql/data}\"", "service shell command")
 	_ = fs.Parse(args)
@@ -172,7 +172,7 @@ func cmdPaasBackupRestore(args []string) {
 	target := fs.String("target", "", "target id (defaults to current target)")
 	service := fs.String("service", "supabase-walg-restore", "compose service name")
 	releaseID := fs.String("release", "", "release id (defaults to current release)")
-	remoteRoot := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "remote release root")
+	remoteRoot := fs.String("remote-dir", "", "remote release root")
 	timeout := fs.String("timeout", "3m", "execution timeout")
 	restoreFrom := fs.String("from", "LATEST", "WAL-G backup id to restore")
 	force := fs.Bool("force", false, "wipe PGDATA before restore")
@@ -217,7 +217,7 @@ func cmdPaasBackupStatus(args []string) {
 	target := fs.String("target", "", "target id (defaults to current target)")
 	service := fs.String("service", "supabase-walg-backup", "compose service name")
 	releaseID := fs.String("release", "", "release id (defaults to current release)")
-	remoteRoot := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "remote release root")
+	remoteRoot := fs.String("remote-dir", "", "remote release root")
 	timeout := fs.String("timeout", "1m", "execution timeout")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -285,7 +285,17 @@ func runPaasBackupRemoteAction(opts paasBackupRemoteActionOptions, jsonOut bool)
 			err,
 		), map[string]string{"app": opts.App, "release": opts.ReleaseID})
 	}
-	releaseDir := path.Join(strings.TrimSpace(opts.RemoteRoot), sanitizePaasReleasePathSegment(releaseID))
+	resolvedRemoteRoot, err := resolvePaasRemoteDirForApp(opts.RemoteRoot, opts.App)
+	if err != nil {
+		failPaasCommand("backup "+strings.TrimSpace(opts.Operation), jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+			err,
+		), map[string]string{"remote_dir": strings.TrimSpace(opts.RemoteRoot)})
+	}
+	releaseDir := path.Join(resolvedRemoteRoot, sanitizePaasReleasePathSegment(releaseID))
 	results := make([]paasBackupResult, 0, len(targetRows))
 	for _, target := range targetRows {
 		start := time.Now()

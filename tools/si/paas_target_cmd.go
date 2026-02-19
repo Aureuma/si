@@ -66,22 +66,25 @@ func cmdPaasTargetAdd(args []string) {
 	host := fs.String("host", "", "target host or IP")
 	port := fs.Int("port", 22, "ssh port")
 	user := fs.String("user", "", "ssh username")
-	authMethod := fs.String("auth-method", "key", "ssh auth method (key|password)")
+	authMethod := fs.String("auth-method", "key", "target auth method (key|password|local)")
 	labels := fs.String("labels", "", "comma-separated labels")
 	setDefault := fs.Bool("default", false, "set target as default")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password>] [--labels <k:v,...>] [--default] [--json]")
+		printUsage("usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password|local>] [--labels <k:v,...>] [--default] [--json]")
 		return
 	}
-	if !requirePaasValue(*name, "name", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password>] [--labels <k:v,...>] [--default] [--json]") {
+	if !requirePaasValue(*name, "name", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password|local>] [--labels <k:v,...>] [--default] [--json]") {
 		return
 	}
-	if !requirePaasValue(*host, "host", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password>] [--labels <k:v,...>] [--default] [--json]") {
+	if !requirePaasValue(*host, "host", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password|local>] [--labels <k:v,...>] [--default] [--json]") {
 		return
 	}
-	if !requirePaasValue(*user, "user", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password>] [--labels <k:v,...>] [--default] [--json]") {
+	if !requirePaasValue(*user, "user", "usage: si paas target add --name <id> --host <host> --user <user> [--port <n>] [--auth-method <key|password|local>] [--labels <k:v,...>] [--default] [--json]") {
 		return
+	}
+	if !isValidPaasAuthMethod(*authMethod) {
+		fatal(fmt.Errorf("invalid --auth-method %q (expected key|password|local)", strings.TrimSpace(*authMethod)))
 	}
 	store, err := loadPaasTargetStore(currentPaasContext())
 	if err != nil {
@@ -96,7 +99,7 @@ func cmdPaasTargetAdd(args []string) {
 		Host:       strings.TrimSpace(*host),
 		Port:       *port,
 		User:       strings.TrimSpace(*user),
-		AuthMethod: strings.ToLower(strings.TrimSpace(*authMethod)),
+		AuthMethod: normalizePaasAuthMethod(*authMethod),
 		Labels:     parseCSV(*labels),
 		CreatedAt:  utcNowRFC3339(),
 		UpdatedAt:  utcNowRFC3339(),

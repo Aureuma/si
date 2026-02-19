@@ -132,7 +132,7 @@ func cmdPaasDeployWebhookMapAdd(args []string) {
 	maxParallel := fs.Int("max-parallel", 1, "mapped deploy max parallel operations")
 	continueOnError := fs.Bool("continue-on-error", false, "mapped deploy continue on target error")
 	applyRemote := fs.Bool("apply", false, "mapped deploy applies remotely")
-	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "mapped deploy remote release root")
+	remoteDir := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "mapped deploy remote release root")
 	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "mapped deploy allows untrusted vault fingerprint (unsafe)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -174,6 +174,16 @@ func cmdPaasDeployWebhookMapAdd(args []string) {
 			fmt.Errorf("invalid --max-parallel %d", *maxParallel),
 		), nil)
 	}
+	resolvedRemoteDir, err := resolvePaasRemoteDir(strings.TrimSpace(*remoteDir))
+	if err != nil {
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+			err,
+		), nil)
+	}
 	store, err := loadPaasWebhookMappingStore(currentPaasContext())
 	if err != nil {
 		failPaasDeploy(jsonOut, newPaasOperationFailure(
@@ -196,7 +206,7 @@ func cmdPaasDeployWebhookMapAdd(args []string) {
 		MaxParallel:         *maxParallel,
 		ContinueOnError:     *continueOnError,
 		Apply:               *applyRemote,
-		RemoteDir:           strings.TrimSpace(*remoteDir),
+		RemoteDir:           resolvedRemoteDir,
 		AllowUntrustedVault: *allowUntrustedVault,
 		UpdatedAt:           now,
 	}
@@ -573,7 +583,10 @@ func normalizePaasWebhookMappingRow(row paasWebhookMapping) (paasWebhookMapping,
 	}
 	row.RemoteDir = strings.TrimSpace(row.RemoteDir)
 	if row.RemoteDir == "" {
-		row.RemoteDir = "/opt/si/paas/releases"
+		row.RemoteDir = defaultPaasReleaseRemoteDir
+	}
+	if resolvedRemoteDir, err := resolvePaasRemoteDir(row.RemoteDir); err == nil {
+		row.RemoteDir = resolvedRemoteDir
 	}
 	row.CreatedAt = strings.TrimSpace(row.CreatedAt)
 	row.UpdatedAt = strings.TrimSpace(row.UpdatedAt)
