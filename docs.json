@@ -55,8 +55,7 @@
               "docs/PROVIDERS",
               "docs/API_CHARACTERISTICS",
               "docs/INTEGRATION_ECOSYSTEM",
-              "docs/codex-model-policy",
-              "docs/CODEX_SKILLS_AND_INTERACTIVE_DRIVER_PLAN"
+              "docs/codex-model-policy"
             ]
           },
           {
@@ -101,7 +100,6 @@
               "docs/PAAS_TEST_MATRIX",
               "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
               "docs/PAAS_AUTOMATION_AGENTS",
-              "docs/PAAS_MARKET_TASKBOARD",
               "docs/PAAS_BACKUP_RESTORE_POLICY"
             ]
           },

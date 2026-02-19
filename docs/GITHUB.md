@@ -63,7 +63,7 @@ si github git setup \
   --root ~/Development \
   --account core \
   --owner Aureuma \
-  --vault-file ~/Development/viva/.env.dev \
+  --vault-file ~/.si/vault/dev.env \
   --vault-identity-file ~/.si/vault/keys/age.key
 ```
 

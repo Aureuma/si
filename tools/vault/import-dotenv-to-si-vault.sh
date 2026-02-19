@@ -6,14 +6,14 @@ usage() {
 Import plaintext .env files into si vault (no dotenvx).
 
 Defaults:
-  --src ../viva
-  --section viva
+  --src .
+  --section default
   --identity-file $SI_VAULT_IDENTITY_FILE or ~/.si/vault/keys/age.key
 
 Examples:
-  tools/vault/import-dotenv-to-si-vault.sh --src ../viva
-  tools/vault/import-dotenv-to-si-vault.sh --src ../viva --section viva-dev
-  tools/vault/import-dotenv-to-si-vault.sh --src ../viva --dry-run
+  tools/vault/import-dotenv-to-si-vault.sh --src .
+  tools/vault/import-dotenv-to-si-vault.sh --src . --section app-dev
+  tools/vault/import-dotenv-to-si-vault.sh --src . --dry-run
 
 Notes:
   - This reads plaintext .env files. Use for migration/bootstrap only.
@@ -24,8 +24,8 @@ Notes:
 EOF
 }
 
-src="../viva"
-section="viva"
+src="."
+section="default"
 dry_run="0"
 identity_file="${SI_VAULT_IDENTITY_FILE:-$HOME/.si/vault/keys/age.key}"
 
@@ -179,4 +179,3 @@ for key in sorted(data.keys()):
   print(f"imported: {target_env}:{section}:{key}")
 PY
 done
-

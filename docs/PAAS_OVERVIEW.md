@@ -53,7 +53,6 @@ si paas agent logs --name <agent> --tail 50 --json
 - [PaaS Test Matrix](./PAAS_TEST_MATRIX)
 - [PaaS Context Operations Runbook](./PAAS_CONTEXT_OPERATIONS_RUNBOOK)
 - [PaaS Automation Agents](./PAAS_AUTOMATION_AGENTS)
-- [PaaS Market Taskboard](./PAAS_MARKET_TASKBOARD)
 - [PaaS Backup and Restore Policy](./PAAS_BACKUP_RESTORE_POLICY)
 
 ### Agent runtime and approvals

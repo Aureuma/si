@@ -21,11 +21,11 @@ func TestNormalizeGitHubRemoteURLHTTPSWithPAT(t *testing.T) {
 }
 
 func TestNormalizeGitHubRemoteURLSSH(t *testing.T) {
-	got, ok := normalizeGitHubRemoteURL("git@github.com:Aureuma/viva.git")
+	got, ok := normalizeGitHubRemoteURL("git@github.com:Aureuma/platform.git")
 	if !ok {
 		t.Fatalf("expected github ssh remote to normalize")
 	}
-	if got.URL != "https://github.com/Aureuma/viva.git" {
+	if got.URL != "https://github.com/Aureuma/platform.git" {
 		t.Fatalf("unexpected normalized url: %s", got.URL)
 	}
 }
@@ -58,7 +58,7 @@ func TestReadGitCredentialRequestFromURL(t *testing.T) {
 }
 
 func TestReadGitCredentialRequestFromFields(t *testing.T) {
-	input := strings.NewReader("protocol=https\nhost=github.com\npath=Aureuma/viva.git\n\n")
+	input := strings.NewReader("protocol=https\nhost=github.com\npath=Aureuma/platform.git\n\n")
 	req, err := readGitCredentialRequest(input)
 	if err != nil {
 		t.Fatalf("read credential request: %v", err)
@@ -69,7 +69,7 @@ func TestReadGitCredentialRequestFromFields(t *testing.T) {
 	if req.Host != "github.com" {
 		t.Fatalf("unexpected host: %s", req.Host)
 	}
-	if req.Path != "Aureuma/viva.git" {
+	if req.Path != "Aureuma/platform.git" {
 		t.Fatalf("unexpected path: %s", req.Path)
 	}
 }
@@ -100,10 +100,10 @@ func TestBuildGitHubCredentialHelperCommandUsesVault(t *testing.T) {
 func TestBuildGitHubCredentialHelperCommandUsesVaultFile(t *testing.T) {
 	cmd := buildGitHubCredentialHelperCommand(githubGitHelperOptions{
 		UseVault:  true,
-		VaultFile: "/home/shawn/Development/viva/.env.prod",
+		VaultFile: "/home/dev/.si/vault/prod.env",
 		Account:   "core",
 	})
-	want := "!si vault run --file /home/shawn/Development/viva/.env.prod -- si github git credential --account core"
+	want := "!si vault run --file /home/dev/.si/vault/prod.env -- si github git credential --account core"
 	if cmd != want {
 		t.Fatalf("unexpected helper command:\nwant: %s\ngot:  %s", want, cmd)
 	}

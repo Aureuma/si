@@ -32,7 +32,6 @@ bash -n tools/agents/config.sh
 bash -n tools/agents/lib.sh
 bash -n tools/agents/pr-guardian.sh
 bash -n tools/agents/website-sentry.sh
-bash -n tools/agents/market-research-scout.sh
 bash -n tools/agents/status.sh
 
 echo "PASS shell syntax"

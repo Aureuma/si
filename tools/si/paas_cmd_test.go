@@ -3087,10 +3087,10 @@ func TestPaasTaskboardAddListMoveFlow(t *testing.T) {
 			"--title", "Evaluate enterprise billing controls",
 			"--status", "paas-backlog",
 			"--priority", "P1",
-			"--owner", "market-research-agent",
+			"--owner", "automation-agent",
 			"--workstream", "paas",
-			"--ticket", "tickets/market-research/20260218-enterprise-billing-controls.md",
-			"--tags", "market-research,opportunity",
+			"--ticket", "tickets/opportunities/20260218-enterprise-billing-controls.md",
+			"--tags", "opportunity,paas",
 			"--json",
 		})
 	})
