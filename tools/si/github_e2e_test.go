@@ -83,9 +83,8 @@ func TestGitHubE2E_RawWithOAuthToken(t *testing.T) {
 	defer server.Close()
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"GITHUB_DEFAULT_AUTH_MODE": "oauth",
-		"GITHUB_TOKEN":             "oauth-token-123",
-	}, "github", "raw", "--base-url", server.URL, "--method", "GET", "--path", "/user", "--json")
+		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+	}, "github", "raw", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--method", "GET", "--path", "/user", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
