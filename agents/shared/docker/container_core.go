@@ -55,6 +55,12 @@ func BuildContainerCoreMounts(plan ContainerCoreMountPlan) []mount.Mount {
 			appendUniqueMount(&mounts, m)
 		}
 	}
+	if m, ok := HostDockerConfigMount(plan.ContainerHome); ok {
+		appendUniqueMount(&mounts, m)
+	}
+	if m, ok := HostSiGoToolchainMount(plan.ContainerHome); ok {
+		appendUniqueMount(&mounts, m)
+	}
 	if m, ok := HostVaultEnvFileMount(plan.HostVaultEnvFile); ok {
 		appendUniqueMount(&mounts, m)
 	}

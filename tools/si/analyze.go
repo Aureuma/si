@@ -44,7 +44,12 @@ func cmdAnalyze(args []string) {
 	}
 
 	root := mustRepoRoot()
-	allModules, err := discoverAnalyzeModules(root)
+	goPath, err := resolveGoForSelfBuild(root, filepath.Join(root, "si"), "go")
+	if err != nil {
+		fatal(fmt.Errorf("go toolchain not found for analyze: %w", err))
+	}
+
+	allModules, err := discoverAnalyzeModules(root, goPath)
 	if err != nil {
 		fatal(err)
 	}
@@ -56,11 +61,6 @@ func cmdAnalyze(args []string) {
 		fatal(errors.New("no modules selected for analysis"))
 	}
 
-	if !*skipVet {
-		if _, err := exec.LookPath("go"); err != nil {
-			fatal(fmt.Errorf("go toolchain not found in PATH"))
-		}
-	}
 	if !*skipLint {
 		if _, err := exec.LookPath("golangci-lint"); err != nil {
 			fatal(fmt.Errorf("golangci-lint not found in PATH (install: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest)"))
@@ -72,7 +72,7 @@ func cmdAnalyze(args []string) {
 	for _, mod := range selectedModules {
 		fmt.Printf("\n%s %s\n", styleSection("module:"), styleCmd(mod.Rel))
 		if !*skipVet {
-			if err := runAnalyzeCommand(mod.Dir, "go", []string{"vet", "./..."}); err != nil {
+			if err := runAnalyzeCommand(mod.Dir, goPath, []string{"vet", "./..."}); err != nil {
 				warnf("%s go vet failed: %v", mod.Rel, err)
 				failed = true
 			}
@@ -110,8 +110,8 @@ func runAnalyzeCommand(dir, name string, args []string) error {
 	return cmd.Run()
 }
 
-func discoverAnalyzeModules(root string) ([]analyzeModule, error) {
-	cmd := exec.Command("go", "work", "edit", "-json")
+func discoverAnalyzeModules(root string, goPath string) ([]analyzeModule, error) {
+	cmd := exec.Command(goPath, "work", "edit", "-json")
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {

@@ -166,6 +166,10 @@ func (c *Client) EnsureDyad(ctx context.Context, opts DyadOptions) (string, stri
 	// inside both members.
 	if !HasHostSiMount(actorInfo, "/root") ||
 		!HasHostSiMount(criticInfo, "/root") ||
+		!HasHostDockerConfigMount(actorInfo, "/root") ||
+		!HasHostDockerConfigMount(criticInfo, "/root") ||
+		!HasHostSiGoToolchainMount(actorInfo, "/root") ||
+		!HasHostSiGoToolchainMount(criticInfo, "/root") ||
 		!HasDevelopmentMount(actorInfo, opts.WorkspaceHost, "/root") ||
 		!HasDevelopmentMount(criticInfo, opts.WorkspaceHost, "/root") ||
 		!HasHostVaultEnvFileMount(actorInfo, opts.VaultEnvFile) ||

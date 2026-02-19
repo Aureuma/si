@@ -160,3 +160,47 @@ func TestBuildDyadSpecsIncludesDevelopmentMount(t *testing.T) {
 		t.Fatalf("critic spec missing host ~/Development mount: %+v", critic.HostConfig.Mounts)
 	}
 }
+
+func TestBuildDyadSpecsIncludesHostDockerAndGoToolingMounts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".docker"), 0o700); err != nil {
+		t.Fatalf("mkdir .docker: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".local", "share", "si", "go"), 0o700); err != nil {
+		t.Fatalf("mkdir host go dir: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "mounttest-tooling",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".docker"), "/root/.docker") {
+		t.Fatalf("actor spec missing host ~/.docker mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".docker"), "/root/.docker") {
+		t.Fatalf("critic spec missing host ~/.docker mount: %+v", critic.HostConfig.Mounts)
+	}
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".local", "share", "si", "go"), "/root/.local/share/si/go") {
+		t.Fatalf("actor spec missing host go tooling mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".local", "share", "si", "go"), "/root/.local/share/si/go") {
+		t.Fatalf("critic spec missing host go tooling mount: %+v", critic.HostConfig.Mounts)
+	}
+}
