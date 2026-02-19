@@ -30,7 +30,7 @@ func cmdPaasDeployReconcile(args []string) {
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "single target id")
 	targets := fs.String("targets", "", "target ids csv or all")
-	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
+	remoteDir := fs.String("remote-dir", "", "remote release root directory")
 	timeout := fs.String("timeout", "45s", "per-target reconcile timeout")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -48,6 +48,16 @@ func cmdPaasDeployReconcile(args []string) {
 			"",
 			"pass a positive --timeout duration (for example 45s)",
 			fmt.Errorf("invalid --timeout %q", strings.TrimSpace(*timeout)),
+		), nil)
+	}
+	resolvedRemoteDir, err := resolvePaasRemoteDirForApp(strings.TrimSpace(*remoteDir), strings.TrimSpace(*app))
+	if err != nil {
+		failPaasCommand("deploy reconcile", jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+			err,
 		), nil)
 	}
 	selectedTargets := normalizeTargets(*target, *targets)
@@ -72,7 +82,7 @@ func cmdPaasDeployReconcile(args []string) {
 	results := make([]paasReconcileResult, 0, len(resolvedTargets))
 	for _, t := range resolvedTargets {
 		ctx, cancel := context.WithTimeout(context.Background(), timeoutValue)
-		row := runPaasTargetReconcile(ctx, t, strings.TrimSpace(*remoteDir), strings.TrimSpace(desiredRelease))
+		row := runPaasTargetReconcile(ctx, t, resolvedRemoteDir, strings.TrimSpace(desiredRelease))
 		cancel()
 		results = append(results, row)
 	}
@@ -201,10 +211,14 @@ func runPaasTargetReconcile(ctx context.Context, target paasTarget, remoteRoot, 
 		Status:         "unknown",
 		Plan:           []string{},
 	}
-	remoteRoot = strings.TrimSpace(remoteRoot)
-	if remoteRoot == "" {
-		remoteRoot = "/opt/si/paas/releases"
+	resolvedRemoteRoot, remoteErr := resolvePaasRemoteDir(remoteRoot)
+	if remoteErr != nil {
+		result.Status = "error"
+		result.Error = remoteErr.Error()
+		result.Plan = append(result.Plan, "pass an absolute --remote-dir path and retry reconcile")
+		return result
 	}
+	remoteRoot = resolvedRemoteRoot
 
 	remoteReleases, listErr := runPaasRemoteListReleaseDirs(ctx, target, remoteRoot)
 	if listErr != nil {

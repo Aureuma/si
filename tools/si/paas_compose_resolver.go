@@ -193,8 +193,22 @@ func buildPaasComposeFileArgs(composeFiles []string) string {
 	return strings.Join(parts, " ")
 }
 
+func buildPaasComposeExecCommand(composeFiles []string, tail string) string {
+	args := buildPaasComposeFileArgs(composeFiles)
+	suffix := strings.TrimSpace(tail)
+	if suffix != "" {
+		suffix = " " + suffix
+	}
+	return fmt.Sprintf("if docker compose version >/dev/null 2>&1; then docker compose %s%s; elif command -v docker-compose >/dev/null 2>&1; then docker-compose %s%s; else echo 'docker compose and docker-compose are unavailable' >&2; exit 127; fi", args, suffix, args, suffix)
+}
+
+func buildPaasComposePullCommand(composeFiles []string) string {
+	args := buildPaasComposeFileArgs(composeFiles)
+	return fmt.Sprintf("if docker compose version >/dev/null 2>&1; then (docker compose %s pull --ignore-buildable 2>/dev/null || docker compose %s pull) || echo 'WARNING: compose pull failed; continuing with local/build images' >&2; elif command -v docker-compose >/dev/null 2>&1; then docker-compose %s pull || echo 'WARNING: compose pull failed; continuing with local/build images' >&2; else echo 'docker compose and docker-compose are unavailable' >&2; exit 127; fi", args, args, args)
+}
+
 func buildPaasDefaultHealthCheckCommand(composeFiles []string) string {
-	return fmt.Sprintf("docker compose %s ps --status running --services | grep -q .", buildPaasComposeFileArgs(composeFiles))
+	return fmt.Sprintf("%s | grep -q .", buildPaasComposeExecCommand(composeFiles, "ps --status running --services"))
 }
 
 func buildPaasMagicVariableMap(app, releaseID, strategy string, targets []string) map[string]string {

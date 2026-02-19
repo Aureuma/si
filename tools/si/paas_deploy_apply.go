@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -436,7 +437,17 @@ func resolvePaasDeployTargets(selectedTargets []string) ([]paasTarget, error) {
 }
 
 func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBundleDir, releaseID, remoteRoot string) error {
-	releaseDir := path.Join(strings.TrimSpace(remoteRoot), sanitizePaasReleasePathSegment(releaseID))
+	resolvedRemoteRoot, err := resolvePaasRemoteDir(remoteRoot)
+	if err != nil {
+		return newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			target.Name,
+			"pass an absolute remote release root (for example /opt/si/paas/releases)",
+			err,
+		)
+	}
+	releaseDir := path.Join(resolvedRemoteRoot, sanitizePaasReleasePathSegment(releaseID))
 	if strings.TrimSpace(releaseDir) == "" {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -466,7 +477,6 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			err,
 		)
 	}
-	composeArgs := buildPaasComposeFileArgs(composeFiles)
 	if _, err := runPaasSSHCommand(ctx, target, fmt.Sprintf("mkdir -p %s", quoteSingle(releaseDir))); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -488,7 +498,9 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			)
 		}
 	}
-	remoteCmd := fmt.Sprintf("cd %s && docker compose %s pull && docker compose %s up -d --remove-orphans", quoteSingle(releaseDir), composeArgs, composeArgs)
+	pullCmd := buildPaasComposePullCommand(composeFiles)
+	upCmd := buildPaasComposeExecCommand(composeFiles, "up -d --remove-orphans --build")
+	remoteCmd := fmt.Sprintf("cd %s && %s && %s", quoteSingle(releaseDir), pullCmd, upCmd)
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
@@ -520,7 +532,17 @@ func runPaasRemoteHealthCheck(ctx context.Context, target paasTarget, localBundl
 		}
 		command = buildPaasDefaultHealthCheckCommand(composeFiles)
 	}
-	releaseDir := path.Join(strings.TrimSpace(remoteRoot), sanitizePaasReleasePathSegment(releaseID))
+	resolvedRemoteRoot, err := resolvePaasRemoteDir(remoteRoot)
+	if err != nil {
+		return newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			target.Name,
+			"pass an absolute remote release root (for example /opt/si/paas/releases)",
+			err,
+		)
+	}
+	releaseDir := path.Join(resolvedRemoteRoot, sanitizePaasReleasePathSegment(releaseID))
 	remoteCmd := fmt.Sprintf("cd %s && %s", quoteSingle(releaseDir), command)
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
 		return newPaasOperationFailure(
@@ -535,13 +557,42 @@ func runPaasRemoteHealthCheck(ctx context.Context, target paasTarget, localBundl
 }
 
 func runPaasSCPUpload(ctx context.Context, target paasTarget, srcPath, remoteDir string) error {
-	scpBin := strings.TrimSpace(os.Getenv(paasSCPBinEnvKey))
-	if scpBin == "" {
-		scpBin = "scp"
-	}
 	absSrc, err := filepath.Abs(strings.TrimSpace(srcPath))
 	if err != nil {
 		return err
+	}
+	if isPaasLocalTarget(target) {
+		resolvedRemoteDir := strings.TrimSpace(remoteDir)
+		if resolvedRemoteDir == "" {
+			return fmt.Errorf("remote directory is required")
+		}
+		if err := os.MkdirAll(resolvedRemoteDir, 0o755); err != nil {
+			return err
+		}
+		destPath := filepath.Join(resolvedRemoteDir, filepath.Base(absSrc))
+		srcFile, err := os.Open(absSrc)
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+		srcInfo, err := srcFile.Stat()
+		if err != nil {
+			return err
+		}
+		dstFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode().Perm())
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+		if _, err := io.Copy(dstFile, srcFile); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	scpBin := strings.TrimSpace(os.Getenv(paasSCPBinEnvKey))
+	if scpBin == "" {
+		scpBin = "scp"
 	}
 	dest := fmt.Sprintf("%s@%s:%s/", target.User, target.Host, strings.TrimSpace(remoteDir))
 	args := []string{

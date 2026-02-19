@@ -43,19 +43,24 @@ func runPaasTargetCheck(target paasTarget, timeout time.Duration, imagePlatformA
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	if err := paasTCPDialCheck(ctx, target.Host, target.Port); err != nil {
-		result.Error = "network check failed: " + err.Error()
-		result.DurationMs = time.Since(started).Milliseconds()
-		return result
-	}
-	result.Reachable = true
+	if isPaasLocalTarget(target) {
+		result.Reachable = true
+		result.SSHOK = true
+	} else {
+		if err := paasTCPDialCheck(ctx, target.Host, target.Port); err != nil {
+			result.Error = "network check failed: " + err.Error()
+			result.DurationMs = time.Since(started).Milliseconds()
+			return result
+		}
+		result.Reachable = true
 
-	if _, err := runPaasSSHCommand(ctx, target, "echo si-preflight-ok"); err != nil {
-		result.Error = "ssh check failed: " + err.Error()
-		result.DurationMs = time.Since(started).Milliseconds()
-		return result
+		if _, err := runPaasSSHCommand(ctx, target, "echo si-preflight-ok"); err != nil {
+			result.Error = "ssh check failed: " + err.Error()
+			result.DurationMs = time.Since(started).Milliseconds()
+			return result
+		}
+		result.SSHOK = true
 	}
-	result.SSHOK = true
 
 	if out, err := runPaasSSHCommand(ctx, target, "uname -m"); err != nil {
 		result.Error = "architecture check failed: " + err.Error()
@@ -106,6 +111,23 @@ func paasTCPDialCheck(ctx context.Context, host string, port int) error {
 }
 
 func runPaasSSHCommand(ctx context.Context, target paasTarget, remoteCmd string) (string, error) {
+	if isPaasLocalTarget(target) {
+		cmd := exec.CommandContext(ctx, "sh", "-lc", remoteCmd)
+		var stdout bytes.Buffer
+		var stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err := cmd.Run()
+		if err != nil {
+			errMsg := strings.TrimSpace(stderr.String())
+			if errMsg == "" {
+				errMsg = err.Error()
+			}
+			return "", fmt.Errorf("%s", errMsg)
+		}
+		return strings.TrimSpace(stdout.String()), nil
+	}
+
 	bin := strings.TrimSpace(os.Getenv(paasSSHBinEnvKey))
 	if bin == "" {
 		bin = "ssh"

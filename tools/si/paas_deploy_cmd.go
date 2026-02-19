@@ -38,7 +38,7 @@ func cmdPaasDeploy(args []string) {
 	composeFile := fs.String("compose-file", "compose.yaml", "compose file path")
 	bundleRoot := fs.String("bundle-root", "", "release bundle root path (defaults to context-scoped state root)")
 	applyRemote := fs.Bool("apply", false, "upload bundle and apply docker compose on remote targets")
-	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
+	remoteDir := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "remote release root directory")
 	applyTimeout := fs.String("apply-timeout", "2m", "per-target remote apply timeout")
 	healthCmd := fs.String("health-cmd", defaultPaasHealthCheckCommand, "remote health command executed after apply")
 	healthTimeout := fs.String("health-timeout", "45s", "per-target health check timeout")
@@ -93,6 +93,16 @@ func cmdPaasDeploy(args []string) {
 			"",
 			"pass a positive duration for --rollback-timeout (for example 2m)",
 			fmt.Errorf("invalid --rollback-timeout %q", strings.TrimSpace(*rollbackTimeout)),
+		), nil)
+	}
+	resolvedRemoteDir, err := resolvePaasRemoteDir(strings.TrimSpace(*remoteDir))
+	if err != nil {
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+			err,
 		), nil)
 	}
 	composeGuardrail, err := enforcePaasPlaintextSecretGuardrail(strings.TrimSpace(*composeFile), *allowPlaintextSecrets)
@@ -209,7 +219,7 @@ func cmdPaasDeploy(args []string) {
 		ContinueOnError:      *continueOnError,
 		BundleDir:            bundleDir,
 		ReleaseID:            releaseID,
-		RemoteRoot:           strings.TrimSpace(*remoteDir),
+		RemoteRoot:           resolvedRemoteDir,
 		ApplyTimeout:         applyTimeoutValue,
 		HealthTimeout:        healthTimeoutValue,
 		HealthCommand:        strings.TrimSpace(*healthCmd),
@@ -234,7 +244,7 @@ func cmdPaasDeploy(args []string) {
 		failPaasDeploy(jsonOut, err, failureFields)
 	}
 	if *applyRemote && len(applyResult.AppliedTargets) > 0 {
-		if err := recordPaasSuccessfulRelease(resolvedApp, releaseID); err != nil {
+		if err := recordPaasSuccessfulReleaseWithRemoteDir(resolvedApp, releaseID, resolvedRemoteDir); err != nil {
 			failPaasDeploy(jsonOut, newPaasOperationFailure(
 				paasFailureUnknown,
 				"state_record",
@@ -260,7 +270,7 @@ func cmdPaasDeploy(args []string) {
 		"continue_on_error":        boolString(*continueOnError),
 		"max_parallel":             intString(*maxParallel),
 		"release":                  releaseID,
-		"remote_dir":               strings.TrimSpace(*remoteDir),
+		"remote_dir":               resolvedRemoteDir,
 		"rollback_on_failure":      boolString(*rollbackOnFailure),
 		"rollback_release":         rollbackReleaseID,
 		"rollback_targets":         formatTargets(applyResult.RolledBackTargets),
@@ -300,7 +310,7 @@ func cmdPaasRollback(args []string) {
 	continueOnError := fs.Bool("continue-on-error", false, "continue rollback on target errors")
 	bundleRoot := fs.String("bundle-root", "", "release bundle root path (defaults to context-scoped state root)")
 	applyRemote := fs.Bool("apply", false, "upload release bundle and apply docker compose on targets")
-	remoteDir := fs.String("remote-dir", "/opt/si/paas/releases", "remote release root directory")
+	remoteDir := fs.String("remote-dir", defaultPaasReleaseRemoteDir, "remote release root directory")
 	applyTimeout := fs.String("apply-timeout", "2m", "per-target remote apply timeout")
 	healthCmd := fs.String("health-cmd", defaultPaasHealthCheckCommand, "remote health command executed after rollback")
 	healthTimeout := fs.String("health-timeout", "45s", "per-target health check timeout")
@@ -342,6 +352,16 @@ func cmdPaasRollback(args []string) {
 			"",
 			"pass a positive duration for --health-timeout (for example 45s)",
 			fmt.Errorf("invalid --health-timeout %q", strings.TrimSpace(*healthTimeout)),
+		), nil)
+	}
+	resolvedRemoteDir, err := resolvePaasRemoteDir(strings.TrimSpace(*remoteDir))
+	if err != nil {
+		failPaasRollback(jsonOut, newPaasOperationFailure(
+			paasFailureInvalidArgument,
+			"flag_validation",
+			"",
+			"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+			err,
 		), nil)
 	}
 	vaultGuardrail, err := runPaasVaultDeployGuardrail(strings.TrimSpace(*vaultFile), *allowUntrustedVault)
@@ -406,7 +426,7 @@ func cmdPaasRollback(args []string) {
 			ContinueOnError:      *continueOnError,
 			BundleDir:            bundleDir,
 			ReleaseID:            resolvedRelease,
-			RemoteRoot:           strings.TrimSpace(*remoteDir),
+			RemoteRoot:           resolvedRemoteDir,
 			ApplyTimeout:         applyTimeoutValue,
 			HealthTimeout:        healthTimeoutValue,
 			HealthCommand:        strings.TrimSpace(*healthCmd),
@@ -431,7 +451,7 @@ func cmdPaasRollback(args []string) {
 		}
 		appliedTargets = applyResult.AppliedTargets
 		healthyTargets = applyResult.HealthyTargets
-		if err := recordPaasSuccessfulRelease(resolvedApp, resolvedRelease); err != nil {
+		if err := recordPaasSuccessfulReleaseWithRemoteDir(resolvedApp, resolvedRelease, resolvedRemoteDir); err != nil {
 			failPaasRollback(jsonOut, newPaasOperationFailure(
 				paasFailureUnknown,
 				"state_record",
@@ -452,7 +472,7 @@ func cmdPaasRollback(args []string) {
 		"health_checked_targets": formatTargets(healthyTargets),
 		"health_timeout":         healthTimeoutValue.String(),
 		"max_parallel":           intString(*maxParallel),
-		"remote_dir":             strings.TrimSpace(*remoteDir),
+		"remote_dir":             resolvedRemoteDir,
 		"strategy":               resolvedStrategy,
 		"failed_targets":         formatTargets(applyResult.FailedTargets),
 		"skipped_targets":        formatTargets(applyResult.SkippedTargets),
@@ -526,6 +546,7 @@ func cmdPaasLogs(args []string) {
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id")
 	service := fs.String("service", "", "service name")
+	remoteDir := fs.String("remote-dir", "", "remote release root directory override")
 	tail := fs.Int("tail", 200, "number of lines")
 	follow := fs.Bool("follow", false, "follow logs")
 	since := fs.String("since", "", "relative duration")
@@ -551,15 +572,30 @@ func cmdPaasLogs(args []string) {
 			), nil)
 		}
 	}
-	results, err := runPaasLogs(strings.TrimSpace(*app), strings.TrimSpace(*target), strings.TrimSpace(*service), *tail, resolvedSince, *follow)
+	resolvedRemoteDir := strings.TrimSpace(*remoteDir)
+	if resolvedRemoteDir != "" {
+		checkedRemoteDir, err := resolvePaasRemoteDir(resolvedRemoteDir)
+		if err != nil {
+			failPaasCommand("logs", jsonOut, newPaasOperationFailure(
+				paasFailureInvalidArgument,
+				"flag_validation",
+				"",
+				"pass an absolute --remote-dir path (for example /opt/si/paas/releases)",
+				err,
+			), nil)
+		}
+		resolvedRemoteDir = checkedRemoteDir
+	}
+	results, err := runPaasLogs(strings.TrimSpace(*app), strings.TrimSpace(*target), strings.TrimSpace(*service), resolvedRemoteDir, *tail, resolvedSince, *follow)
 	if err != nil {
 		failPaasCommand("logs", jsonOut, err, map[string]string{
-			"app":     strings.TrimSpace(*app),
-			"follow":  boolString(*follow),
-			"service": strings.TrimSpace(*service),
-			"since":   resolvedSince,
-			"tail":    intString(*tail),
-			"target":  strings.TrimSpace(*target),
+			"app":        strings.TrimSpace(*app),
+			"follow":     boolString(*follow),
+			"remote_dir": resolvedRemoteDir,
+			"service":    strings.TrimSpace(*service),
+			"since":      resolvedSince,
+			"tail":       intString(*tail),
+			"target":     strings.TrimSpace(*target),
 		})
 	}
 	printPaasLogsResults(jsonOut, strings.TrimSpace(*app), strings.TrimSpace(*target), strings.TrimSpace(*service), resolvedSince, *tail, *follow, results)

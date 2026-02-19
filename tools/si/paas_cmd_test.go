@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -2662,6 +2663,109 @@ func TestPaasLogsLiveJSONContract(t *testing.T) {
 	}
 	if row.LineCount != 2 || !strings.Contains(row.Output, "api log line 1") {
 		t.Fatalf("expected collected logs output, got %#v", row)
+	}
+}
+
+func TestPaasLogsLiveUsesRecordedRemoteDir(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.51", "--user", "root"})
+	})
+	customRemoteDir := "/srv/si/releases"
+	releaseID := "rel-20260219T010203"
+	if err := recordPaasSuccessfulReleaseWithRemoteDir("billing-api", releaseID, customRemoteDir); err != nil {
+		t.Fatalf("record release history with remote dir: %v", err)
+	}
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"echo \"$*\" >> " + quoteSingle(sshLog),
+		"echo 'api log line 1'",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"logs",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--service", "api",
+			"--tail", "10",
+			"--json",
+		})
+	})
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	expectedReleaseDir := path.Join(customRemoteDir, releaseID)
+	if !strings.Contains(string(sshRaw), expectedReleaseDir) {
+		t.Fatalf("expected logs command to use recorded remote dir %q, got %q", expectedReleaseDir, string(sshRaw))
+	}
+}
+
+func TestPaasLogsLiveRemoteDirOverride(t *testing.T) {
+	stateRoot := t.TempDir()
+	fakeBinDir := t.TempDir()
+	sshLog := filepath.Join(fakeBinDir, "ssh.log")
+	t.Setenv(paasStateRootEnvKey, stateRoot)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{"target", "add", "--name", "edge-a", "--host", "203.0.113.52", "--user", "root"})
+	})
+	recordedRemoteDir := "/srv/si/releases-recorded"
+	overrideRemoteDir := "/srv/si/releases-override"
+	releaseID := "rel-20260219T040506"
+	if err := recordPaasSuccessfulReleaseWithRemoteDir("billing-api", releaseID, recordedRemoteDir); err != nil {
+		t.Fatalf("record release history with remote dir: %v", err)
+	}
+
+	sshScript := filepath.Join(fakeBinDir, "fake-ssh")
+	sshBody := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"echo \"$*\" >> " + quoteSingle(sshLog),
+		"echo 'api log line override'",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(sshBody), 0o700); err != nil {
+		t.Fatalf("write fake ssh: %v", err)
+	}
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+
+	captureStdout(t, func() {
+		cmdPaas([]string{
+			"logs",
+			"--app", "billing-api",
+			"--target", "edge-a",
+			"--service", "api",
+			"--tail", "10",
+			"--remote-dir", overrideRemoteDir,
+			"--json",
+		})
+	})
+	sshRaw, err := os.ReadFile(sshLog)
+	if err != nil {
+		t.Fatalf("read ssh log: %v", err)
+	}
+	text := string(sshRaw)
+	overrideReleaseDir := path.Join(overrideRemoteDir, releaseID)
+	recordedReleaseDir := path.Join(recordedRemoteDir, releaseID)
+	if !strings.Contains(text, overrideReleaseDir) {
+		t.Fatalf("expected logs command to use override remote dir %q, got %q", overrideReleaseDir, text)
+	}
+	if strings.Contains(text, recordedReleaseDir) {
+		t.Fatalf("expected logs command to ignore recorded remote dir %q when override is provided, got %q", recordedReleaseDir, text)
 	}
 }
 

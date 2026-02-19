@@ -253,6 +253,9 @@ func mergePaasDeployHistoryStore(base, incoming paasDeployHistoryStore) paasDepl
 		if strings.TrimSpace(row.CurrentRelease) != "" {
 			current.CurrentRelease = strings.TrimSpace(row.CurrentRelease)
 		}
+		if strings.TrimSpace(row.CurrentRemoteDir) != "" {
+			current.CurrentRemoteDir = strings.TrimSpace(row.CurrentRemoteDir)
+		}
 		for _, release := range row.History {
 			current.History = appendUniquePaasRelease(current.History, release)
 		}

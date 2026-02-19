@@ -13,7 +13,6 @@ import (
 
 const (
 	defaultPaasLogsQueryTimeout = 45 * time.Second
-	defaultPaasReleaseRemoteDir = "/opt/si/paas/releases"
 )
 
 type paasLogResult struct {
@@ -29,7 +28,7 @@ type paasLogResult struct {
 	DurationMs int64  `json:"duration_ms"`
 }
 
-func runPaasLogs(app, target, service string, tail int, since string, follow bool) ([]paasLogResult, error) {
+func runPaasLogs(app, target, service, remoteRoot string, tail int, since string, follow bool) ([]paasLogResult, error) {
 	selected := normalizeTargets(target, "")
 	resolvedTargets, err := resolvePaasDeployTargets(selected)
 	if err != nil {
@@ -55,7 +54,7 @@ func runPaasLogs(app, target, service string, tail int, since string, follow boo
 			Status:  "failed",
 		}
 
-		cmd, releaseID, buildErr := buildPaasLogsRemoteCommand(resolvedApp, resolvedService, tail, resolvedSince, follow)
+		cmd, releaseID, buildErr := buildPaasLogsRemoteCommand(resolvedApp, resolvedService, remoteRoot, tail, resolvedSince, follow)
 		item.Release = releaseID
 		if buildErr != nil {
 			item.Error = buildErr.Error()
@@ -86,7 +85,7 @@ func runPaasLogs(app, target, service string, tail int, since string, follow boo
 	return results, nil
 }
 
-func buildPaasLogsRemoteCommand(app, service string, tail int, since string, follow bool) (string, string, error) {
+func buildPaasLogsRemoteCommand(app, service, remoteRoot string, tail int, since string, follow bool) (string, string, error) {
 	args := []string{"docker", "logs", "--tail", strconv.Itoa(tail)}
 	if since != "" {
 		args = append(args, "--since", since)
@@ -103,7 +102,8 @@ func buildPaasLogsRemoteCommand(app, service string, tail int, since string, fol
 		return "sh -lc " + quoteSingle(joinPaasShellArgs(args)), "", nil
 	}
 
-	releaseID, err := resolvePaasCurrentRelease(app)
+	resolvedRemoteDir := strings.TrimSpace(remoteRoot)
+	releaseID, historyRemoteDir, err := resolvePaasCurrentReleaseInfo(app)
 	if err != nil {
 		return "", "", fmt.Errorf("resolve current release for %q: %w", app, err)
 	}
@@ -116,7 +116,14 @@ func buildPaasLogsRemoteCommand(app, service string, tail int, since string, fol
 	if strings.TrimSpace(releaseID) == "" {
 		return "", "", fmt.Errorf("no release history found for app %q; deploy once first", app)
 	}
-	releaseDir := path.Join(defaultPaasReleaseRemoteDir, sanitizePaasReleasePathSegment(releaseID))
+	if resolvedRemoteDir == "" {
+		resolvedRemoteDir = historyRemoteDir
+	}
+	resolvedRemoteDir, err = resolvePaasRemoteDirForApp(resolvedRemoteDir, app)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve remote dir for %q: %w", app, err)
+	}
+	releaseDir := path.Join(resolvedRemoteDir, sanitizePaasReleasePathSegment(releaseID))
 
 	composeArgs := []string{"docker", "compose", "-f", "compose.yaml", "logs", "--no-color", "--tail", strconv.Itoa(tail)}
 	if since != "" {
