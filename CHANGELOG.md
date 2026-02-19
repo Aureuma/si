@@ -30,6 +30,7 @@ All notable changes to this project will be documented in this file.
 - Fixed settings loading/ownership edge cases that produced permission-denied warnings for `~/.si/settings.toml` on host-driven executions.
 - Fixed mixed boolean flag reordering behavior and dyad `--skip-auth` boolean parsing edge cases.
 - Fixed installer smoke and website-sentry workflow output handling, plus environment-dependent codex/PaaS test flakiness.
+- Fixed host/container tooling parity by mounting host Docker config + SI Go toolchain into codex/dyad containers and resolving preflight/analyze Go without host PATH dependence.
 
 ### Removed
 - Removed internal planning/taskboard/market-research artifacts and retired related automation surfaces from tracked docs/workflows.
