@@ -36,9 +36,7 @@
               "docs/CLI_REFERENCE",
               "docs/COMMAND_REFERENCE",
               "docs/INTEGRATIONS_OVERVIEW",
-              "docs/INSTALLER",
               "docs/SETTINGS",
-              "docs/MINTLIFY",
               "docs/testing"
             ]
           }
@@ -64,9 +62,7 @@
           {
             "group": "Operations",
             "pages": [
-              "docs/operations/agents",
-              "docs/operations/market-taskboard",
-              "docs/human_queue"
+              "docs/operations/agents"
             ]
           }
         ]
@@ -142,11 +138,7 @@
             "group": "Release Docs",
             "pages": [
               "docs/RELEASING",
-              "docs/RELEASE_RUNBOOK",
-              "docs/RELEASE_NOTES_ARCHIVE",
-              "docs/market-research",
-              "docs/market-research/usage-based-pricing",
-              "docs/market-research/release-notes-competitive-pricing-2026-02-13"
+              "docs/RELEASE_RUNBOOK"
             ]
           }
         ]
