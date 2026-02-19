@@ -36,6 +36,7 @@ func TestBuildContainerCoreMountsIncludesWorkspaceMirrorAndHostSi(t *testing.T) 
 }
 
 func TestBuildContainerCoreMountsDedupesMirrorTarget(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	workspace := t.TempDir()
 	mounts := BuildContainerCoreMounts(ContainerCoreMountPlan{
 		WorkspaceHost:          workspace,
@@ -59,6 +60,7 @@ func TestBuildContainerCoreMountsRejectsEmptyWorkspace(t *testing.T) {
 }
 
 func TestBuildContainerCoreMountsIncludesVaultEnvFileMount(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	workspace := t.TempDir()
 	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
 	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
@@ -101,5 +103,45 @@ func TestBuildContainerCoreMountsIncludesDevelopmentMirrorMount(t *testing.T) {
 	}
 	if mounts[3].Source != filepath.Join(home, "Development") || mounts[3].Target != filepath.ToSlash(filepath.Join(home, "Development")) {
 		t.Fatalf("unexpected host development mount: %+v", mounts[3])
+	}
+}
+
+func TestBuildContainerCoreMountsIncludesHostDockerAndGoToolingMounts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".docker"), 0o700); err != nil {
+		t.Fatalf("mkdir .docker: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".local", "share", "si", "go"), 0o700); err != nil {
+		t.Fatalf("mkdir host go dir: %v", err)
+	}
+	workspace := t.TempDir()
+
+	mounts := BuildContainerCoreMounts(ContainerCoreMountPlan{
+		WorkspaceHost:          workspace,
+		WorkspacePrimaryTarget: "/workspace",
+		ContainerHome:          "/home/si",
+		IncludeHostSi:          true,
+	})
+	if len(mounts) != 4 {
+		t.Fatalf("expected 4 mounts, got %d: %+v", len(mounts), mounts)
+	}
+	if mounts[0].Source != workspace || mounts[0].Target != "/workspace" {
+		t.Fatalf("unexpected workspace mount: %+v", mounts[0])
+	}
+	if mounts[1].Source != filepath.Join(home, ".si") || mounts[1].Target != "/home/si/.si" {
+		t.Fatalf("unexpected host .si mount: %+v", mounts[1])
+	}
+	if mounts[2].Source != filepath.Join(home, ".docker") || mounts[2].Target != "/home/si/.docker" {
+		t.Fatalf("unexpected host .docker mount: %+v", mounts[2])
+	}
+	if mounts[3].Source != filepath.Join(home, ".local", "share", "si", "go") || mounts[3].Target != "/home/si/.local/share/si/go" {
+		t.Fatalf("unexpected host go toolchain mount: %+v", mounts[3])
+	}
+	if !mounts[3].ReadOnly {
+		t.Fatalf("expected host go toolchain mount to be read-only")
 	}
 }

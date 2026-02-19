@@ -74,6 +74,97 @@ func TestHasHostSiMountNoHostSiDir(t *testing.T) {
 	}
 }
 
+func TestHostDockerConfigMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dockerDir := filepath.Join(home, ".docker")
+	if err := ensureDir(dockerDir); err != nil {
+		t.Fatalf("ensure .docker dir: %v", err)
+	}
+
+	got, ok := HostDockerConfigMount("/home/si")
+	if !ok {
+		t.Fatalf("expected docker config mount to be returned")
+	}
+	if got.Source != dockerDir {
+		t.Fatalf("unexpected source %q", got.Source)
+	}
+	if got.Target != "/home/si/.docker" {
+		t.Fatalf("unexpected target %q", got.Target)
+	}
+}
+
+func TestHasHostDockerConfigMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dockerDir := filepath.Join(home, ".docker")
+	if err := ensureDir(dockerDir); err != nil {
+		t.Fatalf("ensure .docker dir: %v", err)
+	}
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "bind",
+				Source:      dockerDir,
+				Destination: "/root/.docker",
+			},
+		},
+	}
+	if !HasHostDockerConfigMount(info, "/root") {
+		t.Fatalf("expected host ~/.docker mount to be detected")
+	}
+	if HasHostDockerConfigMount(info, "/home/si") {
+		t.Fatalf("expected wrong target home to fail detection")
+	}
+}
+
+func TestHostSiGoToolchainMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	goDir := filepath.Join(home, ".local", "share", "si", "go")
+	if err := ensureDir(goDir); err != nil {
+		t.Fatalf("ensure go dir: %v", err)
+	}
+
+	got, ok := HostSiGoToolchainMount("/home/si")
+	if !ok {
+		t.Fatalf("expected go toolchain mount to be returned")
+	}
+	if got.Source != goDir {
+		t.Fatalf("unexpected source %q", got.Source)
+	}
+	if got.Target != "/home/si/.local/share/si/go" {
+		t.Fatalf("unexpected target %q", got.Target)
+	}
+	if !got.ReadOnly {
+		t.Fatalf("expected go toolchain mount to be read-only")
+	}
+}
+
+func TestHasHostSiGoToolchainMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	goDir := filepath.Join(home, ".local", "share", "si", "go")
+	if err := ensureDir(goDir); err != nil {
+		t.Fatalf("ensure go dir: %v", err)
+	}
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "bind",
+				Source:      goDir,
+				Destination: "/root/.local/share/si/go",
+			},
+		},
+	}
+	if !HasHostSiGoToolchainMount(info, "/root") {
+		t.Fatalf("expected host go toolchain mount to be detected")
+	}
+	if HasHostSiGoToolchainMount(info, "/home/si") {
+		t.Fatalf("expected wrong target home to fail detection")
+	}
+}
+
 func TestHostVaultEnvFileMount(t *testing.T) {
 	vaultFile := filepath.Join(t.TempDir(), ".env.vault")
 	if err := os.WriteFile(vaultFile, []byte("KEY=value\n"), 0o600); err != nil {
