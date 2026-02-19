@@ -12,6 +12,31 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.47.0] - 2026-02-19
+### Added
+- Added a full plugin marketplace command surface (`si plugins`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
+- Added `si browser` Docker runtime integration for Playwright MCP and wired browser MCP endpoints into spawned codex and dyad containers.
+- Added SI-managed Supabase backup workflows with WAL-G/Databackup profile support under `si paas backup`, including contract/run/status/restore operations.
+- Added GitHub git-credential helper and remote normalization workflows under `si github git`, plus expanded PAT OAuth guidance for multi-repo operations.
+- Added first-run workspace defaults prompting/persistence and a strict vault-focused regression suite with explicit default vault-file management.
+- Added `si mintlify` docs lifecycle integration and Gemini image generation support in `si gcp`.
+
+### Changed
+- Reorganized and expanded Mintlify docs structure, command references, and integration guides for complete current command coverage.
+- Hardened CI/workflow behavior with docs-scope gating, workflow sanity checks, installer smoke lanes, and segmented plugin matrix runners.
+- Hardened installer and image build flows for docker root/non-root environments and BuildKit/buildx fallback behavior.
+
+### Fixed
+- Fixed settings loading/ownership edge cases that produced permission-denied warnings for `~/.si/settings.toml` on host-driven executions.
+- Fixed mixed boolean flag reordering behavior and dyad `--skip-auth` boolean parsing edge cases.
+- Fixed installer smoke and website-sentry workflow output handling, plus environment-dependent codex/PaaS test flakiness.
+
+### Removed
+- Removed internal planning/taskboard/market-research artifacts and retired related automation surfaces from tracked docs/workflows.
+
+### Security
+- Removed internal-only documentation pages and references from tracked history to reduce accidental exposure risk ahead of public repository usage.
+
 ## [v0.46.1] - 2026-02-18
 ### Fixed
 - Fixed release version metadata by updating the `si version` output to report `v0.46.1` in built binaries/images.
