@@ -194,51 +194,81 @@ func writeMintlifyDocsConfig(pathValue, docsDir, siteName, siteURL string, force
 	if siteURL == "" {
 		siteURL = "https://si.aureuma.ai"
 	}
-		config := map[string]any{
-			"$schema": "https://mintlify.com/docs.json",
-			"name":    siteName,
-			"theme":   "mint",
-			"colors":  map[string]string{"primary": "#0f6d5f", "light": "#8bf0c9", "dark": "#0c4b42"},
-			"favicon": "/docs/images/si-hero.png",
-			"logo":    map[string]string{"light": "/docs/images/si-hero.png", "dark": "/docs/images/si-hero.png"},
-			"navigation": map[string]any{
-				"groups": []map[string]any{
-					{
-						"group": "Overview",
-						"pages": []string{path.Join(docsDir, "index")},
-					},
-					{
-						"group": "Core",
-						"pages": []string{
-							path.Join(docsDir, "DYAD"),
-							path.Join(docsDir, "VAULT"),
-							path.Join(docsDir, "GITHUB"),
-							path.Join(docsDir, "CLOUDFLARE"),
-							path.Join(docsDir, "GCP"),
-							path.Join(docsDir, "STRIPE"),
+	config := map[string]any{
+		"$schema": "https://mintlify.com/docs.json",
+		"name":    siteName,
+		"theme":   "mint",
+		"colors":  map[string]string{"primary": "#0f6d5f", "light": "#8bf0c9", "dark": "#0c4b42"},
+		"favicon": "/docs/images/si-hero.png",
+		"logo":    map[string]string{"light": "/docs/images/si-hero.png", "dark": "/docs/images/si-hero.png"},
+		"navigation": map[string]any{
+			"global": map[string]any{
+				"anchors": []map[string]string{
+					{"anchor": "Website", "href": siteURL},
+				},
+			},
+			"tabs": []map[string]any{
+				{
+					"tab": "Get Started",
+					"groups": []map[string]any{
+						{
+							"group": "Overview",
+							"pages": []string{
+								path.Join(docsDir, "index"),
+								path.Join(docsDir, "CLI_REFERENCE"),
+								path.Join(docsDir, "INTEGRATIONS_OVERVIEW"),
+								path.Join(docsDir, "MINTLIFY"),
+							},
 						},
 					},
-					{
-						"group": "PaaS",
-						"pages": []string{
-							path.Join(docsDir, "PAAS_TEST_MATRIX"),
-							path.Join(docsDir, "PAAS_CONTEXT_OPERATIONS_RUNBOOK"),
-							path.Join(docsDir, "PAAS_BACKUP_RESTORE_POLICY"),
-							path.Join(docsDir, "PAAS_INCIDENT_RUNBOOK"),
+				},
+				{
+					"tab": "Core Runtime",
+					"groups": []map[string]any{
+						{
+							"group": "Runtime",
+							"pages": []string{
+								path.Join(docsDir, "DYAD"),
+								path.Join(docsDir, "VAULT"),
+								path.Join(docsDir, "BROWSER"),
+								path.Join(docsDir, "PLUGIN_MARKETPLACE"),
+							},
 						},
 					},
-					{
-						"group": "Release",
-						"pages": []string{
-							path.Join(docsDir, "RELEASING"),
-							path.Join(docsDir, "RELEASE_RUNBOOK"),
-							path.Join(docsDir, "testing"),
+				},
+				{
+					"tab": "Integrations",
+					"groups": []map[string]any{
+						{
+							"group": "Provider Guides",
+							"pages": []string{
+								path.Join(docsDir, "GITHUB"),
+								path.Join(docsDir, "CLOUDFLARE"),
+								path.Join(docsDir, "GCP"),
+								path.Join(docsDir, "AWS"),
+								path.Join(docsDir, "OPENAI"),
+								path.Join(docsDir, "STRIPE"),
+							},
+						},
+					},
+				},
+				{
+					"tab": "PaaS",
+					"groups": []map[string]any{
+						{
+							"group": "Operations",
+							"pages": []string{
+								path.Join(docsDir, "PAAS_TEST_MATRIX"),
+								path.Join(docsDir, "PAAS_CONTEXT_OPERATIONS_RUNBOOK"),
+								path.Join(docsDir, "PAAS_BACKUP_RESTORE_POLICY"),
+								path.Join(docsDir, "PAAS_INCIDENT_RUNBOOK"),
+							},
 						},
 					},
 				},
 			},
-			"tabs": []map[string]string{{"name": "CLI", "url": siteURL}},
-		}
+		},
+	}
 	raw, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err

@@ -1,6 +1,6 @@
 # Plugin Marketplace and Integration Plan
 
-![Plugin Marketplace](/images/integrations/plugins.svg)
+![Plugin Marketplace](/docs/images/integrations/plugins.svg)
 
 This document defines SI's plugin marketplace model and the implementation now available in `si plugins ...`.
 

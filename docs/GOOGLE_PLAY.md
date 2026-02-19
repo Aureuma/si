@@ -1,6 +1,6 @@
 # Google Play (`si google play`)
 
-![Google Play](/images/integrations/google-play.svg)
+![Google Play](/docs/images/integrations/google-play.svg)
 
 `si google play` provides direct Google Play automation through the Google Play Developer API (and Play Custom App API for app creation).
 

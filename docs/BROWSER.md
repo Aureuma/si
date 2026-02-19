@@ -1,6 +1,6 @@
 # Browser Runtime (`si browser`)
 
-![Browser MCP](/images/integrations/browser.svg)
+![Browser MCP](/docs/images/integrations/browser.svg)
 
 `si browser` manages the Dockerized Playwright MCP runtime used by SI agents.
 

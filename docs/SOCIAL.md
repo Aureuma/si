@@ -1,6 +1,6 @@
 # Social Integrations (`si social`)
 
-![Social](/images/integrations/social.svg)
+![Social](/docs/images/integrations/social.svg)
 
 `si social` provides unified command families for:
 - Facebook Graph API

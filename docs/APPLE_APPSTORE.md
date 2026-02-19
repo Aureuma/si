@@ -5,7 +5,7 @@ description: App Store Connect workflows in SI for auth, context, app metadata, 
 
 # Apple App Store Command Guide (`si apple appstore`)
 
-![Apple App Store](/images/integrations/apple-appstore.svg)
+![Apple App Store](/docs/images/integrations/apple-appstore.svg)
 
 `si apple appstore` provides App Store Connect automation for app creation, listing metadata, and managed apply flows.
 

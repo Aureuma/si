@@ -1,6 +1,6 @@
 # GitHub Command Guide (`si github`)
 
-![GitHub](/images/integrations/github.svg)
+![GitHub](/docs/images/integrations/github.svg)
 
 `si github` supports GitHub REST/GraphQL using either GitHub App auth or OAuth token auth.
 

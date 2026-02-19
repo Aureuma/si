@@ -1,56 +1,60 @@
 ---
 title: si Documentation
-description: AI-first CLI docs for dyads, providers, browser runtime, and Docker-native PaaS operations.
+description: Canonical docs for SI CLI runtime, integrations, PaaS operations, and release workflows.
 ---
 
 # si Documentation
 
-`si` provides one CLI surface for:
-
-- Agent operations (`dyad`, codex container lifecycle)
-- Secure secrets (`vault`)
-- Cloud/provider bridges
-- Docker-native PaaS operations (`si paas ...`)
-- Browser MCP runtime (`si browser ...`)
-- Plugin marketplace (`si plugins ...`)
-- Docs workflow (`si mintlify ...`)
+SI is an operations-first CLI that combines secure secrets, integration bridges, agent runtime controls, browser MCP execution, and Docker-native PaaS workflows.
 
 ## Start here
 
-1. Build runtime image: `si build image`
-2. Validate credentials/secrets: `si vault status`
-3. Check command map: `si --help`
-4. Review operational runbooks before production deploys.
+1. Build and verify your local binary: `si build self`
+2. Validate secret setup: `si vault status`
+3. Inspect command surface: `si --help`
+4. Validate docs before publishing changes: `si mintlify validate`
 
-## Core docs
+## Documentation entry points
+
+### Commands and tooling
 
 - [CLI Reference](./CLI_REFERENCE)
-- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Dyad](./DYAD)
+- [Command Reference](./COMMAND_REFERENCE)
 - [Vault](./VAULT)
+- [Dyad](./DYAD)
 - [Browser Runtime](./BROWSER)
 - [Plugin Marketplace](./PLUGIN_MARKETPLACE)
-- [Mintlify Docs Workflow](./MINTLIFY)
-- [Documentation Style Guide](./DOCS_STYLE_GUIDE)
+- [Settings](./SETTINGS)
+- [Installer](./INSTALLER)
 
-## Integration guides
+### Integrations
 
-- [Providers](./PROVIDERS)
-- [GitHub](./GITHUB), [Cloudflare](./CLOUDFLARE), [WorkOS](./WORKOS), [Stripe](./STRIPE), [Social](./SOCIAL)
-- [GCP](./GCP), [Google Places](./GOOGLE_PLACES), [Google Play](./GOOGLE_PLAY), [Google YouTube](./GOOGLE_YOUTUBE)
-- [AWS](./AWS), [OpenAI](./OPENAI), [OCI](./OCI), [Apple App Store](./APPLE_APPSTORE), [Publish](./PUBLISH)
+- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Providers Telemetry Guide](./PROVIDERS)
+- [GitHub](./GITHUB), [Cloudflare](./CLOUDFLARE), [GCP](./GCP), [AWS](./AWS), [OpenAI](./OPENAI), [OCI](./OCI)
+- [Google Places](./GOOGLE_PLACES), [Google Play](./GOOGLE_PLAY), [Google YouTube](./GOOGLE_YOUTUBE)
+- [Stripe](./STRIPE), [Social](./SOCIAL), [WorkOS](./WORKOS), [Apple App Store](./APPLE_APPSTORE), [Publish](./PUBLISH)
 
-## PaaS docs
+### PaaS operations
 
+- [PaaS Overview](./PAAS_OVERVIEW)
 - [PaaS Test Matrix](./PAAS_TEST_MATRIX)
 - [PaaS Context Operations Runbook](./PAAS_CONTEXT_OPERATIONS_RUNBOOK)
-- [PaaS Automation Agents](./PAAS_AUTOMATION_AGENTS)
-- [PaaS Market Taskboard](./PAAS_MARKET_TASKBOARD)
 - [PaaS Backup and Restore Policy](./PAAS_BACKUP_RESTORE_POLICY)
 - [PaaS Incident Runbook](./PAAS_INCIDENT_RUNBOOK)
 
-## Release docs
+### Docs and release
 
+- [Mintlify Workflow](./MINTLIFY)
+- [Documentation Style Guide](./DOCS_STYLE_GUIDE)
 - [Releasing](./RELEASING)
 - [Release Runbook](./RELEASE_RUNBOOK)
+- [Release Notes Archive](./RELEASE_NOTES_ARCHIVE)
 - [Testing](./testing)
+
+## Best-practice workflow for docs updates
+
+1. Update or add the relevant page.
+2. Update `docs.json` navigation at the same time.
+3. Run `si mintlify validate`.
+4. Run `si mintlify broken-links` before publishing.

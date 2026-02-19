@@ -1,6 +1,6 @@
 # Google Places Command Guide (`si google places`)
 
-![Google Places](/images/integrations/google-places.svg)
+![Google Places](/docs/images/integrations/google-places.svg)
 
 `si google places` is the Google Places API (New) bridge for autocomplete, search, details, photos, local reporting, and raw API access.
 

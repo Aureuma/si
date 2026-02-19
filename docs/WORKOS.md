@@ -5,7 +5,7 @@ description: WorkOS integration workflows in SI for organizations, users, member
 
 # WorkOS Command Guide (`si workos`)
 
-![WorkOS](/images/integrations/workos.svg)
+![WorkOS](/docs/images/integrations/workos.svg)
 
 `si workos` provides WorkOS operational APIs with account context and environment-aware auth.
 
