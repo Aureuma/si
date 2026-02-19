@@ -73,7 +73,7 @@ Responsibilities:
 - Scores opportunities against ReleaseMind + PaaS strategy keywords.
 - Produces actionable plans + 7-day experiments per opportunity.
 - Creates/updates shared taskboard entries and market-research tickets.
-- Generates dated reports under `docs/market-research/opportunities/`.
+- Generates dated reports in automation artifacts and associated tickets.
 - Opens an automated PR when new tasks are discovered.
 
 ## Logging Contract
