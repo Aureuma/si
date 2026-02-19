@@ -90,15 +90,15 @@ func TestDecodeMountInfoPath(t *testing.T) {
 
 func TestCollectGitSafeDirectoriesIncludesDevelopmentChildren(t *testing.T) {
 	base := t.TempDir()
-	development := filepath.Join(base, "home", "shawn", "Development")
-	viva := filepath.Join(development, "viva")
-	si := filepath.Join(development, "si")
+	development := filepath.Join(base, "home", "dev", "Development")
+	repoA := filepath.Join(development, "repo-a")
+	repoB := filepath.Join(development, "repo-b")
 
-	mustMakeGitRepoRoot(t, viva)
-	mustMakeGitRepoRoot(t, si)
+	mustMakeGitRepoRoot(t, repoA)
+	mustMakeGitRepoRoot(t, repoB)
 
-	got := collectGitSafeDirectories([]string{development}, viva)
-	want := []string{si, viva}
+	got := collectGitSafeDirectories([]string{development}, repoA)
+	want := []string{repoA, repoB}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("collectGitSafeDirectories()=%v want=%v", got, want)
 	}
@@ -121,12 +121,12 @@ func TestCollectGitSafeDirectoriesIncludesMountAndCwdRepos(t *testing.T) {
 
 func TestCollectGitSafeDirectoriesDeduplicatesEntries(t *testing.T) {
 	base := t.TempDir()
-	development := filepath.Join(base, "home", "shawn", "Development")
-	viva := filepath.Join(development, "viva")
-	mustMakeGitRepoRoot(t, viva)
+	development := filepath.Join(base, "home", "dev", "Development")
+	repo := filepath.Join(development, "repo")
+	mustMakeGitRepoRoot(t, repo)
 
-	got := collectGitSafeDirectories([]string{development, viva, viva}, viva)
-	want := []string{viva}
+	got := collectGitSafeDirectories([]string{development, repo, repo}, repo)
+	want := []string{repo}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("collectGitSafeDirectories()=%v want=%v", got, want)
 	}

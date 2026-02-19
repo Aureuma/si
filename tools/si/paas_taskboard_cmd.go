@@ -233,7 +233,7 @@ func cmdPaasTaskboardAdd(args []string) {
 	title := fs.String("title", "", "task title")
 	status := fs.String("status", "paas-backlog", "column id")
 	priority := fs.String("priority", "P2", "priority (P1|P2|P3)")
-	owner := fs.String("owner", "market-research-agent", "owner")
+	owner := fs.String("owner", "automation-agent", "owner")
 	workstream := fs.String("workstream", "paas", "workstream")
 	ticketPath := fs.String("ticket", "", "ticket path")
 	tags := fs.String("tags", "", "csv tags")

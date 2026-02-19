@@ -53,7 +53,6 @@ si <command> <subcommand> --help
 | `si paas app` | App lifecycle controls | `list`, `status`, `env`, `deploy` | [PaaS Context Operations](./PAAS_CONTEXT_OPERATIONS_RUNBOOK) |
 | `si paas backup` | Backup and restore workflows | `run`, `list`, `restore` | [PaaS Backup Policy](./PAAS_BACKUP_RESTORE_POLICY) |
 | `si paas agent` | Automation agent runtime | `list`, `enable`, `run-once`, `logs` | [PaaS Agent Runtime Commands](./PAAS_AGENT_RUNTIME_COMMANDS) |
-| `si paas taskboard` | Shared PaaS work queue | `list`, `move`, `update` | [PaaS Market Taskboard](./PAAS_MARKET_TASKBOARD) |
 
 ## Build, docs, and developer tooling
 

@@ -30,4 +30,3 @@ print_latest() {
 
 print_latest "pr-guardian"
 print_latest "website-sentry"
-print_latest "market-research-scout"

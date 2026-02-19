@@ -1,30 +1,23 @@
 # Automation Agents
 
-This repository includes three sustainable automation agents:
+This repository includes two sustainable automation agents:
 
 - `PR Guardian` for pull-request triage and safe autofixes.
 - `Website Sentry` for website health monitoring, remediation, and escalation.
-- `Market Research Scout` for opportunity discovery and PaaS task planning.
-
-The implementation is organized for operational durability and explicitly adopts
-reliability patterns inspired by OpenClaw automation docs/workflows.
 
 ## Layout
 
-- `scripts/agents/config.sh`: shared runtime defaults and policy thresholds.
-- `scripts/agents/lib.sh`: logging, lock control, retries, and run finalization.
-- `scripts/agents/pr-guardian.sh`: PR triage + autofix flow.
-- `scripts/agents/website-sentry.sh`: health + remediation flow.
-- `scripts/agents/market-research-scout.sh`: market intelligence and taskboard sync.
-- `scripts/agents/doctor.sh`: preflight/syntax validation for the agent system.
-- `scripts/agents/status.sh`: latest-run summary for all agents.
+- `tools/agents/config.sh`: shared runtime defaults and policy thresholds.
+- `tools/agents/lib.sh`: logging, lock control, retries, and run finalization.
+- `tools/agents/pr-guardian.sh`: PR triage + autofix flow.
+- `tools/agents/website-sentry.sh`: health + remediation flow.
+- `tools/agents/doctor.sh`: preflight/syntax validation for the agent system.
+- `tools/agents/status.sh`: latest-run summary for all agents.
 
-## OpenClaw Learnings Applied
+## Reliability Patterns
 
 1. Deterministic run artifacts
-- Every run writes a dedicated timestamped folder with `summary.md`, `run.log`,
-  and `run.jsonl`.
-- This mirrors OpenClaw’s “explicit run state + inspectability” approach.
+- Every run writes a dedicated timestamped folder with `summary.md`, `run.log`, and `run.jsonl`.
 
 2. Locking to avoid overlapping automation
 - Agents acquire filesystem locks under `tmp/agent-locks/`.
@@ -34,12 +27,8 @@ reliability patterns inspired by OpenClaw automation docs/workflows.
 - Health checks use bounded retries with exponential backoff.
 - Retry behavior is centralized in `lib.sh` and configured in `config.sh`.
 
-4. Command ladder / troubleshooting workflow
-- Introduced `pnpm run agent:doctor` and `pnpm run agent:status` to provide a
-  fast operator ladder, similar to OpenClaw’s automation troubleshooting flow.
-
-5. Workflow concurrency guardrails
-- GitHub workflows now define explicit `concurrency` groups.
+4. Workflow concurrency guardrails
+- GitHub workflows define explicit `concurrency` groups.
 - This reduces duplicated or conflicting remediation runs.
 
 ## Agent 1: PR Guardian
@@ -64,18 +53,6 @@ Responsibilities:
 - Opens/updates failure issue when remediation is exhausted.
 - Uploads artifacts and writes job summaries.
 
-## Agent 3: Market Research Scout
-
-Workflow: `.github/workflows/agent_market_research.yml`
-
-Responsibilities:
-- Scans curated external RSS feeds for high-signal market changes.
-- Scores opportunities against ReleaseMind + PaaS strategy keywords.
-- Produces actionable plans + 7-day experiments per opportunity.
-- Creates/updates shared taskboard entries and market-research tickets.
-- Generates dated reports in automation artifacts and associated tickets.
-- Opens an automated PR when new tasks are discovered.
-
 ## Logging Contract
 
 Per-run files:
@@ -84,23 +61,21 @@ Per-run files:
 - `run.jsonl`: structured log lines for parsing/automation.
 
 Location:
-- `artifacts/agent-logs/pr-guardian/<timestamp-pid>/`
-- `artifacts/agent-logs/website-sentry/<timestamp-pid>/`
-- `artifacts/agent-logs/market-research-scout/<timestamp-pid>/`
+- `.artifacts/agent-logs/pr-guardian/<timestamp-pid>/`
+- `.artifacts/agent-logs/website-sentry/<timestamp-pid>/`
 
 Retention:
-- old run folders are garbage-collected automatically (default: 14 days).
+- Old run folders are garbage-collected automatically (default: 14 days).
 
 ## Operations
 
 Run locally:
 
 ```bash
-pnpm run agent:doctor
-pnpm run agent:status
-pnpm run agent:pr-guardian
-pnpm run agent:website-sentry
-pnpm run agent:market-research
+bash tools/agents/doctor.sh
+bash tools/agents/status.sh
+bash tools/agents/pr-guardian.sh
+bash tools/agents/website-sentry.sh
 ```
 
 Notes:
