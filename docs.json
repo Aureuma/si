@@ -7,10 +7,10 @@
     "light": "#8bf0c9",
     "dark": "#0c4b42"
   },
-  "favicon": "/docs/images/si-hero.png",
+  "favicon": "/docs/images/branding/favicon.ico",
   "logo": {
-    "light": "/docs/images/si-hero.png",
-    "dark": "/docs/images/si-hero.png"
+    "light": "/docs/images/branding/aureuma-logo-dark.png",
+    "dark": "/docs/images/branding/aureuma-logo-light.png"
   },
   "navigation": {
     "global": {
