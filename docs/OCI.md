@@ -5,7 +5,7 @@ description: Oracle Cloud Infrastructure workflows in SI for identity, networkin
 
 # OCI Command Guide (`si oci`)
 
-![OCI](/images/integrations/oci.svg)
+![OCI](/docs/images/integrations/oci.svg)
 
 `si oci` provides signed Oracle Cloud Infrastructure API workflows for tenancy bootstrap and infrastructure operations.
 

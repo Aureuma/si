@@ -5,7 +5,7 @@ description: DistributionKit-backed publishing workflows in SI for Dev.to, Hashn
 
 # Publish Command Guide (`si publish`)
 
-![Publish](/images/integrations/publish.svg)
+![Publish](/docs/images/integrations/publish.svg)
 
 `si publish` provides a unified publishing surface across multiple launch channels.
 

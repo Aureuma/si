@@ -5,7 +5,7 @@ description: Complete map of SI integration families, capabilities, and command 
 
 # Integrations Overview
 
-![SI Integrations](/images/integrations/integrations-overview.svg)
+![SI Integrations](/docs/images/integrations/integrations-overview.svg)
 
 This page is the canonical map of SI integration families.
 
@@ -57,19 +57,19 @@ This page is the canonical map of SI integration families.
 
 | Integration | Visual |
 | --- | --- |
-| GitHub | ![GitHub](/images/integrations/github.svg) |
-| Cloudflare | ![Cloudflare](/images/integrations/cloudflare.svg) |
-| Stripe | ![Stripe](/images/integrations/stripe.svg) |
-| Google Cloud | ![GCP](/images/integrations/gcp.svg) |
-| AWS | ![AWS](/images/integrations/aws.svg) |
-| OpenAI | ![OpenAI](/images/integrations/openai.svg) |
-| OCI | ![OCI](/images/integrations/oci.svg) |
-| WorkOS | ![WorkOS](/images/integrations/workos.svg) |
-| Apple App Store | ![Apple App Store](/images/integrations/apple-appstore.svg) |
-| Publish | ![Publish](/images/integrations/publish.svg) |
-| Providers | ![Providers](/images/integrations/providers.svg) |
-| Browser MCP | ![Browser](/images/integrations/browser.svg) |
-| Plugin Marketplace | ![Plugin Marketplace](/images/integrations/plugins.svg) |
+| GitHub | ![GitHub](/docs/images/integrations/github.svg) |
+| Cloudflare | ![Cloudflare](/docs/images/integrations/cloudflare.svg) |
+| Stripe | ![Stripe](/docs/images/integrations/stripe.svg) |
+| Google Cloud | ![GCP](/docs/images/integrations/gcp.svg) |
+| AWS | ![AWS](/docs/images/integrations/aws.svg) |
+| OpenAI | ![OpenAI](/docs/images/integrations/openai.svg) |
+| OCI | ![OCI](/docs/images/integrations/oci.svg) |
+| WorkOS | ![WorkOS](/docs/images/integrations/workos.svg) |
+| Apple App Store | ![Apple App Store](/docs/images/integrations/apple-appstore.svg) |
+| Publish | ![Publish](/docs/images/integrations/publish.svg) |
+| Providers | ![Providers](/docs/images/integrations/providers.svg) |
+| Browser MCP | ![Browser](/docs/images/integrations/browser.svg) |
+| Plugin Marketplace | ![Plugin Marketplace](/docs/images/integrations/plugins.svg) |
 
 ## Operator checklist before production writes
 

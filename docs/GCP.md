@@ -1,6 +1,6 @@
 # GCP Command Guide (`si gcp`)
 
-![Google Cloud](/images/integrations/gcp.svg)
+![Google Cloud](/docs/images/integrations/gcp.svg)
 
 `si gcp` covers Google Cloud Service Usage, IAM, API keys, Gemini (Generative Language), and Vertex AI.
 

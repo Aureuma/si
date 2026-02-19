@@ -13,67 +13,142 @@
     "dark": "/docs/images/si-hero.png"
   },
   "navigation": {
-    "groups": [
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Aureuma AI",
+          "href": "https://aureuma.ai"
+        },
+        {
+          "anchor": "GitHub",
+          "href": "https://github.com/Aureuma/si"
+        }
+      ]
+    },
+    "tabs": [
       {
-        "group": "Overview",
-        "pages": [
-          "docs/index",
-          "docs/CLI_REFERENCE",
-          "docs/INTEGRATIONS_OVERVIEW",
-          "docs/DOCS_STYLE_GUIDE",
-          "docs/testing",
-          "docs/MINTLIFY"
+        "tab": "Get Started",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "docs/index",
+              "docs/CLI_REFERENCE",
+              "docs/COMMAND_REFERENCE",
+              "docs/INTEGRATIONS_OVERVIEW",
+              "docs/INSTALLER",
+              "docs/SETTINGS",
+              "docs/MINTLIFY",
+              "docs/testing"
+            ]
+          }
         ]
       },
       {
-        "group": "Core",
-        "pages": [
-          "docs/DYAD",
-          "docs/VAULT",
-          "docs/BROWSER",
-          "docs/PLUGIN_MARKETPLACE",
-          "docs/INTEGRATION_ECOSYSTEM",
-          "docs/SETTINGS"
+        "tab": "Core Runtime",
+        "groups": [
+          {
+            "group": "Runtime",
+            "pages": [
+              "docs/DYAD",
+              "docs/VAULT",
+              "docs/BROWSER",
+              "docs/PLUGIN_MARKETPLACE",
+              "docs/PROVIDERS",
+              "docs/API_CHARACTERISTICS",
+              "docs/INTEGRATION_ECOSYSTEM",
+              "docs/codex-model-policy",
+              "docs/CODEX_SKILLS_AND_INTERACTIVE_DRIVER_PLAN"
+            ]
+          },
+          {
+            "group": "Operations",
+            "pages": [
+              "docs/operations/agents",
+              "docs/operations/market-taskboard",
+              "docs/human_queue"
+            ]
+          }
         ]
       },
       {
-        "group": "Providers",
-        "pages": [
-          "docs/PROVIDERS",
-          "docs/GITHUB",
-          "docs/CLOUDFLARE",
-          "docs/WORKOS",
-          "docs/APPLE_APPSTORE",
-          "docs/GCP",
-          "docs/GOOGLE_PLACES",
-          "docs/GOOGLE_PLAY",
-          "docs/GOOGLE_YOUTUBE",
-          "docs/AWS",
-          "docs/OPENAI",
-          "docs/OCI",
-          "docs/STRIPE",
-          "docs/SOCIAL",
-          "docs/PUBLISH"
+        "tab": "Integrations",
+        "groups": [
+          {
+            "group": "Provider Guides",
+            "pages": [
+              "docs/GITHUB",
+              "docs/CLOUDFLARE",
+              "docs/GCP",
+              "docs/GOOGLE_PLACES",
+              "docs/GOOGLE_PLAY",
+              "docs/GOOGLE_YOUTUBE",
+              "docs/AWS",
+              "docs/OPENAI",
+              "docs/OCI",
+              "docs/STRIPE",
+              "docs/SOCIAL",
+              "docs/WORKOS",
+              "docs/APPLE_APPSTORE",
+              "docs/PUBLISH"
+            ]
+          }
         ]
       },
       {
-        "group": "PaaS",
-        "pages": [
-          "docs/PAAS_TEST_MATRIX",
-          "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
-          "docs/PAAS_AUTOMATION_AGENTS",
-          "docs/PAAS_MARKET_TASKBOARD",
-          "docs/PAAS_BACKUP_RESTORE_POLICY",
-          "docs/PAAS_INCIDENT_RUNBOOK",
-          "docs/PAAS_SECURITY_THREAT_MODEL"
+        "tab": "PaaS",
+        "groups": [
+          {
+            "group": "Platform",
+            "pages": [
+              "docs/PAAS_OVERVIEW",
+              "docs/PAAS_TEST_MATRIX",
+              "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
+              "docs/PAAS_AUTOMATION_AGENTS",
+              "docs/PAAS_MARKET_TASKBOARD",
+              "docs/PAAS_BACKUP_RESTORE_POLICY"
+            ]
+          },
+          {
+            "group": "Agents",
+            "pages": [
+              "docs/PAAS_AGENT_RUNTIME_COMMANDS",
+              "docs/PAAS_AGENT_RUNTIME_ADAPTER",
+              "docs/PAAS_AGENT_APPROVAL_FLOW",
+              "docs/PAAS_AGENT_OFFLINE_SMOKE_TESTS",
+              "docs/PAAS_AGENT_SCHEDULER_SELF_HEAL",
+              "docs/PAAS_AGENT_AUDIT_ARTIFACTS"
+            ]
+          },
+          {
+            "group": "Reliability",
+            "pages": [
+              "docs/PAAS_INCIDENT_RUNBOOK",
+              "docs/PAAS_INCIDENT_EVENT_SCHEMA",
+              "docs/PAAS_INCIDENT_QUEUE_POLICY",
+              "docs/PAAS_FAILURE_DRILLS",
+              "docs/PAAS_REMEDIATION_POLICY_ENGINE",
+              "docs/PAAS_STATE_CLASSIFICATION_POLICY",
+              "docs/PAAS_SECURITY_THREAT_MODEL",
+              "docs/PAAS_EVENT_BRIDGE_COLLECTORS"
+            ]
+          }
         ]
       },
       {
-        "group": "Release",
-        "pages": [
-          "docs/RELEASING",
-          "docs/RELEASE_RUNBOOK",
-          "docs/RELEASE_NOTES_ARCHIVE"
+        "tab": "Release",
+        "groups": [
+          {
+            "group": "Release Docs",
+            "pages": [
+              "docs/RELEASING",
+              "docs/RELEASE_RUNBOOK",
+              "docs/RELEASE_NOTES_ARCHIVE",
+              "docs/market-research",
+              "docs/market-research/usage-based-pricing",
+              "docs/market-research/release-notes-competitive-pricing-2026-02-13"
+            ]
+          }
         ]
       }
     ]

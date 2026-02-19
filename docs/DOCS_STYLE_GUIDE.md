@@ -33,6 +33,12 @@ Every command or integration page should follow this order:
 6. Diagnostics and troubleshooting.
 7. Links to adjacent docs.
 
+Mintlify-specific expectations:
+
+- Include frontmatter with at least `title` and `description`.
+- Keep page paths stable; update `docs.json` when files are moved or renamed.
+- Prefer the `navigation.tabs -> groups -> pages` pattern in `docs.json` for large doc sets.
+
 ## Heading and section conventions
 
 - One H1 per file.
@@ -89,7 +95,7 @@ For any integration that touches credentials, billing, or production mutation:
 
 1. Propose IA changes in a ticket under `tickets/`.
 2. Update docs page(s) and navigation in `docs.json` together.
-3. Run docs validation if tooling is available.
+3. Run `si mintlify validate` and `si mintlify broken-links`.
 4. Keep commits scoped (foundation vs provider docs vs polish).
 
 ## Definition of done for docs PRs

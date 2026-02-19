@@ -1,81 +1,74 @@
+---
+title: CLI Reference
+description: Practical SI CLI orientation with command discovery, top-level families, and high-signal workflows.
+---
+
 # CLI Reference
 
-Use `si --help` for the full command and flag surface.
+This page is the fast orientation guide for `si`.
 
-Related:
-- [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Documentation Style Guide](./DOCS_STYLE_GUIDE)
+For a full categorized list, use [Command Reference](./COMMAND_REFERENCE).
 
-Detailed integration guides:
-- [Providers](./PROVIDERS), [GitHub](./GITHUB), [Cloudflare](./CLOUDFLARE), [WorkOS](./WORKOS)
-- [GCP](./GCP), [Google Places](./GOOGLE_PLACES), [Google Play](./GOOGLE_PLAY), [Google YouTube](./GOOGLE_YOUTUBE)
-- [AWS](./AWS), [OpenAI](./OPENAI), [OCI](./OCI), [Apple App Store](./APPLE_APPSTORE), [Stripe](./STRIPE), [Social](./SOCIAL), [Publish](./PUBLISH)
-
-## Top-level command groups
-
-- `si dyad ...`: actor/critic dyad lifecycle and loop operations.
-- codex lifecycle: `si spawn|respawn|list|status|report|login|logout|swap|ps|run|logs|tail|clone|remove|stop|start|warmup`.
-- `si vault ...`: encrypted dotenv management + secure process/container injection.
-- `si stripe|github|cloudflare|google|apple|social|workos|publish|aws|gcp|openai|oci ...`: provider bridge families.
-- `si providers ...`: provider capability and health views.
-- `si plugins ...`: plugin marketplace, catalog, and integration lifecycle.
-- `si browser ...`: Dockerized Playwright MCP runtime.
-- `si paas ...`: Docker-native deployment and operations workflows.
-- `si paas taskboard ...`: shared market taskboard operations.
-- `si mintlify ...`: docs bootstrap/validate/dev wrappers via Mintlify CLI.
-- `si build ...`: local runtime image and self-build workflows.
-- `si analyze|lint`: static analysis for `go.work` modules.
-- `si docker ...`: raw Docker passthrough.
-
-## Help conventions
-
-- `si <command> --help` prints command-level usage.
-- `si <command> <subcommand> --help` prints subcommand flags.
-- Most command families support `help`, `-h`, and `--help` aliases.
-
-Examples:
+## Command discovery pattern
 
 ```bash
 si --help
-si paas --help
-si paas backup --help
-si gcp gemini image generate --help
-si mintlify --help
+si <command> --help
+si <command> <subcommand> --help
 ```
 
-## High-signal operations
+## Top-level command families
+
+| Domain | Commands |
+| --- | --- |
+| Runtime and orchestration | `si dyad`, codex lifecycle (`si spawn`, `si run`, `si status`, `si report`) |
+| Secrets and context | `si vault` (`si creds`) |
+| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish` |
+| Provider telemetry | `si providers` |
+| Platform operations | `si paas` |
+| Browser MCP runtime | `si browser` |
+| Plugin ecosystem | `si plugins` |
+| Build and quality | `si build`, `si analyze` (`si lint`), `si docker` |
+| Docs workflow | `si mintlify` |
+| Profiles and skills | `si persona`, `si skill` |
+
+## High-signal workflows
+
+### Runtime setup
 
 ```bash
-# Build runtime image (runs codex compatibility preflight first)
 si build image
-
-# Run only the codex compatibility preflight lanes
-si build image --preflight-only
-
-# Spawn dyad
 si dyad spawn app-hardening --profile main
-
-# Run PaaS doctor checks
-si paas doctor --json
-
-# Trigger Supabase WAL-G backup
-si paas backup run --app <slug> --json
-
-# Review and update shared market taskboard
-si paas taskboard list --status paas-backlog --priority P1 --json
-si paas taskboard move --id <task-id> --status validate --json
-
-# Run browser runtime for MCP clients
-si browser start
-
-# Scaffold and register a plugin integration
-si plugins scaffold acme/release-mind --dir ./integrations
-si plugins register ./integrations/acme/release-mind --channel community
-si plugins policy set --deny acme/release-mind
+si dyad status app-hardening
 ```
 
-## Security notes
+### Integration readiness
 
-- Prefer `si vault run -- <cmd>` for sensitive commands.
-- Avoid plaintext secret files in repo workspaces.
-- Use `si paas doctor` before production writes.
+```bash
+si providers characteristics --json
+si github doctor --json
+si cloudflare doctor --json
+si gcp doctor --json
+```
+
+### PaaS readiness
+
+```bash
+si paas doctor --json
+si paas backup run --app <slug> --json
+si paas events tail --app <slug> --json
+```
+
+### Docs quality
+
+```bash
+si mintlify validate
+si mintlify broken-links
+```
+
+## Safety guidance
+
+- Use `si vault run -- <command>` when secrets are required.
+- Prefer `--json` for automation and auditability.
+- Run `doctor` commands before mutating production systems.
+- Keep docs and `docs.json` navigation in sync.

@@ -5,7 +5,7 @@ description: AWS integration workflows in SI for IAM, STS, S3, EC2, Lambda, ECR,
 
 # AWS Command Guide (`si aws`)
 
-![AWS](/images/integrations/aws.svg)
+![AWS](/docs/images/integrations/aws.svg)
 
 `si aws` is SI's signed AWS bridge for account context, diagnostics, and resource operations.
 

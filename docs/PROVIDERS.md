@@ -5,7 +5,7 @@ description: Using si providers to inspect integration characteristics, runtime 
 
 # Providers Telemetry Guide (`si providers`)
 
-![Providers](/images/integrations/providers.svg)
+![Providers](/docs/images/integrations/providers.svg)
 
 `si providers` is the control-plane view across SI integration runtimes.
 

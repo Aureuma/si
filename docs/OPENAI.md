@@ -5,7 +5,7 @@ description: OpenAI integration workflows in SI for auth, projects, keys, usage,
 
 # OpenAI Command Guide (`si openai`)
 
-![OpenAI](/images/integrations/openai.svg)
+![OpenAI](/docs/images/integrations/openai.svg)
 
 `si openai` provides authenticated OpenAI operations with context management, project administration, usage analytics, and raw access.
 
