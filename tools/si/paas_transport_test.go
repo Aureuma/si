@@ -118,3 +118,57 @@ func TestPaasTargetAddAcceptsLocalAuthMethod(t *testing.T) {
 		t.Fatalf("expected one local target in store, got %#v", store.Targets)
 	}
 }
+
+func TestResolvePaasSSHTransportEngineDefaultsToGo(t *testing.T) {
+	t.Setenv(paasSSHEngineEnvKey, "")
+	t.Setenv(paasSSHBinEnvKey, "")
+	t.Setenv(paasSCPBinEnvKey, "")
+	if got := resolvePaasSSHTransportEngine(); got != paasSSHEngineGo {
+		t.Fatalf("expected default engine go, got %q", got)
+	}
+}
+
+func TestResolvePaasSSHTransportEngineAutoUsesExecWithBinaryOverride(t *testing.T) {
+	fakeBin := filepath.Join(t.TempDir(), "fake-ssh")
+	if err := os.WriteFile(fakeBin, []byte("#!/usr/bin/env bash\nexit 0\n"), 0o700); err != nil {
+		t.Fatalf("write fake ssh binary: %v", err)
+	}
+	t.Setenv(paasSSHEngineEnvKey, "")
+	t.Setenv(paasSSHBinEnvKey, fakeBin)
+	t.Setenv(paasSCPBinEnvKey, "")
+	if got := resolvePaasSSHTransportEngine(); got != paasSSHEngineExec {
+		t.Fatalf("expected auto engine to switch to exec with binary override, got %q", got)
+	}
+}
+
+func TestRunPaasSSHCommandExecFallbackWithAutoEngine(t *testing.T) {
+	sshScript := filepath.Join(t.TempDir(), "fake-ssh")
+	script := strings.Join([]string{
+		"#!/usr/bin/env bash",
+		"set -euo pipefail",
+		"echo si-exec-engine",
+		"",
+	}, "\n")
+	if err := os.WriteFile(sshScript, []byte(script), 0o700); err != nil {
+		t.Fatalf("write fake ssh script: %v", err)
+	}
+	t.Setenv(paasSSHEngineEnvKey, "")
+	t.Setenv(paasSSHBinEnvKey, sshScript)
+	target := paasTarget{Name: "edge-a", Host: "203.0.113.10", Port: 22, User: "root", AuthMethod: "key"}
+	out, err := runPaasSSHCommand(context.Background(), target, "echo ignored")
+	if err != nil {
+		t.Fatalf("runPaasSSHCommand with exec fallback failed: %v", err)
+	}
+	if strings.TrimSpace(out) != "si-exec-engine" {
+		t.Fatalf("expected fake exec output, got %q", out)
+	}
+}
+
+func TestResolvePaasSSHPasswordPrefersTargetSpecificEnv(t *testing.T) {
+	t.Setenv(paasSSHPasswordEnvKey, "global-pass")
+	t.Setenv("SI_PAAS_SSH_PASSWORD_EDGE_A", "target-pass")
+	got := resolvePaasSSHPassword(paasTarget{Name: "edge-a"})
+	if got != "target-pass" {
+		t.Fatalf("expected target-specific password to win, got %q", got)
+	}
+}

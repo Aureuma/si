@@ -1,18 +1,14 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
-
-const paasSSHBinEnvKey = "SI_PAAS_SSH_BIN"
 
 type paasTargetCheckResult struct {
 	Target         string `json:"target"`
@@ -108,52 +104,6 @@ func paasTCPDialCheck(ctx context.Context, host string, port int) error {
 	}
 	_ = conn.Close()
 	return nil
-}
-
-func runPaasSSHCommand(ctx context.Context, target paasTarget, remoteCmd string) (string, error) {
-	if isPaasLocalTarget(target) {
-		cmd := exec.CommandContext(ctx, "sh", "-lc", remoteCmd)
-		var stdout bytes.Buffer
-		var stderr bytes.Buffer
-		cmd.Stdout = &stdout
-		cmd.Stderr = &stderr
-		err := cmd.Run()
-		if err != nil {
-			errMsg := strings.TrimSpace(stderr.String())
-			if errMsg == "" {
-				errMsg = err.Error()
-			}
-			return "", fmt.Errorf("%s", errMsg)
-		}
-		return strings.TrimSpace(stdout.String()), nil
-	}
-
-	bin := strings.TrimSpace(os.Getenv(paasSSHBinEnvKey))
-	if bin == "" {
-		bin = "ssh"
-	}
-	args := []string{
-		"-p", fmt.Sprintf("%d", target.Port),
-		"-o", "BatchMode=yes",
-		"-o", "StrictHostKeyChecking=accept-new",
-		"-o", "ConnectTimeout=5",
-		fmt.Sprintf("%s@%s", target.User, target.Host),
-		remoteCmd,
-	}
-	cmd := exec.CommandContext(ctx, bin, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	if err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg == "" {
-			errMsg = err.Error()
-		}
-		return "", fmt.Errorf("%s", errMsg)
-	}
-	return strings.TrimSpace(stdout.String()), nil
 }
 
 func printPaasTargetCheckResults(jsonOut bool, timeout time.Duration, imagePlatformArch string, results []paasTargetCheckResult) {

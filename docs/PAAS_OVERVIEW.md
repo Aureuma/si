@@ -50,6 +50,7 @@ si paas agent logs --name <agent> --tail 50 --json
 
 ### Platform core
 
+- [PaaS SSH Transport Architecture](./PAAS_SSH_TRANSPORT_ARCHITECTURE)
 - [PaaS Test Matrix](./PAAS_TEST_MATRIX)
 - [PaaS Context Operations Runbook](./PAAS_CONTEXT_OPERATIONS_RUNBOOK)
 - [PaaS Automation Agents](./PAAS_AUTOMATION_AGENTS)
