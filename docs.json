@@ -97,6 +97,7 @@
             "group": "Platform",
             "pages": [
               "docs/PAAS_OVERVIEW",
+              "docs/PAAS_SSH_TRANSPORT_ARCHITECTURE",
               "docs/PAAS_TEST_MATRIX",
               "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
               "docs/PAAS_AUTOMATION_AGENTS",
