@@ -98,6 +98,28 @@ func cmdPaasTargetBootstrap(args []string) {
 }
 
 func runPaasSSHBootstrapWithPassword(ctx context.Context, target paasTarget, password, publicKey string) error {
+	switch resolvePaasSSHTransportEngine() {
+	case paasSSHEngineExec:
+		return runPaasSSHBootstrapWithPasswordExec(ctx, target, password, publicKey)
+	default:
+		return runPaasSSHBootstrapWithPasswordGo(ctx, target, password, publicKey)
+	}
+}
+
+func runPaasSSHBootstrapWithPasswordGo(ctx context.Context, target paasTarget, password, publicKey string) error {
+	passwordMethods, err := buildPaasPasswordAuthMethods(password)
+	if err != nil {
+		return err
+	}
+	quotedKey := quoteSingle(publicKey)
+	remoteScript := fmt.Sprintf("mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && (grep -qxF %s ~/.ssh/authorized_keys || echo %s >> ~/.ssh/authorized_keys)", quotedKey, quotedKey)
+	if _, err := runPaasSSHCommandGoWithAuth(ctx, target, remoteScript, passwordMethods); err != nil {
+		return fmt.Errorf("bootstrap failed: %w", err)
+	}
+	return nil
+}
+
+func runPaasSSHBootstrapWithPasswordExec(ctx context.Context, target paasTarget, password, publicKey string) error {
 	sshpassBin := strings.TrimSpace(os.Getenv(paasSSHPassBinEnvKey))
 	if sshpassBin == "" {
 		sshpassBin = "sshpass"

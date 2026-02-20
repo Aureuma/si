@@ -1,19 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
 )
-
-const paasSCPBinEnvKey = "SI_PAAS_SCP_BIN"
 
 const defaultPaasHealthCheckCommand = "docker compose -f compose.yaml ps --status running --services | grep -q ."
 
@@ -552,66 +546,6 @@ func runPaasRemoteHealthCheck(ctx context.Context, target paasTarget, localBundl
 			"verify service readiness and health command behavior before retrying deploy",
 			err,
 		)
-	}
-	return nil
-}
-
-func runPaasSCPUpload(ctx context.Context, target paasTarget, srcPath, remoteDir string) error {
-	absSrc, err := filepath.Abs(strings.TrimSpace(srcPath))
-	if err != nil {
-		return err
-	}
-	if isPaasLocalTarget(target) {
-		resolvedRemoteDir := strings.TrimSpace(remoteDir)
-		if resolvedRemoteDir == "" {
-			return fmt.Errorf("remote directory is required")
-		}
-		if err := os.MkdirAll(resolvedRemoteDir, 0o755); err != nil {
-			return err
-		}
-		destPath := filepath.Join(resolvedRemoteDir, filepath.Base(absSrc))
-		srcFile, err := os.Open(absSrc)
-		if err != nil {
-			return err
-		}
-		defer srcFile.Close()
-		srcInfo, err := srcFile.Stat()
-		if err != nil {
-			return err
-		}
-		dstFile, err := os.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode().Perm())
-		if err != nil {
-			return err
-		}
-		defer dstFile.Close()
-		if _, err := io.Copy(dstFile, srcFile); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	scpBin := strings.TrimSpace(os.Getenv(paasSCPBinEnvKey))
-	if scpBin == "" {
-		scpBin = "scp"
-	}
-	dest := fmt.Sprintf("%s@%s:%s/", target.User, target.Host, strings.TrimSpace(remoteDir))
-	args := []string{
-		"-P", fmt.Sprintf("%d", target.Port),
-		"-o", "StrictHostKeyChecking=accept-new",
-		"-o", "ConnectTimeout=5",
-		absSrc,
-		dest,
-	}
-	cmd := exec.CommandContext(ctx, scpBin, args...)
-	var stderr bytes.Buffer
-	cmd.Stdout = ioDiscard{}
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(stderr.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return fmt.Errorf("%s", msg)
 	}
 	return nil
 }
