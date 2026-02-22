@@ -131,9 +131,9 @@ func sortPaasAgentApprovalDecisions(rows []paasAgentApprovalDecision) {
 
 func notifyPaasAgentApprovalTelegramLinkage(runID, agentName, decision, note string) string {
 	fields := map[string]string{
-		"run":                   strings.TrimSpace(runID),
-		"agent":                 strings.TrimSpace(agentName),
-		"decision":              strings.TrimSpace(decision),
+		"run":                    strings.TrimSpace(runID),
+		"agent":                  strings.TrimSpace(agentName),
+		"decision":               strings.TrimSpace(decision),
 		"callback_agent_approve": "si paas agent approve --run " + quoteSingle(strings.TrimSpace(runID)),
 		"callback_agent_deny":    "si paas agent deny --run " + quoteSingle(strings.TrimSpace(runID)),
 	}
@@ -149,4 +149,3 @@ func notifyPaasAgentApprovalTelegramLinkage(runID, agentName, decision, note str
 		fields,
 	)
 }
-

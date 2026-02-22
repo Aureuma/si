@@ -146,4 +146,3 @@ func evaluatePaasRemediationPolicy(policy paasRemediationPolicy, incident *paasI
 	}
 	return action, reason
 }
-

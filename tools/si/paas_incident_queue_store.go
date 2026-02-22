@@ -365,4 +365,3 @@ func mustSyncPaasIncidentQueueFromCollectors(limit, maxEntries int, maxAge time.
 	}
 	return result
 }
-

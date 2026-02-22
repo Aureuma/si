@@ -151,4 +151,3 @@ func mustWriteJSONL(t *testing.T, path string, rows []map[string]any) {
 		}
 	}
 }
-

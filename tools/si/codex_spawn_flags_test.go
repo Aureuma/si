@@ -71,4 +71,3 @@ func TestSplitNameAndFlagsIgnoresBoolWithoutLiteralValue(t *testing.T) {
 		}
 	}
 }
-

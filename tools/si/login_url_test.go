@@ -96,6 +96,10 @@ func TestBoolEnv(t *testing.T) {
 	if _, ok := boolEnv("SI_BOOL_TEST"); ok {
 		t.Fatalf("expected unknown bool value to be rejected")
 	}
+	t.Setenv("SI_BOOL_TEST", "")
+	if _, ok := boolEnv("SI_BOOL_TEST"); ok {
+		t.Fatalf("expected empty bool value to be treated as unset")
+	}
 }
 
 func TestIsLikelyHeadlessMachineForcedOverride(t *testing.T) {
