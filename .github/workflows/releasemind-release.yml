@@ -1,0 +1,138 @@
+name: ReleaseMind Release Runbook
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to run the ReleaseMind runbook against (for example v0.60.0)
+        required: true
+        type: string
+      publish:
+        description: Publish the release after draft generation
+        required: true
+        default: true
+        type: boolean
+      base_tag:
+        description: Optional base tag override for changelog diff
+        required: false
+        type: string
+      pull_request_numbers:
+        description: Optional comma-separated PR numbers
+        required: false
+        type: string
+
+concurrency:
+  group: releasemind-release-${{ github.event.inputs.tag || github.ref_name || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  releasemind-runbook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate ReleaseMind secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${{ secrets.RELEASEMIND_API_BASE_URL }}" ]]; then
+            echo "Missing required secret: RELEASEMIND_API_BASE_URL" >&2
+            exit 1
+          fi
+          if [[ -z "${{ secrets.RELEASEMIND_AUTOMATION_TOKEN }}" ]]; then
+            echo "Missing required secret: RELEASEMIND_AUTOMATION_TOKEN" >&2
+            exit 1
+          fi
+
+      - name: Resolve tag and options
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ github.ref_name }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          fi
+
+          if [[ -z "$tag" ]]; then
+            echo "Unable to resolve release tag." >&2
+            exit 1
+          fi
+
+          publish="true"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            publish="${{ inputs.publish }}"
+          fi
+
+          base_tag="${{ inputs.base_tag }}"
+          if [[ "${{ github.event_name }}" != "workflow_dispatch" || -z "$base_tag" ]]; then
+            git fetch --tags --force
+            base_tag="$(git tag --sort=-v:refname | grep -E '^v' | grep -Fxv "$tag" | head -n1 || true)"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+          echo "base_tag=$base_tag" >> "$GITHUB_OUTPUT"
+          echo "pull_request_numbers=${{ inputs.pull_request_numbers }}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure draft release exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.resolve.outputs.tag }}"
+
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            is_draft="$(gh release view "$tag" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')"
+            if [[ "$is_draft" != "true" && "${{ steps.resolve.outputs.publish }}" == "true" ]]; then
+              echo "Release ${tag} already exists and is published; refusing to republish." >&2
+              exit 1
+            fi
+            echo "Release ${tag} already exists (isDraft=${is_draft})."
+          else
+            gh release create "$tag" \
+              --repo "${{ github.repository }}" \
+              --verify-tag \
+              --title "$tag" \
+              --notes "Preparing release notes via ReleaseMind automation." \
+              --draft
+          fi
+
+      - name: Run ReleaseMind automation
+        id: releasemind
+        uses: Aureuma/viva/.github/actions/releasemind-release-runbook@main
+        with:
+          api_base_url: ${{ secrets.RELEASEMIND_API_BASE_URL }}
+          automation_token: ${{ secrets.RELEASEMIND_AUTOMATION_TOKEN }}
+          repo_full_name: ${{ github.repository }}
+          release_tag: ${{ steps.resolve.outputs.tag }}
+          base_tag: ${{ steps.resolve.outputs.base_tag }}
+          pull_request_numbers: ${{ steps.resolve.outputs.pull_request_numbers }}
+          publish: ${{ steps.resolve.outputs.publish }}
+
+      - name: Verify release state
+        if: ${{ steps.resolve.outputs.publish == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ steps.resolve.outputs.tag }}"
+          is_draft="$(gh release view "$tag" --repo "${{ github.repository }}" --json isDraft --jq '.isDraft')"
+          if [[ "$is_draft" != "false" ]]; then
+            echo "Release ${tag} is still draft after publish step." >&2
+            exit 1
+          fi
+          gh release view "$tag" --repo "${{ github.repository }}" --json url,name,tagName
