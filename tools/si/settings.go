@@ -133,6 +133,12 @@ type VaultSettings struct {
 	File       string `toml:"file,omitempty"`
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
+	// SyncBackend selects how vault state sync is handled.
+	// Supported values: git, helia, dual
+	// - git: local/git-based only
+	// - helia: Helia backup required on mutating vault operations
+	// - dual: local/git-based with best-effort Helia backup
+	SyncBackend string `toml:"sync_backend,omitempty"`
 
 	// KeyBackend selects where the device private key is stored.
 	// Supported values: keyring, file
@@ -671,6 +677,7 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Vault.KeyFile == "" {
 		settings.Vault.KeyFile = "~/.si/vault/keys/age.key"
 	}
+	settings.Vault.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Vault.SyncBackend))
 	settings.Dyad.Loop.TmuxCapture = strings.ToLower(strings.TrimSpace(settings.Dyad.Loop.TmuxCapture))
 	switch settings.Dyad.Loop.TmuxCapture {
 	case "", "main", "alt":

@@ -271,8 +271,81 @@ func TestMaybeHeliaAutoBackupVaultSkipsPlaintext(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	maybeHeliaAutoBackupVault("test_plaintext", vaultFile)
+	if err := maybeHeliaAutoBackupVault("test_plaintext", vaultFile); err != nil {
+		t.Fatalf("expected best-effort mode to skip plaintext without hard error, got: %v", err)
+	}
 	if got := store.putCount(); got != 0 {
 		t.Fatalf("expected no backup upload for plaintext vault, got %d put calls", got)
+	}
+}
+
+func TestMaybeHeliaAutoBackupVaultHeliaModeFailsOnPlaintext(t *testing.T) {
+	server, store := newHeliaTestServer(t, "acme", "token-plain")
+	defer server.Close()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Helia.BaseURL = server.URL
+	settings.Helia.Token = "token-plain"
+	settings.Vault.SyncBackend = vaultSyncBackendHelia
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	vaultFile := filepath.Join(home, ".si", "vault", ".env")
+	if err := os.MkdirAll(filepath.Dir(vaultFile), 0o700); err != nil {
+		t.Fatalf("mkdir vault dir: %v", err)
+	}
+	if err := os.WriteFile(vaultFile, []byte("PLAINTEXT_KEY=oops\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+
+	err := maybeHeliaAutoBackupVault("test_plaintext_strict", vaultFile)
+	if err == nil {
+		t.Fatalf("expected strict helia mode to fail on plaintext vault")
+	}
+	if !strings.Contains(err.Error(), "plaintext keys detected") {
+		t.Fatalf("expected plaintext error, got: %v", err)
+	}
+	if got := store.putCount(); got != 0 {
+		t.Fatalf("expected no backup upload for plaintext vault in strict mode, got %d put calls", got)
+	}
+}
+
+func TestMaybeHeliaAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
+	server, store := newHeliaTestServer(t, "acme", "token-git")
+	defer server.Close()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Helia.AutoSync = true
+	settings.Helia.BaseURL = server.URL
+	settings.Helia.Token = "token-git"
+	settings.Vault.SyncBackend = vaultSyncBackendGit
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	vaultFile := filepath.Join(home, ".si", "vault", ".env")
+	if err := os.MkdirAll(filepath.Dir(vaultFile), 0o700); err != nil {
+		t.Fatalf("mkdir vault dir: %v", err)
+	}
+	if err := os.WriteFile(vaultFile, []byte("ANY=value\n"), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
+
+	if err := maybeHeliaAutoBackupVault("test_git_mode", vaultFile); err != nil {
+		t.Fatalf("git mode should skip cloud backup without error: %v", err)
+	}
+	if got := store.putCount(); got != 0 {
+		t.Fatalf("expected no backup upload in git mode, got %d put calls", got)
 	}
 }

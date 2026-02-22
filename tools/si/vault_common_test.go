@@ -82,3 +82,60 @@ func mustMkdir(t *testing.T, path string) {
 		t.Fatalf("mkdir %s: %v", path, err)
 	}
 }
+
+func TestResolveVaultSyncBackendDefaultsAndLegacy(t *testing.T) {
+	settings := Settings{}
+	applySettingsDefaults(&settings)
+
+	got, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve default backend: %v", err)
+	}
+	if got.Mode != vaultSyncBackendGit || got.Source != "default" {
+		t.Fatalf("unexpected default resolution: %+v", got)
+	}
+
+	settings.Helia.AutoSync = true
+	settings.Vault.SyncBackend = ""
+	got, err = resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve legacy backend: %v", err)
+	}
+	if got.Mode != vaultSyncBackendDual || got.Source != "legacy_helia_auto_sync" {
+		t.Fatalf("unexpected legacy resolution: %+v", got)
+	}
+}
+
+func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
+	settings := Settings{}
+	applySettingsDefaults(&settings)
+	settings.Vault.SyncBackend = "helia"
+
+	got, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve settings backend: %v", err)
+	}
+	if got.Mode != vaultSyncBackendHelia || got.Source != "settings" {
+		t.Fatalf("unexpected settings resolution: %+v", got)
+	}
+
+	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")
+	got, err = resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve env backend: %v", err)
+	}
+	if got.Mode != vaultSyncBackendGit || got.Source != "env" {
+		t.Fatalf("unexpected env resolution: %+v", got)
+	}
+
+	t.Setenv("SI_VAULT_SYNC_BACKEND", "invalid")
+	if _, err := resolveVaultSyncBackend(settings); err == nil {
+		t.Fatalf("expected invalid env backend to fail")
+	}
+
+	t.Setenv("SI_VAULT_SYNC_BACKEND", "")
+	settings.Vault.SyncBackend = "invalid"
+	if _, err := resolveVaultSyncBackend(settings); err == nil {
+		t.Fatalf("expected invalid settings backend to fail")
+	}
+}

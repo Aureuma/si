@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,33 +66,57 @@ func maybeHeliaAutoSyncProfile(source string, profile codexProfile) {
 	infof("helia auto-sync complete for profile %s (%s)", profile.ID, source)
 }
 
-func maybeHeliaAutoBackupVault(source string, vaultPath string) {
+func maybeHeliaAutoBackupVault(source string, vaultPath string) error {
 	settings := loadSettingsOrDefault()
-	if !settings.Helia.AutoSync {
-		return
+	backend, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		return err
 	}
+	if backend.Mode == vaultSyncBackendGit {
+		return nil
+	}
+	requireHelia := backend.Mode == vaultSyncBackendHelia
 	vaultPath = expandTilde(strings.TrimSpace(vaultPath))
 	if vaultPath == "" {
-		return
+		if requireHelia {
+			return fmt.Errorf("helia vault auto-backup failed (%s): vault file path required in helia backend mode", source)
+		}
+		return nil
 	}
 	client, err := heliaClientFromSettings(settings)
 	if err != nil {
-		warnf("helia vault auto-backup skipped (%s): %v", source, err)
-		return
+		if requireHelia {
+			return fmt.Errorf("helia vault auto-backup failed (%s): %w", source, err)
+		} else {
+			warnf("helia vault auto-backup skipped (%s): %v", source, err)
+		}
+		return nil
 	}
 	doc, err := vault.ReadDotenvFile(vaultPath)
 	if err != nil {
-		warnf("helia vault auto-backup skipped (%s): %v", source, err)
-		return
+		if requireHelia {
+			return fmt.Errorf("helia vault auto-backup failed (%s): %w", source, err)
+		} else {
+			warnf("helia vault auto-backup skipped (%s): %v", source, err)
+		}
+		return nil
 	}
 	scan, err := vault.ScanDotenvEncryption(doc)
 	if err != nil {
-		warnf("helia vault auto-backup skipped (%s): %v", source, err)
-		return
+		if requireHelia {
+			return fmt.Errorf("helia vault auto-backup failed (%s): %w", source, err)
+		} else {
+			warnf("helia vault auto-backup skipped (%s): %v", source, err)
+		}
+		return nil
 	}
 	if len(scan.PlaintextKeys) > 0 {
-		warnf("helia vault auto-backup skipped (%s): plaintext keys detected (%d); run `si vault encrypt`", source, len(scan.PlaintextKeys))
-		return
+		if requireHelia {
+			return fmt.Errorf("helia vault auto-backup failed (%s): plaintext keys detected (%d); run `si vault encrypt`", source, len(scan.PlaintextKeys))
+		} else {
+			warnf("helia vault auto-backup skipped (%s): plaintext keys detected (%d); run `si vault encrypt`", source, len(scan.PlaintextKeys))
+		}
+		return nil
 	}
 	data := doc.Bytes()
 	name := strings.TrimSpace(settings.Helia.VaultBackup)
@@ -104,8 +129,13 @@ func maybeHeliaAutoBackupVault(source string, vaultPath string) {
 		"path":   filepath.Base(vaultPath),
 		"source": source,
 	}, nil); err != nil {
-		warnf("helia vault auto-backup failed (%s): %v", source, err)
-		return
+		if requireHelia {
+			return fmt.Errorf("helia vault auto-backup failed (%s): %w", source, err)
+		} else {
+			warnf("helia vault auto-backup skipped (%s): %v", source, err)
+		}
+		return nil
 	}
 	infof("helia vault auto-backup complete (%s)", source)
+	return nil
 }

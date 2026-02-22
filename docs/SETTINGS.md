@@ -313,6 +313,7 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
+- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only), `dual` (local/git + best-effort Helia backup), `helia` (Helia backup required on mutating vault commands). Default resolution is `git`, with legacy fallback to `dual` when `helia.auto_sync=true` and `vault.sync_backend` is unset.
 
 ### `[helia]`
 Defaults for `si helia` cloud sync.
@@ -320,12 +321,13 @@ Defaults for `si helia` cloud sync.
 - `helia.account` (string): expected account slug bound to the saved token
 - `helia.token` (string): Helia bearer token
 - `helia.timeout_seconds` (int): request timeout for Helia API calls (default: `15`)
-- `helia.auto_sync` (bool): enable automatic profile + vault backup sync hooks
+- `helia.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
 - `helia.vault_backup` (string): default vault backup object name (default: `default`)
 
 Environment overrides:
 - `SI_HELIA_BASE_URL`
 - `SI_HELIA_TOKEN`
+- `SI_VAULT_SYNC_BACKEND`
 
 ### `[shell.prompt]`
 Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
@@ -527,6 +529,7 @@ trust_store = "~/.si/vault/trust.json"
 audit_log = "~/.si/logs/vault.log"
 key_backend = "keyring"
 key_file = "~/.si/vault/keys/age.key"
+sync_backend = "dual"
 
 [helia]
 base_url = "http://127.0.0.1:8080"

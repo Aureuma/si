@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -445,6 +447,10 @@ func cmdHeliaVaultBackupPush(args []string) {
 	if path == "" {
 		fatal(fmt.Errorf("vault file path required"))
 	}
+	backupName := strings.TrimSpace(*name)
+	if backupName == "" {
+		fatal(fmt.Errorf("backup name required (--name or helia.vault_backup)"))
+	}
 	path = expandTilde(path)
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -463,13 +469,14 @@ func cmdHeliaVaultBackupPush(args []string) {
 			fatal(fmt.Errorf("vault file contains plaintext keys; run `si vault encrypt` first or re-run with --allow-plaintext"))
 		}
 	}
-	result, err := client.putObject(context.Background(), heliaVaultBackupKind, strings.TrimSpace(*name), data, "text/plain", map[string]interface{}{
-		"path": filepath.Base(path),
+	result, err := client.putObject(context.Background(), heliaVaultBackupKind, backupName, data, "text/plain", map[string]interface{}{
+		"path":   filepath.Base(path),
+		"sha256": heliaPayloadSHA256Hex(data),
 	}, nil)
 	if err != nil {
 		fatal(err)
 	}
-	successf("vault backup pushed (%s revision %d)", strings.TrimSpace(*name), result.Result.Revision.Revision)
+	successf("vault backup pushed (%s revision %d)", backupName, result.Result.Revision.Revision)
 }
 
 func cmdHeliaVaultBackupPull(args []string) {
@@ -488,9 +495,27 @@ func cmdHeliaVaultBackupPull(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	data, err := client.getPayload(context.Background(), heliaVaultBackupKind, strings.TrimSpace(*name))
+	backupName := strings.TrimSpace(*name)
+	if backupName == "" {
+		fatal(fmt.Errorf("backup name required (--name or helia.vault_backup)"))
+	}
+	meta, metaErr := heliaLookupObjectMeta(heliaContext(settings), client, heliaVaultBackupKind, backupName)
+	if metaErr != nil {
+		warnf("vault backup checksum verification preflight skipped: %v", metaErr)
+	}
+	data, err := client.getPayload(context.Background(), heliaVaultBackupKind, backupName)
 	if err != nil {
 		fatal(err)
+	}
+	if meta != nil && strings.TrimSpace(meta.Checksum) != "" {
+		got := heliaPayloadSHA256Hex(data)
+		want := strings.TrimSpace(meta.Checksum)
+		if !strings.EqualFold(got, want) {
+			fatal(fmt.Errorf("vault backup checksum mismatch for %s: expected %s got %s", backupName, want, got))
+		}
+	}
+	if meta != nil && meta.SizeBytes > 0 && int64(len(data)) != meta.SizeBytes {
+		fatal(fmt.Errorf("vault backup size mismatch for %s: expected %d bytes got %d", backupName, meta.SizeBytes, len(data)))
 	}
 	path := expandTilde(strings.TrimSpace(*file))
 	if path == "" {
@@ -836,4 +861,23 @@ func resolveVaultPath(settings Settings, explicit string) string {
 		return strings.TrimSpace(settings.Vault.File)
 	}
 	return "~/.si/vault/.env"
+}
+
+func heliaPayloadSHA256Hex(payload []byte) string {
+	sum := sha256.Sum256(payload)
+	return hex.EncodeToString(sum[:])
+}
+
+func heliaLookupObjectMeta(ctx context.Context, client *heliaClient, kind string, name string) (*heliaObjectMeta, error) {
+	items, err := client.listObjects(ctx, kind, name, 5)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		if strings.EqualFold(strings.TrimSpace(items[i].Name), strings.TrimSpace(name)) {
+			item := items[i]
+			return &item, nil
+		}
+	}
+	return nil, nil
 }

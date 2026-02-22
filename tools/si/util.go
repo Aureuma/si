@@ -328,6 +328,14 @@ vault:
 	  si vault docker exec --container <name|id> [--file <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
 	  si vault trust status|accept|forget [--file <path>]
 	  si vault recipients list|add|remove [--file <path>]
+	  si vault backend status [--json]
+	  si vault backend use --mode <git|helia|dual>
+
+  Sync backend policy:
+    SI_VAULT_SYNC_BACKEND (or vault.sync_backend) controls vault cloud behavior:
+      git: local/git-based only (default)
+      dual: local/git-based + best-effort Helia backup
+      helia: Helia backup required for mutating vault commands
 
   Alias:
     si creds ...

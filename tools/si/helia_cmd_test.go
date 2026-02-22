@@ -32,10 +32,10 @@ func TestResolveVaultPath(t *testing.T) {
 }
 
 func TestHeliaClientFromSettingsEnvPrecedence(t *testing.T) {
-	t.Setenv("SI_HELIA_BASE_URL", "http://env-helia.local")
+	t.Setenv("SI_HELIA_BASE_URL", "https://env-helia.local")
 	t.Setenv("SI_HELIA_TOKEN", "env-token")
 	settings := Settings{}
-	settings.Helia.BaseURL = "http://settings-helia.local"
+	settings.Helia.BaseURL = "https://settings-helia.local"
 	settings.Helia.Token = "settings-token"
 	settings.Helia.TimeoutSeconds = 1
 
@@ -43,7 +43,7 @@ func TestHeliaClientFromSettingsEnvPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("heliaClientFromSettings: %v", err)
 	}
-	if client.baseURL != "http://env-helia.local" {
+	if client.baseURL != "https://env-helia.local" {
 		t.Fatalf("base url=%q", client.baseURL)
 	}
 	if client.token != "env-token" {

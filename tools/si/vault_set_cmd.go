@@ -98,5 +98,7 @@ func cmdVaultSet(args []string) {
 
 	fmt.Printf("file: %s\n", filepath.Clean(target.File))
 	fmt.Printf("set:  %s\n", key)
-	maybeHeliaAutoBackupVault("vault_set", target.File)
+	if err := maybeHeliaAutoBackupVault("vault_set", target.File); err != nil {
+		fatal(err)
+	}
 }
