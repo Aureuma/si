@@ -287,3 +287,25 @@ func TestLoadSettingsOrDefaultWarnsOncePerDistinctError(t *testing.T) {
 		t.Fatalf("expected two warnings for distinct errors, got %d output:\n%s", got, stderr)
 	}
 }
+
+func TestApplySettingsDefaultsSetsCodexLoginDefaultBrowser(t *testing.T) {
+	settings := Settings{}
+	applySettingsDefaults(&settings)
+	if settings.Codex.Login.DefaultBrowser == "" {
+		t.Fatalf("expected codex.login.default_browser default to be set")
+	}
+}
+
+func TestApplySettingsDefaultsNormalizesCodexLoginDefaultBrowser(t *testing.T) {
+	settings := Settings{
+		Codex: CodexSettings{
+			Login: CodexLoginSettings{
+				DefaultBrowser: "  CHROME ",
+			},
+		},
+	}
+	applySettingsDefaults(&settings)
+	if settings.Codex.Login.DefaultBrowser != "chrome" {
+		t.Fatalf("expected default_browser to normalize to chrome, got %q", settings.Codex.Login.DefaultBrowser)
+	}
+}

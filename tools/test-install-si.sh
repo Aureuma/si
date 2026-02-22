@@ -3,12 +3,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 INSTALLER="${ROOT}/tools/install-si.sh"
+SETTINGS_HELPER_TEST="${ROOT}/tools/test-install-si-settings.sh"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Usage: ./tools/test-install-si.sh
 
-Runs installer smoke tests against tools/install-si.sh.
+Runs installer smoke tests against tools/install-si.sh, including
+settings helper regression tests.
 EOF
   exit 0
 fi
@@ -26,6 +28,10 @@ fi
 
 if [[ ! -f "${INSTALLER}" ]]; then
   echo "FAIL: installer not found at ${INSTALLER}" >&2
+  exit 1
+fi
+if [[ ! -x "${SETTINGS_HELPER_TEST}" ]]; then
+  echo "FAIL: installer settings helper test not found at ${SETTINGS_HELPER_TEST}" >&2
   exit 1
 fi
 
@@ -46,6 +52,9 @@ trap cleanup EXIT
 
 note "syntax check"
 bash -n "${INSTALLER}"
+
+note "installer settings helper tests"
+"${SETTINGS_HELPER_TEST}"
 
 note "help output"
 "${INSTALLER}" --help >/dev/null

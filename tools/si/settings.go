@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,6 +71,7 @@ type CodexLoginSettings struct {
 	DeviceAuth     *bool  `toml:"device_auth,omitempty"`
 	OpenURL        *bool  `toml:"open_url,omitempty"`
 	OpenURLCommand string `toml:"open_url_command,omitempty"`
+	DefaultBrowser string `toml:"default_browser,omitempty"`
 }
 
 type CodexExecSettings struct {
@@ -610,6 +612,14 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	if settings.Paths.CodexProfilesDir == "" {
 		settings.Paths.CodexProfilesDir = "~/.si/codex/profiles"
+	}
+	settings.Codex.Login.DefaultBrowser = normalizeLoginDefaultBrowser(settings.Codex.Login.DefaultBrowser)
+	if settings.Codex.Login.DefaultBrowser == "" && strings.TrimSpace(settings.Codex.Login.OpenURLCommand) == "" {
+		if runtime.GOOS == "darwin" {
+			settings.Codex.Login.DefaultBrowser = "safari"
+		} else {
+			settings.Codex.Login.DefaultBrowser = "chrome"
+		}
 	}
 	if settings.Vault.File == "" {
 		settings.Vault.File = "~/.si/vault/.env"

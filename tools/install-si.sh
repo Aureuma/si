@@ -61,6 +61,9 @@ Notes:
       4) Install si to the first writable default install dir.
   - This script does not modify your shell rc files. If your install dir isn't on PATH,
     it prints the exact line to add for bash/zsh.
+  - Advanced CI checks for installer settings mutation are available via:
+      tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --check
+      tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --print
   - For si vault on Linux, installing "secret-tool" enables keyring storage:
       Ubuntu/Debian: sudo apt install -y libsecret-tools
 EOF
@@ -588,6 +591,82 @@ install_symlink() {
   ln -sfn "${target}" "${linkpath}"
 }
 
+prompt_default_browser() {
+  if [[ "${ASSUME_YES}" -eq 1 ]]; then
+    return 1
+  fi
+  if ! is_tty; then
+    return 1
+  fi
+  local default_choice="chrome"
+  if [[ "${OS}" == "darwin" ]]; then
+    default_choice="safari"
+  fi
+  local answer=""
+  log info ""
+  log info "Browser profile preference for si login:"
+  log info "  1) Safari"
+  log info "  2) Chrome"
+  log info "  3) Skip"
+  # shellcheck disable=SC2162
+  read -r -p "Select default browser [1-3] (default: ${default_choice}): " answer
+  answer="$(trim "${answer}")"
+  if [[ -z "${answer}" ]]; then
+    answer="${default_choice}"
+  fi
+  answer="$(echo "${answer}" | tr '[:upper:]' '[:lower:]')"
+  case "${answer}" in
+    1|safari)
+      printf '%s' "safari"
+      return 0
+      ;;
+    2|chrome)
+      printf '%s' "chrome"
+      return 0
+      ;;
+    3|skip|none|no)
+      return 1
+      ;;
+    *)
+      log warn "invalid choice: ${answer}; skipping browser configuration"
+      return 1
+      ;;
+  esac
+}
+
+write_default_browser_setting() {
+  local browser="$1"
+  browser="$(echo "$(trim "${browser}")" | tr '[:upper:]' '[:lower:]')"
+  case "${browser}" in
+    safari|chrome) ;;
+    *) return 1 ;;
+  esac
+  [[ -n "${HOME:-}" ]] || return 1
+  local settings_path="${HOME}/.si/settings.toml"
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  local helper="${script_dir}/install-si-settings.sh"
+  if [[ -x "${helper}" ]]; then
+    "${helper}" --settings "${settings_path}" --default-browser "${browser}"
+    return $?
+  fi
+  return 1
+}
+
+configure_default_browser_setting() {
+  if [[ "${DRY_RUN}" -eq 1 ]]; then
+    return 0
+  fi
+  local browser=""
+  if browser="$(prompt_default_browser)"; then
+    if write_default_browser_setting "${browser}"; then
+      log info "✅ configured codex.login.default_browser=${browser} in ~/.si/settings.toml"
+      return 0
+    fi
+    log warn "failed to configure default browser setting"
+  fi
+}
+
 ensure_docker_buildx() {
   # If docker is present but buildx isn't, try a next-best fix:
   # - Auto mode: attempt install only in an interactive TTY (avoid surprising CI/tests).
@@ -1006,3 +1085,4 @@ fi
 
 ensure_docker_buildx "${OS}" "${ARCH}"
 post_install "${INSTALL_PATH}"
+configure_default_browser_setting

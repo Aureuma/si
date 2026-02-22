@@ -37,6 +37,11 @@ const (
 	codexBrowserMCPName    = "si_browser"
 )
 
+var (
+	openLoginURLFn              = openLoginURL
+	copyDeviceCodeToClipboardFn = copyDeviceCodeToClipboard
+)
+
 func dispatchCodexCommand(cmd string, args []string) bool {
 	maybeAutoRepairWarmupScheduler(cmd)
 
@@ -1604,9 +1609,10 @@ func envValue(env []string, key string) string {
 }
 
 func cmdCodexLogin(args []string) {
+	headless := isLikelyHeadlessMachine()
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
-	openURL := fs.Bool("open-url", false, "open login URL in browser")
+	openURL := fs.Bool("open-url", !headless, "open login URL in browser")
 	openURLCmd := fs.String("open-url-cmd", "", "command to open login URL (use {url})")
 	safariProfile := fs.String("safari-profile", "", "override Safari profile name (macOS only)")
 	_ = fs.Parse(args)
@@ -1619,6 +1625,12 @@ func cmdCodexLogin(args []string) {
 	}
 	if !flagProvided(args, "open-url-cmd") && strings.TrimSpace(settings.Codex.Login.OpenURLCommand) != "" {
 		*openURLCmd = settings.Codex.Login.OpenURLCommand
+	}
+	if !flagProvided(args, "open-url-cmd") && strings.TrimSpace(*openURLCmd) == "" {
+		*openURLCmd = loginOpenCommandForBrowser(settings.Codex.Login.DefaultBrowser)
+	}
+	if headless {
+		*openURL = false
 	}
 	if fs.NArg() > 1 {
 		printUsage("usage: si login [profile] [--device-auth] [--open-url] [--open-url-cmd <command>] [--safari-profile <name>]")
@@ -1704,12 +1716,8 @@ func cmdCodexLogin(args []string) {
 	if *deviceAuth {
 		execArgs = append(execArgs, "--device-auth")
 	}
-	watcher := newLoginURLWatcher(func(url string) {
-		if *openURL {
-			openLoginURL(url, *profile, *openURLCmd, *safariProfile)
-		}
-	}, copyDeviceCodeToClipboard)
-	if err := execDockerCLIWithOutput(execArgs, watcher.Feed); err != nil {
+	outputHandler := loginOutputHandler(headless, *openURL, *openURLCmd, *profile, *safariProfile)
+	if err := execDockerCLIWithOutput(execArgs, outputHandler); err != nil {
 		removeContainer()
 		fatal(err)
 	}
@@ -1723,6 +1731,18 @@ func cmdCodexLogin(args []string) {
 	}
 	triggerWarmupAfterLogin(*profile)
 	removeContainer()
+}
+
+func loginOutputHandler(headless bool, openURL bool, openURLCmd string, profile codexProfile, safariProfile string) func([]byte) {
+	if headless {
+		return nil
+	}
+	watcher := newLoginURLWatcher(func(url string) {
+		if openURL {
+			openLoginURLFn(url, profile, openURLCmd, safariProfile)
+		}
+	}, copyDeviceCodeToClipboardFn)
+	return watcher.Feed
 }
 
 func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {

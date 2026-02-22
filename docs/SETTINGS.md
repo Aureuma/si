@@ -58,9 +58,11 @@ Defaults for Codex container commands (spawn/respawn/login/run).
 Defaults for `si login`.
 - `codex.login.device_auth` (bool): default device auth flow (`true`/`false`)
 - `codex.login.open_url` (bool): open the login URL in a browser after it is printed
-- `codex.login.open_url_command` (string): command to open the login URL. Use `{url}` to inject the URL, otherwise it is appended. Supported placeholders: `{url}`, `{profile}`, `{profile_id}`, `{profile_name}`, `{profile_email}`. Special value `safari-profile` opens Safari using a profile window derived from the selected Codex profile name (including emojis). macOS only; requires Accessibility permission for System Events. Use `si login --safari-profile "<name>"` to override.
+- `codex.login.open_url_command` (string): command to open the login URL. Use `{url}` to inject the URL, otherwise it is appended. Supported placeholders: `{url}`, `{profile}`, `{profile_id}`, `{profile_name}`, `{profile_email}`. Special values: `safari-profile` and `chrome-profile`.
+- `codex.login.default_browser` (string): browser-aware launcher used when `open_url_command` is unset. Supported: `safari`, `chrome`. On macOS default is `safari`; elsewhere default is `chrome`.
 Notes:
-- When `si login` detects a one-time device code, it copies it to the clipboard (macOS: `pbcopy`, Linux: `wl-copy`, `xclip`, or `xsel`).
+- In non-headless environments, `si login` detects one-time device codes and copies them to the clipboard (macOS: `pbcopy`, Linux: `wl-copy`, `xclip`, or `xsel`).
+- In headless environments (for example Linux without `DISPLAY`/`WAYLAND_DISPLAY`), `si login` skips URL/device-code parsing and clipboard copy.
 
 #### `[codex.exec]`
 Defaults for one-off `si run` (alias `si exec`).
@@ -354,7 +356,7 @@ clean_slate = false
 [codex.login]
 device_auth = true
 open_url = false
-open_url_command = "safari-profile"
+default_browser = "safari"
 
 [codex.exec]
 model = "gpt-5.2-codex"

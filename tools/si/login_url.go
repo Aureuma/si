@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
@@ -18,6 +20,13 @@ var (
 	ansiEscapeOSCRegex     = regexp.MustCompile(`\x1b\][^\x07]*\x07`)
 	ansiEscapeEncodedRegex = regexp.MustCompile(`(?i)%1b%5b[0-9;]*[a-z]`)
 	deviceCodeRegex        = regexp.MustCompile(`\b[A-Z0-9]{4,8}-[A-Z0-9]{4,8}\b`)
+)
+
+var (
+	runShellCommandFn      = runShellCommand
+	openSafariProfileURLFn = openSafariProfileURL
+	openChromeProfileURLFn = openChromeProfileURL
+	chromeProfilesFn       = chromeProfiles
 )
 
 type loginURLWatcher struct {
@@ -107,7 +116,13 @@ func openLoginURL(url string, profile codexProfile, command string, safariProfil
 		return
 	}
 	if isSafariProfileCommand(cmdTemplate) {
-		if err := openSafariProfileURL(url, profile, safariProfileOverride); err != nil {
+		if err := openSafariProfileURLFn(url, profile, safariProfileOverride); err != nil {
+			warnf("open login url failed: %v", err)
+		}
+		return
+	}
+	if isChromeProfileCommand(cmdTemplate) {
+		if err := openChromeProfileURLFn(url, profile); err != nil {
 			warnf("open login url failed: %v", err)
 		}
 		return
@@ -116,7 +131,7 @@ func openLoginURL(url string, profile codexProfile, command string, safariProfil
 	if !strings.Contains(cmdTemplate, "{url}") {
 		cmdLine = strings.TrimSpace(cmdLine + " " + shellSingleQuote(url))
 	}
-	if err := runShellCommand(cmdLine); err != nil {
+	if err := runShellCommandFn(cmdLine); err != nil {
 		warnf("open login url failed: %v", err)
 	}
 }
@@ -173,6 +188,64 @@ func copyDeviceCodeToClipboard(code string) {
 	successf("📋 copied device one-time code to clipboard")
 }
 
+func loginOpenCommandForBrowser(browser string) string {
+	switch normalizeLoginDefaultBrowser(browser) {
+	case "safari":
+		return "safari-profile"
+	case "chrome":
+		return "chrome-profile"
+	default:
+		return ""
+	}
+}
+
+func normalizeLoginDefaultBrowser(browser string) string {
+	switch strings.ToLower(strings.TrimSpace(browser)) {
+	case "safari":
+		return "safari"
+	case "chrome":
+		return "chrome"
+	default:
+		return ""
+	}
+}
+
+func isLikelyHeadlessMachine() bool {
+	if forced, ok := boolEnv("SI_HEADLESS"); ok {
+		return forced
+	}
+	if forced, ok := boolEnv("HEADLESS"); ok {
+		return forced
+	}
+	if forced, ok := boolEnv("CI"); ok && forced {
+		return true
+	}
+	if runtime.GOOS == "linux" {
+		display := strings.TrimSpace(os.Getenv("DISPLAY"))
+		wayland := strings.TrimSpace(os.Getenv("WAYLAND_DISPLAY"))
+		if display == "" && wayland == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func boolEnv(key string) (bool, bool) {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return false, false
+	}
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "1", "true", "yes", "on":
+		return true, true
+	case "0", "false", "no", "off", "":
+		return false, true
+	default:
+		return false, false
+	}
+}
+
 func copyToClipboard(text string) error {
 	switch runtime.GOOS {
 	case "darwin":
@@ -220,21 +293,26 @@ func isSafariProfileCommand(command string) bool {
 	return command == "safari-profile" || command == "safari-profile-window"
 }
 
+func isChromeProfileCommand(command string) bool {
+	command = strings.TrimSpace(strings.ToLower(command))
+	return command == "chrome-profile"
+}
+
 func openSafariProfileURL(url string, profile codexProfile, override string) error {
 	if runtime.GOOS != "darwin" {
 		cmd := strings.TrimSpace(defaultLoginOpenCommand())
 		if cmd == "" {
 			return nil
 		}
-		return runShellCommand(cmd + " " + shellSingleQuote(url))
+		return runShellCommandFn(cmd + " " + shellSingleQuote(url))
 	}
 	candidates := safariProfileNameCandidates(profile, override)
 	if len(candidates) == 0 {
-		return runShellCommand("open -a \"Safari\" " + shellSingleQuote(url))
+		return runShellCommandFn("open -a \"Safari\" " + shellSingleQuote(url))
 	}
 	menuItems, err := safariProfileMenuItems()
 	if err != nil {
-		_ = runShellCommand("open -a \"Safari\" " + shellSingleQuote(url))
+		_ = runShellCommandFn("open -a \"Safari\" " + shellSingleQuote(url))
 		return err
 	}
 	profileName := ""
@@ -245,7 +323,7 @@ func openSafariProfileURL(url string, profile codexProfile, override string) err
 		}
 	}
 	if profileName == "" {
-		return runShellCommand("open -a \"Safari\" " + shellSingleQuote(url))
+		return runShellCommandFn("open -a \"Safari\" " + shellSingleQuote(url))
 	}
 	script := []string{
 		"tell application \"Safari\" to activate",
@@ -268,10 +346,147 @@ func openSafariProfileURL(url string, profile codexProfile, override string) err
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		_ = runShellCommand("open -a \"Safari\" " + shellSingleQuote(url))
+		_ = runShellCommandFn("open -a \"Safari\" " + shellSingleQuote(url))
 		return err
 	}
 	return nil
+}
+
+func openChromeProfileURL(url string, profile codexProfile) error {
+	url = cleanLoginURL(url)
+	if url == "" {
+		return nil
+	}
+	profiles := chromeProfilesFn()
+	dir := selectChromeProfileDir(profiles, profile)
+	switch runtime.GOOS {
+	case "darwin":
+		if dir != "" {
+			return runShellCommandFn("open -a \"Google Chrome\" --args --profile-directory=" + shellSingleQuote(dir) + " " + shellSingleQuote(url))
+		}
+		return runShellCommandFn("open -a \"Google Chrome\" " + shellSingleQuote(url))
+	case "linux":
+		chromeCmd := "google-chrome"
+		if _, err := exec.LookPath(chromeCmd); err != nil {
+			chromeCmd = "chromium-browser"
+		}
+		if _, err := exec.LookPath(chromeCmd); err == nil {
+			if dir != "" {
+				return runShellCommandFn(chromeCmd + " --profile-directory=" + shellSingleQuote(dir) + " " + shellSingleQuote(url))
+			}
+			return runShellCommandFn(chromeCmd + " " + shellSingleQuote(url))
+		}
+		return runShellCommandFn("xdg-open " + shellSingleQuote(url))
+	case "windows":
+		if dir != "" {
+			return runShellCommandFn("cmd /c start \"\" chrome --profile-directory=" + shellSingleQuote(dir) + " " + shellSingleQuote(url))
+		}
+		return runShellCommandFn("cmd /c start \"\" chrome " + shellSingleQuote(url))
+	default:
+		cmd := strings.TrimSpace(defaultLoginOpenCommand())
+		if cmd == "" {
+			return nil
+		}
+		return runShellCommandFn(cmd + " " + shellSingleQuote(url))
+	}
+}
+
+type chromeProfileMeta struct {
+	Directory string
+	Name      string
+	UserName  string
+}
+
+func chromeProfiles() map[string]chromeProfileMeta {
+	path := chromeLocalStatePath()
+	if strings.TrimSpace(path) == "" {
+		return map[string]chromeProfileMeta{}
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return map[string]chromeProfileMeta{}
+	}
+	var parsed struct {
+		Profile struct {
+			InfoCache map[string]struct {
+				Name         string `json:"name"`
+				UserName     string `json:"user_name"`
+				ShortcutName string `json:"shortcut_name"`
+			} `json:"info_cache"`
+		} `json:"profile"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return map[string]chromeProfileMeta{}
+	}
+	out := map[string]chromeProfileMeta{}
+	for dir, entry := range parsed.Profile.InfoCache {
+		dir = strings.TrimSpace(dir)
+		if dir == "" {
+			continue
+		}
+		name := strings.TrimSpace(entry.Name)
+		if name == "" {
+			name = strings.TrimSpace(entry.ShortcutName)
+		}
+		out[dir] = chromeProfileMeta{
+			Directory: dir,
+			Name:      name,
+			UserName:  strings.TrimSpace(entry.UserName),
+		}
+	}
+	return out
+}
+
+func chromeLocalStatePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Local State")
+	case "linux":
+		return filepath.Join(home, ".config", "google-chrome", "Local State")
+	case "windows":
+		localAppData := strings.TrimSpace(os.Getenv("LOCALAPPDATA"))
+		if localAppData == "" {
+			return ""
+		}
+		return filepath.Join(localAppData, "Google", "Chrome", "User Data", "Local State")
+	default:
+		return ""
+	}
+}
+
+func selectChromeProfileDir(profiles map[string]chromeProfileMeta, profile codexProfile) string {
+	if len(profiles) == 0 {
+		return ""
+	}
+	candidates := safariProfileNameCandidates(profile, "")
+	normalized := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(strings.ToLower(candidate))
+		if candidate != "" {
+			normalized = append(normalized, candidate)
+		}
+	}
+	for _, candidate := range normalized {
+		for dir, entry := range profiles {
+			if strings.EqualFold(strings.TrimSpace(dir), candidate) {
+				return dir
+			}
+			if strings.EqualFold(strings.TrimSpace(entry.Name), candidate) {
+				return dir
+			}
+			if strings.EqualFold(strings.TrimSpace(entry.UserName), candidate) {
+				return dir
+			}
+		}
+	}
+	if _, ok := profiles["Default"]; ok {
+		return "Default"
+	}
+	return ""
 }
 
 func safariProfileNameCandidates(profile codexProfile, override string) []string {
