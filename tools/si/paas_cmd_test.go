@@ -79,6 +79,7 @@ func TestPaasSubcommandNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 		{name: "events", invoke: func() { cmdPaasEvents(nil) }, usage: paasEventsUsageText},
 		{name: "backup", invoke: func() { cmdPaasBackup(nil) }, usage: paasBackupUsageText},
 		{name: "taskboard", invoke: func() { cmdPaasTaskboard(nil) }, usage: paasTaskboardUsageText},
+		{name: "cloud", invoke: func() { cmdPaasCloud(nil) }, usage: paasCloudUsageText},
 	}
 	for _, tc := range tests {
 		out := captureStdout(t, tc.invoke)
@@ -927,6 +928,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 		{name: "paas agent", actions: paasAgentActions},
 		{name: "paas events", actions: paasEventsActions},
 		{name: "paas backup", actions: paasBackupActions},
+		{name: "paas cloud", actions: paasCloudActions},
 	}
 	for _, tc := range tests {
 		if len(tc.actions) == 0 {
@@ -944,7 +946,7 @@ func TestPaasCommandActionSetsArePopulated(t *testing.T) {
 }
 
 func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
-	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events", "backup", "taskboard"})
+	expectActionNames(t, "paas", paasActions, []string{"target", "app", "deploy", "rollback", "logs", "alert", "secret", "ai", "context", "doctor", "agent", "events", "backup", "taskboard", "cloud"})
 	expectActionNames(t, "paas target", paasTargetActions, []string{"add", "list", "check", "use", "remove", "bootstrap", "ingress-baseline"})
 	expectActionNames(t, "paas app", paasAppActions, []string{"init", "list", "status", "remove", "addon"})
 	expectActionNames(t, "paas app addon", paasAppAddonActions, []string{"contract", "enable", "list", "disable"})
@@ -955,6 +957,7 @@ func TestPaasActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "paas agent", paasAgentActions, []string{"enable", "disable", "status", "logs", "run-once", "approve", "deny"})
 	expectActionNames(t, "paas events", paasEventsActions, []string{"list"})
 	expectActionNames(t, "paas backup", paasBackupActions, []string{"contract", "run", "restore", "status"})
+	expectActionNames(t, "paas cloud", paasCloudActions, []string{"status", "use", "push", "pull"})
 }
 
 func TestNormalizeImagePlatformArch(t *testing.T) {

@@ -372,16 +372,20 @@ func resolvePaasAddonContract(raw string) (paasAddonPackContract, bool) {
 	return row, ok
 }
 
-func resolvePaasAddonStorePath() (string, error) {
-	contextDir, err := resolvePaasContextDir(currentPaasContext())
+func resolvePaasAddonStorePathForContext(contextName string) (string, error) {
+	contextDir, err := resolvePaasContextDir(contextName)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(contextDir, "addons.json"), nil
 }
 
-func loadPaasAddonStore() (paasAddonStore, error) {
-	path, err := resolvePaasAddonStorePath()
+func resolvePaasAddonStorePath() (string, error) {
+	return resolvePaasAddonStorePathForContext(currentPaasContext())
+}
+
+func loadPaasAddonStoreForContext(contextName string) (paasAddonStore, error) {
+	path, err := resolvePaasAddonStorePathForContext(contextName)
 	if err != nil {
 		return paasAddonStore{}, err
 	}
@@ -409,8 +413,12 @@ func loadPaasAddonStore() (paasAddonStore, error) {
 	return store, nil
 }
 
-func savePaasAddonStore(store paasAddonStore) error {
-	path, err := resolvePaasAddonStorePath()
+func loadPaasAddonStore() (paasAddonStore, error) {
+	return loadPaasAddonStoreForContext(currentPaasContext())
+}
+
+func savePaasAddonStoreForContext(contextName string, store paasAddonStore) error {
+	path, err := resolvePaasAddonStorePathForContext(contextName)
 	if err != nil {
 		return err
 	}
@@ -433,6 +441,10 @@ func savePaasAddonStore(store paasAddonStore) error {
 		return err
 	}
 	return os.WriteFile(path, raw, 0o600)
+}
+
+func savePaasAddonStore(store paasAddonStore) error {
+	return savePaasAddonStoreForContext(currentPaasContext(), store)
 }
 
 func normalizePaasAddonRecord(appKey string, in paasAddonRecord) paasAddonRecord {
