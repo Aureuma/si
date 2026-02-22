@@ -482,6 +482,44 @@ func TestBuildDyadRowsUnknownMemberIgnored(t *testing.T) {
 	}
 }
 
+func TestBuildDyadStatusResult(t *testing.T) {
+	actorInfo := &types.ContainerJSON{
+		ContainerJSONBase: &types.ContainerJSONBase{
+			State: &types.ContainerState{Status: "running"},
+		},
+	}
+	criticInfo := &types.ContainerJSON{
+		ContainerJSONBase: &types.ContainerJSONBase{
+			State: &types.ContainerState{Status: "exited"},
+		},
+	}
+
+	got := buildDyadStatusResult("atlas", "1234567890abcdef", actorInfo, "fedcba0987654321", criticInfo)
+	if !got.Found {
+		t.Fatalf("expected status to be found")
+	}
+	if got.Actor == nil || got.Actor.Name != "si-actor-atlas" || got.Actor.Status != "running" {
+		t.Fatalf("unexpected actor payload: %+v", got.Actor)
+	}
+	if got.Critic == nil || got.Critic.Name != "si-critic-atlas" || got.Critic.Status != "exited" {
+		t.Fatalf("unexpected critic payload: %+v", got.Critic)
+	}
+
+	notFound := buildDyadStatusResult("atlas", "", nil, "", nil)
+	if notFound.Found {
+		t.Fatalf("expected not-found result when both members are missing")
+	}
+}
+
+func TestShortContainerID(t *testing.T) {
+	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
+		t.Fatalf("unexpected unchanged id: %q", got)
+	}
+	if got := shortContainerID("1234567890abcdef"); got != "1234567890ab" {
+		t.Fatalf("unexpected short id: %q", got)
+	}
+}
+
 func TestDefaultEffort(t *testing.T) {
 	actor, critic := defaultEffort("infra")
 	if actor != "xhigh" || critic != "xhigh" {
@@ -523,6 +561,12 @@ func TestSplitDyadLogsNameAndFlags(t *testing.T) {
 			args:       []string{"--member", "actor", "--tail", "10", "figi"},
 			wantDyad:   "figi",
 			wantRemain: []string{"--member", "actor", "--tail", "10"},
+		},
+		{
+			name:       "json-flag-before-name",
+			args:       []string{"--json", "--member", "critic", "figi"},
+			wantDyad:   "figi",
+			wantRemain: []string{"--json", "--member", "critic"},
 		},
 	}
 
