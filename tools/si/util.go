@@ -189,6 +189,7 @@ codex:
     --open-url / --open-url=false
     --open-url-cmd <command>
     --safari-profile <name>
+    Note: Safari profile opening on macOS uses System Events automation and requires Accessibility permission.
 
   si logout [--force] [--all]
     --force

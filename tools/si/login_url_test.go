@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -191,5 +192,26 @@ func TestChromeLocalStatePath(t *testing.T) {
 	}
 	if runtime.GOOS != "windows" && !strings.HasPrefix(path, home) {
 		t.Fatalf("expected path under home dir %q, got %q", home, path)
+	}
+}
+
+func TestSafariAccessibilityHint(t *testing.T) {
+	msg := safariAccessibilityHintForOS("darwin", fmt.Errorf("System Events got an error: Not authorized"))
+	if !strings.Contains(strings.ToLower(msg), "accessibility") {
+		t.Fatalf("expected accessibility hint, got %q", msg)
+	}
+}
+
+func TestSafariAccessibilityHintFallbackMessage(t *testing.T) {
+	msg := safariAccessibilityHintForOS("darwin", fmt.Errorf("exit status 1"))
+	if !strings.Contains(strings.ToLower(msg), "enable it in system settings") {
+		t.Fatalf("expected generic accessibility guidance, got %q", msg)
+	}
+}
+
+func TestSafariAccessibilityHintNonDarwinEmpty(t *testing.T) {
+	msg := safariAccessibilityHintForOS("linux", fmt.Errorf("System Events got an error"))
+	if msg != "" {
+		t.Fatalf("expected empty hint off darwin, got %q", msg)
 	}
 }

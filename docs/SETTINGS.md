@@ -63,6 +63,10 @@ Defaults for `si login`.
 Notes:
 - In non-headless environments, `si login` detects one-time device codes and copies them to the clipboard (macOS: `pbcopy`, Linux: `wl-copy`, `xclip`, or `xsel`).
 - In headless environments (for example Linux without `DISPLAY`/`WAYLAND_DISPLAY`), `si login` skips URL/device-code parsing and clipboard copy.
+- macOS Safari profile windows (`open_url_command = "safari-profile"` or `default_browser = "safari"`) require Accessibility permission because SI uses AppleScript + `System Events` UI automation to click `File > New Window > <Profile>`.
+  - Why: Safari does not provide a direct command-line/profile flag equivalent for opening a URL into a specific Safari profile window, so SI must automate the Safari menu.
+  - If permission is not granted: SI warns clearly and falls back to opening Safari without profile selection.
+  - Grant/review: `System Settings > Privacy & Security > Accessibility` and allow the app/terminal running `si`.
 
 #### `[codex.exec]`
 Defaults for one-off `si run` (alias `si exec`).
