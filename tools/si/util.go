@@ -73,7 +73,7 @@ Core:
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
-  si helia <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
+  si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -348,35 +348,35 @@ paas:
   Running si paas with no subcommand opens an interactive command picker.
   Running si paas target/app/alert/ai/context/agent/events with no subcommand opens an interactive command picker.
 
-helia:
-  si helia auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]
-  si helia auth status [--json]
-  si helia auth logout [--clear-account]
-  si helia doctor [--json]
-  si helia profile list [--json]
-  si helia profile push [--profile <id>] [--json]
-  si helia profile pull [--profile <id>] [--json]
-  si helia vault backup push [--file <path>] [--name <name>] [--allow-plaintext]
-  si helia vault backup pull [--file <path>] [--name <name>]
-  si helia token list [--include-revoked] [--limit <n>] [--json]
-  si helia token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]
-  si helia token revoke --token-id <id>
-  si helia audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]
-  si helia taskboard use [--name <name>] [--agent <agent-id>]
-  si helia taskboard show [--name <name>] [--json]
-  si helia taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]
-  si helia taskboard add --title <text> [--prompt <text>] [--priority <P1|P2|P3>] [--tags <csv>] [--name <name>] [--json]
-  si helia taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--lease-seconds <n>] [--json]
-  si helia taskboard release --id <task-id> [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
-  si helia taskboard done --id <task-id> [--result <text>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
-  si helia machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]
-  si helia machine status [--machine <id>] [--json]
-  si helia machine list [--limit <n>] [--json]
-  si helia machine allow --machine <id> --grant <operator> [--as <operator>] [--json]
-  si helia machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]
-  si helia machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>
-  si helia machine jobs [--machine <id>] [--requested-by <operator>] [--status <queued|running|succeeded|failed|denied>] [--limit <n>] [--json]
-  si helia machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]
+sun:
+  si sun auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]
+  si sun auth status [--json]
+  si sun auth logout [--clear-account]
+  si sun doctor [--json]
+  si sun profile list [--json]
+  si sun profile push [--profile <id>] [--json]
+  si sun profile pull [--profile <id>] [--json]
+  si sun vault backup push [--file <path>] [--name <name>] [--allow-plaintext]
+  si sun vault backup pull [--file <path>] [--name <name>]
+  si sun token list [--include-revoked] [--limit <n>] [--json]
+  si sun token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]
+  si sun token revoke --token-id <id>
+  si sun audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]
+  si sun taskboard use [--name <name>] [--agent <agent-id>]
+  si sun taskboard show [--name <name>] [--json]
+  si sun taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]
+  si sun taskboard add --title <text> [--prompt <text>] [--priority <P1|P2|P3>] [--tags <csv>] [--name <name>] [--json]
+  si sun taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--lease-seconds <n>] [--json]
+  si sun taskboard release --id <task-id> [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
+  si sun taskboard done --id <task-id> [--result <text>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
+  si sun machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]
+  si sun machine status [--machine <id>] [--json]
+  si sun machine list [--limit <n>] [--json]
+  si sun machine allow --machine <id> --grant <operator> [--as <operator>] [--json]
+  si sun machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]
+  si sun machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>
+  si sun machine jobs [--machine <id>] [--requested-by <operator>] [--status <queued|running|succeeded|failed|denied>] [--limit <n>] [--json]
+  si sun machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]
 
 github:
   si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]
@@ -869,7 +869,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify|helia)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify|sun|helia)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)

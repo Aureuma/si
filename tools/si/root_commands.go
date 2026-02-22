@@ -138,7 +138,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
 	register(newLazyRootHandler(loadMintlifyRootHandler), "mintlify")
 	register(newLazyRootHandler(loadPaasRootHandler), "paas")
-	register(newLazyRootHandler(loadHeliaRootHandler), "helia")
+	register(newLazyRootHandler(loadHeliaRootHandler), "sun", "helia")
 	register(newLazyRootHandler(loadPersonaRootHandler), "persona")
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
 	register(newLazyRootHandler(loadPluginsRootHandler), "plugins", "plugin", "marketplace")

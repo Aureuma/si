@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	heliaTaskboardUsageText = "usage: si helia taskboard <use|show|list|add|claim|release|done> ..."
+	heliaTaskboardUsageText = "usage: si sun taskboard <use|show|list|add|claim|release|done> ..."
 	heliaTaskboardKind      = "dyad_taskboard"
 
 	heliaTaskStatusTodo  = "todo"
@@ -111,7 +111,7 @@ func cmdHeliaTaskboard(args []string) {
 	case "done":
 		cmdHeliaTaskboardDone(rest)
 	default:
-		printUnknown("helia taskboard", sub)
+		printUnknown("sun taskboard", sub)
 		printUsage(heliaTaskboardUsageText)
 		os.Exit(1)
 	}
@@ -119,7 +119,7 @@ func cmdHeliaTaskboard(args []string) {
 
 func cmdHeliaTaskboardUse(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard use", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard use", flag.ExitOnError)
 	name := fs.String("name", strings.TrimSpace(settings.Helia.Taskboard), "default taskboard object name")
 	agent := fs.String("agent", strings.TrimSpace(settings.Helia.TaskboardAgent), "default agent id")
 	if err := fs.Parse(args); err != nil {
@@ -142,22 +142,22 @@ func cmdHeliaTaskboardUse(args []string) {
 	if err := saveSettings(current); err != nil {
 		fatal(err)
 	}
-	successf("helia taskboard default set to %s", strings.TrimSpace(*name))
+	successf("sun taskboard default set to %s", strings.TrimSpace(*name))
 	if strings.TrimSpace(*agent) != "" {
-		successf("helia taskboard default agent set to %s", strings.TrimSpace(*agent))
+		successf("sun taskboard default agent set to %s", strings.TrimSpace(*agent))
 	}
 }
 
 func cmdHeliaTaskboardShow(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard show", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard show", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia taskboard show [--name <name>] [--json]")
+		printUsage("usage: si sun taskboard show [--name <name>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -190,7 +190,7 @@ func cmdHeliaTaskboardShow(args []string) {
 
 func cmdHeliaTaskboardList(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard list", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard list", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	status := fs.String("status", "", "filter status: todo|doing|done")
 	owner := fs.String("owner", "", "filter assigned agent id")
@@ -200,7 +200,7 @@ func cmdHeliaTaskboardList(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]")
+		printUsage("usage: si sun taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -247,7 +247,7 @@ func cmdHeliaTaskboardList(args []string) {
 
 func cmdHeliaTaskboardAdd(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard add", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard add", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	title := fs.String("title", "", "task title")
 	prompt := fs.String("prompt", "", "task prompt used by dyad autopilot")
@@ -258,7 +258,7 @@ func cmdHeliaTaskboardAdd(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia taskboard add --title <text> [--prompt <text>] [--priority <P1|P2|P3>] [--tags <csv>] [--name <name>] [--json]")
+		printUsage("usage: si sun taskboard add --title <text> [--prompt <text>] [--priority <P1|P2|P3>] [--tags <csv>] [--name <name>] [--json]")
 		return
 	}
 	taskTitle := strings.TrimSpace(*title)
@@ -302,7 +302,7 @@ func cmdHeliaTaskboardAdd(args []string) {
 
 func cmdHeliaTaskboardClaim(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard claim", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard claim", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	id := fs.String("id", "", "specific task id")
 	agent := fs.String("agent", "", "agent id (defaults to dyad@machine identity)")
@@ -314,7 +314,7 @@ func cmdHeliaTaskboardClaim(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--lease-seconds <n>] [--json]")
+		printUsage("usage: si sun taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--lease-seconds <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -340,7 +340,7 @@ func cmdHeliaTaskboardClaim(args []string) {
 
 func cmdHeliaTaskboardRelease(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard release", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard release", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	id := fs.String("id", "", "task id")
 	agent := fs.String("agent", "", "agent id (defaults to dyad@machine identity)")
@@ -351,7 +351,7 @@ func cmdHeliaTaskboardRelease(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia taskboard release --id <task-id> [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--json]")
+		printUsage("usage: si sun taskboard release --id <task-id> [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--json]")
 		return
 	}
 	taskID := strings.TrimSpace(*id)
@@ -377,7 +377,7 @@ func cmdHeliaTaskboardRelease(args []string) {
 
 func cmdHeliaTaskboardDone(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia taskboard done", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun taskboard done", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	id := fs.String("id", "", "task id")
 	resultText := fs.String("result", "", "completion notes")
@@ -389,7 +389,7 @@ func cmdHeliaTaskboardDone(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia taskboard done --id <task-id> [--result <text>] [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--json]")
+		printUsage("usage: si sun taskboard done --id <task-id> [--result <text>] [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--json]")
 		return
 	}
 	taskID := strings.TrimSpace(*id)
@@ -888,7 +888,7 @@ func heliaTaskboardResolveAgent(settings Settings, explicitAgent string, dyad st
 
 	agentID := strings.TrimSpace(explicitAgent)
 	if agentID == "" {
-		agentID = strings.TrimSpace(os.Getenv("SI_HELIA_TASKBOARD_AGENT"))
+		agentID = envSunTaskboardAgent()
 	}
 	if agentID == "" {
 		agentID = strings.TrimSpace(settings.Helia.TaskboardAgent)
@@ -968,7 +968,7 @@ func heliaTaskboardName(settings Settings, explicit string) string {
 	if strings.TrimSpace(explicit) != "" {
 		return strings.TrimSpace(explicit)
 	}
-	if env := strings.TrimSpace(os.Getenv("SI_HELIA_TASKBOARD")); env != "" {
+	if env := envSunTaskboard(); env != "" {
 		return env
 	}
 	if strings.TrimSpace(settings.Helia.Taskboard) != "" {
@@ -981,7 +981,7 @@ func heliaTaskboardLeaseSeconds(settings Settings, explicit int) int {
 	if explicit > 0 {
 		return explicit
 	}
-	if env := strings.TrimSpace(os.Getenv("SI_HELIA_TASKBOARD_LEASE_SECONDS")); env != "" {
+	if env := envSunTaskboardLeaseSeconds(); env != "" {
 		if parsed, err := strconv.Atoi(env); err == nil && parsed > 0 {
 			return parsed
 		}

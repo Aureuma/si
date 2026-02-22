@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	heliaMachineUsageText = "usage: si helia machine <register|status|list|allow|deny|run|jobs|serve> ..."
+	heliaMachineUsageText = "usage: si sun machine <register|status|list|allow|deny|run|jobs|serve> ..."
 
 	heliaMachineKind    = "si_machine"
 	heliaMachineJobKind = "si_machine_job"
@@ -110,7 +110,7 @@ func cmdHeliaMachine(args []string) {
 	case "serve":
 		cmdHeliaMachineServe(rest)
 	default:
-		printUnknown("helia machine", sub)
+		printUnknown("sun machine", sub)
 		printUsage(heliaMachineUsageText)
 		os.Exit(1)
 	}
@@ -118,7 +118,7 @@ func cmdHeliaMachine(args []string) {
 
 func cmdHeliaMachineRegister(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine register", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine register", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id")
 	operatorID := fs.String("operator", "", "operator id")
 	displayName := fs.String("display-name", "", "display name")
@@ -131,7 +131,7 @@ func cmdHeliaMachineRegister(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]")
+		printUsage("usage: si sun machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -221,14 +221,14 @@ func cmdHeliaMachineRegister(args []string) {
 
 func cmdHeliaMachineStatus(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine status", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine status", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine status [--machine <id>] [--json]")
+		printUsage("usage: si sun machine status [--machine <id>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -252,14 +252,14 @@ func cmdHeliaMachineStatus(args []string) {
 
 func cmdHeliaMachineList(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine list", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine list", flag.ExitOnError)
 	limit := fs.Int("limit", 200, "max rows")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine list [--limit <n>] [--json]")
+		printUsage("usage: si sun machine list [--limit <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -310,7 +310,7 @@ func cmdHeliaMachineList(args []string) {
 
 func cmdHeliaMachineAllow(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine allow", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine allow", flag.ExitOnError)
 	machineID := fs.String("machine", "", "target machine id")
 	grantOperator := fs.String("grant", "", "operator id to allow")
 	asOperator := fs.String("as", "", "requesting operator id")
@@ -319,7 +319,7 @@ func cmdHeliaMachineAllow(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine allow --machine <id> --grant <operator> [--as <operator>] [--json]")
+		printUsage("usage: si sun machine allow --machine <id> --grant <operator> [--as <operator>] [--json]")
 		return
 	}
 	targetMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
@@ -361,7 +361,7 @@ func cmdHeliaMachineAllow(args []string) {
 
 func cmdHeliaMachineDeny(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine deny", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine deny", flag.ExitOnError)
 	machineID := fs.String("machine", "", "target machine id")
 	revokeOperator := fs.String("revoke", "", "operator id to revoke")
 	asOperator := fs.String("as", "", "requesting operator id")
@@ -370,7 +370,7 @@ func cmdHeliaMachineDeny(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]")
+		printUsage("usage: si sun machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]")
 		return
 	}
 	targetMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
@@ -421,7 +421,7 @@ func cmdHeliaMachineDeny(args []string) {
 
 func cmdHeliaMachineRun(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine run", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine run", flag.ExitOnError)
 	targetMachineFlag := fs.String("machine", "", "target machine id")
 	sourceMachineFlag := fs.String("source-machine", "", "requesting machine id")
 	operatorFlag := fs.String("operator", "", "requesting operator id")
@@ -441,7 +441,7 @@ func cmdHeliaMachineRun(args []string) {
 		commandArgs = commandArgs[1:]
 	}
 	if len(commandArgs) == 0 {
-		printUsage("usage: si helia machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>")
+		printUsage("usage: si sun machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>")
 		return
 	}
 	targetMachine := heliaMachineResolveID(settings, strings.TrimSpace(*targetMachineFlag))
@@ -471,7 +471,7 @@ func cmdHeliaMachineRun(args []string) {
 		fatal(err)
 	}
 	if !sourceExists {
-		fatal(fmt.Errorf("source machine %q is not registered; run `si helia machine register --machine %s --can-control-others` first", sourceMachine, sourceMachine))
+		fatal(fmt.Errorf("source machine %q is not registered; run `si sun machine register --machine %s --can-control-others` first", sourceMachine, sourceMachine))
 	}
 	if !heliaMachineOperatorAllowed(sourceRecord, operatorID) {
 		fatal(fmt.Errorf("operator %q is not allowed on source machine %q", operatorID, sourceMachine))
@@ -525,7 +525,7 @@ func cmdHeliaMachineRun(args []string) {
 
 func cmdHeliaMachineJobs(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine jobs", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine jobs", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id filter")
 	requestedBy := fs.String("requested-by", "", "requesting operator filter")
 	status := fs.String("status", "", "status filter")
@@ -535,7 +535,7 @@ func cmdHeliaMachineJobs(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine jobs [--machine <id>] [--requested-by <operator>] [--status <queued|running|succeeded|failed|denied>] [--limit <n>] [--json]")
+		printUsage("usage: si sun machine jobs [--machine <id>] [--requested-by <operator>] [--status <queued|running|succeeded|failed|denied>] [--limit <n>] [--json]")
 		return
 	}
 	statusFilter := normalizeMachineJobStatus(*status)
@@ -606,7 +606,7 @@ func cmdHeliaMachineJobs(args []string) {
 
 func cmdHeliaMachineServe(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia machine serve", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun machine serve", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id")
 	operatorID := fs.String("operator", "", "local operator id")
 	pollSeconds := fs.Int("poll-seconds", 2, "queue poll interval seconds")
@@ -617,7 +617,7 @@ func cmdHeliaMachineServe(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]")
+		printUsage("usage: si sun machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -633,7 +633,7 @@ func cmdHeliaMachineServe(args []string) {
 		fatal(err)
 	}
 	if !exists {
-		fatal(fmt.Errorf("machine %q is not registered; run `si helia machine register --machine %s` first", resolvedMachine, resolvedMachine))
+		fatal(fmt.Errorf("machine %q is not registered; run `si sun machine register --machine %s` first", resolvedMachine, resolvedMachine))
 	}
 	if !record.Capabilities.CanBeControlled {
 		fatal(fmt.Errorf("machine %q is not accepting remote jobs (can_be_controlled=false)", resolvedMachine))
@@ -1001,7 +1001,7 @@ func heliaMachineResolveID(settings Settings, explicit string) string {
 	if trimmed := sanitizeMachineID(strings.TrimSpace(explicit)); trimmed != "" {
 		return trimmed
 	}
-	if trimmed := sanitizeMachineID(strings.TrimSpace(os.Getenv("SI_HELIA_MACHINE_ID"))); trimmed != "" {
+	if trimmed := sanitizeMachineID(envSunMachineID()); trimmed != "" {
 		return trimmed
 	}
 	if trimmed := sanitizeMachineID(strings.TrimSpace(settings.Helia.MachineID)); trimmed != "" {
@@ -1018,7 +1018,7 @@ func heliaMachineResolveOperatorID(settings Settings, explicit string, machineID
 	if trimmed := sanitizeOperatorID(strings.TrimSpace(explicit)); trimmed != "" {
 		return trimmed
 	}
-	if trimmed := sanitizeOperatorID(strings.TrimSpace(os.Getenv("SI_HELIA_OPERATOR_ID"))); trimmed != "" {
+	if trimmed := sanitizeOperatorID(envSunOperatorID()); trimmed != "" {
 		return trimmed
 	}
 	if trimmed := sanitizeOperatorID(strings.TrimSpace(settings.Helia.OperatorID)); trimmed != "" {

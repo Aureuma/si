@@ -81,7 +81,7 @@ func cmdPaasCloudStatus(args []string) {
 		"object_name":           objectName,
 		"helia_sync_enabled":    resolution.Mode == paasSyncBackendHelia || resolution.Mode == paasSyncBackendDual,
 		"helia_sync_strict":     resolution.Mode == paasSyncBackendHelia,
-		"helia_auth_configured": strings.TrimSpace(firstNonEmpty(os.Getenv("SI_HELIA_TOKEN"), settings.Helia.Token)) != "",
+		"helia_auth_configured": strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Helia.Token)) != "",
 	}
 	if client, clientErr := heliaClientFromSettings(settings); clientErr == nil {
 		items, listErr := client.listObjects(heliaContext(settings), heliaPaasControlPlaneSnapshotKind, objectName, 1)
@@ -141,9 +141,9 @@ func cmdPaasCloudUse(args []string) {
 	}
 	successf("paas cloud sync backend set to %s", mode)
 	if mode == paasSyncBackendHelia || mode == paasSyncBackendDual {
-		token := firstNonEmpty(strings.TrimSpace(os.Getenv("SI_HELIA_TOKEN")), strings.TrimSpace(settings.Helia.Token))
+		token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Helia.Token))
 		if token == "" {
-			warnf("helia token not configured; run `si helia auth login --url <helia-url> --token <token> --account <slug>`")
+			warnf("sun token not configured; run `si sun auth login --url <sun-url> --token <token> --account <slug>`")
 		}
 	}
 }

@@ -1,22 +1,22 @@
 ---
-title: Helia Cloud Sync
-description: Use `si helia` to sync codex profiles and vault backups to the Helia cloud backend.
+title: Sun Cloud Sync
+description: Use `si sun` to sync codex profiles and vault backups to the Sun cloud backend.
 ---
 
-# Helia Cloud Sync
+# Sun Cloud Sync
 
-`si helia` connects SI to the Helia backend for account-scoped sync.
+`si sun` connects SI to the Sun backend for account-scoped sync.
 
 Primary uses:
 - Sync Codex profile auth caches across machines.
 - Back up encrypted SI vault files to a cloud object store.
-- Share a Helia-backed dyad taskboard across machines/agents.
-- Manage Helia device tokens and inspect audit history.
+- Share a Sun-backed dyad taskboard across machines/agents.
+- Manage Sun device tokens and inspect audit history.
 
 ## Prerequisites
 
-- Reachable Helia API URL (for example `http://127.0.0.1:8080`).
-- Helia bearer token with at least:
+- Reachable Sun API URL (for example `http://127.0.0.1:8080`).
+- Sun bearer token with at least:
   - `objects:read`
   - `objects:write`
 - Optional for token management:
@@ -28,22 +28,22 @@ Primary uses:
 ## Initial auth
 
 ```bash
-si helia auth login \
+si sun auth login \
   --url http://127.0.0.1:8080 \
-  --token "$SI_HELIA_TOKEN" \
+  --token "$SI_SUN_TOKEN" \
   --account acme \
   --auto-sync
 ```
 
 Security note:
-- Use `https://` Helia URLs for any non-local deployment.
-- `http://` is accepted only for loopback (`localhost`, `127.0.0.1`, `::1`) unless `SI_HELIA_ALLOW_INSECURE_HTTP=1` is set.
+- Use `https://` Sun URLs for any non-local deployment.
+- `http://` is accepted only for loopback (`localhost`, `127.0.0.1`, `::1`) unless `SI_SUN_ALLOW_INSECURE_HTTP=1` is set.
 
 Verify:
 
 ```bash
-si helia auth status
-si helia doctor
+si sun auth status
+si sun doctor
 ```
 
 ## Codex profile sync
@@ -51,31 +51,31 @@ si helia doctor
 Push one profile:
 
 ```bash
-si helia profile push --profile america
+si sun profile push --profile america
 ```
 
 Push all configured profiles:
 
 ```bash
-si helia profile push
+si sun profile push
 ```
 
 Pull one profile:
 
 ```bash
-si helia profile pull --profile america
+si sun profile pull --profile america
 ```
 
 Pull all cloud profiles:
 
 ```bash
-si helia profile pull
+si sun profile pull
 ```
 
 List cloud profile objects:
 
 ```bash
-si helia profile list
+si sun profile list
 ```
 
 ## Vault backup sync
@@ -83,13 +83,13 @@ si helia profile list
 Push:
 
 ```bash
-si helia vault backup push --file ~/.si/vault/.env --name default
+si sun vault backup push --file ~/.si/vault/.env --name default
 ```
 
 Pull:
 
 ```bash
-si helia vault backup pull --file ~/.si/vault/.env --name default
+si sun vault backup pull --file ~/.si/vault/.env --name default
 ```
 
 Select vault backend mode:
@@ -111,11 +111,11 @@ Security rule:
 ## Token and audit workflows
 
 ```bash
-si helia token list
-si helia token create --label laptop --scopes objects:read,objects:write --expires-hours 720
-si helia token revoke --token-id <id>
-si helia audit list --kind codex_profile_bundle --limit 20
-si helia audit list --kind vault_backup --limit 20
+si sun token list
+si sun token create --label laptop --scopes objects:read,objects:write --expires-hours 720
+si sun token revoke --token-id <id>
+si sun audit list --kind codex_profile_bundle --limit 20
+si sun audit list --kind vault_backup --limit 20
 ```
 
 ## Shared dyad taskboard
@@ -123,22 +123,22 @@ si helia audit list --kind vault_backup --limit 20
 Set a default board (and optional default agent id):
 
 ```bash
-si helia taskboard use --name shared --agent dyad:main-laptop
+si sun taskboard use --name shared --agent dyad:main-laptop
 ```
 
 Add work items (include `--prompt` for dyad autopilot seed text):
 
 ```bash
-si helia taskboard add --title "Harden release workflow" --prompt "Audit and fix release asset upload flow" --priority P1 --name shared
-si helia taskboard list --name shared
+si sun taskboard add --title "Harden release workflow" --prompt "Audit and fix release asset upload flow" --priority P1 --name shared
+si sun taskboard list --name shared
 ```
 
 Claim/release/complete with optimistic lock ownership:
 
 ```bash
-si helia taskboard claim --name shared --agent dyad:main-laptop
-si helia taskboard release --name shared --id <task-id> --agent dyad:main-laptop
-si helia taskboard done --name shared --id <task-id> --agent dyad:main-laptop --result "merged and verified"
+si sun taskboard claim --name shared --agent dyad:main-laptop
+si sun taskboard release --name shared --id <task-id> --agent dyad:main-laptop
+si sun taskboard done --name shared --id <task-id> --agent dyad:main-laptop --result "merged and verified"
 ```
 
 Dyad autopilot integration:
@@ -150,23 +150,23 @@ si dyad spawn release-bot --autopilot --profile main
 
 ## Cross-machine SI control
 
-`si helia machine` provides generic host-level remote SI execution over Helia objects.
+`si sun machine` provides generic host-level remote SI execution over Sun objects.
 
 Boundary with `si paas`:
-- `si helia machine ...`: machine orchestration and ACL for running arbitrary `si` commands remotely.
+- `si sun machine ...`: machine orchestration and ACL for running arbitrary `si` commands remotely.
 - `si paas ...`: app/platform control plane workflows (targets, deploy, logs, backup, agent).
-- If needed, dispatch a remote PaaS command via `si helia machine run ... -- paas ...`.
+- If needed, dispatch a remote PaaS command via `si sun machine run ... -- paas ...`.
 
 Register a controller machine and a worker machine:
 
 ```bash
-si helia machine register \
+si sun machine register \
   --machine controller-a \
   --operator op:controller@local \
   --can-control-others \
   --can-be-controlled=false
 
-si helia machine register \
+si sun machine register \
   --machine worker-a \
   --operator op:worker@remote \
   --allow-operators op:controller@local \
@@ -177,7 +177,7 @@ Dispatch and execute a remote command:
 
 ```bash
 # Dispatch from controller:
-si helia machine run \
+si sun machine run \
   --machine worker-a \
   --source-machine controller-a \
   --operator op:controller@local \
@@ -185,7 +185,7 @@ si helia machine run \
   -- version
 
 # Run worker loop on worker machine:
-si helia machine serve --machine worker-a
+si sun machine serve --machine worker-a
 ```
 
 `--wait` behavior contract:
@@ -196,8 +196,8 @@ si helia machine serve --machine worker-a
 ACL updates (owner-only):
 
 ```bash
-si helia machine allow --machine worker-a --grant op:ci@runner --as op:worker@remote
-si helia machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remote
+si sun machine allow --machine worker-a --grant op:ci@runner --as op:worker@remote
+si sun machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remote
 ```
 
 ## Settings keys
@@ -216,3 +216,4 @@ si helia machine deny --machine worker-a --revoke op:ci@runner --as op:worker@re
 - `operator_id`
 
 See [Settings](./SETTINGS) for full schema details.
+Legacy compatibility: `SI_HELIA_*` environment variables are still accepted.
