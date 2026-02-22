@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -197,4 +198,99 @@ func TestListGitRepos(t *testing.T) {
 	if repos[0] != repoA || repos[1] != repoB {
 		t.Fatalf("unexpected repos: %v", repos)
 	}
+}
+
+func TestBuildGitHubRemoteURLWithPAT(t *testing.T) {
+	urlWithPAT, err := buildGitHubRemoteURLWithPAT("https://github.com/Aureuma/sun.git", "github_pat_example123")
+	if err != nil {
+		t.Fatalf("buildGitHubRemoteURLWithPAT: %v", err)
+	}
+	want := "https://github_pat_example123@github.com/Aureuma/sun.git"
+	if urlWithPAT != want {
+		t.Fatalf("unexpected url with pat:\nwant: %s\ngot:  %s", want, urlWithPAT)
+	}
+}
+
+func TestBuildGitHubRemoteURLWithPATRejectsNonHTTPS(t *testing.T) {
+	if _, err := buildGitHubRemoteURLWithPAT("ssh://github.com/Aureuma/sun.git", "token"); err == nil {
+		t.Fatalf("expected non-https url to fail")
+	}
+}
+
+func TestRedactGitRemotePATURL(t *testing.T) {
+	raw := "https://github_pat_1234567890abcdef@github.com/Aureuma/sun.git"
+	redacted := redactGitRemotePATURL(raw)
+	if strings.Contains(redacted, "github_pat_1234567890abcdef") {
+		t.Fatalf("expected PAT to be redacted, got: %s", redacted)
+	}
+	if !strings.Contains(redacted, "https://gith...cdef@github.com/Aureuma/sun.git") {
+		t.Fatalf("unexpected redacted url: %s", redacted)
+	}
+}
+
+func TestCountRemoteAuthFunctions(t *testing.T) {
+	items := []githubGitRemoteAuthRepoChange{
+		{Changed: true},
+		{Changed: true, Error: "failed"},
+		{Skipped: "not github"},
+		{Error: "boom"},
+	}
+	if got := countRemoteAuthChanged(items); got != 1 {
+		t.Fatalf("countRemoteAuthChanged=%d want=1", got)
+	}
+	if got := countRemoteAuthSkipped(items); got != 1 {
+		t.Fatalf("countRemoteAuthSkipped=%d want=1", got)
+	}
+	if got := countRemoteAuthErrored(items); got != 2 {
+		t.Fatalf("countRemoteAuthErrored=%d want=2", got)
+	}
+}
+
+func TestEnsureGitBranchTrackingSetsConfig(t *testing.T) {
+	repo := t.TempDir()
+	runGit(t, repo, "init")
+	runGit(t, repo, "config", "user.email", "test@example.com")
+	runGit(t, repo, "config", "user.name", "test")
+	runGit(t, repo, "remote", "add", "origin", "https://github.com/Aureuma/demo.git")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("demo\n"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	runGit(t, repo, "add", "README.md")
+	runGit(t, repo, "commit", "-m", "init")
+
+	status, err := ensureGitBranchTracking(repo, "origin", false)
+	if err != nil {
+		t.Fatalf("ensureGitBranchTracking: %v", err)
+	}
+	if status != "set" {
+		t.Fatalf("tracking status=%q want=set", status)
+	}
+
+	branch, err := gitCurrentBranch(repo)
+	if err != nil {
+		t.Fatalf("gitCurrentBranch: %v", err)
+	}
+	if branch == "" {
+		t.Fatalf("expected non-empty current branch")
+	}
+
+	remote := strings.TrimSpace(runGit(t, repo, "config", "--get", "branch."+branch+".remote"))
+	if remote != "origin" {
+		t.Fatalf("branch remote=%q want=origin", remote)
+	}
+	merge := strings.TrimSpace(runGit(t, repo, "config", "--get", "branch."+branch+".merge"))
+	if merge != "refs/heads/"+branch {
+		t.Fatalf("branch merge=%q want=%q", merge, "refs/heads/"+branch)
+	}
+}
+
+func runGit(t *testing.T, repo string, args ...string) string {
+	t.Helper()
+	full := append([]string{"-C", repo}, args...)
+	cmd := exec.Command("git", full...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s failed: %v\n%s", strings.Join(args, " "), err, string(out))
+	}
+	return string(out)
 }

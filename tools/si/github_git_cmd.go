@@ -18,7 +18,7 @@ import (
 )
 
 func cmdGithubGit(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github git <credential|setup>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github git <credential|setup|remote-auth>")
 	if !routedOK {
 		return
 	}
@@ -28,6 +28,8 @@ func cmdGithubGit(args []string) {
 		cmdGithubGitCredential(args[1:])
 	case "setup":
 		cmdGithubGitSetup(args[1:])
+	case "remote-auth":
+		cmdGithubGitRemoteAuth(args[1:])
 	default:
 		printUnknown("github git", args[0])
 	}
@@ -127,6 +129,207 @@ type githubGitSetupRepoChange struct {
 	PushAfter  string `json:"push_after,omitempty"`
 	Changed    bool   `json:"changed"`
 	Skipped    string `json:"skipped,omitempty"`
+}
+
+type githubGitRemoteAuthResult struct {
+	Root          string                          `json:"root"`
+	Remote        string                          `json:"remote"`
+	VaultKey      string                          `json:"vault_key"`
+	OwnerFilter   string                          `json:"owner_filter,omitempty"`
+	DryRun        bool                            `json:"dry_run"`
+	TrackUpstream bool                            `json:"track_upstream"`
+	ReposScanned  int                             `json:"repos_scanned"`
+	ReposUpdated  int                             `json:"repos_updated"`
+	ReposSkipped  int                             `json:"repos_skipped"`
+	ReposErrored  int                             `json:"repos_errored"`
+	Changes       []githubGitRemoteAuthRepoChange `json:"changes"`
+}
+
+type githubGitRemoteAuthRepoChange struct {
+	Repo       string `json:"repo"`
+	Remote     string `json:"remote"`
+	Owner      string `json:"owner,omitempty"`
+	Name       string `json:"name,omitempty"`
+	Before     string `json:"before,omitempty"`
+	PushBefore string `json:"push_before,omitempty"`
+	After      string `json:"after,omitempty"`
+	Changed    bool   `json:"changed"`
+	Tracking   string `json:"tracking,omitempty"`
+	Skipped    string `json:"skipped,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+func cmdGithubGitRemoteAuth(args []string) {
+	fs := flag.NewFlagSet("github git remote-auth", flag.ExitOnError)
+	root := fs.String("root", "", "root directory containing repositories (default: ~/Development)")
+	remote := fs.String("remote", "origin", "remote name to rewrite")
+	vaultKey := fs.String("vault-key", "", "vault key containing PAT/token used for remote URL auth")
+	ownerFilter := fs.String("owner", "", "only rewrite repositories for this github owner/org")
+	trackUpstream := fs.Bool("track-upstream", true, "set branch upstream tracking for plain git push/pull")
+	dryRun := fs.Bool("dry-run", false, "preview changes without writing git config/remotes")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si github git remote-auth --vault-key <KEY> [--root <path>] [--remote <name>] [--owner <owner>] [--track-upstream=true|false] [--dry-run] [--json]")
+		return
+	}
+
+	key := strings.TrimSpace(*vaultKey)
+	if key == "" {
+		fatal(fmt.Errorf("--vault-key is required"))
+	}
+	remoteName := strings.TrimSpace(*remote)
+	if remoteName == "" {
+		fatal(fmt.Errorf("--remote is required"))
+	}
+
+	settings := loadSettingsOrDefault()
+	pat, ok := resolveVaultKeyValue(settings, key)
+	if !ok {
+		fatal(fmt.Errorf("vault key %q is missing or unreadable", key))
+	}
+	pat = strings.TrimSpace(pat)
+	if pat == "" {
+		fatal(fmt.Errorf("vault key %q resolved to an empty value", key))
+	}
+
+	rootPath, err := resolveGitReposRoot(*root)
+	if err != nil {
+		fatal(err)
+	}
+	repos, err := listGitRepos(rootPath)
+	if err != nil {
+		fatal(err)
+	}
+	if len(repos) == 0 {
+		fatal(fmt.Errorf("no git repositories found under %s", rootPath))
+	}
+
+	changes := make([]githubGitRemoteAuthRepoChange, 0, len(repos))
+	ownerConstraint := strings.TrimSpace(*ownerFilter)
+
+	for _, repoPath := range repos {
+		change := githubGitRemoteAuthRepoChange{
+			Repo:   repoPath,
+			Remote: remoteName,
+		}
+		rawFetchURL, err := gitRemoteGetURL(repoPath, remoteName, false)
+		if err != nil {
+			change.Skipped = err.Error()
+			changes = append(changes, change)
+			continue
+		}
+		rawPushURL, _ := gitRemoteGetURL(repoPath, remoteName, true)
+		change.Before = redactGitRemotePATURL(rawFetchURL)
+		change.PushBefore = redactGitRemotePATURL(rawPushURL)
+
+		normalized, ok := normalizeGitHubRemoteURL(rawFetchURL)
+		if !ok {
+			change.Skipped = "remote is not a supported github URL"
+			changes = append(changes, change)
+			continue
+		}
+		change.Owner = normalized.Owner
+		change.Name = normalized.Repo
+
+		if ownerConstraint != "" && !strings.EqualFold(ownerConstraint, normalized.Owner) {
+			change.Skipped = "owner filter mismatch"
+			changes = append(changes, change)
+			continue
+		}
+
+		authURL, err := buildGitHubRemoteURLWithPAT(normalized.URL, pat)
+		if err != nil {
+			change.Error = err.Error()
+			changes = append(changes, change)
+			continue
+		}
+		change.After = redactGitRemotePATURL(authURL)
+		change.Changed = strings.TrimSpace(rawFetchURL) != strings.TrimSpace(authURL) || strings.TrimSpace(rawPushURL) != strings.TrimSpace(authURL)
+
+		if change.Changed && !*dryRun {
+			if err := gitRemoteSetURL(repoPath, remoteName, authURL, false); err != nil {
+				change.Error = err.Error()
+				changes = append(changes, change)
+				continue
+			}
+			if err := gitRemoteSetURL(repoPath, remoteName, authURL, true); err != nil {
+				change.Error = err.Error()
+				changes = append(changes, change)
+				continue
+			}
+		}
+
+		if *trackUpstream {
+			trackingStatus, trackErr := ensureGitBranchTracking(repoPath, remoteName, *dryRun)
+			change.Tracking = trackingStatus
+			if trackErr != nil {
+				change.Error = trackErr.Error()
+			}
+		}
+		changes = append(changes, change)
+	}
+
+	result := githubGitRemoteAuthResult{
+		Root:          rootPath,
+		Remote:        remoteName,
+		VaultKey:      key,
+		OwnerFilter:   ownerConstraint,
+		DryRun:        *dryRun,
+		TrackUpstream: *trackUpstream,
+		ReposScanned:  len(repos),
+		ReposUpdated:  countRemoteAuthChanged(changes),
+		ReposSkipped:  countRemoteAuthSkipped(changes),
+		ReposErrored:  countRemoteAuthErrored(changes),
+		Changes:       changes,
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(result); err != nil {
+			fatal(err)
+		}
+		if result.ReposErrored > 0 {
+			os.Exit(1)
+		}
+		return
+	}
+
+	fmt.Printf("%s %s\n", styleHeading("GitHub PAT remote auth:"), styleSuccess("completed"))
+	fmt.Printf("%s %s\n", styleHeading("Root:"), result.Root)
+	fmt.Printf("%s %s\n", styleHeading("Remote:"), result.Remote)
+	fmt.Printf("%s %s\n", styleHeading("Vault key:"), result.VaultKey)
+	if result.OwnerFilter != "" {
+		fmt.Printf("%s %s\n", styleHeading("Owner filter:"), result.OwnerFilter)
+	}
+	fmt.Printf("%s %d scanned, %d changed, %d skipped, %d errors\n", styleHeading("Repos:"), result.ReposScanned, result.ReposUpdated, result.ReposSkipped, result.ReposErrored)
+	if result.DryRun {
+		fmt.Printf("%s %s\n", styleHeading("Mode:"), "dry-run")
+	}
+	rows := make([][]string, 0, len(result.Changes))
+	for _, item := range result.Changes {
+		status := styleDim("ok")
+		detail := item.After
+		if item.Error != "" {
+			status = styleError("error")
+			detail = item.Error
+		} else if item.Skipped != "" {
+			status = styleDim("skip")
+			detail = item.Skipped
+		} else if item.Changed {
+			status = styleSuccess("set")
+		}
+		if strings.TrimSpace(detail) == "" {
+			detail = item.Before
+		}
+		rows = append(rows, []string{status, item.Repo, detail})
+	}
+	printAlignedRows(rows, 2, "  ")
+
+	if result.ReposErrored > 0 {
+		fatal(fmt.Errorf("remote-auth encountered %d errors", result.ReposErrored))
+	}
 }
 
 func cmdGithubGitSetup(args []string) {
@@ -692,6 +895,136 @@ func countSkippedChanges(items []githubGitSetupRepoChange) int {
 	total := 0
 	for _, item := range items {
 		if strings.TrimSpace(item.Skipped) != "" {
+			total++
+		}
+	}
+	return total
+}
+
+func buildGitHubRemoteURLWithPAT(rawCanonicalURL string, pat string) (string, error) {
+	rawCanonicalURL = strings.TrimSpace(rawCanonicalURL)
+	if rawCanonicalURL == "" {
+		return "", fmt.Errorf("github remote url is required")
+	}
+	pat = strings.TrimSpace(pat)
+	if pat == "" {
+		return "", fmt.Errorf("github PAT is required")
+	}
+	u, err := url.Parse(rawCanonicalURL)
+	if err != nil {
+		return "", fmt.Errorf("parse github remote url: %w", err)
+	}
+	if !strings.EqualFold(strings.TrimSpace(u.Scheme), "https") {
+		return "", fmt.Errorf("github remote url must use https")
+	}
+	if normalizeGitHost(u.Host) == "" {
+		return "", fmt.Errorf("github remote url host is required")
+	}
+	u.User = url.User(pat)
+	return u.String(), nil
+}
+
+func redactGitRemotePATURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	if u.User == nil {
+		return raw
+	}
+	username := strings.TrimSpace(u.User.Username())
+	if username == "" {
+		return raw
+	}
+	u.User = url.User(maskCredentialValue(username))
+	return u.String()
+}
+
+func maskCredentialValue(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "****"
+	}
+	if len(value) <= 8 {
+		return "****"
+	}
+	return value[:4] + "..." + value[len(value)-4:]
+}
+
+func ensureGitBranchTracking(repoPath string, remote string, dryRun bool) (string, error) {
+	branch, err := gitCurrentBranch(repoPath)
+	if err != nil {
+		return "", err
+	}
+	if branch == "" {
+		if dryRun {
+			return "would-skip-detached", nil
+		}
+		return "detached", nil
+	}
+	if dryRun {
+		return "would-set", nil
+	}
+	if err := gitSetBranchConfig(repoPath, branch, "remote", remote); err != nil {
+		return "", err
+	}
+	if err := gitSetBranchConfig(repoPath, branch, "merge", "refs/heads/"+branch); err != nil {
+		return "", err
+	}
+	return "set", nil
+}
+
+func gitCurrentBranch(repoPath string) (string, error) {
+	cmd := exec.Command("git", "-C", repoPath, "rev-parse", "--abbrev-ref", "HEAD")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse branch (%s): %w: %s", repoPath, err, strings.TrimSpace(string(out)))
+	}
+	branch := strings.TrimSpace(string(out))
+	if branch == "" || branch == "HEAD" {
+		return "", nil
+	}
+	return branch, nil
+}
+
+func gitSetBranchConfig(repoPath string, branch string, key string, value string) error {
+	name := fmt.Sprintf("branch.%s.%s", strings.TrimSpace(branch), strings.TrimSpace(key))
+	cmd := exec.Command("git", "-C", repoPath, "config", name, value)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git config %s (%s): %w: %s", name, repoPath, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func countRemoteAuthChanged(items []githubGitRemoteAuthRepoChange) int {
+	total := 0
+	for _, item := range items {
+		if item.Changed && strings.TrimSpace(item.Error) == "" {
+			total++
+		}
+	}
+	return total
+}
+
+func countRemoteAuthSkipped(items []githubGitRemoteAuthRepoChange) int {
+	total := 0
+	for _, item := range items {
+		if strings.TrimSpace(item.Skipped) != "" {
+			total++
+		}
+	}
+	return total
+}
+
+func countRemoteAuthErrored(items []githubGitRemoteAuthRepoChange) int {
+	total := 0
+	for _, item := range items {
+		if strings.TrimSpace(item.Error) != "" {
 			total++
 		}
 	}
