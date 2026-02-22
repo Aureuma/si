@@ -15,7 +15,7 @@ import (
 )
 
 func cmdGithubProject(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github project <list|get|fields|items|item-add|item-set|item-clear|item-archive|item-unarchive|item-delete> ...")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github project <list|get|update|fields|items|item-add|item-set|item-clear|item-archive|item-unarchive|item-delete> ...")
 	if !routedOK {
 		return
 	}
@@ -25,6 +25,8 @@ func cmdGithubProject(args []string) {
 		cmdGithubProjectList(args[1:])
 	case "get":
 		cmdGithubProjectGet(args[1:])
+	case "update":
+		cmdGithubProjectUpdate(args[1:])
 	case "fields":
 		cmdGithubProjectFields(args[1:])
 	case "items":
@@ -202,6 +204,109 @@ query($id:ID!){
 		if resolved.Organization != "" {
 			payload["organization"] = resolved.Organization
 		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		return
+	}
+	if *raw {
+		printGithubResponse(resp, false, true)
+		return
+	}
+	printGitHubKeyValueMap(project)
+}
+
+func cmdGithubProjectUpdate(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
+	fs := flag.NewFlagSet("github project update", flag.ExitOnError)
+	auth := addGithubProjectAuthFlags(fs)
+	title := fs.String("title", "", "set project title")
+	description := fs.String("description", "", "set project short description")
+	readme := fs.String("readme", "", "set project readme markdown")
+	publicRaw := fs.String("public", "", "set project visibility (true|false)")
+	closedRaw := fs.String("closed", "", "set project closed state (true|false)")
+	jsonOut := fs.Bool("json", false, "output json")
+	raw := fs.Bool("raw", false, "print raw response body")
+	_ = fs.Parse(args)
+	if fs.NArg() != 1 {
+		printUsage("usage: si github project update <project-id|org/number|url|number> [--title <text>] [--description <text>] [--readme <markdown>] [--public true|false] [--closed true|false] [--owner <org>] [--json]")
+		return
+	}
+	runtime, client := auth.runtimeClient()
+	ref, err := parseGitHubProjectRef(fs.Arg(0))
+	if err != nil {
+		fatal(err)
+	}
+	publicValue, err := githubProjectParseOptionalBoolFlag("--public", *publicRaw)
+	if err != nil {
+		fatal(err)
+	}
+	closedValue, err := githubProjectParseOptionalBoolFlag("--closed", *closedRaw)
+	if err != nil {
+		fatal(err)
+	}
+	trimmedTitle := strings.TrimSpace(*title)
+	trimmedDescription := strings.TrimSpace(*description)
+	trimmedReadme := strings.TrimSpace(*readme)
+	if trimmedTitle == "" && trimmedDescription == "" && trimmedReadme == "" && publicValue == nil && closedValue == nil {
+		fatal(fmt.Errorf("at least one field update is required"))
+	}
+
+	printGithubContextBanner(runtime, *jsonOut)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	resolved, err := resolveGitHubProjectRef(ctx, client, runtime, ref, strings.TrimSpace(auth.owner))
+	if err != nil {
+		fatal(err)
+	}
+
+	input := map[string]any{"projectId": resolved.ProjectID}
+	if trimmedTitle != "" {
+		input["title"] = trimmedTitle
+	}
+	if trimmedDescription != "" {
+		input["shortDescription"] = trimmedDescription
+	}
+	if trimmedReadme != "" {
+		input["readme"] = trimmedReadme
+	}
+	if publicValue != nil {
+		input["public"] = *publicValue
+	}
+	if closedValue != nil {
+		input["closed"] = *closedValue
+	}
+
+	resp, data, err := githubProjectGraphQL(ctx, client, runtime, `
+mutation($input:UpdateProjectV2Input!){
+  updateProjectV2(input:$input) {
+    projectV2 {
+      id
+      number
+      title
+      shortDescription
+      readme
+      public
+      closed
+      url
+      updatedAt
+    }
+  }
+}
+`, map[string]any{"input": input})
+	if err != nil {
+		githubProjectHandleGraphQLError(err, resp, *jsonOut, *raw)
+		return
+	}
+	result := githubProjectMap(data["updateProjectV2"])
+	project := githubProjectMap(result["projectV2"])
+	if len(project) == 0 {
+		fatal(fmt.Errorf("project update returned empty result"))
+	}
+	if *jsonOut {
+		payload := map[string]any{"project_id": resolved.ProjectID, "project": project}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
 		if err := enc.Encode(payload); err != nil {
@@ -1421,4 +1526,16 @@ func githubProjectInt(value any) int {
 		}
 	}
 	return 0
+}
+
+func githubProjectParseOptionalBoolFlag(flagName, value string) (*bool, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	parsed, err := strconv.ParseBool(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be true or false", flagName)
+	}
+	return &parsed, nil
 }

@@ -244,3 +244,84 @@ func TestGitHubE2E_ProjectItemSetSingleSelectByName(t *testing.T) {
 		t.Fatalf("unexpected field id payload: %#v", payload)
 	}
 }
+
+func TestGitHubE2E_ProjectUpdate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/graphql" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload githubProjectGraphQLPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode graphql payload: %v", err)
+		}
+		switch {
+		case strings.Contains(payload.Query, "projectV2(number:$number)"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"organization": map[string]any{
+						"projectV2": map[string]any{"id": "PVT_proj_7", "number": 7},
+					},
+				},
+			})
+		case strings.Contains(payload.Query, "updateProjectV2(input:$input)"):
+			input, ok := payload.Variables["input"].(map[string]any)
+			if !ok {
+				t.Fatalf("missing input payload: %#v", payload.Variables)
+			}
+			if input["projectId"] != "PVT_proj_7" {
+				t.Fatalf("unexpected project id: %#v", input)
+			}
+			if input["title"] != "Roadmap" {
+				t.Fatalf("unexpected title: %#v", input)
+			}
+			if input["shortDescription"] != "Delivery plan" {
+				t.Fatalf("unexpected shortDescription: %#v", input)
+			}
+			if input["public"] != true {
+				t.Fatalf("unexpected public flag: %#v", input)
+			}
+			if input["closed"] != false {
+				t.Fatalf("unexpected closed flag: %#v", input)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"updateProjectV2": map[string]any{
+						"projectV2": map[string]any{
+							"id":               "PVT_proj_7",
+							"number":           7,
+							"title":            "Roadmap",
+							"shortDescription": "Delivery plan",
+							"public":           true,
+							"closed":           false,
+						},
+					},
+				},
+			})
+		default:
+			t.Fatalf("unexpected query: %s", payload.Query)
+		}
+	}))
+	defer server.Close()
+
+	stdout, stderr, err := runSICommand(t, map[string]string{
+		"GITHUB_TEST_OAUTH_ACCESS_TOKEN": "oauth-token-123",
+	}, "github", "project", "update", "Aureuma/7", "--title", "Roadmap", "--description", "Delivery plan", "--public", "true", "--closed", "false", "--account", "test", "--auth-mode", "oauth", "--base-url", server.URL, "--json")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json output parse failed: %v\nstdout=%s", err, stdout)
+	}
+	project, ok := payload["project"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing project payload: %#v", payload)
+	}
+	if project["title"] != "Roadmap" {
+		t.Fatalf("unexpected project title payload: %#v", project)
+	}
+}

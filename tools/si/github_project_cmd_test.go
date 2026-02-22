@@ -106,3 +106,33 @@ func TestGitHubProjectResolveIterationIDByTitleAndDate(t *testing.T) {
 		t.Fatalf("by date=%q want=iter_a", byDate)
 	}
 }
+
+func TestGitHubProjectParseOptionalBoolFlag(t *testing.T) {
+	unsetValue, err := githubProjectParseOptionalBoolFlag("--public", "")
+	if err != nil {
+		t.Fatalf("unexpected error for empty value: %v", err)
+	}
+	if unsetValue != nil {
+		t.Fatalf("expected nil pointer for empty value")
+	}
+
+	trueValue, err := githubProjectParseOptionalBoolFlag("--public", "true")
+	if err != nil {
+		t.Fatalf("unexpected error for true value: %v", err)
+	}
+	if trueValue == nil || !*trueValue {
+		t.Fatalf("expected parsed true pointer")
+	}
+
+	falseValue, err := githubProjectParseOptionalBoolFlag("--closed", "false")
+	if err != nil {
+		t.Fatalf("unexpected error for false value: %v", err)
+	}
+	if falseValue == nil || *falseValue {
+		t.Fatalf("expected parsed false pointer")
+	}
+
+	if _, err := githubProjectParseOptionalBoolFlag("--public", "not-a-bool"); err == nil {
+		t.Fatalf("expected parse error for invalid bool")
+	}
+}
