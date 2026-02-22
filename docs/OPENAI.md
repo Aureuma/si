@@ -25,11 +25,17 @@ si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
 
 ```bash
 si openai auth status --account core --json
+si openai auth status --auth-mode codex --profile main --json
+si openai auth codex-status --profile main --json
 si openai context list --json
 si openai context current --json
 si openai context use --account core --org-id org_xxx --project-id proj_xxx
 si openai doctor --account core --public --json
 ```
+
+`si openai auth` supports two modes:
+- `api` (default): validates OpenAI API-key auth against `api.openai.com`.
+- `codex`: validates ChatGPT/Codex plan-token auth from SI codex profiles (OpenClaw-style non-API-key flow).
 
 ## Model and project administration
 
