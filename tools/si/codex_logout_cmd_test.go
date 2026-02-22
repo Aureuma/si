@@ -96,3 +96,43 @@ func TestCodexLogoutPreservesConfigToml(t *testing.T) {
 		t.Fatalf("unexpected preserved config content: %q", string(gotCfg))
 	}
 }
+
+func TestCodexLogoutAllBlocksConfiguredAndCachedProfiles(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
+		t.Fatalf("mkdir .codex: %v", err)
+	}
+	cachedProfile := filepath.Join(home, ".si", "codex", "profiles", "berylla")
+	if err := os.MkdirAll(cachedProfile, 0o700); err != nil {
+		t.Fatalf("mkdir cached profile: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(cachedProfile, "auth.json"), []byte(`{"tokens":{"access_token":"x"}}`), 0o600); err != nil {
+		t.Fatalf("write cached auth: %v", err)
+	}
+
+	res, err := codexLogout(codexLogoutOptions{
+		Home:       home,
+		All:        true,
+		ProfileIDs: []string{"Einsteina"},
+	})
+	if err != nil {
+		t.Fatalf("logout all: %v", err)
+	}
+	if len(res.Removed) != 2 {
+		t.Fatalf("expected .codex and .si/codex removed, got: %#v", res.Removed)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".si", "codex")); !os.IsNotExist(err) {
+		t.Fatalf("expected ~/.si/codex removed, stat err=%v", err)
+	}
+
+	blocked, err := loadCodexLogoutBlockedProfiles(home)
+	if err != nil {
+		t.Fatalf("load blocked profiles: %v", err)
+	}
+	if _, ok := blocked["einsteina"]; !ok {
+		t.Fatalf("expected einsteina to be blocklisted, got %#v", blocked)
+	}
+	if _, ok := blocked["berylla"]; !ok {
+		t.Fatalf("expected berylla to be blocklisted, got %#v", blocked)
+	}
+}

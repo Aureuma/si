@@ -10,8 +10,9 @@ import (
 )
 
 type codexLogoutOptions struct {
-	Home string
-	All  bool
+	Home       string
+	All        bool
+	ProfileIDs []string
 }
 
 type codexLogoutResult struct {
@@ -54,8 +55,9 @@ func cmdCodexLogout(args []string) {
 	}
 
 	res, err := codexLogout(codexLogoutOptions{
-		Home: home,
-		All:  *all,
+		Home:       home,
+		All:        *all,
+		ProfileIDs: codexProfileIDs(),
 	})
 	if err != nil {
 		fatal(err)
@@ -98,6 +100,10 @@ func codexLogout(opts codexLogoutOptions) (codexLogoutResult, error) {
 	}
 
 	if opts.All {
+		blocked := make([]string, 0, len(opts.ProfileIDs)+8)
+		blocked = append(blocked, opts.ProfileIDs...)
+		blocked = append(blocked, discoverCachedCodexProfileIDs(home)...)
+
 		siCodexDir := filepath.Join(home, ".si", "codex")
 		removed, err := removeHomeChildDir(home, siCodexDir)
 		if err != nil {
@@ -107,6 +113,9 @@ func codexLogout(opts codexLogoutOptions) (codexLogoutResult, error) {
 			res.Removed = append(res.Removed, siCodexDir)
 		} else {
 			res.Skipped = append(res.Skipped, siCodexDir)
+		}
+		if err := addCodexLogoutBlockedProfiles(home, blocked); err != nil {
+			return res, err
 		}
 	}
 	return res, nil

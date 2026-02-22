@@ -1726,6 +1726,9 @@ func cmdCodexLogin(args []string) {
 	} else {
 		successf("🔐 cached codex auth for profile %s", profile.ID)
 	}
+	if err := clearCodexProfileRecoveryBlock(profile.ID); err != nil {
+		warnf("codex logout recovery unblock failed: %v", err)
+	}
 	if err := updateSettingsProfile(*profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
