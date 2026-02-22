@@ -6,6 +6,7 @@ This document defines SI's plugin marketplace model and the implementation now a
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
+- [Integration Gateway Architecture](./INTEGRATION_GATEWAY_ARCHITECTURE)
 - [Documentation Style Guide](./DOCS_STYLE_GUIDE)
 
 ## Goals
@@ -80,6 +81,24 @@ SI now loads catalog entries from:
 
 User sources override lower-precedence entries for the same plugin id.
 
+## Sharded Gateway for Large Catalogs
+
+SI now includes a sharded integration gateway model for high-cardinality catalogs (thousands to tens of thousands of integrations).
+
+Design:
+- Namespace partitioning: each plugin id (`namespace/name`) maps to a namespace partition.
+- Slot sharding: each namespace is further split into deterministic slots (`namespace--NN`) using stable hashing.
+- Index-first reads: a compact registry index tracks shards, counts, and capabilities so clients fetch only relevant shards.
+
+Sun storage model:
+- Registry index object kind: `integration_gateway_index`
+- Registry shard object kind: `integration_gateway_shard`
+
+Why this shape:
+- Avoids monolithic catalog payloads.
+- Supports targeted fetch by namespace/capability/prefix.
+- Keeps plugin resolution deterministic and cache-friendly.
+
 ## Runtime State and Files
 
 - Root: `~/.si/plugins`
@@ -111,6 +130,10 @@ Install state tracks:
 - `si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]`
 - `si plugins catalog build --source <path> [--output <path>] [--channel <name>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]`
 - `si plugins catalog validate --source <path> [--json]`
+- `si plugins gateway build --source <path> [--registry <name>] [--slots <n>] [--output-dir <dir>] [--json]`
+- `si plugins gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]`
+- `si plugins gateway pull [--registry <name>] [--namespace <ns>] [--capability <cap>] [--prefix <prefix>] [--limit <n>] [--out <file>] [--json]`
+- `si plugins gateway status [--registry <name>] [--json]`
 
 Catalog metadata now includes source provenance:
 - `catalog_source` in `si plugins list --json`

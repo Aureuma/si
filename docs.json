@@ -50,9 +50,10 @@
             "pages": [
               "docs/DYAD",
               "docs/VAULT",
-              "docs/HELIA",
+              "docs/SUN",
               "docs/BROWSER",
               "docs/PLUGIN_MARKETPLACE",
+              "docs/INTEGRATION_GATEWAY_ARCHITECTURE",
               "docs/PROVIDERS",
               "docs/API_CHARACTERISTICS",
               "docs/INTEGRATION_ECOSYSTEM",

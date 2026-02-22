@@ -19,6 +19,9 @@ Primary uses:
 - Sun bearer token with at least:
   - `objects:read`
   - `objects:write`
+- Optional for integration gateway endpoints:
+  - `integrations:read`
+  - `integrations:write`
 - Optional for token management:
   - `tokens:read`
   - `tokens:write`
@@ -149,6 +152,26 @@ Dyad autopilot integration:
 si dyad spawn release-bot --autopilot --profile main
 ```
 
+## Plugin Gateway Registry
+
+Build and push a sharded integration registry to Sun:
+
+```bash
+si plugins gateway push --source ./integrations --registry global --slots 32
+```
+
+Pull a filtered local catalog from Sun:
+
+```bash
+si plugins gateway pull --registry global --namespace acme --capability chat.send
+```
+
+Inspect registry metadata:
+
+```bash
+si plugins gateway status --registry global
+```
+
 ## Cross-machine SI control
 
 `si sun machine` provides generic host-level remote SI execution over Sun objects.
@@ -210,6 +233,8 @@ si sun machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remo
 - `timeout_seconds`
 - `auto_sync`
 - `vault_backup`
+- `plugin_gateway_registry`
+- `plugin_gateway_slots`
 - `taskboard`
 - `taskboard_agent`
 - `taskboard_lease_seconds`

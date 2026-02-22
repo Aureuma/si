@@ -36,3 +36,11 @@ func envSunOperatorID() string {
 func envSunAllowInsecureHTTP() bool {
 	return isTruthyFlagValue(firstNonEmpty(os.Getenv("SI_SUN_ALLOW_INSECURE_HTTP"), os.Getenv("SI_HELIA_ALLOW_INSECURE_HTTP")))
 }
+
+func envSunPluginGatewayRegistry() string {
+	return strings.TrimSpace(firstNonEmpty(os.Getenv("SI_SUN_PLUGIN_GATEWAY_REGISTRY"), os.Getenv("SI_HELIA_PLUGIN_GATEWAY_REGISTRY")))
+}
+
+func envSunPluginGatewaySlots() string {
+	return strings.TrimSpace(firstNonEmpty(os.Getenv("SI_SUN_PLUGIN_GATEWAY_SLOTS"), os.Getenv("SI_HELIA_PLUGIN_GATEWAY_SLOTS")))
+}

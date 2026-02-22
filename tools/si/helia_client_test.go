@@ -30,6 +30,8 @@ func TestNewHeliaClientValidation(t *testing.T) {
 func TestHeliaClientRoundTripMethods(t *testing.T) {
 	payloadBytes := []byte(`{"ok":true}`)
 	var revokedID string
+	var gatewayIndexPayload []byte
+	var gatewayShardPayload []byte
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/readyz" {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
@@ -40,6 +42,47 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 			return
 		}
 		switch {
+		case r.Method == http.MethodPut && r.URL.Path == "/v1/integrations/registries/team":
+			var body struct {
+				Payload json.RawMessage `json:"payload"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			gatewayIndexPayload = append([]byte{}, body.Payload...)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"result": map[string]any{
+					"object":   map[string]any{"latest_revision": 7},
+					"revision": map[string]any{"revision": 7},
+				},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/integrations/registries/team":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"registry": "team",
+				"index":    json.RawMessage(gatewayIndexPayload),
+			})
+		case r.Method == http.MethodPut && r.URL.Path == "/v1/integrations/registries/team/shards/acme--03":
+			var body struct {
+				Payload json.RawMessage `json:"payload"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			gatewayShardPayload = append([]byte{}, body.Payload...)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"result": map[string]any{
+					"object":   map[string]any{"latest_revision": 8},
+					"revision": map[string]any{"revision": 8},
+				},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/integrations/registries/team/shards/acme--03":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"registry": "team",
+				"shard":    "acme--03",
+				"payload":  json.RawMessage(gatewayShardPayload),
+			})
 		case r.Method == http.MethodGet && r.URL.Path == "/v1/auth/whoami":
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"account_id":   "acc-1",
@@ -187,5 +230,37 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 	}
 	if len(auditRows) != 1 || auditRows[0].Kind != heliaCodexProfileBundleKind {
 		t.Fatalf("unexpected audit rows: %+v", auditRows)
+	}
+
+	indexPayload := []byte(`{"registry":"team","shards":[{"key":"acme--03","namespace":"acme"}]}`)
+	indexPut, err := client.putIntegrationRegistryIndex(ctx, "team", indexPayload, nil)
+	if err != nil {
+		t.Fatalf("put integration registry index: %v", err)
+	}
+	if indexPut.Result.Revision.Revision != 7 {
+		t.Fatalf("unexpected index revision: %d", indexPut.Result.Revision.Revision)
+	}
+	indexBack, err := client.getIntegrationRegistryIndex(ctx, "team")
+	if err != nil {
+		t.Fatalf("get integration registry index: %v", err)
+	}
+	if strings.TrimSpace(string(indexBack)) != strings.TrimSpace(string(indexPayload)) {
+		t.Fatalf("unexpected index payload: %s", string(indexBack))
+	}
+
+	shardPayload := []byte(`{"registry":"team","key":"acme--03","entries":[{"manifest":{"id":"acme/chat"}}]}`)
+	shardPut, err := client.putIntegrationRegistryShard(ctx, "team", "acme--03", shardPayload, nil)
+	if err != nil {
+		t.Fatalf("put integration registry shard: %v", err)
+	}
+	if shardPut.Result.Revision.Revision != 8 {
+		t.Fatalf("unexpected shard revision: %d", shardPut.Result.Revision.Revision)
+	}
+	shardBack, err := client.getIntegrationRegistryShard(ctx, "team", "acme--03")
+	if err != nil {
+		t.Fatalf("get integration registry shard: %v", err)
+	}
+	if strings.TrimSpace(string(shardBack)) != strings.TrimSpace(string(shardPayload)) {
+		t.Fatalf("unexpected shard payload: %s", string(shardBack))
 	}
 }

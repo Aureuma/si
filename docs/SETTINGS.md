@@ -323,6 +323,8 @@ Defaults for `si sun` cloud sync. SI reads `[sun]` first and falls back to `[hel
 - `sun.timeout_seconds` / `helia.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
 - `sun.auto_sync` / `helia.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
 - `sun.vault_backup` / `helia.vault_backup` (string): default vault backup object name (default: `default`)
+- `sun.plugin_gateway_registry` / `helia.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
+- `sun.plugin_gateway_slots` / `helia.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
 - `sun.taskboard` / `helia.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
 - `sun.taskboard_agent` / `helia.taskboard_agent` (string): optional default agent id used by `si sun taskboard` and dyad autopilot claims
 - `sun.taskboard_lease_seconds` / `helia.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
@@ -333,6 +335,8 @@ Environment overrides:
 - `SI_SUN_BASE_URL`
 - `SI_SUN_TOKEN`
 - `SI_SUN_ALLOW_INSECURE_HTTP`
+- `SI_SUN_PLUGIN_GATEWAY_REGISTRY`
+- `SI_SUN_PLUGIN_GATEWAY_SLOTS`
 - `SI_SUN_TASKBOARD`
 - `SI_SUN_TASKBOARD_AGENT`
 - `SI_SUN_TASKBOARD_LEASE_SECONDS`
@@ -341,6 +345,8 @@ Environment overrides:
 - `SI_HELIA_BASE_URL`
 - `SI_HELIA_TOKEN`
 - `SI_HELIA_ALLOW_INSECURE_HTTP`
+- `SI_HELIA_PLUGIN_GATEWAY_REGISTRY`
+- `SI_HELIA_PLUGIN_GATEWAY_SLOTS`
 - `SI_HELIA_TASKBOARD`
 - `SI_HELIA_TASKBOARD_AGENT`
 - `SI_HELIA_TASKBOARD_LEASE_SECONDS`
@@ -556,6 +562,8 @@ account = "acme"
 timeout_seconds = 15
 auto_sync = true
 vault_backup = "default"
+plugin_gateway_registry = "global"
+plugin_gateway_slots = 16
 taskboard = "default"
 taskboard_agent = "dyad:main-laptop"
 taskboard_lease_seconds = 1800

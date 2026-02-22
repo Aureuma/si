@@ -24,7 +24,7 @@ si <command> <subcommand> --help
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `init`, `status`, `list`, `set`, `run`, `docker exec`, `trust`, `backend` | [Vault](./VAULT) |
 | `si sun` | Cloud sync and machine orchestration for profiles, vault, taskboards, and remote SI control | `auth`, `profile`, `vault backup`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
 | `si browser` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
-| `si plugins` | Plugin registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy` | [Plugin Marketplace](./PLUGIN_MARKETPLACE) |
+| `si plugins` | Plugin registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build/push/pull/status)` | [Plugin Marketplace](./PLUGIN_MARKETPLACE) |
 
 ## Provider and integration command families
 

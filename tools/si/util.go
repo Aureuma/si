@@ -614,6 +614,10 @@ plugins:
   si plugins register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]
   si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]
   si plugins policy show|set ... [--json]
+  si plugins gateway build --source <path> [--registry <name>] [--slots <n>] [--output-dir <dir>] [--json]
+  si plugins gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]
+  si plugins gateway pull [--registry <name>] [--namespace <ns>] [--capability <cap>] [--prefix <prefix>] [--limit <n>] [--out <file>] [--json]
+  si plugins gateway status [--registry <name>] [--json]
 
 	Environment defaults (selected)
 	-------------------------------
