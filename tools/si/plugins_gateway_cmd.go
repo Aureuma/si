@@ -124,7 +124,7 @@ func cmdPluginsGatewayPush(args []string) {
 	settings := loadSettingsOrDefault()
 	targetRegistry := pluginGatewayRegistryName(settings, *registry)
 	targetSlots := pluginGatewaySlots(settings, *slots)
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
@@ -147,7 +147,7 @@ func cmdPluginsGatewayPush(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	ctx := heliaContext(settings)
+	ctx := sunContext(settings)
 	indexPut, err := client.putIntegrationRegistryIndex(ctx, index.Registry, indexPayload, nil)
 	if err != nil {
 		fatal(err)
@@ -208,12 +208,12 @@ func cmdPluginsGatewayPull(args []string) {
 	}
 	settings := loadSettingsOrDefault()
 	targetRegistry := pluginGatewayRegistryName(settings, *registry)
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
 
-	ctx := heliaContext(settings)
+	ctx := sunContext(settings)
 	indexPayload, err := client.getIntegrationRegistryIndex(ctx, targetRegistry)
 	if err != nil {
 		fatal(err)
@@ -281,11 +281,11 @@ func cmdPluginsGatewayStatus(args []string) {
 	}
 	settings := loadSettingsOrDefault()
 	targetRegistry := pluginGatewayRegistryName(settings, *registry)
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	raw, err := client.getIntegrationRegistryIndex(heliaContext(settings), targetRegistry)
+	raw, err := client.getIntegrationRegistryIndex(sunContext(settings), targetRegistry)
 	if err != nil {
 		fatal(err)
 	}
@@ -389,7 +389,7 @@ func pluginGatewayRegistryName(settings Settings, explicit string) string {
 	if env := envSunPluginGatewayRegistry(); env != "" {
 		return strings.ToLower(env)
 	}
-	if trimmed := strings.TrimSpace(settings.Helia.PluginGatewayRegistry); trimmed != "" {
+	if trimmed := strings.TrimSpace(settings.Sun.PluginGatewayRegistry); trimmed != "" {
 		return strings.ToLower(trimmed)
 	}
 	return defaultPluginGatewayName
@@ -404,8 +404,8 @@ func pluginGatewaySlots(settings Settings, explicit int) int {
 			return parsed
 		}
 	}
-	if settings.Helia.PluginGatewaySlots > 0 {
-		return settings.Helia.PluginGatewaySlots
+	if settings.Sun.PluginGatewaySlots > 0 {
+		return settings.Sun.PluginGatewaySlots
 	}
 	return pluginmarket.GatewayDefaultSlotsPerNamespace
 }

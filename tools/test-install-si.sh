@@ -72,8 +72,8 @@ note "dry-run: no-path-hint flag"
 note "dry-run: --yes accepted"
 "${INSTALLER}" --dry-run --yes --source-dir "${ROOT}" --force >/dev/null
 
-note "dry-run: backend intent helia accepted"
-"${INSTALLER}" --dry-run --backend helia --source-dir "${ROOT}" --force >/dev/null
+note "dry-run: backend intent sun accepted"
+"${INSTALLER}" --dry-run --backend sun --source-dir "${ROOT}" --force >/dev/null
 
 note "edge: invalid backend rejected"
 set +e

@@ -5,58 +5,58 @@ import (
 	"time"
 )
 
-func TestNormalizeHeliaTaskStatus(t *testing.T) {
+func TestNormalizeSunTaskStatus(t *testing.T) {
 	cases := map[string]string{
-		"":            heliaTaskStatusTodo,
-		"open":        heliaTaskStatusTodo,
-		"claimed":     heliaTaskStatusDoing,
-		"in-progress": heliaTaskStatusDoing,
-		"done":        heliaTaskStatusDone,
-		"closed":      heliaTaskStatusDone,
-		"unknown":     heliaTaskStatusTodo,
+		"":            sunTaskStatusTodo,
+		"open":        sunTaskStatusTodo,
+		"claimed":     sunTaskStatusDoing,
+		"in-progress": sunTaskStatusDoing,
+		"done":        sunTaskStatusDone,
+		"closed":      sunTaskStatusDone,
+		"unknown":     sunTaskStatusTodo,
 	}
 	for in, want := range cases {
-		if got := normalizeHeliaTaskStatus(in); got != want {
-			t.Fatalf("normalizeHeliaTaskStatus(%q)=%q want %q", in, got, want)
+		if got := normalizeSunTaskStatus(in); got != want {
+			t.Fatalf("normalizeSunTaskStatus(%q)=%q want %q", in, got, want)
 		}
 	}
 }
 
-func TestParseHeliaTaskStatusFilter(t *testing.T) {
-	status, err := parseHeliaTaskStatusFilter("")
+func TestParseSunTaskStatusFilter(t *testing.T) {
+	status, err := parseSunTaskStatusFilter("")
 	if err != nil {
 		t.Fatalf("unexpected error for empty status: %v", err)
 	}
 	if status != "" {
 		t.Fatalf("expected empty filter, got %q", status)
 	}
-	status, err = parseHeliaTaskStatusFilter("claimed")
+	status, err = parseSunTaskStatusFilter("claimed")
 	if err != nil {
 		t.Fatalf("unexpected error for claimed: %v", err)
 	}
-	if status != heliaTaskStatusDoing {
+	if status != sunTaskStatusDoing {
 		t.Fatalf("expected doing, got %q", status)
 	}
-	if _, err := parseHeliaTaskStatusFilter("not-a-status"); err == nil {
+	if _, err := parseSunTaskStatusFilter("not-a-status"); err == nil {
 		t.Fatalf("expected invalid status to fail")
 	}
 }
 
-func TestHeliaTaskboardSelectNextClaimable(t *testing.T) {
+func TestSunTaskboardSelectNextClaimable(t *testing.T) {
 	now := time.Date(2026, 2, 22, 0, 0, 0, 0, time.UTC)
-	tasks := []heliaTaskboardTask{
+	tasks := []sunTaskboardTask{
 		{
 			ID:       "t1",
 			Title:    "done",
-			Status:   heliaTaskStatusDone,
-			Priority: heliaTaskPriorityP1,
+			Status:   sunTaskStatusDone,
+			Priority: sunTaskPriorityP1,
 		},
 		{
 			ID:       "t2",
 			Title:    "locked active",
-			Status:   heliaTaskStatusDoing,
-			Priority: heliaTaskPriorityP1,
-			Assignment: &heliaTaskboardLock{
+			Status:   sunTaskStatusDoing,
+			Priority: sunTaskPriorityP1,
+			Assignment: &sunTaskboardLock{
 				AgentID:        "agent-a",
 				ClaimedAt:      now.Add(-1 * time.Minute).Format(time.RFC3339),
 				LeaseSeconds:   600,
@@ -66,33 +66,33 @@ func TestHeliaTaskboardSelectNextClaimable(t *testing.T) {
 		{
 			ID:        "t3",
 			Title:     "claim me first",
-			Status:    heliaTaskStatusTodo,
-			Priority:  heliaTaskPriorityP1,
+			Status:    sunTaskStatusTodo,
+			Priority:  sunTaskPriorityP1,
 			CreatedAt: now.Add(-10 * time.Minute).Format(time.RFC3339),
 		},
 		{
 			ID:        "t4",
 			Title:     "lower priority",
-			Status:    heliaTaskStatusTodo,
-			Priority:  heliaTaskPriorityP2,
+			Status:    sunTaskStatusTodo,
+			Priority:  sunTaskPriorityP2,
 			CreatedAt: now.Add(-20 * time.Minute).Format(time.RFC3339),
 		},
 	}
-	got := heliaTaskboardSelectNextClaimable(tasks, now)
+	got := sunTaskboardSelectNextClaimable(tasks, now)
 	if got < 0 || tasks[got].ID != "t3" {
 		t.Fatalf("expected t3 to be selected, got idx=%d task=%+v", got, tasks[got])
 	}
 }
 
-func TestHeliaTaskboardLockExpired(t *testing.T) {
+func TestSunTaskboardLockExpired(t *testing.T) {
 	now := time.Date(2026, 2, 22, 0, 0, 0, 0, time.UTC)
-	if !heliaTaskboardLockExpired(heliaTaskboardLock{
+	if !sunTaskboardLockExpired(sunTaskboardLock{
 		AgentID:        "a",
 		LeaseExpiresAt: now.Add(-1 * time.Second).Format(time.RFC3339),
 	}, now) {
 		t.Fatalf("expected explicit expiry to be considered expired")
 	}
-	if heliaTaskboardLockExpired(heliaTaskboardLock{
+	if sunTaskboardLockExpired(sunTaskboardLock{
 		AgentID:        "a",
 		LeaseExpiresAt: now.Add(10 * time.Second).Format(time.RFC3339),
 	}, now) {
@@ -100,10 +100,10 @@ func TestHeliaTaskboardLockExpired(t *testing.T) {
 	}
 }
 
-func TestHeliaTaskboardResolveAgent(t *testing.T) {
+func TestSunTaskboardResolveAgent(t *testing.T) {
 	settings := Settings{}
-	settings.Helia.TaskboardAgent = "agent-from-settings"
-	got := heliaTaskboardResolveAgent(settings, "", "dyad-main", "build-host")
+	settings.Sun.TaskboardAgent = "agent-from-settings"
+	got := sunTaskboardResolveAgent(settings, "", "dyad-main", "build-host")
 	if got.AgentID != "agent-from-settings" {
 		t.Fatalf("agent id=%q", got.AgentID)
 	}

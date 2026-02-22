@@ -12,22 +12,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
-- Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `helia` vault sync modes.
+- Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `sun` vault sync modes.
 - Added automated GitHub Release asset publishing for `si` CLI archives (`linux/amd64`, `linux/arm64`, `linux/armv7`, `darwin/amd64`, `darwin/arm64`) with generated `checksums.txt`.
 - Added `si build self release-assets` to run local release-archive preflight builds using the same target matrix used by release automation.
 
 ### Changed
-- Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy `helia.auto_sync`.
-- Hardened Helia vault backup pull flow with payload checksum/size verification when object metadata is available.
+- Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy `sun.auto_sync`.
+- Hardened Sun vault backup pull flow with payload checksum/size verification when object metadata is available.
 
 ### Security
-- Hardened Helia client URL policy to require HTTPS for non-loopback endpoints by default (override with `SI_HELIA_ALLOW_INSECURE_HTTP=1` only when intentional).
+- Hardened Sun client URL policy to require HTTPS for non-loopback endpoints by default (override with `SI_SUN_ALLOW_INSECURE_HTTP=1` only when intentional).
 
 ## [v0.48.0] - 2026-02-22
 ### Added
 - Added the `si sun` cloud command surface for account auth, codex profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics.
-- Added Helia-focused CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
-- Added Helia cloud-sync operator documentation and settings reference coverage (`[helia]`).
+- Added Sun-focused CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
+- Added Sun cloud-sync operator documentation and settings reference coverage (`[sun]`).
 - Added native Go SSH transport support for SI PaaS remote deploy workflows, with companion architecture runbook documentation.
 
 ### Changed
@@ -36,12 +36,12 @@ All notable changes to this project will be documented in this file.
 - Simplified `si build image` mode selection while preserving native `docker buildx` progress output behavior.
 
 ### Fixed
-- Stabilized SI CI lanes (`SI Tests` and Helia-focused workflow checks) by fixing empty-env headless detection and formatting gate regressions.
+- Stabilized SI CI lanes (`SI Tests` and Sun-focused workflow checks) by fixing empty-env headless detection and formatting gate regressions.
 - Fixed `si vault` write paths to refuse updates when git index flags (`skip-worktree`/`assume-unchanged`) could hide dotenv changes.
 - Fixed `si logout-all` behavior to block unintended auth-cache recovery after explicit logout.
 
 ### Security
-- Hardened Helia vault auto-backup hooks to skip uploading dotenv files containing plaintext keys, preventing accidental plaintext secret sync to cloud storage.
+- Hardened Sun vault auto-backup hooks to skip uploading dotenv files containing plaintext keys, preventing accidental plaintext secret sync to cloud storage.
 
 ## [v0.47.0] - 2026-02-19
 ### Added

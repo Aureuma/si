@@ -313,23 +313,23 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
-- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only), `dual` (local/git + best-effort Sun backup), `sun`/`helia` (Sun backup required on mutating vault commands). Default resolution is `git`, with legacy fallback to `dual` when `helia.auto_sync=true` and `vault.sync_backend` is unset.
+- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only), `dual` (local/git + best-effort Sun backup), `sun`/`sun` (Sun backup required on mutating vault commands). Default resolution is `git`, with legacy fallback to `dual` when `sun.auto_sync=true` and `vault.sync_backend` is unset.
 
-### `[sun]` (preferred) / `[helia]` (legacy alias)
-Defaults for `si sun` cloud sync. SI reads `[sun]` first and falls back to `[helia]`.
-- `sun.base_url` / `helia.base_url` (string): Sun API base URL (default: `http://127.0.0.1:8080`)
-- `sun.account` / `helia.account` (string): expected account slug bound to the saved token
-- `sun.token` / `helia.token` (string): Sun bearer token
-- `sun.timeout_seconds` / `helia.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
-- `sun.auto_sync` / `helia.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
-- `sun.vault_backup` / `helia.vault_backup` (string): default vault backup object name (default: `default`)
-- `sun.plugin_gateway_registry` / `helia.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
-- `sun.plugin_gateway_slots` / `helia.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
-- `sun.taskboard` / `helia.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
-- `sun.taskboard_agent` / `helia.taskboard_agent` (string): optional default agent id used by `si sun taskboard` and dyad autopilot claims
-- `sun.taskboard_lease_seconds` / `helia.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
-- `sun.machine_id` / `helia.machine_id` (string): default machine id for `si sun machine ...` commands
-- `sun.operator_id` / `helia.operator_id` (string): default operator identity for machine ACL and dispatch actions
+### `[sun]` (preferred) / `[sun]` (legacy alias)
+Defaults for `si sun` cloud sync. SI reads `[sun]` first and falls back to `[sun]`.
+- `sun.base_url` / `sun.base_url` (string): Sun API base URL (default: `http://127.0.0.1:8080`)
+- `sun.account` / `sun.account` (string): expected account slug bound to the saved token
+- `sun.token` / `sun.token` (string): Sun bearer token
+- `sun.timeout_seconds` / `sun.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
+- `sun.auto_sync` / `sun.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
+- `sun.vault_backup` / `sun.vault_backup` (string): default vault backup object name (default: `default`)
+- `sun.plugin_gateway_registry` / `sun.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
+- `sun.plugin_gateway_slots` / `sun.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
+- `sun.taskboard` / `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
+- `sun.taskboard_agent` / `sun.taskboard_agent` (string): optional default agent id used by `si sun taskboard` and dyad autopilot claims
+- `sun.taskboard_lease_seconds` / `sun.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
+- `sun.machine_id` / `sun.machine_id` (string): default machine id for `si sun machine ...` commands
+- `sun.operator_id` / `sun.operator_id` (string): default operator identity for machine ACL and dispatch actions
 
 Environment overrides:
 - `SI_SUN_BASE_URL`
@@ -342,16 +342,16 @@ Environment overrides:
 - `SI_SUN_TASKBOARD_LEASE_SECONDS`
 - `SI_SUN_MACHINE_ID`
 - `SI_SUN_OPERATOR_ID`
-- `SI_HELIA_BASE_URL`
-- `SI_HELIA_TOKEN`
-- `SI_HELIA_ALLOW_INSECURE_HTTP`
-- `SI_HELIA_PLUGIN_GATEWAY_REGISTRY`
-- `SI_HELIA_PLUGIN_GATEWAY_SLOTS`
-- `SI_HELIA_TASKBOARD`
-- `SI_HELIA_TASKBOARD_AGENT`
-- `SI_HELIA_TASKBOARD_LEASE_SECONDS`
-- `SI_HELIA_MACHINE_ID`
-- `SI_HELIA_OPERATOR_ID`
+- `SI_SUN_BASE_URL`
+- `SI_SUN_TOKEN`
+- `SI_SUN_ALLOW_INSECURE_HTTP`
+- `SI_SUN_PLUGIN_GATEWAY_REGISTRY`
+- `SI_SUN_PLUGIN_GATEWAY_SLOTS`
+- `SI_SUN_TASKBOARD`
+- `SI_SUN_TASKBOARD_AGENT`
+- `SI_SUN_TASKBOARD_LEASE_SECONDS`
+- `SI_SUN_MACHINE_ID`
+- `SI_SUN_OPERATOR_ID`
 - `SI_VAULT_SYNC_BACKEND`
 
 ### `[shell.prompt]`

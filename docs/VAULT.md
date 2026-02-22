@@ -12,10 +12,10 @@ Goals:
 
 - One encrypted dotenv file on disk (default: `~/.si/vault/.env`).
 - Use `--file` to operate on a different file.
-- Choose sync backend policy with `si vault backend use --mode <git|dual|sun|helia>`:
+- Choose sync backend policy with `si vault backend use --mode <git|dual|sun|sun>`:
   - `git`: local/git-based only (default)
   - `dual`: local/git-based with best-effort Sun backup
-  - `sun`/`helia`: Sun backup required on mutating vault commands (`helia` is a legacy alias)
+  - `sun`/`sun`: Sun backup required on mutating vault commands (`sun` is a legacy alias)
 
 ## Quickstart
 
@@ -177,7 +177,7 @@ si vault backend use --mode sun
 ```
 
 Environment override:
-- `SI_VAULT_SYNC_BACKEND=git|dual|sun|helia`
+- `SI_VAULT_SYNC_BACKEND=git|dual|sun|sun`
 
 ## Key Storage
 
@@ -226,7 +226,7 @@ Audit logs never include secret values.
 
 ## Industry References
 
-The vault + Helia backend model in SI aligns with common guidance from major secret-management systems:
+The vault + Sun backend model in SI aligns with common guidance from major secret-management systems:
 - HashiCorp Vault production hardening guidance (TLS, auth boundaries, audit coverage):
   https://developer.hashicorp.com/vault/docs/concepts/production-hardening
 - AWS Secrets Manager best practices (least privilege, rotation, monitoring):

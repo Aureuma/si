@@ -11,9 +11,9 @@ import (
 )
 
 const (
-	paasSyncBackendGit   = "git"
-	paasSyncBackendHelia = "helia"
-	paasSyncBackendDual  = "dual"
+	paasSyncBackendGit  = "git"
+	paasSyncBackendSun  = "sun"
+	paasSyncBackendDual = "dual"
 
 	paasSyncBackendEnvKey  = "SI_PAAS_SYNC_BACKEND"
 	paasSnapshotNameEnvKey = "SI_PAAS_SNAPSHOT_NAME"
@@ -58,8 +58,8 @@ func normalizePaasSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "git", "local":
 		return paasSyncBackendGit
-	case "sun", "helia", "cloud":
-		return paasSyncBackendHelia
+	case "sun", "cloud":
+		return paasSyncBackendSun
 	case "dual", "both":
 		return paasSyncBackendDual
 	default:
@@ -71,19 +71,19 @@ func resolvePaasSyncBackend(settings Settings) (paasSyncBackendResolution, error
 	if envRaw := strings.TrimSpace(os.Getenv(paasSyncBackendEnvKey)); envRaw != "" {
 		mode := normalizePaasSyncBackend(envRaw)
 		if mode == "" {
-			return paasSyncBackendResolution{}, fmt.Errorf("invalid %s %q (expected git, sun, helia, or dual)", paasSyncBackendEnvKey, envRaw)
+			return paasSyncBackendResolution{}, fmt.Errorf("invalid %s %q (expected git, sun, or dual)", paasSyncBackendEnvKey, envRaw)
 		}
 		return paasSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Paas.SyncBackend); cfgRaw != "" {
 		mode := normalizePaasSyncBackend(cfgRaw)
 		if mode == "" {
-			return paasSyncBackendResolution{}, fmt.Errorf("invalid paas.sync_backend %q (expected git, sun, helia, or dual)", cfgRaw)
+			return paasSyncBackendResolution{}, fmt.Errorf("invalid paas.sync_backend %q (expected git, sun, or dual)", cfgRaw)
 		}
 		return paasSyncBackendResolution{Mode: mode, Source: "settings"}, nil
 	}
-	if settings.Helia.AutoSync {
-		return paasSyncBackendResolution{Mode: paasSyncBackendDual, Source: "legacy_helia_auto_sync"}, nil
+	if settings.Sun.AutoSync {
+		return paasSyncBackendResolution{Mode: paasSyncBackendDual, Source: "legacy_sun_auto_sync"}, nil
 	}
 	return paasSyncBackendResolution{Mode: paasSyncBackendGit, Source: "default"}, nil
 }
@@ -168,7 +168,7 @@ func isPaasCloudMutationCommand(command string) bool {
 	}
 }
 
-func maybeHeliaAutoSyncPaasControlPlane(command string) error {
+func maybeSunAutoSyncPaasControlPlane(command string) error {
 	if !isPaasCloudMutationCommand(command) {
 		return nil
 	}
@@ -180,10 +180,10 @@ func maybeHeliaAutoSyncPaasControlPlane(command string) error {
 	if resolution.Mode == paasSyncBackendGit {
 		return nil
 	}
-	requireHelia := resolution.Mode == paasSyncBackendHelia
-	summary, err := pushPaasControlPlaneSnapshotToHelia(currentPaasContext(), "", nil)
+	requireSun := resolution.Mode == paasSyncBackendSun
+	summary, err := pushPaasControlPlaneSnapshotToSun(currentPaasContext(), "", nil)
 	if err != nil {
-		if requireHelia {
+		if requireSun {
 			return fmt.Errorf("sun paas auto-sync failed (%s): %w", strings.TrimSpace(command), err)
 		}
 		warnf("sun paas auto-sync skipped (%s): %v", strings.TrimSpace(command), err)
@@ -193,9 +193,9 @@ func maybeHeliaAutoSyncPaasControlPlane(command string) error {
 	return nil
 }
 
-func pushPaasControlPlaneSnapshotToHelia(contextName string, explicitObjectName string, expectedRevision *int64) (paasCloudSyncSummary, error) {
+func pushPaasControlPlaneSnapshotToSun(contextName string, explicitObjectName string, expectedRevision *int64) (paasCloudSyncSummary, error) {
 	settings := loadSettingsOrDefault()
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		return paasCloudSyncSummary{}, err
 	}
@@ -214,9 +214,9 @@ func pushPaasControlPlaneSnapshotToHelia(contextName string, explicitObjectName 
 	if objectName == "" {
 		objectName = resolvePaasSnapshotObjectName(settings, snapshot.Context)
 	}
-	ctx, cancel := context.WithTimeout(heliaContext(settings), 20*time.Second)
+	ctx, cancel := context.WithTimeout(sunContext(settings), 20*time.Second)
 	defer cancel()
-	put, err := client.putObject(ctx, heliaPaasControlPlaneSnapshotKind, objectName, payload, "application/json", map[string]interface{}{
+	put, err := client.putObject(ctx, sunPaasControlPlaneSnapshotKind, objectName, payload, "application/json", map[string]interface{}{
 		"context":        snapshot.Context,
 		"schema_version": snapshot.SchemaVersion,
 		"generated_at":   snapshot.GeneratedAt,
@@ -227,9 +227,9 @@ func pushPaasControlPlaneSnapshotToHelia(contextName string, explicitObjectName 
 	return summarizePaasCloudSnapshot(snapshot, objectName, put.Result.Revision.Revision), nil
 }
 
-func pullPaasControlPlaneSnapshotFromHelia(contextName string, explicitObjectName string, replace bool) (paasCloudSyncSummary, error) {
+func pullPaasControlPlaneSnapshotFromSun(contextName string, explicitObjectName string, replace bool) (paasCloudSyncSummary, error) {
 	settings := loadSettingsOrDefault()
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		return paasCloudSyncSummary{}, err
 	}
@@ -238,9 +238,9 @@ func pullPaasControlPlaneSnapshotFromHelia(contextName string, explicitObjectNam
 	if objectName == "" {
 		objectName = resolvePaasSnapshotObjectName(settings, resolvedContext)
 	}
-	ctx, cancel := context.WithTimeout(heliaContext(settings), 20*time.Second)
+	ctx, cancel := context.WithTimeout(sunContext(settings), 20*time.Second)
 	defer cancel()
-	payload, err := client.getPayload(ctx, heliaPaasControlPlaneSnapshotKind, objectName)
+	payload, err := client.getPayload(ctx, sunPaasControlPlaneSnapshotKind, objectName)
 	if err != nil {
 		return paasCloudSyncSummary{}, err
 	}

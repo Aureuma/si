@@ -34,8 +34,7 @@ type Settings struct {
 	AWS           AWSSettings        `toml:"aws,omitempty"`
 	GCP           GCPSettings        `toml:"gcp,omitempty"`
 	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
-	Helia         HeliaSettings      `toml:"helia,omitempty"`
-	Sun           HeliaSettings      `toml:"sun,omitempty"`
+	Sun           SunSettings        `toml:"sun,omitempty"`
 	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
@@ -137,10 +136,10 @@ type VaultSettings struct {
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 	// SyncBackend selects how vault state sync is handled.
-	// Supported values: git, sun, helia, dual
+	// Supported values: git, sun, dual
 	// - git: local/git-based only
-	// - sun/helia: Sun backup required on mutating vault operations
-	// - dual: local/git-based with best-effort Helia backup
+	// - sun: Sun backup required on mutating vault operations
+	// - dual: local/git-based with best-effort Sun backup
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
 	// KeyBackend selects where the device private key is stored.
@@ -153,13 +152,13 @@ type VaultSettings struct {
 
 type PaasSettings struct {
 	// SyncBackend selects how paas state sync is handled.
-	// Supported values: git, sun, helia, dual
+	// Supported values: git, sun, dual
 	// - git: local/git-based only
-	// - sun/helia: Sun snapshot backup required on mutating paas operations
-	// - dual: local/git-based with best-effort Helia snapshot backup
+	// - sun: Sun snapshot backup required on mutating paas operations
+	// - dual: local/git-based with best-effort Sun snapshot backup
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
-	// SnapshotName is the Helia object name used for paas control plane snapshots.
+	// SnapshotName is the Sun object name used for paas control plane snapshots.
 	// When empty, the current context name is used.
 	SnapshotName string `toml:"snapshot_name,omitempty"`
 }
@@ -449,7 +448,7 @@ type OpenAIAccountEntry struct {
 	ProjectIDEnv      string `toml:"project_id_env,omitempty"`
 }
 
-type HeliaSettings struct {
+type SunSettings struct {
 	BaseURL               string `toml:"base_url,omitempty"`
 	Account               string `toml:"account,omitempty"`
 	Token                 string `toml:"token,omitempty"`
@@ -522,52 +521,52 @@ func mergeSunSettings(settings *Settings) {
 	}
 	sun := settings.Sun
 	if trimmed := strings.TrimSpace(sun.BaseURL); trimmed != "" {
-		settings.Helia.BaseURL = trimmed
+		settings.Sun.BaseURL = trimmed
 	}
 	if trimmed := strings.TrimSpace(sun.Account); trimmed != "" {
-		settings.Helia.Account = trimmed
+		settings.Sun.Account = trimmed
 	}
 	if trimmed := strings.TrimSpace(sun.Token); trimmed != "" {
-		settings.Helia.Token = trimmed
+		settings.Sun.Token = trimmed
 	}
 	if sun.TimeoutSeconds > 0 {
-		settings.Helia.TimeoutSeconds = sun.TimeoutSeconds
+		settings.Sun.TimeoutSeconds = sun.TimeoutSeconds
 	}
 	// Bool zero-value cannot distinguish unset from explicit false; prefer true when set.
 	if sun.AutoSync {
-		settings.Helia.AutoSync = true
+		settings.Sun.AutoSync = true
 	}
 	if trimmed := strings.TrimSpace(sun.VaultBackup); trimmed != "" {
-		settings.Helia.VaultBackup = trimmed
+		settings.Sun.VaultBackup = trimmed
 	}
 	if trimmed := strings.TrimSpace(sun.PluginGatewayRegistry); trimmed != "" {
-		settings.Helia.PluginGatewayRegistry = trimmed
+		settings.Sun.PluginGatewayRegistry = trimmed
 	}
 	if sun.PluginGatewaySlots > 0 {
-		settings.Helia.PluginGatewaySlots = sun.PluginGatewaySlots
+		settings.Sun.PluginGatewaySlots = sun.PluginGatewaySlots
 	}
 	if trimmed := strings.TrimSpace(sun.Taskboard); trimmed != "" {
-		settings.Helia.Taskboard = trimmed
+		settings.Sun.Taskboard = trimmed
 	}
 	if trimmed := strings.TrimSpace(sun.TaskboardAgent); trimmed != "" {
-		settings.Helia.TaskboardAgent = trimmed
+		settings.Sun.TaskboardAgent = trimmed
 	}
 	if sun.TaskboardLeaseSeconds > 0 {
-		settings.Helia.TaskboardLeaseSeconds = sun.TaskboardLeaseSeconds
+		settings.Sun.TaskboardLeaseSeconds = sun.TaskboardLeaseSeconds
 	}
 	if trimmed := strings.TrimSpace(sun.MachineID); trimmed != "" {
-		settings.Helia.MachineID = trimmed
+		settings.Sun.MachineID = trimmed
 	}
 	if trimmed := strings.TrimSpace(sun.OperatorID); trimmed != "" {
-		settings.Helia.OperatorID = trimmed
+		settings.Sun.OperatorID = trimmed
 	}
 }
 
-func mirrorHeliaToSun(settings *Settings) {
+func mirrorSunToSun(settings *Settings) {
 	if settings == nil {
 		return
 	}
-	settings.Sun = settings.Helia
+	settings.Sun = settings.Sun
 }
 
 func settingsPath() (string, error) {
@@ -993,39 +992,39 @@ func applySettingsDefaults(settings *Settings) {
 		settings.OpenAI.APIBaseURL = firstNonEmpty(openAISpec.BaseURL, "https://api.openai.com")
 	}
 	mergeSunSettings(settings)
-	settings.Helia.BaseURL = strings.TrimSpace(settings.Helia.BaseURL)
-	if settings.Helia.BaseURL == "" {
-		settings.Helia.BaseURL = "http://127.0.0.1:8080"
+	settings.Sun.BaseURL = strings.TrimSpace(settings.Sun.BaseURL)
+	if settings.Sun.BaseURL == "" {
+		settings.Sun.BaseURL = "http://127.0.0.1:8080"
 	}
-	settings.Helia.Account = strings.TrimSpace(settings.Helia.Account)
-	settings.Helia.Token = strings.TrimSpace(settings.Helia.Token)
-	if settings.Helia.TimeoutSeconds <= 0 {
-		settings.Helia.TimeoutSeconds = 15
+	settings.Sun.Account = strings.TrimSpace(settings.Sun.Account)
+	settings.Sun.Token = strings.TrimSpace(settings.Sun.Token)
+	if settings.Sun.TimeoutSeconds <= 0 {
+		settings.Sun.TimeoutSeconds = 15
 	}
-	if strings.TrimSpace(settings.Helia.VaultBackup) == "" {
-		settings.Helia.VaultBackup = "default"
+	if strings.TrimSpace(settings.Sun.VaultBackup) == "" {
+		settings.Sun.VaultBackup = "default"
 	}
-	settings.Helia.PluginGatewayRegistry = strings.TrimSpace(settings.Helia.PluginGatewayRegistry)
-	if settings.Helia.PluginGatewayRegistry == "" {
-		settings.Helia.PluginGatewayRegistry = defaultPluginGatewayName
+	settings.Sun.PluginGatewayRegistry = strings.TrimSpace(settings.Sun.PluginGatewayRegistry)
+	if settings.Sun.PluginGatewayRegistry == "" {
+		settings.Sun.PluginGatewayRegistry = defaultPluginGatewayName
 	}
-	if settings.Helia.PluginGatewaySlots <= 0 {
-		settings.Helia.PluginGatewaySlots = pluginmarket.GatewayDefaultSlotsPerNamespace
+	if settings.Sun.PluginGatewaySlots <= 0 {
+		settings.Sun.PluginGatewaySlots = pluginmarket.GatewayDefaultSlotsPerNamespace
 	}
-	if settings.Helia.PluginGatewaySlots > pluginmarket.GatewayMaxSlotsPerNamespace {
-		settings.Helia.PluginGatewaySlots = pluginmarket.GatewayMaxSlotsPerNamespace
+	if settings.Sun.PluginGatewaySlots > pluginmarket.GatewayMaxSlotsPerNamespace {
+		settings.Sun.PluginGatewaySlots = pluginmarket.GatewayMaxSlotsPerNamespace
 	}
-	settings.Helia.Taskboard = strings.TrimSpace(settings.Helia.Taskboard)
-	if settings.Helia.Taskboard == "" {
-		settings.Helia.Taskboard = "default"
+	settings.Sun.Taskboard = strings.TrimSpace(settings.Sun.Taskboard)
+	if settings.Sun.Taskboard == "" {
+		settings.Sun.Taskboard = "default"
 	}
-	settings.Helia.TaskboardAgent = strings.TrimSpace(settings.Helia.TaskboardAgent)
-	if settings.Helia.TaskboardLeaseSeconds <= 0 {
-		settings.Helia.TaskboardLeaseSeconds = 1800
+	settings.Sun.TaskboardAgent = strings.TrimSpace(settings.Sun.TaskboardAgent)
+	if settings.Sun.TaskboardLeaseSeconds <= 0 {
+		settings.Sun.TaskboardLeaseSeconds = 1800
 	}
-	settings.Helia.MachineID = strings.TrimSpace(settings.Helia.MachineID)
-	settings.Helia.OperatorID = strings.TrimSpace(settings.Helia.OperatorID)
-	mirrorHeliaToSun(settings)
+	settings.Sun.MachineID = strings.TrimSpace(settings.Sun.MachineID)
+	settings.Sun.OperatorID = strings.TrimSpace(settings.Sun.OperatorID)
+	mirrorSunToSun(settings)
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
 	if settings.OCI.Profile == "" {
@@ -1136,7 +1135,7 @@ func saveSettings(settings Settings) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	mirrorHeliaToSun(&settings)
+	mirrorSunToSun(&settings)
 	settings.Metadata.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	data, err := toml.Marshal(settings)
 	if err != nil {

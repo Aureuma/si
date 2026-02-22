@@ -11,23 +11,23 @@ import (
 	"time"
 )
 
-func TestNewHeliaClientValidation(t *testing.T) {
-	if _, err := newHeliaClient("", "token", time.Second); err == nil {
+func TestNewSunClientValidation(t *testing.T) {
+	if _, err := newSunClient("", "token", time.Second); err == nil {
 		t.Fatalf("expected base url validation error")
 	}
-	if _, err := newHeliaClient("http://127.0.0.1:8080", "", time.Second); err == nil {
+	if _, err := newSunClient("http://127.0.0.1:8080", "", time.Second); err == nil {
 		t.Fatalf("expected token validation error")
 	}
-	if _, err := newHeliaClient("http://example.com", "token", time.Second); err == nil {
+	if _, err := newSunClient("http://example.com", "token", time.Second); err == nil {
 		t.Fatalf("expected non-local insecure http URL to be rejected")
 	}
 	t.Setenv("SI_SUN_ALLOW_INSECURE_HTTP", "1")
-	if _, err := newHeliaClient("http://example.com", "token", time.Second); err != nil {
+	if _, err := newSunClient("http://example.com", "token", time.Second); err != nil {
 		t.Fatalf("expected insecure http override to permit URL, got: %v", err)
 	}
 }
 
-func TestHeliaClientRoundTripMethods(t *testing.T) {
+func TestSunClientRoundTripMethods(t *testing.T) {
 	payloadBytes := []byte(`{"ok":true}`)
 	var revokedID string
 	var gatewayIndexPayload []byte
@@ -93,7 +93,7 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/objects") && !strings.HasSuffix(r.URL.Path, "/payload"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{{
-					"kind":            heliaCodexProfileBundleKind,
+					"kind":            sunCodexProfileBundleKind,
 					"name":            "cadma",
 					"latest_revision": 3,
 					"checksum":        "abc",
@@ -149,7 +149,7 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 				"items": []map[string]any{{
 					"id":         1,
 					"action":     "put_object",
-					"kind":       heliaCodexProfileBundleKind,
+					"kind":       sunCodexProfileBundleKind,
 					"name":       "cadma",
 					"created_at": "2026-02-22T00:00:00Z",
 				}},
@@ -160,7 +160,7 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, err := newHeliaClient(server.URL, "token123", 3*time.Second)
+	client, err := newSunClient(server.URL, "token123", 3*time.Second)
 	if err != nil {
 		t.Fatalf("new client: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 		t.Fatalf("unexpected account slug: %s", who.AccountSlug)
 	}
 
-	items, err := client.listObjects(ctx, heliaCodexProfileBundleKind, "", 10)
+	items, err := client.listObjects(ctx, sunCodexProfileBundleKind, "", 10)
 	if err != nil {
 		t.Fatalf("list objects: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 		t.Fatalf("unexpected list result: %+v", items)
 	}
 
-	put, err := client.putObject(ctx, heliaCodexProfileBundleKind, "cadma", []byte(`{"x":1}`), "application/json", nil, nil)
+	put, err := client.putObject(ctx, sunCodexProfileBundleKind, "cadma", []byte(`{"x":1}`), "application/json", nil, nil)
 	if err != nil {
 		t.Fatalf("put object: %v", err)
 	}
@@ -193,7 +193,7 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 		t.Fatalf("unexpected revision: %d", put.Result.Revision.Revision)
 	}
 
-	gotPayload, err := client.getPayload(ctx, heliaCodexProfileBundleKind, "cadma")
+	gotPayload, err := client.getPayload(ctx, sunCodexProfileBundleKind, "cadma")
 	if err != nil {
 		t.Fatalf("get payload: %v", err)
 	}
@@ -224,11 +224,11 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 		t.Fatalf("unexpected revoked token id: %s", revokedID)
 	}
 
-	auditRows, err := client.listAuditEvents(ctx, "", heliaCodexProfileBundleKind, "", 10)
+	auditRows, err := client.listAuditEvents(ctx, "", sunCodexProfileBundleKind, "", 10)
 	if err != nil {
 		t.Fatalf("list audit events: %v", err)
 	}
-	if len(auditRows) != 1 || auditRows[0].Kind != heliaCodexProfileBundleKind {
+	if len(auditRows) != 1 || auditRows[0].Kind != sunCodexProfileBundleKind {
 		t.Fatalf("unexpected audit rows: %+v", auditRows)
 	}
 

@@ -9,16 +9,16 @@ import (
 	"time"
 )
 
-func TestMaybeHeliaAutoBackupVaultHeliaModeRequiresAuthConfigAdditional(t *testing.T) {
+func TestMaybeSunAutoBackupVaultSunModeRequiresAuthConfigAdditional(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_SETTINGS_HOME", home)
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Vault.SyncBackend = vaultSyncBackendHelia
-	settings.Helia.BaseURL = ""
-	settings.Helia.Token = ""
+	settings.Vault.SyncBackend = vaultSyncBackendSun
+	settings.Sun.BaseURL = ""
+	settings.Sun.Token = ""
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -31,17 +31,17 @@ func TestMaybeHeliaAutoBackupVaultHeliaModeRequiresAuthConfigAdditional(t *testi
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	err := maybeHeliaAutoBackupVault("test_missing_auth", vaultFile)
+	err := maybeSunAutoBackupVault("test_missing_auth", vaultFile)
 	if err == nil {
-		t.Fatalf("expected strict helia mode to fail without helia auth config")
+		t.Fatalf("expected strict sun mode to fail without sun auth config")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "sun") {
 		t.Fatalf("expected sun context in error, got: %v", err)
 	}
 }
 
-func TestMaybeHeliaAutoSyncProfileUploadsCredentialsAdditional(t *testing.T) {
-	server, store := newHeliaTestServer(t, "acme", "token-autosync")
+func TestMaybeSunAutoSyncProfileUploadsCredentialsAdditional(t *testing.T) {
+	server, store := newSunTestServer(t, "acme", "token-autosync")
 	defer server.Close()
 
 	home := t.TempDir()
@@ -50,9 +50,9 @@ func TestMaybeHeliaAutoSyncProfileUploadsCredentialsAdditional(t *testing.T) {
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Helia.AutoSync = true
-	settings.Helia.BaseURL = server.URL
-	settings.Helia.Token = "token-autosync"
+	settings.Sun.AutoSync = true
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-autosync"
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -68,13 +68,13 @@ func TestMaybeHeliaAutoSyncProfileUploadsCredentialsAdditional(t *testing.T) {
 		t.Fatalf("write auth cache: %v", err)
 	}
 
-	maybeHeliaAutoSyncProfile("test_auto_sync", profile)
+	maybeSunAutoSyncProfile("test_auto_sync", profile)
 
-	payload, ok := store.get(heliaCodexProfileBundleKind, profile.ID)
+	payload, ok := store.get(sunCodexProfileBundleKind, profile.ID)
 	if !ok || len(payload) == 0 {
 		t.Fatalf("expected cloud profile payload to be uploaded")
 	}
-	var bundle heliaCodexProfileBundle
+	var bundle sunCodexProfileBundle
 	if err := json.Unmarshal(payload, &bundle); err != nil {
 		t.Fatalf("decode uploaded profile bundle: %v", err)
 	}
@@ -109,16 +109,16 @@ func TestSICommandSupportsLoginHelpAndVersion(t *testing.T) {
 	}
 }
 
-func TestHeliaE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
+func TestSunE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, _ := newHeliaTestServer(t, "acme", "token-machine-wait")
+	server, _ := newSunTestServer(t, "acme", "token-machine-wait")
 	defer server.Close()
 
-	_, env := setupHeliaAuthState(t, server.URL, "acme", "token-machine-wait")
+	_, env := setupSunAuthState(t, server.URL, "acme", "token-machine-wait")
 
-	stdout, stderr, err := runSICommand(t, env, "helia", "machine", "register",
+	stdout, stderr, err := runSICommand(t, env, "sun", "machine", "register",
 		"--machine", "controller-wait",
 		"--operator", "op:controller@local",
 		"--can-control-others",
@@ -129,7 +129,7 @@ func TestHeliaE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
 		t.Fatalf("controller register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "register",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "register",
 		"--machine", "worker-wait",
 		"--operator", "op:worker@remote",
 		"--allow-operators", "op:controller@local",
@@ -147,7 +147,7 @@ func TestHeliaE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
 	}
 	waitResultCh := make(chan cmdResult, 1)
 	go func() {
-		out, errOut, runErr := runSICommand(t, env, "helia", "machine", "run",
+		out, errOut, runErr := runSICommand(t, env, "sun", "machine", "run",
 			"--machine", "worker-wait",
 			"--source-machine", "controller-wait",
 			"--operator", "op:controller@local",
@@ -161,7 +161,7 @@ func TestHeliaE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
 	}()
 
 	time.Sleep(600 * time.Millisecond)
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "serve",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "serve",
 		"--machine", "worker-wait",
 		"--operator", "op:worker@remote",
 		"--once",
@@ -170,7 +170,7 @@ func TestHeliaE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("machine serve once failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var serveSummary heliaMachineServeSummary
+	var serveSummary sunMachineServeSummary
 	if err := json.Unmarshal([]byte(stdout), &serveSummary); err != nil {
 		t.Fatalf("decode serve summary payload: %v output=%q", err, stdout)
 	}
@@ -185,11 +185,11 @@ func TestHeliaE2E_MachineRunWaitFailsOnRemoteCommandError(t *testing.T) {
 	if !strings.Contains(strings.ToLower(waitResult.stderr), "finished with status failed") {
 		t.Fatalf("expected wait stderr to mention failed status, got: %s", waitResult.stderr)
 	}
-	var job heliaMachineJob
+	var job sunMachineJob
 	if err := json.Unmarshal([]byte(waitResult.stdout), &job); err != nil {
 		t.Fatalf("decode wait job payload: %v output=%q stderr=%q", err, waitResult.stdout, waitResult.stderr)
 	}
-	if job.Status != heliaMachineJobStatusFailed {
+	if job.Status != sunMachineJobStatusFailed {
 		t.Fatalf("expected failed status from --wait json output, got %q", job.Status)
 	}
 	if job.ExitCode == 0 {

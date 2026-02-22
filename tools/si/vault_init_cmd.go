@@ -160,7 +160,7 @@ func cmdVaultInit(args []string) {
 	} else {
 		fmt.Printf("key:       ok (backend=%s)\n", vault.NormalizeKeyBackend(keyCfg.Backend))
 	}
-	if err := maybeHeliaAutoBackupVault("vault_init", target.File); err != nil {
+	if err := maybeSunAutoBackupVault("vault_init", target.File); err != nil {
 		fatal(err)
 	}
 }

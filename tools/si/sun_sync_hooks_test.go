@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-type heliaObjectStore struct {
+type sunObjectStore struct {
 	mu       sync.Mutex
 	payloads map[string][]byte
 	revs     map[string]int64
@@ -24,8 +24,8 @@ type heliaObjectStore struct {
 	putCalls int
 }
 
-func newHeliaObjectStore() *heliaObjectStore {
-	return &heliaObjectStore{
+func newSunObjectStore() *sunObjectStore {
+	return &sunObjectStore{
 		payloads: map[string][]byte{},
 		revs:     map[string]int64{},
 		created:  map[string]string{},
@@ -33,11 +33,11 @@ func newHeliaObjectStore() *heliaObjectStore {
 	}
 }
 
-func (s *heliaObjectStore) key(kind string, name string) string {
+func (s *sunObjectStore) key(kind string, name string) string {
 	return kind + "/" + name
 }
 
-func (s *heliaObjectStore) get(kind string, name string) ([]byte, bool) {
+func (s *sunObjectStore) get(kind string, name string) ([]byte, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	raw, ok := s.payloads[s.key(kind, name)]
@@ -49,13 +49,13 @@ func (s *heliaObjectStore) get(kind string, name string) ([]byte, bool) {
 	return out, true
 }
 
-func (s *heliaObjectStore) putCount() int {
+func (s *sunObjectStore) putCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.putCalls
 }
 
-func (s *heliaObjectStore) list(kind string, name string, limit int) []map[string]any {
+func (s *sunObjectStore) list(kind string, name string, limit int) []map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if limit <= 0 {
@@ -89,7 +89,7 @@ func (s *heliaObjectStore) list(kind string, name string, limit int) []map[strin
 			"kind":            itemKind,
 			"name":            itemName,
 			"latest_revision": s.revs[key],
-			"checksum":        heliaPayloadSHA256Hex(payload),
+			"checksum":        sunPayloadSHA256Hex(payload),
 			"content_type":    "application/json",
 			"size_bytes":      len(payload),
 			"created_at":      created,
@@ -105,9 +105,9 @@ func (s *heliaObjectStore) list(kind string, name string, limit int) []map[strin
 	return items
 }
 
-func newHeliaTestServer(t *testing.T, account string, token string) (*httptest.Server, *heliaObjectStore) {
+func newSunTestServer(t *testing.T, account string, token string) (*httptest.Server, *sunObjectStore) {
 	t.Helper()
-	store := newHeliaObjectStore()
+	store := newSunObjectStore()
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/auth/whoami" && r.Method == http.MethodGet {
 			if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer "+token {
@@ -222,28 +222,28 @@ func appendCodexProfileToSettings(t *testing.T, home string, id string, name str
 	}
 }
 
-func setupHeliaAuthState(t *testing.T, serverURL string, account string, token string) (string, map[string]string) {
+func setupSunAuthState(t *testing.T, serverURL string, account string, token string) (string, map[string]string) {
 	t.Helper()
 	home := t.TempDir()
 	env := map[string]string{
 		"HOME":             home,
 		"SI_SETTINGS_HOME": home,
 	}
-	stdout, stderr, err := runSICommand(t, env, "helia", "auth", "login", "--url", serverURL, "--token", token, "--account", account, "--auto-sync")
+	stdout, stderr, err := runSICommand(t, env, "sun", "auth", "login", "--url", serverURL, "--token", token, "--account", account, "--auto-sync")
 	if err != nil {
-		t.Fatalf("helia auth login failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+		t.Fatalf("sun auth login failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 	return home, env
 }
 
-func TestHeliaE2E_ProfilePushPullRoundTrip(t *testing.T) {
+func TestSunE2E_ProfilePushPullRoundTrip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, store := newHeliaTestServer(t, "acme", "token-123")
+	server, store := newSunTestServer(t, "acme", "token-123")
 	defer server.Close()
 
-	home, env := setupHeliaAuthState(t, server.URL, "acme", "token-123")
+	home, env := setupSunAuthState(t, server.URL, "acme", "token-123")
 	authPath := filepath.Join(home, ".si", "codex", "profiles", "demo", "auth.json")
 	if err := os.MkdirAll(filepath.Dir(authPath), 0o700); err != nil {
 		t.Fatalf("mkdir profile dir: %v", err)
@@ -254,7 +254,7 @@ func TestHeliaE2E_ProfilePushPullRoundTrip(t *testing.T) {
 	}
 	appendCodexProfileToSettings(t, home, "demo", "Demo User", "demo@example.com")
 
-	stdout, stderr, err := runSICommand(t, env, "helia", "profile", "push", "--profile", "demo")
+	stdout, stderr, err := runSICommand(t, env, "sun", "profile", "push", "--profile", "demo")
 	if err != nil {
 		t.Fatalf("profile push failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -262,7 +262,7 @@ func TestHeliaE2E_ProfilePushPullRoundTrip(t *testing.T) {
 	if err := os.Remove(authPath); err != nil {
 		t.Fatalf("remove auth path: %v", err)
 	}
-	stdout, stderr, err = runSICommand(t, env, "helia", "profile", "pull", "--profile", "demo")
+	stdout, stderr, err = runSICommand(t, env, "sun", "profile", "pull", "--profile", "demo")
 	if err != nil {
 		t.Fatalf("profile pull failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -273,19 +273,19 @@ func TestHeliaE2E_ProfilePushPullRoundTrip(t *testing.T) {
 	if strings.TrimSpace(string(gotAuth)) != wantAuth {
 		t.Fatalf("auth payload mismatch\ngot:  %s\nwant: %s", strings.TrimSpace(string(gotAuth)), wantAuth)
 	}
-	if payload, ok := store.get(heliaCodexProfileBundleKind, "demo"); !ok || len(payload) == 0 {
+	if payload, ok := store.get(sunCodexProfileBundleKind, "demo"); !ok || len(payload) == 0 {
 		t.Fatalf("expected server to persist profile bundle payload")
 	}
 }
 
-func TestHeliaE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
+func TestSunE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, _ := newHeliaTestServer(t, "acme", "token-456")
+	server, _ := newSunTestServer(t, "acme", "token-456")
 	defer server.Close()
 
-	home, env := setupHeliaAuthState(t, server.URL, "acme", "token-456")
+	home, env := setupSunAuthState(t, server.URL, "acme", "token-456")
 	keyFile := filepath.Join(home, ".si", "vault", "keys", "age.key")
 	trustFile := filepath.Join(home, ".si", "vault", "trust.json")
 	auditLog := filepath.Join(home, ".si", "vault", "audit.log")
@@ -299,7 +299,7 @@ func TestHeliaE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vault init failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, env, "vault", "set", "HELIA_SYNC_TEST", "secret-value", "--file", vaultFile)
+	stdout, stderr, err = runSICommand(t, env, "vault", "set", "SUN_SYNC_TEST", "secret-value", "--file", vaultFile)
 	if err != nil {
 		t.Fatalf("vault set failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -308,14 +308,14 @@ func TestHeliaE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
 		t.Fatalf("read vault before backup: %v", err)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "vault", "backup", "push", "--file", vaultFile, "--name", "roundtrip")
+	stdout, stderr, err = runSICommand(t, env, "sun", "vault", "backup", "push", "--file", vaultFile, "--name", "roundtrip")
 	if err != nil {
 		t.Fatalf("vault backup push failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 	if err := os.Remove(vaultFile); err != nil {
 		t.Fatalf("remove vault file: %v", err)
 	}
-	stdout, stderr, err = runSICommand(t, env, "helia", "vault", "backup", "pull", "--file", vaultFile, "--name", "roundtrip")
+	stdout, stderr, err = runSICommand(t, env, "sun", "vault", "backup", "pull", "--file", vaultFile, "--name", "roundtrip")
 	if err != nil {
 		t.Fatalf("vault backup pull failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -328,8 +328,8 @@ func TestHeliaE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMaybeHeliaAutoBackupVaultSkipsPlaintext(t *testing.T) {
-	server, store := newHeliaTestServer(t, "acme", "token-789")
+func TestMaybeSunAutoBackupVaultSkipsPlaintext(t *testing.T) {
+	server, store := newSunTestServer(t, "acme", "token-789")
 	defer server.Close()
 
 	home := t.TempDir()
@@ -338,10 +338,10 @@ func TestMaybeHeliaAutoBackupVaultSkipsPlaintext(t *testing.T) {
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Helia.AutoSync = true
-	settings.Helia.BaseURL = server.URL
-	settings.Helia.Token = "token-789"
-	settings.Helia.VaultBackup = "default"
+	settings.Sun.AutoSync = true
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-789"
+	settings.Sun.VaultBackup = "default"
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestMaybeHeliaAutoBackupVaultSkipsPlaintext(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	if err := maybeHeliaAutoBackupVault("test_plaintext", vaultFile); err != nil {
+	if err := maybeSunAutoBackupVault("test_plaintext", vaultFile); err != nil {
 		t.Fatalf("expected best-effort mode to skip plaintext without hard error, got: %v", err)
 	}
 	if got := store.putCount(); got != 0 {
@@ -362,8 +362,8 @@ func TestMaybeHeliaAutoBackupVaultSkipsPlaintext(t *testing.T) {
 	}
 }
 
-func TestMaybeHeliaAutoBackupVaultHeliaModeFailsOnPlaintext(t *testing.T) {
-	server, store := newHeliaTestServer(t, "acme", "token-plain")
+func TestMaybeSunAutoBackupVaultSunModeFailsOnPlaintext(t *testing.T) {
+	server, store := newSunTestServer(t, "acme", "token-plain")
 	defer server.Close()
 
 	home := t.TempDir()
@@ -372,9 +372,9 @@ func TestMaybeHeliaAutoBackupVaultHeliaModeFailsOnPlaintext(t *testing.T) {
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Helia.BaseURL = server.URL
-	settings.Helia.Token = "token-plain"
-	settings.Vault.SyncBackend = vaultSyncBackendHelia
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-plain"
+	settings.Vault.SyncBackend = vaultSyncBackendSun
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -387,9 +387,9 @@ func TestMaybeHeliaAutoBackupVaultHeliaModeFailsOnPlaintext(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	err := maybeHeliaAutoBackupVault("test_plaintext_strict", vaultFile)
+	err := maybeSunAutoBackupVault("test_plaintext_strict", vaultFile)
 	if err == nil {
-		t.Fatalf("expected strict helia mode to fail on plaintext vault")
+		t.Fatalf("expected strict sun mode to fail on plaintext vault")
 	}
 	if !strings.Contains(err.Error(), "plaintext keys detected") {
 		t.Fatalf("expected plaintext error, got: %v", err)
@@ -399,8 +399,8 @@ func TestMaybeHeliaAutoBackupVaultHeliaModeFailsOnPlaintext(t *testing.T) {
 	}
 }
 
-func TestMaybeHeliaAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
-	server, store := newHeliaTestServer(t, "acme", "token-git")
+func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
+	server, store := newSunTestServer(t, "acme", "token-git")
 	defer server.Close()
 
 	home := t.TempDir()
@@ -409,9 +409,9 @@ func TestMaybeHeliaAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Helia.AutoSync = true
-	settings.Helia.BaseURL = server.URL
-	settings.Helia.Token = "token-git"
+	settings.Sun.AutoSync = true
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-git"
 	settings.Vault.SyncBackend = vaultSyncBackendGit
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
@@ -425,7 +425,7 @@ func TestMaybeHeliaAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	if err := maybeHeliaAutoBackupVault("test_git_mode", vaultFile); err != nil {
+	if err := maybeSunAutoBackupVault("test_git_mode", vaultFile); err != nil {
 		t.Fatalf("git mode should skip cloud backup without error: %v", err)
 	}
 	if got := store.putCount(); got != 0 {
@@ -433,38 +433,38 @@ func TestMaybeHeliaAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 	}
 }
 
-func TestHeliaE2E_TaskboardClaimAndLocking(t *testing.T) {
+func TestSunE2E_TaskboardClaimAndLocking(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, _ := newHeliaTestServer(t, "acme", "token-taskboard")
+	server, _ := newSunTestServer(t, "acme", "token-taskboard")
 	defer server.Close()
 
-	_, env := setupHeliaAuthState(t, server.URL, "acme", "token-taskboard")
+	_, env := setupSunAuthState(t, server.URL, "acme", "token-taskboard")
 
-	stdout, stderr, err := runSICommand(t, env, "helia", "taskboard", "add", "--name", "shared", "--title", "low priority", "--prompt", "handle low", "--priority", "P3", "--json")
+	stdout, stderr, err := runSICommand(t, env, "sun", "taskboard", "add", "--name", "shared", "--title", "low priority", "--prompt", "handle low", "--priority", "P3", "--json")
 	if err != nil {
 		t.Fatalf("taskboard add low failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var lowTask heliaTaskboardTask
+	var lowTask sunTaskboardTask
 	if err := json.Unmarshal([]byte(stdout), &lowTask); err != nil {
 		t.Fatalf("decode low task json: %v output=%q", err, stdout)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "add", "--name", "shared", "--title", "high priority", "--prompt", "handle high", "--priority", "P1", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "add", "--name", "shared", "--title", "high priority", "--prompt", "handle high", "--priority", "P1", "--json")
 	if err != nil {
 		t.Fatalf("taskboard add high failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var highTask heliaTaskboardTask
+	var highTask sunTaskboardTask
 	if err := json.Unmarshal([]byte(stdout), &highTask); err != nil {
 		t.Fatalf("decode high task json: %v output=%q", err, stdout)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "claim", "--name", "shared", "--agent", "agent-a", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "claim", "--name", "shared", "--agent", "agent-a", "--json")
 	if err != nil {
 		t.Fatalf("taskboard claim #1 failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var firstClaim heliaTaskboardClaimResult
+	var firstClaim sunTaskboardClaimResult
 	if err := json.Unmarshal([]byte(stdout), &firstClaim); err != nil {
 		t.Fatalf("decode first claim json: %v output=%q", err, stdout)
 	}
@@ -472,11 +472,11 @@ func TestHeliaE2E_TaskboardClaimAndLocking(t *testing.T) {
 		t.Fatalf("expected first claim to pick high priority task %q, got %q", highTask.ID, firstClaim.Task.ID)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "claim", "--name", "shared", "--agent", "agent-b", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "claim", "--name", "shared", "--agent", "agent-b", "--json")
 	if err != nil {
 		t.Fatalf("taskboard claim #2 failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var secondClaim heliaTaskboardClaimResult
+	var secondClaim sunTaskboardClaimResult
 	if err := json.Unmarshal([]byte(stdout), &secondClaim); err != nil {
 		t.Fatalf("decode second claim json: %v output=%q", err, stdout)
 	}
@@ -484,21 +484,21 @@ func TestHeliaE2E_TaskboardClaimAndLocking(t *testing.T) {
 		t.Fatalf("expected second claim to pick low task %q, got %q", lowTask.ID, secondClaim.Task.ID)
 	}
 
-	_, _, err = runSICommand(t, env, "helia", "taskboard", "release", "--name", "shared", "--id", firstClaim.Task.ID, "--agent", "agent-b")
+	_, _, err = runSICommand(t, env, "sun", "taskboard", "release", "--name", "shared", "--id", firstClaim.Task.ID, "--agent", "agent-b")
 	if err == nil {
 		t.Fatalf("expected release by non-owner agent to fail")
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "release", "--name", "shared", "--id", firstClaim.Task.ID, "--agent", "agent-a", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "release", "--name", "shared", "--id", firstClaim.Task.ID, "--agent", "agent-a", "--json")
 	if err != nil {
 		t.Fatalf("taskboard release by owner failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "claim", "--name", "shared", "--id", firstClaim.Task.ID, "--agent", "agent-b", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "claim", "--name", "shared", "--id", firstClaim.Task.ID, "--agent", "agent-b", "--json")
 	if err != nil {
 		t.Fatalf("taskboard claim released task failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var reclaimed heliaTaskboardClaimResult
+	var reclaimed sunTaskboardClaimResult
 	if err := json.Unmarshal([]byte(stdout), &reclaimed); err != nil {
 		t.Fatalf("decode reclaimed json: %v output=%q", err, stdout)
 	}
@@ -506,23 +506,23 @@ func TestHeliaE2E_TaskboardClaimAndLocking(t *testing.T) {
 		t.Fatalf("expected to reclaim task %q, got %q", firstClaim.Task.ID, reclaimed.Task.ID)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "done", "--name", "shared", "--id", secondClaim.Task.ID, "--agent", "agent-b", "--result", "completed", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "done", "--name", "shared", "--id", secondClaim.Task.ID, "--agent", "agent-b", "--result", "completed", "--json")
 	if err != nil {
 		t.Fatalf("taskboard done failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var doneTask heliaTaskboardTask
+	var doneTask sunTaskboardTask
 	if err := json.Unmarshal([]byte(stdout), &doneTask); err != nil {
 		t.Fatalf("decode done task json: %v output=%q", err, stdout)
 	}
-	if doneTask.Status != heliaTaskStatusDone {
+	if doneTask.Status != sunTaskStatusDone {
 		t.Fatalf("expected done status, got %q", doneTask.Status)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "taskboard", "show", "--name", "shared", "--json")
+	stdout, stderr, err = runSICommand(t, env, "sun", "taskboard", "show", "--name", "shared", "--json")
 	if err != nil {
 		t.Fatalf("taskboard show failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var board heliaTaskboard
+	var board sunTaskboard
 	if err := json.Unmarshal([]byte(stdout), &board); err != nil {
 		t.Fatalf("decode board json: %v output=%q", err, stdout)
 	}
@@ -531,16 +531,16 @@ func TestHeliaE2E_TaskboardClaimAndLocking(t *testing.T) {
 	}
 }
 
-func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
+func TestSunE2E_MachineRunServeWithACL(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, _ := newHeliaTestServer(t, "acme", "token-machine")
+	server, _ := newSunTestServer(t, "acme", "token-machine")
 	defer server.Close()
 
-	_, env := setupHeliaAuthState(t, server.URL, "acme", "token-machine")
+	_, env := setupSunAuthState(t, server.URL, "acme", "token-machine")
 
-	stdout, stderr, err := runSICommand(t, env, "helia", "machine", "register",
+	stdout, stderr, err := runSICommand(t, env, "sun", "machine", "register",
 		"--machine", "controller-a",
 		"--operator", "op:controller@local",
 		"--can-control-others",
@@ -551,7 +551,7 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 		t.Fatalf("controller register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "register",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "register",
 		"--machine", "worker-a",
 		"--operator", "op:worker@remote",
 		"--allow-operators", "op:controller@local",
@@ -562,7 +562,7 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 		t.Fatalf("worker register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	_, _, err = runSICommand(t, env, "helia", "machine", "run",
+	_, _, err = runSICommand(t, env, "sun", "machine", "run",
 		"--machine", "worker-a",
 		"--source-machine", "controller-a",
 		"--operator", "op:rogue@local",
@@ -573,7 +573,7 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 		t.Fatalf("expected unauthorized operator dispatch to fail")
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "run",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "run",
 		"--machine", "worker-a",
 		"--source-machine", "controller-a",
 		"--operator", "op:controller@local",
@@ -583,15 +583,15 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("remote run dispatch failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var queued heliaMachineJob
+	var queued sunMachineJob
 	if err := json.Unmarshal([]byte(stdout), &queued); err != nil {
 		t.Fatalf("decode queued job payload: %v output=%q", err, stdout)
 	}
-	if strings.TrimSpace(queued.Status) != heliaMachineJobStatusQueued {
+	if strings.TrimSpace(queued.Status) != sunMachineJobStatusQueued {
 		t.Fatalf("expected queued status, got %q", queued.Status)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "serve",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "serve",
 		"--machine", "worker-a",
 		"--operator", "op:worker@remote",
 		"--once",
@@ -600,7 +600,7 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("machine serve once failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var serveSummary heliaMachineServeSummary
+	var serveSummary sunMachineServeSummary
 	if err := json.Unmarshal([]byte(stdout), &serveSummary); err != nil {
 		t.Fatalf("decode serve summary payload: %v output=%q", err, stdout)
 	}
@@ -608,7 +608,7 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 		t.Fatalf("expected serve to process one job, got %d", serveSummary.Processed)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "jobs",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "jobs",
 		"--machine", "worker-a",
 		"--status", "succeeded",
 		"--json",
@@ -616,28 +616,28 @@ func TestHeliaE2E_MachineRunServeWithACL(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jobs list failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var jobs []heliaMachineJob
+	var jobs []sunMachineJob
 	if err := json.Unmarshal([]byte(stdout), &jobs); err != nil {
 		t.Fatalf("decode jobs payload: %v output=%q", err, stdout)
 	}
 	if len(jobs) == 0 {
 		t.Fatalf("expected at least one succeeded job")
 	}
-	if strings.TrimSpace(jobs[0].Status) != heliaMachineJobStatusSucceeded {
+	if strings.TrimSpace(jobs[0].Status) != sunMachineJobStatusSucceeded {
 		t.Fatalf("expected succeeded job, got %q", jobs[0].Status)
 	}
 }
 
-func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
+func TestSunE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, _ := newHeliaTestServer(t, "acme", "token-machine-remote")
+	server, _ := newSunTestServer(t, "acme", "token-machine-remote")
 	defer server.Close()
 
-	_, env := setupHeliaAuthState(t, server.URL, "acme", "token-machine-remote")
+	_, env := setupSunAuthState(t, server.URL, "acme", "token-machine-remote")
 
-	stdout, stderr, err := runSICommand(t, env, "helia", "machine", "register",
+	stdout, stderr, err := runSICommand(t, env, "sun", "machine", "register",
 		"--machine", "controller-b",
 		"--operator", "op:controller@local",
 		"--can-control-others",
@@ -648,7 +648,7 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 		t.Fatalf("controller register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "register",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "register",
 		"--machine", "worker-b",
 		"--operator", "op:worker@remote",
 		"--allow-operators", "op:controller@local",
@@ -659,7 +659,7 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 		t.Fatalf("worker register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "run",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "run",
 		"--machine", "worker-b",
 		"--source-machine", "controller-b",
 		"--operator", "op:controller@local",
@@ -669,15 +669,15 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("remote login --help dispatch failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var loginJob heliaMachineJob
+	var loginJob sunMachineJob
 	if err := json.Unmarshal([]byte(stdout), &loginJob); err != nil {
 		t.Fatalf("decode login queued job: %v output=%q", err, stdout)
 	}
-	if loginJob.Status != heliaMachineJobStatusQueued {
+	if loginJob.Status != sunMachineJobStatusQueued {
 		t.Fatalf("expected queued login job status, got %q", loginJob.Status)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "serve",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "serve",
 		"--machine", "worker-b",
 		"--operator", "op:worker@remote",
 		"--once",
@@ -687,7 +687,7 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 		t.Fatalf("serve once (login job) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "run",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "run",
 		"--machine", "worker-b",
 		"--source-machine", "controller-b",
 		"--operator", "op:controller@local",
@@ -697,15 +697,15 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("remote list --json dispatch failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var listJob heliaMachineJob
+	var listJob sunMachineJob
 	if err := json.Unmarshal([]byte(stdout), &listJob); err != nil {
 		t.Fatalf("decode list queued job: %v output=%q", err, stdout)
 	}
-	if listJob.Status != heliaMachineJobStatusQueued {
+	if listJob.Status != sunMachineJobStatusQueued {
 		t.Fatalf("expected queued list job status, got %q", listJob.Status)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "serve",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "serve",
 		"--machine", "worker-b",
 		"--operator", "op:worker@remote",
 		"--once",
@@ -715,7 +715,7 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 		t.Fatalf("serve once (list job) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "helia", "machine", "jobs",
+	stdout, stderr, err = runSICommand(t, env, "sun", "machine", "jobs",
 		"--machine", "worker-b",
 		"--status", "succeeded",
 		"--json",
@@ -723,7 +723,7 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jobs list failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	var jobs []heliaMachineJob
+	var jobs []sunMachineJob
 	if err := json.Unmarshal([]byte(stdout), &jobs); err != nil {
 		t.Fatalf("decode jobs payload: %v output=%q", err, stdout)
 	}
@@ -748,16 +748,16 @@ func TestHeliaE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 	}
 }
 
-func TestMaybeHeliaAutoBackupVaultHeliaModeRequiresAuthConfig(t *testing.T) {
+func TestMaybeSunAutoBackupVaultSunModeRequiresAuthConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_SETTINGS_HOME", home)
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Vault.SyncBackend = vaultSyncBackendHelia
-	settings.Helia.BaseURL = ""
-	settings.Helia.Token = ""
+	settings.Vault.SyncBackend = vaultSyncBackendSun
+	settings.Sun.BaseURL = ""
+	settings.Sun.Token = ""
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -770,17 +770,17 @@ func TestMaybeHeliaAutoBackupVaultHeliaModeRequiresAuthConfig(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	err := maybeHeliaAutoBackupVault("test_missing_auth", vaultFile)
+	err := maybeSunAutoBackupVault("test_missing_auth", vaultFile)
 	if err == nil {
-		t.Fatalf("expected strict helia mode to fail without helia auth config")
+		t.Fatalf("expected strict sun mode to fail without sun auth config")
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "sun") {
 		t.Fatalf("expected sun context in error, got: %v", err)
 	}
 }
 
-func TestMaybeHeliaAutoSyncProfileUploadsCredentials(t *testing.T) {
-	server, store := newHeliaTestServer(t, "acme", "token-autosync")
+func TestMaybeSunAutoSyncProfileUploadsCredentials(t *testing.T) {
+	server, store := newSunTestServer(t, "acme", "token-autosync")
 	defer server.Close()
 
 	home := t.TempDir()
@@ -789,9 +789,9 @@ func TestMaybeHeliaAutoSyncProfileUploadsCredentials(t *testing.T) {
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Helia.AutoSync = true
-	settings.Helia.BaseURL = server.URL
-	settings.Helia.Token = "token-autosync"
+	settings.Sun.AutoSync = true
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-autosync"
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -807,13 +807,13 @@ func TestMaybeHeliaAutoSyncProfileUploadsCredentials(t *testing.T) {
 		t.Fatalf("write auth cache: %v", err)
 	}
 
-	maybeHeliaAutoSyncProfile("test_auto_sync", profile)
+	maybeSunAutoSyncProfile("test_auto_sync", profile)
 
-	payload, ok := store.get(heliaCodexProfileBundleKind, profile.ID)
+	payload, ok := store.get(sunCodexProfileBundleKind, profile.ID)
 	if !ok || len(payload) == 0 {
 		t.Fatalf("expected cloud profile payload to be uploaded")
 	}
-	var bundle heliaCodexProfileBundle
+	var bundle sunCodexProfileBundle
 	if err := json.Unmarshal(payload, &bundle); err != nil {
 		t.Fatalf("decode uploaded profile bundle: %v", err)
 	}

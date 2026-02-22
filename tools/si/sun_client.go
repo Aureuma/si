@@ -13,20 +13,20 @@ import (
 	"time"
 )
 
-type heliaClient struct {
+type sunClient struct {
 	baseURL string
 	token   string
 	http    *http.Client
 }
 
-type heliaWhoAmI struct {
+type sunWhoAmI struct {
 	AccountID   string   `json:"account_id"`
 	AccountSlug string   `json:"account_slug"`
 	TokenID     string   `json:"token_id"`
 	Scopes      []string `json:"scopes"`
 }
 
-type heliaObjectMeta struct {
+type sunObjectMeta struct {
 	Kind           string                 `json:"kind"`
 	Name           string                 `json:"name"`
 	LatestRevision int64                  `json:"latest_revision"`
@@ -38,7 +38,7 @@ type heliaObjectMeta struct {
 	UpdatedAt      string                 `json:"updated_at"`
 }
 
-type heliaPutResult struct {
+type sunPutResult struct {
 	Result struct {
 		Object struct {
 			LatestRevision int64 `json:"latest_revision"`
@@ -49,7 +49,7 @@ type heliaPutResult struct {
 	} `json:"result"`
 }
 
-type heliaTokenRecord struct {
+type sunTokenRecord struct {
 	TokenID    string   `json:"token_id"`
 	Label      string   `json:"label"`
 	Scopes     []string `json:"scopes"`
@@ -59,7 +59,7 @@ type heliaTokenRecord struct {
 	LastUsedAt string   `json:"last_used_at,omitempty"`
 }
 
-type heliaIssuedToken struct {
+type sunIssuedToken struct {
 	Account struct {
 		ID   string `json:"id"`
 		Slug string `json:"slug"`
@@ -72,7 +72,7 @@ type heliaIssuedToken struct {
 	IssuedAt  string   `json:"issued_at"`
 }
 
-type heliaAuditEvent struct {
+type sunAuditEvent struct {
 	ID        int64                  `json:"id"`
 	TokenID   string                 `json:"token_id,omitempty"`
 	Action    string                 `json:"action"`
@@ -83,32 +83,32 @@ type heliaAuditEvent struct {
 	CreatedAt string                 `json:"created_at"`
 }
 
-type heliaError struct {
+type sunError struct {
 	Error string `json:"error"`
 }
 
-type heliaIntegrationRegistryResponse struct {
+type sunIntegrationRegistryResponse struct {
 	Registry string          `json:"registry"`
 	Index    json.RawMessage `json:"index"`
 }
 
-type heliaIntegrationShardResponse struct {
+type sunIntegrationShardResponse struct {
 	Registry string          `json:"registry"`
 	Shard    string          `json:"shard"`
 	Payload  json.RawMessage `json:"payload"`
 }
 
-func newHeliaClient(baseURL string, token string, timeout time.Duration) (*heliaClient, error) {
+func newSunClient(baseURL string, token string, timeout time.Duration) (*sunClient, error) {
 	baseURL = strings.TrimSpace(baseURL)
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	if baseURL == "" {
-		return nil, fmt.Errorf("sun base url is required (set settings.sun.base_url/settings.helia.base_url, SI_SUN_BASE_URL, or SI_HELIA_BASE_URL)")
+		return nil, fmt.Errorf("sun base url is required (set settings.sun.base_url or SI_SUN_BASE_URL)")
 	}
 	if _, err := url.ParseRequestURI(baseURL); err != nil {
 		return nil, fmt.Errorf("invalid sun base url %q", baseURL)
 	}
 	parsed, _ := url.Parse(baseURL)
-	if parsed != nil && !heliaAllowsInsecureHTTP(parsed) {
+	if parsed != nil && !sunAllowsInsecureHTTP(parsed) {
 		return nil, fmt.Errorf("sun base url must use https for non-local hosts (set SI_SUN_ALLOW_INSECURE_HTTP=1 to override)")
 	}
 	token = strings.TrimSpace(token)
@@ -118,14 +118,14 @@ func newHeliaClient(baseURL string, token string, timeout time.Duration) (*helia
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return &heliaClient{
+	return &sunClient{
 		baseURL: baseURL,
 		token:   token,
 		http:    &http.Client{Timeout: timeout},
 	}, nil
 }
 
-func heliaAllowsInsecureHTTP(u *url.URL) bool {
+func sunAllowsInsecureHTTP(u *url.URL) bool {
 	if u == nil {
 		return false
 	}
@@ -147,7 +147,7 @@ func heliaAllowsInsecureHTTP(u *url.URL) bool {
 	}
 }
 
-func (c *heliaClient) ready(ctx context.Context) error {
+func (c *sunClient) ready(ctx context.Context) error {
 	endpoint := c.baseURL + "/v1/readyz"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -159,13 +159,13 @@ func (c *heliaClient) ready(ctx context.Context) error {
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return decodeHeliaError(res)
+		return decodeSunError(res)
 	}
 	return nil
 }
 
-func (c *heliaClient) whoAmI(ctx context.Context) (heliaWhoAmI, error) {
-	var out heliaWhoAmI
+func (c *sunClient) whoAmI(ctx context.Context) (sunWhoAmI, error) {
+	var out sunWhoAmI
 	body, err := c.doJSON(ctx, http.MethodGet, "/v1/auth/whoami", nil)
 	if err != nil {
 		return out, err
@@ -176,7 +176,7 @@ func (c *heliaClient) whoAmI(ctx context.Context) (heliaWhoAmI, error) {
 	return out, nil
 }
 
-func (c *heliaClient) listObjects(ctx context.Context, kind string, name string, limit int) ([]heliaObjectMeta, error) {
+func (c *sunClient) listObjects(ctx context.Context, kind string, name string, limit int) ([]sunObjectMeta, error) {
 	params := url.Values{}
 	if strings.TrimSpace(kind) != "" {
 		params.Set("kind", strings.TrimSpace(kind))
@@ -196,7 +196,7 @@ func (c *heliaClient) listObjects(ctx context.Context, kind string, name string,
 		return nil, err
 	}
 	var parsed struct {
-		Items []heliaObjectMeta `json:"items"`
+		Items []sunObjectMeta `json:"items"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("parse list objects response: %w", err)
@@ -204,8 +204,8 @@ func (c *heliaClient) listObjects(ctx context.Context, kind string, name string,
 	return parsed.Items, nil
 }
 
-func (c *heliaClient) putObject(ctx context.Context, kind string, name string, payload []byte, contentType string, metadata map[string]interface{}, expectedRevision *int64) (heliaPutResult, error) {
-	var out heliaPutResult
+func (c *sunClient) putObject(ctx context.Context, kind string, name string, payload []byte, contentType string, metadata map[string]interface{}, expectedRevision *int64) (sunPutResult, error) {
+	var out sunPutResult
 	request := map[string]interface{}{
 		"content_type":   strings.TrimSpace(contentType),
 		"payload_base64": base64.StdEncoding.EncodeToString(payload),
@@ -226,7 +226,7 @@ func (c *heliaClient) putObject(ctx context.Context, kind string, name string, p
 	return out, nil
 }
 
-func (c *heliaClient) getPayload(ctx context.Context, kind string, name string) ([]byte, error) {
+func (c *sunClient) getPayload(ctx context.Context, kind string, name string) ([]byte, error) {
 	endpoint := c.baseURL + "/v1/objects/" + url.PathEscape(kind) + "/" + url.PathEscape(name) + "/payload"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -239,12 +239,12 @@ func (c *heliaClient) getPayload(ctx context.Context, kind string, name string) 
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, decodeHeliaError(res)
+		return nil, decodeSunError(res)
 	}
 	return io.ReadAll(res.Body)
 }
 
-func (c *heliaClient) listTokens(ctx context.Context, includeRevoked bool, limit int) ([]heliaTokenRecord, error) {
+func (c *sunClient) listTokens(ctx context.Context, includeRevoked bool, limit int) ([]sunTokenRecord, error) {
 	params := url.Values{}
 	params.Set("include_revoked", boolString(includeRevoked))
 	if limit > 0 {
@@ -255,7 +255,7 @@ func (c *heliaClient) listTokens(ctx context.Context, includeRevoked bool, limit
 		return nil, err
 	}
 	var parsed struct {
-		Items []heliaTokenRecord `json:"items"`
+		Items []sunTokenRecord `json:"items"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("parse list tokens response: %w", err)
@@ -263,8 +263,8 @@ func (c *heliaClient) listTokens(ctx context.Context, includeRevoked bool, limit
 	return parsed.Items, nil
 }
 
-func (c *heliaClient) createToken(ctx context.Context, label string, scopes []string, expiresInHours int) (heliaIssuedToken, error) {
-	var out heliaIssuedToken
+func (c *sunClient) createToken(ctx context.Context, label string, scopes []string, expiresInHours int) (sunIssuedToken, error) {
+	var out sunIssuedToken
 	request := map[string]interface{}{
 		"label":  strings.TrimSpace(label),
 		"scopes": scopes,
@@ -282,12 +282,12 @@ func (c *heliaClient) createToken(ctx context.Context, label string, scopes []st
 	return out, nil
 }
 
-func (c *heliaClient) revokeToken(ctx context.Context, tokenID string) error {
+func (c *sunClient) revokeToken(ctx context.Context, tokenID string) error {
 	_, err := c.doJSON(ctx, http.MethodPost, "/v1/tokens/"+url.PathEscape(strings.TrimSpace(tokenID))+"/revoke", map[string]interface{}{})
 	return err
 }
 
-func (c *heliaClient) listAuditEvents(ctx context.Context, action string, kind string, name string, limit int) ([]heliaAuditEvent, error) {
+func (c *sunClient) listAuditEvents(ctx context.Context, action string, kind string, name string, limit int) ([]sunAuditEvent, error) {
 	params := url.Values{}
 	if strings.TrimSpace(action) != "" {
 		params.Set("action", strings.TrimSpace(action))
@@ -310,7 +310,7 @@ func (c *heliaClient) listAuditEvents(ctx context.Context, action string, kind s
 		return nil, err
 	}
 	var parsed struct {
-		Items []heliaAuditEvent `json:"items"`
+		Items []sunAuditEvent `json:"items"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("parse audit response: %w", err)
@@ -318,12 +318,12 @@ func (c *heliaClient) listAuditEvents(ctx context.Context, action string, kind s
 	return parsed.Items, nil
 }
 
-func (c *heliaClient) getIntegrationRegistryIndex(ctx context.Context, registry string) ([]byte, error) {
+func (c *sunClient) getIntegrationRegistryIndex(ctx context.Context, registry string) ([]byte, error) {
 	body, err := c.doJSON(ctx, http.MethodGet, "/v1/integrations/registries/"+url.PathEscape(strings.TrimSpace(registry)), nil)
 	if err != nil {
 		return nil, err
 	}
-	var parsed heliaIntegrationRegistryResponse
+	var parsed sunIntegrationRegistryResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("parse integration registry response: %w", err)
 	}
@@ -333,8 +333,8 @@ func (c *heliaClient) getIntegrationRegistryIndex(ctx context.Context, registry 
 	return parsed.Index, nil
 }
 
-func (c *heliaClient) putIntegrationRegistryIndex(ctx context.Context, registry string, payload []byte, expectedRevision *int64) (heliaPutResult, error) {
-	var out heliaPutResult
+func (c *sunClient) putIntegrationRegistryIndex(ctx context.Context, registry string, payload []byte, expectedRevision *int64) (sunPutResult, error) {
+	var out sunPutResult
 	request := map[string]interface{}{
 		"payload": json.RawMessage(payload),
 	}
@@ -351,13 +351,13 @@ func (c *heliaClient) putIntegrationRegistryIndex(ctx context.Context, registry 
 	return out, nil
 }
 
-func (c *heliaClient) getIntegrationRegistryShard(ctx context.Context, registry string, shard string) ([]byte, error) {
+func (c *sunClient) getIntegrationRegistryShard(ctx context.Context, registry string, shard string) ([]byte, error) {
 	path := "/v1/integrations/registries/" + url.PathEscape(strings.TrimSpace(registry)) + "/shards/" + url.PathEscape(strings.TrimSpace(shard))
 	body, err := c.doJSON(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, err
 	}
-	var parsed heliaIntegrationShardResponse
+	var parsed sunIntegrationShardResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("parse integration shard response: %w", err)
 	}
@@ -367,8 +367,8 @@ func (c *heliaClient) getIntegrationRegistryShard(ctx context.Context, registry 
 	return parsed.Payload, nil
 }
 
-func (c *heliaClient) putIntegrationRegistryShard(ctx context.Context, registry string, shard string, payload []byte, expectedRevision *int64) (heliaPutResult, error) {
-	var out heliaPutResult
+func (c *sunClient) putIntegrationRegistryShard(ctx context.Context, registry string, shard string, payload []byte, expectedRevision *int64) (sunPutResult, error) {
+	var out sunPutResult
 	request := map[string]interface{}{
 		"payload": json.RawMessage(payload),
 	}
@@ -386,7 +386,7 @@ func (c *heliaClient) putIntegrationRegistryShard(ctx context.Context, registry 
 	return out, nil
 }
 
-func (c *heliaClient) doJSON(ctx context.Context, method string, path string, payload interface{}) ([]byte, error) {
+func (c *sunClient) doJSON(ctx context.Context, method string, path string, payload interface{}) ([]byte, error) {
 	endpoint := c.baseURL + path
 	var body io.Reader
 	if payload != nil {
@@ -410,14 +410,14 @@ func (c *heliaClient) doJSON(ctx context.Context, method string, path string, pa
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, decodeHeliaError(res)
+		return nil, decodeSunError(res)
 	}
 	return io.ReadAll(res.Body)
 }
 
-func decodeHeliaError(res *http.Response) error {
+func decodeSunError(res *http.Response) error {
 	body, _ := io.ReadAll(res.Body)
-	var parsed heliaError
+	var parsed sunError
 	if err := json.Unmarshal(body, &parsed); err == nil && strings.TrimSpace(parsed.Error) != "" {
 		return fmt.Errorf("sun: %s (status %d)", parsed.Error, res.StatusCode)
 	}

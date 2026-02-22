@@ -339,7 +339,7 @@ func TestApplySettingsDefaultsNormalizesCodexLoginDefaultBrowser(t *testing.T) {
 	}
 }
 
-func TestLoadSettingsSunSectionOverridesLegacyHeliaSection(t *testing.T) {
+func TestLoadSettingsSunSection(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
@@ -348,11 +348,6 @@ func TestLoadSettingsSunSectionOverridesLegacyHeliaSection(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	content := `
-[helia]
-base_url = "https://legacy.example"
-token = "legacy-token"
-timeout_seconds = 5
-
 [sun]
 base_url = "https://sun.example"
 token = "sun-token"
@@ -367,31 +362,28 @@ taskboard = "shared"
 	if err != nil {
 		t.Fatalf("loadSettings: %v", err)
 	}
-	if got.Helia.BaseURL != "https://sun.example" {
-		t.Fatalf("expected sun base url override, got %q", got.Helia.BaseURL)
+	if got.Sun.BaseURL != "https://sun.example" {
+		t.Fatalf("expected sun base url override, got %q", got.Sun.BaseURL)
 	}
-	if got.Helia.Token != "sun-token" {
-		t.Fatalf("expected sun token override, got %q", got.Helia.Token)
+	if got.Sun.Token != "sun-token" {
+		t.Fatalf("expected sun token override, got %q", got.Sun.Token)
 	}
-	if got.Helia.TimeoutSeconds != 30 {
-		t.Fatalf("expected sun timeout override, got %d", got.Helia.TimeoutSeconds)
+	if got.Sun.TimeoutSeconds != 30 {
+		t.Fatalf("expected sun timeout override, got %d", got.Sun.TimeoutSeconds)
 	}
-	if got.Helia.Taskboard != "shared" {
-		t.Fatalf("expected sun taskboard override, got %q", got.Helia.Taskboard)
-	}
-	if got.Sun.BaseURL != got.Helia.BaseURL {
-		t.Fatalf("expected mirrored sun settings, got sun=%q helia=%q", got.Sun.BaseURL, got.Helia.BaseURL)
+	if got.Sun.Taskboard != "shared" {
+		t.Fatalf("expected sun taskboard override, got %q", got.Sun.Taskboard)
 	}
 }
 
-func TestSaveSettingsMirrorsHeliaIntoSunSection(t *testing.T) {
+func TestSaveSettingsWritesSunSection(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Helia.BaseURL = "https://sun-save.example"
-	settings.Helia.Token = "save-token"
+	settings.Sun.BaseURL = "https://sun-save.example"
+	settings.Sun.Token = "save-token"
 
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("saveSettings: %v", err)
@@ -410,6 +402,6 @@ func TestSaveSettingsMirrorsHeliaIntoSunSection(t *testing.T) {
 		t.Fatalf("expected [sun] section in saved settings, got:\n%s", text)
 	}
 	if !strings.Contains(text, "sun-save.example") {
-		t.Fatalf("expected mirrored sun base_url in saved settings, got:\n%s", text)
+		t.Fatalf("expected sun base_url in saved settings, got:\n%s", text)
 	}
 }
