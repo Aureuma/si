@@ -1,0 +1,87 @@
+name: CLI Release Assets
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build/upload (for example v0.48.0)
+        required: true
+        type: string
+
+concurrency:
+  group: cli-release-assets-${{ github.event.release.tag_name || github.event.inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  attestations: write
+  id-token: write
+
+jobs:
+  resolve-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+    steps:
+      - name: Resolve release tag
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event.release.tag_name }}"
+          if [[ -z "${tag}" ]]; then
+            tag="${{ github.event.inputs.tag }}"
+          fi
+          if [[ -z "${tag}" ]]; then
+            echo "No release tag provided." >&2
+            exit 1
+          fi
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "Building assets for tag: ${tag}"
+
+  publish-assets:
+    needs: [resolve-tag]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-tag.outputs.tag }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
+      - name: Validate release tag and CLI version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/release/validate-release-version.sh --tag "${{ needs.resolve-tag.outputs.tag }}"
+
+      - name: Build all release archives and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/release/build-cli-release-assets.sh --version "${{ needs.resolve-tag.outputs.tag }}" --out-dir dist
+          ls -lah dist
+
+      - name: Upload assets to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${{ needs.resolve-tag.outputs.tag }}"
+          gh release view "${tag}" --repo "${{ github.repository }}" >/dev/null
+          gh release upload "${tag}" dist/*.tar.gz dist/checksums.txt --repo "${{ github.repository }}" --clobber
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/checksums.txt

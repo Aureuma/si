@@ -7,9 +7,7 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 - waits for a delimited work report between `<<WORK_REPORT_BEGIN>>` and `<<WORK_REPORT_END>>` (and has a tolerant fallback for Codex-native output)
 - persists artifacts under `.si/dyad/<dyad>/reports/` in the workspace
 
-Dyads also share a task queue file:
-
-- `/root/.si/TASK_BOARD.md` (host path: `~/.si/TASK_BOARD.md`)
+Dyads can also pull tasks from a shared Helia taskboard (`si helia taskboard ...`) when spawned with autopilot.
 
 ## Requirements
 
@@ -36,6 +34,18 @@ Spawn a dyad:
 
 ```bash
 si dyad spawn <name> [role]
+```
+
+Autopilot (claim from Helia taskboard when no explicit prompt is provided):
+
+```bash
+si dyad spawn <name> [role] --autopilot
+```
+
+Optional explicit seed prompt:
+
+```bash
+si dyad spawn <name> [role] --autopilot --prompt "Investigate failing CI release job"
 ```
 
 Check status:

@@ -448,12 +448,17 @@ type OpenAIAccountEntry struct {
 }
 
 type HeliaSettings struct {
-	BaseURL        string `toml:"base_url,omitempty"`
-	Account        string `toml:"account,omitempty"`
-	Token          string `toml:"token,omitempty"`
-	TimeoutSeconds int    `toml:"timeout_seconds,omitempty"`
-	AutoSync       bool   `toml:"auto_sync,omitempty"`
-	VaultBackup    string `toml:"vault_backup,omitempty"`
+	BaseURL               string `toml:"base_url,omitempty"`
+	Account               string `toml:"account,omitempty"`
+	Token                 string `toml:"token,omitempty"`
+	TimeoutSeconds        int    `toml:"timeout_seconds,omitempty"`
+	AutoSync              bool   `toml:"auto_sync,omitempty"`
+	VaultBackup           string `toml:"vault_backup,omitempty"`
+	Taskboard             string `toml:"taskboard,omitempty"`
+	TaskboardAgent        string `toml:"taskboard_agent,omitempty"`
+	TaskboardLeaseSeconds int    `toml:"taskboard_lease_seconds,omitempty"`
+	MachineID             string `toml:"machine_id,omitempty"`
+	OperatorID            string `toml:"operator_id,omitempty"`
 }
 
 type OCISettings struct {
@@ -941,6 +946,16 @@ func applySettingsDefaults(settings *Settings) {
 	if strings.TrimSpace(settings.Helia.VaultBackup) == "" {
 		settings.Helia.VaultBackup = "default"
 	}
+	settings.Helia.Taskboard = strings.TrimSpace(settings.Helia.Taskboard)
+	if settings.Helia.Taskboard == "" {
+		settings.Helia.Taskboard = "default"
+	}
+	settings.Helia.TaskboardAgent = strings.TrimSpace(settings.Helia.TaskboardAgent)
+	if settings.Helia.TaskboardLeaseSeconds <= 0 {
+		settings.Helia.TaskboardLeaseSeconds = 1800
+	}
+	settings.Helia.MachineID = strings.TrimSpace(settings.Helia.MachineID)
+	settings.Helia.OperatorID = strings.TrimSpace(settings.Helia.OperatorID)
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
 	if settings.OCI.Profile == "" {

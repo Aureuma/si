@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	heliaUsageText                    = "usage: si helia <auth|profile|vault|token|audit|doctor> ..."
+	heliaUsageText                    = "usage: si helia <auth|profile|vault|token|audit|taskboard|machine|doctor> ..."
 	heliaAuthUsageText                = "usage: si helia auth <login|status|logout> ..."
 	heliaProfileUsageText             = "usage: si helia profile <list|push|pull> ..."
 	heliaVaultUsageText               = "usage: si helia vault backup <push|pull> ..."
@@ -55,6 +55,10 @@ func cmdHelia(args []string) {
 		cmdHeliaToken(rest)
 	case "audit":
 		cmdHeliaAudit(rest)
+	case "taskboard":
+		cmdHeliaTaskboard(rest)
+	case "machine":
+		cmdHeliaMachine(rest)
 	case "doctor":
 		cmdHeliaDoctor(rest)
 	default:

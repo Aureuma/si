@@ -399,6 +399,7 @@ func dyadSpawnBoolFlags() map[string]bool {
 	return map[string]bool{
 		"docker-socket": true,
 		"skip-auth":     true,
+		"autopilot":     true,
 	}
 }
 
