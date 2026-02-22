@@ -118,6 +118,9 @@ func openLoginURL(url string, profile codexProfile, command string, safariProfil
 	if isSafariProfileCommand(cmdTemplate) {
 		if err := openSafariProfileURLFn(url, profile, safariProfileOverride); err != nil {
 			warnf("open login url failed: %v", err)
+			if hint := safariAccessibilityHint(err); hint != "" {
+				warnf("%s", hint)
+			}
 		}
 		return
 	}
@@ -342,14 +345,38 @@ func openSafariProfileURL(url string, profile codexProfile, override string) err
 		cmdArgs = append(cmdArgs, "-e", line)
 	}
 	// #nosec G204 -- osascript command and generated script lines are controlled locally.
-	cmd := exec.Command("osascript", cmdArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	out, err := exec.Command("osascript", cmdArgs...).CombinedOutput()
+	if len(out) > 0 {
+		_, _ = os.Stderr.Write(out)
+	}
+	if err != nil {
 		_ = runShellCommandFn("open -a \"Safari\" " + shellSingleQuote(url))
-		return err
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed != "" {
+			return fmt.Errorf("osascript safari profile automation failed: %s", trimmed)
+		}
+		return fmt.Errorf("osascript safari profile automation failed: %w", err)
 	}
 	return nil
+}
+
+func safariAccessibilityHint(err error) string {
+	return safariAccessibilityHintForOS(runtime.GOOS, err)
+}
+
+func safariAccessibilityHintForOS(goos string, err error) string {
+	if goos != "darwin" || err == nil {
+		return ""
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	if strings.Contains(msg, "system events") ||
+		strings.Contains(msg, "accessibility") ||
+		strings.Contains(msg, "not allowed assistive access") ||
+		strings.Contains(msg, "not authorized") ||
+		strings.Contains(msg, "not permitted") {
+		return "Safari profile automation was blocked. Grant Accessibility permission to your terminal in System Settings > Privacy & Security > Accessibility, then retry `si login`. SI already fell back to opening Safari without profile selection."
+	}
+	return "Safari profile opening failed. If you have not granted Accessibility permission to your terminal, enable it in System Settings > Privacy & Security > Accessibility, then retry `si login`."
 }
 
 func openChromeProfileURL(url string, profile codexProfile) error {
@@ -533,9 +560,13 @@ func safariProfileMenuItems() (map[string]bool, error) {
 		cmdArgs = append(cmdArgs, "-e", line)
 	}
 	// #nosec G204 -- osascript command and generated script lines are controlled locally.
-	out, err := exec.Command("osascript", cmdArgs...).Output()
+	out, err := exec.Command("osascript", cmdArgs...).CombinedOutput()
 	if err != nil {
-		return nil, err
+		trimmed := strings.TrimSpace(string(out))
+		if trimmed != "" {
+			return nil, fmt.Errorf("osascript safari menu query failed: %s", trimmed)
+		}
+		return nil, fmt.Errorf("osascript safari menu query failed: %w", err)
 	}
 	items := map[string]bool{}
 	for _, item := range strings.Split(string(out), ",") {
