@@ -42,12 +42,14 @@ func cmdBuildSelf(args []string) {
 		cmdSelfBuild(args[1:])
 	case "upgrade":
 		cmdSelfUpgrade(args[1:])
+	case "release-assets", "release":
+		cmdSelfReleaseAssets(args[1:])
 	case "run":
 		cmdSelfRun(args[1:])
 	case "help", "-h", "--help":
-		printUsage("usage: si build self [build|upgrade|run] [args...]")
+		printUsage("usage: si build self [build|upgrade|release-assets|run] [args...]")
 	default:
 		printUnknown("build self", args[0])
-		printUsage("usage: si build self [build|upgrade|run] [args...]")
+		printUsage("usage: si build self [build|upgrade|release-assets|run] [args...]")
 	}
 }

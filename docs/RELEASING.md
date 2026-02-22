@@ -66,10 +66,12 @@ Update release version constants:
 ./tools/test-install-si.sh
 ./tools/test-install-si-docker.sh
 ./si analyze --module tools/si
+./si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 git add CHANGELOG.md tools/si/version.go
 git commit -m "Bump version to vX.Y.Z"
 ```
 - Keep release prep changes in a dedicated commit.
+- The release-assets preflight confirms archive packaging before publishing a GitHub Release.
 
 ### 5) Create an annotated tag for the release commit
 ```
@@ -132,6 +134,36 @@ gh release view vX.Y.Z --web
 ```
 - Confirm title, notes, and tag target are correct.
 - Optional: if your repo uses release attestations, run `gh release verify vX.Y.Z`.
+
+### 9) Verify automated CLI release assets
+When a GitHub Release is published, workflow `.github/workflows/cli-release-assets.yml`
+builds and uploads CLI archives automatically.
+
+Supported targets:
+- `linux/amd64`
+- `linux/arm64`
+- `linux/armv7`
+- `darwin/amd64`
+- `darwin/arm64`
+
+Expected assets:
+- `si_<version>_linux_amd64.tar.gz`
+- `si_<version>_linux_arm64.tar.gz`
+- `si_<version>_linux_armv7.tar.gz`
+- `si_<version>_darwin_amd64.tar.gz`
+- `si_<version>_darwin_arm64.tar.gz`
+- `checksums.txt`
+
+Verification commands:
+```
+gh run list --workflow "CLI Release Assets" --limit 1
+gh release view vX.Y.Z --json assets --jq '.assets[].name'
+```
+
+Notes:
+- The workflow validates that `tools/si/version.go` matches the release tag.
+- The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path.
+- A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 
 ## Tagging Rules
 - Use annotated tags: `git tag -a vX.Y.Z -m "vX.Y.Z" <commit>`.

@@ -22,7 +22,7 @@ si <command> <subcommand> --help
 | `si dyad` | Manage actor/critic pairs | `spawn`, `status`, `peek`, `exec`, `logs`, `cleanup` | [Dyad](./DYAD) |
 | codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `init`, `status`, `list`, `set`, `run`, `docker exec`, `trust`, `backend` | [Vault](./VAULT) |
-| `si helia` | Cloud sync for codex profiles and vault backups | `auth`, `profile`, `vault backup`, `token`, `audit`, `doctor` | [Helia Cloud Sync](./HELIA) |
+| `si helia` | Cloud sync and machine orchestration for profiles, vault, taskboards, and remote SI control | `auth`, `profile`, `vault backup`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Helia Cloud Sync](./HELIA) |
 | `si browser` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si plugins` | Plugin registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy` | [Plugin Marketplace](./PLUGIN_MARKETPLACE) |
 
@@ -61,6 +61,7 @@ si <command> <subcommand> --help
 | --- | --- | --- |
 | `si build image` | Build local runtime image | `si build image` |
 | `si build self` | Build or upgrade `si` binary | `si build self` |
+| `si build self release-assets` | Build all release archives + `checksums.txt` locally | `si build self release-assets --version vX.Y.Z` |
 | `si mintlify` | Docs lifecycle commands | `si mintlify validate`, `si mintlify dev` |
 | `si analyze` (`si lint`) | Go static analysis | `si analyze --module tools/si` |
 | `si docker` | Raw Docker passthrough | `si docker ps` |
@@ -93,6 +94,12 @@ si cloudflare doctor --json
 si paas doctor --json
 si paas backup run --app <slug> --json
 si paas events tail --json
+```
+
+### 4. Release maintainer preflight
+
+```bash
+si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
 ## Guardrails

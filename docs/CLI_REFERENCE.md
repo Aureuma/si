@@ -23,7 +23,7 @@ si <command> <subcommand> --help
 | --- | --- |
 | Runtime and orchestration | `si dyad`, codex lifecycle (`si spawn`, `si run`, `si status`, `si report`) |
 | Secrets and context | `si vault` (`si creds`) |
-| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish` |
+| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si helia` |
 | Provider telemetry | `si providers` |
 | Platform operations | `si paas` |
 | Browser MCP runtime | `si browser` |
@@ -41,6 +41,22 @@ si build image
 si dyad spawn app-hardening --profile main
 si dyad status app-hardening
 ```
+
+### Shared dyad taskboard
+
+```bash
+si helia taskboard add --name shared --title "Triage flaky test" --prompt "Reproduce and fix the flaky test in CI" --priority P1
+si dyad spawn ci-triage --autopilot --profile main
+```
+
+### Cross-machine SI control
+
+```bash
+si helia machine register --machine controller-a --operator op:controller@local --can-control-others --can-be-controlled=false
+si helia machine run --machine worker-a --source-machine controller-a --operator op:controller@local --wait -- version
+```
+
+`--wait` exits non-zero for remote `failed`/`denied` jobs, so it is safe for CI gating.
 
 ### Integration readiness
 
@@ -64,6 +80,12 @@ si paas events tail --app <slug> --json
 ```bash
 si mintlify validate
 si mintlify broken-links
+```
+
+### Release preflight
+
+```bash
+si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
 ```
 
 ## Safety guidance

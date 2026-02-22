@@ -10,6 +10,7 @@ description: Use `si helia` to sync codex profiles and vault backups to the Heli
 Primary uses:
 - Sync Codex profile auth caches across machines.
 - Back up encrypted SI vault files to a cloud object store.
+- Share a Helia-backed dyad taskboard across machines/agents.
 - Manage Helia device tokens and inspect audit history.
 
 ## Prerequisites
@@ -117,6 +118,88 @@ si helia audit list --kind codex_profile_bundle --limit 20
 si helia audit list --kind vault_backup --limit 20
 ```
 
+## Shared dyad taskboard
+
+Set a default board (and optional default agent id):
+
+```bash
+si helia taskboard use --name shared --agent dyad:main-laptop
+```
+
+Add work items (include `--prompt` for dyad autopilot seed text):
+
+```bash
+si helia taskboard add --title "Harden release workflow" --prompt "Audit and fix release asset upload flow" --priority P1 --name shared
+si helia taskboard list --name shared
+```
+
+Claim/release/complete with optimistic lock ownership:
+
+```bash
+si helia taskboard claim --name shared --agent dyad:main-laptop
+si helia taskboard release --name shared --id <task-id> --agent dyad:main-laptop
+si helia taskboard done --name shared --id <task-id> --agent dyad:main-laptop --result "merged and verified"
+```
+
+Dyad autopilot integration:
+
+```bash
+# If --prompt is omitted, autopilot claims from helia.taskboard and uses task.prompt.
+si dyad spawn release-bot --autopilot --profile main
+```
+
+## Cross-machine SI control
+
+`si helia machine` provides generic host-level remote SI execution over Helia objects.
+
+Boundary with `si paas`:
+- `si helia machine ...`: machine orchestration and ACL for running arbitrary `si` commands remotely.
+- `si paas ...`: app/platform control plane workflows (targets, deploy, logs, backup, agent).
+- If needed, dispatch a remote PaaS command via `si helia machine run ... -- paas ...`.
+
+Register a controller machine and a worker machine:
+
+```bash
+si helia machine register \
+  --machine controller-a \
+  --operator op:controller@local \
+  --can-control-others \
+  --can-be-controlled=false
+
+si helia machine register \
+  --machine worker-a \
+  --operator op:worker@remote \
+  --allow-operators op:controller@local \
+  --can-be-controlled
+```
+
+Dispatch and execute a remote command:
+
+```bash
+# Dispatch from controller:
+si helia machine run \
+  --machine worker-a \
+  --source-machine controller-a \
+  --operator op:controller@local \
+  --wait \
+  -- version
+
+# Run worker loop on worker machine:
+si helia machine serve --machine worker-a
+```
+
+`--wait` behavior contract:
+- Exits `0` only when the remote job reaches `succeeded`.
+- Exits non-zero when the remote job reaches `failed` or `denied`.
+- With `--json`, prints the terminal job JSON to stdout before exiting, so automation can both parse result data and rely on process exit code.
+
+ACL updates (owner-only):
+
+```bash
+si helia machine allow --machine worker-a --grant op:ci@runner --as op:worker@remote
+si helia machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remote
+```
+
 ## Settings keys
 
 `[helia]` supports:
@@ -126,5 +209,10 @@ si helia audit list --kind vault_backup --limit 20
 - `timeout_seconds`
 - `auto_sync`
 - `vault_backup`
+- `taskboard`
+- `taskboard_agent`
+- `taskboard_lease_seconds`
+- `machine_id`
+- `operator_id`
 
 See [Settings](./SETTINGS) for full schema details.

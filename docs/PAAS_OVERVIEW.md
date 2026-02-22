@@ -7,6 +7,11 @@ description: Structured guide to SI PaaS command surfaces, runbooks, reliability
 
 `si paas` is the platform command surface for operating applications, environments, backups, events, and automation on SI PaaS.
 
+Boundary with `si helia machine`:
+- `si paas` is the app/platform control plane.
+- `si helia machine` is generic host-level remote command orchestration with ACL.
+- Use `si helia machine run ... -- paas ...` only when you intentionally need to execute PaaS workflows from another machine.
+
 ## Command surface
 
 ```bash

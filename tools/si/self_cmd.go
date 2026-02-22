@@ -96,6 +96,49 @@ func cmdSelfRun(args []string) {
 	}
 }
 
+func cmdSelfReleaseAssets(args []string) {
+	fs := flag.NewFlagSet("self release-assets", flag.ExitOnError)
+	repo := fs.String("repo", "", "path inside si repo checkout")
+	version := fs.String("version", "", "release version tag (default: tools/si/version.go)")
+	outDir := fs.String("out-dir", "", "output directory for release archives (default: <repo>/dist)")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si build self release-assets [--repo <path>] [--version <vX.Y.Z>] [--out-dir <path>]")
+		return
+	}
+	root, err := resolveSelfRepoRoot(*repo)
+	if err != nil {
+		fatal(err)
+	}
+	scriptPath := filepath.Join(root, "tools", "release", "build-cli-release-assets.sh")
+	if _, err := os.Stat(scriptPath); err != nil {
+		fatal(fmt.Errorf("release assets script not found: %s", scriptPath))
+	}
+
+	resolvedOutDir := strings.TrimSpace(*outDir)
+	if resolvedOutDir == "" {
+		resolvedOutDir = filepath.Join(root, "dist")
+	} else {
+		resolvedOutDir = makeAbsPath(resolvedOutDir)
+	}
+
+	cmdArgs := []string{scriptPath, "--repo-root", root, "--out-dir", resolvedOutDir}
+	if strings.TrimSpace(*version) != "" {
+		cmdArgs = append(cmdArgs, "--version", strings.TrimSpace(*version))
+	}
+
+	// #nosec G204 -- script path is resolved from repo root and args are controlled by flags.
+	cmd := exec.Command("bash", cmdArgs...)
+	cmd.Dir = root
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if err := cmd.Run(); err != nil {
+		fatal(err)
+	}
+	successf("built release assets in: %s", resolvedOutDir)
+}
+
 func resolveSelfRepoRoot(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw != "" {

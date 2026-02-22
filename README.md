@@ -161,6 +161,13 @@ Release process and runbook:
 - [`docs/RELEASE_RUNBOOK.md`](docs/RELEASE_RUNBOOK.md)
 - [`CHANGELOG.md`](CHANGELOG.md)
 
+Published GitHub Releases automatically include multi-arch CLI archives for:
+- Linux (`amd64`, `arm64`, `armv7`)
+- macOS (`amd64`, `arm64`)
+
+Local preflight command:
+- `si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
+
 ## License
 
 This repository is licensed under GNU Affero General Public License v3.0 (AGPL-3.0).

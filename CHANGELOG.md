@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 ### Added
 - Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `helia` vault sync modes.
+- Added automated GitHub Release asset publishing for `si` CLI archives (`linux/amd64`, `linux/arm64`, `linux/armv7`, `darwin/amd64`, `darwin/arm64`) with generated `checksums.txt`.
+- Added `si build self release-assets` to run local release-archive preflight builds using the same target matrix used by release automation.
 
 ### Changed
 - Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy `helia.auto_sync`.

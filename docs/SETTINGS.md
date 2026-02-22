@@ -323,10 +323,20 @@ Defaults for `si helia` cloud sync.
 - `helia.timeout_seconds` (int): request timeout for Helia API calls (default: `15`)
 - `helia.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
 - `helia.vault_backup` (string): default vault backup object name (default: `default`)
+- `helia.taskboard` (string): default Helia object name for shared dyad taskboard (default: `default`)
+- `helia.taskboard_agent` (string): optional default agent id used by `si helia taskboard` and dyad autopilot claims
+- `helia.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
+- `helia.machine_id` (string): default machine id for `si helia machine ...` commands
+- `helia.operator_id` (string): default operator identity for machine ACL and dispatch actions
 
 Environment overrides:
 - `SI_HELIA_BASE_URL`
 - `SI_HELIA_TOKEN`
+- `SI_HELIA_TASKBOARD`
+- `SI_HELIA_TASKBOARD_AGENT`
+- `SI_HELIA_TASKBOARD_LEASE_SECONDS`
+- `SI_HELIA_MACHINE_ID`
+- `SI_HELIA_OPERATOR_ID`
 - `SI_VAULT_SYNC_BACKEND`
 
 ### `[shell.prompt]`
@@ -537,6 +547,11 @@ account = "acme"
 timeout_seconds = 15
 auto_sync = true
 vault_backup = "default"
+taskboard = "default"
+taskboard_agent = "dyad:main-laptop"
+taskboard_lease_seconds = 1800
+machine_id = "laptop-a"
+operator_id = "op:shawn@laptop-a"
 
 [shell.prompt]
 enabled = true

@@ -89,6 +89,8 @@ func cmdDyadSpawn(args []string) {
 	dockerSocket := fs.Bool("docker-socket", true, "mount host docker socket in dyad containers")
 	profileKey := fs.String("profile", "", "codex profile name/email/id")
 	skipAuth := fs.Bool("skip-auth", false, "skip codex profile auth requirement (for offline/testing use)")
+	autopilot := fs.Bool("autopilot", false, "enable dyad autopilot (claims taskboard prompt when --prompt is empty)")
+	prompt := fs.String("prompt", "", "initial critic prompt")
 	nameArg, filtered := splitDyadSpawnArgs(args)
 	if err := fs.Parse(filtered); err != nil {
 		fatal(err)
@@ -153,7 +155,7 @@ func cmdDyadSpawn(args []string) {
 	}
 	if name == "" {
 		if !isInteractiveTerminal() {
-			printUsage("usage: si dyad spawn <name> [role] [--profile <profile>]")
+			printUsage("usage: si dyad spawn <name> [role] [--profile <profile>] [--autopilot] [--prompt <text>]")
 			return
 		}
 		var ok bool
@@ -227,6 +229,20 @@ func cmdDyadSpawn(args []string) {
 		*forwardPorts = "1455-1465"
 	}
 
+	seedPrompt := strings.TrimSpace(*prompt)
+	var autopilotClaim *heliaTaskboardClaimResult
+	if *autopilot && seedPrompt == "" {
+		claim, err := heliaAutopilotClaimTask(settings, name)
+		if err != nil {
+			fatal(fmt.Errorf("dyad autopilot claim failed: %w", err))
+		}
+		seedPrompt = strings.TrimSpace(claim.Task.Prompt)
+		if seedPrompt == "" {
+			fatal(fmt.Errorf("dyad autopilot claimed task %s but prompt is empty", claim.Task.ID))
+		}
+		autopilotClaim = &claim
+	}
+
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -284,6 +300,12 @@ func cmdDyadSpawn(args []string) {
 		LoopTmuxCapture:   dyadLoopStringSetting("DYAD_LOOP_TMUX_CAPTURE", settings.Dyad.Loop.TmuxCapture),
 		LoopPausePoll:     dyadLoopIntSetting("DYAD_LOOP_PAUSE_POLL_SECONDS", settings.Dyad.Loop.PausePollSeconds),
 	}
+	if seedPrompt != "" {
+		opts.LoopSeedPrompt = seedPrompt
+	}
+	if *autopilot {
+		opts.LoopEnabled = boolPtr(true)
+	}
 
 	actorID, criticID, err := client.EnsureDyad(ctx, opts)
 	if err != nil {
@@ -296,6 +318,9 @@ func cmdDyadSpawn(args []string) {
 	if identity, ok := hostGitIdentity(); ok {
 		seedGitIdentity(ctx, client, actorID, "root", "/root", identity)
 		seedGitIdentity(ctx, client, criticID, "root", "/root", identity)
+	}
+	if autopilotClaim != nil {
+		successf("autopilot claimed %s from taskboard %s", autopilotClaim.Task.ID, autopilotClaim.BoardName)
 	}
 	successf("dyad %s ready (role=%s)", name, role)
 }

@@ -73,7 +73,7 @@ Core:
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
-  si helia <auth|profile|vault|token|audit|doctor> [args...]
+  si helia <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -99,6 +99,8 @@ dyad:
     --role <role>
     --profile <profile>
     --skip-auth / --skip-auth=false
+    --autopilot / --autopilot=false
+    --prompt <text>
     --actor-image <image>
     --critic-image <image>
     --codex-model <model>
@@ -244,8 +246,10 @@ build:
   si build image [--skip-preflight] [--preflight-only]
   si build self [--repo <path>] [--install-path <path>] [--no-upgrade] [--output <path>]
   si build self upgrade [--repo <path>] [--install-path <path>]
+  si build self release-assets [--repo <path>] [--version <vX.Y.Z>] [--out-dir <path>]
   si build self run [--repo <path>] [--] [si args...]
     Note: image builds use buildx directly when available, else classic docker build.
+    Release maintainers: use "si build self release-assets" to produce all CLI release archives + checksums.
 
   Typical workflows:
     Stable use: run si build self to upgrade installed si from your checkout.
@@ -358,6 +362,21 @@ helia:
   si helia token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]
   si helia token revoke --token-id <id>
   si helia audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]
+  si helia taskboard use [--name <name>] [--agent <agent-id>]
+  si helia taskboard show [--name <name>] [--json]
+  si helia taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]
+  si helia taskboard add --title <text> [--prompt <text>] [--priority <P1|P2|P3>] [--tags <csv>] [--name <name>] [--json]
+  si helia taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--lease-seconds <n>] [--json]
+  si helia taskboard release --id <task-id> [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
+  si helia taskboard done --id <task-id> [--result <text>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
+  si helia machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]
+  si helia machine status [--machine <id>] [--json]
+  si helia machine list [--limit <n>] [--json]
+  si helia machine allow --machine <id> --grant <operator> [--as <operator>] [--json]
+  si helia machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]
+  si helia machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>
+  si helia machine jobs [--machine <id>] [--requested-by <operator>] [--status <queued|running|succeeded|failed|denied>] [--limit <n>] [--json]
+  si helia machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]
 
 github:
   si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]
