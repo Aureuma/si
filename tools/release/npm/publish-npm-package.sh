@@ -17,7 +17,7 @@ Defaults:
   --version   Parsed from tools/si/version.go
   --repo-root Auto-detected from script location
   --out-dir   <repo-root>/dist/npm
-  --token-env NPM_TOKEN
+  --token-env NPM_TOKEN (falls back to NPM_GAT_AUREUMA_VANGUARDA when unset)
 USAGE
 }
 
@@ -73,6 +73,10 @@ done
 
 cd "${repo_root}"
 [[ -f tools/si/version.go ]] || die "tools/si/version.go not found"
+
+if [[ "${token_env}" == "NPM_TOKEN" && -z "${NPM_TOKEN:-}" && -n "${NPM_GAT_AUREUMA_VANGUARDA:-}" ]]; then
+  token_env="NPM_GAT_AUREUMA_VANGUARDA"
+fi
 
 if [[ -z "${version}" ]]; then
   version="$(sed -n 's/^const siVersion = "\(.*\)"$/\1/p' tools/si/version.go)"
