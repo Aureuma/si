@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"si/tools/si/internal/vault"
+)
 
 func TestSlugUpper(t *testing.T) {
 	if got := slugUpper("core-main 1"); got != "CORE_MAIN_1" {
@@ -107,5 +113,67 @@ func TestResolveGitHubAuthMode_OAuthFromEnv(t *testing.T) {
 	}
 	if source != "env:GITHUB_AUTH_MODE" {
 		t.Fatalf("unexpected source: %q", source)
+	}
+}
+
+func TestResolveGitHubOAuthAccessTokenFromVaultEncrypted(t *testing.T) {
+	tempDir := t.TempDir()
+	vaultFile := filepath.Join(tempDir, ".env")
+	trustFile := filepath.Join(tempDir, "trust.json")
+	keyFile := filepath.Join(tempDir, "age.key")
+
+	identity, err := vault.GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	if err := os.WriteFile(keyFile, []byte(identity.String()+"\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile key: %v", err)
+	}
+
+	doc := vault.ParseDotenv(nil)
+	if _, err := vault.EnsureVaultHeader(&doc, []string{identity.Recipient().String()}); err != nil {
+		t.Fatalf("EnsureVaultHeader: %v", err)
+	}
+	cipher, err := vault.EncryptStringV1("token-from-vault", []string{identity.Recipient().String()})
+	if err != nil {
+		t.Fatalf("EncryptStringV1: %v", err)
+	}
+	if _, err := doc.Set("GH_PAT_AUREUMA_VANGUARDA", cipher, vault.SetOptions{}); err != nil {
+		t.Fatalf("doc.Set: %v", err)
+	}
+	if err := os.WriteFile(vaultFile, doc.Bytes(), 0o600); err != nil {
+		t.Fatalf("WriteFile vault: %v", err)
+	}
+
+	target, err := vault.ResolveTarget(vault.ResolveOptions{File: vaultFile, DefaultFile: vaultFile})
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	store, err := vault.LoadTrustStore(trustFile)
+	if err != nil {
+		t.Fatalf("LoadTrustStore: %v", err)
+	}
+	store.Upsert(vault.TrustEntry{
+		RepoRoot:    target.RepoRoot,
+		File:        target.File,
+		Fingerprint: vault.RecipientsFingerprint(vault.ParseRecipientsFromDotenv(doc)),
+	})
+	if err := store.Save(trustFile); err != nil {
+		t.Fatalf("Save trust store: %v", err)
+	}
+
+	settings := Settings{}
+	applySettingsDefaults(&settings)
+	settings.Vault.File = vaultFile
+	settings.Vault.TrustStore = trustFile
+	settings.Vault.KeyBackend = "file"
+	settings.Vault.KeyFile = keyFile
+
+	token, source := resolveGitHubOAuthAccessTokenFromVault(settings, GitHubAccountEntry{OAuthTokenEnv: "GH_PAT_AUREUMA_VANGUARDA"})
+	if token != "token-from-vault" {
+		t.Fatalf("token=%q", token)
+	}
+	if source != "vault:GH_PAT_AUREUMA_VANGUARDA" {
+		t.Fatalf("source=%q", source)
 	}
 }
