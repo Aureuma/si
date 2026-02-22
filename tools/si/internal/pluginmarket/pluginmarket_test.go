@@ -36,6 +36,28 @@ func TestValidatePolicySelector(t *testing.T) {
 	}
 }
 
+func TestBuiltinCatalogIncludesCuratedIntegrations(t *testing.T) {
+	catalog, diagnostics, err := loadCatalogFromRaw("builtin", builtinCatalogRaw)
+	if err != nil {
+		t.Fatalf("load builtin catalog: %v", err)
+	}
+	if len(diagnostics) != 0 {
+		t.Fatalf("expected builtin catalog diagnostics to be empty, got %#v", diagnostics)
+	}
+	byID := CatalogByID(catalog)
+	if len(byID) != len(catalog.Entries) {
+		t.Fatalf("expected unique builtin ids, got entries=%d unique=%d", len(catalog.Entries), len(byID))
+	}
+	if len(catalog.Entries) < 70 {
+		t.Fatalf("expected expanded builtin catalog, got %d entries", len(catalog.Entries))
+	}
+	for _, id := range []string{"si/browser-mcp", "openclaw/discord", "saas/linear"} {
+		if _, ok := byID[id]; !ok {
+			t.Fatalf("expected builtin catalog to contain %s", id)
+		}
+	}
+}
+
 func TestResolveSafeInstallDirRejectsTraversal(t *testing.T) {
 	base := t.TempDir()
 	resolved, err := resolveSafeInstallDir(base, "acme/release-mind")

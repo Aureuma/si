@@ -25,19 +25,25 @@ func TestPluginsListCommandJSON(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected rows array in payload: %#v", payload)
 	}
-	found := false
+	required := map[string]bool{
+		"si/browser-mcp":  false,
+		"openclaw/discord": false,
+		"saas/linear":     false,
+	}
 	for _, item := range rowsRaw {
 		row, ok := item.(map[string]any)
 		if !ok {
 			continue
 		}
-		if row["id"] == "si/browser-mcp" {
-			found = true
-			break
+		id, _ := row["id"].(string)
+		if _, tracked := required[id]; tracked {
+			required[id] = true
 		}
 	}
-	if !found {
-		t.Fatalf("expected built-in plugin si/browser-mcp in list output: %#v", payload)
+	for id, found := range required {
+		if !found {
+			t.Fatalf("expected built-in plugin %s in list output: %#v", id, payload)
+		}
 	}
 }
 
