@@ -368,6 +368,13 @@ func runSICommand(t *testing.T, env map[string]string, args ...string) (string, 
 	cmd.Dir = "."
 	cmd.Env = append([]string{}, os.Environ()...)
 	cmd.Env = append(cmd.Env, "NO_COLOR=1")
+	if _, ok := env["HOME"]; !ok {
+		testHome := siTestHomeDir(t)
+		cmd.Env = append(cmd.Env, "HOME="+testHome)
+	}
+	if _, ok := env["SI_SETTINGS_HOME"]; !ok {
+		cmd.Env = append(cmd.Env, "SI_SETTINGS_HOME="+siTestHomeDir(t))
+	}
 	for key, value := range env {
 		cmd.Env = append(cmd.Env, key+"="+value)
 	}
@@ -386,6 +393,7 @@ var (
 	siTestBinaryOnce sync.Once
 	siTestBinary     string
 	siTestBinaryErr  error
+	siTestHomes      sync.Map
 )
 
 func siTestBinaryPath(t *testing.T) string {
@@ -412,6 +420,22 @@ func siTestBinaryPath(t *testing.T) string {
 		t.Fatalf("prepare si test binary: %v", siTestBinaryErr)
 	}
 	return siTestBinary
+}
+
+func siTestHomeDir(t *testing.T) string {
+	t.Helper()
+	if existing, ok := siTestHomes.Load(t.Name()); ok {
+		return existing.(string)
+	}
+	created, err := os.MkdirTemp("", "si-test-home-*")
+	if err != nil {
+		t.Fatalf("prepare si test home: %v", err)
+	}
+	actual, loaded := siTestHomes.LoadOrStore(t.Name(), created)
+	if loaded {
+		_ = os.RemoveAll(created)
+	}
+	return actual.(string)
 }
 
 func testAppPrivateKeyPEM(t *testing.T) string {
