@@ -32,6 +32,7 @@ type Settings struct {
 	AWS           AWSSettings        `toml:"aws,omitempty"`
 	GCP           GCPSettings        `toml:"gcp,omitempty"`
 	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
+	Helia         HeliaSettings      `toml:"helia,omitempty"`
 	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
@@ -424,6 +425,13 @@ type OpenAIAccountEntry struct {
 	OrganizationIDEnv string `toml:"organization_id_env,omitempty"`
 	ProjectID         string `toml:"project_id,omitempty"`
 	ProjectIDEnv      string `toml:"project_id_env,omitempty"`
+}
+
+type HeliaSettings struct {
+	BaseURL        string `toml:"base_url,omitempty"`
+	Account        string `toml:"account,omitempty"`
+	Token          string `toml:"token,omitempty"`
+	TimeoutSeconds int    `toml:"timeout_seconds,omitempty"`
 }
 
 type OCISettings struct {
@@ -870,6 +878,15 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.OpenAI.APIBaseURL == "" {
 		openAISpec := providers.Resolve(providers.OpenAI)
 		settings.OpenAI.APIBaseURL = firstNonEmpty(openAISpec.BaseURL, "https://api.openai.com")
+	}
+	settings.Helia.BaseURL = strings.TrimSpace(settings.Helia.BaseURL)
+	if settings.Helia.BaseURL == "" {
+		settings.Helia.BaseURL = "http://127.0.0.1:8080"
+	}
+	settings.Helia.Account = strings.TrimSpace(settings.Helia.Account)
+	settings.Helia.Token = strings.TrimSpace(settings.Helia.Token)
+	if settings.Helia.TimeoutSeconds <= 0 {
+		settings.Helia.TimeoutSeconds = 15
 	}
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
