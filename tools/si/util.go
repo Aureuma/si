@@ -564,7 +564,8 @@ gcp:
     test is intentionally not used; map sandbox workflows to staging/dev context.
 
 openai:
-  si openai auth status [--account <alias>] [--base-url <url>] [--json]
+  si openai auth status [--account <alias>] [--auth-mode <api|codex>] [--profile <profile>] [--base-url <url>] [--json]
+  si openai auth codex-status [--profile <profile>] [--json]
   si openai context list|current|use ...
   si openai doctor [--account <alias>] [--public] [--json]
   si openai model list|get ...

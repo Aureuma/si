@@ -24,6 +24,7 @@ import (
 )
 
 const openAIUsageText = "usage: si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>"
+const openAIAuthUsageText = "usage: si openai auth <status|codex-status> [--account <alias>] [--auth-mode <api|codex>] [--profile <profile>] [--json]"
 
 type openaiRuntimeContext struct {
 	AccountAlias string
@@ -143,7 +144,7 @@ func cmdOpenAI(args []string) {
 }
 
 func cmdOpenAIAuth(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai auth status [--account <alias>] [--json]")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, openAIAuthUsageText)
 	if !routedOK {
 		return
 	}
@@ -152,8 +153,11 @@ func cmdOpenAIAuth(args []string) {
 	switch sub {
 	case "status":
 		cmdOpenAIAuthStatus(args[1:])
+	case "codex-status":
+		cmdOpenAICodexAuthStatus(args[1:])
 	default:
 		printUnknown("openai auth", sub)
+		printUsage(openAIAuthUsageText)
 	}
 }
 
@@ -161,11 +165,21 @@ func cmdOpenAIAuthStatus(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("openai auth status", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
+	authMode := fs.String("auth-mode", "api", "auth mode (api|codex)")
+	codexProfile := fs.String("profile", "", "codex profile id/name/email (for auth-mode=codex)")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si openai auth status [--account <alias>] [--json]")
+		printUsage("usage: si openai auth status [--account <alias>] [--auth-mode <api|codex>] [--profile <profile>] [--json]")
 		return
+	}
+	switch normalizeOpenAIAuthMode(*authMode) {
+	case "codex":
+		runOpenAICodexAuthStatus(strings.TrimSpace(*codexProfile), *jsonOut)
+		return
+	case "api":
+	default:
+		fatal(fmt.Errorf("invalid --auth-mode %q (expected api or codex)", strings.TrimSpace(*authMode)))
 	}
 	runtime, err := resolveRuntimeFromOpenAIFlags(flags)
 	if err != nil {
@@ -219,6 +233,148 @@ func cmdOpenAIAuthStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatOpenAIContext(runtime))
 	fmt.Printf("%s %s\n", styleHeading("Source:"), orDash(runtime.Source))
 	fmt.Printf("%s %s\n", styleHeading("API key preview:"), previewOpenAISecret(runtime.APIKey))
+}
+
+func cmdOpenAICodexAuthStatus(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{"json": true})
+	fs := flag.NewFlagSet("openai auth codex-status", flag.ExitOnError)
+	profile := fs.String("profile", "", "codex profile id/name/email")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si openai auth codex-status [--profile <profile>] [--json]")
+		return
+	}
+	runOpenAICodexAuthStatus(strings.TrimSpace(*profile), *jsonOut)
+}
+
+func normalizeOpenAIAuthMode(value string) string {
+	mode := strings.ToLower(strings.TrimSpace(value))
+	switch mode {
+	case "", "api", "apikey", "api-key":
+		return "api"
+	case "codex", "chatgpt", "plan":
+		return "codex"
+	default:
+		return mode
+	}
+}
+
+func runOpenAICodexAuthStatus(profileKey string, jsonOut bool) {
+	profile, err := resolveOpenAICodexProfile(profileKey)
+	if err != nil {
+		fatal(err)
+	}
+	client := &http.Client{Timeout: 20 * time.Second}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+
+	auth, authErr := loadProfileAuthTokens(profile)
+	if authErr == nil && strings.TrimSpace(auth.AccessToken) == "" && strings.TrimSpace(auth.RefreshToken) != "" {
+		if refreshed, refreshErr := refreshProfileAuthTokens(ctx, client, profile, auth); refreshErr == nil {
+			auth = refreshed
+		}
+	}
+
+	verifyStatus := codexStatus{}
+	verifyErr := authErr
+	if verifyErr == nil {
+		verifyStatus, verifyErr = fetchUsageStatus(ctx, client, profileUsageURL(), auth)
+	}
+
+	status := "error"
+	if verifyErr == nil {
+		status = "ready"
+	}
+	payload := map[string]any{
+		"status":               status,
+		"auth_mode":            "codex",
+		"profile_id":           profile.ID,
+		"profile_name":         strings.TrimSpace(profile.Name),
+		"profile_email":        strings.TrimSpace(profile.Email),
+		"usage_url":            profileUsageURL(),
+		"source":               "codex.auth.json",
+		"access_token_preview": previewOpenAISecret(auth.AccessToken),
+		"account_id_set":       strings.TrimSpace(auth.AccountID) != "",
+	}
+	if verifyErr == nil {
+		payload["verify"] = map[string]any{
+			"plan_type":                   strings.TrimSpace(verifyStatus.AccountPlan),
+			"account_email":               strings.TrimSpace(verifyStatus.AccountEmail),
+			"five_hour_left_pct":          verifyStatus.FiveHourLeftPct,
+			"five_hour_reset":             strings.TrimSpace(verifyStatus.FiveHourReset),
+			"five_hour_remaining_minutes": verifyStatus.FiveHourRemaining,
+			"weekly_left_pct":             verifyStatus.WeeklyLeftPct,
+			"weekly_reset":                strings.TrimSpace(verifyStatus.WeeklyReset),
+			"weekly_remaining_minutes":    verifyStatus.WeeklyRemaining,
+		}
+	} else {
+		payload["verify_error"] = verifyErr.Error()
+	}
+
+	if jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fatal(err)
+		}
+		if verifyErr != nil {
+			os.Exit(1)
+		}
+		return
+	}
+
+	if verifyErr != nil {
+		fmt.Printf("%s %s\n", styleHeading("OpenAI auth (codex):"), styleError("error"))
+		fmt.Printf("%s %s\n", styleHeading("Profile:"), formatCodexProfileSummary(profile))
+		printOpenAIError(verifyErr)
+		return
+	}
+	fmt.Printf("%s %s\n", styleHeading("OpenAI auth (codex):"), styleSuccess("ready"))
+	fmt.Printf("%s %s\n", styleHeading("Profile:"), formatCodexProfileSummary(profile))
+	fmt.Printf("%s %s\n", styleHeading("Plan:"), orDash(verifyStatus.AccountPlan))
+	fmt.Printf("%s %s\n", styleHeading("5h window:"), formatLimitDetail(verifyStatus.FiveHourLeftPct, verifyStatus.FiveHourReset, verifyStatus.FiveHourRemaining))
+	fmt.Printf("%s %s\n", styleHeading("Weekly window:"), formatLimitDetail(verifyStatus.WeeklyLeftPct, verifyStatus.WeeklyReset, verifyStatus.WeeklyRemaining))
+}
+
+func resolveOpenAICodexProfile(profileKey string) (codexProfile, error) {
+	key := strings.TrimSpace(profileKey)
+	if key != "" {
+		return requireCodexProfile(key)
+	}
+	settings := loadSettingsOrDefault()
+	defaultKey := strings.TrimSpace(codexDefaultProfileKey(settings))
+	if defaultKey != "" {
+		if profile, ok := codexProfileByKey(defaultKey); ok {
+			return profile, nil
+		}
+	}
+	profiles := codexProfiles()
+	switch len(profiles) {
+	case 0:
+		return codexProfile{}, errors.New("no codex profiles configured; run `si login`")
+	case 1:
+		return profiles[0], nil
+	default:
+		return codexProfile{}, fmt.Errorf("multiple codex profiles configured (%s); set --profile", strings.Join(codexProfileIDs(), ", "))
+	}
+}
+
+func formatCodexProfileSummary(profile codexProfile) string {
+	parts := make([]string, 0, 3)
+	if id := strings.TrimSpace(profile.ID); id != "" {
+		parts = append(parts, "id="+id)
+	}
+	if name := strings.TrimSpace(profile.Name); name != "" {
+		parts = append(parts, "name="+name)
+	}
+	if email := strings.TrimSpace(profile.Email); email != "" {
+		parts = append(parts, "email="+email)
+	}
+	if len(parts) == 0 {
+		return "(unknown)"
+	}
+	return strings.Join(parts, " ")
 }
 
 func cmdOpenAIContext(args []string) {
@@ -2108,9 +2264,9 @@ func stringifyOpenAIAny(value any) string {
 	switch typed := value.(type) {
 	case string:
 		return typed
-	case fmt.Stringer:
-		return typed.String()
 	case json.Number:
+		return typed.String()
+	case fmt.Stringer:
 		return typed.String()
 	case float64:
 		if typed == float64(int64(typed)) {
