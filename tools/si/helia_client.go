@@ -49,6 +49,40 @@ type heliaPutResult struct {
 	} `json:"result"`
 }
 
+type heliaTokenRecord struct {
+	TokenID    string   `json:"token_id"`
+	Label      string   `json:"label"`
+	Scopes     []string `json:"scopes"`
+	ExpiresAt  string   `json:"expires_at,omitempty"`
+	RevokedAt  string   `json:"revoked_at,omitempty"`
+	CreatedAt  string   `json:"created_at"`
+	LastUsedAt string   `json:"last_used_at,omitempty"`
+}
+
+type heliaIssuedToken struct {
+	Account struct {
+		ID   string `json:"id"`
+		Slug string `json:"slug"`
+	} `json:"account"`
+	Token     string   `json:"token"`
+	TokenID   string   `json:"token_id"`
+	Label     string   `json:"label"`
+	Scopes    []string `json:"scopes"`
+	ExpiresAt string   `json:"expires_at,omitempty"`
+	IssuedAt  string   `json:"issued_at"`
+}
+
+type heliaAuditEvent struct {
+	ID        int64                  `json:"id"`
+	TokenID   string                 `json:"token_id,omitempty"`
+	Action    string                 `json:"action"`
+	Kind      string                 `json:"kind"`
+	Name      string                 `json:"name"`
+	Revision  int64                  `json:"revision,omitempty"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+	CreatedAt string                 `json:"created_at"`
+}
+
 type heliaError struct {
 	Error string `json:"error"`
 }
@@ -76,25 +110,32 @@ func newHeliaClient(baseURL string, token string, timeout time.Duration) (*helia
 	}, nil
 }
 
+func (c *heliaClient) ready(ctx context.Context) error {
+	endpoint := c.baseURL + "/v1/readyz"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return err
+	}
+	res, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return decodeHeliaError(res)
+	}
+	return nil
+}
+
 func (c *heliaClient) whoAmI(ctx context.Context) (heliaWhoAmI, error) {
 	var out heliaWhoAmI
 	body, err := c.doJSON(ctx, http.MethodGet, "/v1/auth/whoami", nil)
 	if err != nil {
 		return out, err
 	}
-	if err := json.Unmarshal(body, &out); err == nil && strings.TrimSpace(out.AccountSlug) != "" {
-		return out, nil
-	}
-	var wrapped struct {
-		AccountID   string   `json:"account_id"`
-		AccountSlug string   `json:"account_slug"`
-		TokenID     string   `json:"token_id"`
-		Scopes      []string `json:"scopes"`
-	}
-	if err := json.Unmarshal(body, &wrapped); err != nil {
+	if err := json.Unmarshal(body, &out); err != nil {
 		return out, fmt.Errorf("parse whoami response: %w", err)
 	}
-	out = heliaWhoAmI(wrapped)
 	return out, nil
 }
 
@@ -164,6 +205,80 @@ func (c *heliaClient) getPayload(ctx context.Context, kind string, name string) 
 		return nil, decodeHeliaError(res)
 	}
 	return io.ReadAll(res.Body)
+}
+
+func (c *heliaClient) listTokens(ctx context.Context, includeRevoked bool, limit int) ([]heliaTokenRecord, error) {
+	params := url.Values{}
+	params.Set("include_revoked", boolString(includeRevoked))
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	body, err := c.doJSON(ctx, http.MethodGet, "/v1/tokens?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed struct {
+		Items []heliaTokenRecord `json:"items"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("parse list tokens response: %w", err)
+	}
+	return parsed.Items, nil
+}
+
+func (c *heliaClient) createToken(ctx context.Context, label string, scopes []string, expiresInHours int) (heliaIssuedToken, error) {
+	var out heliaIssuedToken
+	request := map[string]interface{}{
+		"label":  strings.TrimSpace(label),
+		"scopes": scopes,
+	}
+	if expiresInHours > 0 {
+		request["expires_in_hours"] = expiresInHours
+	}
+	body, err := c.doJSON(ctx, http.MethodPost, "/v1/tokens", request)
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return out, fmt.Errorf("parse create token response: %w", err)
+	}
+	return out, nil
+}
+
+func (c *heliaClient) revokeToken(ctx context.Context, tokenID string) error {
+	_, err := c.doJSON(ctx, http.MethodPost, "/v1/tokens/"+url.PathEscape(strings.TrimSpace(tokenID))+"/revoke", map[string]interface{}{})
+	return err
+}
+
+func (c *heliaClient) listAuditEvents(ctx context.Context, action string, kind string, name string, limit int) ([]heliaAuditEvent, error) {
+	params := url.Values{}
+	if strings.TrimSpace(action) != "" {
+		params.Set("action", strings.TrimSpace(action))
+	}
+	if strings.TrimSpace(kind) != "" {
+		params.Set("kind", strings.TrimSpace(kind))
+	}
+	if strings.TrimSpace(name) != "" {
+		params.Set("name", strings.TrimSpace(name))
+	}
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	path := "/v1/audit"
+	if encoded := params.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	body, err := c.doJSON(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed struct {
+		Items []heliaAuditEvent `json:"items"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("parse audit response: %w", err)
+	}
+	return parsed.Items, nil
 }
 
 func (c *heliaClient) doJSON(ctx context.Context, method string, path string, payload interface{}) ([]byte, error) {

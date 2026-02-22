@@ -74,4 +74,5 @@ func cmdVaultUnset(args []string) {
 	} else {
 		fmt.Printf("unset: %s (no-op)\n", key)
 	}
+	maybeHeliaAutoBackupVault("vault_unset", target.File)
 }

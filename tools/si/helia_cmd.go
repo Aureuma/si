@@ -9,13 +9,17 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"si/tools/si/internal/vault"
 )
 
 const (
-	heliaUsageText              = "usage: si helia <auth|profile|vault> ..."
+	heliaUsageText              = "usage: si helia <auth|profile|vault|token|audit|doctor> ..."
 	heliaAuthUsageText          = "usage: si helia auth <login|status|logout> ..."
 	heliaProfileUsageText       = "usage: si helia profile <list|push|pull> ..."
 	heliaVaultUsageText         = "usage: si helia vault backup <push|pull> ..."
+	heliaTokenUsageText         = "usage: si helia token <list|create|revoke> ..."
+	heliaAuditUsageText         = "usage: si helia audit list ..."
 	heliaCodexProfileBundleKind = "codex_profile_bundle"
 	heliaVaultBackupKind        = "vault_backup"
 )
@@ -44,6 +48,12 @@ func cmdHelia(args []string) {
 		cmdHeliaProfile(rest)
 	case "vault":
 		cmdHeliaVault(rest)
+	case "token", "tokens":
+		cmdHeliaToken(rest)
+	case "audit":
+		cmdHeliaAudit(rest)
+	case "doctor":
+		cmdHeliaDoctor(rest)
 	default:
 		printUnknown("helia", sub)
 		printUsage(heliaUsageText)
@@ -81,11 +91,12 @@ func cmdHeliaAuthLogin(args []string) {
 	tokenFlag := fs.String("token", strings.TrimSpace(os.Getenv("SI_HELIA_TOKEN")), "helia bearer token")
 	accountFlag := fs.String("account", strings.TrimSpace(settings.Helia.Account), "expected account slug")
 	timeoutSeconds := fs.Int("timeout-seconds", settings.Helia.TimeoutSeconds, "http timeout seconds")
+	autoSync := fs.Bool("auto-sync", settings.Helia.AutoSync, "enable automatic profile sync after login/swap")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>]")
+		printUsage("usage: si helia auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]")
 		return
 	}
 
@@ -115,6 +126,7 @@ func cmdHeliaAuthLogin(args []string) {
 	persisted.Helia.Token = token
 	persisted.Helia.Account = who.AccountSlug
 	persisted.Helia.TimeoutSeconds = *timeoutSeconds
+	persisted.Helia.AutoSync = *autoSync
 	if err := saveSettings(persisted); err != nil {
 		fatal(err)
 	}
@@ -155,6 +167,7 @@ func cmdHeliaAuthStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("account:"), who.AccountSlug)
 	fmt.Printf("%s %s\n", styleHeading("token_id:"), who.TokenID)
 	fmt.Printf("%s %s\n", styleHeading("scopes:"), strings.Join(who.Scopes, ","))
+	fmt.Printf("%s %s\n", styleHeading("auto_sync:"), boolString(settings.Helia.AutoSync))
 }
 
 func cmdHeliaAuthLogout(args []string) {
@@ -415,12 +428,13 @@ func cmdHeliaVaultBackupPush(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("helia vault backup push", flag.ExitOnError)
 	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
-	name := fs.String("name", "default", "backup object name")
+	name := fs.String("name", strings.TrimSpace(settings.Helia.VaultBackup), "backup object name")
+	allowPlaintext := fs.Bool("allow-plaintext", false, "allow plaintext vault values in backup payload")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia vault backup push [--file <path>] [--name <name>]")
+		printUsage("usage: si helia vault backup push [--file <path>] [--name <name>] [--allow-plaintext]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -436,6 +450,19 @@ func cmdHeliaVaultBackupPush(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	if !*allowPlaintext {
+		doc, err := vault.ReadDotenvFile(path)
+		if err != nil {
+			fatal(fmt.Errorf("read vault dotenv: %w", err))
+		}
+		scan, err := vault.ScanDotenvEncryption(doc)
+		if err != nil {
+			fatal(fmt.Errorf("scan vault encryption: %w", err))
+		}
+		if len(scan.PlaintextKeys) > 0 {
+			fatal(fmt.Errorf("vault file contains plaintext keys; run `si vault encrypt` first or re-run with --allow-plaintext"))
+		}
+	}
 	result, err := client.putObject(context.Background(), heliaVaultBackupKind, strings.TrimSpace(*name), data, "text/plain", map[string]interface{}{
 		"path": filepath.Base(path),
 	}, nil)
@@ -449,7 +476,7 @@ func cmdHeliaVaultBackupPull(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("helia vault backup pull", flag.ExitOnError)
 	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
-	name := fs.String("name", "default", "backup object name")
+	name := fs.String("name", strings.TrimSpace(settings.Helia.VaultBackup), "backup object name")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -475,6 +502,233 @@ func cmdHeliaVaultBackupPull(args []string) {
 	successf("vault backup pulled to %s", path)
 }
 
+func cmdHeliaToken(args []string) {
+	if len(args) == 0 {
+		printUsage(heliaTokenUsageText)
+		return
+	}
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	rest := args[1:]
+	switch sub {
+	case "list":
+		cmdHeliaTokenList(rest)
+	case "create", "issue":
+		cmdHeliaTokenCreate(rest)
+	case "revoke":
+		cmdHeliaTokenRevoke(rest)
+	case "help", "-h", "--help":
+		printUsage(heliaTokenUsageText)
+	default:
+		printUnknown("helia token", sub)
+		printUsage(heliaTokenUsageText)
+		os.Exit(1)
+	}
+}
+
+func cmdHeliaTokenList(args []string) {
+	settings := loadSettingsOrDefault()
+	fs := flag.NewFlagSet("helia token list", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "json output")
+	includeRevoked := fs.Bool("include-revoked", false, "include revoked tokens")
+	limit := fs.Int("limit", 100, "max tokens")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		printUsage("usage: si helia token list [--include-revoked] [--limit <n>] [--json]")
+		return
+	}
+	client, err := heliaClientFromSettings(settings)
+	if err != nil {
+		fatal(err)
+	}
+	items, err := client.listTokens(heliaContext(settings), *includeRevoked, *limit)
+	if err != nil {
+		fatal(err)
+	}
+	if *jsonOut {
+		printJSON(items)
+		return
+	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		revoked := "-"
+		if strings.TrimSpace(item.RevokedAt) != "" {
+			revoked = item.RevokedAt
+		}
+		expires := "-"
+		if strings.TrimSpace(item.ExpiresAt) != "" {
+			expires = item.ExpiresAt
+		}
+		rows = append(rows, []string{item.TokenID, item.Label, strings.Join(item.Scopes, ","), expires, revoked, item.LastUsedAt})
+	}
+	printAlignedTable([]string{styleHeading("TOKEN_ID"), styleHeading("LABEL"), styleHeading("SCOPES"), styleHeading("EXPIRES"), styleHeading("REVOKED"), styleHeading("LAST_USED")}, rows, 2)
+}
+
+func cmdHeliaTokenCreate(args []string) {
+	settings := loadSettingsOrDefault()
+	fs := flag.NewFlagSet("helia token create", flag.ExitOnError)
+	label := fs.String("label", "si-cli", "token label")
+	scopesCSV := fs.String("scopes", "objects:read,objects:write", "comma-separated scopes")
+	expiresHours := fs.Int("expires-hours", 0, "optional expiry in hours")
+	jsonOut := fs.Bool("json", false, "json output")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		printUsage("usage: si helia token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]")
+		return
+	}
+	client, err := heliaClientFromSettings(settings)
+	if err != nil {
+		fatal(err)
+	}
+	issued, err := client.createToken(heliaContext(settings), strings.TrimSpace(*label), splitCSVScopes(*scopesCSV), *expiresHours)
+	if err != nil {
+		fatal(err)
+	}
+	if *jsonOut {
+		printJSON(issued)
+		return
+	}
+	fmt.Printf("%s %s\n", styleHeading("token_id:"), issued.TokenID)
+	fmt.Printf("%s %s\n", styleHeading("token:"), issued.Token)
+	fmt.Printf("%s %s\n", styleHeading("scopes:"), strings.Join(issued.Scopes, ","))
+	if issued.ExpiresAt != "" {
+		fmt.Printf("%s %s\n", styleHeading("expires_at:"), issued.ExpiresAt)
+	}
+	fmt.Println("store this token securely; it is only shown once")
+}
+
+func cmdHeliaTokenRevoke(args []string) {
+	settings := loadSettingsOrDefault()
+	fs := flag.NewFlagSet("helia token revoke", flag.ExitOnError)
+	tokenID := fs.String("token-id", "", "token id to revoke")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		printUsage("usage: si helia token revoke --token-id <id>")
+		return
+	}
+	if strings.TrimSpace(*tokenID) == "" {
+		fatal(fmt.Errorf("--token-id is required"))
+	}
+	client, err := heliaClientFromSettings(settings)
+	if err != nil {
+		fatal(err)
+	}
+	if err := client.revokeToken(heliaContext(settings), strings.TrimSpace(*tokenID)); err != nil {
+		fatal(err)
+	}
+	successf("revoked token %s", strings.TrimSpace(*tokenID))
+}
+
+func cmdHeliaAudit(args []string) {
+	if len(args) == 0 {
+		printUsage(heliaAuditUsageText)
+		return
+	}
+	sub := strings.ToLower(strings.TrimSpace(args[0]))
+	rest := args[1:]
+	switch sub {
+	case "list":
+		cmdHeliaAuditList(rest)
+	case "help", "-h", "--help":
+		printUsage(heliaAuditUsageText)
+	default:
+		printUnknown("helia audit", sub)
+		printUsage(heliaAuditUsageText)
+		os.Exit(1)
+	}
+}
+
+func cmdHeliaAuditList(args []string) {
+	settings := loadSettingsOrDefault()
+	fs := flag.NewFlagSet("helia audit list", flag.ExitOnError)
+	action := fs.String("action", "", "filter action")
+	kind := fs.String("kind", "", "filter kind")
+	name := fs.String("name", "", "filter name")
+	limit := fs.Int("limit", 200, "max rows")
+	jsonOut := fs.Bool("json", false, "json output")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		printUsage("usage: si helia audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]")
+		return
+	}
+	client, err := heliaClientFromSettings(settings)
+	if err != nil {
+		fatal(err)
+	}
+	items, err := client.listAuditEvents(heliaContext(settings), strings.TrimSpace(*action), strings.TrimSpace(*kind), strings.TrimSpace(*name), *limit)
+	if err != nil {
+		fatal(err)
+	}
+	if *jsonOut {
+		printJSON(items)
+		return
+	}
+	rows := make([][]string, 0, len(items))
+	for _, item := range items {
+		rows = append(rows, []string{fmt.Sprintf("%d", item.ID), item.CreatedAt, item.Action, item.Kind, item.Name, item.TokenID})
+	}
+	printAlignedTable([]string{styleHeading("ID"), styleHeading("AT"), styleHeading("ACTION"), styleHeading("KIND"), styleHeading("NAME"), styleHeading("TOKEN_ID")}, rows, 2)
+}
+
+func cmdHeliaDoctor(args []string) {
+	settings := loadSettingsOrDefault()
+	fs := flag.NewFlagSet("helia doctor", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "json output")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		printUsage("usage: si helia doctor [--json]")
+		return
+	}
+	client, err := heliaClientFromSettings(settings)
+	if err != nil {
+		fatal(err)
+	}
+	ctx := heliaContext(settings)
+	readinessErr := client.ready(ctx)
+	who, whoErr := client.whoAmI(ctx)
+	report := map[string]interface{}{
+		"base_url":     client.baseURL,
+		"readiness_ok": readinessErr == nil,
+		"whoami_ok":    whoErr == nil,
+		"whoami":       who,
+	}
+	if readinessErr != nil {
+		report["readiness_error"] = readinessErr.Error()
+	}
+	if whoErr != nil {
+		report["whoami_error"] = whoErr.Error()
+	}
+	if *jsonOut {
+		printJSON(report)
+		if readinessErr != nil || whoErr != nil {
+			os.Exit(1)
+		}
+		return
+	}
+	if readinessErr == nil {
+		successf("helia readiness: ok")
+	} else {
+		warnf("helia readiness failed: %v", readinessErr)
+	}
+	if whoErr == nil {
+		successf("helia auth: ok (%s)", who.AccountSlug)
+	} else {
+		warnf("helia auth failed: %v", whoErr)
+	}
+	if readinessErr != nil || whoErr != nil {
+		os.Exit(1)
+	}
+}
+
 func heliaClientFromSettings(settings Settings) (*heliaClient, error) {
 	baseURL := firstNonEmpty(strings.TrimSpace(os.Getenv("SI_HELIA_BASE_URL")), strings.TrimSpace(settings.Helia.BaseURL))
 	token := firstNonEmpty(strings.TrimSpace(os.Getenv("SI_HELIA_TOKEN")), strings.TrimSpace(settings.Helia.Token))
@@ -483,6 +737,28 @@ func heliaClientFromSettings(settings Settings) (*heliaClient, error) {
 		timeout = 15 * time.Second
 	}
 	return newHeliaClient(baseURL, token, timeout)
+}
+
+func heliaContext(_ Settings) context.Context {
+	return context.Background()
+}
+
+func splitCSVScopes(csv string) []string {
+	parts := strings.Split(csv, ",")
+	out := make([]string, 0, len(parts))
+	seen := map[string]struct{}{}
+	for _, part := range parts {
+		normalized := strings.TrimSpace(part)
+		if normalized == "" {
+			continue
+		}
+		if _, ok := seen[normalized]; ok {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+	return out
 }
 
 func resolveTargetProfiles(profileKey string) ([]codexProfile, error) {

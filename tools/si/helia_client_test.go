@@ -22,7 +22,12 @@ func TestNewHeliaClientValidation(t *testing.T) {
 
 func TestHeliaClientRoundTripMethods(t *testing.T) {
 	payloadBytes := []byte(`{"ok":true}`)
+	var revokedID string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/readyz" {
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			return
+		}
 		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer token123" {
 			http.Error(w, `{"error":"missing auth"}`, http.StatusUnauthorized)
 			return
@@ -68,6 +73,37 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/payload"):
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(payloadBytes)
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/tokens"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{{
+					"token_id":   "tok-2",
+					"label":      "device",
+					"scopes":     []string{"objects:read"},
+					"created_at": "2026-02-22T00:00:00Z",
+				}},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/tokens":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"account":  map[string]any{"id": "acc-1", "slug": "acme"},
+				"token":    "hlia_new_token",
+				"token_id": "new-token",
+				"label":    "new",
+				"scopes":   []string{"objects:read"},
+			})
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/v1/tokens/") && strings.HasSuffix(r.URL.Path, "/revoke"):
+			parts := strings.Split(r.URL.Path, "/")
+			revokedID = parts[len(parts)-2]
+			_ = json.NewEncoder(w).Encode(map[string]any{"revoked": true})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/audit"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{{
+					"id":         1,
+					"action":     "put_object",
+					"kind":       heliaCodexProfileBundleKind,
+					"name":       "cadma",
+					"created_at": "2026-02-22T00:00:00Z",
+				}},
+			})
 		default:
 			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 		}
@@ -80,6 +116,9 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	if err := client.ready(ctx); err != nil {
+		t.Fatalf("ready: %v", err)
+	}
 	who, err := client.whoAmI(ctx)
 	if err != nil {
 		t.Fatalf("whoami: %v", err)
@@ -110,5 +149,36 @@ func TestHeliaClientRoundTripMethods(t *testing.T) {
 	}
 	if base64.StdEncoding.EncodeToString(gotPayload) != base64.StdEncoding.EncodeToString(payloadBytes) {
 		t.Fatalf("unexpected payload: %s", string(gotPayload))
+	}
+
+	tokens, err := client.listTokens(ctx, true, 10)
+	if err != nil {
+		t.Fatalf("list tokens: %v", err)
+	}
+	if len(tokens) != 1 || tokens[0].TokenID != "tok-2" {
+		t.Fatalf("unexpected tokens response: %+v", tokens)
+	}
+
+	issued, err := client.createToken(ctx, "new", []string{"objects:read"}, 1)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	if issued.TokenID != "new-token" {
+		t.Fatalf("unexpected issued token: %+v", issued)
+	}
+
+	if err := client.revokeToken(ctx, "new-token"); err != nil {
+		t.Fatalf("revoke token: %v", err)
+	}
+	if revokedID != "new-token" {
+		t.Fatalf("unexpected revoked token id: %s", revokedID)
+	}
+
+	auditRows, err := client.listAuditEvents(ctx, "", heliaCodexProfileBundleKind, "", 10)
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(auditRows) != 1 || auditRows[0].Kind != heliaCodexProfileBundleKind {
+		t.Fatalf("unexpected audit rows: %+v", auditRows)
 	}
 }
