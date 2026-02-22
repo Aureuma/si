@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"si/tools/si/internal/vault"
 )
 
 func maybeHeliaAutoSyncProfile(source string, profile codexProfile) {
@@ -77,11 +79,21 @@ func maybeHeliaAutoBackupVault(source string, vaultPath string) {
 		warnf("helia vault auto-backup skipped (%s): %v", source, err)
 		return
 	}
-	data, err := os.ReadFile(vaultPath)
+	doc, err := vault.ReadDotenvFile(vaultPath)
 	if err != nil {
 		warnf("helia vault auto-backup skipped (%s): %v", source, err)
 		return
 	}
+	scan, err := vault.ScanDotenvEncryption(doc)
+	if err != nil {
+		warnf("helia vault auto-backup skipped (%s): %v", source, err)
+		return
+	}
+	if len(scan.PlaintextKeys) > 0 {
+		warnf("helia vault auto-backup skipped (%s): plaintext keys detected (%d); run `si vault encrypt`", source, len(scan.PlaintextKeys))
+		return
+	}
+	data := doc.Bytes()
 	name := strings.TrimSpace(settings.Helia.VaultBackup)
 	if name == "" {
 		name = "default"
