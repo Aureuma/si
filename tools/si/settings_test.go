@@ -72,6 +72,35 @@ func TestSettingsHomeDirRootFallsBackFromForeignHome(t *testing.T) {
 	}
 }
 
+func TestSettingsHomeDirRootKeepsForeignHomeWithExistingSIState(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("requires root euid")
+	}
+	foreignHome := t.TempDir()
+	if err := os.Chown(foreignHome, 1001, 1001); err != nil {
+		t.Fatalf("chown foreign home: %v", err)
+	}
+	settingsDir := filepath.Join(foreignHome, ".si")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir settings dir: %v", err)
+	}
+	settingsPath := filepath.Join(settingsDir, "settings.toml")
+	if err := os.WriteFile(settingsPath, []byte("schema_version = 1\n"), 0o600); err != nil {
+		t.Fatalf("write settings file: %v", err)
+	}
+
+	t.Setenv("SI_SETTINGS_HOME", "")
+	t.Setenv("HOME", foreignHome)
+
+	got, err := settingsHomeDir()
+	if err != nil {
+		t.Fatalf("settingsHomeDir() unexpected err: %v", err)
+	}
+	if got != foreignHome {
+		t.Fatalf("expected foreign home %q to be preserved, got %q", foreignHome, got)
+	}
+}
+
 func TestLoadSettingsCreatesDefaultWhenMissing(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
