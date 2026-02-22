@@ -79,6 +79,30 @@ Helper-only usage (for manual git credential helper wiring):
 si github git credential get
 ```
 
+## Git Remotes (PAT URLs from Vault)
+
+When you need explicit PAT-authenticated remotes (for CI/dev environments that do not use git credential helpers), use:
+
+```bash
+si github git remote-auth \
+  --root ~/Development \
+  --owner Aureuma \
+  --vault-key GH_PAT_AUREUMA_VANGUARDA
+```
+
+This command:
+- reads the PAT from `si vault` using `--vault-key`
+- rewrites both fetch and push URLs for the target remote (default `origin`) to:
+  - `https://<PAT>@github.com/<owner>/<repo>.git`
+- sets local branch upstream tracking so plain `git push` / `git pull` work without extra remote/branch args
+
+Useful flags:
+- `--remote <name>`: remote name to rewrite (default `origin`)
+- `--owner <owner>`: only apply to repos for that owner/org
+- `--track-upstream=false`: skip branch tracking update
+- `--dry-run`: preview changes without writing
+- `--json`: structured output for automation
+
 ### Troubleshooting Git App Access
 
 If fetch/push still fails after setup:
