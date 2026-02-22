@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Added
+- Added Helia cloud-sync documentation for `si helia` command workflows and `[helia]` settings, including profile sync and vault backup usage.
+
+### Fixed
+- Added subprocess integration coverage for Helia profile push/pull and vault backup push/pull round-trips in `tools/si`.
+
+### Security
+- Hardened Helia auto-backup hooks to skip uploading vault files that contain plaintext keys, preventing accidental plaintext secret sync.
 
 ## [v0.47.0] - 2026-02-19
 ### Added
