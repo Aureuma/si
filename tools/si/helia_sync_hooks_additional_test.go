@@ -35,8 +35,8 @@ func TestMaybeHeliaAutoBackupVaultHeliaModeRequiresAuthConfigAdditional(t *testi
 	if err == nil {
 		t.Fatalf("expected strict helia mode to fail without helia auth config")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "helia") {
-		t.Fatalf("expected helia context in error, got: %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "sun") {
+		t.Fatalf("expected sun context in error, got: %v", err)
 	}
 }
 
