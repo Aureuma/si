@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -24,6 +25,24 @@ func TestRunImageBuildPreflightScriptFailure(t *testing.T) {
 	}
 	if err := runImageBuildPreflight(root); err == nil {
 		t.Fatalf("expected script failure error")
+	}
+}
+
+func TestRunImageBuildPreflightFailureIncludesScriptLogs(t *testing.T) {
+	root := t.TempDir()
+	script := filepath.Join(root, "tools", "si-image", "preflight-codex-upgrade.sh")
+	if err := os.MkdirAll(filepath.Dir(script), 0o755); err != nil {
+		t.Fatalf("mkdir script dir: %v", err)
+	}
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env bash\necho preflight failed details\nexit 3\n"), 0o755); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	err := runImageBuildPreflight(root)
+	if err == nil {
+		t.Fatalf("expected script failure error")
+	}
+	if !strings.Contains(err.Error(), "preflight failed details") {
+		t.Fatalf("expected error to include script logs, got: %v", err)
 	}
 }
 
