@@ -11,14 +11,26 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+
+## [v0.48.0] - 2026-02-22
 ### Added
-- Added Helia cloud-sync documentation for `si helia` command workflows and `[helia]` settings, including profile sync and vault backup usage.
+- Added the `si helia` cloud command surface for account auth, codex profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics.
+- Added Helia-focused CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
+- Added Helia cloud-sync operator documentation and settings reference coverage (`[helia]`).
+- Added native Go SSH transport support for SI PaaS remote deploy workflows, with companion architecture runbook documentation.
+
+### Changed
+- Updated GitHub and Cloudflare auth resolution so account credentials can be sourced directly from SI vault key references.
+- Improved `si login` browser/headless behavior and clarified Safari accessibility guidance for profile-aware URL opening.
+- Simplified `si build image` mode selection while preserving native `docker buildx` progress output behavior.
 
 ### Fixed
-- Added subprocess integration coverage for Helia profile push/pull and vault backup push/pull round-trips in `tools/si`.
+- Stabilized SI CI lanes (`SI Tests` and Helia-focused workflow checks) by fixing empty-env headless detection and formatting gate regressions.
+- Fixed `si vault` write paths to refuse updates when git index flags (`skip-worktree`/`assume-unchanged`) could hide dotenv changes.
+- Fixed `si logout-all` behavior to block unintended auth-cache recovery after explicit logout.
 
 ### Security
-- Hardened Helia auto-backup hooks to skip uploading vault files that contain plaintext keys, preventing accidental plaintext secret sync.
+- Hardened Helia vault auto-backup hooks to skip uploading dotenv files containing plaintext keys, preventing accidental plaintext secret sync to cloud storage.
 
 ## [v0.47.0] - 2026-02-19
 ### Added
