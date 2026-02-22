@@ -25,7 +25,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.48.0] - 2026-02-22
 ### Added
-- Added the `si helia` cloud command surface for account auth, codex profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics.
+- Added the `si sun` cloud command surface for account auth, codex profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics.
 - Added Helia-focused CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
 - Added Helia cloud-sync operator documentation and settings reference coverage (`[helia]`).
 - Added native Go SSH transport support for SI PaaS remote deploy workflows, with companion architecture runbook documentation.

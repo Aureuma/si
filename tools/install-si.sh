@@ -64,7 +64,7 @@ Notes:
     it prints the exact line to add for bash/zsh.
   - Backend selection is configuration guidance only:
       - local (default): keep secrets/profile state local-first.
-      - helia: installer prints follow-up `si helia auth login` steps.
+      - helia: installer prints follow-up `si sun auth login` steps.
     The installer intentionally does not collect or store Helia tokens.
   - Advanced CI checks for installer settings mutation are available via:
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --check
@@ -813,11 +813,11 @@ post_install() {
   log info "🗄️  Backend:"
   if [[ "${BACKEND_MODE}" == "helia" ]]; then
     log info "  - selected: helia (cloud sync)"
-    log info "  - next: si helia auth login --url <helia-url> --token <helia-token> --account <slug> --auto-sync"
-    log info "  - then: si helia profile push && si helia vault backup push"
+    log info "  - next: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
+    log info "  - then: si sun profile push && si sun vault backup push"
   else
     log info "  - selected: local (default)"
-    log info "  - optional cloud sync later: si helia auth login --url <helia-url> --token <helia-token> --account <slug> --auto-sync"
+    log info "  - optional cloud sync later: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
   fi
   log info "🏗️  Build notes:"
   log info "  - 'si build self' needs a Go toolchain. If this installer downloads Go, it will place a go shim next to si."
