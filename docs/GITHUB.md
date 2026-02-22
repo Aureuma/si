@@ -184,6 +184,7 @@ Project reference inputs accepted by project commands:
 ```bash
 si github project list Aureuma
 si github project get Aureuma/7
+si github project update Aureuma/7 --title "Q1 Delivery" --description "Shared roadmap board" --public true
 si github project fields Aureuma/7
 si github project items Aureuma/7 --include-archived
 
