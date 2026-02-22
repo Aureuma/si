@@ -54,7 +54,7 @@ func normalizeVaultSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "git", "local":
 		return vaultSyncBackendGit
-	case "helia", "cloud":
+	case "sun", "helia", "cloud":
 		return vaultSyncBackendHelia
 	case "dual", "both":
 		return vaultSyncBackendDual
@@ -67,14 +67,14 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 	if envRaw := strings.TrimSpace(os.Getenv("SI_VAULT_SYNC_BACKEND")); envRaw != "" {
 		mode := normalizeVaultSyncBackend(envRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git, helia, or dual)", envRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git, sun, helia, or dual)", envRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Vault.SyncBackend); cfgRaw != "" {
 		mode := normalizeVaultSyncBackend(cfgRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git, helia, or dual)", cfgRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git, sun, helia, or dual)", cfgRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "settings"}, nil
 	}

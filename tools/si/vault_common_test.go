@@ -119,6 +119,15 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 		t.Fatalf("unexpected settings resolution: %+v", got)
 	}
 
+	settings.Vault.SyncBackend = "sun"
+	got, err = resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve settings backend sun alias: %v", err)
+	}
+	if got.Mode != vaultSyncBackendHelia || got.Source != "settings" {
+		t.Fatalf("unexpected settings sun-alias resolution: %+v", got)
+	}
+
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")
 	got, err = resolveVaultSyncBackend(settings)
 	if err != nil {
@@ -126,6 +135,15 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	}
 	if got.Mode != vaultSyncBackendGit || got.Source != "env" {
 		t.Fatalf("unexpected env resolution: %+v", got)
+	}
+
+	t.Setenv("SI_VAULT_SYNC_BACKEND", "sun")
+	got, err = resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve env backend sun alias: %v", err)
+	}
+	if got.Mode != vaultSyncBackendHelia || got.Source != "env" {
+		t.Fatalf("unexpected env sun-alias resolution: %+v", got)
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "invalid")

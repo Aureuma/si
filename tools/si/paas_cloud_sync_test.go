@@ -37,6 +37,15 @@ func TestResolvePaasSyncBackendPrecedence(t *testing.T) {
 	if got.Mode != paasSyncBackendHelia || got.Source != "env" {
 		t.Fatalf("unexpected env backend resolution: %#v", got)
 	}
+
+	t.Setenv(paasSyncBackendEnvKey, "sun")
+	got, err = resolvePaasSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve env backend sun alias: %v", err)
+	}
+	if got.Mode != paasSyncBackendHelia || got.Source != "env" {
+		t.Fatalf("unexpected env sun-alias backend resolution: %#v", got)
+	}
 }
 
 func TestIsPaasCloudMutationCommand(t *testing.T) {

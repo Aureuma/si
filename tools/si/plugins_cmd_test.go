@@ -26,9 +26,9 @@ func TestPluginsListCommandJSON(t *testing.T) {
 		t.Fatalf("expected rows array in payload: %#v", payload)
 	}
 	required := map[string]bool{
-		"si/browser-mcp":  false,
+		"si/browser-mcp":   false,
 		"openclaw/discord": false,
-		"saas/linear":     false,
+		"saas/linear":      false,
 	}
 	for _, item := range rowsRaw {
 		row, ok := item.(map[string]any)

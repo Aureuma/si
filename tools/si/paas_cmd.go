@@ -30,7 +30,7 @@ var paasActions = []subcommandAction{
 	{Name: "events", Description: "query operational events"},
 	{Name: "backup", Description: "manage database backup workflows"},
 	{Name: "taskboard", Description: "manage shared market taskboard"},
-	{Name: "cloud", Description: "sync paas control-plane state with helia"},
+	{Name: "cloud", Description: "sync paas control-plane state with sun"},
 }
 
 const (
@@ -136,7 +136,7 @@ func printPaasScaffold(command string, fields map[string]string, jsonOut bool) {
 			paasFailureUnknown,
 			"cloud_sync",
 			"",
-			"verify helia auth/backend mode or switch to `si paas cloud use --mode git`",
+			"verify sun auth/backend mode or switch to `si paas cloud use --mode git`",
 			err,
 		), fields)
 	}

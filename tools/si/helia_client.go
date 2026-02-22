@@ -91,7 +91,7 @@ func newHeliaClient(baseURL string, token string, timeout time.Duration) (*helia
 	baseURL = strings.TrimSpace(baseURL)
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	if baseURL == "" {
-		return nil, fmt.Errorf("sun base url is required (set settings.helia.base_url, SI_SUN_BASE_URL, or SI_HELIA_BASE_URL)")
+		return nil, fmt.Errorf("sun base url is required (set settings.sun.base_url/settings.helia.base_url, SI_SUN_BASE_URL, or SI_HELIA_BASE_URL)")
 	}
 	if _, err := url.ParseRequestURI(baseURL); err != nil {
 		return nil, fmt.Errorf("invalid sun base url %q", baseURL)
@@ -340,11 +340,11 @@ func decodeHeliaError(res *http.Response) error {
 	body, _ := io.ReadAll(res.Body)
 	var parsed heliaError
 	if err := json.Unmarshal(body, &parsed); err == nil && strings.TrimSpace(parsed.Error) != "" {
-		return fmt.Errorf("helia: %s (status %d)", parsed.Error, res.StatusCode)
+		return fmt.Errorf("sun: %s (status %d)", parsed.Error, res.StatusCode)
 	}
 	trimmed := strings.TrimSpace(string(body))
 	if trimmed == "" {
 		trimmed = http.StatusText(res.StatusCode)
 	}
-	return fmt.Errorf("helia: %s (status %d)", trimmed, res.StatusCode)
+	return fmt.Errorf("sun: %s (status %d)", trimmed, res.StatusCode)
 }

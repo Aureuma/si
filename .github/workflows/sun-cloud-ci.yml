@@ -1,0 +1,76 @@
+name: SI Sun Cloud CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sun-cloud-ci.yml'
+      - 'tools/si/helia*.go'
+      - 'tools/si/sun_env*.go'
+      - 'tools/si/paas*cloud*.go'
+      - 'tools/si/paas_cmd.go'
+      - 'tools/si/paas_app_addon_cmd.go'
+      - 'tools/si/paas_deploy_bluegreen.go'
+      - 'tools/si/codex.go'
+      - 'tools/si/codex_swap_cmd.go'
+      - 'tools/si/settings.go'
+      - 'tools/si/settings_test.go'
+      - 'tools/si/vault_common*.go'
+      - 'tools/si/vault_*_cmd.go'
+      - 'tools/si/vault_backend_cmd_test.go'
+      - 'docs/SUN.md'
+      - 'docs/SETTINGS.md'
+      - 'docs/VAULT.md'
+  pull_request:
+    paths:
+      - '.github/workflows/sun-cloud-ci.yml'
+      - 'tools/si/helia*.go'
+      - 'tools/si/sun_env*.go'
+      - 'tools/si/paas*cloud*.go'
+      - 'tools/si/paas_cmd.go'
+      - 'tools/si/paas_app_addon_cmd.go'
+      - 'tools/si/paas_deploy_bluegreen.go'
+      - 'tools/si/codex.go'
+      - 'tools/si/codex_swap_cmd.go'
+      - 'tools/si/settings.go'
+      - 'tools/si/settings_test.go'
+      - 'tools/si/vault_common*.go'
+      - 'tools/si/vault_*_cmd.go'
+      - 'tools/si/vault_backend_cmd_test.go'
+      - 'docs/SUN.md'
+      - 'docs/SETTINGS.md'
+      - 'docs/VAULT.md'
+  workflow_dispatch:
+
+concurrency:
+  group: si-sun-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sun-cli-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l tools/si/*.go)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run Sun-focused unit tests
+        run: |
+          go test ./tools/si -run 'Test(NewHeliaClientValidation|HeliaClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|HeliaClientFromSettingsEnvPrecedence|HeliaE2E_ProfilePushPullRoundTrip|HeliaE2E_VaultBackupPushPullRoundTrip|MaybeHeliaAutoBackupVaultSkipsPlaintext|ResolvePaasSyncBackendPrecedence|IsPaasCloudMutationCommand|PaasCloudUseAndStatusE2E|PaasCloudPushPullRoundTripE2E|PaasCloudStrictAutoSyncPreservesJSONOutput|NormalizeVaultSyncBackend|VaultBackendStatusAndUse|ResolveVaultSyncBackendOverridesAndValidation|LoadSettingsSunSectionOverridesLegacyHeliaSection|SaveSettingsMirrorsHeliaIntoSunSection|SunEnvAliasesPreferSunThenHelia|SunEnvAliasesFallbackToHelia|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
+
+      - name: Compile command package
+        run: go test ./tools/si -run '^$'
