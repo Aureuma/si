@@ -18,7 +18,7 @@ import (
 )
 
 func cmdGithubGit(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github git <credential|setup|remote-auth>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github git <credential|setup|remote-auth|clone-auth>")
 	if !routedOK {
 		return
 	}
@@ -30,6 +30,8 @@ func cmdGithubGit(args []string) {
 		cmdGithubGitSetup(args[1:])
 	case "remote-auth":
 		cmdGithubGitRemoteAuth(args[1:])
+	case "clone-auth":
+		cmdGithubGitCloneAuth(args[1:])
 	default:
 		printUnknown("github git", args[0])
 	}
@@ -129,6 +131,23 @@ type githubGitSetupRepoChange struct {
 	PushAfter  string `json:"push_after,omitempty"`
 	Changed    bool   `json:"changed"`
 	Skipped    string `json:"skipped,omitempty"`
+}
+
+type githubGitCloneAuthResult struct {
+	RepoSource   string `json:"repo_source"`
+	Owner        string `json:"owner"`
+	Name         string `json:"name"`
+	Root         string `json:"root"`
+	Destination  string `json:"destination"`
+	Remote       string `json:"remote"`
+	VaultKey     string `json:"vault_key"`
+	CloneURL     string `json:"clone_url"`
+	DryRun       bool   `json:"dry_run"`
+	Cloned       bool   `json:"cloned"`
+	Tracking     string `json:"tracking,omitempty"`
+	WouldClone   bool   `json:"would_clone,omitempty"`
+	WouldRewrite bool   `json:"would_rewrite_remote,omitempty"`
+	Error        string `json:"error,omitempty"`
 }
 
 type githubGitRemoteAuthResult struct {
@@ -329,6 +348,154 @@ func cmdGithubGitRemoteAuth(args []string) {
 
 	if result.ReposErrored > 0 {
 		fatal(fmt.Errorf("remote-auth encountered %d errors", result.ReposErrored))
+	}
+}
+
+func cmdGithubGitCloneAuth(args []string) {
+	args = stripeFlagsFirst(args, map[string]bool{
+		"track-upstream": true,
+		"dry-run":        true,
+		"json":           true,
+	})
+	fs := flag.NewFlagSet("github git clone-auth", flag.ExitOnError)
+	repoSource := fs.String("repo", "", "repository source (<owner/repo> or GitHub URL)")
+	root := fs.String("root", "", "destination root directory (default: ~/Development)")
+	destDir := fs.String("dest", "", "destination directory (absolute path or path relative to root)")
+	remote := fs.String("remote", "origin", "remote name")
+	vaultKey := fs.String("vault-key", "", "vault key containing PAT/token used for clone URL auth")
+	trackUpstream := fs.Bool("track-upstream", true, "set branch upstream tracking for plain git push/pull")
+	dryRun := fs.Bool("dry-run", false, "preview clone without writing to disk")
+	jsonOut := fs.Bool("json", false, "output json")
+	_ = fs.Parse(args)
+	if fs.NArg() > 1 {
+		printUsage("usage: si github git clone-auth [<owner/repo|github-url>] --vault-key <KEY> [--root <path>] [--dest <path>] [--remote <name>] [--track-upstream=true|false] [--dry-run] [--json]")
+		return
+	}
+	if strings.TrimSpace(*repoSource) == "" && fs.NArg() == 1 {
+		*repoSource = strings.TrimSpace(fs.Arg(0))
+	}
+	if strings.TrimSpace(*repoSource) == "" {
+		printUsage("usage: si github git clone-auth [<owner/repo|github-url>] --vault-key <KEY> [--root <path>] [--dest <path>] [--remote <name>] [--track-upstream=true|false] [--dry-run] [--json]")
+		return
+	}
+	key := strings.TrimSpace(*vaultKey)
+	if key == "" {
+		fatal(fmt.Errorf("--vault-key is required"))
+	}
+	remoteName := strings.TrimSpace(*remote)
+	if remoteName == "" {
+		fatal(fmt.Errorf("--remote is required"))
+	}
+
+	normalized, err := parseGitHubCloneSource(*repoSource)
+	if err != nil {
+		fatal(err)
+	}
+	rootPath, err := resolveGitReposRoot(*root)
+	if err != nil {
+		fatal(err)
+	}
+	destination := planGitCloneDestination(rootPath, normalized.Repo, strings.TrimSpace(*destDir))
+	if strings.TrimSpace(destination) == "" {
+		fatal(fmt.Errorf("destination path is required"))
+	}
+	if err := ensureCloneDestinationAvailable(destination); err != nil {
+		fatal(err)
+	}
+
+	settings := loadSettingsOrDefault()
+	pat, ok := resolveVaultKeyValue(settings, key)
+	if !ok {
+		fatal(fmt.Errorf("vault key %q is missing or unreadable", key))
+	}
+	pat = strings.TrimSpace(pat)
+	if pat == "" {
+		fatal(fmt.Errorf("vault key %q resolved to an empty value", key))
+	}
+	authURL, err := buildGitHubRemoteURLWithPAT(normalized.URL, pat)
+	if err != nil {
+		fatal(err)
+	}
+
+	result := githubGitCloneAuthResult{
+		RepoSource:   strings.TrimSpace(*repoSource),
+		Owner:        normalized.Owner,
+		Name:         normalized.Repo,
+		Root:         rootPath,
+		Destination:  destination,
+		Remote:       remoteName,
+		VaultKey:     key,
+		CloneURL:     redactGitRemotePATURL(authURL),
+		DryRun:       *dryRun,
+		WouldClone:   true,
+		WouldRewrite: true,
+	}
+
+	if !*dryRun {
+		if err := gitCloneRepository(authURL, destination, remoteName); err != nil {
+			result.Error = err.Error()
+			if *jsonOut {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				_ = enc.Encode(result)
+			}
+			fatal(err)
+		}
+		result.Cloned = true
+		if err := gitRemoteSetURL(destination, remoteName, authURL, false); err != nil {
+			result.Error = err.Error()
+			if *jsonOut {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				_ = enc.Encode(result)
+			}
+			fatal(err)
+		}
+		if err := gitRemoteSetURL(destination, remoteName, authURL, true); err != nil {
+			result.Error = err.Error()
+			if *jsonOut {
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				_ = enc.Encode(result)
+			}
+			fatal(err)
+		}
+		if *trackUpstream {
+			status, trackErr := ensureGitBranchTracking(destination, remoteName, false)
+			result.Tracking = status
+			if trackErr != nil {
+				result.Error = trackErr.Error()
+				if *jsonOut {
+					enc := json.NewEncoder(os.Stdout)
+					enc.SetIndent("", "  ")
+					_ = enc.Encode(result)
+				}
+				fatal(trackErr)
+			}
+		}
+	} else if *trackUpstream {
+		result.Tracking = "would-set"
+	}
+
+	if *jsonOut {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(result); err != nil {
+			fatal(err)
+		}
+		return
+	}
+
+	fmt.Printf("%s %s\n", styleHeading("GitHub PAT clone:"), styleSuccess("completed"))
+	fmt.Printf("%s %s\n", styleHeading("Repo:"), normalized.Owner+"/"+normalized.Repo)
+	fmt.Printf("%s %s\n", styleHeading("Destination:"), destination)
+	fmt.Printf("%s %s\n", styleHeading("Remote:"), remoteName)
+	fmt.Printf("%s %s\n", styleHeading("Clone URL:"), result.CloneURL)
+	if *dryRun {
+		fmt.Printf("%s %s\n", styleHeading("Mode:"), "dry-run")
+	}
+	if strings.TrimSpace(result.Tracking) != "" {
+		fmt.Printf("%s %s\n", styleHeading("Tracking:"), result.Tracking)
 	}
 }
 
@@ -664,6 +831,71 @@ func normalizeGitHubRemoteURL(raw string) (githubRemoteNormalized, bool) {
 	return canonical, true
 }
 
+func parseGitHubCloneSource(raw string) (githubRemoteNormalized, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return githubRemoteNormalized{}, fmt.Errorf("repository source is required")
+	}
+
+	if strings.Contains(raw, "://") || strings.HasPrefix(raw, "git@") {
+		if normalized, ok := normalizeGitHubRemoteURL(raw); ok {
+			return normalized, nil
+		}
+		return githubRemoteNormalized{}, fmt.Errorf("repository source must be a supported github URL or owner/repo")
+	}
+
+	if strings.HasPrefix(strings.ToLower(raw), "github.com/") {
+		if normalized, ok := normalizeGitHubRemoteURL("https://" + raw); ok {
+			return normalized, nil
+		}
+		return githubRemoteNormalized{}, fmt.Errorf("repository source must be a supported github URL or owner/repo")
+	}
+
+	owner, repo := gitOwnerRepoFromCredentialPath(raw)
+	if owner == "" || repo == "" {
+		return githubRemoteNormalized{}, fmt.Errorf("repository source must be <owner/repo> or a github URL")
+	}
+
+	return githubRemoteNormalized{
+		Host:  "github.com",
+		Owner: owner,
+		Repo:  repo,
+		URL:   fmt.Sprintf("https://github.com/%s/%s.git", owner, repo),
+	}, nil
+}
+
+func planGitCloneDestination(root string, repoName string, dest string) string {
+	root = filepath.Clean(strings.TrimSpace(root))
+	dest = strings.TrimSpace(dest)
+	if dest == "" {
+		return filepath.Join(root, strings.TrimSpace(repoName))
+	}
+	if filepath.IsAbs(dest) {
+		return filepath.Clean(dest)
+	}
+	return filepath.Join(root, dest)
+}
+
+func ensureCloneDestinationAvailable(destination string) error {
+	if strings.TrimSpace(destination) == "" {
+		return fmt.Errorf("destination path is required")
+	}
+	stat, err := os.Stat(destination)
+	switch {
+	case err == nil && stat.IsDir():
+		return fmt.Errorf("destination already exists: %s", destination)
+	case err == nil && !stat.IsDir():
+		return fmt.Errorf("destination path exists and is not a directory: %s", destination)
+	case err != nil && !os.IsNotExist(err):
+		return err
+	}
+	parent := filepath.Dir(destination)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return fmt.Errorf("create clone parent dir %s: %w", parent, err)
+	}
+	return nil
+}
+
 func normalizeGitHost(host string) string {
 	host = strings.TrimSpace(strings.ToLower(host))
 	host = strings.TrimPrefix(host, "https://")
@@ -766,6 +998,21 @@ func gitRemoteSetURL(repoPath string, remote string, value string, push bool) er
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("git remote set-url %s (%s): %w: %s", remote, repoPath, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func gitCloneRepository(remoteURL string, destination string, remote string) error {
+	args := []string{"clone"}
+	remote = strings.TrimSpace(remote)
+	if remote != "" && remote != "origin" {
+		args = append(args, "--origin", remote)
+	}
+	args = append(args, strings.TrimSpace(remoteURL), strings.TrimSpace(destination))
+	cmd := exec.Command("git", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git clone (%s): %w: %s", destination, err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

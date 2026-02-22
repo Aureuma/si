@@ -103,6 +103,16 @@ Useful flags:
 - `--dry-run`: preview changes without writing
 - `--json`: structured output for automation
 
+To clone a new repository directly with PAT URL auth sourced from vault:
+
+```bash
+si github git clone-auth Aureuma/GitHubProj \
+  --root ~/Development \
+  --vault-key GH_PAT_AUREUMA_VANGUARDA
+```
+
+`clone-auth` supports either `owner/repo` or full GitHub URL input, rewrites both fetch/push URLs with PAT auth, and sets upstream tracking for plain `git push` / `git pull`.
+
 ### Troubleshooting Git App Access
 
 If fetch/push still fails after setup:

@@ -284,6 +284,62 @@ func TestEnsureGitBranchTrackingSetsConfig(t *testing.T) {
 	}
 }
 
+func TestParseGitHubCloneSourceOwnerRepo(t *testing.T) {
+	normalized, err := parseGitHubCloneSource("Aureuma/GitHubProj")
+	if err != nil {
+		t.Fatalf("parseGitHubCloneSource: %v", err)
+	}
+	if normalized.Owner != "Aureuma" || normalized.Repo != "GitHubProj" {
+		t.Fatalf("unexpected owner/repo: %s/%s", normalized.Owner, normalized.Repo)
+	}
+	if normalized.URL != "https://github.com/Aureuma/GitHubProj.git" {
+		t.Fatalf("unexpected canonical url: %s", normalized.URL)
+	}
+}
+
+func TestParseGitHubCloneSourceURL(t *testing.T) {
+	normalized, err := parseGitHubCloneSource("https://github.com/Aureuma/GitHubProj")
+	if err != nil {
+		t.Fatalf("parseGitHubCloneSource: %v", err)
+	}
+	if normalized.URL != "https://github.com/Aureuma/GitHubProj.git" {
+		t.Fatalf("unexpected canonical url: %s", normalized.URL)
+	}
+}
+
+func TestParseGitHubCloneSourceRejectsInvalid(t *testing.T) {
+	if _, err := parseGitHubCloneSource("not-a-repo"); err == nil {
+		t.Fatalf("expected invalid clone source to fail")
+	}
+}
+
+func TestPlanGitCloneDestination(t *testing.T) {
+	root := "/tmp/dev"
+	if got := planGitCloneDestination(root, "GitHubProj", ""); got != filepath.Join(root, "GitHubProj") {
+		t.Fatalf("unexpected default destination: %s", got)
+	}
+	if got := planGitCloneDestination(root, "GitHubProj", "custom/path"); got != filepath.Join(root, "custom/path") {
+		t.Fatalf("unexpected relative destination: %s", got)
+	}
+	if got := planGitCloneDestination(root, "GitHubProj", "/tmp/elsewhere"); got != "/tmp/elsewhere" {
+		t.Fatalf("unexpected absolute destination: %s", got)
+	}
+}
+
+func TestEnsureCloneDestinationAvailable(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "repo")
+	if err := ensureCloneDestinationAvailable(target); err != nil {
+		t.Fatalf("ensureCloneDestinationAvailable new path: %v", err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatalf("mkdir target: %v", err)
+	}
+	if err := ensureCloneDestinationAvailable(target); err == nil {
+		t.Fatalf("expected existing destination error")
+	}
+}
+
 func runGit(t *testing.T, repo string, args ...string) string {
 	t.Helper()
 	full := append([]string{"-C", repo}, args...)
