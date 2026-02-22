@@ -42,21 +42,21 @@ type paasTaskboardColumn struct {
 }
 
 type paasTaskboardTask struct {
-	ID          string                 `json:"id"`
-	Title       string                 `json:"title"`
-	Status      string                 `json:"status"`
-	Priority    string                 `json:"priority"`
-	Workstream  string                 `json:"workstream,omitempty"`
-	Owner       string                 `json:"owner,omitempty"`
-	Score       int                    `json:"score,omitempty"`
-	Matched     []string               `json:"matched_terms,omitempty"`
-	ActionPlan  paasTaskboardAction    `json:"action_plan,omitempty"`
-	Source      *paasTaskboardSource   `json:"source,omitempty"`
-	TicketPath  string                 `json:"ticket_path,omitempty"`
-	CreatedAt   string                 `json:"created_at,omitempty"`
-	UpdatedAt   string                 `json:"updated_at,omitempty"`
-	Tags        []string               `json:"tags,omitempty"`
-	Extensions  map[string]interface{} `json:"-"`
+	ID         string                 `json:"id"`
+	Title      string                 `json:"title"`
+	Status     string                 `json:"status"`
+	Priority   string                 `json:"priority"`
+	Workstream string                 `json:"workstream,omitempty"`
+	Owner      string                 `json:"owner,omitempty"`
+	Score      int                    `json:"score,omitempty"`
+	Matched    []string               `json:"matched_terms,omitempty"`
+	ActionPlan paasTaskboardAction    `json:"action_plan,omitempty"`
+	Source     *paasTaskboardSource   `json:"source,omitempty"`
+	TicketPath string                 `json:"ticket_path,omitempty"`
+	CreatedAt  string                 `json:"created_at,omitempty"`
+	UpdatedAt  string                 `json:"updated_at,omitempty"`
+	Tags       []string               `json:"tags,omitempty"`
+	Extensions map[string]interface{} `json:"-"`
 }
 
 type paasTaskboardAction struct {
@@ -72,10 +72,10 @@ type paasTaskboardSource struct {
 }
 
 type paasTaskboardRunRecord struct {
-	RanAt           string `json:"ran_at,omitempty"`
-	SignalsScanned  int    `json:"signals_scanned,omitempty"`
-	TopOpportunities int   `json:"top_opportunities,omitempty"`
-	NewTasks        int    `json:"new_tasks,omitempty"`
+	RanAt            string `json:"ran_at,omitempty"`
+	SignalsScanned   int    `json:"signals_scanned,omitempty"`
+	TopOpportunities int    `json:"top_opportunities,omitempty"`
+	NewTasks         int    `json:"new_tasks,omitempty"`
 }
 
 func cmdPaasTaskboard(args []string) {
@@ -126,14 +126,14 @@ func cmdPaasTaskboardShow(args []string) {
 	}
 	if jsonOut {
 		payload := map[string]any{
-			"ok":       true,
-			"command":  "taskboard show",
-			"context":  currentPaasContext(),
-			"mode":     "live",
-			"count":    len(board.Tasks),
+			"ok":        true,
+			"command":   "taskboard show",
+			"context":   currentPaasContext(),
+			"mode":      "live",
+			"count":     len(board.Tasks),
 			"json_path": jsonPath,
 			"md_path":   mdPath,
-			"data":     board,
+			"data":      board,
 		}
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
@@ -146,7 +146,7 @@ func cmdPaasTaskboardShow(args []string) {
 		return
 	}
 	printPaasScaffold("taskboard show", map[string]string{
-		"count":    intString(len(board.Tasks)),
+		"count":     intString(len(board.Tasks)),
 		"json_path": jsonPath,
 		"md_path":   mdPath,
 	}, false)

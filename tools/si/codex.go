@@ -1732,6 +1732,7 @@ func cmdCodexLogin(args []string) {
 	if err := updateSettingsProfile(*profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
+	maybeHeliaAutoSyncProfile("login", *profile)
 	triggerWarmupAfterLogin(*profile)
 	removeContainer()
 }

@@ -73,6 +73,7 @@ Core:
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
+  si helia <auth|profile|vault|token|audit|doctor> [args...]
   si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
@@ -335,6 +336,21 @@ paas:
   Running si paas with no subcommand opens an interactive command picker.
   Running si paas target/app/alert/ai/context/agent/events with no subcommand opens an interactive command picker.
 
+helia:
+  si helia auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]
+  si helia auth status [--json]
+  si helia auth logout [--clear-account]
+  si helia doctor [--json]
+  si helia profile list [--json]
+  si helia profile push [--profile <id>] [--json]
+  si helia profile pull [--profile <id>] [--json]
+  si helia vault backup push [--file <path>] [--name <name>] [--allow-plaintext]
+  si helia vault backup pull [--file <path>] [--name <name>]
+  si helia token list [--include-revoked] [--limit <n>] [--json]
+  si helia token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]
+  si helia token revoke --token-id <id>
+  si helia audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]
+
 github:
   si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]
   si github context list|current|use [--account <alias>] [--owner <owner>] [--base-url <url>] [--auth-mode <app|oauth>] [--token-env <env_key>]
@@ -343,7 +359,7 @@ github:
   si github branch list|get|create|delete|protect|unprotect ...
   si github pr list|get|create|comment|merge ...
   si github issue list|get|create|comment|close|reopen ...
-  si github workflow list|run|runs|logs ...
+  si github workflow list|run|runs|logs|watch ...
   si github workflow run get|cancel|rerun ...
   si github release list|get|create|upload|delete ...
   si github secret repo|env|org set|delete ...
@@ -826,7 +842,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify|helia)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)

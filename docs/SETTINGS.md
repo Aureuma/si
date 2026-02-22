@@ -314,6 +314,19 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
 
+### `[helia]`
+Defaults for `si helia` cloud sync.
+- `helia.base_url` (string): Helia API base URL (default: `http://127.0.0.1:8080`)
+- `helia.account` (string): expected account slug bound to the saved token
+- `helia.token` (string): Helia bearer token
+- `helia.timeout_seconds` (int): request timeout for Helia API calls (default: `15`)
+- `helia.auto_sync` (bool): enable automatic profile + vault backup sync hooks
+- `helia.vault_backup` (string): default vault backup object name (default: `default`)
+
+Environment overrides:
+- `SI_HELIA_BASE_URL`
+- `SI_HELIA_TOKEN`
+
 ### `[shell.prompt]`
 Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization
@@ -514,6 +527,13 @@ trust_store = "~/.si/vault/trust.json"
 audit_log = "~/.si/logs/vault.log"
 key_backend = "keyring"
 key_file = "~/.si/vault/keys/age.key"
+
+[helia]
+base_url = "http://127.0.0.1:8080"
+account = "acme"
+timeout_seconds = 15
+auto_sync = true
+vault_backup = "default"
 
 [shell.prompt]
 enabled = true

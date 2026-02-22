@@ -12,6 +12,7 @@ import (
 
 	"si/tools/si/internal/cloudflarebridge"
 	"si/tools/si/internal/providers"
+	"si/tools/si/internal/vault"
 )
 
 type cloudflareRuntimeContextInput struct {
@@ -58,6 +59,12 @@ func resolveCloudflareRuntimeContext(input cloudflareRuntimeContextInput) (cloud
 
 	accountID, accountSource := resolveCloudflareAccountID(alias, account, strings.TrimSpace(input.AccountIDFlag))
 	token, tokenSource := resolveCloudflareAPIToken(alias, account, strings.TrimSpace(input.TokenFlag))
+	if strings.TrimSpace(accountID) == "" {
+		accountID, accountSource = resolveCloudflareAccountIDFromVault(settings, account)
+	}
+	if strings.TrimSpace(token) == "" {
+		token, tokenSource = resolveCloudflareAPITokenFromVault(settings, account)
+	}
 	if strings.TrimSpace(token) == "" {
 		prefix := cloudflareAccountEnvPrefix(alias, account)
 		if prefix == "" {
@@ -155,6 +162,71 @@ func resolveCloudflareAPIToken(alias string, account CloudflareAccountEntry, ove
 		return value, "env:CLOUDFLARE_API_TOKEN"
 	}
 	return "", ""
+}
+
+func resolveCloudflareAccountIDFromVault(settings Settings, account CloudflareAccountEntry) (string, string) {
+	key := strings.TrimSpace(account.AccountIDEnv)
+	if key == "" {
+		return "", ""
+	}
+	value, ok := resolveVaultKeyValue(settings, key)
+	if !ok {
+		return "", ""
+	}
+	return value, "vault:" + key
+}
+
+func resolveCloudflareAPITokenFromVault(settings Settings, account CloudflareAccountEntry) (string, string) {
+	key := strings.TrimSpace(account.APITokenEnv)
+	if key == "" {
+		return "", ""
+	}
+	value, ok := resolveVaultKeyValue(settings, key)
+	if !ok {
+		return "", ""
+	}
+	return value, "vault:" + key
+}
+
+func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", false
+	}
+	target, err := vaultResolveTarget(settings, "", false)
+	if err != nil {
+		return "", false
+	}
+	doc, err := vault.ReadDotenvFile(target.File)
+	if err != nil {
+		return "", false
+	}
+	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
+		return "", false
+	}
+	raw, ok := doc.Lookup(key)
+	if !ok {
+		return "", false
+	}
+	value, err := vault.NormalizeDotenvValue(raw)
+	if err != nil {
+		return "", false
+	}
+	if vault.IsEncryptedValueV1(value) {
+		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
+			return "", false
+		}
+		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
+		if err != nil {
+			return "", false
+		}
+		plain, err := vault.DecryptStringV1(value, info.Identity)
+		if err != nil {
+			return "", false
+		}
+		return plain, strings.TrimSpace(plain) != ""
+	}
+	return value, strings.TrimSpace(value) != ""
 }
 
 func resolveCloudflareZoneID(alias string, account CloudflareAccountEntry, env string, override string) (string, string) {
