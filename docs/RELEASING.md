@@ -161,6 +161,7 @@ When a GitHub Release is published, workflow `.github/workflows/cli-release-asse
 builds and uploads CLI archives automatically, then:
 - publishes npm package `@aureuma/si-cli` (when `NPM_TOKEN` secret is configured)
 - updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` secret is configured)
+- verifies release assets + npm + Homebrew sync in a final gate job
 
 Supported targets:
 - `linux/amd64`
@@ -194,6 +195,7 @@ Notes:
 - The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
 - Use `tools/release/npm/publish-npm-package.sh --version vX.Y.Z --dry-run` for local npm publish rehearsal.
+- Use `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
 - Use `tools/release/homebrew/render-core-formula.sh --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 
 ## Tagging Rules

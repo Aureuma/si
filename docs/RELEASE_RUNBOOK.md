@@ -68,6 +68,12 @@ Manual trigger variant:
 gh workflow run releasemind-release.yml -f tag=vX.Y.Z -f publish=true
 ```
 
+This runbook can also be installed in other repositories via the workflow
+template shipped in `Aureuma/viva`:
+
+- `.github/workflow-templates/releasemind-release-runbook.yml`
+- composite action: `Aureuma/viva/.github/actions/releasemind-release-runbook@main`
+
 Manual fallback (if automation is disabled):
 
 1. In GitHub UI: Releases -> "Draft a new release".
@@ -101,6 +107,15 @@ Manual fallback (if automation is disabled):
 - npm package:
   - `npm view @aureuma/si-cli version`
   - Expect returned version to match `X.Y.Z`.
+- npm publish using SI vault-managed token:
+  - `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z`
+  - default token key: `NPM_GAT_AUREUMA_VANGUARDA`
 - Homebrew tap:
   - `curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb | grep 'version \"'`
   - Formula version should match `X.Y.Z`.
+
+Workflow `.github/workflows/cli-release-assets.yml` now performs a final
+distribution verification job that checks:
+- required GitHub release assets are present
+- npm package visibility/version (when `NPM_TOKEN` is configured)
+- Homebrew tap version sync (when `HOMEBREW_TAP_PUSH_TOKEN` is configured)

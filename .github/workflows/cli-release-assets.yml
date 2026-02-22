@@ -251,3 +251,83 @@ jobs:
             --repo "${{ github.repository }}" \
             --commit \
             --push
+
+  verify-release-distribution:
+    name: Verify release assets, npm package, and Homebrew tap
+    needs: [resolve-tag, publish-assets, publish-npm, update-homebrew-tap]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify release distribution state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          HOMEBREW_TAP_PUSH_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          tag="${{ needs.resolve-tag.outputs.tag }}"
+          version="${tag#v}"
+          if [[ -z "${version}" || "${version}" == "${tag}" ]]; then
+            echo "invalid tag: ${tag}" >&2
+            exit 1
+          fi
+
+          retry() {
+            local attempts="$1"
+            local delay="$2"
+            shift 2
+            local i
+            for ((i=1; i<=attempts; i++)); do
+              if "$@"; then
+                return 0
+              fi
+              if (( i < attempts )); then
+                sleep "${delay}"
+              fi
+            done
+            return 1
+          }
+
+          assets="$(gh release view "${tag}" --repo "${{ github.repository }}" --json assets --jq '.assets[].name')"
+          required_assets=(
+            "si_${version}_linux_amd64.tar.gz"
+            "si_${version}_linux_arm64.tar.gz"
+            "si_${version}_linux_armv7.tar.gz"
+            "si_${version}_darwin_amd64.tar.gz"
+            "si_${version}_darwin_arm64.tar.gz"
+            "checksums.txt"
+          )
+          for asset in "${required_assets[@]}"; do
+            if ! grep -Fxq "${asset}" <<<"${assets}"; then
+              echo "missing release asset: ${asset}" >&2
+              exit 1
+            fi
+          done
+          echo "release assets verified for ${tag}"
+
+          if [[ -n "${NPM_TOKEN}" ]]; then
+            if ! retry 12 10 npm view "@aureuma/si-cli@${version}" version >/dev/null 2>&1; then
+              echo "npm package @aureuma/si-cli@${version} was not visible after retries" >&2
+              exit 1
+            fi
+            npm_version="$(npm view "@aureuma/si-cli@${version}" version)"
+            if [[ "${npm_version}" != "${version}" ]]; then
+              echo "npm version mismatch: expected ${version}, got ${npm_version}" >&2
+              exit 1
+            fi
+            echo "npm package verified: @aureuma/si-cli@${npm_version}"
+          else
+            echo "NPM_TOKEN is not configured; skipping npm verification."
+          fi
+
+          if [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" ]]; then
+            tap_url="https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb"
+            if ! retry 12 10 bash -lc "curl --proto '=https' --tlsv1.2 -fsSL '${tap_url}' | grep -Eq 'version\\s+\"${version}\"'"; then
+              echo "Homebrew tap formula did not update to ${version} after retries" >&2
+              exit 1
+            fi
+            echo "homebrew tap formula verified at version ${version}"
+          else
+            echo "HOMEBREW_TAP_PUSH_TOKEN is not configured; skipping tap verification."
+          fi
