@@ -227,4 +227,3 @@ func fallbackPaasIncidentMessage(message, command, status string) string {
 	}
 	return "incident candidate"
 }
-

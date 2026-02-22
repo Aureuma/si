@@ -89,6 +89,7 @@ func cmdCodexSwap(args []string) {
 	if err := updateSettingsProfile(profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
+	maybeHeliaAutoSyncProfile("swap", profile)
 	successf("swapped host codex auth to profile %s", res.ProfileID)
 }
 

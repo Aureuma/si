@@ -86,4 +86,3 @@ func TestNewPaasIncidentEventDefaultsAndRedaction(t *testing.T) {
 		t.Fatalf("expected non-sensitive metadata unchanged, got %#v", event.Metadata)
 	}
 }
-

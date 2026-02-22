@@ -213,14 +213,14 @@ func writeMintlifyDocsConfig(pathValue, docsDir, siteName, siteURL string, force
 					"groups": []map[string]any{
 						{
 							"group": "Overview",
-								"pages": []string{
-									path.Join(docsDir, "index"),
-									path.Join(docsDir, "CLI_REFERENCE"),
-									path.Join(docsDir, "INTEGRATIONS_OVERVIEW"),
-									path.Join(docsDir, "testing"),
-								},
+							"pages": []string{
+								path.Join(docsDir, "index"),
+								path.Join(docsDir, "CLI_REFERENCE"),
+								path.Join(docsDir, "INTEGRATIONS_OVERVIEW"),
+								path.Join(docsDir, "testing"),
 							},
 						},
+					},
 				},
 				{
 					"tab": "Core Runtime",

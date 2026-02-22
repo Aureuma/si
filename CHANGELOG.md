@@ -12,6 +12,26 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.48.0] - 2026-02-22
+### Added
+- Added the `si helia` cloud command surface for account auth, codex profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics.
+- Added Helia-focused CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
+- Added Helia cloud-sync operator documentation and settings reference coverage (`[helia]`).
+- Added native Go SSH transport support for SI PaaS remote deploy workflows, with companion architecture runbook documentation.
+
+### Changed
+- Updated GitHub and Cloudflare auth resolution so account credentials can be sourced directly from SI vault key references.
+- Improved `si login` browser/headless behavior and clarified Safari accessibility guidance for profile-aware URL opening.
+- Simplified `si build image` mode selection while preserving native `docker buildx` progress output behavior.
+
+### Fixed
+- Stabilized SI CI lanes (`SI Tests` and Helia-focused workflow checks) by fixing empty-env headless detection and formatting gate regressions.
+- Fixed `si vault` write paths to refuse updates when git index flags (`skip-worktree`/`assume-unchanged`) could hide dotenv changes.
+- Fixed `si logout-all` behavior to block unintended auth-cache recovery after explicit logout.
+
+### Security
+- Hardened Helia vault auto-backup hooks to skip uploading dotenv files containing plaintext keys, preventing accidental plaintext secret sync to cloud storage.
+
 ## [v0.47.0] - 2026-02-19
 ### Added
 - Added a full plugin marketplace command surface (`si plugins`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.

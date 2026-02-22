@@ -1,0 +1,54 @@
+name: SI Helia Cloud CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/helia-cloud-ci.yml'
+      - 'tools/si/helia*.go'
+      - 'tools/si/codex.go'
+      - 'tools/si/codex_swap_cmd.go'
+      - 'tools/si/settings.go'
+      - 'tools/si/vault_*_cmd.go'
+  pull_request:
+    paths:
+      - '.github/workflows/helia-cloud-ci.yml'
+      - 'tools/si/helia*.go'
+      - 'tools/si/codex.go'
+      - 'tools/si/codex_swap_cmd.go'
+      - 'tools/si/settings.go'
+      - 'tools/si/vault_*_cmd.go'
+  workflow_dispatch:
+
+concurrency:
+  group: si-helia-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  helia-cli-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l tools/si/*.go)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Run Helia-focused unit tests
+        run: |
+          go test ./tools/si -run 'Test(NewHeliaClientValidation|HeliaClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|HeliaClientFromSettingsEnvPrecedence|HeliaE2E_ProfilePushPullRoundTrip|HeliaE2E_VaultBackupPushPullRoundTrip|MaybeHeliaAutoBackupVaultSkipsPlaintext|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
+
+      - name: Compile command package
+        run: go test ./tools/si -run '^$'

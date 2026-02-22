@@ -58,4 +58,3 @@ func TestBuildPaasAgentRuntimeAdapterPlanMissingAuth(t *testing.T) {
 		t.Fatalf("unexpected missing-auth plan: %#v", plan)
 	}
 }
-

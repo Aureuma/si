@@ -98,4 +98,3 @@ func resolvePaasAgentIncidentID(incident *paasIncidentQueueEntry) string {
 	}
 	return strings.TrimSpace(incident.Key)
 }
-
