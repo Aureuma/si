@@ -10,6 +10,9 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 - Repo secrets are configured for ReleaseMind automation:
   - `RELEASEMIND_API_BASE_URL`
   - `RELEASEMIND_AUTOMATION_TOKEN`
+- Optional distribution secrets (for full npm + Homebrew automation):
+  - `NPM_TOKEN`
+  - `HOMEBREW_TAP_PUSH_TOKEN`
 
 ## 1. Decide Version
 
@@ -95,3 +98,9 @@ Manual fallback (if automation is disabled):
     - `si_<version>_darwin_amd64.tar.gz`
     - `si_<version>_darwin_arm64.tar.gz`
     - `checksums.txt`
+- npm package:
+  - `npm view @aureuma/si-cli version`
+  - Expect returned version to match `X.Y.Z`.
+- Homebrew tap:
+  - `curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb | grep 'version \"'`
+  - Formula version should match `X.Y.Z`.

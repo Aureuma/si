@@ -139,7 +139,8 @@
             "group": "Release Docs",
             "pages": [
               "docs/RELEASING",
-              "docs/RELEASE_RUNBOOK"
+              "docs/RELEASE_RUNBOOK",
+              "docs/HOMEBREW_CORE"
             ]
           }
         ]

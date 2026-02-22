@@ -158,7 +158,9 @@ gh run list --workflow "ReleaseMind Release Runbook" --limit 1
 
 ### 11) Verify automated CLI release assets
 When a GitHub Release is published, workflow `.github/workflows/cli-release-assets.yml`
-builds and uploads CLI archives automatically.
+builds and uploads CLI archives automatically, then:
+- publishes npm package `@aureuma/si-cli` (when `NPM_TOKEN` secret is configured)
+- updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` secret is configured)
 
 Supported targets:
 - `linux/amd64`
@@ -179,12 +181,20 @@ Verification commands:
 ```
 gh run list --workflow "CLI Release Assets" --limit 1
 gh release view vX.Y.Z --json assets --jq '.assets[].name'
+npm view @aureuma/si-cli version
+```
+
+Verify Homebrew tap formula version:
+```
+curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb | grep -n 'version "'
 ```
 
 Notes:
 - The workflow validates that `tools/si/version.go` matches the release tag.
 - The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
+- Use `tools/release/npm/publish-npm-package.sh --version vX.Y.Z --dry-run` for local npm publish rehearsal.
+- Use `tools/release/homebrew/render-core-formula.sh --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.
 
 ## Tagging Rules
 - Use annotated tags: `git tag -a vX.Y.Z -m "vX.Y.Z" <commit>`.
