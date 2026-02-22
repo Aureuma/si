@@ -2,7 +2,7 @@ package main
 
 import "strings"
 
-const githubUsageText = "usage: si github <auth|context|doctor|git|repo|branch|pr|issue|workflow|release|secret|raw|graphql>"
+const githubUsageText = "usage: si github <auth|context|doctor|git|repo|project|branch|pr|issue|workflow|release|secret|raw|graphql>"
 
 func cmdGithub(args []string) {
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, githubUsageText)
@@ -25,6 +25,8 @@ func cmdGithub(args []string) {
 		cmdGithubGit(rest)
 	case "repo":
 		cmdGithubRepo(rest)
+	case "project":
+		cmdGithubProject(rest)
 	case "branch":
 		cmdGithubBranch(rest)
 	case "pr":
