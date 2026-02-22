@@ -672,16 +672,20 @@ func flipPaasBlueGreenSlot(current string) string {
 	return "blue"
 }
 
-func resolvePaasBlueGreenPolicyStorePath() (string, error) {
-	contextDir, err := resolvePaasContextDir(currentPaasContext())
+func resolvePaasBlueGreenPolicyStorePathForContext(contextName string) (string, error) {
+	contextDir, err := resolvePaasContextDir(contextName)
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(contextDir, "bluegreen.json"), nil
 }
 
-func loadPaasBlueGreenPolicyStore() (paasBlueGreenPolicyStore, error) {
-	path, err := resolvePaasBlueGreenPolicyStorePath()
+func resolvePaasBlueGreenPolicyStorePath() (string, error) {
+	return resolvePaasBlueGreenPolicyStorePathForContext(currentPaasContext())
+}
+
+func loadPaasBlueGreenPolicyStoreForContext(contextName string) (paasBlueGreenPolicyStore, error) {
+	path, err := resolvePaasBlueGreenPolicyStorePathForContext(contextName)
 	if err != nil {
 		return paasBlueGreenPolicyStore{}, err
 	}
@@ -711,8 +715,12 @@ func loadPaasBlueGreenPolicyStore() (paasBlueGreenPolicyStore, error) {
 	return store, nil
 }
 
-func savePaasBlueGreenPolicyStore(store paasBlueGreenPolicyStore) error {
-	path, err := resolvePaasBlueGreenPolicyStorePath()
+func loadPaasBlueGreenPolicyStore() (paasBlueGreenPolicyStore, error) {
+	return loadPaasBlueGreenPolicyStoreForContext(currentPaasContext())
+}
+
+func savePaasBlueGreenPolicyStoreForContext(contextName string, store paasBlueGreenPolicyStore) error {
+	path, err := resolvePaasBlueGreenPolicyStorePathForContext(contextName)
 	if err != nil {
 		return err
 	}
@@ -737,6 +745,10 @@ func savePaasBlueGreenPolicyStore(store paasBlueGreenPolicyStore) error {
 		return err
 	}
 	return os.WriteFile(path, raw, 0o600)
+}
+
+func savePaasBlueGreenPolicyStore(store paasBlueGreenPolicyStore) error {
+	return savePaasBlueGreenPolicyStoreForContext(currentPaasContext(), store)
 }
 
 func normalizePaasBlueGreenTargetPolicy(in paasBlueGreenTargetPolicy) paasBlueGreenTargetPolicy {

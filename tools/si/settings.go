@@ -22,6 +22,7 @@ type Settings struct {
 	Paths         SettingsPaths      `toml:"paths"`
 	Codex         CodexSettings      `toml:"codex"`
 	Vault         VaultSettings      `toml:"vault,omitempty"`
+	Paas          PaasSettings       `toml:"paas,omitempty"`
 	Stripe        StripeSettings     `toml:"stripe,omitempty"`
 	Github        GitHubSettings     `toml:"github,omitempty"`
 	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
@@ -146,6 +147,19 @@ type VaultSettings struct {
 
 	// KeyFile is used when KeyBackend=file (or when file fallback is explicitly enabled).
 	KeyFile string `toml:"key_file,omitempty"`
+}
+
+type PaasSettings struct {
+	// SyncBackend selects how paas state sync is handled.
+	// Supported values: git, helia, dual
+	// - git: local/git-based only
+	// - helia: Helia snapshot backup required on mutating paas operations
+	// - dual: local/git-based with best-effort Helia snapshot backup
+	SyncBackend string `toml:"sync_backend,omitempty"`
+
+	// SnapshotName is the Helia object name used for paas control plane snapshots.
+	// When empty, the current context name is used.
+	SnapshotName string `toml:"snapshot_name,omitempty"`
 }
 
 type StripeSettings struct {
@@ -678,6 +692,8 @@ func applySettingsDefaults(settings *Settings) {
 		settings.Vault.KeyFile = "~/.si/vault/keys/age.key"
 	}
 	settings.Vault.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Vault.SyncBackend))
+	settings.Paas.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Paas.SyncBackend))
+	settings.Paas.SnapshotName = strings.TrimSpace(settings.Paas.SnapshotName)
 	settings.Dyad.Loop.TmuxCapture = strings.ToLower(strings.TrimSpace(settings.Dyad.Loop.TmuxCapture))
 	switch settings.Dyad.Loop.TmuxCapture {
 	case "", "main", "alt":

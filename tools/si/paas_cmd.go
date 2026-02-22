@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]"
+const paasUsageText = "usage: si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard|cloud> [args...]"
 
 const defaultPaasContext = "default"
 
@@ -30,6 +30,7 @@ var paasActions = []subcommandAction{
 	{Name: "events", Description: "query operational events"},
 	{Name: "backup", Description: "manage database backup workflows"},
 	{Name: "taskboard", Description: "manage shared market taskboard"},
+	{Name: "cloud", Description: "sync paas control-plane state with helia"},
 }
 
 const (
@@ -47,6 +48,7 @@ const (
 	paasEventsUsageText    = "usage: si paas events <list> [args...]"
 	paasBackupUsageText    = "usage: si paas backup <contract|run|restore|status> [args...]"
 	paasTaskboardUsageText = "usage: si paas taskboard <show|list|add|move> [args...]"
+	paasCloudUsageText     = "usage: si paas cloud <status|use|push|pull> [args...]"
 )
 
 func cmdPaas(args []string) {
@@ -106,6 +108,8 @@ func cmdPaas(args []string) {
 		cmdPaasBackup(rest)
 	case "taskboard":
 		cmdPaasTaskboard(rest)
+	case "cloud":
+		cmdPaasCloud(rest)
 	default:
 		printUnknown("paas", sub)
 		printUsage(paasUsageText)
@@ -127,6 +131,15 @@ type paasScaffoldEnvelope struct {
 
 func printPaasScaffold(command string, fields map[string]string, jsonOut bool) {
 	fields = redactPaasSensitiveFields(fields)
+	if err := maybeHeliaAutoSyncPaasControlPlane(command); err != nil {
+		failPaasCommand(command, jsonOut, newPaasOperationFailure(
+			paasFailureUnknown,
+			"cloud_sync",
+			"",
+			"verify helia auth/backend mode or switch to `si paas cloud use --mode git`",
+			err,
+		), fields)
+	}
 	if jsonOut {
 		envelope := paasScaffoldEnvelope{
 			OK:      true,

@@ -16,14 +16,15 @@ import (
 )
 
 const (
-	heliaUsageText              = "usage: si helia <auth|profile|vault|token|audit|doctor> ..."
-	heliaAuthUsageText          = "usage: si helia auth <login|status|logout> ..."
-	heliaProfileUsageText       = "usage: si helia profile <list|push|pull> ..."
-	heliaVaultUsageText         = "usage: si helia vault backup <push|pull> ..."
-	heliaTokenUsageText         = "usage: si helia token <list|create|revoke> ..."
-	heliaAuditUsageText         = "usage: si helia audit list ..."
-	heliaCodexProfileBundleKind = "codex_profile_bundle"
-	heliaVaultBackupKind        = "vault_backup"
+	heliaUsageText                    = "usage: si helia <auth|profile|vault|token|audit|doctor> ..."
+	heliaAuthUsageText                = "usage: si helia auth <login|status|logout> ..."
+	heliaProfileUsageText             = "usage: si helia profile <list|push|pull> ..."
+	heliaVaultUsageText               = "usage: si helia vault backup <push|pull> ..."
+	heliaTokenUsageText               = "usage: si helia token <list|create|revoke> ..."
+	heliaAuditUsageText               = "usage: si helia audit list ..."
+	heliaCodexProfileBundleKind       = "codex_profile_bundle"
+	heliaVaultBackupKind              = "vault_backup"
+	heliaPaasControlPlaneSnapshotKind = "paas_control_plane_snapshot"
 )
 
 type heliaCodexProfileBundle struct {
