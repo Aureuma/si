@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -27,16 +28,21 @@ func runImageBuildPreflight(repoRoot string) error {
 		}
 		goBin = resolved
 	}
-	infof("running codex image preflight: %s", scriptPath)
+
 	cmd := exec.Command("bash", scriptPath)
 	cmd.Dir = repoRoot
 	cmd.Env = append([]string{}, os.Environ()...)
 	cmd.Env = append(cmd.Env, "NO_COLOR=1")
 	cmd.Env = append(cmd.Env, "SI_GO_BIN="+goBin)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("preflight script failed: %w", err)
+		logs := strings.TrimSpace(output.String())
+		if logs == "" {
+			return fmt.Errorf("preflight script failed: %w", err)
+		}
+		return fmt.Errorf("preflight script failed: %w\n%s", err, logs)
 	}
 	return nil
 }
