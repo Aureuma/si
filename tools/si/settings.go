@@ -432,6 +432,8 @@ type HeliaSettings struct {
 	Account        string `toml:"account,omitempty"`
 	Token          string `toml:"token,omitempty"`
 	TimeoutSeconds int    `toml:"timeout_seconds,omitempty"`
+	AutoSync       bool   `toml:"auto_sync,omitempty"`
+	VaultBackup    string `toml:"vault_backup,omitempty"`
 }
 
 type OCISettings struct {
@@ -887,6 +889,9 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Helia.Token = strings.TrimSpace(settings.Helia.Token)
 	if settings.Helia.TimeoutSeconds <= 0 {
 		settings.Helia.TimeoutSeconds = 15
+	}
+	if strings.TrimSpace(settings.Helia.VaultBackup) == "" {
+		settings.Helia.VaultBackup = "default"
 	}
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
