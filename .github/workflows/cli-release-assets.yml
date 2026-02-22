@@ -181,8 +181,6 @@ jobs:
       - name: Checkout
         if: steps.gate.outputs.enabled == 'true'
         uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.resolve-tag.outputs.tag }}
 
       - name: Setup Node
         if: steps.gate.outputs.enabled == 'true'
@@ -197,7 +195,13 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
-          tools/release/npm/publish-npm-package.sh --version "${{ needs.resolve-tag.outputs.tag }}"
+          tag="${{ needs.resolve-tag.outputs.tag }}"
+          if [[ -x "tools/release/npm/publish-npm-package.sh" ]]; then
+            tools/release/npm/publish-npm-package.sh --version "${tag}"
+            exit 0
+          fi
+
+          echo "tools/release/npm/publish-npm-package.sh is missing on this checkout; skipping npm publish for ${tag}."
 
   update-homebrew-tap:
     name: Update homebrew-si tap formula
