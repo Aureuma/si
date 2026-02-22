@@ -2,10 +2,2429 @@
   "schema_version": 1,
   "entries": [
     {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/bluebubbles",
+        "namespace": "openclaw",
+        "name": "OpenClaw Bluebubbles",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Bluebubbles.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's bluebubbles channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/bluebubbles",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/bluebubbles"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/copilot-proxy",
+        "namespace": "openclaw",
+        "name": "OpenClaw Copilot Proxy",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity provider/auth integration for Copilot Proxy.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's copilot-proxy provider/auth integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/copilot-proxy",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/copilot-proxy"
+          ],
+          "capabilities": [
+            "auth",
+            "provider",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/device-pair",
+        "namespace": "openclaw",
+        "name": "OpenClaw Device Pair",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Device Pair.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's device-pair capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/device-pair",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/device-pair"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/diagnostics-otel",
+        "namespace": "openclaw",
+        "name": "OpenClaw Diagnostics Otel",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Diagnostics Otel.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's diagnostics-otel capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/diagnostics-otel",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/diagnostics-otel"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/discord",
+        "namespace": "openclaw",
+        "name": "OpenClaw Discord",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Discord.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's discord channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/discord",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/discord"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/feishu",
+        "namespace": "openclaw",
+        "name": "OpenClaw Feishu",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Feishu.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's feishu channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/feishu",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/feishu"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/google-antigravity-auth",
+        "namespace": "openclaw",
+        "name": "OpenClaw Google Antigravity Auth",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity provider/auth integration for Google Antigravity Auth.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's google-antigravity-auth provider/auth integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/google-antigravity-auth",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/google-antigravity-auth"
+          ],
+          "capabilities": [
+            "auth",
+            "provider",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/google-gemini-cli-auth",
+        "namespace": "openclaw",
+        "name": "OpenClaw Google Gemini Cli Auth",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity provider/auth integration for Google Gemini Cli Auth.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's google-gemini-cli-auth provider/auth integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/google-gemini-cli-auth",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/google-gemini-cli-auth"
+          ],
+          "capabilities": [
+            "auth",
+            "provider",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/googlechat",
+        "namespace": "openclaw",
+        "name": "OpenClaw Googlechat",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Googlechat.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's googlechat channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/googlechat",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/googlechat"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/imessage",
+        "namespace": "openclaw",
+        "name": "OpenClaw Imessage",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Imessage.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's imessage channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/imessage",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/imessage"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/irc",
+        "namespace": "openclaw",
+        "name": "OpenClaw Irc",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Irc.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's irc channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/irc",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/irc"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/line",
+        "namespace": "openclaw",
+        "name": "OpenClaw Line",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Line.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's line channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/line",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/line"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/llm-task",
+        "namespace": "openclaw",
+        "name": "OpenClaw Llm Task",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Llm Task.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's llm-task capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/llm-task",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/llm-task"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/lobster",
+        "namespace": "openclaw",
+        "name": "OpenClaw Lobster",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Lobster.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's lobster capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/lobster",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/lobster"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/matrix",
+        "namespace": "openclaw",
+        "name": "OpenClaw Matrix",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Matrix.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's matrix channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/matrix",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/matrix"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/mattermost",
+        "namespace": "openclaw",
+        "name": "OpenClaw Mattermost",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Mattermost.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's mattermost channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/mattermost",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/mattermost"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/memory-core",
+        "namespace": "openclaw",
+        "name": "OpenClaw Memory Core",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Memory Core.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's memory-core capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/memory-core",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/memory-core"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/memory-lancedb",
+        "namespace": "openclaw",
+        "name": "OpenClaw Memory Lancedb",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Memory Lancedb.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's memory-lancedb capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/memory-lancedb",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/memory-lancedb"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/minimax-portal-auth",
+        "namespace": "openclaw",
+        "name": "OpenClaw Minimax Portal Auth",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity provider/auth integration for Minimax Portal Auth.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's minimax-portal-auth provider/auth integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/minimax-portal-auth",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/minimax-portal-auth"
+          ],
+          "capabilities": [
+            "auth",
+            "provider",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/msteams",
+        "namespace": "openclaw",
+        "name": "OpenClaw Msteams",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Msteams.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's msteams channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/msteams",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/msteams"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/nextcloud-talk",
+        "namespace": "openclaw",
+        "name": "OpenClaw Nextcloud Talk",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Nextcloud Talk.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's nextcloud-talk channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/nextcloud-talk",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/nextcloud-talk"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/nostr",
+        "namespace": "openclaw",
+        "name": "OpenClaw Nostr",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Nostr.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's nostr channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/nostr",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/nostr"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/open-prose",
+        "namespace": "openclaw",
+        "name": "OpenClaw Open Prose",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Open Prose.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's open-prose capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/open-prose",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/open-prose"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/phone-control",
+        "namespace": "openclaw",
+        "name": "OpenClaw Phone Control",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Phone Control.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's phone-control capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/phone-control",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/phone-control"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/qwen-portal-auth",
+        "namespace": "openclaw",
+        "name": "OpenClaw Qwen Portal Auth",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity provider/auth integration for Qwen Portal Auth.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's qwen-portal-auth provider/auth integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/qwen-portal-auth",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/qwen-portal-auth"
+          ],
+          "capabilities": [
+            "auth",
+            "provider",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/signal",
+        "namespace": "openclaw",
+        "name": "OpenClaw Signal",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Signal.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's signal channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/signal",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/signal"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/slack",
+        "namespace": "openclaw",
+        "name": "OpenClaw Slack",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Slack.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's slack channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/slack",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/slack"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/talk-voice",
+        "namespace": "openclaw",
+        "name": "OpenClaw Talk Voice",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Talk Voice.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's talk-voice capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/talk-voice",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/talk-voice"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/telegram",
+        "namespace": "openclaw",
+        "name": "OpenClaw Telegram",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Telegram.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's telegram channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/telegram",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/telegram"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/thread-ownership",
+        "namespace": "openclaw",
+        "name": "OpenClaw Thread Ownership",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Thread Ownership.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's thread-ownership capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/thread-ownership",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/thread-ownership"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/tlon",
+        "namespace": "openclaw",
+        "name": "OpenClaw Tlon",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Tlon.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's tlon channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/tlon",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/tlon"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/twitch",
+        "namespace": "openclaw",
+        "name": "OpenClaw Twitch",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Twitch.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's twitch channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/twitch",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/twitch"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/voice-call",
+        "namespace": "openclaw",
+        "name": "OpenClaw Voice Call",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity capability integration for Voice Call.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's voice-call capability integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/voice-call",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/voice-call"
+          ],
+          "capabilities": [
+            "tooling",
+            "workflow",
+            "openclaw-parity"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/whatsapp",
+        "namespace": "openclaw",
+        "name": "OpenClaw Whatsapp",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Whatsapp.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's whatsapp channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/whatsapp",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/whatsapp"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/zalo",
+        "namespace": "openclaw",
+        "name": "OpenClaw Zalo",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Zalo.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's zalo channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/zalo",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/zalo"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "openclaw-parity",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "openclaw",
+        "parity"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "openclaw/zalouser",
+        "namespace": "openclaw",
+        "name": "OpenClaw Zalouser",
+        "version": "0.1.0",
+        "summary": "OpenClaw parity channel integration for Zalouser.",
+        "description": "Provides SI plugin metadata parity for OpenClaw's zalouser channel integration.",
+        "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/zalouser",
+        "license": "AGPL-3.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install openclaw/zalouser"
+          ],
+          "capabilities": [
+            "messaging",
+            "openclaw-parity",
+            "channel"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/airtable",
+        "namespace": "saas",
+        "name": "Airtable Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Airtable.",
+        "description": "Curated SI plugin metadata for Airtable to support startup/company operations.",
+        "homepage": "https://www.airtable.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/airtable"
+          ],
+          "capabilities": [
+            "saas",
+            "database",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/amplitude",
+        "namespace": "saas",
+        "name": "Amplitude Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Amplitude.",
+        "description": "Curated SI plugin metadata for Amplitude to support startup/company operations.",
+        "homepage": "https://amplitude.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/amplitude"
+          ],
+          "capabilities": [
+            "saas",
+            "analytics",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/asana",
+        "namespace": "saas",
+        "name": "Asana Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Asana.",
+        "description": "Curated SI plugin metadata for Asana to support startup/company operations.",
+        "homepage": "https://asana.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/asana"
+          ],
+          "capabilities": [
+            "saas",
+            "project-management",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/auth0",
+        "namespace": "saas",
+        "name": "Auth0 Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Auth0.",
+        "description": "Curated SI plugin metadata for Auth0 to support startup/company operations.",
+        "homepage": "https://auth0.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/auth0"
+          ],
+          "capabilities": [
+            "saas",
+            "identity",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/bigquery",
+        "namespace": "saas",
+        "name": "BigQuery Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for BigQuery.",
+        "description": "Curated SI plugin metadata for BigQuery to support startup/company operations.",
+        "homepage": "https://cloud.google.com/bigquery",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/bigquery"
+          ],
+          "capabilities": [
+            "saas",
+            "data-warehouse",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/braze",
+        "namespace": "saas",
+        "name": "Braze Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Braze.",
+        "description": "Curated SI plugin metadata for Braze to support startup/company operations.",
+        "homepage": "https://www.braze.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/braze"
+          ],
+          "capabilities": [
+            "saas",
+            "marketing",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/clickup",
+        "namespace": "saas",
+        "name": "ClickUp Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for ClickUp.",
+        "description": "Curated SI plugin metadata for ClickUp to support startup/company operations.",
+        "homepage": "https://clickup.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/clickup"
+          ],
+          "capabilities": [
+            "saas",
+            "project-management",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/customerio",
+        "namespace": "saas",
+        "name": "Customer.io Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Customer.io.",
+        "description": "Curated SI plugin metadata for Customer.io to support startup/company operations.",
+        "homepage": "https://customer.io",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/customerio"
+          ],
+          "capabilities": [
+            "saas",
+            "marketing",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/datadog",
+        "namespace": "saas",
+        "name": "Datadog Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Datadog.",
+        "description": "Curated SI plugin metadata for Datadog to support startup/company operations.",
+        "homepage": "https://www.datadoghq.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/datadog"
+          ],
+          "capabilities": [
+            "saas",
+            "observability",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/freshdesk",
+        "namespace": "saas",
+        "name": "Freshdesk Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Freshdesk.",
+        "description": "Curated SI plugin metadata for Freshdesk to support startup/company operations.",
+        "homepage": "https://www.freshworks.com/freshdesk",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/freshdesk"
+          ],
+          "capabilities": [
+            "saas",
+            "support",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/hubspot",
+        "namespace": "saas",
+        "name": "HubSpot Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for HubSpot.",
+        "description": "Curated SI plugin metadata for HubSpot to support startup/company operations.",
+        "homepage": "https://www.hubspot.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/hubspot"
+          ],
+          "capabilities": [
+            "saas",
+            "crm",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/intercom",
+        "namespace": "saas",
+        "name": "Intercom Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Intercom.",
+        "description": "Curated SI plugin metadata for Intercom to support startup/company operations.",
+        "homepage": "https://www.intercom.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/intercom"
+          ],
+          "capabilities": [
+            "saas",
+            "support",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/jira",
+        "namespace": "saas",
+        "name": "Jira Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Jira.",
+        "description": "Curated SI plugin metadata for Jira to support startup/company operations.",
+        "homepage": "https://www.atlassian.com/software/jira",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/jira"
+          ],
+          "capabilities": [
+            "saas",
+            "project-management",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/linear",
+        "namespace": "saas",
+        "name": "Linear Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Linear.",
+        "description": "Curated SI plugin metadata for Linear to support startup/company operations.",
+        "homepage": "https://linear.app",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/linear"
+          ],
+          "capabilities": [
+            "saas",
+            "project-management",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/mailchimp",
+        "namespace": "saas",
+        "name": "Mailchimp Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Mailchimp.",
+        "description": "Curated SI plugin metadata for Mailchimp to support startup/company operations.",
+        "homepage": "https://mailchimp.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/mailchimp"
+          ],
+          "capabilities": [
+            "saas",
+            "marketing",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/mixpanel",
+        "namespace": "saas",
+        "name": "Mixpanel Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Mixpanel.",
+        "description": "Curated SI plugin metadata for Mixpanel to support startup/company operations.",
+        "homepage": "https://mixpanel.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/mixpanel"
+          ],
+          "capabilities": [
+            "saas",
+            "analytics",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/notion",
+        "namespace": "saas",
+        "name": "Notion Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Notion.",
+        "description": "Curated SI plugin metadata for Notion to support startup/company operations.",
+        "homepage": "https://www.notion.so",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/notion"
+          ],
+          "capabilities": [
+            "saas",
+            "knowledge-management",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/okta",
+        "namespace": "saas",
+        "name": "Okta Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Okta.",
+        "description": "Curated SI plugin metadata for Okta to support startup/company operations.",
+        "homepage": "https://www.okta.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/okta"
+          ],
+          "capabilities": [
+            "saas",
+            "identity",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/opsgenie",
+        "namespace": "saas",
+        "name": "Opsgenie Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Opsgenie.",
+        "description": "Curated SI plugin metadata for Opsgenie to support startup/company operations.",
+        "homepage": "https://www.atlassian.com/software/opsgenie",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/opsgenie"
+          ],
+          "capabilities": [
+            "saas",
+            "incident-response",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/pagerduty",
+        "namespace": "saas",
+        "name": "PagerDuty Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for PagerDuty.",
+        "description": "Curated SI plugin metadata for PagerDuty to support startup/company operations.",
+        "homepage": "https://www.pagerduty.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/pagerduty"
+          ],
+          "capabilities": [
+            "saas",
+            "incident-response",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/pipedrive",
+        "namespace": "saas",
+        "name": "Pipedrive Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Pipedrive.",
+        "description": "Curated SI plugin metadata for Pipedrive to support startup/company operations.",
+        "homepage": "https://www.pipedrive.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/pipedrive"
+          ],
+          "capabilities": [
+            "saas",
+            "crm",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/posthog",
+        "namespace": "saas",
+        "name": "PostHog Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for PostHog.",
+        "description": "Curated SI plugin metadata for PostHog to support startup/company operations.",
+        "homepage": "https://posthog.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/posthog"
+          ],
+          "capabilities": [
+            "saas",
+            "analytics",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/postmark",
+        "namespace": "saas",
+        "name": "Postmark Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Postmark.",
+        "description": "Curated SI plugin metadata for Postmark to support startup/company operations.",
+        "homepage": "https://postmarkapp.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/postmark"
+          ],
+          "capabilities": [
+            "saas",
+            "communication",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/quickbooks",
+        "namespace": "saas",
+        "name": "QuickBooks Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for QuickBooks.",
+        "description": "Curated SI plugin metadata for QuickBooks to support startup/company operations.",
+        "homepage": "https://quickbooks.intuit.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/quickbooks"
+          ],
+          "capabilities": [
+            "saas",
+            "finance",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/salesforce",
+        "namespace": "saas",
+        "name": "Salesforce Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Salesforce.",
+        "description": "Curated SI plugin metadata for Salesforce to support startup/company operations.",
+        "homepage": "https://www.salesforce.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/salesforce"
+          ],
+          "capabilities": [
+            "saas",
+            "crm",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/segment",
+        "namespace": "saas",
+        "name": "Segment Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Segment.",
+        "description": "Curated SI plugin metadata for Segment to support startup/company operations.",
+        "homepage": "https://segment.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/segment"
+          ],
+          "capabilities": [
+            "saas",
+            "analytics",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/sendgrid",
+        "namespace": "saas",
+        "name": "SendGrid Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for SendGrid.",
+        "description": "Curated SI plugin metadata for SendGrid to support startup/company operations.",
+        "homepage": "https://sendgrid.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/sendgrid"
+          ],
+          "capabilities": [
+            "saas",
+            "communication",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/sentry",
+        "namespace": "saas",
+        "name": "Sentry Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Sentry.",
+        "description": "Curated SI plugin metadata for Sentry to support startup/company operations.",
+        "homepage": "https://sentry.io",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/sentry"
+          ],
+          "capabilities": [
+            "saas",
+            "observability",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/shopify",
+        "namespace": "saas",
+        "name": "Shopify Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Shopify.",
+        "description": "Curated SI plugin metadata for Shopify to support startup/company operations.",
+        "homepage": "https://www.shopify.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/shopify"
+          ],
+          "capabilities": [
+            "saas",
+            "commerce",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/snowflake",
+        "namespace": "saas",
+        "name": "Snowflake Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Snowflake.",
+        "description": "Curated SI plugin metadata for Snowflake to support startup/company operations.",
+        "homepage": "https://www.snowflake.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/snowflake"
+          ],
+          "capabilities": [
+            "saas",
+            "data-warehouse",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/twilio",
+        "namespace": "saas",
+        "name": "Twilio Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Twilio.",
+        "description": "Curated SI plugin metadata for Twilio to support startup/company operations.",
+        "homepage": "https://www.twilio.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/twilio"
+          ],
+          "capabilities": [
+            "saas",
+            "communication",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/xero",
+        "namespace": "saas",
+        "name": "Xero Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Xero.",
+        "description": "Curated SI plugin metadata for Xero to support startup/company operations.",
+        "homepage": "https://www.xero.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/xero"
+          ],
+          "capabilities": [
+            "saas",
+            "finance",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
+      "channel": "saas-foundation",
+      "verified": false,
+      "added_at": "2026-02-18",
+      "tags": [
+        "saas",
+        "foundation"
+      ],
+      "manifest": {
+        "schema_version": 1,
+        "id": "saas/zendesk",
+        "namespace": "saas",
+        "name": "Zendesk Integration",
+        "version": "0.1.0",
+        "summary": "SaaS integration plugin metadata for Zendesk.",
+        "description": "Curated SI plugin metadata for Zendesk to support startup/company operations.",
+        "homepage": "https://www.zendesk.com",
+        "license": "Apache-2.0",
+        "maturity": "beta",
+        "kind": "integration",
+        "install": {
+          "type": "none"
+        },
+        "integration": {
+          "commands": [
+            "si plugins install saas/zendesk"
+          ],
+          "capabilities": [
+            "saas",
+            "support",
+            "automation"
+          ]
+        }
+      }
+    },
+    {
       "channel": "core",
       "verified": true,
       "added_at": "2026-02-18",
-      "tags": ["mcp", "browser", "playwright"],
+      "tags": [
+        "mcp",
+        "browser",
+        "playwright"
+      ],
       "manifest": {
         "schema_version": 1,
         "id": "si/browser-mcp",

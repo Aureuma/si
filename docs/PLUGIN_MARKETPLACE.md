@@ -73,7 +73,7 @@ Important rules:
 
 SI now loads catalog entries from:
 
-1. Embedded built-in catalog (`si/browser-mcp` seeded as core).
+1. Embedded built-in catalog (core + curated OpenClaw parity + SaaS foundation integrations).
 2. User catalog file: `~/.si/plugins/catalog.json`.
 3. User catalog directory: `~/.si/plugins/catalog.d/*.json`.
 4. Optional env overrides via `SI_PLUGIN_CATALOG_PATHS` (comma/semicolon/path-list separated file/dir paths).
@@ -119,17 +119,15 @@ Catalog metadata now includes source provenance:
 
 ## External Catalog Packs
 
-For large integration ecosystems, keep manifests in a separate repository and generate catalog artifacts for SI consumption.
+SI still supports external catalog packs for private or team-specific integrations.
 
-Example with the sibling `si-integrations` repository:
+Example:
 
 ```bash
-cd ../si-integrations
-npm test
-SI_PLUGIN_CATALOG_PATHS="$(pwd)/catalog/all.json" si plugins list --json
+SI_PLUGIN_CATALOG_PATHS="/path/to/team-catalog.json" si plugins list --json
 ```
 
-This keeps SI core stable while allowing rapid integration expansion and independent validation.
+External catalogs overlay built-ins and can override matching ids.
 
 ## Quick Integration Onboarding Flow
 
