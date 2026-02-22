@@ -81,7 +81,7 @@ func vaultFormatOne(path string, check bool) (bool, error) {
 	if check {
 		return true, nil
 	}
-	if err := vault.WriteDotenvFileAtomic(path, formatted.Bytes()); err != nil {
+	if err := vaultWriteDotenvFileAtomic(path, formatted.Bytes()); err != nil {
 		return false, err
 	}
 	return true, nil

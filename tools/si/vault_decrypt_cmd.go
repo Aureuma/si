@@ -91,7 +91,7 @@ func cmdVaultDecrypt(args []string) {
 
 		// In-place decrypt is dangerous: it writes plaintext secrets to disk.
 		if res.Changed {
-			if err := vault.WriteDotenvFileAtomic(target.File, working.Bytes()); err != nil {
+			if err := vaultWriteDotenvFileAtomic(target.File, working.Bytes()); err != nil {
 				fatal(err)
 			}
 		}

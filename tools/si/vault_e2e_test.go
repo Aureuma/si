@@ -591,3 +591,58 @@ func TestVaultE2E_StrictTargetScopeBlocksCrossRepoImplicitDefault(t *testing.T) 
 		t.Fatalf("expected strict target scope guidance in stderr, got: %q", stderr)
 	}
 }
+
+func TestVaultE2E_SetRefusesSkipWorktreeVaultFile(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip e2e-style subprocess test in short mode")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available for skip-worktree regression test")
+	}
+
+	tempState := t.TempDir()
+	repo := t.TempDir()
+	envFile := filepath.Join(repo, ".env.prod")
+	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
+	trustFile := filepath.Join(tempState, "vault", "trust.json")
+
+	if out, err := exec.Command("git", "-C", repo, "init").CombinedOutput(); err != nil {
+		t.Fatalf("git init repo failed: %v: %s", err, string(out))
+	}
+
+	env := map[string]string{
+		"HOME":                 tempState,
+		"GOFLAGS":              "-modcacherw",
+		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
+		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
+		"SI_VAULT_KEY_BACKEND": "file",
+		"SI_VAULT_KEY_FILE":    keyFile,
+		"SI_VAULT_TRUST_STORE": trustFile,
+	}
+
+	if _, _, err := runSICommand(t, env, "vault", "init", "--file", envFile); err != nil {
+		t.Fatalf("vault init failed: %v", err)
+	}
+	if out, err := exec.Command("git", "-C", repo, "add", ".env.prod").CombinedOutput(); err != nil {
+		t.Fatalf("git add .env.prod failed: %v: %s", err, string(out))
+	}
+	if out, err := exec.Command("git", "-C", repo, "update-index", "--skip-worktree", "--", ".env.prod").CombinedOutput(); err != nil {
+		t.Fatalf("git update-index --skip-worktree failed: %v: %s", err, string(out))
+	}
+
+	stdout, stderr, err := runSICommand(t, env, "vault", "set", "PULL_GUARD_TEST", "value", "--file", envFile)
+	if err == nil {
+		t.Fatalf("expected vault set to fail for skip-worktree file\nstdout=%s\nstderr=%s", stdout, stderr)
+	}
+	if !strings.Contains(stderr, "--no-skip-worktree") {
+		t.Fatalf("expected skip-worktree remediation guidance, got stderr: %q", stderr)
+	}
+
+	raw, readErr := os.ReadFile(envFile)
+	if readErr != nil {
+		t.Fatalf("read env file: %v", readErr)
+	}
+	if strings.Contains(string(raw), "PULL_GUARD_TEST=") {
+		t.Fatalf("expected vault set write to be blocked; key unexpectedly present")
+	}
+}

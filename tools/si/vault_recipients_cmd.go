@@ -102,7 +102,7 @@ func cmdVaultRecipientsAdd(args []string) {
 		fatal(err)
 	}
 	if changed {
-		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
+		if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
 			fatal(err)
 		}
 	}
@@ -161,7 +161,7 @@ func cmdVaultRecipientsRemove(args []string) {
 	}
 	changed := vault.RemoveRecipient(&doc, recipient)
 	if changed {
-		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
+		if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
 			fatal(err)
 		}
 	}

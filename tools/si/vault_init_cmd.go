@@ -73,7 +73,7 @@ func cmdVaultInit(args []string) {
 		if err := os.MkdirAll(filepath.Dir(target.File), 0o700); err != nil {
 			fatal(err)
 		}
-		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
+		if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
 			fatal(err)
 		}
 	}
