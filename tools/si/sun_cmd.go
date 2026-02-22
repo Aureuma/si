@@ -598,7 +598,7 @@ func cmdSunTokenList(args []string) {
 func cmdSunTokenCreate(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun token create", flag.ExitOnError)
-	label := fs.String("label", "si-cli", "token label")
+	label := fs.String("label", "si", "token label")
 	scopesCSV := fs.String("scopes", "objects:read,objects:write", "comma-separated scopes")
 	expiresHours := fs.Int("expires-hours", 0, "optional expiry in hours")
 	jsonOut := fs.Bool("json", false, "json output")

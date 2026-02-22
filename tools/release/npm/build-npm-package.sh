@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Build the @aureuma/si-cli npm package tarball.
+Build the @aureuma/si npm package tarball.
 
 Usage:
   tools/release/npm/build-npm-package.sh \
@@ -60,7 +60,7 @@ done
 
 cd "${repo_root}"
 [[ -f tools/si/version.go ]] || die "tools/si/version.go not found"
-[[ -d npm/si-cli ]] || die "npm/si-cli not found"
+[[ -d npm/si ]] || die "npm/si not found"
 
 if [[ -z "${version}" ]]; then
   version="$(sed -n 's/^const siVersion = "\(.*\)"$/\1/p' tools/si/version.go)"
@@ -83,7 +83,7 @@ mkdir -p "${out_dir}"
 stage_dir="$(mktemp -d)"
 trap 'rm -rf "${stage_dir}"' EXIT
 
-cp -R npm/si-cli/. "${stage_dir}/"
+cp -R npm/si/. "${stage_dir}/"
 cp LICENSE "${stage_dir}/LICENSE"
 
 node - <<'NODE' "${stage_dir}/package.json" "${npm_version}"

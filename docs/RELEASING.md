@@ -159,7 +159,7 @@ gh run list --workflow "ReleaseMind Release Runbook" --limit 1
 ### 11) Verify automated CLI release assets
 When a GitHub Release is published, workflow `.github/workflows/cli-release-assets.yml`
 builds and uploads CLI archives automatically, then:
-- publishes npm package `@aureuma/si-cli` (when `NPM_TOKEN` secret is configured)
+- publishes npm package `@aureuma/si` (when `NPM_TOKEN` secret is configured)
 - updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` secret is configured)
 - verifies release assets + npm + Homebrew sync in a final gate job
 
@@ -182,7 +182,7 @@ Verification commands:
 ```
 gh run list --workflow "CLI Release Assets" --limit 1
 gh release view vX.Y.Z --json assets --jq '.assets[].name'
-npm view @aureuma/si-cli version
+npm view @aureuma/si version
 ```
 
 Verify Homebrew tap formula version:

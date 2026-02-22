@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Publish @aureuma/si-cli to npm.
+Publish @aureuma/si to npm.
 
 Usage:
   tools/release/npm/publish-npm-package.sh \
@@ -93,8 +93,8 @@ fi
 require_cmd npm
 require_cmd node
 
-if npm view "@aureuma/si-cli@${npm_version}" version >/dev/null 2>&1; then
-  echo "@aureuma/si-cli@${npm_version} already published; skipping"
+if npm view "@aureuma/si@${npm_version}" version >/dev/null 2>&1; then
+  echo "@aureuma/si@${npm_version} already published; skipping"
   exit 0
 fi
 
@@ -103,7 +103,7 @@ fi
   --repo-root "${repo_root}" \
   --out-dir "${out_dir}"
 
-pack_file="$(find "${out_dir}" -maxdepth 1 -type f -name 'aureuma-si-cli-*.tgz' | sort | tail -n1)"
+pack_file="$(find "${out_dir}" -maxdepth 1 -type f -name 'aureuma-si-*.tgz' | sort | tail -n1)"
 [[ -n "${pack_file}" ]] || die "failed to find generated package tarball"
 
 token="${!token_env:-}"
@@ -128,8 +128,8 @@ fi
 
 npm publish "${pack_file}" --access public
 
-if ! npm view "@aureuma/si-cli@${npm_version}" version >/dev/null 2>&1; then
+if ! npm view "@aureuma/si@${npm_version}" version >/dev/null 2>&1; then
   die "package publish appears to have failed verification"
 fi
 
-echo "published @aureuma/si-cli@${npm_version}"
+echo "published @aureuma/si@${npm_version}"

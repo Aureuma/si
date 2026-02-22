@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Publish @aureuma/si-cli to npm using SI vault-managed credentials.
+Publish @aureuma/si to npm using SI vault-managed credentials.
 
 Usage:
   tools/release/npm/publish-npm-from-vault.sh \

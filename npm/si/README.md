@@ -1,9 +1,9 @@
-# @aureuma/si-cli
+# @aureuma/si
 
 Install the SI CLI with npm:
 
 ```bash
-npm install -g @aureuma/si-cli
+npm install -g @aureuma/si
 ```
 
 Then run:
