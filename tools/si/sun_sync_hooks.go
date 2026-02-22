@@ -12,15 +12,15 @@ import (
 	"si/tools/si/internal/vault"
 )
 
-func maybeHeliaAutoSyncProfile(source string, profile codexProfile) {
+func maybeSunAutoSyncProfile(source string, profile codexProfile) {
 	settings := loadSettingsOrDefault()
-	if !settings.Helia.AutoSync {
+	if !settings.Sun.AutoSync {
 		return
 	}
 	if strings.TrimSpace(profile.ID) == "" {
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		warnf("sun auto-sync skipped (%s): %v", source, err)
 		return
@@ -40,7 +40,7 @@ func maybeHeliaAutoSyncProfile(source string, profile codexProfile) {
 		warnf("sun auto-sync skipped (%s): %v", source, err)
 		return
 	}
-	bundle := heliaCodexProfileBundle{
+	bundle := sunCodexProfileBundle{
 		ID:       profile.ID,
 		Name:     profile.Name,
 		Email:    profile.Email,
@@ -54,7 +54,7 @@ func maybeHeliaAutoSyncProfile(source string, profile codexProfile) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if _, err := client.putObject(ctx, heliaCodexProfileBundleKind, profile.ID, payload, "application/json", map[string]interface{}{
+	if _, err := client.putObject(ctx, sunCodexProfileBundleKind, profile.ID, payload, "application/json", map[string]interface{}{
 		"profile_id": profile.ID,
 		"name":       profile.Name,
 		"email":      profile.Email,
@@ -66,7 +66,7 @@ func maybeHeliaAutoSyncProfile(source string, profile codexProfile) {
 	infof("sun auto-sync complete for profile %s (%s)", profile.ID, source)
 }
 
-func maybeHeliaAutoBackupVault(source string, vaultPath string) error {
+func maybeSunAutoBackupVault(source string, vaultPath string) error {
 	settings := loadSettingsOrDefault()
 	backend, err := resolveVaultSyncBackend(settings)
 	if err != nil {
@@ -75,7 +75,7 @@ func maybeHeliaAutoBackupVault(source string, vaultPath string) error {
 	if backend.Mode == vaultSyncBackendGit {
 		return nil
 	}
-	requireSunBackend := backend.Mode == vaultSyncBackendHelia
+	requireSunBackend := backend.Mode == vaultSyncBackendSun
 	vaultPath = expandTilde(strings.TrimSpace(vaultPath))
 	if vaultPath == "" {
 		if requireSunBackend {
@@ -83,7 +83,7 @@ func maybeHeliaAutoBackupVault(source string, vaultPath string) error {
 		}
 		return nil
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		if requireSunBackend {
 			return fmt.Errorf("sun vault auto-backup failed (%s): %w", source, err)
@@ -119,13 +119,13 @@ func maybeHeliaAutoBackupVault(source string, vaultPath string) error {
 		return nil
 	}
 	data := doc.Bytes()
-	name := strings.TrimSpace(settings.Helia.VaultBackup)
+	name := strings.TrimSpace(settings.Sun.VaultBackup)
 	if name == "" {
 		name = "default"
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	if _, err := client.putObject(ctx, heliaVaultBackupKind, name, data, "text/plain", map[string]interface{}{
+	if _, err := client.putObject(ctx, sunVaultBackupKind, name, data, "text/plain", map[string]interface{}{
 		"path":   filepath.Base(vaultPath),
 		"source": source,
 	}, nil); err != nil {

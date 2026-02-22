@@ -29,12 +29,12 @@ func TestResolvePaasSyncBackendPrecedence(t *testing.T) {
 		t.Fatalf("unexpected settings backend resolution: %#v", got)
 	}
 
-	t.Setenv(paasSyncBackendEnvKey, "helia")
+	t.Setenv(paasSyncBackendEnvKey, "sun")
 	got, err = resolvePaasSyncBackend(settings)
 	if err != nil {
 		t.Fatalf("resolve env backend: %v", err)
 	}
-	if got.Mode != paasSyncBackendHelia || got.Source != "env" {
+	if got.Mode != paasSyncBackendSun || got.Source != "env" {
 		t.Fatalf("unexpected env backend resolution: %#v", got)
 	}
 
@@ -43,7 +43,7 @@ func TestResolvePaasSyncBackendPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve env backend sun alias: %v", err)
 	}
-	if got.Mode != paasSyncBackendHelia || got.Source != "env" {
+	if got.Mode != paasSyncBackendSun || got.Source != "env" {
 		t.Fatalf("unexpected env sun-alias backend resolution: %#v", got)
 	}
 }
@@ -111,10 +111,10 @@ func TestPaasCloudPushPullRoundTripE2E(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, store := newHeliaTestServer(t, "acme", "token-paas")
+	server, store := newSunTestServer(t, "acme", "token-paas")
 	defer server.Close()
 
-	home, env := setupHeliaAuthState(t, server.URL, "acme", "token-paas")
+	home, env := setupSunAuthState(t, server.URL, "acme", "token-paas")
 	stateRoot := filepath.Join(home, ".si", "paas-state")
 	env[paasStateRootEnvKey] = stateRoot
 
@@ -139,8 +139,8 @@ func TestPaasCloudPushPullRoundTripE2E(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cloud push failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	if payload, ok := store.get(heliaPaasControlPlaneSnapshotKind, "demo"); !ok || len(payload) == 0 {
-		t.Fatalf("expected helia object store to contain demo cloud snapshot")
+	if payload, ok := store.get(sunPaasControlPlaneSnapshotKind, "demo"); !ok || len(payload) == 0 {
+		t.Fatalf("expected sun object store to contain demo cloud snapshot")
 	}
 
 	if err := os.RemoveAll(filepath.Join(stateRoot, "contexts", "demo")); err != nil {
@@ -181,12 +181,12 @@ func TestPaasCloudStrictAutoSyncPreservesJSONOutput(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
-	server, _ := newHeliaTestServer(t, "acme", "token-json")
+	server, _ := newSunTestServer(t, "acme", "token-json")
 	defer server.Close()
 
-	home, env := setupHeliaAuthState(t, server.URL, "acme", "token-json")
+	home, env := setupSunAuthState(t, server.URL, "acme", "token-json")
 	env[paasStateRootEnvKey] = filepath.Join(home, ".si", "paas-state")
-	env[paasSyncBackendEnvKey] = paasSyncBackendHelia
+	env[paasSyncBackendEnvKey] = paasSyncBackendSun
 
 	stdout, stderr, err := runSICommand(t, env, "paas", "--context", "jsonctx", "context", "init", "--json")
 	if err != nil {

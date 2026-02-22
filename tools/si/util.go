@@ -333,13 +333,13 @@ vault:
 	  si vault trust status|accept|forget [--file <path>]
 	  si vault recipients list|add|remove [--file <path>]
 	  si vault backend status [--json]
-	  si vault backend use --mode <git|sun|helia|dual>
+	  si vault backend use --mode <git|sun|dual>
 
   Sync backend policy:
     SI_VAULT_SYNC_BACKEND (or vault.sync_backend) controls vault cloud behavior:
       git: local/git-based only (default)
       dual: local/git-based + best-effort Sun backup
-      sun/helia: Sun backup required for mutating vault commands
+      sun: Sun backup required for mutating vault commands
 
   Alias:
     si creds ...
@@ -873,7 +873,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify|sun|helia)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify|sun)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)

@@ -16,47 +16,47 @@ import (
 )
 
 const (
-	heliaMachineUsageText = "usage: si sun machine <register|status|list|allow|deny|run|jobs|serve> ..."
+	sunMachineUsageText = "usage: si sun machine <register|status|list|allow|deny|run|jobs|serve> ..."
 
-	heliaMachineKind    = "si_machine"
-	heliaMachineJobKind = "si_machine_job"
+	sunMachineKind    = "si_machine"
+	sunMachineJobKind = "si_machine_job"
 
-	heliaMachineJobStatusQueued    = "queued"
-	heliaMachineJobStatusRunning   = "running"
-	heliaMachineJobStatusSucceeded = "succeeded"
-	heliaMachineJobStatusFailed    = "failed"
-	heliaMachineJobStatusDenied    = "denied"
+	sunMachineJobStatusQueued    = "queued"
+	sunMachineJobStatusRunning   = "running"
+	sunMachineJobStatusSucceeded = "succeeded"
+	sunMachineJobStatusFailed    = "failed"
+	sunMachineJobStatusDenied    = "denied"
 
-	heliaMachineOutputMaxBytes = 64 * 1024
+	sunMachineOutputMaxBytes = 64 * 1024
 )
 
-type heliaMachineRecord struct {
-	Version       int                       `json:"version"`
-	MachineID     string                    `json:"machine_id"`
-	DisplayName   string                    `json:"display_name,omitempty"`
-	OwnerOperator string                    `json:"owner_operator"`
-	UpdatedAt     string                    `json:"updated_at,omitempty"`
-	RegisteredAt  string                    `json:"registered_at,omitempty"`
-	Capabilities  heliaMachineCapabilities  `json:"capabilities"`
-	ACL           heliaMachineAccessControl `json:"acl"`
-	Heartbeat     heliaMachineHeartbeat     `json:"heartbeat"`
+type sunMachineRecord struct {
+	Version       int                     `json:"version"`
+	MachineID     string                  `json:"machine_id"`
+	DisplayName   string                  `json:"display_name,omitempty"`
+	OwnerOperator string                  `json:"owner_operator"`
+	UpdatedAt     string                  `json:"updated_at,omitempty"`
+	RegisteredAt  string                  `json:"registered_at,omitempty"`
+	Capabilities  sunMachineCapabilities  `json:"capabilities"`
+	ACL           sunMachineAccessControl `json:"acl"`
+	Heartbeat     sunMachineHeartbeat     `json:"heartbeat"`
 }
 
-type heliaMachineCapabilities struct {
+type sunMachineCapabilities struct {
 	CanControlOthers bool `json:"can_control_others"`
 	CanBeControlled  bool `json:"can_be_controlled"`
 }
 
-type heliaMachineAccessControl struct {
+type sunMachineAccessControl struct {
 	AllowedOperators []string `json:"allowed_operators,omitempty"`
 }
 
-type heliaMachineHeartbeat struct {
+type sunMachineHeartbeat struct {
 	LastSeenAt string `json:"last_seen_at,omitempty"`
 	LastState  string `json:"last_state,omitempty"`
 }
 
-type heliaMachineJob struct {
+type sunMachineJob struct {
 	Version        int      `json:"version"`
 	JobID          string   `json:"job_id"`
 	MachineID      string   `json:"machine_id"`
@@ -77,46 +77,46 @@ type heliaMachineJob struct {
 	Error          string   `json:"error,omitempty"`
 }
 
-type heliaMachineServeSummary struct {
+type sunMachineServeSummary struct {
 	MachineID string   `json:"machine_id"`
 	Processed int      `json:"processed"`
 	JobIDs    []string `json:"job_ids,omitempty"`
 }
 
-func cmdHeliaMachine(args []string) {
+func cmdSunMachine(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaMachineUsageText)
+		printUsage(sunMachineUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "help", "-h", "--help":
-		printUsage(heliaMachineUsageText)
+		printUsage(sunMachineUsageText)
 	case "register":
-		cmdHeliaMachineRegister(rest)
+		cmdSunMachineRegister(rest)
 	case "status":
-		cmdHeliaMachineStatus(rest)
+		cmdSunMachineStatus(rest)
 	case "list":
-		cmdHeliaMachineList(rest)
+		cmdSunMachineList(rest)
 	case "allow":
-		cmdHeliaMachineAllow(rest)
+		cmdSunMachineAllow(rest)
 	case "deny":
-		cmdHeliaMachineDeny(rest)
+		cmdSunMachineDeny(rest)
 	case "run", "exec":
-		cmdHeliaMachineRun(rest)
+		cmdSunMachineRun(rest)
 	case "jobs":
-		cmdHeliaMachineJobs(rest)
+		cmdSunMachineJobs(rest)
 	case "serve":
-		cmdHeliaMachineServe(rest)
+		cmdSunMachineServe(rest)
 	default:
 		printUnknown("sun machine", sub)
-		printUsage(heliaMachineUsageText)
+		printUsage(sunMachineUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaMachineRegister(args []string) {
+func cmdSunMachineRegister(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine register", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id")
@@ -134,13 +134,13 @@ func cmdHeliaMachineRegister(args []string) {
 		printUsage("usage: si sun machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	ctx := heliaContext(settings)
-	resolvedMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
-	resolvedOperator := heliaMachineResolveOperatorID(settings, strings.TrimSpace(*operatorID), resolvedMachine)
+	ctx := sunContext(settings)
+	resolvedMachine := sunMachineResolveID(settings, strings.TrimSpace(*machineID))
+	resolvedOperator := sunMachineResolveOperatorID(settings, strings.TrimSpace(*operatorID), resolvedMachine)
 	if resolvedMachine == "" {
 		fatal(fmt.Errorf("machine id is required"))
 	}
@@ -148,13 +148,13 @@ func cmdHeliaMachineRegister(args []string) {
 		fatal(fmt.Errorf("operator id is required"))
 	}
 
-	record, revision, exists, err := heliaMachineLoad(ctx, client, resolvedMachine)
+	record, revision, exists, err := sunMachineLoad(ctx, client, resolvedMachine)
 	if err != nil {
 		fatal(err)
 	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	if !exists {
-		record = heliaMachineRecord{
+		record = sunMachineRecord{
 			Version:       1,
 			MachineID:     resolvedMachine,
 			OwnerOperator: resolvedOperator,
@@ -194,7 +194,7 @@ func cmdHeliaMachineRegister(args []string) {
 	record.Heartbeat.LastSeenAt = now
 	record.Heartbeat.LastState = "registered"
 
-	newRevision, err := heliaMachinePersist(ctx, client, record, exists, revision)
+	newRevision, err := sunMachinePersist(ctx, client, record, exists, revision)
 	if err != nil {
 		fatal(err)
 	}
@@ -203,8 +203,8 @@ func cmdHeliaMachineRegister(args []string) {
 		if loadErr != nil {
 			fatal(loadErr)
 		}
-		current.Helia.MachineID = resolvedMachine
-		current.Helia.OperatorID = resolvedOperator
+		current.Sun.MachineID = resolvedMachine
+		current.Sun.OperatorID = resolvedOperator
 		if saveErr := saveSettings(current); saveErr != nil {
 			fatal(saveErr)
 		}
@@ -219,7 +219,7 @@ func cmdHeliaMachineRegister(args []string) {
 	successf("registered machine %s (revision %d)", record.MachineID, newRevision)
 }
 
-func cmdHeliaMachineStatus(args []string) {
+func cmdSunMachineStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine status", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id")
@@ -231,12 +231,12 @@ func cmdHeliaMachineStatus(args []string) {
 		printUsage("usage: si sun machine status [--machine <id>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	resolvedMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
-	record, _, exists, err := heliaMachineLoad(heliaContext(settings), client, resolvedMachine)
+	resolvedMachine := sunMachineResolveID(settings, strings.TrimSpace(*machineID))
+	record, _, exists, err := sunMachineLoad(sunContext(settings), client, resolvedMachine)
 	if err != nil {
 		fatal(err)
 	}
@@ -247,10 +247,10 @@ func cmdHeliaMachineStatus(args []string) {
 		printJSON(record)
 		return
 	}
-	printHeliaMachineRecord(record)
+	printSunMachineRecord(record)
 }
 
-func cmdHeliaMachineList(args []string) {
+func cmdSunMachineList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine list", flag.ExitOnError)
 	limit := fs.Int("limit", 200, "max rows")
@@ -262,17 +262,17 @@ func cmdHeliaMachineList(args []string) {
 		printUsage("usage: si sun machine list [--limit <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	items, err := client.listObjects(heliaContext(settings), heliaMachineKind, "", *limit)
+	items, err := client.listObjects(sunContext(settings), sunMachineKind, "", *limit)
 	if err != nil {
 		fatal(err)
 	}
-	rows := make([]heliaMachineRecord, 0, len(items))
+	rows := make([]sunMachineRecord, 0, len(items))
 	for i := range items {
-		record, _, exists, loadErr := heliaMachineLoad(heliaContext(settings), client, strings.TrimSpace(items[i].Name))
+		record, _, exists, loadErr := sunMachineLoad(sunContext(settings), client, strings.TrimSpace(items[i].Name))
 		if loadErr != nil || !exists {
 			continue
 		}
@@ -308,7 +308,7 @@ func cmdHeliaMachineList(args []string) {
 	}, table, 2)
 }
 
-func cmdHeliaMachineAllow(args []string) {
+func cmdSunMachineAllow(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine allow", flag.ExitOnError)
 	machineID := fs.String("machine", "", "target machine id")
@@ -322,16 +322,16 @@ func cmdHeliaMachineAllow(args []string) {
 		printUsage("usage: si sun machine allow --machine <id> --grant <operator> [--as <operator>] [--json]")
 		return
 	}
-	targetMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
+	targetMachine := sunMachineResolveID(settings, strings.TrimSpace(*machineID))
 	if strings.TrimSpace(*grantOperator) == "" {
 		fatal(fmt.Errorf("--grant is required"))
 	}
-	caller := heliaMachineResolveOperatorID(settings, strings.TrimSpace(*asOperator), heliaMachineResolveID(settings, ""))
-	client, err := heliaClientFromSettings(settings)
+	caller := sunMachineResolveOperatorID(settings, strings.TrimSpace(*asOperator), sunMachineResolveID(settings, ""))
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	record, revision, exists, err := heliaMachineLoad(heliaContext(settings), client, targetMachine)
+	record, revision, exists, err := sunMachineLoad(sunContext(settings), client, targetMachine)
 	if err != nil {
 		fatal(err)
 	}
@@ -345,7 +345,7 @@ func cmdHeliaMachineAllow(args []string) {
 	updated = append(updated, strings.TrimSpace(*grantOperator))
 	record.ACL.AllowedOperators = normalizeMachineOperatorIDs(updated)
 	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	newRevision, err := heliaMachinePersist(heliaContext(settings), client, record, true, revision)
+	newRevision, err := sunMachinePersist(sunContext(settings), client, record, true, revision)
 	if err != nil {
 		fatal(err)
 	}
@@ -359,7 +359,7 @@ func cmdHeliaMachineAllow(args []string) {
 	successf("granted operator %s on machine %s", strings.TrimSpace(*grantOperator), targetMachine)
 }
 
-func cmdHeliaMachineDeny(args []string) {
+func cmdSunMachineDeny(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine deny", flag.ExitOnError)
 	machineID := fs.String("machine", "", "target machine id")
@@ -373,17 +373,17 @@ func cmdHeliaMachineDeny(args []string) {
 		printUsage("usage: si sun machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]")
 		return
 	}
-	targetMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
+	targetMachine := sunMachineResolveID(settings, strings.TrimSpace(*machineID))
 	revoke := strings.TrimSpace(*revokeOperator)
 	if revoke == "" {
 		fatal(fmt.Errorf("--revoke is required"))
 	}
-	caller := heliaMachineResolveOperatorID(settings, strings.TrimSpace(*asOperator), heliaMachineResolveID(settings, ""))
-	client, err := heliaClientFromSettings(settings)
+	caller := sunMachineResolveOperatorID(settings, strings.TrimSpace(*asOperator), sunMachineResolveID(settings, ""))
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	record, revision, exists, err := heliaMachineLoad(heliaContext(settings), client, targetMachine)
+	record, revision, exists, err := sunMachineLoad(sunContext(settings), client, targetMachine)
 	if err != nil {
 		fatal(err)
 	}
@@ -405,7 +405,7 @@ func cmdHeliaMachineDeny(args []string) {
 	}
 	record.ACL.AllowedOperators = normalizeMachineOperatorIDs(filtered)
 	record.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	newRevision, err := heliaMachinePersist(heliaContext(settings), client, record, true, revision)
+	newRevision, err := sunMachinePersist(sunContext(settings), client, record, true, revision)
 	if err != nil {
 		fatal(err)
 	}
@@ -419,7 +419,7 @@ func cmdHeliaMachineDeny(args []string) {
 	successf("revoked operator %s on machine %s", revoke, targetMachine)
 }
 
-func cmdHeliaMachineRun(args []string) {
+func cmdSunMachineRun(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine run", flag.ExitOnError)
 	targetMachineFlag := fs.String("machine", "", "target machine id")
@@ -444,16 +444,16 @@ func cmdHeliaMachineRun(args []string) {
 		printUsage("usage: si sun machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>")
 		return
 	}
-	targetMachine := heliaMachineResolveID(settings, strings.TrimSpace(*targetMachineFlag))
-	sourceMachine := heliaMachineResolveID(settings, strings.TrimSpace(*sourceMachineFlag))
-	operatorID := heliaMachineResolveOperatorID(settings, strings.TrimSpace(*operatorFlag), sourceMachine)
+	targetMachine := sunMachineResolveID(settings, strings.TrimSpace(*targetMachineFlag))
+	sourceMachine := sunMachineResolveID(settings, strings.TrimSpace(*sourceMachineFlag))
+	operatorID := sunMachineResolveOperatorID(settings, strings.TrimSpace(*operatorFlag), sourceMachine)
 
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	ctx := heliaContext(settings)
-	targetRecord, _, exists, err := heliaMachineLoad(ctx, client, targetMachine)
+	ctx := sunContext(settings)
+	targetRecord, _, exists, err := sunMachineLoad(ctx, client, targetMachine)
 	if err != nil {
 		fatal(err)
 	}
@@ -463,17 +463,17 @@ func cmdHeliaMachineRun(args []string) {
 	if !targetRecord.Capabilities.CanBeControlled {
 		fatal(fmt.Errorf("target machine %q does not accept remote control (can_be_controlled=false)", targetMachine))
 	}
-	if !heliaMachineOperatorAllowed(targetRecord, operatorID) {
+	if !sunMachineOperatorAllowed(targetRecord, operatorID) {
 		fatal(fmt.Errorf("operator %q is not allowed to control machine %q", operatorID, targetMachine))
 	}
-	sourceRecord, _, sourceExists, err := heliaMachineLoad(ctx, client, sourceMachine)
+	sourceRecord, _, sourceExists, err := sunMachineLoad(ctx, client, sourceMachine)
 	if err != nil {
 		fatal(err)
 	}
 	if !sourceExists {
 		fatal(fmt.Errorf("source machine %q is not registered; run `si sun machine register --machine %s --can-control-others` first", sourceMachine, sourceMachine))
 	}
-	if !heliaMachineOperatorAllowed(sourceRecord, operatorID) {
+	if !sunMachineOperatorAllowed(sourceRecord, operatorID) {
 		fatal(fmt.Errorf("operator %q is not allowed on source machine %q", operatorID, sourceMachine))
 	}
 	if !sourceRecord.Capabilities.CanControlOthers {
@@ -481,8 +481,8 @@ func cmdHeliaMachineRun(args []string) {
 	}
 
 	now := time.Now().UTC()
-	jobID := heliaMachineJobID(now)
-	job := heliaMachineJob{
+	jobID := sunMachineJobID(now)
+	job := sunMachineJob{
 		Version:        1,
 		JobID:          jobID,
 		MachineID:      targetMachine,
@@ -490,28 +490,28 @@ func cmdHeliaMachineRun(args []string) {
 		SourceMachine:  sourceMachine,
 		Command:        append([]string(nil), commandArgs...),
 		TimeoutSeconds: max(10, *timeoutSeconds),
-		Status:         heliaMachineJobStatusQueued,
+		Status:         sunMachineJobStatusQueued,
 		RequestedAt:    now.Format(time.RFC3339),
 		UpdatedAt:      now.Format(time.RFC3339),
 	}
-	jobName := heliaMachineJobObjectName(targetMachine, jobID)
-	if _, err := heliaMachinePersistJob(ctx, client, jobName, job, false, 0); err != nil {
+	jobName := sunMachineJobObjectName(targetMachine, jobID)
+	if _, err := sunMachinePersistJob(ctx, client, jobName, job, false, 0); err != nil {
 		fatal(err)
 	}
 
 	if *wait {
 		waitCtx, cancel := context.WithTimeout(ctx, time.Duration(max(10, *waitTimeoutSeconds))*time.Second)
 		defer cancel()
-		doneJob, _, waitErr := heliaMachineWaitForJob(waitCtx, client, jobName, max(1, *pollSeconds))
+		doneJob, _, waitErr := sunMachineWaitForJob(waitCtx, client, jobName, max(1, *pollSeconds))
 		if waitErr != nil {
 			fatal(waitErr)
 		}
 		if *jsonOut {
 			printJSON(doneJob)
 		} else {
-			printHeliaMachineJob(doneJob)
+			printSunMachineJob(doneJob)
 		}
-		if statusErr := heliaMachineJobFailureError(doneJob); statusErr != nil {
+		if statusErr := sunMachineJobFailureError(doneJob); statusErr != nil {
 			fatal(statusErr)
 		}
 		return
@@ -523,7 +523,7 @@ func cmdHeliaMachineRun(args []string) {
 	successf("queued remote job %s on machine %s", job.JobID, targetMachine)
 }
 
-func cmdHeliaMachineJobs(args []string) {
+func cmdSunMachineJobs(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine jobs", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id filter")
@@ -542,21 +542,21 @@ func cmdHeliaMachineJobs(args []string) {
 	if strings.TrimSpace(*status) != "" && statusFilter == "" {
 		fatal(fmt.Errorf("invalid --status %q", strings.TrimSpace(*status)))
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	items, err := client.listObjects(heliaContext(settings), heliaMachineJobKind, "", *limit)
+	items, err := client.listObjects(sunContext(settings), sunMachineJobKind, "", *limit)
 	if err != nil {
 		fatal(err)
 	}
-	rows := make([]heliaMachineJob, 0, len(items))
+	rows := make([]sunMachineJob, 0, len(items))
 	for i := range items {
-		job, _, exists, loadErr := heliaMachineLoadJob(heliaContext(settings), client, strings.TrimSpace(items[i].Name))
+		job, _, exists, loadErr := sunMachineLoadJob(sunContext(settings), client, strings.TrimSpace(items[i].Name))
 		if loadErr != nil || !exists {
 			continue
 		}
-		if strings.TrimSpace(*machineID) != "" && !strings.EqualFold(strings.TrimSpace(job.MachineID), heliaMachineResolveID(settings, strings.TrimSpace(*machineID))) {
+		if strings.TrimSpace(*machineID) != "" && !strings.EqualFold(strings.TrimSpace(job.MachineID), sunMachineResolveID(settings, strings.TrimSpace(*machineID))) {
 			continue
 		}
 		if strings.TrimSpace(*requestedBy) != "" && !strings.EqualFold(strings.TrimSpace(job.RequestedBy), strings.TrimSpace(*requestedBy)) {
@@ -604,7 +604,7 @@ func cmdHeliaMachineJobs(args []string) {
 	}, table, 2)
 }
 
-func cmdHeliaMachineServe(args []string) {
+func cmdSunMachineServe(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun machine serve", flag.ExitOnError)
 	machineID := fs.String("machine", "", "machine id")
@@ -620,15 +620,15 @@ func cmdHeliaMachineServe(args []string) {
 		printUsage("usage: si sun machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	ctx := heliaContext(settings)
-	resolvedMachine := heliaMachineResolveID(settings, strings.TrimSpace(*machineID))
-	localOperator := heliaMachineResolveOperatorID(settings, strings.TrimSpace(*operatorID), resolvedMachine)
+	ctx := sunContext(settings)
+	resolvedMachine := sunMachineResolveID(settings, strings.TrimSpace(*machineID))
+	localOperator := sunMachineResolveOperatorID(settings, strings.TrimSpace(*operatorID), resolvedMachine)
 
-	record, machineRevision, exists, err := heliaMachineLoad(ctx, client, resolvedMachine)
+	record, machineRevision, exists, err := sunMachineLoad(ctx, client, resolvedMachine)
 	if err != nil {
 		fatal(err)
 	}
@@ -642,13 +642,13 @@ func cmdHeliaMachineServe(args []string) {
 	record.Heartbeat.LastSeenAt = now
 	record.Heartbeat.LastState = "serving"
 	record.UpdatedAt = now
-	if _, err := heliaMachinePersist(ctx, client, record, true, machineRevision); err != nil {
+	if _, err := sunMachinePersist(ctx, client, record, true, machineRevision); err != nil {
 		fatal(err)
 	}
 
-	summary := heliaMachineServeSummary{MachineID: resolvedMachine}
+	summary := sunMachineServeSummary{MachineID: resolvedMachine}
 	for {
-		jobName, job, jobRevision, found, claimErr := heliaMachineClaimNextJob(ctx, client, resolvedMachine)
+		jobName, job, jobRevision, found, claimErr := sunMachineClaimNextJob(ctx, client, resolvedMachine)
 		if claimErr != nil {
 			fatal(claimErr)
 		}
@@ -662,8 +662,8 @@ func cmdHeliaMachineServe(args []string) {
 			time.Sleep(time.Duration(max(1, *pollSeconds)) * time.Second)
 			continue
 		}
-		finished := heliaMachineRunClaimedJob(job, record, localOperator)
-		if _, err := heliaMachinePersistJob(ctx, client, jobName, finished, true, jobRevision); err != nil {
+		finished := sunMachineRunClaimedJob(job, record, localOperator)
+		if _, err := sunMachinePersistJob(ctx, client, jobName, finished, true, jobRevision); err != nil {
 			fatal(err)
 		}
 		summary.Processed++
@@ -682,15 +682,15 @@ func cmdHeliaMachineServe(args []string) {
 	successf("machine serve processed %d jobs on %s", summary.Processed, resolvedMachine)
 }
 
-func heliaMachineRunClaimedJob(job heliaMachineJob, machine heliaMachineRecord, localOperator string) heliaMachineJob {
+func sunMachineRunClaimedJob(job sunMachineJob, machine sunMachineRecord, localOperator string) sunMachineJob {
 	now := time.Now().UTC()
-	job.Status = heliaMachineJobStatusRunning
+	job.Status = sunMachineJobStatusRunning
 	job.UpdatedAt = now.Format(time.RFC3339)
 	if strings.TrimSpace(job.StartedAt) == "" {
 		job.StartedAt = now.Format(time.RFC3339)
 	}
-	if !heliaMachineOperatorAllowed(machine, job.RequestedBy) {
-		job.Status = heliaMachineJobStatusDenied
+	if !sunMachineOperatorAllowed(machine, job.RequestedBy) {
+		job.Status = sunMachineJobStatusDenied
 		job.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 		job.UpdatedAt = job.CompletedAt
 		job.ExitCode = 1
@@ -698,7 +698,7 @@ func heliaMachineRunClaimedJob(job heliaMachineJob, machine heliaMachineRecord, 
 		return job
 	}
 	if !machine.Capabilities.CanBeControlled {
-		job.Status = heliaMachineJobStatusDenied
+		job.Status = sunMachineJobStatusDenied
 		job.CompletedAt = time.Now().UTC().Format(time.RFC3339)
 		job.UpdatedAt = job.CompletedAt
 		job.ExitCode = 1
@@ -716,7 +716,7 @@ func heliaMachineRunClaimedJob(job heliaMachineJob, machine heliaMachineRecord, 
 	job.CompletedAt = completed
 	job.UpdatedAt = completed
 	if runErr != nil || exitCode != 0 {
-		job.Status = heliaMachineJobStatusFailed
+		job.Status = sunMachineJobStatusFailed
 		if runErr != nil {
 			job.Error = strings.TrimSpace(runErr.Error())
 		} else {
@@ -724,7 +724,7 @@ func heliaMachineRunClaimedJob(job heliaMachineJob, machine heliaMachineRecord, 
 		}
 		return job
 	}
-	job.Status = heliaMachineJobStatusSucceeded
+	job.Status = sunMachineJobStatusSucceeded
 	job.Error = ""
 	job.ClaimedBy = firstNonEmpty(strings.TrimSpace(job.ClaimedBy), strings.TrimSpace(machine.MachineID))
 	job.ClaimedAt = firstNonEmpty(strings.TrimSpace(job.ClaimedAt), now.Format(time.RFC3339))
@@ -768,26 +768,26 @@ func runLocalSICommand(ctx context.Context, args []string) (stdout string, stder
 	return outBuf.String(), errBuf.String(), exit, runErr
 }
 
-func heliaMachineClaimNextJob(ctx context.Context, client *heliaClient, machineID string) (string, heliaMachineJob, int64, bool, error) {
-	items, err := client.listObjects(ctx, heliaMachineJobKind, "", 200)
+func sunMachineClaimNextJob(ctx context.Context, client *sunClient, machineID string) (string, sunMachineJob, int64, bool, error) {
+	items, err := client.listObjects(ctx, sunMachineJobKind, "", 200)
 	if err != nil {
-		return "", heliaMachineJob{}, 0, false, err
+		return "", sunMachineJob{}, 0, false, err
 	}
 	type candidate struct {
 		name string
-		job  heliaMachineJob
+		job  sunMachineJob
 	}
 	candidates := make([]candidate, 0, len(items))
 	for _, item := range items {
 		name := strings.TrimSpace(item.Name)
-		if !strings.HasPrefix(strings.ToLower(name), strings.ToLower(heliaMachineJobNamePrefix(machineID))) {
+		if !strings.HasPrefix(strings.ToLower(name), strings.ToLower(sunMachineJobNamePrefix(machineID))) {
 			continue
 		}
-		job, _, exists, loadErr := heliaMachineLoadJob(ctx, client, name)
+		job, _, exists, loadErr := sunMachineLoadJob(ctx, client, name)
 		if loadErr != nil || !exists {
 			continue
 		}
-		if !strings.EqualFold(strings.TrimSpace(job.Status), heliaMachineJobStatusQueued) {
+		if !strings.EqualFold(strings.TrimSpace(job.Status), sunMachineJobStatusQueued) {
 			continue
 		}
 		candidates = append(candidates, candidate{name: name, job: job})
@@ -801,78 +801,78 @@ func heliaMachineClaimNextJob(ctx context.Context, client *heliaClient, machineI
 		return strings.Compare(candidates[i].job.JobID, candidates[j].job.JobID) < 0
 	})
 	for _, cand := range candidates {
-		job, revision, exists, loadErr := heliaMachineLoadJob(ctx, client, cand.name)
+		job, revision, exists, loadErr := sunMachineLoadJob(ctx, client, cand.name)
 		if loadErr != nil || !exists {
 			continue
 		}
-		if !strings.EqualFold(strings.TrimSpace(job.Status), heliaMachineJobStatusQueued) {
+		if !strings.EqualFold(strings.TrimSpace(job.Status), sunMachineJobStatusQueued) {
 			continue
 		}
 		now := time.Now().UTC().Format(time.RFC3339)
-		job.Status = heliaMachineJobStatusRunning
+		job.Status = sunMachineJobStatusRunning
 		job.ClaimedBy = machineID
 		job.ClaimedAt = now
 		job.StartedAt = now
 		job.UpdatedAt = now
-		newRevision, persistErr := heliaMachinePersistJob(ctx, client, cand.name, job, true, revision)
+		newRevision, persistErr := sunMachinePersistJob(ctx, client, cand.name, job, true, revision)
 		if persistErr != nil {
-			if isHeliaStatus(persistErr, 409) {
+			if isSunStatus(persistErr, 409) {
 				continue
 			}
-			return "", heliaMachineJob{}, 0, false, persistErr
+			return "", sunMachineJob{}, 0, false, persistErr
 		}
 		return cand.name, job, newRevision, true, nil
 	}
-	return "", heliaMachineJob{}, 0, false, nil
+	return "", sunMachineJob{}, 0, false, nil
 }
 
-func heliaMachineWaitForJob(ctx context.Context, client *heliaClient, jobName string, pollSeconds int) (heliaMachineJob, int64, error) {
+func sunMachineWaitForJob(ctx context.Context, client *sunClient, jobName string, pollSeconds int) (sunMachineJob, int64, error) {
 	interval := time.Duration(max(1, pollSeconds)) * time.Second
 	for {
-		job, revision, exists, err := heliaMachineLoadJob(ctx, client, jobName)
+		job, revision, exists, err := sunMachineLoadJob(ctx, client, jobName)
 		if err != nil {
-			return heliaMachineJob{}, 0, err
+			return sunMachineJob{}, 0, err
 		}
 		if !exists {
-			return heliaMachineJob{}, 0, fmt.Errorf("remote job %q not found", strings.TrimSpace(jobName))
+			return sunMachineJob{}, 0, fmt.Errorf("remote job %q not found", strings.TrimSpace(jobName))
 		}
-		if heliaMachineIsTerminalStatus(job.Status) {
+		if sunMachineIsTerminalStatus(job.Status) {
 			return job, revision, nil
 		}
 		select {
 		case <-ctx.Done():
-			return heliaMachineJob{}, 0, fmt.Errorf("timed out waiting for remote job %q", strings.TrimSpace(job.JobID))
+			return sunMachineJob{}, 0, fmt.Errorf("timed out waiting for remote job %q", strings.TrimSpace(job.JobID))
 		case <-time.After(interval):
 		}
 	}
 }
 
-func heliaMachineLoad(ctx context.Context, client *heliaClient, machineID string) (heliaMachineRecord, int64, bool, error) {
+func sunMachineLoad(ctx context.Context, client *sunClient, machineID string) (sunMachineRecord, int64, bool, error) {
 	id := strings.TrimSpace(machineID)
 	if id == "" {
-		return heliaMachineRecord{}, 0, false, fmt.Errorf("machine id is required")
+		return sunMachineRecord{}, 0, false, fmt.Errorf("machine id is required")
 	}
-	meta, err := heliaLookupObjectMeta(ctx, client, heliaMachineKind, id)
+	meta, err := sunLookupObjectMeta(ctx, client, sunMachineKind, id)
 	if err != nil {
-		return heliaMachineRecord{}, 0, false, err
+		return sunMachineRecord{}, 0, false, err
 	}
 	if meta == nil {
-		return heliaMachineRecord{}, 0, false, nil
+		return sunMachineRecord{}, 0, false, nil
 	}
-	payload, err := client.getPayload(ctx, heliaMachineKind, id)
+	payload, err := client.getPayload(ctx, sunMachineKind, id)
 	if err != nil {
-		return heliaMachineRecord{}, 0, true, err
+		return sunMachineRecord{}, 0, true, err
 	}
-	var out heliaMachineRecord
+	var out sunMachineRecord
 	if err := json.Unmarshal(payload, &out); err != nil {
-		return heliaMachineRecord{}, 0, true, fmt.Errorf("machine payload invalid: %w", err)
+		return sunMachineRecord{}, 0, true, fmt.Errorf("machine payload invalid: %w", err)
 	}
-	out = normalizeHeliaMachineRecord(out, id)
+	out = normalizeSunMachineRecord(out, id)
 	return out, meta.LatestRevision, true, nil
 }
 
-func heliaMachinePersist(ctx context.Context, client *heliaClient, record heliaMachineRecord, exists bool, revision int64) (int64, error) {
-	record = normalizeHeliaMachineRecord(record, record.MachineID)
+func sunMachinePersist(ctx context.Context, client *sunClient, record sunMachineRecord, exists bool, revision int64) (int64, error) {
+	record = normalizeSunMachineRecord(record, record.MachineID)
 	payload, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return 0, err
@@ -881,7 +881,7 @@ func heliaMachinePersist(ctx context.Context, client *heliaClient, record heliaM
 	if exists {
 		expected = &revision
 	}
-	put, err := client.putObject(ctx, heliaMachineKind, record.MachineID, payload, "application/json", map[string]interface{}{
+	put, err := client.putObject(ctx, sunMachineKind, record.MachineID, payload, "application/json", map[string]interface{}{
 		"machine_id":          record.MachineID,
 		"owner_operator":      record.OwnerOperator,
 		"can_control_others":  record.Capabilities.CanControlOthers,
@@ -897,32 +897,32 @@ func heliaMachinePersist(ctx context.Context, client *heliaClient, record heliaM
 	return put.Result.Revision.Revision, nil
 }
 
-func heliaMachineLoadJob(ctx context.Context, client *heliaClient, jobName string) (heliaMachineJob, int64, bool, error) {
+func sunMachineLoadJob(ctx context.Context, client *sunClient, jobName string) (sunMachineJob, int64, bool, error) {
 	name := strings.TrimSpace(jobName)
 	if name == "" {
-		return heliaMachineJob{}, 0, false, fmt.Errorf("job name is required")
+		return sunMachineJob{}, 0, false, fmt.Errorf("job name is required")
 	}
-	meta, err := heliaLookupObjectMeta(ctx, client, heliaMachineJobKind, name)
+	meta, err := sunLookupObjectMeta(ctx, client, sunMachineJobKind, name)
 	if err != nil {
-		return heliaMachineJob{}, 0, false, err
+		return sunMachineJob{}, 0, false, err
 	}
 	if meta == nil {
-		return heliaMachineJob{}, 0, false, nil
+		return sunMachineJob{}, 0, false, nil
 	}
-	payload, err := client.getPayload(ctx, heliaMachineJobKind, name)
+	payload, err := client.getPayload(ctx, sunMachineJobKind, name)
 	if err != nil {
-		return heliaMachineJob{}, 0, true, err
+		return sunMachineJob{}, 0, true, err
 	}
-	var out heliaMachineJob
+	var out sunMachineJob
 	if err := json.Unmarshal(payload, &out); err != nil {
-		return heliaMachineJob{}, 0, true, fmt.Errorf("machine job payload invalid: %w", err)
+		return sunMachineJob{}, 0, true, fmt.Errorf("machine job payload invalid: %w", err)
 	}
-	out = normalizeHeliaMachineJob(out, "")
+	out = normalizeSunMachineJob(out, "")
 	return out, meta.LatestRevision, true, nil
 }
 
-func heliaMachinePersistJob(ctx context.Context, client *heliaClient, jobName string, job heliaMachineJob, exists bool, revision int64) (int64, error) {
-	job = normalizeHeliaMachineJob(job, "")
+func sunMachinePersistJob(ctx context.Context, client *sunClient, jobName string, job sunMachineJob, exists bool, revision int64) (int64, error) {
+	job = normalizeSunMachineJob(job, "")
 	payload, err := json.MarshalIndent(job, "", "  ")
 	if err != nil {
 		return 0, err
@@ -931,7 +931,7 @@ func heliaMachinePersistJob(ctx context.Context, client *heliaClient, jobName st
 	if exists {
 		expected = &revision
 	}
-	put, err := client.putObject(ctx, heliaMachineJobKind, strings.TrimSpace(jobName), payload, "application/json", map[string]interface{}{
+	put, err := client.putObject(ctx, sunMachineJobKind, strings.TrimSpace(jobName), payload, "application/json", map[string]interface{}{
 		"machine_id":   job.MachineID,
 		"job_id":       job.JobID,
 		"status":       job.Status,
@@ -946,7 +946,7 @@ func heliaMachinePersistJob(ctx context.Context, client *heliaClient, jobName st
 	return put.Result.Revision.Revision, nil
 }
 
-func normalizeHeliaMachineRecord(record heliaMachineRecord, fallbackID string) heliaMachineRecord {
+func normalizeSunMachineRecord(record sunMachineRecord, fallbackID string) sunMachineRecord {
 	record.Version = max(1, record.Version)
 	record.MachineID = sanitizeMachineID(firstNonEmpty(strings.TrimSpace(record.MachineID), strings.TrimSpace(fallbackID)))
 	record.OwnerOperator = sanitizeOperatorID(strings.TrimSpace(record.OwnerOperator))
@@ -958,7 +958,7 @@ func normalizeHeliaMachineRecord(record heliaMachineRecord, fallbackID string) h
 	return record
 }
 
-func normalizeHeliaMachineJob(job heliaMachineJob, fallbackMachine string) heliaMachineJob {
+func normalizeSunMachineJob(job sunMachineJob, fallbackMachine string) sunMachineJob {
 	job.Version = max(1, job.Version)
 	job.JobID = strings.TrimSpace(job.JobID)
 	job.MachineID = sanitizeMachineID(firstNonEmpty(strings.TrimSpace(job.MachineID), strings.TrimSpace(fallbackMachine)))
@@ -997,14 +997,14 @@ func normalizeMachineOperatorIDs(values []string) []string {
 	return out
 }
 
-func heliaMachineResolveID(settings Settings, explicit string) string {
+func sunMachineResolveID(settings Settings, explicit string) string {
 	if trimmed := sanitizeMachineID(strings.TrimSpace(explicit)); trimmed != "" {
 		return trimmed
 	}
 	if trimmed := sanitizeMachineID(envSunMachineID()); trimmed != "" {
 		return trimmed
 	}
-	if trimmed := sanitizeMachineID(strings.TrimSpace(settings.Helia.MachineID)); trimmed != "" {
+	if trimmed := sanitizeMachineID(strings.TrimSpace(settings.Sun.MachineID)); trimmed != "" {
 		return trimmed
 	}
 	host, _ := os.Hostname()
@@ -1014,14 +1014,14 @@ func heliaMachineResolveID(settings Settings, explicit string) string {
 	return "machine-unknown"
 }
 
-func heliaMachineResolveOperatorID(settings Settings, explicit string, machineID string) string {
+func sunMachineResolveOperatorID(settings Settings, explicit string, machineID string) string {
 	if trimmed := sanitizeOperatorID(strings.TrimSpace(explicit)); trimmed != "" {
 		return trimmed
 	}
 	if trimmed := sanitizeOperatorID(envSunOperatorID()); trimmed != "" {
 		return trimmed
 	}
-	if trimmed := sanitizeOperatorID(strings.TrimSpace(settings.Helia.OperatorID)); trimmed != "" {
+	if trimmed := sanitizeOperatorID(strings.TrimSpace(settings.Sun.OperatorID)); trimmed != "" {
 		return trimmed
 	}
 	userName := strings.TrimSpace(firstNonEmpty(os.Getenv("USER"), os.Getenv("USERNAME")))
@@ -1032,7 +1032,7 @@ func heliaMachineResolveOperatorID(settings Settings, explicit string, machineID
 	return sanitizeOperatorID("op:" + userName + "@" + sanitizeMachineID(machineID))
 }
 
-func heliaMachineOperatorAllowed(record heliaMachineRecord, operatorID string) bool {
+func sunMachineOperatorAllowed(record sunMachineRecord, operatorID string) bool {
 	operatorID = strings.TrimSpace(operatorID)
 	if operatorID == "" {
 		return false
@@ -1090,7 +1090,7 @@ func sanitizeOperatorID(raw string) string {
 	return out
 }
 
-func heliaMachineJobID(now time.Time) string {
+func sunMachineJobID(now time.Time) string {
 	prefix := "job-" + now.UTC().Format("20060102-150405")
 	n, err := secureIntn(36 * 36 * 36)
 	if err != nil {
@@ -1103,26 +1103,26 @@ func heliaMachineJobID(now time.Time) string {
 	return prefix + "-" + suffix
 }
 
-func heliaMachineJobObjectName(machineID string, jobID string) string {
-	return heliaMachineJobNamePrefix(machineID) + strings.TrimSpace(jobID)
+func sunMachineJobObjectName(machineID string, jobID string) string {
+	return sunMachineJobNamePrefix(machineID) + strings.TrimSpace(jobID)
 }
 
-func heliaMachineJobNamePrefix(machineID string) string {
+func sunMachineJobNamePrefix(machineID string) string {
 	return strings.TrimSpace(sanitizeMachineID(machineID)) + "--"
 }
 
-func heliaMachineIsTerminalStatus(status string) bool {
+func sunMachineIsTerminalStatus(status string) bool {
 	switch normalizeMachineJobStatus(status) {
-	case heliaMachineJobStatusSucceeded, heliaMachineJobStatusFailed, heliaMachineJobStatusDenied:
+	case sunMachineJobStatusSucceeded, sunMachineJobStatusFailed, sunMachineJobStatusDenied:
 		return true
 	default:
 		return false
 	}
 }
 
-func heliaMachineJobFailureError(job heliaMachineJob) error {
+func sunMachineJobFailureError(job sunMachineJob) error {
 	status := normalizeMachineJobStatus(job.Status)
-	if status == heliaMachineJobStatusSucceeded {
+	if status == sunMachineJobStatusSucceeded {
 		return nil
 	}
 	if status == "" {
@@ -1147,28 +1147,28 @@ func heliaMachineJobFailureError(job heliaMachineJob) error {
 func normalizeMachineJobStatus(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "queued", "pending":
-		return heliaMachineJobStatusQueued
+		return sunMachineJobStatusQueued
 	case "running", "claimed":
-		return heliaMachineJobStatusRunning
+		return sunMachineJobStatusRunning
 	case "succeeded", "success", "ok":
-		return heliaMachineJobStatusSucceeded
+		return sunMachineJobStatusSucceeded
 	case "failed", "error":
-		return heliaMachineJobStatusFailed
+		return sunMachineJobStatusFailed
 	case "denied", "forbidden":
-		return heliaMachineJobStatusDenied
+		return sunMachineJobStatusDenied
 	default:
 		return ""
 	}
 }
 
 func truncateMachineOutput(raw string) string {
-	if len(raw) <= heliaMachineOutputMaxBytes {
+	if len(raw) <= sunMachineOutputMaxBytes {
 		return raw
 	}
-	return raw[:heliaMachineOutputMaxBytes] + "\n[truncated]"
+	return raw[:sunMachineOutputMaxBytes] + "\n[truncated]"
 }
 
-func printHeliaMachineRecord(record heliaMachineRecord) {
+func printSunMachineRecord(record sunMachineRecord) {
 	fmt.Printf("%s %s\n", styleHeading("machine:"), record.MachineID)
 	fmt.Printf("%s %s\n", styleHeading("owner:"), record.OwnerOperator)
 	fmt.Printf("%s %s\n", styleHeading("display_name:"), firstNonEmpty(record.DisplayName, "-"))
@@ -1179,7 +1179,7 @@ func printHeliaMachineRecord(record heliaMachineRecord) {
 	fmt.Printf("%s %s\n", styleHeading("last_seen:"), firstNonEmpty(record.Heartbeat.LastSeenAt, "-"))
 }
 
-func printHeliaMachineJob(job heliaMachineJob) {
+func printSunMachineJob(job sunMachineJob) {
 	fmt.Printf("%s %s\n", styleHeading("job_id:"), job.JobID)
 	fmt.Printf("%s %s\n", styleHeading("machine:"), job.MachineID)
 	fmt.Printf("%s %s\n", styleHeading("status:"), job.Status)

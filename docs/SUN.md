@@ -104,8 +104,8 @@ si vault backend use --mode sun   # Sun backup required on mutating vault comman
 si vault backend status
 ```
 
-`--mode helia` remains supported as a legacy alias for `--mode sun`.
-When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `sun.vault_backup`/`helia.vault_backup` object.
+`--mode sun` remains supported as a legacy alias for `--mode sun`.
+When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `sun.vault_backup`/`sun.vault_backup` object.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.
@@ -148,7 +148,7 @@ si sun taskboard done --name shared --id <task-id> --agent dyad:main-laptop --re
 Dyad autopilot integration:
 
 ```bash
-# If --prompt is omitted, autopilot claims from sun.taskboard (or helia.taskboard legacy alias) and uses task.prompt.
+# If --prompt is omitted, autopilot claims from sun.taskboard (or sun.taskboard legacy alias) and uses task.prompt.
 si dyad spawn release-bot --autopilot --profile main
 ```
 
@@ -226,7 +226,7 @@ si sun machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remo
 
 ## Settings keys
 
-`[sun]` supports (with `[helia]` as a legacy alias):
+`[sun]` supports (with `[sun]` as a legacy alias):
 - `base_url`
 - `account`
 - `token`
@@ -242,4 +242,4 @@ si sun machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remo
 - `operator_id`
 
 See [Settings](./SETTINGS) for full schema details.
-Legacy compatibility: `SI_HELIA_*` environment variables are still accepted.
+Legacy compatibility: `SI_SUN_*` environment variables are still accepted.

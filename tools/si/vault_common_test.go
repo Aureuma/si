@@ -95,13 +95,13 @@ func TestResolveVaultSyncBackendDefaultsAndLegacy(t *testing.T) {
 		t.Fatalf("unexpected default resolution: %+v", got)
 	}
 
-	settings.Helia.AutoSync = true
+	settings.Sun.AutoSync = true
 	settings.Vault.SyncBackend = ""
 	got, err = resolveVaultSyncBackend(settings)
 	if err != nil {
 		t.Fatalf("resolve legacy backend: %v", err)
 	}
-	if got.Mode != vaultSyncBackendDual || got.Source != "legacy_helia_auto_sync" {
+	if got.Mode != vaultSyncBackendDual || got.Source != "legacy_sun_auto_sync" {
 		t.Fatalf("unexpected legacy resolution: %+v", got)
 	}
 }
@@ -109,13 +109,13 @@ func TestResolveVaultSyncBackendDefaultsAndLegacy(t *testing.T) {
 func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Vault.SyncBackend = "helia"
+	settings.Vault.SyncBackend = "sun"
 
 	got, err := resolveVaultSyncBackend(settings)
 	if err != nil {
 		t.Fatalf("resolve settings backend: %v", err)
 	}
-	if got.Mode != vaultSyncBackendHelia || got.Source != "settings" {
+	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
 		t.Fatalf("unexpected settings resolution: %+v", got)
 	}
 
@@ -124,7 +124,7 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve settings backend sun alias: %v", err)
 	}
-	if got.Mode != vaultSyncBackendHelia || got.Source != "settings" {
+	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
 		t.Fatalf("unexpected settings sun-alias resolution: %+v", got)
 	}
 
@@ -142,7 +142,7 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve env backend sun alias: %v", err)
 	}
-	if got.Mode != vaultSyncBackendHelia || got.Source != "env" {
+	if got.Mode != vaultSyncBackendSun || got.Source != "env" {
 		t.Fatalf("unexpected env sun-alias resolution: %+v", got)
 	}
 

@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/sun-cloud-ci.yml'
-      - 'tools/si/helia*.go'
+      - 'tools/si/sun*.go'
       - 'tools/si/sun_env*.go'
       - 'tools/si/paas*cloud*.go'
       - 'tools/si/paas_cmd.go'
@@ -24,7 +24,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/sun-cloud-ci.yml'
-      - 'tools/si/helia*.go'
+      - 'tools/si/sun*.go'
       - 'tools/si/sun_env*.go'
       - 'tools/si/paas*cloud*.go'
       - 'tools/si/paas_cmd.go'
@@ -70,7 +70,7 @@ jobs:
 
       - name: Run Sun-focused unit tests
         run: |
-          go test ./tools/si -run 'Test(NewHeliaClientValidation|HeliaClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|HeliaClientFromSettingsEnvPrecedence|HeliaE2E_ProfilePushPullRoundTrip|HeliaE2E_VaultBackupPushPullRoundTrip|MaybeHeliaAutoBackupVaultSkipsPlaintext|ResolvePaasSyncBackendPrecedence|IsPaasCloudMutationCommand|PaasCloudUseAndStatusE2E|PaasCloudPushPullRoundTripE2E|PaasCloudStrictAutoSyncPreservesJSONOutput|NormalizeVaultSyncBackend|VaultBackendStatusAndUse|ResolveVaultSyncBackendOverridesAndValidation|LoadSettingsSunSectionOverridesLegacyHeliaSection|SaveSettingsMirrorsHeliaIntoSunSection|SunEnvAliasesPreferSunThenHelia|SunEnvAliasesFallbackToHelia|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
+          go test ./tools/si -run 'Test(NewSunClientValidation|SunClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|SunClientFromSettingsEnvPrecedence|SunE2E_ProfilePushPullRoundTrip|SunE2E_VaultBackupPushPullRoundTrip|MaybeSunAutoBackupVaultSkipsPlaintext|ResolvePaasSyncBackendPrecedence|IsPaasCloudMutationCommand|PaasCloudUseAndStatusE2E|PaasCloudPushPullRoundTripE2E|PaasCloudStrictAutoSyncPreservesJSONOutput|NormalizeVaultSyncBackend|VaultBackendStatusAndUse|ResolveVaultSyncBackendOverridesAndValidation|LoadSettingsSunSectionOverridesLegacySunSection|SaveSettingsMirrorsSunIntoSunSection|SunEnvAliasesPreferSunThenSun|SunEnvAliasesFallbackToSun|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
 
       - name: Compile command package
         run: go test ./tools/si -run '^$'

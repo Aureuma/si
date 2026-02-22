@@ -10,9 +10,8 @@ func TestNormalizeVaultSyncBackend(t *testing.T) {
 	cases := map[string]string{
 		"git":   vaultSyncBackendGit,
 		"local": vaultSyncBackendGit,
-		"sun":   vaultSyncBackendHelia,
-		"helia": vaultSyncBackendHelia,
-		"cloud": vaultSyncBackendHelia,
+		"sun":   vaultSyncBackendSun,
+		"cloud": vaultSyncBackendSun,
 		"dual":  vaultSyncBackendDual,
 		"both":  vaultSyncBackendDual,
 	}
@@ -82,8 +81,8 @@ func TestVaultBackendStatusAndUse(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &after); err != nil {
 		t.Fatalf("parse backend status json after sun alias: %v\nstdout=%s", err, stdout)
 	}
-	if after["mode"] != vaultSyncBackendHelia {
-		t.Fatalf("mode after sun alias=%v want=%s", after["mode"], vaultSyncBackendHelia)
+	if after["mode"] != vaultSyncBackendSun {
+		t.Fatalf("mode after sun alias=%v want=%s", after["mode"], vaultSyncBackendSun)
 	}
 }
 

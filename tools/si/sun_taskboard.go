@@ -13,41 +13,41 @@ import (
 )
 
 const (
-	heliaTaskboardUsageText = "usage: si sun taskboard <use|show|list|add|claim|release|done> ..."
-	heliaTaskboardKind      = "dyad_taskboard"
+	sunTaskboardUsageText = "usage: si sun taskboard <use|show|list|add|claim|release|done> ..."
+	sunTaskboardKind      = "dyad_taskboard"
 
-	heliaTaskStatusTodo  = "todo"
-	heliaTaskStatusDoing = "doing"
-	heliaTaskStatusDone  = "done"
+	sunTaskStatusTodo  = "todo"
+	sunTaskStatusDoing = "doing"
+	sunTaskStatusDone  = "done"
 
-	heliaTaskPriorityP1 = "P1"
-	heliaTaskPriorityP2 = "P2"
-	heliaTaskPriorityP3 = "P3"
+	sunTaskPriorityP1 = "P1"
+	sunTaskPriorityP2 = "P2"
+	sunTaskPriorityP3 = "P3"
 )
 
-type heliaTaskboard struct {
-	Version   int                            `json:"version"`
-	Name      string                         `json:"name"`
-	UpdatedAt string                         `json:"updated_at,omitempty"`
-	Tasks     []heliaTaskboardTask           `json:"tasks"`
-	Agents    map[string]heliaTaskboardAgent `json:"agents,omitempty"`
+type sunTaskboard struct {
+	Version   int                          `json:"version"`
+	Name      string                       `json:"name"`
+	UpdatedAt string                       `json:"updated_at,omitempty"`
+	Tasks     []sunTaskboardTask           `json:"tasks"`
+	Agents    map[string]sunTaskboardAgent `json:"agents,omitempty"`
 }
 
-type heliaTaskboardTask struct {
-	ID          string              `json:"id"`
-	Title       string              `json:"title"`
-	Prompt      string              `json:"prompt"`
-	Status      string              `json:"status"`
-	Priority    string              `json:"priority"`
-	Tags        []string            `json:"tags,omitempty"`
-	CreatedAt   string              `json:"created_at,omitempty"`
-	UpdatedAt   string              `json:"updated_at,omitempty"`
-	CompletedAt string              `json:"completed_at,omitempty"`
-	Result      string              `json:"result,omitempty"`
-	Assignment  *heliaTaskboardLock `json:"assignment,omitempty"`
+type sunTaskboardTask struct {
+	ID          string            `json:"id"`
+	Title       string            `json:"title"`
+	Prompt      string            `json:"prompt"`
+	Status      string            `json:"status"`
+	Priority    string            `json:"priority"`
+	Tags        []string          `json:"tags,omitempty"`
+	CreatedAt   string            `json:"created_at,omitempty"`
+	UpdatedAt   string            `json:"updated_at,omitempty"`
+	CompletedAt string            `json:"completed_at,omitempty"`
+	Result      string            `json:"result,omitempty"`
+	Assignment  *sunTaskboardLock `json:"assignment,omitempty"`
 }
 
-type heliaTaskboardLock struct {
+type sunTaskboardLock struct {
 	AgentID        string `json:"agent_id"`
 	Dyad           string `json:"dyad,omitempty"`
 	Machine        string `json:"machine,omitempty"`
@@ -58,7 +58,7 @@ type heliaTaskboardLock struct {
 	LeaseExpiresAt string `json:"lease_expires_at,omitempty"`
 }
 
-type heliaTaskboardAgent struct {
+type sunTaskboardAgent struct {
 	ID            string `json:"id"`
 	Dyad          string `json:"dyad,omitempty"`
 	Machine       string `json:"machine,omitempty"`
@@ -68,60 +68,60 @@ type heliaTaskboardAgent struct {
 	LastSeenAt    string `json:"last_seen_at,omitempty"`
 }
 
-type heliaTaskboardAgentIdentity struct {
+type sunTaskboardAgentIdentity struct {
 	AgentID string
 	Dyad    string
 	Machine string
 	User    string
 }
 
-type heliaTaskboardClaimRequest struct {
+type sunTaskboardClaimRequest struct {
 	TaskID       string
-	Agent        heliaTaskboardAgentIdentity
+	Agent        sunTaskboardAgentIdentity
 	LeaseSeconds int
 }
 
-type heliaTaskboardClaimResult struct {
-	BoardName string             `json:"board_name"`
-	Task      heliaTaskboardTask `json:"task"`
+type sunTaskboardClaimResult struct {
+	BoardName string           `json:"board_name"`
+	Task      sunTaskboardTask `json:"task"`
 }
 
-func cmdHeliaTaskboard(args []string) {
+func cmdSunTaskboard(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaTaskboardUsageText)
+		printUsage(sunTaskboardUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "help", "-h", "--help":
-		printUsage(heliaTaskboardUsageText)
+		printUsage(sunTaskboardUsageText)
 	case "use":
-		cmdHeliaTaskboardUse(rest)
+		cmdSunTaskboardUse(rest)
 	case "show":
-		cmdHeliaTaskboardShow(rest)
+		cmdSunTaskboardShow(rest)
 	case "list":
-		cmdHeliaTaskboardList(rest)
+		cmdSunTaskboardList(rest)
 	case "add":
-		cmdHeliaTaskboardAdd(rest)
+		cmdSunTaskboardAdd(rest)
 	case "claim":
-		cmdHeliaTaskboardClaim(rest)
+		cmdSunTaskboardClaim(rest)
 	case "release":
-		cmdHeliaTaskboardRelease(rest)
+		cmdSunTaskboardRelease(rest)
 	case "done":
-		cmdHeliaTaskboardDone(rest)
+		cmdSunTaskboardDone(rest)
 	default:
 		printUnknown("sun taskboard", sub)
-		printUsage(heliaTaskboardUsageText)
+		printUsage(sunTaskboardUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaTaskboardUse(args []string) {
+func cmdSunTaskboardUse(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard use", flag.ExitOnError)
-	name := fs.String("name", strings.TrimSpace(settings.Helia.Taskboard), "default taskboard object name")
-	agent := fs.String("agent", strings.TrimSpace(settings.Helia.TaskboardAgent), "default agent id")
+	name := fs.String("name", strings.TrimSpace(settings.Sun.Taskboard), "default taskboard object name")
+	agent := fs.String("agent", strings.TrimSpace(settings.Sun.TaskboardAgent), "default agent id")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -129,15 +129,15 @@ func cmdHeliaTaskboardUse(args []string) {
 		*name = strings.TrimSpace(fs.Arg(0))
 	}
 	if strings.TrimSpace(*name) == "" {
-		fatal(fmt.Errorf("taskboard name required (--name or helia.taskboard)"))
+		fatal(fmt.Errorf("taskboard name required (--name or sun.taskboard)"))
 	}
 	current, err := loadSettings()
 	if err != nil {
 		fatal(err)
 	}
-	current.Helia.Taskboard = strings.TrimSpace(*name)
+	current.Sun.Taskboard = strings.TrimSpace(*name)
 	if strings.TrimSpace(*agent) != "" {
-		current.Helia.TaskboardAgent = strings.TrimSpace(*agent)
+		current.Sun.TaskboardAgent = strings.TrimSpace(*agent)
 	}
 	if err := saveSettings(current); err != nil {
 		fatal(err)
@@ -148,7 +148,7 @@ func cmdHeliaTaskboardUse(args []string) {
 	}
 }
 
-func cmdHeliaTaskboardShow(args []string) {
+func cmdSunTaskboardShow(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard show", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
@@ -160,12 +160,12 @@ func cmdHeliaTaskboardShow(args []string) {
 		printUsage("usage: si sun taskboard show [--name <name>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	targetBoard := heliaTaskboardName(settings, strings.TrimSpace(*boardName))
-	board, _, _, err := heliaTaskboardLoad(heliaContext(settings), client, targetBoard)
+	targetBoard := sunTaskboardName(settings, strings.TrimSpace(*boardName))
+	board, _, _, err := sunTaskboardLoad(sunContext(settings), client, targetBoard)
 	if err != nil {
 		fatal(err)
 	}
@@ -173,7 +173,7 @@ func cmdHeliaTaskboardShow(args []string) {
 		printJSON(board)
 		return
 	}
-	todo, doing, done := heliaTaskboardStatusCounts(board.Tasks)
+	todo, doing, done := sunTaskboardStatusCounts(board.Tasks)
 	fmt.Printf("%s %s\n", styleHeading("board:"), board.Name)
 	fmt.Printf("%s %d (todo=%d doing=%d done=%d)\n", styleHeading("tasks:"), len(board.Tasks), todo, doing, done)
 	if strings.TrimSpace(board.UpdatedAt) != "" {
@@ -183,12 +183,12 @@ func cmdHeliaTaskboardShow(args []string) {
 		infof("no tasks on board")
 		return
 	}
-	tasks := append([]heliaTaskboardTask(nil), board.Tasks...)
-	heliaSortTasks(tasks)
-	printHeliaTaskRows(tasks)
+	tasks := append([]sunTaskboardTask(nil), board.Tasks...)
+	sunSortTasks(tasks)
+	printSunTaskRows(tasks)
 }
 
-func cmdHeliaTaskboardList(args []string) {
+func cmdSunTaskboardList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard list", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
@@ -203,21 +203,21 @@ func cmdHeliaTaskboardList(args []string) {
 		printUsage("usage: si sun taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	targetBoard := heliaTaskboardName(settings, strings.TrimSpace(*boardName))
-	board, _, _, err := heliaTaskboardLoad(heliaContext(settings), client, targetBoard)
+	targetBoard := sunTaskboardName(settings, strings.TrimSpace(*boardName))
+	board, _, _, err := sunTaskboardLoad(sunContext(settings), client, targetBoard)
 	if err != nil {
 		fatal(err)
 	}
-	statusFilter, err := parseHeliaTaskStatusFilter(*status)
+	statusFilter, err := parseSunTaskStatusFilter(*status)
 	if err != nil {
 		fatal(err)
 	}
 	ownerFilter := strings.TrimSpace(*owner)
-	filtered := make([]heliaTaskboardTask, 0, len(board.Tasks))
+	filtered := make([]sunTaskboardTask, 0, len(board.Tasks))
 	for i := range board.Tasks {
 		task := board.Tasks[i]
 		if statusFilter != "" && task.Status != statusFilter {
@@ -230,7 +230,7 @@ func cmdHeliaTaskboardList(args []string) {
 		}
 		filtered = append(filtered, task)
 	}
-	heliaSortTasks(filtered)
+	sunSortTasks(filtered)
 	if *limit > 0 && len(filtered) > *limit {
 		filtered = filtered[:*limit]
 	}
@@ -242,16 +242,16 @@ func cmdHeliaTaskboardList(args []string) {
 		infof("no matching tasks")
 		return
 	}
-	printHeliaTaskRows(filtered)
+	printSunTaskRows(filtered)
 }
 
-func cmdHeliaTaskboardAdd(args []string) {
+func cmdSunTaskboardAdd(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard add", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
 	title := fs.String("title", "", "task title")
 	prompt := fs.String("prompt", "", "task prompt used by dyad autopilot")
-	priority := fs.String("priority", heliaTaskPriorityP2, "priority: P1|P2|P3")
+	priority := fs.String("priority", sunTaskPriorityP2, "priority: P1|P2|P3")
 	tagsCSV := fs.String("tags", "", "comma-separated tags")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
@@ -269,20 +269,20 @@ func cmdHeliaTaskboardAdd(args []string) {
 	if taskPrompt == "" {
 		taskPrompt = taskTitle
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	targetBoard := heliaTaskboardName(settings, strings.TrimSpace(*boardName))
-	var created heliaTaskboardTask
-	_, _, err = heliaTaskboardMutateWithRetry(heliaContext(settings), client, targetBoard, func(board *heliaTaskboard, now time.Time) error {
-		id := heliaTaskID(now, board.Tasks)
-		created = heliaTaskboardTask{
+	targetBoard := sunTaskboardName(settings, strings.TrimSpace(*boardName))
+	var created sunTaskboardTask
+	_, _, err = sunTaskboardMutateWithRetry(sunContext(settings), client, targetBoard, func(board *sunTaskboard, now time.Time) error {
+		id := sunTaskID(now, board.Tasks)
+		created = sunTaskboardTask{
 			ID:        id,
 			Title:     taskTitle,
 			Prompt:    taskPrompt,
-			Status:    heliaTaskStatusTodo,
-			Priority:  normalizeHeliaTaskPriority(*priority),
+			Status:    sunTaskStatusTodo,
+			Priority:  normalizeSunTaskPriority(*priority),
 			Tags:      splitCSVScopes(*tagsCSV),
 			CreatedAt: now.Format(time.RFC3339),
 			UpdatedAt: now.Format(time.RFC3339),
@@ -300,7 +300,7 @@ func cmdHeliaTaskboardAdd(args []string) {
 	successf("added task %s (%s)", created.ID, created.Title)
 }
 
-func cmdHeliaTaskboardClaim(args []string) {
+func cmdSunTaskboardClaim(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard claim", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
@@ -317,16 +317,16 @@ func cmdHeliaTaskboardClaim(args []string) {
 		printUsage("usage: si sun taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <dyad>] [--lease-seconds <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	targetBoard := heliaTaskboardName(settings, strings.TrimSpace(*boardName))
-	identity := heliaTaskboardResolveAgent(settings, strings.TrimSpace(*agent), strings.TrimSpace(*dyad), strings.TrimSpace(*machine))
-	result, err := heliaTaskboardClaim(heliaContext(settings), client, targetBoard, heliaTaskboardClaimRequest{
+	targetBoard := sunTaskboardName(settings, strings.TrimSpace(*boardName))
+	identity := sunTaskboardResolveAgent(settings, strings.TrimSpace(*agent), strings.TrimSpace(*dyad), strings.TrimSpace(*machine))
+	result, err := sunTaskboardClaim(sunContext(settings), client, targetBoard, sunTaskboardClaimRequest{
 		TaskID:       strings.TrimSpace(*id),
 		Agent:        identity,
-		LeaseSeconds: heliaTaskboardLeaseSeconds(settings, *leaseSeconds),
+		LeaseSeconds: sunTaskboardLeaseSeconds(settings, *leaseSeconds),
 	})
 	if err != nil {
 		fatal(err)
@@ -338,7 +338,7 @@ func cmdHeliaTaskboardClaim(args []string) {
 	successf("claimed %s on board %s as %s", result.Task.ID, result.BoardName, identity.AgentID)
 }
 
-func cmdHeliaTaskboardRelease(args []string) {
+func cmdSunTaskboardRelease(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard release", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
@@ -358,13 +358,13 @@ func cmdHeliaTaskboardRelease(args []string) {
 	if taskID == "" {
 		fatal(fmt.Errorf("--id is required"))
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	targetBoard := heliaTaskboardName(settings, strings.TrimSpace(*boardName))
-	identity := heliaTaskboardResolveAgent(settings, strings.TrimSpace(*agent), strings.TrimSpace(*dyad), strings.TrimSpace(*machine))
-	task, err := heliaTaskboardRelease(heliaContext(settings), client, targetBoard, taskID, identity)
+	targetBoard := sunTaskboardName(settings, strings.TrimSpace(*boardName))
+	identity := sunTaskboardResolveAgent(settings, strings.TrimSpace(*agent), strings.TrimSpace(*dyad), strings.TrimSpace(*machine))
+	task, err := sunTaskboardRelease(sunContext(settings), client, targetBoard, taskID, identity)
 	if err != nil {
 		fatal(err)
 	}
@@ -375,7 +375,7 @@ func cmdHeliaTaskboardRelease(args []string) {
 	successf("released %s on board %s", task.ID, targetBoard)
 }
 
-func cmdHeliaTaskboardDone(args []string) {
+func cmdSunTaskboardDone(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun taskboard done", flag.ExitOnError)
 	boardName := fs.String("name", "", "taskboard object name")
@@ -396,13 +396,13 @@ func cmdHeliaTaskboardDone(args []string) {
 	if taskID == "" {
 		fatal(fmt.Errorf("--id is required"))
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	targetBoard := heliaTaskboardName(settings, strings.TrimSpace(*boardName))
-	identity := heliaTaskboardResolveAgent(settings, strings.TrimSpace(*agent), strings.TrimSpace(*dyad), strings.TrimSpace(*machine))
-	task, err := heliaTaskboardMarkDone(heliaContext(settings), client, targetBoard, taskID, identity, strings.TrimSpace(*resultText))
+	targetBoard := sunTaskboardName(settings, strings.TrimSpace(*boardName))
+	identity := sunTaskboardResolveAgent(settings, strings.TrimSpace(*agent), strings.TrimSpace(*dyad), strings.TrimSpace(*machine))
+	task, err := sunTaskboardMarkDone(sunContext(settings), client, targetBoard, taskID, identity, strings.TrimSpace(*resultText))
 	if err != nil {
 		fatal(err)
 	}
@@ -413,20 +413,20 @@ func cmdHeliaTaskboardDone(args []string) {
 	successf("completed %s on board %s", task.ID, targetBoard)
 }
 
-func heliaAutopilotClaimTask(settings Settings, dyadName string) (heliaTaskboardClaimResult, error) {
-	client, err := heliaClientFromSettings(settings)
+func sunAutopilotClaimTask(settings Settings, dyadName string) (sunTaskboardClaimResult, error) {
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
-		return heliaTaskboardClaimResult{}, err
+		return sunTaskboardClaimResult{}, err
 	}
-	identity := heliaTaskboardResolveAgent(settings, "", dyadName, "")
-	return heliaTaskboardClaim(heliaContext(settings), client, heliaTaskboardName(settings, ""), heliaTaskboardClaimRequest{
+	identity := sunTaskboardResolveAgent(settings, "", dyadName, "")
+	return sunTaskboardClaim(sunContext(settings), client, sunTaskboardName(settings, ""), sunTaskboardClaimRequest{
 		Agent:        identity,
-		LeaseSeconds: heliaTaskboardLeaseSeconds(settings, 0),
+		LeaseSeconds: sunTaskboardLeaseSeconds(settings, 0),
 	})
 }
 
-func heliaTaskboardClaim(ctx context.Context, client *heliaClient, boardName string, req heliaTaskboardClaimRequest) (heliaTaskboardClaimResult, error) {
-	result := heliaTaskboardClaimResult{BoardName: strings.TrimSpace(boardName)}
+func sunTaskboardClaim(ctx context.Context, client *sunClient, boardName string, req sunTaskboardClaimRequest) (sunTaskboardClaimResult, error) {
+	result := sunTaskboardClaimResult{BoardName: strings.TrimSpace(boardName)}
 	if strings.TrimSpace(req.Agent.AgentID) == "" {
 		return result, fmt.Errorf("agent id required")
 	}
@@ -434,8 +434,8 @@ func heliaTaskboardClaim(ctx context.Context, client *heliaClient, boardName str
 	if leaseSeconds <= 0 {
 		leaseSeconds = 1800
 	}
-	var claimed heliaTaskboardTask
-	_, _, err := heliaTaskboardMutateWithRetry(ctx, client, boardName, func(board *heliaTaskboard, now time.Time) error {
+	var claimed sunTaskboardTask
+	_, _, err := sunTaskboardMutateWithRetry(ctx, client, boardName, func(board *sunTaskboard, now time.Time) error {
 		index := -1
 		if strings.TrimSpace(req.TaskID) != "" {
 			for i := range board.Tasks {
@@ -448,27 +448,27 @@ func heliaTaskboardClaim(ctx context.Context, client *heliaClient, boardName str
 				return fmt.Errorf("task %q not found", strings.TrimSpace(req.TaskID))
 			}
 		} else {
-			index = heliaTaskboardSelectNextClaimable(board.Tasks, now)
+			index = sunTaskboardSelectNextClaimable(board.Tasks, now)
 			if index < 0 {
 				return fmt.Errorf("no claimable tasks available")
 			}
 		}
 		task := board.Tasks[index]
-		if task.Status == heliaTaskStatusDone {
+		if task.Status == sunTaskStatusDone {
 			return fmt.Errorf("task %s is already done", task.ID)
 		}
 		if task.Assignment != nil {
 			assignedTo := strings.TrimSpace(task.Assignment.AgentID)
-			expired := heliaTaskboardLockExpired(*task.Assignment, now)
+			expired := sunTaskboardLockExpired(*task.Assignment, now)
 			if assignedTo != "" && !expired && !strings.EqualFold(assignedTo, req.Agent.AgentID) {
 				return fmt.Errorf("task %s is locked by %s", task.ID, assignedTo)
 			}
 		}
-		lockToken := heliaTaskboardLockToken(now)
+		lockToken := sunTaskboardLockToken(now)
 		expires := now.Add(time.Duration(leaseSeconds) * time.Second).UTC().Format(time.RFC3339)
-		task.Status = heliaTaskStatusDoing
+		task.Status = sunTaskStatusDoing
 		task.UpdatedAt = now.UTC().Format(time.RFC3339)
-		task.Assignment = &heliaTaskboardLock{
+		task.Assignment = &sunTaskboardLock{
 			AgentID:        req.Agent.AgentID,
 			Dyad:           req.Agent.Dyad,
 			Machine:        req.Agent.Machine,
@@ -479,8 +479,8 @@ func heliaTaskboardClaim(ctx context.Context, client *heliaClient, boardName str
 			LeaseExpiresAt: expires,
 		}
 		board.Tasks[index] = task
-		heliaTaskboardTouchAgent(board, req.Agent, now, "working", task.ID)
-		heliaTaskboardClearOtherAgentsForTask(board, req.Agent.AgentID, task.ID, now)
+		sunTaskboardTouchAgent(board, req.Agent, now, "working", task.ID)
+		sunTaskboardClearOtherAgentsForTask(board, req.Agent.AgentID, task.ID, now)
 		claimed = task
 		return nil
 	})
@@ -491,10 +491,10 @@ func heliaTaskboardClaim(ctx context.Context, client *heliaClient, boardName str
 	return result, nil
 }
 
-func heliaTaskboardRelease(ctx context.Context, client *heliaClient, boardName string, taskID string, agent heliaTaskboardAgentIdentity) (heliaTaskboardTask, error) {
-	var updated heliaTaskboardTask
-	_, _, err := heliaTaskboardMutateWithRetry(ctx, client, boardName, func(board *heliaTaskboard, now time.Time) error {
-		index := heliaTaskboardFindTask(board.Tasks, taskID)
+func sunTaskboardRelease(ctx context.Context, client *sunClient, boardName string, taskID string, agent sunTaskboardAgentIdentity) (sunTaskboardTask, error) {
+	var updated sunTaskboardTask
+	_, _, err := sunTaskboardMutateWithRetry(ctx, client, boardName, func(board *sunTaskboard, now time.Time) error {
+		index := sunTaskboardFindTask(board.Tasks, taskID)
 		if index < 0 {
 			return fmt.Errorf("task %q not found", taskID)
 		}
@@ -503,19 +503,19 @@ func heliaTaskboardRelease(ctx context.Context, client *heliaClient, boardName s
 			return fmt.Errorf("task %s is not currently assigned", task.ID)
 		}
 		assignedTo := strings.TrimSpace(task.Assignment.AgentID)
-		expired := heliaTaskboardLockExpired(*task.Assignment, now)
+		expired := sunTaskboardLockExpired(*task.Assignment, now)
 		if assignedTo != "" && !expired && !strings.EqualFold(assignedTo, agent.AgentID) {
 			return fmt.Errorf("task %s is locked by %s", task.ID, assignedTo)
 		}
 		task.Assignment = nil
-		if task.Status != heliaTaskStatusDone {
-			task.Status = heliaTaskStatusTodo
+		if task.Status != sunTaskStatusDone {
+			task.Status = sunTaskStatusTodo
 		}
 		task.UpdatedAt = now.UTC().Format(time.RFC3339)
 		board.Tasks[index] = task
-		heliaTaskboardTouchAgent(board, agent, now, "idle", "")
+		sunTaskboardTouchAgent(board, agent, now, "idle", "")
 		if assignedTo != "" && !strings.EqualFold(assignedTo, agent.AgentID) {
-			heliaTaskboardSetAgentState(board, assignedTo, now, "idle", "")
+			sunTaskboardSetAgentState(board, assignedTo, now, "idle", "")
 		}
 		updated = task
 		return nil
@@ -523,25 +523,25 @@ func heliaTaskboardRelease(ctx context.Context, client *heliaClient, boardName s
 	return updated, err
 }
 
-func heliaTaskboardMarkDone(ctx context.Context, client *heliaClient, boardName string, taskID string, agent heliaTaskboardAgentIdentity, resultText string) (heliaTaskboardTask, error) {
-	var updated heliaTaskboardTask
-	_, _, err := heliaTaskboardMutateWithRetry(ctx, client, boardName, func(board *heliaTaskboard, now time.Time) error {
-		index := heliaTaskboardFindTask(board.Tasks, taskID)
+func sunTaskboardMarkDone(ctx context.Context, client *sunClient, boardName string, taskID string, agent sunTaskboardAgentIdentity, resultText string) (sunTaskboardTask, error) {
+	var updated sunTaskboardTask
+	_, _, err := sunTaskboardMutateWithRetry(ctx, client, boardName, func(board *sunTaskboard, now time.Time) error {
+		index := sunTaskboardFindTask(board.Tasks, taskID)
 		if index < 0 {
 			return fmt.Errorf("task %q not found", taskID)
 		}
 		task := board.Tasks[index]
 		if task.Assignment != nil {
 			assignedTo := strings.TrimSpace(task.Assignment.AgentID)
-			expired := heliaTaskboardLockExpired(*task.Assignment, now)
+			expired := sunTaskboardLockExpired(*task.Assignment, now)
 			if assignedTo != "" && !expired && !strings.EqualFold(assignedTo, agent.AgentID) {
 				return fmt.Errorf("task %s is locked by %s", task.ID, assignedTo)
 			}
 			if assignedTo != "" && !strings.EqualFold(assignedTo, agent.AgentID) {
-				heliaTaskboardSetAgentState(board, assignedTo, now, "idle", "")
+				sunTaskboardSetAgentState(board, assignedTo, now, "idle", "")
 			}
 		}
-		task.Status = heliaTaskStatusDone
+		task.Status = sunTaskStatusDone
 		task.Assignment = nil
 		task.UpdatedAt = now.UTC().Format(time.RFC3339)
 		task.CompletedAt = now.UTC().Format(time.RFC3339)
@@ -549,82 +549,82 @@ func heliaTaskboardMarkDone(ctx context.Context, client *heliaClient, boardName 
 			task.Result = strings.TrimSpace(resultText)
 		}
 		board.Tasks[index] = task
-		heliaTaskboardTouchAgent(board, agent, now, "idle", "")
+		sunTaskboardTouchAgent(board, agent, now, "idle", "")
 		updated = task
 		return nil
 	})
 	return updated, err
 }
 
-func heliaTaskboardMutateWithRetry(ctx context.Context, client *heliaClient, boardName string, mutate func(board *heliaTaskboard, now time.Time) error) (heliaTaskboard, int64, error) {
+func sunTaskboardMutateWithRetry(ctx context.Context, client *sunClient, boardName string, mutate func(board *sunTaskboard, now time.Time) error) (sunTaskboard, int64, error) {
 	name := strings.TrimSpace(boardName)
 	if name == "" {
-		return heliaTaskboard{}, 0, fmt.Errorf("taskboard name required")
+		return sunTaskboard{}, 0, fmt.Errorf("taskboard name required")
 	}
 	var lastErr error
 	for attempt := 0; attempt < 8; attempt++ {
-		board, revision, exists, err := heliaTaskboardLoad(ctx, client, name)
+		board, revision, exists, err := sunTaskboardLoad(ctx, client, name)
 		if err != nil {
-			return heliaTaskboard{}, 0, err
+			return sunTaskboard{}, 0, err
 		}
 		now := time.Now().UTC()
 		if err := mutate(&board, now); err != nil {
-			return heliaTaskboard{}, 0, err
+			return sunTaskboard{}, 0, err
 		}
 		board.UpdatedAt = now.Format(time.RFC3339)
-		newRevision, err := heliaTaskboardPersist(ctx, client, board, exists, revision)
+		newRevision, err := sunTaskboardPersist(ctx, client, board, exists, revision)
 		if err == nil {
 			return board, newRevision, nil
 		}
-		if !isHeliaStatus(err, 409) {
-			return heliaTaskboard{}, 0, err
+		if !isSunStatus(err, 409) {
+			return sunTaskboard{}, 0, err
 		}
 		lastErr = err
 	}
 	if lastErr == nil {
 		lastErr = fmt.Errorf("taskboard update conflict")
 	}
-	return heliaTaskboard{}, 0, fmt.Errorf("taskboard update failed after retries: %w", lastErr)
+	return sunTaskboard{}, 0, fmt.Errorf("taskboard update failed after retries: %w", lastErr)
 }
 
-func heliaTaskboardLoad(ctx context.Context, client *heliaClient, boardName string) (heliaTaskboard, int64, bool, error) {
+func sunTaskboardLoad(ctx context.Context, client *sunClient, boardName string) (sunTaskboard, int64, bool, error) {
 	name := strings.TrimSpace(boardName)
 	if name == "" {
-		return heliaTaskboard{}, 0, false, fmt.Errorf("taskboard name required")
+		return sunTaskboard{}, 0, false, fmt.Errorf("taskboard name required")
 	}
-	meta, err := heliaLookupObjectMeta(ctx, client, heliaTaskboardKind, name)
+	meta, err := sunLookupObjectMeta(ctx, client, sunTaskboardKind, name)
 	if err != nil {
-		return heliaTaskboard{}, 0, false, err
+		return sunTaskboard{}, 0, false, err
 	}
 	if meta == nil {
-		return heliaNewTaskboard(name), 0, false, nil
+		return sunNewTaskboard(name), 0, false, nil
 	}
-	payload, err := client.getPayload(ctx, heliaTaskboardKind, name)
+	payload, err := client.getPayload(ctx, sunTaskboardKind, name)
 	if err != nil {
-		return heliaTaskboard{}, 0, true, err
+		return sunTaskboard{}, 0, true, err
 	}
-	board := heliaNewTaskboard(name)
+	board := sunNewTaskboard(name)
 	if len(payload) > 0 {
 		if err := json.Unmarshal(payload, &board); err != nil {
-			return heliaTaskboard{}, 0, true, fmt.Errorf("taskboard %s payload invalid: %w", name, err)
+			return sunTaskboard{}, 0, true, fmt.Errorf("taskboard %s payload invalid: %w", name, err)
 		}
 	}
-	board = heliaNormalizeTaskboard(board, name)
+	board = sunNormalizeTaskboard(board, name)
 	return board, meta.LatestRevision, true, nil
 }
 
-func heliaTaskboardPersist(ctx context.Context, client *heliaClient, board heliaTaskboard, exists bool, revision int64) (int64, error) {
-	board = heliaNormalizeTaskboard(board, board.Name)
+func sunTaskboardPersist(ctx context.Context, client *sunClient, board sunTaskboard, exists bool, revision int64) (int64, error) {
+	board = sunNormalizeTaskboard(board, board.Name)
 	payload, err := json.MarshalIndent(board, "", "  ")
 	if err != nil {
 		return 0, err
 	}
-	metadata := heliaTaskboardObjectMetadata(board)
+	metadata := sunTaskboardObjectMetadata(board)
 	var expected *int64
 	if exists {
 		expected = &revision
 	}
-	result, err := client.putObject(ctx, heliaTaskboardKind, board.Name, payload, "application/json", metadata, expected)
+	result, err := client.putObject(ctx, sunTaskboardKind, board.Name, payload, "application/json", metadata, expected)
 	if err != nil {
 		return 0, err
 	}
@@ -634,8 +634,8 @@ func heliaTaskboardPersist(ctx context.Context, client *heliaClient, board helia
 	return result.Result.Revision.Revision, nil
 }
 
-func heliaTaskboardObjectMetadata(board heliaTaskboard) map[string]interface{} {
-	todo, doing, done := heliaTaskboardStatusCounts(board.Tasks)
+func sunTaskboardObjectMetadata(board sunTaskboard) map[string]interface{} {
+	todo, doing, done := sunTaskboardStatusCounts(board.Tasks)
 	return map[string]interface{}{
 		"tasks_total": len(board.Tasks),
 		"tasks_todo":  todo,
@@ -644,16 +644,16 @@ func heliaTaskboardObjectMetadata(board heliaTaskboard) map[string]interface{} {
 	}
 }
 
-func heliaNewTaskboard(name string) heliaTaskboard {
-	return heliaTaskboard{
+func sunNewTaskboard(name string) sunTaskboard {
+	return sunTaskboard{
 		Version: 1,
 		Name:    strings.TrimSpace(name),
-		Tasks:   []heliaTaskboardTask{},
-		Agents:  map[string]heliaTaskboardAgent{},
+		Tasks:   []sunTaskboardTask{},
+		Agents:  map[string]sunTaskboardAgent{},
 	}
 }
 
-func heliaNormalizeTaskboard(board heliaTaskboard, fallbackName string) heliaTaskboard {
+func sunNormalizeTaskboard(board sunTaskboard, fallbackName string) sunTaskboard {
 	if board.Version <= 0 {
 		board.Version = 1
 	}
@@ -662,10 +662,10 @@ func heliaNormalizeTaskboard(board heliaTaskboard, fallbackName string) heliaTas
 		board.Name = strings.TrimSpace(fallbackName)
 	}
 	if board.Tasks == nil {
-		board.Tasks = []heliaTaskboardTask{}
+		board.Tasks = []sunTaskboardTask{}
 	}
 	if board.Agents == nil {
-		board.Agents = map[string]heliaTaskboardAgent{}
+		board.Agents = map[string]sunTaskboardAgent{}
 	}
 	for i := range board.Tasks {
 		board.Tasks[i].ID = strings.TrimSpace(board.Tasks[i].ID)
@@ -674,8 +674,8 @@ func heliaNormalizeTaskboard(board heliaTaskboard, fallbackName string) heliaTas
 		if board.Tasks[i].Prompt == "" {
 			board.Tasks[i].Prompt = board.Tasks[i].Title
 		}
-		board.Tasks[i].Status = normalizeHeliaTaskStatus(board.Tasks[i].Status)
-		board.Tasks[i].Priority = normalizeHeliaTaskPriority(board.Tasks[i].Priority)
+		board.Tasks[i].Status = normalizeSunTaskStatus(board.Tasks[i].Status)
+		board.Tasks[i].Priority = normalizeSunTaskPriority(board.Tasks[i].Priority)
 		if board.Tasks[i].Tags == nil {
 			board.Tasks[i].Tags = []string{}
 		}
@@ -689,12 +689,12 @@ func heliaNormalizeTaskboard(board heliaTaskboard, fallbackName string) heliaTas
 	return board
 }
 
-func heliaTaskboardStatusCounts(tasks []heliaTaskboardTask) (todo int, doing int, done int) {
+func sunTaskboardStatusCounts(tasks []sunTaskboardTask) (todo int, doing int, done int) {
 	for i := range tasks {
-		switch normalizeHeliaTaskStatus(tasks[i].Status) {
-		case heliaTaskStatusDone:
+		switch normalizeSunTaskStatus(tasks[i].Status) {
+		case sunTaskStatusDone:
 			done++
-		case heliaTaskStatusDoing:
+		case sunTaskStatusDoing:
 			doing++
 		default:
 			todo++
@@ -703,59 +703,59 @@ func heliaTaskboardStatusCounts(tasks []heliaTaskboardTask) (todo int, doing int
 	return todo, doing, done
 }
 
-func normalizeHeliaTaskStatus(raw string) string {
+func normalizeSunTaskStatus(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "todo", "open", "queued", "backlog":
-		return heliaTaskStatusTodo
+		return sunTaskStatusTodo
 	case "doing", "in-progress", "in_progress", "claimed", "active":
-		return heliaTaskStatusDoing
+		return sunTaskStatusDoing
 	case "done", "closed", "complete", "completed":
-		return heliaTaskStatusDone
+		return sunTaskStatusDone
 	default:
-		return heliaTaskStatusTodo
+		return sunTaskStatusTodo
 	}
 }
 
-func parseHeliaTaskStatusFilter(raw string) (string, error) {
+func parseSunTaskStatusFilter(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "", nil
 	}
 	switch strings.ToLower(trimmed) {
 	case "todo", "open", "queued", "backlog":
-		return heliaTaskStatusTodo, nil
+		return sunTaskStatusTodo, nil
 	case "doing", "in-progress", "in_progress", "claimed", "active":
-		return heliaTaskStatusDoing, nil
+		return sunTaskStatusDoing, nil
 	case "done", "closed", "complete", "completed":
-		return heliaTaskStatusDone, nil
+		return sunTaskStatusDone, nil
 	default:
 		return "", fmt.Errorf("invalid --status %q (expected todo|doing|done)", trimmed)
 	}
 }
 
-func normalizeHeliaTaskPriority(raw string) string {
+func normalizeSunTaskPriority(raw string) string {
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
-	case heliaTaskPriorityP1:
-		return heliaTaskPriorityP1
-	case heliaTaskPriorityP3:
-		return heliaTaskPriorityP3
+	case sunTaskPriorityP1:
+		return sunTaskPriorityP1
+	case sunTaskPriorityP3:
+		return sunTaskPriorityP3
 	default:
-		return heliaTaskPriorityP2
+		return sunTaskPriorityP2
 	}
 }
 
-func heliaTaskPriorityRank(priority string) int {
-	switch normalizeHeliaTaskPriority(priority) {
-	case heliaTaskPriorityP1:
+func sunTaskPriorityRank(priority string) int {
+	switch normalizeSunTaskPriority(priority) {
+	case sunTaskPriorityP1:
 		return 1
-	case heliaTaskPriorityP2:
+	case sunTaskPriorityP2:
 		return 2
 	default:
 		return 3
 	}
 }
 
-func heliaTaskboardFindTask(tasks []heliaTaskboardTask, id string) int {
+func sunTaskboardFindTask(tasks []sunTaskboardTask, id string) int {
 	needle := strings.TrimSpace(id)
 	for i := range tasks {
 		if strings.EqualFold(strings.TrimSpace(tasks[i].ID), needle) {
@@ -765,22 +765,22 @@ func heliaTaskboardFindTask(tasks []heliaTaskboardTask, id string) int {
 	return -1
 }
 
-func heliaTaskboardSelectNextClaimable(tasks []heliaTaskboardTask, now time.Time) int {
+func sunTaskboardSelectNextClaimable(tasks []sunTaskboardTask, now time.Time) int {
 	candidates := make([]int, 0, len(tasks))
 	for i := range tasks {
-		status := normalizeHeliaTaskStatus(tasks[i].Status)
-		if status == heliaTaskStatusDone {
+		status := normalizeSunTaskStatus(tasks[i].Status)
+		if status == sunTaskStatusDone {
 			continue
 		}
-		if tasks[i].Assignment == nil || heliaTaskboardLockExpired(*tasks[i].Assignment, now) {
+		if tasks[i].Assignment == nil || sunTaskboardLockExpired(*tasks[i].Assignment, now) {
 			candidates = append(candidates, i)
 		}
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := tasks[candidates[i]]
 		right := tasks[candidates[j]]
-		if heliaTaskPriorityRank(left.Priority) != heliaTaskPriorityRank(right.Priority) {
-			return heliaTaskPriorityRank(left.Priority) < heliaTaskPriorityRank(right.Priority)
+		if sunTaskPriorityRank(left.Priority) != sunTaskPriorityRank(right.Priority) {
+			return sunTaskPriorityRank(left.Priority) < sunTaskPriorityRank(right.Priority)
 		}
 		leftCreated := parseRFC3339(left.CreatedAt)
 		rightCreated := parseRFC3339(right.CreatedAt)
@@ -795,7 +795,7 @@ func heliaTaskboardSelectNextClaimable(tasks []heliaTaskboardTask, now time.Time
 	return candidates[0]
 }
 
-func heliaTaskboardLockExpired(lock heliaTaskboardLock, now time.Time) bool {
+func sunTaskboardLockExpired(lock sunTaskboardLock, now time.Time) bool {
 	if strings.TrimSpace(lock.LeaseExpiresAt) != "" {
 		expires := parseRFC3339(lock.LeaseExpiresAt)
 		if !expires.IsZero() {
@@ -820,9 +820,9 @@ func parseRFC3339(raw string) time.Time {
 	return parsed
 }
 
-func heliaTaskboardTouchAgent(board *heliaTaskboard, identity heliaTaskboardAgentIdentity, now time.Time, status string, currentTaskID string) {
+func sunTaskboardTouchAgent(board *sunTaskboard, identity sunTaskboardAgentIdentity, now time.Time, status string, currentTaskID string) {
 	if board.Agents == nil {
-		board.Agents = map[string]heliaTaskboardAgent{}
+		board.Agents = map[string]sunTaskboardAgent{}
 	}
 	id := strings.TrimSpace(identity.AgentID)
 	if id == "" {
@@ -839,13 +839,13 @@ func heliaTaskboardTouchAgent(board *heliaTaskboard, identity heliaTaskboardAgen
 	board.Agents[id] = agent
 }
 
-func heliaTaskboardSetAgentState(board *heliaTaskboard, agentID string, now time.Time, status string, currentTaskID string) {
+func sunTaskboardSetAgentState(board *sunTaskboard, agentID string, now time.Time, status string, currentTaskID string) {
 	id := strings.TrimSpace(agentID)
 	if id == "" {
 		return
 	}
 	if board.Agents == nil {
-		board.Agents = map[string]heliaTaskboardAgent{}
+		board.Agents = map[string]sunTaskboardAgent{}
 	}
 	agent := board.Agents[id]
 	agent.ID = id
@@ -855,7 +855,7 @@ func heliaTaskboardSetAgentState(board *heliaTaskboard, agentID string, now time
 	board.Agents[id] = agent
 }
 
-func heliaTaskboardClearOtherAgentsForTask(board *heliaTaskboard, keepAgent string, taskID string, now time.Time) {
+func sunTaskboardClearOtherAgentsForTask(board *sunTaskboard, keepAgent string, taskID string, now time.Time) {
 	if board.Agents == nil {
 		return
 	}
@@ -873,7 +873,7 @@ func heliaTaskboardClearOtherAgentsForTask(board *heliaTaskboard, keepAgent stri
 	}
 }
 
-func heliaTaskboardResolveAgent(settings Settings, explicitAgent string, dyad string, machine string) heliaTaskboardAgentIdentity {
+func sunTaskboardResolveAgent(settings Settings, explicitAgent string, dyad string, machine string) sunTaskboardAgentIdentity {
 	host := strings.TrimSpace(machine)
 	if host == "" {
 		host, _ = os.Hostname()
@@ -891,7 +891,7 @@ func heliaTaskboardResolveAgent(settings Settings, explicitAgent string, dyad st
 		agentID = envSunTaskboardAgent()
 	}
 	if agentID == "" {
-		agentID = strings.TrimSpace(settings.Helia.TaskboardAgent)
+		agentID = strings.TrimSpace(settings.Sun.TaskboardAgent)
 	}
 	if agentID == "" {
 		base := userName
@@ -900,7 +900,7 @@ func heliaTaskboardResolveAgent(settings Settings, explicitAgent string, dyad st
 		}
 		agentID = "dyad:" + base + "@" + host
 	}
-	return heliaTaskboardAgentIdentity{
+	return sunTaskboardAgentIdentity{
 		AgentID: strings.TrimSpace(agentID),
 		Dyad:    dyad,
 		Machine: host,
@@ -932,7 +932,7 @@ func sanitizeAgentIDComponent(raw string) string {
 	return out
 }
 
-func heliaTaskID(now time.Time, existing []heliaTaskboardTask) string {
+func sunTaskID(now time.Time, existing []sunTaskboardTask) string {
 	prefix := "tsk-" + now.UTC().Format("20060102-150405")
 	used := map[string]struct{}{}
 	for i := range existing {
@@ -956,7 +956,7 @@ func heliaTaskID(now time.Time, existing []heliaTaskboardTask) string {
 	return strings.ToLower(fmt.Sprintf("%s-%d", prefix, now.UTC().UnixNano()))
 }
 
-func heliaTaskboardLockToken(now time.Time) string {
+func sunTaskboardLockToken(now time.Time) string {
 	n, err := secureIntn(1_000_000)
 	if err != nil {
 		n = int(now.UnixNano() % 1_000_000)
@@ -964,20 +964,20 @@ func heliaTaskboardLockToken(now time.Time) string {
 	return fmt.Sprintf("lock-%d-%06d", now.UTC().Unix(), n)
 }
 
-func heliaTaskboardName(settings Settings, explicit string) string {
+func sunTaskboardName(settings Settings, explicit string) string {
 	if strings.TrimSpace(explicit) != "" {
 		return strings.TrimSpace(explicit)
 	}
 	if env := envSunTaskboard(); env != "" {
 		return env
 	}
-	if strings.TrimSpace(settings.Helia.Taskboard) != "" {
-		return strings.TrimSpace(settings.Helia.Taskboard)
+	if strings.TrimSpace(settings.Sun.Taskboard) != "" {
+		return strings.TrimSpace(settings.Sun.Taskboard)
 	}
 	return "default"
 }
 
-func heliaTaskboardLeaseSeconds(settings Settings, explicit int) int {
+func sunTaskboardLeaseSeconds(settings Settings, explicit int) int {
 	if explicit > 0 {
 		return explicit
 	}
@@ -986,28 +986,28 @@ func heliaTaskboardLeaseSeconds(settings Settings, explicit int) int {
 			return parsed
 		}
 	}
-	if settings.Helia.TaskboardLeaseSeconds > 0 {
-		return settings.Helia.TaskboardLeaseSeconds
+	if settings.Sun.TaskboardLeaseSeconds > 0 {
+		return settings.Sun.TaskboardLeaseSeconds
 	}
 	return 1800
 }
 
-func isHeliaStatus(err error, statusCode int) bool {
+func isSunStatus(err error, statusCode int) bool {
 	if err == nil {
 		return false
 	}
 	return strings.Contains(strings.ToLower(err.Error()), fmt.Sprintf("status %d", statusCode))
 }
 
-func heliaSortTasks(tasks []heliaTaskboardTask) {
+func sunSortTasks(tasks []sunTaskboardTask) {
 	sort.SliceStable(tasks, func(i, j int) bool {
-		leftStatus := normalizeHeliaTaskStatus(tasks[i].Status)
-		rightStatus := normalizeHeliaTaskStatus(tasks[j].Status)
+		leftStatus := normalizeSunTaskStatus(tasks[i].Status)
+		rightStatus := normalizeSunTaskStatus(tasks[j].Status)
 		if leftStatus != rightStatus {
-			return heliaTaskStatusSortRank(leftStatus) < heliaTaskStatusSortRank(rightStatus)
+			return sunTaskStatusSortRank(leftStatus) < sunTaskStatusSortRank(rightStatus)
 		}
-		if heliaTaskPriorityRank(tasks[i].Priority) != heliaTaskPriorityRank(tasks[j].Priority) {
-			return heliaTaskPriorityRank(tasks[i].Priority) < heliaTaskPriorityRank(tasks[j].Priority)
+		if sunTaskPriorityRank(tasks[i].Priority) != sunTaskPriorityRank(tasks[j].Priority) {
+			return sunTaskPriorityRank(tasks[i].Priority) < sunTaskPriorityRank(tasks[j].Priority)
 		}
 		leftCreated := parseRFC3339(tasks[i].CreatedAt)
 		rightCreated := parseRFC3339(tasks[j].CreatedAt)
@@ -1018,18 +1018,18 @@ func heliaSortTasks(tasks []heliaTaskboardTask) {
 	})
 }
 
-func heliaTaskStatusSortRank(status string) int {
-	switch normalizeHeliaTaskStatus(status) {
-	case heliaTaskStatusDoing:
+func sunTaskStatusSortRank(status string) int {
+	switch normalizeSunTaskStatus(status) {
+	case sunTaskStatusDoing:
 		return 1
-	case heliaTaskStatusTodo:
+	case sunTaskStatusTodo:
 		return 2
 	default:
 		return 3
 	}
 }
 
-func printHeliaTaskRows(tasks []heliaTaskboardTask) {
+func printSunTaskRows(tasks []sunTaskboardTask) {
 	rows := make([][]string, 0, len(tasks))
 	for i := range tasks {
 		owner := "-"

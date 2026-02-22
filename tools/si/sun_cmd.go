@@ -16,18 +16,18 @@ import (
 )
 
 const (
-	heliaUsageText                    = "usage: si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> ..."
-	heliaAuthUsageText                = "usage: si sun auth <login|status|logout> ..."
-	heliaProfileUsageText             = "usage: si sun profile <list|push|pull> ..."
-	heliaVaultUsageText               = "usage: si sun vault backup <push|pull> ..."
-	heliaTokenUsageText               = "usage: si sun token <list|create|revoke> ..."
-	heliaAuditUsageText               = "usage: si sun audit list ..."
-	heliaCodexProfileBundleKind       = "codex_profile_bundle"
-	heliaVaultBackupKind              = "vault_backup"
-	heliaPaasControlPlaneSnapshotKind = "paas_control_plane_snapshot"
+	sunUsageText                    = "usage: si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> ..."
+	sunAuthUsageText                = "usage: si sun auth <login|status|logout> ..."
+	sunProfileUsageText             = "usage: si sun profile <list|push|pull> ..."
+	sunVaultUsageText               = "usage: si sun vault backup <push|pull> ..."
+	sunTokenUsageText               = "usage: si sun token <list|create|revoke> ..."
+	sunAuditUsageText               = "usage: si sun audit list ..."
+	sunCodexProfileBundleKind       = "codex_profile_bundle"
+	sunVaultBackupKind              = "vault_backup"
+	sunPaasControlPlaneSnapshotKind = "paas_control_plane_snapshot"
 )
 
-type heliaCodexProfileBundle struct {
+type sunCodexProfileBundle struct {
 	ID       string          `json:"id"`
 	Name     string          `json:"name,omitempty"`
 	Email    string          `json:"email,omitempty"`
@@ -35,70 +35,70 @@ type heliaCodexProfileBundle struct {
 	SyncedAt string          `json:"synced_at,omitempty"`
 }
 
-func cmdHelia(args []string) {
+func cmdSun(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaUsageText)
+		printUsage(sunUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "help", "-h", "--help":
-		printUsage(heliaUsageText)
+		printUsage(sunUsageText)
 	case "auth":
-		cmdHeliaAuth(rest)
+		cmdSunAuth(rest)
 	case "profile", "profiles":
-		cmdHeliaProfile(rest)
+		cmdSunProfile(rest)
 	case "vault":
-		cmdHeliaVault(rest)
+		cmdSunVault(rest)
 	case "token", "tokens":
-		cmdHeliaToken(rest)
+		cmdSunToken(rest)
 	case "audit":
-		cmdHeliaAudit(rest)
+		cmdSunAudit(rest)
 	case "taskboard":
-		cmdHeliaTaskboard(rest)
+		cmdSunTaskboard(rest)
 	case "machine":
-		cmdHeliaMachine(rest)
+		cmdSunMachine(rest)
 	case "doctor":
-		cmdHeliaDoctor(rest)
+		cmdSunDoctor(rest)
 	default:
 		printUnknown("sun", sub)
-		printUsage(heliaUsageText)
+		printUsage(sunUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaAuth(args []string) {
+func cmdSunAuth(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaAuthUsageText)
+		printUsage(sunAuthUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "help", "-h", "--help":
-		printUsage(heliaAuthUsageText)
+		printUsage(sunAuthUsageText)
 	case "login":
-		cmdHeliaAuthLogin(rest)
+		cmdSunAuthLogin(rest)
 	case "status":
-		cmdHeliaAuthStatus(rest)
+		cmdSunAuthStatus(rest)
 	case "logout":
-		cmdHeliaAuthLogout(rest)
+		cmdSunAuthLogout(rest)
 	default:
 		printUnknown("sun auth", sub)
-		printUsage(heliaAuthUsageText)
+		printUsage(sunAuthUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaAuthLogin(args []string) {
+func cmdSunAuthLogin(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun auth login", flag.ExitOnError)
-	urlFlag := fs.String("url", strings.TrimSpace(settings.Helia.BaseURL), "sun base url")
+	urlFlag := fs.String("url", strings.TrimSpace(settings.Sun.BaseURL), "sun base url")
 	tokenFlag := fs.String("token", envSunToken(), "sun bearer token")
-	accountFlag := fs.String("account", strings.TrimSpace(settings.Helia.Account), "expected account slug")
-	timeoutSeconds := fs.Int("timeout-seconds", settings.Helia.TimeoutSeconds, "http timeout seconds")
-	autoSync := fs.Bool("auto-sync", settings.Helia.AutoSync, "enable automatic profile sync after login/swap")
+	accountFlag := fs.String("account", strings.TrimSpace(settings.Sun.Account), "expected account slug")
+	timeoutSeconds := fs.Int("timeout-seconds", settings.Sun.TimeoutSeconds, "http timeout seconds")
+	autoSync := fs.Bool("auto-sync", settings.Sun.AutoSync, "enable automatic profile sync after login/swap")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -109,9 +109,9 @@ func cmdHeliaAuthLogin(args []string) {
 
 	token := strings.TrimSpace(*tokenFlag)
 	if token == "" {
-		token = strings.TrimSpace(settings.Helia.Token)
+		token = strings.TrimSpace(settings.Sun.Token)
 	}
-	client, err := newHeliaClient(strings.TrimSpace(*urlFlag), token, time.Duration(*timeoutSeconds)*time.Second)
+	client, err := newSunClient(strings.TrimSpace(*urlFlag), token, time.Duration(*timeoutSeconds)*time.Second)
 	if err != nil {
 		fatal(err)
 	}
@@ -129,22 +129,22 @@ func cmdHeliaAuthLogin(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	persisted.Helia.BaseURL = strings.TrimSpace(*urlFlag)
-	persisted.Helia.Token = token
-	persisted.Helia.Account = who.AccountSlug
-	persisted.Helia.TimeoutSeconds = *timeoutSeconds
-	persisted.Helia.AutoSync = *autoSync
+	persisted.Sun.BaseURL = strings.TrimSpace(*urlFlag)
+	persisted.Sun.Token = token
+	persisted.Sun.Account = who.AccountSlug
+	persisted.Sun.TimeoutSeconds = *timeoutSeconds
+	persisted.Sun.AutoSync = *autoSync
 	if err := saveSettings(persisted); err != nil {
 		fatal(err)
 	}
 	successf("sun auth configured for account %s at %s", who.AccountSlug, strings.TrimSpace(*urlFlag))
 }
 
-func cmdHeliaAuthStatus(args []string) {
+func cmdSunAuthStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun auth status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
-	timeoutSeconds := fs.Int("timeout-seconds", settings.Helia.TimeoutSeconds, "http timeout seconds")
+	timeoutSeconds := fs.Int("timeout-seconds", settings.Sun.TimeoutSeconds, "http timeout seconds")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -152,7 +152,7 @@ func cmdHeliaAuthStatus(args []string) {
 		printUsage("usage: si sun auth status [--json] [--timeout-seconds <n>]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
@@ -174,10 +174,10 @@ func cmdHeliaAuthStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("account:"), who.AccountSlug)
 	fmt.Printf("%s %s\n", styleHeading("token_id:"), who.TokenID)
 	fmt.Printf("%s %s\n", styleHeading("scopes:"), strings.Join(who.Scopes, ","))
-	fmt.Printf("%s %s\n", styleHeading("auto_sync:"), boolString(settings.Helia.AutoSync))
+	fmt.Printf("%s %s\n", styleHeading("auto_sync:"), boolString(settings.Sun.AutoSync))
 }
 
-func cmdHeliaAuthLogout(args []string) {
+func cmdSunAuthLogout(args []string) {
 	fs := flag.NewFlagSet("sun auth logout", flag.ExitOnError)
 	clearAccount := fs.Bool("clear-account", false, "also clear stored sun account")
 	if err := fs.Parse(args); err != nil {
@@ -191,9 +191,9 @@ func cmdHeliaAuthLogout(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	settings.Helia.Token = ""
+	settings.Sun.Token = ""
 	if *clearAccount {
-		settings.Helia.Account = ""
+		settings.Sun.Account = ""
 	}
 	if err := saveSettings(settings); err != nil {
 		fatal(err)
@@ -201,30 +201,30 @@ func cmdHeliaAuthLogout(args []string) {
 	successf("sun auth token cleared")
 }
 
-func cmdHeliaProfile(args []string) {
+func cmdSunProfile(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaProfileUsageText)
+		printUsage(sunProfileUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "help", "-h", "--help":
-		printUsage(heliaProfileUsageText)
+		printUsage(sunProfileUsageText)
 	case "list":
-		cmdHeliaProfileList(rest)
+		cmdSunProfileList(rest)
 	case "push":
-		cmdHeliaProfilePush(rest)
+		cmdSunProfilePush(rest)
 	case "pull":
-		cmdHeliaProfilePull(rest)
+		cmdSunProfilePull(rest)
 	default:
 		printUnknown("sun profile", sub)
-		printUsage(heliaProfileUsageText)
+		printUsage(sunProfileUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaProfileList(args []string) {
+func cmdSunProfileList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun profile list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
@@ -235,11 +235,11 @@ func cmdHeliaProfileList(args []string) {
 		printUsage("usage: si sun profile list [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	items, err := client.listObjects(context.Background(), heliaCodexProfileBundleKind, "", 200)
+	items, err := client.listObjects(context.Background(), sunCodexProfileBundleKind, "", 200)
 	if err != nil {
 		fatal(err)
 	}
@@ -254,7 +254,7 @@ func cmdHeliaProfileList(args []string) {
 	printAlignedTable([]string{styleHeading("PROFILE"), styleHeading("REV"), styleHeading("UPDATED"), styleHeading("BYTES")}, rows, 2)
 }
 
-func cmdHeliaProfilePush(args []string) {
+func cmdSunProfilePush(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun profile push", flag.ExitOnError)
 	profileKey := fs.String("profile", "", "profile id or email")
@@ -266,7 +266,7 @@ func cmdHeliaProfilePush(args []string) {
 		printUsage("usage: si sun profile push [--profile <id>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
@@ -288,7 +288,7 @@ func cmdHeliaProfilePush(args []string) {
 		if err != nil {
 			fatal(err)
 		}
-		bundle := heliaCodexProfileBundle{
+		bundle := sunCodexProfileBundle{
 			ID:       profile.ID,
 			Name:     profile.Name,
 			Email:    profile.Email,
@@ -299,7 +299,7 @@ func cmdHeliaProfilePush(args []string) {
 		if err != nil {
 			fatal(err)
 		}
-		put, err := client.putObject(context.Background(), heliaCodexProfileBundleKind, profile.ID, payload, "application/json", map[string]interface{}{
+		put, err := client.putObject(context.Background(), sunCodexProfileBundleKind, profile.ID, payload, "application/json", map[string]interface{}{
 			"profile_id": profile.ID,
 			"name":       profile.Name,
 			"email":      profile.Email,
@@ -321,7 +321,7 @@ func cmdHeliaProfilePush(args []string) {
 	}
 }
 
-func cmdHeliaProfilePull(args []string) {
+func cmdSunProfilePull(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun profile pull", flag.ExitOnError)
 	profileKey := fs.String("profile", "", "profile id or email")
@@ -333,7 +333,7 @@ func cmdHeliaProfilePull(args []string) {
 		printUsage("usage: si sun profile pull [--profile <id>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
@@ -346,7 +346,7 @@ func cmdHeliaProfilePull(args []string) {
 			targets = append(targets, key)
 		}
 	} else {
-		items, err := client.listObjects(context.Background(), heliaCodexProfileBundleKind, "", 200)
+		items, err := client.listObjects(context.Background(), sunCodexProfileBundleKind, "", 200)
 		if err != nil {
 			fatal(err)
 		}
@@ -361,11 +361,11 @@ func cmdHeliaProfilePull(args []string) {
 	pulledProfiles := make([]codexProfile, 0, len(targets))
 	results := make([]map[string]interface{}, 0, len(targets))
 	for _, profileID := range targets {
-		payload, err := client.getPayload(context.Background(), heliaCodexProfileBundleKind, profileID)
+		payload, err := client.getPayload(context.Background(), sunCodexProfileBundleKind, profileID)
 		if err != nil {
 			fatal(err)
 		}
-		var bundle heliaCodexProfileBundle
+		var bundle sunCodexProfileBundle
 		if err := json.Unmarshal(payload, &bundle); err != nil {
 			fatal(fmt.Errorf("profile %s payload invalid: %w", profileID, err))
 		}
@@ -402,40 +402,40 @@ func cmdHeliaProfilePull(args []string) {
 	}
 }
 
-func cmdHeliaVault(args []string) {
+func cmdSunVault(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaVaultUsageText)
+		printUsage(sunVaultUsageText)
 		return
 	}
 	if strings.ToLower(strings.TrimSpace(args[0])) != "backup" {
-		printUsage(heliaVaultUsageText)
+		printUsage(sunVaultUsageText)
 		return
 	}
 	rest := args[1:]
 	if len(rest) == 0 {
-		printUsage(heliaVaultUsageText)
+		printUsage(sunVaultUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(rest[0]))
 	switch sub {
 	case "push":
-		cmdHeliaVaultBackupPush(rest[1:])
+		cmdSunVaultBackupPush(rest[1:])
 	case "pull":
-		cmdHeliaVaultBackupPull(rest[1:])
+		cmdSunVaultBackupPull(rest[1:])
 	case "help", "-h", "--help":
-		printUsage(heliaVaultUsageText)
+		printUsage(sunVaultUsageText)
 	default:
 		printUnknown("sun vault backup", sub)
-		printUsage(heliaVaultUsageText)
+		printUsage(sunVaultUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaVaultBackupPush(args []string) {
+func cmdSunVaultBackupPush(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun vault backup push", flag.ExitOnError)
 	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
-	name := fs.String("name", strings.TrimSpace(settings.Helia.VaultBackup), "backup object name")
+	name := fs.String("name", strings.TrimSpace(settings.Sun.VaultBackup), "backup object name")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow plaintext vault values in backup payload")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
@@ -444,7 +444,7 @@ func cmdHeliaVaultBackupPush(args []string) {
 		printUsage("usage: si sun vault backup push [--file <path>] [--name <name>] [--allow-plaintext]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
@@ -454,7 +454,7 @@ func cmdHeliaVaultBackupPush(args []string) {
 	}
 	backupName := strings.TrimSpace(*name)
 	if backupName == "" {
-		fatal(fmt.Errorf("backup name required (--name or helia.vault_backup)"))
+		fatal(fmt.Errorf("backup name required (--name or sun.vault_backup)"))
 	}
 	path = expandTilde(path)
 	data, err := os.ReadFile(path)
@@ -474,9 +474,9 @@ func cmdHeliaVaultBackupPush(args []string) {
 			fatal(fmt.Errorf("vault file contains plaintext keys; run `si vault encrypt` first or re-run with --allow-plaintext"))
 		}
 	}
-	result, err := client.putObject(context.Background(), heliaVaultBackupKind, backupName, data, "text/plain", map[string]interface{}{
+	result, err := client.putObject(context.Background(), sunVaultBackupKind, backupName, data, "text/plain", map[string]interface{}{
 		"path":   filepath.Base(path),
-		"sha256": heliaPayloadSHA256Hex(data),
+		"sha256": sunPayloadSHA256Hex(data),
 	}, nil)
 	if err != nil {
 		fatal(err)
@@ -484,11 +484,11 @@ func cmdHeliaVaultBackupPush(args []string) {
 	successf("vault backup pushed (%s revision %d)", backupName, result.Result.Revision.Revision)
 }
 
-func cmdHeliaVaultBackupPull(args []string) {
+func cmdSunVaultBackupPull(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun vault backup pull", flag.ExitOnError)
 	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
-	name := fs.String("name", strings.TrimSpace(settings.Helia.VaultBackup), "backup object name")
+	name := fs.String("name", strings.TrimSpace(settings.Sun.VaultBackup), "backup object name")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -496,24 +496,24 @@ func cmdHeliaVaultBackupPull(args []string) {
 		printUsage("usage: si sun vault backup pull [--file <path>] [--name <name>]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
 	backupName := strings.TrimSpace(*name)
 	if backupName == "" {
-		fatal(fmt.Errorf("backup name required (--name or helia.vault_backup)"))
+		fatal(fmt.Errorf("backup name required (--name or sun.vault_backup)"))
 	}
-	meta, metaErr := heliaLookupObjectMeta(heliaContext(settings), client, heliaVaultBackupKind, backupName)
+	meta, metaErr := sunLookupObjectMeta(sunContext(settings), client, sunVaultBackupKind, backupName)
 	if metaErr != nil {
 		warnf("vault backup checksum verification preflight skipped: %v", metaErr)
 	}
-	data, err := client.getPayload(context.Background(), heliaVaultBackupKind, backupName)
+	data, err := client.getPayload(context.Background(), sunVaultBackupKind, backupName)
 	if err != nil {
 		fatal(err)
 	}
 	if meta != nil && strings.TrimSpace(meta.Checksum) != "" {
-		got := heliaPayloadSHA256Hex(data)
+		got := sunPayloadSHA256Hex(data)
 		want := strings.TrimSpace(meta.Checksum)
 		if !strings.EqualFold(got, want) {
 			fatal(fmt.Errorf("vault backup checksum mismatch for %s: expected %s got %s", backupName, want, got))
@@ -532,30 +532,30 @@ func cmdHeliaVaultBackupPull(args []string) {
 	successf("vault backup pulled to %s", path)
 }
 
-func cmdHeliaToken(args []string) {
+func cmdSunToken(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaTokenUsageText)
+		printUsage(sunTokenUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "list":
-		cmdHeliaTokenList(rest)
+		cmdSunTokenList(rest)
 	case "create", "issue":
-		cmdHeliaTokenCreate(rest)
+		cmdSunTokenCreate(rest)
 	case "revoke":
-		cmdHeliaTokenRevoke(rest)
+		cmdSunTokenRevoke(rest)
 	case "help", "-h", "--help":
-		printUsage(heliaTokenUsageText)
+		printUsage(sunTokenUsageText)
 	default:
 		printUnknown("sun token", sub)
-		printUsage(heliaTokenUsageText)
+		printUsage(sunTokenUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaTokenList(args []string) {
+func cmdSunTokenList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun token list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
@@ -568,11 +568,11 @@ func cmdHeliaTokenList(args []string) {
 		printUsage("usage: si sun token list [--include-revoked] [--limit <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	items, err := client.listTokens(heliaContext(settings), *includeRevoked, *limit)
+	items, err := client.listTokens(sunContext(settings), *includeRevoked, *limit)
 	if err != nil {
 		fatal(err)
 	}
@@ -595,7 +595,7 @@ func cmdHeliaTokenList(args []string) {
 	printAlignedTable([]string{styleHeading("TOKEN_ID"), styleHeading("LABEL"), styleHeading("SCOPES"), styleHeading("EXPIRES"), styleHeading("REVOKED"), styleHeading("LAST_USED")}, rows, 2)
 }
 
-func cmdHeliaTokenCreate(args []string) {
+func cmdSunTokenCreate(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun token create", flag.ExitOnError)
 	label := fs.String("label", "si-cli", "token label")
@@ -609,11 +609,11 @@ func cmdHeliaTokenCreate(args []string) {
 		printUsage("usage: si sun token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	issued, err := client.createToken(heliaContext(settings), strings.TrimSpace(*label), splitCSVScopes(*scopesCSV), *expiresHours)
+	issued, err := client.createToken(sunContext(settings), strings.TrimSpace(*label), splitCSVScopes(*scopesCSV), *expiresHours)
 	if err != nil {
 		fatal(err)
 	}
@@ -630,7 +630,7 @@ func cmdHeliaTokenCreate(args []string) {
 	fmt.Println("store this token securely; it is only shown once")
 }
 
-func cmdHeliaTokenRevoke(args []string) {
+func cmdSunTokenRevoke(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun token revoke", flag.ExitOnError)
 	tokenID := fs.String("token-id", "", "token id to revoke")
@@ -644,36 +644,36 @@ func cmdHeliaTokenRevoke(args []string) {
 	if strings.TrimSpace(*tokenID) == "" {
 		fatal(fmt.Errorf("--token-id is required"))
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	if err := client.revokeToken(heliaContext(settings), strings.TrimSpace(*tokenID)); err != nil {
+	if err := client.revokeToken(sunContext(settings), strings.TrimSpace(*tokenID)); err != nil {
 		fatal(err)
 	}
 	successf("revoked token %s", strings.TrimSpace(*tokenID))
 }
 
-func cmdHeliaAudit(args []string) {
+func cmdSunAudit(args []string) {
 	if len(args) == 0 {
-		printUsage(heliaAuditUsageText)
+		printUsage(sunAuditUsageText)
 		return
 	}
 	sub := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
 	switch sub {
 	case "list":
-		cmdHeliaAuditList(rest)
+		cmdSunAuditList(rest)
 	case "help", "-h", "--help":
-		printUsage(heliaAuditUsageText)
+		printUsage(sunAuditUsageText)
 	default:
 		printUnknown("sun audit", sub)
-		printUsage(heliaAuditUsageText)
+		printUsage(sunAuditUsageText)
 		os.Exit(1)
 	}
 }
 
-func cmdHeliaAuditList(args []string) {
+func cmdSunAuditList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun audit list", flag.ExitOnError)
 	action := fs.String("action", "", "filter action")
@@ -688,11 +688,11 @@ func cmdHeliaAuditList(args []string) {
 		printUsage("usage: si sun audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	items, err := client.listAuditEvents(heliaContext(settings), strings.TrimSpace(*action), strings.TrimSpace(*kind), strings.TrimSpace(*name), *limit)
+	items, err := client.listAuditEvents(sunContext(settings), strings.TrimSpace(*action), strings.TrimSpace(*kind), strings.TrimSpace(*name), *limit)
 	if err != nil {
 		fatal(err)
 	}
@@ -707,7 +707,7 @@ func cmdHeliaAuditList(args []string) {
 	printAlignedTable([]string{styleHeading("ID"), styleHeading("AT"), styleHeading("ACTION"), styleHeading("KIND"), styleHeading("NAME"), styleHeading("TOKEN_ID")}, rows, 2)
 }
 
-func cmdHeliaDoctor(args []string) {
+func cmdSunDoctor(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("sun doctor", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
@@ -718,11 +718,11 @@ func cmdHeliaDoctor(args []string) {
 		printUsage("usage: si sun doctor [--json]")
 		return
 	}
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	ctx := heliaContext(settings)
+	ctx := sunContext(settings)
 	readinessErr := client.ready(ctx)
 	who, whoErr := client.whoAmI(ctx)
 	report := map[string]interface{}{
@@ -759,17 +759,17 @@ func cmdHeliaDoctor(args []string) {
 	}
 }
 
-func heliaClientFromSettings(settings Settings) (*heliaClient, error) {
-	baseURL := firstNonEmpty(envSunBaseURL(), strings.TrimSpace(settings.Helia.BaseURL))
-	token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Helia.Token))
-	timeout := time.Duration(settings.Helia.TimeoutSeconds) * time.Second
+func sunClientFromSettings(settings Settings) (*sunClient, error) {
+	baseURL := firstNonEmpty(envSunBaseURL(), strings.TrimSpace(settings.Sun.BaseURL))
+	token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Sun.Token))
+	timeout := time.Duration(settings.Sun.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 15 * time.Second
 	}
-	return newHeliaClient(baseURL, token, timeout)
+	return newSunClient(baseURL, token, timeout)
 }
 
-func heliaContext(_ Settings) context.Context {
+func sunContext(_ Settings) context.Context {
 	return context.Background()
 }
 
@@ -868,12 +868,12 @@ func resolveVaultPath(settings Settings, explicit string) string {
 	return "~/.si/vault/.env"
 }
 
-func heliaPayloadSHA256Hex(payload []byte) string {
+func sunPayloadSHA256Hex(payload []byte) string {
 	sum := sha256.Sum256(payload)
 	return hex.EncodeToString(sum[:])
 }
 
-func heliaLookupObjectMeta(ctx context.Context, client *heliaClient, kind string, name string) (*heliaObjectMeta, error) {
+func sunLookupObjectMeta(ctx context.Context, client *sunClient, kind string, name string) (*sunObjectMeta, error) {
 	items, err := client.listObjects(ctx, kind, name, 5)
 	if err != nil {
 		return nil, err

@@ -15,32 +15,32 @@ func TestNormalizeMachineOperatorIDs(t *testing.T) {
 	}
 }
 
-func TestHeliaMachineOperatorAllowed(t *testing.T) {
-	record := heliaMachineRecord{
+func TestSunMachineOperatorAllowed(t *testing.T) {
+	record := sunMachineRecord{
 		OwnerOperator: "op:owner@host",
-		ACL: heliaMachineAccessControl{
+		ACL: sunMachineAccessControl{
 			AllowedOperators: []string{"op:dev@host"},
 		},
 	}
-	if !heliaMachineOperatorAllowed(record, "op:owner@host") {
+	if !sunMachineOperatorAllowed(record, "op:owner@host") {
 		t.Fatalf("owner should be allowed")
 	}
-	if !heliaMachineOperatorAllowed(record, "op:dev@host") {
+	if !sunMachineOperatorAllowed(record, "op:dev@host") {
 		t.Fatalf("allowlisted operator should be allowed")
 	}
-	if heliaMachineOperatorAllowed(record, "op:other@host") {
+	if sunMachineOperatorAllowed(record, "op:other@host") {
 		t.Fatalf("unexpected allow for non-listed operator")
 	}
 }
 
 func TestNormalizeMachineJobStatus(t *testing.T) {
 	cases := map[string]string{
-		"":          heliaMachineJobStatusQueued,
-		"pending":   heliaMachineJobStatusQueued,
-		"running":   heliaMachineJobStatusRunning,
-		"succeeded": heliaMachineJobStatusSucceeded,
-		"error":     heliaMachineJobStatusFailed,
-		"forbidden": heliaMachineJobStatusDenied,
+		"":          sunMachineJobStatusQueued,
+		"pending":   sunMachineJobStatusQueued,
+		"running":   sunMachineJobStatusRunning,
+		"succeeded": sunMachineJobStatusSucceeded,
+		"error":     sunMachineJobStatusFailed,
+		"forbidden": sunMachineJobStatusDenied,
 		"unknown":   "",
 	}
 	for in, want := range cases {
@@ -50,18 +50,18 @@ func TestNormalizeMachineJobStatus(t *testing.T) {
 	}
 }
 
-func TestHeliaMachineJobFailureError(t *testing.T) {
-	if err := heliaMachineJobFailureError(heliaMachineJob{JobID: "job-ok", Status: heliaMachineJobStatusSucceeded}); err != nil {
+func TestSunMachineJobFailureError(t *testing.T) {
+	if err := sunMachineJobFailureError(sunMachineJob{JobID: "job-ok", Status: sunMachineJobStatusSucceeded}); err != nil {
 		t.Fatalf("expected succeeded job to return nil error, got: %v", err)
 	}
 
-	failed := heliaMachineJob{
+	failed := sunMachineJob{
 		JobID:    "job-failed",
-		Status:   heliaMachineJobStatusFailed,
+		Status:   sunMachineJobStatusFailed,
 		ExitCode: 2,
 		Error:    "command exited with code 2",
 	}
-	err := heliaMachineJobFailureError(failed)
+	err := sunMachineJobFailureError(failed)
 	if err == nil {
 		t.Fatalf("expected failed job to return error")
 	}
@@ -69,12 +69,12 @@ func TestHeliaMachineJobFailureError(t *testing.T) {
 		t.Fatalf("unexpected failed error text: %v", err)
 	}
 
-	denied := heliaMachineJob{
+	denied := sunMachineJob{
 		JobID:    "job-denied",
-		Status:   heliaMachineJobStatusDenied,
+		Status:   sunMachineJobStatusDenied,
 		ExitCode: 1,
 	}
-	err = heliaMachineJobFailureError(denied)
+	err = sunMachineJobFailureError(denied)
 	if err == nil {
 		t.Fatalf("expected denied job to return error")
 	}

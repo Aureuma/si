@@ -131,7 +131,7 @@ type paasScaffoldEnvelope struct {
 
 func printPaasScaffold(command string, fields map[string]string, jsonOut bool) {
 	fields = redactPaasSensitiveFields(fields)
-	if err := maybeHeliaAutoSyncPaasControlPlane(command); err != nil {
+	if err := maybeSunAutoSyncPaasControlPlane(command); err != nil {
 		failPaasCommand(command, jsonOut, newPaasOperationFailure(
 			paasFailureUnknown,
 			"cloud_sync",

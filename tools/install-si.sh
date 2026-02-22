@@ -20,7 +20,7 @@ Usage:
   tools/install-si.sh [flags]
 
 Flags:
-  --backend <local|helia> Backend intent for post-install guidance (default: local)
+  --backend <local|sun> Backend intent for post-install guidance (default: local)
   --source-dir <path>     Build from an existing si repo checkout (auto-detected if omitted)
   --repo <owner/repo>     GitHub repo to clone when not building locally (default: Aureuma/si)
   --repo-url <url>        Full git URL to clone (overrides --repo)
@@ -64,8 +64,8 @@ Notes:
     it prints the exact line to add for bash/zsh.
   - Backend selection is configuration guidance only:
       - local (default): keep secrets/profile state local-first.
-      - helia: installer prints follow-up `si sun auth login` steps.
-    The installer intentionally does not collect or store Helia tokens.
+      - sun: installer prints follow-up `si sun auth login` steps.
+    The installer intentionally does not collect or store Sun tokens.
   - Advanced CI checks for installer settings mutation are available via:
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --check
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --print
@@ -811,8 +811,8 @@ post_install() {
   log info "🔐 First-time vault notes:"
   log info "  - Linux keyring support (recommended): sudo apt install -y libsecret-tools"
   log info "🗄️  Backend:"
-  if [[ "${BACKEND_MODE}" == "helia" ]]; then
-    log info "  - selected: helia (cloud sync)"
+  if [[ "${BACKEND_MODE}" == "sun" ]]; then
+    log info "  - selected: sun (cloud sync)"
     log info "  - next: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
     log info "  - then: si sun profile push && si sun vault backup push"
   else
@@ -902,8 +902,8 @@ esac
 
 BACKEND_MODE="$(echo "$(trim "${BACKEND_MODE}")" | tr '[:upper:]' '[:lower:]')"
 case "${BACKEND_MODE}" in
-  local|helia) ;;
-  *) die "invalid --backend ${BACKEND_MODE} (expected local or helia)" ;;
+  local|sun) ;;
+  *) die "invalid --backend ${BACKEND_MODE} (expected local or sun)" ;;
 esac
 
 if [[ "${DRY_RUN}" -eq 0 ]]; then

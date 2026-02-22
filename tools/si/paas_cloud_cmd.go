@@ -68,26 +68,23 @@ func cmdPaasCloudStatus(args []string) {
 			paasFailureInvalidArgument,
 			"backend_resolve",
 			"",
-			"pass git, sun, helia, or dual for paas sync backend",
+			"pass git, sun, or dual for paas sync backend",
 			err,
 		), nil)
 	}
 	resolvedContext := resolvePaasContextName(strings.TrimSpace(*contextName))
 	objectName := resolvePaasSnapshotObjectName(settings, resolvedContext)
 	report := map[string]any{
-		"mode":                  resolution.Mode,
-		"source":                resolution.Source,
-		"context":               resolvedContext,
-		"object_name":           objectName,
-		"helia_sync_enabled":    resolution.Mode == paasSyncBackendHelia || resolution.Mode == paasSyncBackendDual,
-		"helia_sync_strict":     resolution.Mode == paasSyncBackendHelia,
-		"helia_auth_configured": strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Helia.Token)) != "",
-		"sun_sync_enabled":      resolution.Mode == paasSyncBackendHelia || resolution.Mode == paasSyncBackendDual,
-		"sun_sync_strict":       resolution.Mode == paasSyncBackendHelia,
-		"sun_auth_configured":   strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Helia.Token)) != "",
+		"mode":                resolution.Mode,
+		"source":              resolution.Source,
+		"context":             resolvedContext,
+		"object_name":         objectName,
+		"sun_sync_enabled":    resolution.Mode == paasSyncBackendSun || resolution.Mode == paasSyncBackendDual,
+		"sun_sync_strict":     resolution.Mode == paasSyncBackendSun,
+		"sun_auth_configured": strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Sun.Token)) != "",
 	}
-	if client, clientErr := heliaClientFromSettings(settings); clientErr == nil {
-		items, listErr := client.listObjects(heliaContext(settings), heliaPaasControlPlaneSnapshotKind, objectName, 1)
+	if client, clientErr := sunClientFromSettings(settings); clientErr == nil {
+		items, listErr := client.listObjects(sunContext(settings), sunPaasControlPlaneSnapshotKind, objectName, 1)
 		if listErr != nil {
 			report["remote_check_error"] = listErr.Error()
 		} else if len(items) > 0 {
@@ -126,25 +123,25 @@ func cmdPaasCloudStatus(args []string) {
 func cmdPaasCloudUse(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("paas cloud use", flag.ExitOnError)
-	modeFlag := fs.String("mode", "", "paas cloud sync backend mode: git, sun, helia, or dual")
+	modeFlag := fs.String("mode", "", "paas cloud sync backend mode: git, sun, or dual")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas cloud use --mode <git|sun|helia|dual>")
+		printUsage("usage: si paas cloud use --mode <git|sun|dual>")
 		return
 	}
 	mode := normalizePaasSyncBackend(*modeFlag)
 	if mode == "" {
-		fatal(fmt.Errorf("invalid --mode %q (expected git, sun, helia, or dual)", strings.TrimSpace(*modeFlag)))
+		fatal(fmt.Errorf("invalid --mode %q (expected git, sun, or dual)", strings.TrimSpace(*modeFlag)))
 	}
 	settings.Paas.SyncBackend = mode
 	if err := saveSettings(settings); err != nil {
 		fatal(err)
 	}
 	successf("paas cloud sync backend set to %s", mode)
-	if mode == paasSyncBackendHelia || mode == paasSyncBackendDual {
-		token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Helia.Token))
+	if mode == paasSyncBackendSun || mode == paasSyncBackendDual {
+		token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Sun.Token))
 		if token == "" {
 			warnf("sun token not configured; run `si sun auth login --url <sun-url> --token <token> --account <slug>`")
 		}
@@ -176,7 +173,7 @@ func cmdPaasCloudPush(args []string) {
 		}
 		expectedRevision = &value
 	}
-	summary, err := pushPaasControlPlaneSnapshotToHelia(strings.TrimSpace(*contextName), strings.TrimSpace(*objectName), expectedRevision)
+	summary, err := pushPaasControlPlaneSnapshotToSun(strings.TrimSpace(*contextName), strings.TrimSpace(*objectName), expectedRevision)
 	if err != nil {
 		failPaasCommand("cloud push", jsonOut, newPaasOperationFailure(
 			paasFailureUnknown,
@@ -212,7 +209,7 @@ func cmdPaasCloudPull(args []string) {
 		printUsage("usage: si paas cloud pull [--context <name>] [--name <object>] [--replace] [--json]")
 		return
 	}
-	summary, err := pullPaasControlPlaneSnapshotFromHelia(strings.TrimSpace(*contextName), strings.TrimSpace(*objectName), *replace)
+	summary, err := pullPaasControlPlaneSnapshotFromSun(strings.TrimSpace(*contextName), strings.TrimSpace(*objectName), *replace)
 	if err != nil {
 		failPaasCommand("cloud pull", jsonOut, newPaasOperationFailure(
 			paasFailureUnknown,

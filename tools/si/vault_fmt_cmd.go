@@ -84,7 +84,7 @@ func vaultFormatOne(path string, check bool) (bool, error) {
 	if err := vaultWriteDotenvFileAtomic(path, formatted.Bytes()); err != nil {
 		return false, err
 	}
-	if err := maybeHeliaAutoBackupVault("vault_fmt", path); err != nil {
+	if err := maybeSunAutoBackupVault("vault_fmt", path); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -230,9 +230,9 @@ func cmdDyadSpawn(args []string) {
 	}
 
 	seedPrompt := strings.TrimSpace(*prompt)
-	var autopilotClaim *heliaTaskboardClaimResult
+	var autopilotClaim *sunTaskboardClaimResult
 	if *autopilot && seedPrompt == "" {
-		claim, err := heliaAutopilotClaimTask(settings, name)
+		claim, err := sunAutopilotClaimTask(settings, name)
 		if err != nil {
 			fatal(fmt.Errorf("dyad autopilot claim failed: %w", err))
 		}

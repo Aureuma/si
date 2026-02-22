@@ -62,9 +62,9 @@ SI mapping:
 - New Sun-aware settings:
   - `sun.plugin_gateway_registry`
   - `sun.plugin_gateway_slots`
-  - `SI_SUN_PLUGIN_GATEWAY_*` env aliases (+ legacy `SI_HELIA_*`)
+  - `SI_SUN_PLUGIN_GATEWAY_*` env aliases (+ legacy `SI_SUN_*`)
 
-### Sun (`../helia`)
+### Sun (`../sun`)
 
 - New API endpoints:
   - `GET/PUT /v1/integrations/registries/{name}`

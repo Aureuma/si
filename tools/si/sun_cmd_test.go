@@ -31,17 +31,17 @@ func TestResolveVaultPath(t *testing.T) {
 	}
 }
 
-func TestHeliaClientFromSettingsEnvPrecedence(t *testing.T) {
+func TestSunClientFromSettingsEnvPrecedence(t *testing.T) {
 	t.Setenv("SI_SUN_BASE_URL", "https://env-sun.local")
 	t.Setenv("SI_SUN_TOKEN", "env-token")
 	settings := Settings{}
-	settings.Helia.BaseURL = "https://settings-helia.local"
-	settings.Helia.Token = "settings-token"
-	settings.Helia.TimeoutSeconds = 1
+	settings.Sun.BaseURL = "https://settings-sun.local"
+	settings.Sun.Token = "settings-token"
+	settings.Sun.TimeoutSeconds = 1
 
-	client, err := heliaClientFromSettings(settings)
+	client, err := sunClientFromSettings(settings)
 	if err != nil {
-		t.Fatalf("heliaClientFromSettings: %v", err)
+		t.Fatalf("sunClientFromSettings: %v", err)
 	}
 	if client.baseURL != "https://env-sun.local" {
 		t.Fatalf("base url=%q", client.baseURL)
