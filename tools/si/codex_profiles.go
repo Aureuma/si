@@ -238,6 +238,9 @@ func attemptRecoverCodexAuthCache(profile codexProfile) bool {
 	if profileID == "" || syncProfileAuthFromContainerStatusFn == nil {
 		return false
 	}
+	if codexProfileRecoveryBlocked(profileID) {
+		return false
+	}
 	if _, loaded := codexAuthSyncAttempts.LoadOrStore(strings.ToLower(profileID), struct{}{}); loaded {
 		return false
 	}

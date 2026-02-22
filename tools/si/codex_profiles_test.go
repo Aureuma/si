@@ -100,6 +100,35 @@ func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
 	}
 }
 
+func TestCodexProfileAuthStatusSkipsRecoveryWhenProfileIsBlocked(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	if err := addCodexLogoutBlockedProfiles(home, []string{profile.ID}); err != nil {
+		t.Fatalf("seed blocked profiles: %v", err)
+	}
+
+	prevFn := syncProfileAuthFromContainerStatusFn
+	var calls int32
+	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
+		atomic.AddInt32(&calls, 1)
+		return profileAuthTokens{AccessToken: "access-token"}, nil
+	}
+	codexAuthSyncAttempts = sync.Map{}
+	defer func() {
+		syncProfileAuthFromContainerStatusFn = prevFn
+		codexAuthSyncAttempts = sync.Map{}
+	}()
+
+	status := codexProfileAuthStatus(profile)
+	if status.Exists {
+		t.Fatalf("expected blocked profile to stay missing")
+	}
+	if got := atomic.LoadInt32(&calls); got != 0 {
+		t.Fatalf("expected no sync attempts for blocked profile, got %d", got)
+	}
+}
+
 func writeAuthFixture(t *testing.T, tokens profileAuthTokens) string {
 	t.Helper()
 	dir := t.TempDir()
