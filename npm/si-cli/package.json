@@ -1,0 +1,27 @@
+{
+  "name": "@aureuma/si-cli",
+  "version": "0.0.0-dev",
+  "description": "SI CLI launcher package for macOS and Linux",
+  "license": "AGPL-3.0",
+  "type": "commonjs",
+  "bin": {
+    "si": "bin/si.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aureuma/si.git"
+  },
+  "homepage": "https://github.com/Aureuma/si",
+  "bugs": {
+    "url": "https://github.com/Aureuma/si/issues"
+  }
+}
