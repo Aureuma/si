@@ -172,6 +172,44 @@ si github issue close Aureuma/si 456
 si github issue reopen Aureuma/si 456
 ```
 
+## Projects (GitHub Projects v2)
+
+Project reference inputs accepted by project commands:
+
+- project node ID (for example `PVT_kwDOB2x6Nc4ArlO7`)
+- `org/number` (for example `Aureuma/7`)
+- project URL (for example `https://github.com/orgs/Aureuma/projects/7/views/4`)
+- project number (`7`) when org is available from `--owner` or current context owner
+
+```bash
+si github project list Aureuma
+si github project get Aureuma/7
+si github project fields Aureuma/7
+si github project items Aureuma/7 --include-archived
+
+# add an existing issue to project
+si github project item-add Aureuma/7 --repo Aureuma/GHPSandbox --issue 123
+
+# update project item status by field/option names
+si github project item-set Aureuma/7 PVTI_xxx --field Status --single-select "In Progress"
+
+# update scalar field values
+si github project item-set Aureuma/7 PVTI_xxx --field Estimate --number 3
+si github project item-set Aureuma/7 PVTI_xxx --field DueDate --date 2026-02-28
+
+# clear/archive/delete item state
+si github project item-clear Aureuma/7 PVTI_xxx --field Estimate
+si github project item-archive Aureuma/7 PVTI_xxx
+si github project item-unarchive Aureuma/7 PVTI_xxx
+si github project item-delete Aureuma/7 PVTI_xxx
+```
+
+Notes:
+
+- `item-set` accepts exactly one value update at a time: `--text`, `--number`, `--date`, `--single-select-option-id`, `--single-select`, `--iteration-id`, or `--iteration`.
+- `--single-select` and `--iteration` resolve IDs from project field metadata automatically.
+- OAuth/PAT auth for Projects v2 needs project permissions (`read:project` for read/list/get/fields/items and `project` write scope for item mutations). Issue-linked operations also need repo issue permissions on the target repository.
+
 ## Workflows
 
 ```bash

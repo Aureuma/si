@@ -30,7 +30,7 @@ si <command> <subcommand> --help
 
 | Integration | Command family | Typical first checks | Detailed guide |
 | --- | --- | --- | --- |
-| GitHub | `si github ...` | `si github auth status`, `si github doctor` | [GitHub](./GITHUB) |
+| GitHub | `si github ...` | `si github auth status`, `si github doctor`, `si github project list Aureuma` | [GitHub](./GITHUB) |
 | Cloudflare | `si cloudflare ...` | `si cloudflare auth status`, `si cloudflare doctor` | [Cloudflare](./CLOUDFLARE) |
 | GCP + Gemini/Vertex | `si gcp ...` | `si gcp auth status`, `si gcp doctor` | [GCP](./GCP) |
 | Google Places | `si google places ...` | `si google places auth status`, `si google places doctor` | [Google Places](./GOOGLE_PLACES) |
