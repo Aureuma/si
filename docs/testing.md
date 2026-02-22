@@ -238,3 +238,8 @@ The canonical local image build command is:
 ```bash
 ./si build image
 ```
+
+Build mode behavior:
+- If `docker buildx` is available, SI runs `docker buildx build --load` directly (native buildx progress UI in interactive terminals).
+- If `docker buildx` is unavailable or probe fails, SI uses classic `docker build`.
+- SI no longer retries/falls back mid-build after a buildx start; mode is selected once up front.
