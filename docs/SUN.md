@@ -27,6 +27,9 @@ Primary uses:
   - `tokens:write`
 - Optional for audit listing:
   - `audit:read`
+- Optional for Sun dashboard dyad control endpoints:
+  - `dyads:read`
+  - `dyads:write`
 
 ## Initial auth
 

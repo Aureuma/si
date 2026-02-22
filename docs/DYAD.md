@@ -56,6 +56,14 @@ si dyad logs --member critic <name> --tail 200
 si dyad logs --member actor <name> --tail 200
 ```
 
+Machine-readable output (used by Sun dashboard and automation):
+
+```bash
+si dyad list --json
+si dyad status --json <name>
+si dyad logs --json --member critic <name> --tail 200
+```
+
 ## Peek Into Running Sessions (tmux)
 
 To "peek" into the running interactive Codex sessions (even mid-turn):

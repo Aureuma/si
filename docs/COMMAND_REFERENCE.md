@@ -19,7 +19,7 @@ si <command> <subcommand> --help
 
 | Command family | Primary purpose | Major subcommands | Detailed guide |
 | --- | --- | --- | --- |
-| `si dyad` | Manage actor/critic pairs | `spawn`, `status`, `peek`, `exec`, `logs`, `cleanup` | [Dyad](./DYAD) |
+| `si dyad` | Manage actor/critic pairs | `spawn`, `list`, `status`, `peek`, `exec`, `logs`, `start`, `stop`, `restart`, `remove`, `cleanup` | [Dyad](./DYAD) |
 | codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `init`, `status`, `list`, `set`, `run`, `docker exec`, `trust`, `backend` | [Vault](./VAULT) |
 | `si sun` | Cloud sync and machine orchestration for profiles, vault, taskboards, and remote SI control | `auth`, `profile`, `vault backup`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |

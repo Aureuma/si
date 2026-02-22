@@ -12,10 +12,32 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/docker/api/types"
+
 	shared "si/agents/shared/docker"
 )
 
 const dyadUsageText = "usage: si dyad <spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup>"
+
+type dyadContainerStatus struct {
+	Name   string `json:"name"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
+type dyadStatusResult struct {
+	Dyad   string               `json:"dyad"`
+	Found  bool                 `json:"found"`
+	Actor  *dyadContainerStatus `json:"actor,omitempty"`
+	Critic *dyadContainerStatus `json:"critic,omitempty"`
+}
+
+type dyadLogsResult struct {
+	Dyad   string `json:"dyad"`
+	Member string `json:"member"`
+	Tail   int    `json:"tail"`
+	Logs   string `json:"logs"`
+}
 
 func cmdDyad(args []string) {
 	if len(args) > 0 {
@@ -617,8 +639,13 @@ func dyadLoopBoolEnv(envKey string) (bool, bool) {
 }
 
 func cmdDyadList(args []string) {
-	if len(args) > 0 {
-		printUsage("usage: si dyad list")
+	fs := flag.NewFlagSet("dyad list", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "json output")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		printUsage("usage: si dyad list [--json]")
 		return
 	}
 	client, err := shared.NewClient()
@@ -631,12 +658,15 @@ func cmdDyadList(args []string) {
 		fatal(err)
 	}
 	rows := buildDyadRows(containers)
+	if *jsonOut {
+		printJSON(rows)
+		return
+	}
 	if len(rows) == 0 {
 		infof("no dyads found")
 		return
 	}
 	printDyadRows(rows)
-	_ = args
 }
 
 func cmdDyadRemove(args []string) {
@@ -768,9 +798,18 @@ func dyadSkipAuthArg(args []string) bool {
 }
 
 func cmdDyadStatus(args []string) {
+	fs := flag.NewFlagSet("dyad status", flag.ExitOnError)
+	jsonOut := fs.Bool("json", false, "json output")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 1 {
+		printUsage("usage: si dyad status [--json] <name>")
+		return
+	}
 	name := ""
-	if len(args) > 0 {
-		name = strings.TrimSpace(args[0])
+	if fs.NArg() > 0 {
+		name = strings.TrimSpace(fs.Arg(0))
 	}
 	if name == "" {
 		selected, ok := selectDyadName("status")
@@ -795,21 +834,69 @@ func cmdDyadStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if actorID == "" && criticID == "" {
+	result := buildDyadStatusResult(name, actorID, actorInfo, criticID, criticInfo)
+	if !result.Found {
+		if *jsonOut {
+			printJSON(result)
+			return
+		}
 		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
 		return
 	}
+	if *jsonOut {
+		printJSON(result)
+		return
+	}
 	fmt.Printf("%s %s\n", styleHeading("dyad"), styleCmd(name))
-	if actorInfo != nil {
-		fmt.Printf(" %s %s (%s)\n", styleSection("actor:"), actorID[:12], styleStatus(actorInfo.State.Status))
+	if result.Actor != nil {
+		fmt.Printf(" %s %s (%s)\n", styleSection("actor:"), shortContainerID(result.Actor.ID), styleStatus(result.Actor.Status))
 	} else {
 		fmt.Printf(" %s %s\n", styleSection("actor:"), styleError("missing"))
 	}
-	if criticInfo != nil {
-		fmt.Printf(" %s %s (%s)\n", styleSection("critic:"), criticID[:12], styleStatus(criticInfo.State.Status))
+	if result.Critic != nil {
+		fmt.Printf(" %s %s (%s)\n", styleSection("critic:"), shortContainerID(result.Critic.ID), styleStatus(result.Critic.Status))
 	} else {
 		fmt.Printf(" %s %s\n", styleSection("critic:"), styleError("missing"))
 	}
+}
+
+func buildDyadStatusResult(name string, actorID string, actorInfo *types.ContainerJSON, criticID string, criticInfo *types.ContainerJSON) dyadStatusResult {
+	out := dyadStatusResult{
+		Dyad: strings.TrimSpace(name),
+	}
+	actorID = strings.TrimSpace(actorID)
+	if actorInfo != nil && actorID != "" {
+		out.Actor = &dyadContainerStatus{
+			Name:   shared.DyadContainerName(name, "actor"),
+			ID:     actorID,
+			Status: dyadContainerState(actorInfo),
+		}
+	}
+	criticID = strings.TrimSpace(criticID)
+	if criticInfo != nil && criticID != "" {
+		out.Critic = &dyadContainerStatus{
+			Name:   shared.DyadContainerName(name, "critic"),
+			ID:     criticID,
+			Status: dyadContainerState(criticInfo),
+		}
+	}
+	out.Found = out.Actor != nil || out.Critic != nil
+	return out
+}
+
+func shortContainerID(id string) string {
+	id = strings.TrimSpace(id)
+	if len(id) <= 12 {
+		return id
+	}
+	return id[:12]
+}
+
+func dyadContainerState(info *types.ContainerJSON) string {
+	if info == nil || info.State == nil {
+		return ""
+	}
+	return strings.TrimSpace(info.State.Status)
 }
 
 func cmdDyadExec(args []string) {
@@ -906,6 +993,7 @@ func cmdDyadLogs(args []string) {
 	fs := flag.NewFlagSet("dyad logs", flag.ExitOnError)
 	member := fs.String("member", "critic", "actor or critic")
 	tail := fs.Int("tail", 200, "lines to tail")
+	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(filtered); err != nil {
 		fatal(err)
 	}
@@ -954,6 +1042,15 @@ func cmdDyadLogs(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	if *jsonOut {
+		printJSON(dyadLogsResult{
+			Dyad:   dyad,
+			Member: memberVal,
+			Tail:   *tail,
+			Logs:   out,
+		})
+		return
+	}
 	fmt.Print(out)
 }
 
@@ -961,6 +1058,7 @@ func splitDyadLogsNameAndFlags(args []string) (string, []string) {
 	return splitNameAndFlags(args, map[string]bool{
 		"member": false,
 		"tail":   false,
+		"json":   true,
 	})
 }
 
