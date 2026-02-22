@@ -138,4 +138,3 @@ func TestCmdBuildImageUsageOnUnexpectedArgs(t *testing.T) {
 		t.Fatalf("expected no preflight/build calls on invalid args")
 	}
 }
-

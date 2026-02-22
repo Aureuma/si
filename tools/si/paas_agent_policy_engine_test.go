@@ -48,4 +48,3 @@ func TestEvaluatePaasRemediationPolicyOverrides(t *testing.T) {
 		t.Fatalf("expected warning action to inherit normalized defaults, got %q", defaultAction)
 	}
 }
-

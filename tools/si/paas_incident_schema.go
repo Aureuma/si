@@ -192,4 +192,3 @@ func newPaasIncidentEvent(input paasIncidentEventInput) paasIncidentEvent {
 		Metadata:      redactPaasSensitiveFields(input.Metadata),
 	}
 }
-

@@ -242,8 +242,10 @@ func boolEnv(key string) (bool, bool) {
 	switch value {
 	case "1", "true", "yes", "on":
 		return true, true
-	case "0", "false", "no", "off", "":
+	case "0", "false", "no", "off":
 		return false, true
+	case "":
+		return false, false
 	default:
 		return false, false
 	}
