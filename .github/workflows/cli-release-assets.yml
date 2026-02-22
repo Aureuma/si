@@ -160,7 +160,7 @@ jobs:
             dist/checksums.txt
 
   publish-npm:
-    name: Publish npm package (@aureuma/si-cli)
+    name: Publish npm package (@aureuma/si)
     needs: [resolve-tag, publish-assets]
     runs-on: ubuntu-latest
     steps:
@@ -189,7 +189,7 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
-      - name: Publish @aureuma/si-cli
+      - name: Publish @aureuma/si
         if: steps.gate.outputs.enabled == 'true'
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -307,16 +307,16 @@ jobs:
           echo "release assets verified for ${tag}"
 
           if [[ -n "${NPM_TOKEN}" ]]; then
-            if ! retry 12 10 npm view "@aureuma/si-cli@${version}" version >/dev/null 2>&1; then
-              echo "npm package @aureuma/si-cli@${version} was not visible after retries" >&2
+            if ! retry 12 10 npm view "@aureuma/si@${version}" version >/dev/null 2>&1; then
+              echo "npm package @aureuma/si@${version} was not visible after retries" >&2
               exit 1
             fi
-            npm_version="$(npm view "@aureuma/si-cli@${version}" version)"
+            npm_version="$(npm view "@aureuma/si@${version}" version)"
             if [[ "${npm_version}" != "${version}" ]]; then
               echo "npm version mismatch: expected ${version}, got ${npm_version}" >&2
               exit 1
             fi
-            echo "npm package verified: @aureuma/si-cli@${npm_version}"
+            echo "npm package verified: @aureuma/si@${npm_version}"
           else
             echo "NPM_TOKEN is not configured; skipping npm verification."
           fi

@@ -10,7 +10,7 @@
   <a href="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker required"></a>
   <a href="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge" alt="Docs: Mintlify"></a>
   <a href="https://img.shields.io/badge/paas-docker--native-0ea5e9?style=for-the-badge"><img src="https://img.shields.io/badge/paas-docker--native-0ea5e9?style=for-the-badge" alt="PaaS: Docker Native"></a>
-  <a href="https://www.npmjs.com/package/@aureuma/si-cli"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi--cli?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si-cli"></a>
+  <a href="https://www.npmjs.com/package/@aureuma/si"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si"></a>
   <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Tap: aureuma/si"></a>
 </p>
 
@@ -44,7 +44,7 @@ Use one of these install paths:
 
 ```bash
 # npm (global launcher package)
-npm install -g @aureuma/si-cli
+npm install -g @aureuma/si
 
 # Homebrew tap
 brew tap aureuma/si

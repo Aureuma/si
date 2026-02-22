@@ -22,7 +22,7 @@ mkdir -p "${assets_dir}" "${npm_out}" "${prefix_dir}"
 tools/release/build-cli-release-assets.sh --version "${version}" --out-dir "${assets_dir}"
 tools/release/npm/build-npm-package.sh --version "${version}" --out-dir "${npm_out}"
 
-pack_file="$(find "${npm_out}" -maxdepth 1 -type f -name 'aureuma-si-cli-*.tgz' | head -n1)"
+pack_file="$(find "${npm_out}" -maxdepth 1 -type f -name 'aureuma-si-*.tgz' | head -n1)"
 [[ -n "${pack_file}" ]] || {
   echo "npm package tarball not found" >&2
   exit 1

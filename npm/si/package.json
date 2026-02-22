@@ -1,5 +1,5 @@
 {
-  "name": "@aureuma/si-cli",
+  "name": "@aureuma/si",
   "version": "0.0.0-dev",
   "description": "SI CLI launcher package for macOS and Linux",
   "license": "AGPL-3.0",

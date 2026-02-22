@@ -105,7 +105,7 @@ Manual fallback (if automation is disabled):
     - `si_<version>_darwin_arm64.tar.gz`
     - `checksums.txt`
 - npm package:
-  - `npm view @aureuma/si-cli version`
+  - `npm view @aureuma/si version`
   - Expect returned version to match `X.Y.Z`.
 - npm publish using SI vault-managed token:
   - `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z`
