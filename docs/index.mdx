@@ -9,10 +9,13 @@ SI is an operations-first CLI that combines secure secrets, integration bridges,
 
 ## Start here
 
-1. Build and verify your local binary: `si build self`
-2. Validate secret setup: `si vault status`
-3. Inspect command surface: `si --help`
-4. Validate docs before publishing changes: `si mintlify validate`
+1. Install SI:
+   - npm: `npm install -g @aureuma/si-cli`
+   - Homebrew: `brew tap aureuma/si && brew install si`
+2. Build and verify your local binary from source when needed: `si build self`
+3. Validate secret setup: `si vault status`
+4. Inspect command surface: `si --help`
+5. Validate docs before publishing changes: `si mintlify validate`
 
 ## Documentation entry points
 
@@ -49,6 +52,7 @@ SI is an operations-first CLI that combines secure secrets, integration bridges,
 - [Documentation Style Guide](./DOCS_STYLE_GUIDE)
 - [Releasing](./RELEASING)
 - [Release Runbook](./RELEASE_RUNBOOK)
+- [Homebrew Core Readiness](./HOMEBREW_CORE)
 - [Testing](./testing)
 
 ## Best-practice workflow for docs updates
