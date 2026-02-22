@@ -9,12 +9,14 @@ Run SI test stack in a stable order:
   1) Go workspace tests
   2) Vault strict suite
   3) Installer host smoke
-  4) Installer docker smoke
+  4) npm installer smoke
+  5) Installer docker smoke
 
 Flags:
   --skip-go          Skip Go workspace tests
   --skip-vault       Skip vault strict suite
   --skip-installer   Skip installer host smoke tests
+  --skip-npm         Skip npm installer smoke tests
   --skip-docker      Skip installer docker smoke tests
   -h, --help         Show this help
 USAGE
@@ -23,6 +25,7 @@ USAGE
 SKIP_GO=0
 SKIP_VAULT=0
 SKIP_INSTALLER=0
+SKIP_NPM=0
 SKIP_DOCKER=0
 
 while [[ $# -gt 0 ]]; do
@@ -30,6 +33,7 @@ while [[ $# -gt 0 ]]; do
     --skip-go) SKIP_GO=1; shift ;;
     --skip-vault) SKIP_VAULT=1; shift ;;
     --skip-installer) SKIP_INSTALLER=1; shift ;;
+    --skip-npm) SKIP_NPM=1; shift ;;
     --skip-docker) SKIP_DOCKER=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *)
@@ -62,6 +66,10 @@ fi
 
 if [[ "$SKIP_INSTALLER" -eq 0 ]]; then
   run_step "Installer host smoke" ./tools/test-install-si.sh
+fi
+
+if [[ "$SKIP_NPM" -eq 0 ]]; then
+  run_step "npm installer smoke" ./tools/test-install-si-npm.sh
 fi
 
 if [[ "$SKIP_DOCKER" -eq 0 ]]; then

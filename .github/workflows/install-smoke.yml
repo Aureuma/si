@@ -78,6 +78,29 @@ jobs:
       - name: Run host installer smoke tests
         run: ./tools/test-install-si.sh
 
+  npm-smoke:
+    name: npm installer smoke (ubuntu)
+    needs: [docs-scope]
+    if: needs.docs-scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run npm installer smoke tests
+        run: ./tools/test-install-si-npm.sh
+
   docker-smoke:
     name: Docker installer smoke (ubuntu)
     needs: [docs-scope]
