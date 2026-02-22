@@ -61,6 +61,7 @@ auto-runs on tag push and performs:
 1. Ensures a draft release exists for `vX.Y.Z`.
 1. Asks ReleaseMind to prepare release notes.
 1. Publishes the release after the draft is ready.
+1. Waits for `CLI Release Assets` workflow to complete successfully for the same tag commit (release assets + distribution verification gate).
 
 Manual trigger variant:
 

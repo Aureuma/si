@@ -110,8 +110,17 @@ jobs:
               --draft
           fi
 
+      - name: Mark publish window
+        id: publish_window
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "started_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
       - name: Run ReleaseMind automation
         id: releasemind
+        env:
+          GH_TOKEN: ${{ github.token }}
         uses: Aureuma/viva/.github/actions/releasemind-release-runbook@main
         with:
           api_base_url: ${{ secrets.RELEASEMIND_API_BASE_URL }}
@@ -121,6 +130,71 @@ jobs:
           base_tag: ${{ steps.resolve.outputs.base_tag }}
           pull_request_numbers: ${{ steps.resolve.outputs.pull_request_numbers }}
           publish: ${{ steps.resolve.outputs.publish }}
+          preflight_command: |
+            set -euo pipefail
+            if [[ -x "tools/release/validate-release-version.sh" ]]; then
+              tools/release/validate-release-version.sh --tag "${{ steps.resolve.outputs.tag }}"
+            fi
+          post_publish_command: |
+            set -euo pipefail
+
+            tag="${RM_ACTION_RELEASE_TAG}"
+            workflow_name="CLI Release Assets"
+            poll_seconds=15
+            timeout_seconds=2400
+            started_at="${{ steps.publish_window.outputs.started_at }}"
+
+            tag_sha="$(git rev-list -n 1 "${tag}")"
+            if [[ -z "${tag_sha}" ]]; then
+              echo "Unable to resolve commit SHA for tag ${tag}" >&2
+              exit 1
+            fi
+
+            deadline=$(( $(date +%s) + timeout_seconds ))
+            while true; do
+              now="$(date +%s)"
+              if (( now > deadline )); then
+                echo "Timed out waiting for ${workflow_name} for tag ${tag}" >&2
+                exit 1
+              fi
+
+              runs_json="$(gh run list \
+                --repo "${GITHUB_REPOSITORY}" \
+                --workflow "${workflow_name}" \
+                --event release \
+                --limit 30 \
+                --json databaseId,status,conclusion,headSha,createdAt)"
+
+              run_json="$(printf '%s' "${runs_json}" | jq -c --arg sha "${tag_sha}" --arg started "${started_at}" '
+                [ .[]
+                  | select(.headSha == $sha)
+                  | select((.createdAt | fromdateiso8601) >= ($started | fromdateiso8601))
+                ]
+                | sort_by(.createdAt)
+                | last // empty
+              ')"
+
+              if [[ -z "${run_json}" ]]; then
+                sleep "${poll_seconds}"
+                continue
+              fi
+
+              run_id="$(printf '%s' "${run_json}" | jq -r '.databaseId')"
+              run_status="$(printf '%s' "${run_json}" | jq -r '.status')"
+              run_conclusion="$(printf '%s' "${run_json}" | jq -r '.conclusion // ""')"
+
+              if [[ "${run_status}" == "completed" ]]; then
+                if [[ "${run_conclusion}" != "success" ]]; then
+                  echo "${workflow_name} run ${run_id} failed with conclusion=${run_conclusion}" >&2
+                  gh run view "${run_id}" --repo "${GITHUB_REPOSITORY}" --log-failed || true
+                  exit 1
+                fi
+                echo "${workflow_name} run ${run_id} completed successfully for ${tag}"
+                break
+              fi
+
+              sleep "${poll_seconds}"
+            done
 
       - name: Verify release state
         if: ${{ steps.resolve.outputs.publish == 'true' }}

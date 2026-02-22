@@ -94,6 +94,8 @@ After pushing `vX.Y.Z`, workflow `.github/workflows/releasemind-release.yml` can
 - create/verify a draft release for the tag
 - generate release notes via ReleaseMind automation
 - publish the release non-interactively
+- run preflight tag/version validation before ReleaseMind prepare
+- wait for `CLI Release Assets` workflow success after publish
 
 Required repository secrets:
 - `RELEASEMIND_API_BASE_URL`
