@@ -316,7 +316,7 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only), `dual` (local/git + best-effort Helia backup), `helia` (Helia backup required on mutating vault commands). Default resolution is `git`, with legacy fallback to `dual` when `helia.auto_sync=true` and `vault.sync_backend` is unset.
 
 ### `[helia]`
-Defaults for `si helia` cloud sync.
+Defaults for `si sun` cloud sync.
 - `helia.base_url` (string): Helia API base URL (default: `http://127.0.0.1:8080`)
 - `helia.account` (string): expected account slug bound to the saved token
 - `helia.token` (string): Helia bearer token
@@ -324,14 +324,23 @@ Defaults for `si helia` cloud sync.
 - `helia.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
 - `helia.vault_backup` (string): default vault backup object name (default: `default`)
 - `helia.taskboard` (string): default Helia object name for shared dyad taskboard (default: `default`)
-- `helia.taskboard_agent` (string): optional default agent id used by `si helia taskboard` and dyad autopilot claims
+- `helia.taskboard_agent` (string): optional default agent id used by `si sun taskboard` and dyad autopilot claims
 - `helia.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
-- `helia.machine_id` (string): default machine id for `si helia machine ...` commands
+- `helia.machine_id` (string): default machine id for `si sun machine ...` commands
 - `helia.operator_id` (string): default operator identity for machine ACL and dispatch actions
 
 Environment overrides:
+- `SI_SUN_BASE_URL`
+- `SI_SUN_TOKEN`
+- `SI_SUN_ALLOW_INSECURE_HTTP`
+- `SI_SUN_TASKBOARD`
+- `SI_SUN_TASKBOARD_AGENT`
+- `SI_SUN_TASKBOARD_LEASE_SECONDS`
+- `SI_SUN_MACHINE_ID`
+- `SI_SUN_OPERATOR_ID`
 - `SI_HELIA_BASE_URL`
 - `SI_HELIA_TOKEN`
+- `SI_HELIA_ALLOW_INSECURE_HTTP`
 - `SI_HELIA_TASKBOARD`
 - `SI_HELIA_TASKBOARD_AGENT`
 - `SI_HELIA_TASKBOARD_LEASE_SECONDS`

@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	heliaUsageText                    = "usage: si helia <auth|profile|vault|token|audit|taskboard|machine|doctor> ..."
-	heliaAuthUsageText                = "usage: si helia auth <login|status|logout> ..."
-	heliaProfileUsageText             = "usage: si helia profile <list|push|pull> ..."
-	heliaVaultUsageText               = "usage: si helia vault backup <push|pull> ..."
-	heliaTokenUsageText               = "usage: si helia token <list|create|revoke> ..."
-	heliaAuditUsageText               = "usage: si helia audit list ..."
+	heliaUsageText                    = "usage: si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> ..."
+	heliaAuthUsageText                = "usage: si sun auth <login|status|logout> ..."
+	heliaProfileUsageText             = "usage: si sun profile <list|push|pull> ..."
+	heliaVaultUsageText               = "usage: si sun vault backup <push|pull> ..."
+	heliaTokenUsageText               = "usage: si sun token <list|create|revoke> ..."
+	heliaAuditUsageText               = "usage: si sun audit list ..."
 	heliaCodexProfileBundleKind       = "codex_profile_bundle"
 	heliaVaultBackupKind              = "vault_backup"
 	heliaPaasControlPlaneSnapshotKind = "paas_control_plane_snapshot"
@@ -62,7 +62,7 @@ func cmdHelia(args []string) {
 	case "doctor":
 		cmdHeliaDoctor(rest)
 	default:
-		printUnknown("helia", sub)
+		printUnknown("sun", sub)
 		printUsage(heliaUsageText)
 		os.Exit(1)
 	}
@@ -85,7 +85,7 @@ func cmdHeliaAuth(args []string) {
 	case "logout":
 		cmdHeliaAuthLogout(rest)
 	default:
-		printUnknown("helia auth", sub)
+		printUnknown("sun auth", sub)
 		printUsage(heliaAuthUsageText)
 		os.Exit(1)
 	}
@@ -93,9 +93,9 @@ func cmdHeliaAuth(args []string) {
 
 func cmdHeliaAuthLogin(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia auth login", flag.ExitOnError)
-	urlFlag := fs.String("url", strings.TrimSpace(settings.Helia.BaseURL), "helia base url")
-	tokenFlag := fs.String("token", strings.TrimSpace(os.Getenv("SI_HELIA_TOKEN")), "helia bearer token")
+	fs := flag.NewFlagSet("sun auth login", flag.ExitOnError)
+	urlFlag := fs.String("url", strings.TrimSpace(settings.Helia.BaseURL), "sun base url")
+	tokenFlag := fs.String("token", envSunToken(), "sun bearer token")
 	accountFlag := fs.String("account", strings.TrimSpace(settings.Helia.Account), "expected account slug")
 	timeoutSeconds := fs.Int("timeout-seconds", settings.Helia.TimeoutSeconds, "http timeout seconds")
 	autoSync := fs.Bool("auto-sync", settings.Helia.AutoSync, "enable automatic profile sync after login/swap")
@@ -103,7 +103,7 @@ func cmdHeliaAuthLogin(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]")
+		printUsage("usage: si sun auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]")
 		return
 	}
 
@@ -137,19 +137,19 @@ func cmdHeliaAuthLogin(args []string) {
 	if err := saveSettings(persisted); err != nil {
 		fatal(err)
 	}
-	successf("helia auth configured for account %s at %s", who.AccountSlug, strings.TrimSpace(*urlFlag))
+	successf("sun auth configured for account %s at %s", who.AccountSlug, strings.TrimSpace(*urlFlag))
 }
 
 func cmdHeliaAuthStatus(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia auth status", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun auth status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
 	timeoutSeconds := fs.Int("timeout-seconds", settings.Helia.TimeoutSeconds, "http timeout seconds")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia auth status [--json] [--timeout-seconds <n>]")
+		printUsage("usage: si sun auth status [--json] [--timeout-seconds <n>]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -178,13 +178,13 @@ func cmdHeliaAuthStatus(args []string) {
 }
 
 func cmdHeliaAuthLogout(args []string) {
-	fs := flag.NewFlagSet("helia auth logout", flag.ExitOnError)
-	clearAccount := fs.Bool("clear-account", false, "also clear stored helia account")
+	fs := flag.NewFlagSet("sun auth logout", flag.ExitOnError)
+	clearAccount := fs.Bool("clear-account", false, "also clear stored sun account")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia auth logout [--clear-account]")
+		printUsage("usage: si sun auth logout [--clear-account]")
 		return
 	}
 	settings, err := loadSettings()
@@ -198,7 +198,7 @@ func cmdHeliaAuthLogout(args []string) {
 	if err := saveSettings(settings); err != nil {
 		fatal(err)
 	}
-	successf("helia auth token cleared")
+	successf("sun auth token cleared")
 }
 
 func cmdHeliaProfile(args []string) {
@@ -218,7 +218,7 @@ func cmdHeliaProfile(args []string) {
 	case "pull":
 		cmdHeliaProfilePull(rest)
 	default:
-		printUnknown("helia profile", sub)
+		printUnknown("sun profile", sub)
 		printUsage(heliaProfileUsageText)
 		os.Exit(1)
 	}
@@ -226,13 +226,13 @@ func cmdHeliaProfile(args []string) {
 
 func cmdHeliaProfileList(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia profile list", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun profile list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia profile list [--json]")
+		printUsage("usage: si sun profile list [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -256,14 +256,14 @@ func cmdHeliaProfileList(args []string) {
 
 func cmdHeliaProfilePush(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia profile push", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun profile push", flag.ExitOnError)
 	profileKey := fs.String("profile", "", "profile id or email")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia profile push [--profile <id>] [--json]")
+		printUsage("usage: si sun profile push [--profile <id>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -323,14 +323,14 @@ func cmdHeliaProfilePush(args []string) {
 
 func cmdHeliaProfilePull(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia profile pull", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun profile pull", flag.ExitOnError)
 	profileKey := fs.String("profile", "", "profile id or email")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia profile pull [--profile <id>] [--json]")
+		printUsage("usage: si sun profile pull [--profile <id>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -425,7 +425,7 @@ func cmdHeliaVault(args []string) {
 	case "help", "-h", "--help":
 		printUsage(heliaVaultUsageText)
 	default:
-		printUnknown("helia vault backup", sub)
+		printUnknown("sun vault backup", sub)
 		printUsage(heliaVaultUsageText)
 		os.Exit(1)
 	}
@@ -433,7 +433,7 @@ func cmdHeliaVault(args []string) {
 
 func cmdHeliaVaultBackupPush(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia vault backup push", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun vault backup push", flag.ExitOnError)
 	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
 	name := fs.String("name", strings.TrimSpace(settings.Helia.VaultBackup), "backup object name")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow plaintext vault values in backup payload")
@@ -441,7 +441,7 @@ func cmdHeliaVaultBackupPush(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia vault backup push [--file <path>] [--name <name>] [--allow-plaintext]")
+		printUsage("usage: si sun vault backup push [--file <path>] [--name <name>] [--allow-plaintext]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -486,14 +486,14 @@ func cmdHeliaVaultBackupPush(args []string) {
 
 func cmdHeliaVaultBackupPull(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia vault backup pull", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun vault backup pull", flag.ExitOnError)
 	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
 	name := fs.String("name", strings.TrimSpace(settings.Helia.VaultBackup), "backup object name")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia vault backup pull [--file <path>] [--name <name>]")
+		printUsage("usage: si sun vault backup pull [--file <path>] [--name <name>]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -549,7 +549,7 @@ func cmdHeliaToken(args []string) {
 	case "help", "-h", "--help":
 		printUsage(heliaTokenUsageText)
 	default:
-		printUnknown("helia token", sub)
+		printUnknown("sun token", sub)
 		printUsage(heliaTokenUsageText)
 		os.Exit(1)
 	}
@@ -557,7 +557,7 @@ func cmdHeliaToken(args []string) {
 
 func cmdHeliaTokenList(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia token list", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun token list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
 	includeRevoked := fs.Bool("include-revoked", false, "include revoked tokens")
 	limit := fs.Int("limit", 100, "max tokens")
@@ -565,7 +565,7 @@ func cmdHeliaTokenList(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia token list [--include-revoked] [--limit <n>] [--json]")
+		printUsage("usage: si sun token list [--include-revoked] [--limit <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -597,7 +597,7 @@ func cmdHeliaTokenList(args []string) {
 
 func cmdHeliaTokenCreate(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia token create", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun token create", flag.ExitOnError)
 	label := fs.String("label", "si-cli", "token label")
 	scopesCSV := fs.String("scopes", "objects:read,objects:write", "comma-separated scopes")
 	expiresHours := fs.Int("expires-hours", 0, "optional expiry in hours")
@@ -606,7 +606,7 @@ func cmdHeliaTokenCreate(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]")
+		printUsage("usage: si sun token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -632,13 +632,13 @@ func cmdHeliaTokenCreate(args []string) {
 
 func cmdHeliaTokenRevoke(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia token revoke", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun token revoke", flag.ExitOnError)
 	tokenID := fs.String("token-id", "", "token id to revoke")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia token revoke --token-id <id>")
+		printUsage("usage: si sun token revoke --token-id <id>")
 		return
 	}
 	if strings.TrimSpace(*tokenID) == "" {
@@ -667,7 +667,7 @@ func cmdHeliaAudit(args []string) {
 	case "help", "-h", "--help":
 		printUsage(heliaAuditUsageText)
 	default:
-		printUnknown("helia audit", sub)
+		printUnknown("sun audit", sub)
 		printUsage(heliaAuditUsageText)
 		os.Exit(1)
 	}
@@ -675,7 +675,7 @@ func cmdHeliaAudit(args []string) {
 
 func cmdHeliaAuditList(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia audit list", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun audit list", flag.ExitOnError)
 	action := fs.String("action", "", "filter action")
 	kind := fs.String("kind", "", "filter kind")
 	name := fs.String("name", "", "filter name")
@@ -685,7 +685,7 @@ func cmdHeliaAuditList(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]")
+		printUsage("usage: si sun audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -709,13 +709,13 @@ func cmdHeliaAuditList(args []string) {
 
 func cmdHeliaDoctor(args []string) {
 	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("helia doctor", flag.ExitOnError)
+	fs := flag.NewFlagSet("sun doctor", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si helia doctor [--json]")
+		printUsage("usage: si sun doctor [--json]")
 		return
 	}
 	client, err := heliaClientFromSettings(settings)
@@ -745,14 +745,14 @@ func cmdHeliaDoctor(args []string) {
 		return
 	}
 	if readinessErr == nil {
-		successf("helia readiness: ok")
+		successf("sun readiness: ok")
 	} else {
-		warnf("helia readiness failed: %v", readinessErr)
+		warnf("sun readiness failed: %v", readinessErr)
 	}
 	if whoErr == nil {
-		successf("helia auth: ok (%s)", who.AccountSlug)
+		successf("sun auth: ok (%s)", who.AccountSlug)
 	} else {
-		warnf("helia auth failed: %v", whoErr)
+		warnf("sun auth failed: %v", whoErr)
 	}
 	if readinessErr != nil || whoErr != nil {
 		os.Exit(1)
@@ -760,8 +760,8 @@ func cmdHeliaDoctor(args []string) {
 }
 
 func heliaClientFromSettings(settings Settings) (*heliaClient, error) {
-	baseURL := firstNonEmpty(strings.TrimSpace(os.Getenv("SI_HELIA_BASE_URL")), strings.TrimSpace(settings.Helia.BaseURL))
-	token := firstNonEmpty(strings.TrimSpace(os.Getenv("SI_HELIA_TOKEN")), strings.TrimSpace(settings.Helia.Token))
+	baseURL := firstNonEmpty(envSunBaseURL(), strings.TrimSpace(settings.Helia.BaseURL))
+	token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Helia.Token))
 	timeout := time.Duration(settings.Helia.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -836,7 +836,7 @@ func writeFileAtomic0600(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".helia-*")
+	tmp, err := os.CreateTemp(dir, ".sun-*")
 	if err != nil {
 		return err
 	}

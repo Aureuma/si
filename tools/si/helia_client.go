@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 )
@@ -92,18 +91,18 @@ func newHeliaClient(baseURL string, token string, timeout time.Duration) (*helia
 	baseURL = strings.TrimSpace(baseURL)
 	baseURL = strings.TrimSuffix(baseURL, "/")
 	if baseURL == "" {
-		return nil, fmt.Errorf("helia base url is required (set settings.helia.base_url or SI_HELIA_BASE_URL)")
+		return nil, fmt.Errorf("sun base url is required (set settings.helia.base_url, SI_SUN_BASE_URL, or SI_HELIA_BASE_URL)")
 	}
 	if _, err := url.ParseRequestURI(baseURL); err != nil {
-		return nil, fmt.Errorf("invalid helia base url %q", baseURL)
+		return nil, fmt.Errorf("invalid sun base url %q", baseURL)
 	}
 	parsed, _ := url.Parse(baseURL)
 	if parsed != nil && !heliaAllowsInsecureHTTP(parsed) {
-		return nil, fmt.Errorf("helia base url must use https for non-local hosts (set SI_HELIA_ALLOW_INSECURE_HTTP=1 to override)")
+		return nil, fmt.Errorf("sun base url must use https for non-local hosts (set SI_SUN_ALLOW_INSECURE_HTTP=1 to override)")
 	}
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return nil, fmt.Errorf("helia token is required (run `si helia auth login` or set SI_HELIA_TOKEN)")
+		return nil, fmt.Errorf("sun token is required (run `si sun auth login` or set SI_SUN_TOKEN)")
 	}
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -125,7 +124,7 @@ func heliaAllowsInsecureHTTP(u *url.URL) bool {
 	if !strings.EqualFold(strings.TrimSpace(u.Scheme), "http") {
 		return false
 	}
-	if isTruthyFlagValue(os.Getenv("SI_HELIA_ALLOW_INSECURE_HTTP")) {
+	if envSunAllowInsecureHTTP() {
 		return true
 	}
 	host := strings.ToLower(strings.TrimSpace(u.Hostname()))

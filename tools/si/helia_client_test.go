@@ -21,7 +21,7 @@ func TestNewHeliaClientValidation(t *testing.T) {
 	if _, err := newHeliaClient("http://example.com", "token", time.Second); err == nil {
 		t.Fatalf("expected non-local insecure http URL to be rejected")
 	}
-	t.Setenv("SI_HELIA_ALLOW_INSECURE_HTTP", "1")
+	t.Setenv("SI_SUN_ALLOW_INSECURE_HTTP", "1")
 	if _, err := newHeliaClient("http://example.com", "token", time.Second); err != nil {
 		t.Fatalf("expected insecure http override to permit URL, got: %v", err)
 	}

@@ -82,9 +82,9 @@ func cmdVaultBackendUse(args []string) {
 	}
 	successf("vault sync backend set to %s", mode)
 	if mode == vaultSyncBackendHelia || mode == vaultSyncBackendDual {
-		token := firstNonEmpty(strings.TrimSpace(os.Getenv("SI_HELIA_TOKEN")), strings.TrimSpace(settings.Helia.Token))
+		token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Helia.Token))
 		if token == "" {
-			warnf("helia token not configured; run `si helia auth login --url <helia-url> --token <token> --account <slug>`")
+			warnf("sun token not configured; run `si sun auth login --url <sun-url> --token <token> --account <slug>`")
 		}
 	}
 }

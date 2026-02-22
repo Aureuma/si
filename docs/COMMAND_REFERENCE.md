@@ -22,7 +22,7 @@ si <command> <subcommand> --help
 | `si dyad` | Manage actor/critic pairs | `spawn`, `status`, `peek`, `exec`, `logs`, `cleanup` | [Dyad](./DYAD) |
 | codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `init`, `status`, `list`, `set`, `run`, `docker exec`, `trust`, `backend` | [Vault](./VAULT) |
-| `si helia` | Cloud sync and machine orchestration for profiles, vault, taskboards, and remote SI control | `auth`, `profile`, `vault backup`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Helia Cloud Sync](./HELIA) |
+| `si sun` | Cloud sync and machine orchestration for profiles, vault, taskboards, and remote SI control | `auth`, `profile`, `vault backup`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
 | `si browser` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si plugins` | Plugin registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy` | [Plugin Marketplace](./PLUGIN_MARKETPLACE) |
 
