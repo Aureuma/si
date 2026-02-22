@@ -14,6 +14,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	"si/tools/si/internal/pluginmarket"
 	"si/tools/si/internal/providers"
 )
 
@@ -455,6 +456,8 @@ type HeliaSettings struct {
 	TimeoutSeconds        int    `toml:"timeout_seconds,omitempty"`
 	AutoSync              bool   `toml:"auto_sync,omitempty"`
 	VaultBackup           string `toml:"vault_backup,omitempty"`
+	PluginGatewayRegistry string `toml:"plugin_gateway_registry,omitempty"`
+	PluginGatewaySlots    int    `toml:"plugin_gateway_slots,omitempty"`
 	Taskboard             string `toml:"taskboard,omitempty"`
 	TaskboardAgent        string `toml:"taskboard_agent,omitempty"`
 	TaskboardLeaseSeconds int    `toml:"taskboard_lease_seconds,omitempty"`
@@ -536,6 +539,12 @@ func mergeSunSettings(settings *Settings) {
 	}
 	if trimmed := strings.TrimSpace(sun.VaultBackup); trimmed != "" {
 		settings.Helia.VaultBackup = trimmed
+	}
+	if trimmed := strings.TrimSpace(sun.PluginGatewayRegistry); trimmed != "" {
+		settings.Helia.PluginGatewayRegistry = trimmed
+	}
+	if sun.PluginGatewaySlots > 0 {
+		settings.Helia.PluginGatewaySlots = sun.PluginGatewaySlots
 	}
 	if trimmed := strings.TrimSpace(sun.Taskboard); trimmed != "" {
 		settings.Helia.Taskboard = trimmed
@@ -995,6 +1004,16 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	if strings.TrimSpace(settings.Helia.VaultBackup) == "" {
 		settings.Helia.VaultBackup = "default"
+	}
+	settings.Helia.PluginGatewayRegistry = strings.TrimSpace(settings.Helia.PluginGatewayRegistry)
+	if settings.Helia.PluginGatewayRegistry == "" {
+		settings.Helia.PluginGatewayRegistry = defaultPluginGatewayName
+	}
+	if settings.Helia.PluginGatewaySlots <= 0 {
+		settings.Helia.PluginGatewaySlots = pluginmarket.GatewayDefaultSlotsPerNamespace
+	}
+	if settings.Helia.PluginGatewaySlots > pluginmarket.GatewayMaxSlotsPerNamespace {
+		settings.Helia.PluginGatewaySlots = pluginmarket.GatewayMaxSlotsPerNamespace
 	}
 	settings.Helia.Taskboard = strings.TrimSpace(settings.Helia.Taskboard)
 	if settings.Helia.Taskboard == "" {

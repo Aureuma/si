@@ -87,6 +87,17 @@ type heliaError struct {
 	Error string `json:"error"`
 }
 
+type heliaIntegrationRegistryResponse struct {
+	Registry string          `json:"registry"`
+	Index    json.RawMessage `json:"index"`
+}
+
+type heliaIntegrationShardResponse struct {
+	Registry string          `json:"registry"`
+	Shard    string          `json:"shard"`
+	Payload  json.RawMessage `json:"payload"`
+}
+
 func newHeliaClient(baseURL string, token string, timeout time.Duration) (*heliaClient, error) {
 	baseURL = strings.TrimSpace(baseURL)
 	baseURL = strings.TrimSuffix(baseURL, "/")
@@ -305,6 +316,74 @@ func (c *heliaClient) listAuditEvents(ctx context.Context, action string, kind s
 		return nil, fmt.Errorf("parse audit response: %w", err)
 	}
 	return parsed.Items, nil
+}
+
+func (c *heliaClient) getIntegrationRegistryIndex(ctx context.Context, registry string) ([]byte, error) {
+	body, err := c.doJSON(ctx, http.MethodGet, "/v1/integrations/registries/"+url.PathEscape(strings.TrimSpace(registry)), nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed heliaIntegrationRegistryResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("parse integration registry response: %w", err)
+	}
+	if len(parsed.Index) == 0 {
+		return nil, fmt.Errorf("integration registry response missing index payload")
+	}
+	return parsed.Index, nil
+}
+
+func (c *heliaClient) putIntegrationRegistryIndex(ctx context.Context, registry string, payload []byte, expectedRevision *int64) (heliaPutResult, error) {
+	var out heliaPutResult
+	request := map[string]interface{}{
+		"payload": json.RawMessage(payload),
+	}
+	if expectedRevision != nil {
+		request["expected_revision"] = *expectedRevision
+	}
+	body, err := c.doJSON(ctx, http.MethodPut, "/v1/integrations/registries/"+url.PathEscape(strings.TrimSpace(registry)), request)
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return out, fmt.Errorf("parse put integration registry response: %w", err)
+	}
+	return out, nil
+}
+
+func (c *heliaClient) getIntegrationRegistryShard(ctx context.Context, registry string, shard string) ([]byte, error) {
+	path := "/v1/integrations/registries/" + url.PathEscape(strings.TrimSpace(registry)) + "/shards/" + url.PathEscape(strings.TrimSpace(shard))
+	body, err := c.doJSON(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed heliaIntegrationShardResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("parse integration shard response: %w", err)
+	}
+	if len(parsed.Payload) == 0 {
+		return nil, fmt.Errorf("integration shard response missing payload")
+	}
+	return parsed.Payload, nil
+}
+
+func (c *heliaClient) putIntegrationRegistryShard(ctx context.Context, registry string, shard string, payload []byte, expectedRevision *int64) (heliaPutResult, error) {
+	var out heliaPutResult
+	request := map[string]interface{}{
+		"payload": json.RawMessage(payload),
+	}
+	if expectedRevision != nil {
+		request["expected_revision"] = *expectedRevision
+	}
+	path := "/v1/integrations/registries/" + url.PathEscape(strings.TrimSpace(registry)) + "/shards/" + url.PathEscape(strings.TrimSpace(shard))
+	body, err := c.doJSON(ctx, http.MethodPut, path, request)
+	if err != nil {
+		return out, err
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return out, fmt.Errorf("parse put integration shard response: %w", err)
+	}
+	return out, nil
 }
 
 func (c *heliaClient) doJSON(ctx context.Context, method string, path string, payload interface{}) ([]byte, error) {

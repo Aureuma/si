@@ -13,7 +13,7 @@ import (
 	"si/tools/si/internal/pluginmarket"
 )
 
-const pluginsUsageText = "usage: si plugins <list|catalog|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>"
+const pluginsUsageText = "usage: si plugins <list|catalog|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy|gateway>"
 
 func cmdPlugins(args []string) {
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, pluginsUsageText)
@@ -50,6 +50,8 @@ func cmdPlugins(args []string) {
 		cmdPluginsScaffold(rest)
 	case "policy":
 		cmdPluginsPolicy(rest)
+	case "gateway":
+		cmdPluginsGateway(rest)
 	default:
 		printUnknown("plugins", sub)
 		printUsage(pluginsUsageText)

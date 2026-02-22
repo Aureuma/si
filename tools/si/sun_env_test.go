@@ -19,6 +19,10 @@ func TestSunEnvAliasesPreferSunThenHelia(t *testing.T) {
 	t.Setenv("SI_HELIA_OPERATOR_ID", "helia-operator")
 	t.Setenv("SI_SUN_ALLOW_INSECURE_HTTP", "1")
 	t.Setenv("SI_HELIA_ALLOW_INSECURE_HTTP", "0")
+	t.Setenv("SI_SUN_PLUGIN_GATEWAY_REGISTRY", "team-reg")
+	t.Setenv("SI_HELIA_PLUGIN_GATEWAY_REGISTRY", "legacy-reg")
+	t.Setenv("SI_SUN_PLUGIN_GATEWAY_SLOTS", "32")
+	t.Setenv("SI_HELIA_PLUGIN_GATEWAY_SLOTS", "8")
 
 	if got := envSunBaseURL(); got != "https://sun.example" {
 		t.Fatalf("envSunBaseURL=%q", got)
@@ -44,6 +48,12 @@ func TestSunEnvAliasesPreferSunThenHelia(t *testing.T) {
 	if !envSunAllowInsecureHTTP() {
 		t.Fatalf("expected insecure-http override true")
 	}
+	if got := envSunPluginGatewayRegistry(); got != "team-reg" {
+		t.Fatalf("envSunPluginGatewayRegistry=%q", got)
+	}
+	if got := envSunPluginGatewaySlots(); got != "32" {
+		t.Fatalf("envSunPluginGatewaySlots=%q", got)
+	}
 }
 
 func TestSunEnvAliasesFallbackToHelia(t *testing.T) {
@@ -51,11 +61,21 @@ func TestSunEnvAliasesFallbackToHelia(t *testing.T) {
 	t.Setenv("SI_HELIA_BASE_URL", "https://helia.example")
 	t.Setenv("SI_SUN_TOKEN", "")
 	t.Setenv("SI_HELIA_TOKEN", "helia-token")
+	t.Setenv("SI_SUN_PLUGIN_GATEWAY_REGISTRY", "")
+	t.Setenv("SI_HELIA_PLUGIN_GATEWAY_REGISTRY", "legacy-reg")
+	t.Setenv("SI_SUN_PLUGIN_GATEWAY_SLOTS", "")
+	t.Setenv("SI_HELIA_PLUGIN_GATEWAY_SLOTS", "8")
 
 	if got := envSunBaseURL(); got != "https://helia.example" {
 		t.Fatalf("envSunBaseURL fallback=%q", got)
 	}
 	if got := envSunToken(); got != "helia-token" {
 		t.Fatalf("envSunToken fallback=%q", got)
+	}
+	if got := envSunPluginGatewayRegistry(); got != "legacy-reg" {
+		t.Fatalf("envSunPluginGatewayRegistry fallback=%q", got)
+	}
+	if got := envSunPluginGatewaySlots(); got != "8" {
+		t.Fatalf("envSunPluginGatewaySlots fallback=%q", got)
 	}
 }
