@@ -60,13 +60,86 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tools/release/validate-release-version.sh --tag "${{ needs.resolve-tag.outputs.tag }}"
+          tag="${{ needs.resolve-tag.outputs.tag }}"
+          if [[ -x "tools/release/validate-release-version.sh" ]]; then
+            tools/release/validate-release-version.sh --tag "${tag}"
+            exit 0
+          fi
+
+          if [[ ! -f "tools/si/version.go" ]]; then
+            echo "tools/si/version.go not found for tag ${tag}" >&2
+            exit 1
+          fi
+
+          actual="$(sed -n 's/^const siVersion = "\(.*\)"$/\1/p' tools/si/version.go)"
+          if [[ -z "${actual}" ]]; then
+            echo "unable to parse si version from tools/si/version.go" >&2
+            exit 1
+          fi
+
+          if [[ "${actual}" != "${tag}" ]]; then
+            echo "version mismatch: tools/si/version.go=${actual}, tag=${tag}" >&2
+            exit 1
+          fi
+
+          echo "release tag and tools/si/version.go are aligned (${tag})"
 
       - name: Build all release archives and checksums
         shell: bash
         run: |
           set -euo pipefail
-          tools/release/build-cli-release-assets.sh --version "${{ needs.resolve-tag.outputs.tag }}" --out-dir dist
+          tag="${{ needs.resolve-tag.outputs.tag }}"
+          if [[ -x "tools/release/build-cli-release-assets.sh" ]]; then
+            tools/release/build-cli-release-assets.sh --version "${tag}" --out-dir dist
+            ls -lah dist
+            exit 0
+          fi
+
+          version_nov="${tag#v}"
+          mkdir -p dist
+
+          build_one() {
+            local goos="$1"
+            local goarch="$2"
+            local goarm="${3:-}"
+            local arch_label="$goarch"
+            if [[ "${goarch}" == "arm" ]]; then
+              arch_label="armv${goarm}"
+            fi
+
+            local stem="si_${version_nov}_${goos}_${arch_label}"
+            local tmp_dir
+            tmp_dir="$(mktemp -d)"
+            local stage="${tmp_dir}/${stem}"
+            mkdir -p "${stage}"
+
+            local envs=("CGO_ENABLED=0" "GOOS=${goos}" "GOARCH=${goarch}")
+            if [[ -n "${goarm}" ]]; then
+              envs+=("GOARM=${goarm}")
+            fi
+
+            env "${envs[@]}" go build -trimpath -buildvcs=false -ldflags "-s -w" -o "${stage}/si" ./tools/si
+            chmod 0755 "${stage}/si"
+            [[ -f README.md ]] && cp README.md "${stage}/README.md"
+            [[ -f LICENSE ]] && cp LICENSE "${stage}/LICENSE"
+
+            tar -C "${tmp_dir}" -czf "dist/${stem}.tar.gz" "${stem}"
+            rm -rf "${tmp_dir}"
+          }
+
+          build_one linux amd64
+          build_one linux arm64
+          build_one linux arm 7
+          build_one darwin amd64
+          build_one darwin arm64
+
+          (
+            cd dist
+            : > checksums.txt
+            for f in *.tar.gz; do
+              sha256sum "${f}" >> checksums.txt
+            done
+          )
           ls -lah dist
 
       - name: Upload assets to GitHub Release
