@@ -48,7 +48,7 @@ jobs:
 
       - name: Run Helia-focused unit tests
         run: |
-          go test ./tools/si -run 'Test(NewHeliaClientValidation|HeliaClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|HeliaClientFromSettingsEnvPrecedence|DispatchRootCommandAliases)$'
+          go test ./tools/si -run 'Test(NewHeliaClientValidation|HeliaClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|HeliaClientFromSettingsEnvPrecedence|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
 
       - name: Compile command package
         run: go test ./tools/si -run '^$'
