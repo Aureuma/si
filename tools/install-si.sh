@@ -20,6 +20,7 @@ Usage:
   tools/install-si.sh [flags]
 
 Flags:
+  --backend <local|helia> Backend intent for post-install guidance (default: local)
   --source-dir <path>     Build from an existing si repo checkout (auto-detected if omitted)
   --repo <owner/repo>     GitHub repo to clone when not building locally (default: Aureuma/si)
   --repo-url <url>        Full git URL to clone (overrides --repo)
@@ -61,6 +62,10 @@ Notes:
       4) Install si to the first writable default install dir.
   - This script does not modify your shell rc files. If your install dir isn't on PATH,
     it prints the exact line to add for bash/zsh.
+  - Backend selection is configuration guidance only:
+      - local (default): keep secrets/profile state local-first.
+      - helia: installer prints follow-up `si helia auth login` steps.
+    The installer intentionally does not collect or store Helia tokens.
   - Advanced CI checks for installer settings mutation are available via:
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --check
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --print
@@ -387,12 +392,12 @@ ensure_go() {
     local have
     have="$(go_version_from_bin "${go_bin}" || true)"
     if [[ -n "${have}" ]] && version_ge "${have}" "${required}"; then
-      log info "go: using system go ${have} (${go_bin})"
+      log info "go: using system go ${have} (${go_bin})" >&2
       GO_BIN_KIND="system"
       printf '%s' "${go_bin}"
       return 0
     fi
-    log warn "go: system go is missing or too old (have ${have:-unknown}, need ${required})"
+    log warn "go: system go is missing or too old (have ${have:-unknown}, need ${required})" >&2
   fi
 
   if [[ "${GO_MODE}" == "system" ]]; then
@@ -410,12 +415,12 @@ ensure_go() {
     local have
     have="$(go_version_from_bin "${go_path}" || true)"
     if [[ -n "${have}" ]] && version_ge "${have}" "${required}"; then
-      log info "go: using cached go ${have} (${go_path})"
+      log info "go: using cached go ${have} (${go_path})" >&2
       GO_BIN_KIND="cached"
       printf '%s' "${go_path}"
       return 0
     fi
-    log warn "go: cached go exists but version mismatch (have ${have:-unknown}, need ${required}); reinstalling"
+    log warn "go: cached go exists but version mismatch (have ${have:-unknown}, need ${required}); reinstalling" >&2
   fi
 
   need_downloader
@@ -425,10 +430,10 @@ ensure_go() {
   local url="https://dl.google.com/go/${tgz}"
   local sha_url="${url}.sha256"
 
-  log info "go: downloading ${url}"
+  log info "go: downloading ${url}" >&2
   if [[ "${DRY_RUN}" -eq 1 ]]; then
-    log info "go: would verify sha256 via ${sha_url}"
-    log info "go: would install to ${dest}"
+    log info "go: would verify sha256 via ${sha_url}" >&2
+    log info "go: would install to ${dest}" >&2
     GO_BIN_KIND="downloaded"
     printf '%s' "${go_path}"
     return 0
@@ -467,7 +472,7 @@ ensure_go() {
     die "go: installed go version check failed (have ${have:-unknown}, need ${required})"
   fi
 
-  log info "✅ go: installed ${have} at ${go_path}"
+  log info "✅ go: installed ${have} at ${go_path}" >&2
   rm -rf "${work}" || true
   GO_BIN_KIND="downloaded"
   printf '%s' "${go_path}"
@@ -805,6 +810,15 @@ post_install() {
 
   log info "🔐 First-time vault notes:"
   log info "  - Linux keyring support (recommended): sudo apt install -y libsecret-tools"
+  log info "🗄️  Backend:"
+  if [[ "${BACKEND_MODE}" == "helia" ]]; then
+    log info "  - selected: helia (cloud sync)"
+    log info "  - next: si helia auth login --url <helia-url> --token <helia-token> --account <slug> --auto-sync"
+    log info "  - then: si helia profile push && si helia vault backup push"
+  else
+    log info "  - selected: local (default)"
+    log info "  - optional cloud sync later: si helia auth login --url <helia-url> --token <helia-token> --account <slug> --auto-sync"
+  fi
   log info "🏗️  Build notes:"
   log info "  - 'si build self' needs a Go toolchain. If this installer downloads Go, it will place a go shim next to si."
   log info "  - 'si build image' is best with Docker BuildKit/buildx enabled"
@@ -821,6 +835,7 @@ NO_PATH_HINT=0
 ASSUME_YES=0
 LINK_GO_MODE="auto"
 BUILDX_MODE="auto"
+BACKEND_MODE="${SI_INSTALL_BACKEND:-local}"
 
 REPO="Aureuma/si"
 REPO_URL=""
@@ -841,6 +856,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     -y|--yes) ASSUME_YES=1; shift ;;
+    --backend) BACKEND_MODE="$2"; shift 2 ;;
     --source-dir) SOURCE_DIR="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --repo-url) REPO_URL="$2"; shift 2 ;;
@@ -882,6 +898,12 @@ BUILDX_MODE="$(echo "$(trim "${BUILDX_MODE}")" | tr '[:upper:]' '[:lower:]')"
 case "${BUILDX_MODE}" in
   auto|always|never) ;;
   *) die "invalid buildx mode (expected auto|always|never)" ;;
+esac
+
+BACKEND_MODE="$(echo "$(trim "${BACKEND_MODE}")" | tr '[:upper:]' '[:lower:]')"
+case "${BACKEND_MODE}" in
+  local|helia) ;;
+  *) die "invalid --backend ${BACKEND_MODE} (expected local or helia)" ;;
 esac
 
 if [[ "${DRY_RUN}" -eq 0 ]]; then

@@ -72,6 +72,18 @@ note "dry-run: no-path-hint flag"
 note "dry-run: --yes accepted"
 "${INSTALLER}" --dry-run --yes --source-dir "${ROOT}" --force >/dev/null
 
+note "dry-run: backend intent helia accepted"
+"${INSTALLER}" --dry-run --backend helia --source-dir "${ROOT}" --force >/dev/null
+
+note "edge: invalid backend rejected"
+set +e
+"${INSTALLER}" --dry-run --backend bad-backend --source-dir "${ROOT}" --force >/dev/null 2>&1
+rc=$?
+set -e
+if [[ $rc -eq 0 ]]; then
+  fail "expected installer to fail for invalid --backend"
+fi
+
 note "edge: install-dir and install-path are mutually exclusive"
 set +e
 "${INSTALLER}" --dry-run --source-dir "${ROOT}" --install-dir "${tmp}/x" --install-path "${tmp}/y/si" --force >/dev/null 2>&1
@@ -121,6 +133,12 @@ tmp_dir="${tmp}/tmp build"
 mkdir -p "${tmp_dir}"
 "${INSTALLER}" --source-dir "${ROOT}" --tmp-dir "${tmp_dir}" --install-dir "${install_dir}" --force --quiet
 "${install_dir}/si" version >/dev/null
+
+note "e2e: non-quiet install works"
+nonquiet_dir="${tmp}/bin-nonquiet"
+mkdir -p "${nonquiet_dir}"
+"${INSTALLER}" --source-dir "${ROOT}" --install-dir "${nonquiet_dir}" --force >/dev/null
+"${nonquiet_dir}/si" version >/dev/null
 
 note "e2e: idempotent reinstall over existing binary"
 "${INSTALLER}" --source-dir "${ROOT}" --install-dir "${install_dir}" --force --quiet
