@@ -76,8 +76,8 @@ var (
 	loadPaasRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdPaas(args) }
 	}
-	loadHeliaRootHandler = func() rootCommandHandler {
-		return func(_ string, args []string) { cmdHelia(args) }
+	loadSunRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdSun(args) }
 	}
 	loadPersonaRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdPersona(args) }
@@ -138,7 +138,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
 	register(newLazyRootHandler(loadMintlifyRootHandler), "mintlify")
 	register(newLazyRootHandler(loadPaasRootHandler), "paas")
-	register(newLazyRootHandler(loadHeliaRootHandler), "sun", "helia")
+	register(newLazyRootHandler(loadSunRootHandler), "sun", "helia")
 	register(newLazyRootHandler(loadPersonaRootHandler), "persona")
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
 	register(newLazyRootHandler(loadPluginsRootHandler), "plugins", "plugin", "marketplace")
