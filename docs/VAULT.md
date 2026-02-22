@@ -12,10 +12,10 @@ Goals:
 
 - One encrypted dotenv file on disk (default: `~/.si/vault/.env`).
 - Use `--file` to operate on a different file.
-- Choose sync backend policy with `si vault backend use --mode <git|dual|helia>`:
+- Choose sync backend policy with `si vault backend use --mode <git|dual|sun|helia>`:
   - `git`: local/git-based only (default)
-  - `dual`: local/git-based with best-effort Helia backup
-  - `helia`: Helia backup required on mutating vault commands
+  - `dual`: local/git-based with best-effort Sun backup
+  - `sun`/`helia`: Sun backup required on mutating vault commands (`helia` is a legacy alias)
 
 ## Quickstart
 
@@ -173,11 +173,11 @@ Set backend mode:
 ```bash
 si vault backend use --mode git
 si vault backend use --mode dual
-si vault backend use --mode helia
+si vault backend use --mode sun
 ```
 
 Environment override:
-- `SI_VAULT_SYNC_BACKEND=git|dual|helia`
+- `SI_VAULT_SYNC_BACKEND=git|dual|sun|helia`
 
 ## Key Storage
 

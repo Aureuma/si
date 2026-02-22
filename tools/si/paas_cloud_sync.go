@@ -58,7 +58,7 @@ func normalizePaasSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "git", "local":
 		return paasSyncBackendGit
-	case "helia", "cloud":
+	case "sun", "helia", "cloud":
 		return paasSyncBackendHelia
 	case "dual", "both":
 		return paasSyncBackendDual
@@ -71,14 +71,14 @@ func resolvePaasSyncBackend(settings Settings) (paasSyncBackendResolution, error
 	if envRaw := strings.TrimSpace(os.Getenv(paasSyncBackendEnvKey)); envRaw != "" {
 		mode := normalizePaasSyncBackend(envRaw)
 		if mode == "" {
-			return paasSyncBackendResolution{}, fmt.Errorf("invalid %s %q (expected git, helia, or dual)", paasSyncBackendEnvKey, envRaw)
+			return paasSyncBackendResolution{}, fmt.Errorf("invalid %s %q (expected git, sun, helia, or dual)", paasSyncBackendEnvKey, envRaw)
 		}
 		return paasSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Paas.SyncBackend); cfgRaw != "" {
 		mode := normalizePaasSyncBackend(cfgRaw)
 		if mode == "" {
-			return paasSyncBackendResolution{}, fmt.Errorf("invalid paas.sync_backend %q (expected git, helia, or dual)", cfgRaw)
+			return paasSyncBackendResolution{}, fmt.Errorf("invalid paas.sync_backend %q (expected git, sun, helia, or dual)", cfgRaw)
 		}
 		return paasSyncBackendResolution{Mode: mode, Source: "settings"}, nil
 	}
@@ -184,9 +184,9 @@ func maybeHeliaAutoSyncPaasControlPlane(command string) error {
 	summary, err := pushPaasControlPlaneSnapshotToHelia(currentPaasContext(), "", nil)
 	if err != nil {
 		if requireHelia {
-			return fmt.Errorf("helia paas auto-sync failed (%s): %w", strings.TrimSpace(command), err)
+			return fmt.Errorf("sun paas auto-sync failed (%s): %w", strings.TrimSpace(command), err)
 		}
-		warnf("helia paas auto-sync skipped (%s): %v", strings.TrimSpace(command), err)
+		warnf("sun paas auto-sync skipped (%s): %v", strings.TrimSpace(command), err)
 		return nil
 	}
 	_ = summary

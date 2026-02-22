@@ -96,17 +96,18 @@ Select vault backend mode:
 
 ```bash
 si vault backend use --mode git   # local/git-only
-si vault backend use --mode dual  # local/git + best-effort Helia backup
-si vault backend use --mode helia # Helia backup required on mutating vault commands
+si vault backend use --mode dual  # local/git + best-effort Sun backup
+si vault backend use --mode sun   # Sun backup required on mutating vault commands
 si vault backend status
 ```
 
-When vault backend is `dual` or `helia`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `helia.vault_backup` object.
+`--mode helia` remains supported as a legacy alias for `--mode sun`.
+When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `sun.vault_backup`/`helia.vault_backup` object.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.
 - Use `si vault encrypt --file <path>` before backup if plaintext keys are detected.
-- In `helia` backend mode, plaintext vault files are treated as errors for mutating commands until encrypted.
+- In `sun` backend mode, plaintext vault files are treated as errors for mutating commands until encrypted.
 
 ## Token and audit workflows
 
@@ -144,7 +145,7 @@ si sun taskboard done --name shared --id <task-id> --agent dyad:main-laptop --re
 Dyad autopilot integration:
 
 ```bash
-# If --prompt is omitted, autopilot claims from helia.taskboard and uses task.prompt.
+# If --prompt is omitted, autopilot claims from sun.taskboard (or helia.taskboard legacy alias) and uses task.prompt.
 si dyad spawn release-bot --autopilot --profile main
 ```
 
@@ -202,7 +203,7 @@ si sun machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remo
 
 ## Settings keys
 
-`[helia]` supports:
+`[sun]` supports (with `[helia]` as a legacy alias):
 - `base_url`
 - `account`
 - `token`

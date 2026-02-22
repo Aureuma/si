@@ -338,3 +338,78 @@ func TestApplySettingsDefaultsNormalizesCodexLoginDefaultBrowser(t *testing.T) {
 		t.Fatalf("expected default_browser to normalize to chrome, got %q", settings.Codex.Login.DefaultBrowser)
 	}
 }
+
+func TestLoadSettingsSunSectionOverridesLegacyHeliaSection(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	path := filepath.Join(tmp, ".si", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := `
+[helia]
+base_url = "https://legacy.example"
+token = "legacy-token"
+timeout_seconds = 5
+
+[sun]
+base_url = "https://sun.example"
+token = "sun-token"
+timeout_seconds = 30
+taskboard = "shared"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got, err := loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if got.Helia.BaseURL != "https://sun.example" {
+		t.Fatalf("expected sun base url override, got %q", got.Helia.BaseURL)
+	}
+	if got.Helia.Token != "sun-token" {
+		t.Fatalf("expected sun token override, got %q", got.Helia.Token)
+	}
+	if got.Helia.TimeoutSeconds != 30 {
+		t.Fatalf("expected sun timeout override, got %d", got.Helia.TimeoutSeconds)
+	}
+	if got.Helia.Taskboard != "shared" {
+		t.Fatalf("expected sun taskboard override, got %q", got.Helia.Taskboard)
+	}
+	if got.Sun.BaseURL != got.Helia.BaseURL {
+		t.Fatalf("expected mirrored sun settings, got sun=%q helia=%q", got.Sun.BaseURL, got.Helia.BaseURL)
+	}
+}
+
+func TestSaveSettingsMirrorsHeliaIntoSunSection(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Helia.BaseURL = "https://sun-save.example"
+	settings.Helia.Token = "save-token"
+
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("saveSettings: %v", err)
+	}
+
+	path, err := settingsPath()
+	if err != nil {
+		t.Fatalf("settingsPath: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+	text := string(data)
+	if !strings.Contains(text, "[sun]") {
+		t.Fatalf("expected [sun] section in saved settings, got:\n%s", text)
+	}
+	if !strings.Contains(text, "sun-save.example") {
+		t.Fatalf("expected mirrored sun base_url in saved settings, got:\n%s", text)
+	}
+}

@@ -11,8 +11,8 @@ import (
 var paasCloudActions = []subcommandAction{
 	{Name: "status", Description: "show paas cloud backend configuration"},
 	{Name: "use", Description: "set paas cloud backend mode"},
-	{Name: "push", Description: "push paas control-plane snapshot to helia"},
-	{Name: "pull", Description: "pull paas control-plane snapshot from helia"},
+	{Name: "push", Description: "push paas control-plane snapshot to sun"},
+	{Name: "pull", Description: "pull paas control-plane snapshot from sun"},
 }
 
 func cmdPaasCloud(args []string) {
@@ -68,7 +68,7 @@ func cmdPaasCloudStatus(args []string) {
 			paasFailureInvalidArgument,
 			"backend_resolve",
 			"",
-			"pass git, helia, or dual for paas sync backend",
+			"pass git, sun, helia, or dual for paas sync backend",
 			err,
 		), nil)
 	}
@@ -82,6 +82,9 @@ func cmdPaasCloudStatus(args []string) {
 		"helia_sync_enabled":    resolution.Mode == paasSyncBackendHelia || resolution.Mode == paasSyncBackendDual,
 		"helia_sync_strict":     resolution.Mode == paasSyncBackendHelia,
 		"helia_auth_configured": strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Helia.Token)) != "",
+		"sun_sync_enabled":      resolution.Mode == paasSyncBackendHelia || resolution.Mode == paasSyncBackendDual,
+		"sun_sync_strict":       resolution.Mode == paasSyncBackendHelia,
+		"sun_auth_configured":   strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Helia.Token)) != "",
 	}
 	if client, clientErr := heliaClientFromSettings(settings); clientErr == nil {
 		items, listErr := client.listObjects(heliaContext(settings), heliaPaasControlPlaneSnapshotKind, objectName, 1)
@@ -105,9 +108,9 @@ func cmdPaasCloudStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("source:"), report["source"])
 	fmt.Printf("%s %s\n", styleHeading("context:"), report["context"])
 	fmt.Printf("%s %s\n", styleHeading("object_name:"), report["object_name"])
-	fmt.Printf("%s %s\n", styleHeading("helia_sync_enabled:"), boolString(report["helia_sync_enabled"].(bool)))
-	fmt.Printf("%s %s\n", styleHeading("helia_sync_strict:"), boolString(report["helia_sync_strict"].(bool)))
-	fmt.Printf("%s %s\n", styleHeading("helia_auth_configured:"), boolString(report["helia_auth_configured"].(bool)))
+	fmt.Printf("%s %s\n", styleHeading("sun_sync_enabled:"), boolString(report["sun_sync_enabled"].(bool)))
+	fmt.Printf("%s %s\n", styleHeading("sun_sync_strict:"), boolString(report["sun_sync_strict"].(bool)))
+	fmt.Printf("%s %s\n", styleHeading("sun_auth_configured:"), boolString(report["sun_auth_configured"].(bool)))
 	if exists, ok := report["remote_exists"].(bool); ok {
 		fmt.Printf("%s %s\n", styleHeading("remote_exists:"), boolString(exists))
 		if exists {
@@ -123,17 +126,17 @@ func cmdPaasCloudStatus(args []string) {
 func cmdPaasCloudUse(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("paas cloud use", flag.ExitOnError)
-	modeFlag := fs.String("mode", "", "paas cloud sync backend mode: git, helia, or dual")
+	modeFlag := fs.String("mode", "", "paas cloud sync backend mode: git, sun, helia, or dual")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas cloud use --mode <git|helia|dual>")
+		printUsage("usage: si paas cloud use --mode <git|sun|helia|dual>")
 		return
 	}
 	mode := normalizePaasSyncBackend(*modeFlag)
 	if mode == "" {
-		fatal(fmt.Errorf("invalid --mode %q (expected git, helia, or dual)", strings.TrimSpace(*modeFlag)))
+		fatal(fmt.Errorf("invalid --mode %q (expected git, sun, helia, or dual)", strings.TrimSpace(*modeFlag)))
 	}
 	settings.Paas.SyncBackend = mode
 	if err := saveSettings(settings); err != nil {
@@ -152,7 +155,7 @@ func cmdPaasCloudPush(args []string) {
 	args, jsonOut := parsePaasJSONFlag(args)
 	fs := flag.NewFlagSet("paas cloud push", flag.ExitOnError)
 	contextName := fs.String("context", currentPaasContext(), "paas context to push")
-	objectName := fs.String("name", "", "helia object name override")
+	objectName := fs.String("name", "", "sun object name override")
 	revision := fs.String("expected-revision", "", "optional optimistic-lock revision")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -179,7 +182,7 @@ func cmdPaasCloudPush(args []string) {
 			paasFailureUnknown,
 			"cloud_push",
 			"",
-			"verify helia auth and retry",
+			"verify sun auth and retry",
 			err,
 		), nil)
 	}
@@ -202,7 +205,7 @@ func cmdPaasCloudPull(args []string) {
 	args, jsonOut := parsePaasJSONFlag(args)
 	fs := flag.NewFlagSet("paas cloud pull", flag.ExitOnError)
 	contextName := fs.String("context", currentPaasContext(), "paas context to restore")
-	objectName := fs.String("name", "", "helia object name override")
+	objectName := fs.String("name", "", "sun object name override")
 	replace := fs.Bool("replace", false, "replace local stores instead of merging")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
@@ -215,7 +218,7 @@ func cmdPaasCloudPull(args []string) {
 			paasFailureUnknown,
 			"cloud_pull",
 			"",
-			"verify helia auth/object name and retry",
+			"verify sun auth/object name and retry",
 			err,
 		), nil)
 	}

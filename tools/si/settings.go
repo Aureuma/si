@@ -34,6 +34,7 @@ type Settings struct {
 	GCP           GCPSettings        `toml:"gcp,omitempty"`
 	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
 	Helia         HeliaSettings      `toml:"helia,omitempty"`
+	Sun           HeliaSettings      `toml:"sun,omitempty"`
 	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
 	Shell         ShellSettings      `toml:"shell"`
@@ -135,9 +136,9 @@ type VaultSettings struct {
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 	// SyncBackend selects how vault state sync is handled.
-	// Supported values: git, helia, dual
+	// Supported values: git, sun, helia, dual
 	// - git: local/git-based only
-	// - helia: Helia backup required on mutating vault operations
+	// - sun/helia: Sun backup required on mutating vault operations
 	// - dual: local/git-based with best-effort Helia backup
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
@@ -151,9 +152,9 @@ type VaultSettings struct {
 
 type PaasSettings struct {
 	// SyncBackend selects how paas state sync is handled.
-	// Supported values: git, helia, dual
+	// Supported values: git, sun, helia, dual
 	// - git: local/git-based only
-	// - helia: Helia snapshot backup required on mutating paas operations
+	// - sun/helia: Sun snapshot backup required on mutating paas operations
 	// - dual: local/git-based with best-effort Helia snapshot backup
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
@@ -510,6 +511,54 @@ type ShellPromptColors struct {
 	Symbol  string `toml:"symbol,omitempty"`
 	Error   string `toml:"error,omitempty"`
 	Reset   string `toml:"reset,omitempty"`
+}
+
+func mergeSunSettings(settings *Settings) {
+	if settings == nil {
+		return
+	}
+	sun := settings.Sun
+	if trimmed := strings.TrimSpace(sun.BaseURL); trimmed != "" {
+		settings.Helia.BaseURL = trimmed
+	}
+	if trimmed := strings.TrimSpace(sun.Account); trimmed != "" {
+		settings.Helia.Account = trimmed
+	}
+	if trimmed := strings.TrimSpace(sun.Token); trimmed != "" {
+		settings.Helia.Token = trimmed
+	}
+	if sun.TimeoutSeconds > 0 {
+		settings.Helia.TimeoutSeconds = sun.TimeoutSeconds
+	}
+	// Bool zero-value cannot distinguish unset from explicit false; prefer true when set.
+	if sun.AutoSync {
+		settings.Helia.AutoSync = true
+	}
+	if trimmed := strings.TrimSpace(sun.VaultBackup); trimmed != "" {
+		settings.Helia.VaultBackup = trimmed
+	}
+	if trimmed := strings.TrimSpace(sun.Taskboard); trimmed != "" {
+		settings.Helia.Taskboard = trimmed
+	}
+	if trimmed := strings.TrimSpace(sun.TaskboardAgent); trimmed != "" {
+		settings.Helia.TaskboardAgent = trimmed
+	}
+	if sun.TaskboardLeaseSeconds > 0 {
+		settings.Helia.TaskboardLeaseSeconds = sun.TaskboardLeaseSeconds
+	}
+	if trimmed := strings.TrimSpace(sun.MachineID); trimmed != "" {
+		settings.Helia.MachineID = trimmed
+	}
+	if trimmed := strings.TrimSpace(sun.OperatorID); trimmed != "" {
+		settings.Helia.OperatorID = trimmed
+	}
+}
+
+func mirrorHeliaToSun(settings *Settings) {
+	if settings == nil {
+		return
+	}
+	settings.Sun = settings.Helia
 }
 
 func settingsPath() (string, error) {
@@ -934,6 +983,7 @@ func applySettingsDefaults(settings *Settings) {
 		openAISpec := providers.Resolve(providers.OpenAI)
 		settings.OpenAI.APIBaseURL = firstNonEmpty(openAISpec.BaseURL, "https://api.openai.com")
 	}
+	mergeSunSettings(settings)
 	settings.Helia.BaseURL = strings.TrimSpace(settings.Helia.BaseURL)
 	if settings.Helia.BaseURL == "" {
 		settings.Helia.BaseURL = "http://127.0.0.1:8080"
@@ -956,6 +1006,7 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	settings.Helia.MachineID = strings.TrimSpace(settings.Helia.MachineID)
 	settings.Helia.OperatorID = strings.TrimSpace(settings.Helia.OperatorID)
+	mirrorHeliaToSun(settings)
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
 	if settings.OCI.Profile == "" {
@@ -1066,6 +1117,7 @@ func saveSettings(settings Settings) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	mirrorHeliaToSun(&settings)
 	settings.Metadata.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	data, err := toml.Marshal(settings)
 	if err != nil {
