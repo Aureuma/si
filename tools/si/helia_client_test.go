@@ -18,6 +18,13 @@ func TestNewHeliaClientValidation(t *testing.T) {
 	if _, err := newHeliaClient("http://127.0.0.1:8080", "", time.Second); err == nil {
 		t.Fatalf("expected token validation error")
 	}
+	if _, err := newHeliaClient("http://example.com", "token", time.Second); err == nil {
+		t.Fatalf("expected non-local insecure http URL to be rejected")
+	}
+	t.Setenv("SI_HELIA_ALLOW_INSECURE_HTTP", "1")
+	if _, err := newHeliaClient("http://example.com", "token", time.Second); err != nil {
+		t.Fatalf("expected insecure http override to permit URL, got: %v", err)
+	}
 }
 
 func TestHeliaClientRoundTripMethods(t *testing.T) {

@@ -9,6 +9,17 @@ import (
 	"si/tools/si/internal/vault"
 )
 
+const (
+	vaultSyncBackendGit   = "git"
+	vaultSyncBackendHelia = "helia"
+	vaultSyncBackendDual  = "dual"
+)
+
+type vaultSyncBackendResolution struct {
+	Mode   string
+	Source string
+}
+
 func vaultRefuseNonInteractiveOSKeyring(keyCfg vault.KeyConfig) error {
 	// In non-interactive environments (CI/VPS), OS keychains can block on prompts.
 	// Prefer SI_VAULT_IDENTITY(_FILE) or file backend for deterministic behavior.
@@ -37,6 +48,41 @@ func vaultKeyConfigFromSettings(settings Settings) vault.KeyConfig {
 		keyFile = settings.Vault.KeyFile
 	}
 	return vault.KeyConfig{Backend: backend, KeyFile: keyFile}
+}
+
+func normalizeVaultSyncBackend(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "git", "local":
+		return vaultSyncBackendGit
+	case "helia", "cloud":
+		return vaultSyncBackendHelia
+	case "dual", "both":
+		return vaultSyncBackendDual
+	default:
+		return ""
+	}
+}
+
+func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, error) {
+	if envRaw := strings.TrimSpace(os.Getenv("SI_VAULT_SYNC_BACKEND")); envRaw != "" {
+		mode := normalizeVaultSyncBackend(envRaw)
+		if mode == "" {
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git, helia, or dual)", envRaw)
+		}
+		return vaultSyncBackendResolution{Mode: mode, Source: "env"}, nil
+	}
+	if cfgRaw := strings.TrimSpace(settings.Vault.SyncBackend); cfgRaw != "" {
+		mode := normalizeVaultSyncBackend(cfgRaw)
+		if mode == "" {
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git, helia, or dual)", cfgRaw)
+		}
+		return vaultSyncBackendResolution{Mode: mode, Source: "settings"}, nil
+	}
+	// Backward compatibility: historical Helia auto-sync implied best-effort vault backup.
+	if settings.Helia.AutoSync {
+		return vaultSyncBackendResolution{Mode: vaultSyncBackendDual, Source: "legacy_helia_auto_sync"}, nil
+	}
+	return vaultSyncBackendResolution{Mode: vaultSyncBackendGit, Source: "default"}, nil
 }
 
 func vaultTrustStorePath(settings Settings) string {

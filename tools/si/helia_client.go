@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 )
@@ -96,6 +97,10 @@ func newHeliaClient(baseURL string, token string, timeout time.Duration) (*helia
 	if _, err := url.ParseRequestURI(baseURL); err != nil {
 		return nil, fmt.Errorf("invalid helia base url %q", baseURL)
 	}
+	parsed, _ := url.Parse(baseURL)
+	if parsed != nil && !heliaAllowsInsecureHTTP(parsed) {
+		return nil, fmt.Errorf("helia base url must use https for non-local hosts (set SI_HELIA_ALLOW_INSECURE_HTTP=1 to override)")
+	}
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return nil, fmt.Errorf("helia token is required (run `si helia auth login` or set SI_HELIA_TOKEN)")
@@ -108,6 +113,28 @@ func newHeliaClient(baseURL string, token string, timeout time.Duration) (*helia
 		token:   token,
 		http:    &http.Client{Timeout: timeout},
 	}, nil
+}
+
+func heliaAllowsInsecureHTTP(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(u.Scheme), "https") {
+		return true
+	}
+	if !strings.EqualFold(strings.TrimSpace(u.Scheme), "http") {
+		return false
+	}
+	if isTruthyFlagValue(os.Getenv("SI_HELIA_ALLOW_INSECURE_HTTP")) {
+		return true
+	}
+	host := strings.ToLower(strings.TrimSpace(u.Hostname()))
+	switch host {
+	case "localhost", "127.0.0.1", "::1":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *heliaClient) ready(ctx context.Context) error {

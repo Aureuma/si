@@ -11,6 +11,15 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Added
+- Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `helia` vault sync modes.
+
+### Changed
+- Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy `helia.auto_sync`.
+- Hardened Helia vault backup pull flow with payload checksum/size verification when object metadata is available.
+
+### Security
+- Hardened Helia client URL policy to require HTTPS for non-loopback endpoints by default (override with `SI_HELIA_ALLOW_INSECURE_HTTP=1` only when intentional).
 
 ## [v0.48.0] - 2026-02-22
 ### Added

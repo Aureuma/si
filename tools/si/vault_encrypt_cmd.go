@@ -83,7 +83,9 @@ func cmdVaultEncrypt(args []string) {
 		if *reencrypt {
 			fmt.Printf("reencrypted: %d\n", len(res.ReencryptedKeys))
 		}
-		maybeHeliaAutoBackupVault("vault_encrypt", target.File)
+		if err := maybeHeliaAutoBackupVault("vault_encrypt", target.File); err != nil {
+			fatal(err)
+		}
 	}
 
 	if len(files) == 0 {

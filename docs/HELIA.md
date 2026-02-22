@@ -34,6 +34,10 @@ si helia auth login \
   --auto-sync
 ```
 
+Security note:
+- Use `https://` Helia URLs for any non-local deployment.
+- `http://` is accepted only for loopback (`localhost`, `127.0.0.1`, `::1`) unless `SI_HELIA_ALLOW_INSECURE_HTTP=1` is set.
+
 Verify:
 
 ```bash
@@ -87,11 +91,21 @@ Pull:
 si helia vault backup pull --file ~/.si/vault/.env --name default
 ```
 
-When `helia.auto_sync = true`, `si vault init|set|unset|fmt|encrypt` attempt automatic backup.
+Select vault backend mode:
+
+```bash
+si vault backend use --mode git   # local/git-only
+si vault backend use --mode dual  # local/git + best-effort Helia backup
+si vault backend use --mode helia # Helia backup required on mutating vault commands
+si vault backend status
+```
+
+When vault backend is `dual` or `helia`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `helia.vault_backup` object.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.
 - Use `si vault encrypt --file <path>` before backup if plaintext keys are detected.
+- In `helia` backend mode, plaintext vault files are treated as errors for mutating commands until encrypted.
 
 ## Token and audit workflows
 

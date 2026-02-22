@@ -12,6 +12,10 @@ Goals:
 
 - One encrypted dotenv file on disk (default: `~/.si/vault/.env`).
 - Use `--file` to operate on a different file.
+- Choose sync backend policy with `si vault backend use --mode <git|dual|helia>`:
+  - `git`: local/git-based only (default)
+  - `dual`: local/git-based with best-effort Helia backup
+  - `helia`: Helia backup required on mutating vault commands
 
 ## Quickstart
 
@@ -156,6 +160,25 @@ Commands:
 
 Most mutating/decrypting commands require trust to be established.
 
+## Backend Selection
+
+Inspect effective backend:
+
+```bash
+si vault backend status
+```
+
+Set backend mode:
+
+```bash
+si vault backend use --mode git
+si vault backend use --mode dual
+si vault backend use --mode helia
+```
+
+Environment override:
+- `SI_VAULT_SYNC_BACKEND=git|dual|helia`
+
 ## Key Storage
 
 Device identities are age X25519 private keys. Resolution order:
@@ -200,3 +223,13 @@ Audit logs never include secret values.
 - dotenv keys are validated for safe env export (no whitespace, `=`, or control characters).
 - `docker exec` env injection is per-exec; values are still transmitted to the Docker daemon. Treat remote Docker as highly privileged.
 - `si vault docker exec` refuses insecure `DOCKER_HOST` by default; override with `--allow-insecure-docker-host` only if you understand the risk.
+
+## Industry References
+
+The vault + Helia backend model in SI aligns with common guidance from major secret-management systems:
+- HashiCorp Vault production hardening guidance (TLS, auth boundaries, audit coverage):
+  https://developer.hashicorp.com/vault/docs/concepts/production-hardening
+- AWS Secrets Manager best practices (least privilege, rotation, monitoring):
+  https://docs.aws.amazon.com/secretsmanager/latest/userguide/best-practices.html
+- Google Cloud Secret Manager best practices (least privilege, rotation, replication/access controls):
+  https://cloud.google.com/secret-manager/docs/best-practices
