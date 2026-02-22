@@ -13,6 +13,7 @@ import (
 
 	"si/tools/si/internal/githubbridge"
 	"si/tools/si/internal/providers"
+	"si/tools/si/internal/vault"
 )
 
 type githubAuthOverrides struct {
@@ -63,6 +64,9 @@ func resolveGithubRuntimeContext(accountFlag string, ownerFlag string, baseURLFl
 	sourceParts := nonEmpty(modeSource)
 	if mode == githubbridge.AuthModeOAuth {
 		accessToken, tokenSource := resolveGitHubOAuthAccessToken(alias, account, overrides)
+		if strings.TrimSpace(accessToken) == "" {
+			accessToken, tokenSource = resolveGitHubOAuthAccessTokenFromVault(settings, account)
+		}
 		if strings.TrimSpace(accessToken) == "" {
 			prefix := githubAccountEnvPrefix(alias, account)
 			if prefix == "" {
@@ -294,6 +298,50 @@ func resolveGitHubOAuthAccessToken(alias string, account GitHubAccountEntry, ove
 		return value, "env:GH_PAT"
 	}
 	return "", ""
+}
+
+func resolveGitHubOAuthAccessTokenFromVault(settings Settings, account GitHubAccountEntry) (string, string) {
+	key := strings.TrimSpace(account.OAuthTokenEnv)
+	if key == "" {
+		return "", ""
+	}
+	target, err := vaultResolveTarget(settings, "", false)
+	if err != nil {
+		return "", ""
+	}
+	doc, err := vault.ReadDotenvFile(target.File)
+	if err != nil {
+		return "", ""
+	}
+	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
+		return "", ""
+	}
+	raw, ok := doc.Lookup(key)
+	if !ok {
+		return "", ""
+	}
+	value, err := vault.NormalizeDotenvValue(raw)
+	if err != nil {
+		return "", ""
+	}
+	if vault.IsEncryptedValueV1(value) {
+		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
+			return "", ""
+		}
+		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
+		if err != nil {
+			return "", ""
+		}
+		plain, err := vault.DecryptStringV1(value, info.Identity)
+		if err != nil {
+			return "", ""
+		}
+		return plain, "vault:" + key
+	}
+	if strings.TrimSpace(value) == "" {
+		return "", ""
+	}
+	return value, "vault:" + key
 }
 
 func resolveGitHubEnv(alias string, account GitHubAccountEntry, key string) string {
