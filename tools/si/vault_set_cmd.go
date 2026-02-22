@@ -72,7 +72,7 @@ func cmdVaultSet(args []string) {
 		fatal(err)
 	}
 	if changed {
-		if err := vault.WriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
+		if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
 			fatal(err)
 		}
 	}
@@ -82,7 +82,7 @@ func cmdVaultSet(args []string) {
 			fatal(err)
 		}
 		if fmtChanged {
-			if err := vault.WriteDotenvFileAtomic(target.File, formatted.Bytes()); err != nil {
+			if err := vaultWriteDotenvFileAtomic(target.File, formatted.Bytes()); err != nil {
 				fatal(err)
 			}
 		}
