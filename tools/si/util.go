@@ -244,6 +244,7 @@ build:
   si build self [--repo <path>] [--install-path <path>] [--no-upgrade] [--output <path>]
   si build self upgrade [--repo <path>] [--install-path <path>]
   si build self run [--repo <path>] [--] [si args...]
+    Note: image builds use buildx directly when available, else classic docker build.
 
   Typical workflows:
     Stable use: run si build self to upgrade installed si from your checkout.
