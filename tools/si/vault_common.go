@@ -50,6 +50,24 @@ func vaultKeyConfigFromSettings(settings Settings) vault.KeyConfig {
 	return vault.KeyConfig{Backend: backend, KeyFile: keyFile}
 }
 
+func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source string) ([]string, error) {
+	backend, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		return nil, err
+	}
+	if backend.Mode == vaultSyncBackendSun {
+		identity, err := vaultEnsureStrictSunIdentity(settings, source)
+		if err != nil {
+			return nil, err
+		}
+		if identity == nil {
+			return nil, fmt.Errorf("sun vault identity sync failed (%s): missing identity", source)
+		}
+		return []string{strings.TrimSpace(identity.Recipient().String())}, nil
+	}
+	return vault.ParseRecipientsFromDotenv(doc), nil
+}
+
 func normalizeVaultSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "git", "local":

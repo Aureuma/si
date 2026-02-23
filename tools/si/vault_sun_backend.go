@@ -135,6 +135,55 @@ func vaultPersistIdentityToSun(settings Settings, identity *age.X25519Identity, 
 	return nil
 }
 
+func vaultEnsureStrictSunIdentity(settings Settings, source string) (*age.X25519Identity, error) {
+	backend, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		return nil, err
+	}
+	if backend.Mode != vaultSyncBackendSun {
+		return nil, nil
+	}
+
+	client, err := sunClientFromSettings(settings)
+	if err != nil {
+		return nil, fmt.Errorf("sun vault identity sync failed (%s): %w", source, err)
+	}
+
+	name := sunVaultObjectName(settings)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	payload, err := client.getPayload(ctx, sunVaultIdentityKind, name)
+	if err != nil {
+		if !isSunNotFoundError(err) {
+			return nil, fmt.Errorf("sun vault identity sync failed (%s): %w", source, err)
+		}
+		identity, genErr := vault.GenerateIdentity()
+		if genErr != nil {
+			return nil, fmt.Errorf("sun vault identity sync failed (%s): generate identity: %w", source, genErr)
+		}
+		if setErr := os.Setenv("SI_VAULT_IDENTITY", strings.TrimSpace(identity.String())); setErr != nil {
+			return nil, fmt.Errorf("sun vault identity sync failed (%s): %w", source, setErr)
+		}
+		if persistErr := vaultPersistIdentityToSun(settings, identity, source); persistErr != nil {
+			return nil, persistErr
+		}
+		return identity, nil
+	}
+
+	secret := strings.TrimSpace(string(payload))
+	if secret == "" {
+		return nil, fmt.Errorf("sun vault identity sync failed (%s): empty identity payload", source)
+	}
+	identity, err := age.ParseX25519Identity(secret)
+	if err != nil {
+		return nil, fmt.Errorf("sun vault identity sync failed (%s): invalid age identity: %w", source, err)
+	}
+	if err := os.Setenv("SI_VAULT_IDENTITY", secret); err != nil {
+		return nil, fmt.Errorf("sun vault identity sync failed (%s): %w", source, err)
+	}
+	return identity, nil
+}
+
 func vaultHydrateFromSun(settings Settings, target vault.Target, allowMissingFile bool) error {
 	backend, err := resolveVaultSyncBackend(settings)
 	if err != nil {

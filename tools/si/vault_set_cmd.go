@@ -58,7 +58,10 @@ func cmdVaultSet(args []string) {
 	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
 		fatal(err)
 	}
-	recipients := vault.ParseRecipientsFromDotenv(doc)
+	recipients, err := vaultRecipientsForWrite(settings, doc, "vault_set")
+	if err != nil {
+		fatal(err)
+	}
 	if len(recipients) == 0 {
 		fatal(fmt.Errorf("no recipients found (expected %q lines); run `si vault init`", vault.VaultRecipientPrefix))
 	}
