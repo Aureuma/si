@@ -1838,10 +1838,10 @@ func TestPaasDeployBlueGreenApplyUsesComposeOnlyCutoverPolicy(t *testing.T) {
 	}
 	sshText := string(sshRaw)
 	scpText := string(scpRaw)
-	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-green' -f 'compose.yaml' up -d --remove-orphans") {
+	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-green' -f 'compose.yaml' up -d --remove-orphans --build") {
 		t.Fatalf("expected green project apply command in ssh log, got %q", sshText)
 	}
-	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-blue' -f 'compose.yaml' up -d --remove-orphans") {
+	if !strings.Contains(sshText, "docker compose -p 'billing-api-edge-a-blue' -f 'compose.yaml' up -d --remove-orphans --build") {
 		t.Fatalf("expected blue project apply command in ssh log, got %q", sshText)
 	}
 	if strings.Count(scpText, "root@203.0.113.10") < 4 {

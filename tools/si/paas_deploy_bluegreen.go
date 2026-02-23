@@ -525,7 +525,7 @@ func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, 
 			)
 		}
 	}
-	remoteCmd := fmt.Sprintf("cd %s && docker compose -p %s %s pull && docker compose -p %s %s up -d --remove-orphans", quoteSingle(remoteReleaseDir), quoteSingle(projectName), composeArgs, quoteSingle(projectName), composeArgs)
+	remoteCmd := fmt.Sprintf("cd %s && docker compose -p %s %s pull && docker compose -p %s %s up -d --remove-orphans --build", quoteSingle(remoteReleaseDir), quoteSingle(projectName), composeArgs, quoteSingle(projectName), composeArgs)
 	if _, err := runPaasSSHCommand(ctx, target, remoteCmd); err != nil {
 		return newPaasOperationFailure(
 			paasFailureRemoteApply,
