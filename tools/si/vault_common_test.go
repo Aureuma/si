@@ -83,7 +83,7 @@ func mustMkdir(t *testing.T, path string) {
 	}
 }
 
-func TestResolveVaultSyncBackendDefaultsAndLegacy(t *testing.T) {
+func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 	settings := Settings{}
 	applySettingsDefaults(&settings)
 
@@ -99,10 +99,10 @@ func TestResolveVaultSyncBackendDefaultsAndLegacy(t *testing.T) {
 	settings.Vault.SyncBackend = ""
 	got, err = resolveVaultSyncBackend(settings)
 	if err != nil {
-		t.Fatalf("resolve legacy backend: %v", err)
+		t.Fatalf("resolve backend with sun.auto_sync fallback removed: %v", err)
 	}
-	if got.Mode != vaultSyncBackendDual || got.Source != "legacy_sun_auto_sync" {
-		t.Fatalf("unexpected legacy resolution: %+v", got)
+	if got.Mode != vaultSyncBackendGit || got.Source != "default" {
+		t.Fatalf("unexpected resolution when backend unset: %+v", got)
 	}
 }
 
@@ -126,6 +126,15 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	}
 	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
 		t.Fatalf("unexpected settings sun-alias resolution: %+v", got)
+	}
+
+	settings.Vault.SyncBackend = "dual"
+	got, err = resolveVaultSyncBackend(settings)
+	if err != nil {
+		t.Fatalf("resolve settings backend dual alias: %v", err)
+	}
+	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
+		t.Fatalf("unexpected settings dual-alias resolution: %+v", got)
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")

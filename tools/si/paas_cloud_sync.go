@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	paasSyncBackendGit  = "git"
-	paasSyncBackendSun  = "sun"
-	paasSyncBackendDual = "dual"
+	paasSyncBackendGit = "git"
+	paasSyncBackendSun = "sun"
 
 	paasSyncBackendEnvKey  = "SI_PAAS_SYNC_BACKEND"
 	paasSnapshotNameEnvKey = "SI_PAAS_SNAPSHOT_NAME"
@@ -58,10 +57,9 @@ func normalizePaasSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "git", "local":
 		return paasSyncBackendGit
-	case "sun", "cloud":
+	case "sun", "cloud", "dual", "both":
+		// Backward-compatible alias: dual/both now resolve to strict sun mode.
 		return paasSyncBackendSun
-	case "dual", "both":
-		return paasSyncBackendDual
 	default:
 		return ""
 	}
@@ -71,19 +69,16 @@ func resolvePaasSyncBackend(settings Settings) (paasSyncBackendResolution, error
 	if envRaw := strings.TrimSpace(os.Getenv(paasSyncBackendEnvKey)); envRaw != "" {
 		mode := normalizePaasSyncBackend(envRaw)
 		if mode == "" {
-			return paasSyncBackendResolution{}, fmt.Errorf("invalid %s %q (expected git, sun, or dual)", paasSyncBackendEnvKey, envRaw)
+			return paasSyncBackendResolution{}, fmt.Errorf("invalid %s %q (expected git or sun)", paasSyncBackendEnvKey, envRaw)
 		}
 		return paasSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Paas.SyncBackend); cfgRaw != "" {
 		mode := normalizePaasSyncBackend(cfgRaw)
 		if mode == "" {
-			return paasSyncBackendResolution{}, fmt.Errorf("invalid paas.sync_backend %q (expected git, sun, or dual)", cfgRaw)
+			return paasSyncBackendResolution{}, fmt.Errorf("invalid paas.sync_backend %q (expected git or sun)", cfgRaw)
 		}
 		return paasSyncBackendResolution{Mode: mode, Source: "settings"}, nil
-	}
-	if settings.Sun.AutoSync {
-		return paasSyncBackendResolution{Mode: paasSyncBackendDual, Source: "legacy_sun_auto_sync"}, nil
 	}
 	return paasSyncBackendResolution{Mode: paasSyncBackendGit, Source: "default"}, nil
 }

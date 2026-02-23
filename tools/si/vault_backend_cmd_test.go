@@ -12,8 +12,8 @@ func TestNormalizeVaultSyncBackend(t *testing.T) {
 		"local": vaultSyncBackendGit,
 		"sun":   vaultSyncBackendSun,
 		"cloud": vaultSyncBackendSun,
-		"dual":  vaultSyncBackendDual,
-		"both":  vaultSyncBackendDual,
+		"dual":  vaultSyncBackendSun,
+		"both":  vaultSyncBackendSun,
 	}
 	for in, want := range cases {
 		if got := normalizeVaultSyncBackend(in); got != want {
@@ -51,7 +51,7 @@ func TestVaultBackendStatusAndUse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("backend use failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "vault sync backend set to dual") {
+	if !strings.Contains(stdout, "vault sync backend set to sun") {
 		t.Fatalf("unexpected backend use output: %s", stdout)
 	}
 
@@ -63,8 +63,8 @@ func TestVaultBackendStatusAndUse(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &after); err != nil {
 		t.Fatalf("parse backend status json after use: %v\nstdout=%s", err, stdout)
 	}
-	if after["mode"] != vaultSyncBackendDual {
-		t.Fatalf("mode after use=%v want=%s", after["mode"], vaultSyncBackendDual)
+	if after["mode"] != vaultSyncBackendSun {
+		t.Fatalf("mode after use=%v want=%s", after["mode"], vaultSyncBackendSun)
 	}
 	if after["source"] != "settings" {
 		t.Fatalf("source after use=%v want=settings", after["source"])

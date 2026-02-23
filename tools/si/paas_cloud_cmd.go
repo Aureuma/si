@@ -68,7 +68,7 @@ func cmdPaasCloudStatus(args []string) {
 			paasFailureInvalidArgument,
 			"backend_resolve",
 			"",
-			"pass git, sun, or dual for paas sync backend",
+			"pass git or sun for paas sync backend",
 			err,
 		), nil)
 	}
@@ -79,7 +79,7 @@ func cmdPaasCloudStatus(args []string) {
 		"source":              resolution.Source,
 		"context":             resolvedContext,
 		"object_name":         objectName,
-		"sun_sync_enabled":    resolution.Mode == paasSyncBackendSun || resolution.Mode == paasSyncBackendDual,
+		"sun_sync_enabled":    resolution.Mode == paasSyncBackendSun,
 		"sun_sync_strict":     resolution.Mode == paasSyncBackendSun,
 		"sun_auth_configured": strings.TrimSpace(firstNonEmpty(envSunToken(), settings.Sun.Token)) != "",
 	}
@@ -123,24 +123,24 @@ func cmdPaasCloudStatus(args []string) {
 func cmdPaasCloudUse(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("paas cloud use", flag.ExitOnError)
-	modeFlag := fs.String("mode", "", "paas cloud sync backend mode: git, sun, or dual")
+	modeFlag := fs.String("mode", "", "paas cloud sync backend mode: git or sun")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas cloud use --mode <git|sun|dual>")
+		printUsage("usage: si paas cloud use --mode <git|sun>")
 		return
 	}
 	mode := normalizePaasSyncBackend(*modeFlag)
 	if mode == "" {
-		fatal(fmt.Errorf("invalid --mode %q (expected git, sun, or dual)", strings.TrimSpace(*modeFlag)))
+		fatal(fmt.Errorf("invalid --mode %q (expected git or sun)", strings.TrimSpace(*modeFlag)))
 	}
 	settings.Paas.SyncBackend = mode
 	if err := saveSettings(settings); err != nil {
 		fatal(err)
 	}
 	successf("paas cloud sync backend set to %s", mode)
-	if mode == paasSyncBackendSun || mode == paasSyncBackendDual {
+	if mode == paasSyncBackendSun {
 		token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Sun.Token))
 		if token == "" {
 			warnf("sun token not configured; run `si sun auth login --url <sun-url> --token <token> --account <slug>`")
