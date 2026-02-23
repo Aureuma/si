@@ -98,6 +98,14 @@ Pull:
 si sun vault backup pull --file ~/.si/vault/.env --name default
 ```
 
+Equivalent vault-namespace commands:
+
+```bash
+si vault sync status --file ~/.si/vault/.env --name default
+si vault sync push --file ~/.si/vault/.env --name default
+si vault sync pull --file ~/.si/vault/.env --name default
+```
+
 Select vault backend mode:
 
 ```bash
@@ -107,7 +115,7 @@ si vault backend use --mode sun   # Sun backup required on mutating vault comman
 si vault backend status
 ```
 
-When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `sun.vault_backup` object.
+When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt|recipients add|recipients remove` perform automatic backup behavior for the configured `sun.vault_backup` object.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.

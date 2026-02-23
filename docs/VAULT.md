@@ -12,10 +12,10 @@ Goals:
 
 - One encrypted dotenv file on disk (default: `~/.si/vault/.env`).
 - Use `--file` to operate on a different file.
-- Choose sync backend policy with `si vault backend use --mode <git|dual|sun|sun>`:
+- Choose sync backend policy with `si vault backend use --mode <git|dual|sun>`:
   - `git`: local/git-based only (default)
   - `dual`: local/git-based with best-effort Sun backup
-  - `sun`/`sun`: Sun backup required on mutating vault commands (`sun` is a legacy alias)
+  - `sun`: Sun backup required on mutating vault commands
 
 ## Quickstart
 
@@ -133,6 +133,19 @@ Cross-repo guardrail:
 
 Mutating commands support `--format` to run `fmt` after the minimal edit.
 
+## Sun Vault Sync
+
+You can sync the vault directly from the `si vault` namespace:
+
+```bash
+si vault sync status [--file <path>] [--name <name>] [--json]
+si vault sync push [--file <path>] [--name <name>] [--allow-plaintext]
+si vault sync pull [--file <path>] [--name <name>]
+```
+
+These commands map to the same Sun backup object flow used by `si sun vault backup ...`.
+In `dual`/`sun` backend mode, automatic backup hooks also run after recipient changes (`si vault recipients add/remove`).
+
 ## Decrypting To Plaintext
 
 By default, `si vault decrypt` decrypts values in-place in the same file on disk (similar to `dotenvx decrypt`).
@@ -177,7 +190,7 @@ si vault backend use --mode sun
 ```
 
 Environment override:
-- `SI_VAULT_SYNC_BACKEND=git|dual|sun|sun`
+- `SI_VAULT_SYNC_BACKEND=git|dual|sun`
 
 ## Key Storage
 

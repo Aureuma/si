@@ -129,6 +129,9 @@ func cmdVaultRecipientsAdd(args []string) {
 	fmt.Printf("file: %s\n", filepath.Clean(target.File))
 	if changed {
 		fmt.Printf("recipient: added\n")
+		if err := maybeSunAutoBackupVault("vault_recipients_add", target.File); err != nil {
+			fatal(err)
+		}
 	} else {
 		fmt.Printf("recipient: already present\n")
 	}
@@ -197,6 +200,9 @@ func cmdVaultRecipientsRemove(args []string) {
 	fmt.Printf("file: %s\n", filepath.Clean(target.File))
 	if changed {
 		fmt.Printf("recipient: removed\n")
+		if err := maybeSunAutoBackupVault("vault_recipients_remove", target.File); err != nil {
+			fatal(err)
+		}
 	} else {
 		fmt.Printf("recipient: not present\n")
 	}
