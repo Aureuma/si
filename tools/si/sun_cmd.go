@@ -858,7 +858,18 @@ func writeFileAtomic0600(path string, data []byte) error {
 	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		// Some environments bind-mount dotenv files directly. Replacing those
+		// mount targets via rename(2) can fail even when direct write is allowed.
+		// If the target already exists as a regular file, fall back to in-place write.
+		if info, statErr := os.Stat(path); statErr == nil && info.Mode().IsRegular() {
+			if writeErr := os.WriteFile(path, data, 0o600); writeErr == nil {
+				return os.Chmod(path, 0o600)
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func resolveVaultPath(settings Settings, explicit string) string {
