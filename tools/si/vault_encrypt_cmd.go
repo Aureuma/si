@@ -51,8 +51,12 @@ func cmdVaultEncrypt(args []string) {
 		if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
 			fatal(err)
 		}
+		recipients, err := vaultRecipientsForWrite(settings, doc, "vault_encrypt")
+		if err != nil {
+			fatal(err)
+		}
 
-		res, err := vault.EncryptDotenvValues(&doc, identity, *reencrypt)
+		res, err := vault.EncryptDotenvValuesWithRecipients(&doc, recipients, identity, *reencrypt)
 		if err != nil {
 			fatal(err)
 		}

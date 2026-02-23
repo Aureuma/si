@@ -67,6 +67,13 @@ func EncryptDotenvValues(doc *DotenvFile, identity *age.X25519Identity, reencryp
 		return EncryptResult{}, nil
 	}
 	recipients := ParseRecipientsFromDotenv(*doc)
+	return EncryptDotenvValuesWithRecipients(doc, recipients, identity, reencrypt)
+}
+
+func EncryptDotenvValuesWithRecipients(doc *DotenvFile, recipients []string, identity *age.X25519Identity, reencrypt bool) (EncryptResult, error) {
+	if doc == nil {
+		return EncryptResult{}, nil
+	}
 	if len(recipients) == 0 {
 		return EncryptResult{}, fmt.Errorf("no recipients found (expected %q lines)", VaultRecipientPrefix)
 	}
