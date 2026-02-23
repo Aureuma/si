@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/term"
 )
@@ -108,9 +109,16 @@ func codexSwap(opts codexSwapOptions) (codexSwapResult, error) {
 	authBytes, err := os.ReadFile(authSrc)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return codexSwapResult{}, fmt.Errorf("auth cache not found at %s; run `si login %s`", authSrc, profileID)
+			if recoverCodexAuthCacheFromSun(opts.Profile, 10*time.Second) {
+				authBytes, err = os.ReadFile(authSrc)
+			}
+			if err != nil {
+				return codexSwapResult{}, fmt.Errorf("auth cache not found at %s; run `si login %s`", authSrc, profileID)
+			}
 		}
-		return codexSwapResult{}, fmt.Errorf("read auth cache %s: %w", authSrc, err)
+		if err != nil {
+			return codexSwapResult{}, fmt.Errorf("read auth cache %s: %w", authSrc, err)
+		}
 	}
 	if err := codexAuthValidationError(authSrc); err != nil {
 		return codexSwapResult{}, fmt.Errorf("invalid auth cache at %s: %v", authSrc, err)
