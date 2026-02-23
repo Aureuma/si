@@ -11,7 +11,7 @@
   <a href="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge" alt="Docs: Mintlify"></a>
   <a href="https://img.shields.io/badge/paas-docker--native-0ea5e9?style=for-the-badge"><img src="https://img.shields.io/badge/paas-docker--native-0ea5e9?style=for-the-badge" alt="PaaS: Docker Native"></a>
   <a href="https://www.npmjs.com/package/@aureuma/si"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si"></a>
-  <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Tap: aureuma/si"></a>
+  <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Formula: aureuma/si/si"></a>
 </p>
 
 `si` is an AI-first CLI for orchestrating coding agents, provider bridges, and Docker-native PaaS operations.
@@ -46,10 +46,11 @@ Use one of these install paths:
 # npm (global launcher package)
 npm install -g @aureuma/si
 
-# Homebrew tap
-brew tap aureuma/si
-brew install si
+# Homebrew
+brew install aureuma/si/si
 ```
+
+Homebrew uses `user/repo/formula` for external taps, so `brew install aureuma/si` is not a valid formula path.
 
 Direct installer script remains available:
 
