@@ -8,6 +8,8 @@ import (
 
 func TestNormalizeVaultSyncBackend(t *testing.T) {
 	cases := map[string]string{
+		"git":   vaultSyncBackendGit,
+		"local": vaultSyncBackendGit,
 		"sun":   vaultSyncBackendSun,
 		"cloud": vaultSyncBackendSun,
 		"dual":  vaultSyncBackendSun,
@@ -20,9 +22,6 @@ func TestNormalizeVaultSyncBackend(t *testing.T) {
 	}
 	if got := normalizeVaultSyncBackend("invalid"); got != "" {
 		t.Fatalf("expected invalid backend to normalize to empty, got %q", got)
-	}
-	if got := normalizeVaultSyncBackend("git"); got != "" {
-		t.Fatalf("expected git backend to be rejected, got %q", got)
 	}
 }
 
@@ -44,8 +43,8 @@ func TestVaultBackendStatusAndUse(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &before); err != nil {
 		t.Fatalf("parse backend status json: %v\nstdout=%s", err, stdout)
 	}
-	if before["mode"] != vaultSyncBackendSun {
-		t.Fatalf("default mode=%v want=%s", before["mode"], vaultSyncBackendSun)
+	if before["mode"] != vaultSyncBackendGit {
+		t.Fatalf("default mode=%v want=%s", before["mode"], vaultSyncBackendGit)
 	}
 
 	stdout, stderr, err = runSICommand(t, env, "vault", "backend", "use", "--mode", "dual")
@@ -104,25 +103,5 @@ func TestVaultBackendStatusInvalidEnvOverrideFails(t *testing.T) {
 	combined := strings.ToLower(strings.TrimSpace(stdout + "\n" + stderr))
 	if !strings.Contains(combined, "invalid si_vault_sync_backend") {
 		t.Fatalf("expected invalid backend error, got stdout=%s stderr=%s", stdout, stderr)
-	}
-}
-
-func TestVaultBackendStatusGitEnvOverrideFails(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skip subprocess test in short mode")
-	}
-	home := t.TempDir()
-	env := map[string]string{
-		"HOME":                  home,
-		"SI_SETTINGS_HOME":      home,
-		"SI_VAULT_SYNC_BACKEND": "git",
-	}
-	stdout, stderr, err := runSICommand(t, env, "vault", "backend", "status", "--json")
-	if err == nil {
-		t.Fatalf("expected status with git env override to fail\nstdout=%s\nstderr=%s", stdout, stderr)
-	}
-	combined := strings.ToLower(strings.TrimSpace(stdout + "\n" + stderr))
-	if !strings.Contains(combined, "sun only") {
-		t.Fatalf("expected sun-only backend error, got stdout=%s stderr=%s", stdout, stderr)
 	}
 }

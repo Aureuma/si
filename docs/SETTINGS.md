@@ -76,8 +76,6 @@ Defaults for one-off `si run` (alias `si exec`).
 #### `[codex.profiles]`
 Profile metadata tracked in settings.
 - `codex.profiles.active` (string): the last profile used for login
-- Runtime profile discovery is Sun-first: when Sun profile objects are available, SI uses those IDs and merges local metadata from `codex.profiles.entries.*`.
-- If Sun is unavailable or has no profile objects, SI falls back to local `codex.profiles.entries.*`.
 
 ##### `[codex.profiles.entries.<id>]`
 Per-profile entry keyed by profile ID (for example `america`). These entries are updated on successful `si login`.
@@ -315,7 +313,7 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
-- `vault.sync_backend` (string): vault sync policy. Supported: `sun` only. Explicit `sun` enforces strict Sun-backed hydrate + required Sun backup on mutating vault commands. Default resolution is `sun` with best-effort fallback when Sun auth is not configured. `si sun auth login` sets this to `sun` for authenticated machines.
+- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only) or `sun` (Sun-backed hydrate + required Sun backup on mutating vault commands). Default resolution is `git`. `si sun auth login` sets this to `sun` for authenticated machines.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.
@@ -345,7 +343,7 @@ Environment overrides:
 - `SI_SUN_TASKBOARD_LEASE_SECONDS`
 - `SI_SUN_MACHINE_ID`
 - `SI_SUN_OPERATOR_ID`
-- `SI_VAULT_SYNC_BACKEND` (`sun` only)
+- `SI_VAULT_SYNC_BACKEND`
 
 ### `[shell.prompt]`
 Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.

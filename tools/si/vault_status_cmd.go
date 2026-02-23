@@ -26,8 +26,10 @@ func cmdVaultStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if err := vaultValidateImplicitTargetRepoScope(target); err != nil {
-		warnf("%v", err)
+	if shouldEnforceVaultRepoScope(settings) {
+		if err := vaultValidateImplicitTargetRepoScope(target); err != nil {
+			warnf("%v", err)
+		}
 	}
 
 	if strings.TrimSpace(target.RepoRoot) == "" {
