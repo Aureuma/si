@@ -558,7 +558,6 @@ func TestVaultE2E_StrictTargetScopeBlocksCrossRepoImplicitDefault(t *testing.T) 
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not available for strict cross-repo scope test")
 	}
-
 	tempState := t.TempDir()
 	otherRepo := t.TempDir()
 	envFile := filepath.Join(otherRepo, ".env.dev")

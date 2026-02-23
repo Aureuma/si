@@ -313,7 +313,7 @@ vault:
 
   Target selection (most commands):
     --file <path>               (explicit env file path; otherwise uses vault.file from settings or SI_VAULT_FILE)
-    Guardrail: implicit cross-repo defaults emit warnings; set SI_VAULT_STRICT_TARGET_SCOPE=1 to fail-fast, or SI_VAULT_ALLOW_CROSS_REPO=1 to silence.
+    Guardrail (git mode): implicit cross-repo defaults emit warnings; set SI_VAULT_STRICT_TARGET_SCOPE=1 to fail-fast, or SI_VAULT_ALLOW_CROSS_REPO=1 to silence.
 
 	  si vault init [--file <path>] [--set-default] [--key-backend <keyring|keychain|file>] [--key-file <path>]
 	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
@@ -333,13 +333,14 @@ vault:
 	  si vault trust status|accept|forget [--file <path>]
 	  si vault recipients list|add|remove [--file <path>]
 	  si vault backend status [--json]
-	  si vault backend use --mode <sun>
+	  si vault backend use --mode <git|sun>
 	  si vault sync status [--file <path>] [--name <name>] [--json]
 	  si vault sync push [--file <path>] [--name <name>] [--allow-plaintext]
 	  si vault sync pull [--file <path>] [--name <name>]
 
   Sync backend policy:
-    SI_VAULT_SYNC_BACKEND (or vault.sync_backend) is sun-only:
+    SI_VAULT_SYNC_BACKEND (or vault.sync_backend) controls vault cloud behavior:
+      git: local/git-based only (default)
       sun: Sun backup required for mutating vault commands
 
   Alias:

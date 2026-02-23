@@ -55,14 +55,6 @@ func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source str
 		return nil, err
 	}
 	if backend.Mode == vaultSyncBackendSun {
-		if backend.Source == "default" {
-			_ = vaultEnsureSunIdentityEnv(settings, source)
-			info, loadErr := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
-			if loadErr != nil {
-				return nil, loadErr
-			}
-			return []string{strings.TrimSpace(info.Identity.Recipient().String())}, nil
-		}
 		identity, err := vaultEnsureStrictSunIdentity(settings, source)
 		if err != nil {
 			return nil, err
@@ -77,8 +69,10 @@ func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source str
 
 func normalizeVaultSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "git", "local":
+		return vaultSyncBackendGit
 	case "sun", "cloud", "dual", "both":
-		// Backward-compatible aliases resolve to strict sun mode.
+		// Backward-compatible alias: dual/both now resolve to strict sun mode.
 		return vaultSyncBackendSun
 	default:
 		return ""
@@ -89,18 +83,18 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 	if envRaw := strings.TrimSpace(os.Getenv("SI_VAULT_SYNC_BACKEND")); envRaw != "" {
 		mode := normalizeVaultSyncBackend(envRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (sun only)", envRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git or sun)", envRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Vault.SyncBackend); cfgRaw != "" {
 		mode := normalizeVaultSyncBackend(cfgRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (sun only)", cfgRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git or sun)", cfgRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "settings"}, nil
 	}
-	return vaultSyncBackendResolution{Mode: vaultSyncBackendSun, Source: "default"}, nil
+	return vaultSyncBackendResolution{Mode: vaultSyncBackendGit, Source: "default"}, nil
 }
 
 func vaultTrustStorePath(settings Settings) string {
@@ -133,8 +127,8 @@ func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile boo
 		return vault.Target{}, err
 	}
 	resolveAllowMissing := allowMissingFile
-	if backend.Mode == vaultSyncBackendSun && backend.Source != "default" {
-		// In explicit Sun-backed mode we may hydrate the local file from cloud after resolution.
+	if backend.Mode != vaultSyncBackendGit {
+		// In Sun-backed modes we may hydrate the local file from cloud after resolution.
 		resolveAllowMissing = true
 	}
 	target, err := vault.ResolveTarget(vault.ResolveOptions{
@@ -154,8 +148,10 @@ func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile boo
 			return vault.Target{}, statErr
 		}
 	}
-	if err := vaultValidateImplicitTargetRepoScope(target); err != nil && isTruthyFlagValue(os.Getenv("SI_VAULT_STRICT_TARGET_SCOPE")) {
-		return vault.Target{}, err
+	if shouldEnforceVaultRepoScope(settings) {
+		if err := vaultValidateImplicitTargetRepoScope(target); err != nil && isTruthyFlagValue(os.Getenv("SI_VAULT_STRICT_TARGET_SCOPE")) {
+			return vault.Target{}, err
+		}
 	}
 	return target, nil
 }
@@ -165,7 +161,25 @@ func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target,
 	if err == nil {
 		return target, nil
 	}
-	return vault.Target{}, err
+	backend, backendErr := resolveVaultSyncBackend(settings)
+	if backendErr != nil {
+		return vault.Target{}, err
+	}
+	if backend.Mode == vaultSyncBackendSun {
+		return vault.Target{}, err
+	}
+	// Status commands should degrade gracefully when Sun sync/auth is unavailable.
+	fallback, fallbackErr := vault.ResolveTarget(vault.ResolveOptions{
+		CWD:              "",
+		File:             fileFlag,
+		DefaultFile:      vaultDefaultEnvFile(settings),
+		AllowMissingFile: true,
+	})
+	if fallbackErr != nil {
+		return vault.Target{}, err
+	}
+	warnf("vault status fallback without sun hydrate: %v", err)
+	return fallback, nil
 }
 
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
@@ -285,6 +299,14 @@ func vaultValidateImplicitTargetRepoScope(target vault.Target) error {
 	)
 }
 
+func shouldEnforceVaultRepoScope(settings Settings) bool {
+	backend, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		return false
+	}
+	return backend.Mode == vaultSyncBackendGit
+}
+
 func absPathOrSelf(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -292,7 +314,16 @@ func absPathOrSelf(path string) string {
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return filepath.Clean(path)
+		abs = filepath.Clean(path)
+	} else {
+		abs = filepath.Clean(abs)
 	}
-	return filepath.Clean(abs)
+	if resolved, evalErr := filepath.EvalSymlinks(abs); evalErr == nil && strings.TrimSpace(resolved) != "" {
+		return filepath.Clean(resolved)
+	}
+	parent := filepath.Dir(abs)
+	if parentResolved, evalErr := filepath.EvalSymlinks(parent); evalErr == nil && strings.TrimSpace(parentResolved) != "" {
+		return filepath.Clean(filepath.Join(parentResolved, filepath.Base(abs)))
+	}
+	return abs
 }

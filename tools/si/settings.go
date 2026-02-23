@@ -136,7 +136,8 @@ type VaultSettings struct {
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 	// SyncBackend selects how vault state sync is handled.
-	// Supported values: sun
+	// Supported values: git, sun
+	// - git: local/git-based only
 	// - sun: Sun backup required on mutating vault operations
 	SyncBackend string `toml:"sync_backend,omitempty"`
 

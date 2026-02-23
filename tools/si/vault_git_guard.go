@@ -17,10 +17,17 @@ type vaultGitIndexFlags struct {
 }
 
 func vaultWriteDotenvFileAtomic(path string, contents []byte) error {
-	if err := vaultRefuseHiddenGitIndexEdits(path); err != nil {
-		return err
+	if shouldEnforceVaultGitIndexGuard() {
+		if err := vaultRefuseHiddenGitIndexEdits(path); err != nil {
+			return err
+		}
 	}
 	return vault.WriteDotenvFileAtomic(path, contents)
+}
+
+func shouldEnforceVaultGitIndexGuard() bool {
+	settings := loadSettingsOrDefault()
+	return shouldEnforceVaultRepoScope(settings)
 }
 
 func vaultRefuseHiddenGitIndexEdits(path string) error {

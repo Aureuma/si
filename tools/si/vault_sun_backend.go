@@ -28,7 +28,7 @@ func isSunNotFoundError(err error) bool {
 }
 
 func vaultSyncBackendStrictSun(resolution vaultSyncBackendResolution) bool {
-	return resolution.Mode == vaultSyncBackendSun && resolution.Source != "default"
+	return resolution.Mode == vaultSyncBackendSun
 }
 
 func vaultEnsureSunIdentityEnv(settings Settings, source string) error {

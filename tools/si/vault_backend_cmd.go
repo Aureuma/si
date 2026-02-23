@@ -64,17 +64,17 @@ func cmdVaultBackendStatus(args []string) {
 func cmdVaultBackendUse(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault backend use", flag.ExitOnError)
-	modeFlag := fs.String("mode", "", "vault sync backend mode: sun")
+	modeFlag := fs.String("mode", "", "vault sync backend mode: git or sun")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si vault backend use --mode <sun>")
+		printUsage("usage: si vault backend use --mode <git|sun>")
 		return
 	}
 	mode := normalizeVaultSyncBackend(*modeFlag)
 	if mode == "" {
-		fatal(fmt.Errorf("invalid --mode %q (sun only)", strings.TrimSpace(*modeFlag)))
+		fatal(fmt.Errorf("invalid --mode %q (expected git or sun)", strings.TrimSpace(*modeFlag)))
 	}
 	settings.Vault.SyncBackend = mode
 	if err := saveSettings(settings); err != nil {
