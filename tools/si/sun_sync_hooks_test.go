@@ -399,8 +399,8 @@ func TestMaybeSunAutoBackupVaultSunModeFailsOnPlaintext(t *testing.T) {
 	}
 }
 
-func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
-	server, store := newSunTestServer(t, "acme", "token-git")
+func TestMaybeSunAutoBackupVaultDefaultModeSkipsCloudBackupWithoutSunAuth(t *testing.T) {
+	server, store := newSunTestServer(t, "acme", "token-default")
 	defer server.Close()
 
 	home := t.TempDir()
@@ -411,8 +411,8 @@ func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 	applySettingsDefaults(&settings)
 	settings.Sun.AutoSync = true
 	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = "token-git"
-	settings.Vault.SyncBackend = vaultSyncBackendGit
+	settings.Sun.Token = ""
+	settings.Vault.SyncBackend = ""
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -425,11 +425,11 @@ func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	if err := maybeSunAutoBackupVault("test_git_mode", vaultFile); err != nil {
-		t.Fatalf("git mode should skip cloud backup without error: %v", err)
+	if err := maybeSunAutoBackupVault("test_default_mode", vaultFile); err != nil {
+		t.Fatalf("default mode should skip cloud backup without configured sun auth: %v", err)
 	}
 	if got := store.putCount(); got != 0 {
-		t.Fatalf("expected no backup upload in git mode, got %d put calls", got)
+		t.Fatalf("expected no backup upload without configured sun auth, got %d put calls", got)
 	}
 }
 

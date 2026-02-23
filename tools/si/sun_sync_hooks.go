@@ -72,10 +72,7 @@ func maybeSunAutoBackupVault(source string, vaultPath string) error {
 	if err != nil {
 		return err
 	}
-	if backend.Mode == vaultSyncBackendGit {
-		return nil
-	}
-	requireSunBackend := backend.Mode == vaultSyncBackendSun
+	requireSunBackend := backend.Mode == vaultSyncBackendSun && backend.Source != "default"
 	vaultPath = expandTilde(strings.TrimSpace(vaultPath))
 	if vaultPath == "" {
 		if requireSunBackend {

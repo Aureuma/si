@@ -221,3 +221,78 @@ func testJWTWithExp(t *testing.T, exp time.Time, padded bool) string {
 	}
 	return enc.EncodeToString(header) + "." + enc.EncodeToString(body) + "."
 }
+
+func TestCodexProfilesPrefersSunListWhenAvailable(t *testing.T) {
+	server, _ := newSunTestServer(t, "acme", "token-profiles")
+	defer server.Close()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-profiles"
+	settings.Codex.Profiles.Entries = map[string]CodexProfileEntry{
+		"local-only": {Name: "Local Only", Email: "local@example.com"},
+		"sun-a":      {Name: "Sun A", Email: "sun-a@example.com"},
+	}
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	client, err := newSunClient(server.URL, "token-profiles", 5*time.Second)
+	if err != nil {
+		t.Fatalf("new sun client: %v", err)
+	}
+	payload, err := json.Marshal(sunCodexProfileBundle{ID: "sun-a"})
+	if err != nil {
+		t.Fatalf("marshal sun-a payload: %v", err)
+	}
+	if _, err := client.putObject(context.Background(), sunCodexProfileBundleKind, "sun-a", payload, "application/json", nil, nil); err != nil {
+		t.Fatalf("put sun-a profile bundle: %v", err)
+	}
+	payload, err = json.Marshal(sunCodexProfileBundle{ID: "sun-b"})
+	if err != nil {
+		t.Fatalf("marshal sun-b payload: %v", err)
+	}
+	if _, err := client.putObject(context.Background(), sunCodexProfileBundleKind, "sun-b", payload, "application/json", nil, nil); err != nil {
+		t.Fatalf("put sun-b profile bundle: %v", err)
+	}
+
+	got := codexProfiles()
+	if len(got) != 2 {
+		t.Fatalf("expected 2 sun-backed profiles, got %#v", got)
+	}
+	if got[0].ID != "sun-a" || got[1].ID != "sun-b" {
+		t.Fatalf("expected sorted sun profile ids [sun-a sun-b], got %#v", got)
+	}
+	if got[0].Email != "sun-a@example.com" {
+		t.Fatalf("expected local metadata merge for sun-a, got %#v", got[0])
+	}
+}
+
+func TestCodexProfilesFallsBackToLocalWhenSunUnavailable(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Codex.Profiles.Entries = map[string]CodexProfileEntry{
+		"local-a": {Name: "Local A", Email: "a@example.com"},
+		"local-b": {Name: "Local B", Email: "b@example.com"},
+	}
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+
+	got := codexProfiles()
+	if len(got) != 2 {
+		t.Fatalf("expected local fallback profiles, got %#v", got)
+	}
+	if got[0].ID != "local-a" || got[1].ID != "local-b" {
+		t.Fatalf("expected sorted local profile ids [local-a local-b], got %#v", got)
+	}
+}

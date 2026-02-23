@@ -41,27 +41,51 @@ type codexProfileSummary struct {
 func codexProfiles() []codexProfile {
 	settings := loadSettingsOrDefault()
 	entries := settings.Codex.Profiles.Entries
-	if len(entries) == 0 {
-		return nil
-	}
-	items := make([]codexProfile, 0, len(entries))
+
+	localProfiles := make([]codexProfile, 0, len(entries))
 	for id, entry := range entries {
 		id = strings.TrimSpace(id)
 		if id == "" {
 			continue
 		}
+		localProfiles = append(localProfiles, codexProfile{
+			ID:    id,
+			Name:  strings.TrimSpace(entry.Name),
+			Email: strings.TrimSpace(entry.Email),
+		})
+	}
+	sort.Slice(localProfiles, func(i, j int) bool {
+		return localProfiles[i].ID < localProfiles[j].ID
+	})
+
+	client, err := sunClientFromSettings(settings)
+	if err != nil {
+		return localProfiles
+	}
+	sunItems, err := client.listObjects(context.Background(), sunCodexProfileBundleKind, "", 200)
+	if err != nil || len(sunItems) == 0 {
+		return localProfiles
+	}
+
+	profiles := make([]codexProfile, 0, len(sunItems))
+	for _, item := range sunItems {
+		id := strings.TrimSpace(item.Name)
+		if id == "" {
+			continue
+		}
+		entry := entries[id]
 		name := strings.TrimSpace(entry.Name)
 		email := strings.TrimSpace(entry.Email)
-		items = append(items, codexProfile{
+		profiles = append(profiles, codexProfile{
 			ID:    id,
 			Name:  name,
 			Email: email,
 		})
 	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].ID < items[j].ID
+	sort.Slice(profiles, func(i, j int) bool {
+		return profiles[i].ID < profiles[j].ID
 	})
-	return items
+	return profiles
 }
 
 func codexProfileByKey(key string) (codexProfile, bool) {

@@ -12,13 +12,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 ### Added
-- Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `sun` vault sync modes.
+- Added `si vault backend` commands (`status`, `use`) with Sun-only backend policy semantics.
 - Added automated GitHub Release asset publishing for `si` CLI archives (`linux/amd64`, `linux/arm64`, `linux/armv7`, `darwin/amd64`, `darwin/arm64`) with generated `checksums.txt`.
 - Added `si build self release-assets` to run local release-archive preflight builds using the same target matrix used by release automation.
 
 ### Changed
 - Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy `sun.auto_sync`.
 - Hardened Sun vault backup pull flow with payload checksum/size verification when object metadata is available.
+- Changed codex profile discovery to use Sun profile object listings when available, with fallback to local settings entries when Sun is unavailable/empty.
+- Changed `si vault run` subprocess environment handling to strip inherited `GIT_*` variables.
 
 ### Security
 - Hardened Sun client URL policy to require HTTPS for non-loopback endpoints by default (override with `SI_SUN_ALLOW_INSECURE_HTTP=1` only when intentional).
