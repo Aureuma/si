@@ -22,7 +22,7 @@ func cmdVaultStatus(args []string) {
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), true)
+	target, err := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
 	if err != nil {
 		fatal(err)
 	}
@@ -61,6 +61,9 @@ func cmdVaultStatus(args []string) {
 	}
 
 	// Identity status (no secrets printed).
+	if err := vaultEnsureSunIdentityEnv(settings, "vault_status"); err != nil {
+		warnf("%v", err)
+	}
 	keyCfg := vaultKeyConfigFromSettings(settings)
 	backend := vault.NormalizeKeyBackend(keyCfg.Backend)
 	if err := vaultRefuseNonInteractiveOSKeyring(keyCfg); err != nil {
