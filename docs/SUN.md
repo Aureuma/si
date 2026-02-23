@@ -107,8 +107,7 @@ si vault backend use --mode sun   # Sun backup required on mutating vault comman
 si vault backend status
 ```
 
-`--mode sun` remains supported as a legacy alias for `--mode sun`.
-When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `sun.vault_backup`/`sun.vault_backup` object.
+When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt` perform automatic backup behavior for the configured `sun.vault_backup` object.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.
@@ -151,7 +150,7 @@ si sun taskboard done --name shared --id <task-id> --agent dyad:main-laptop --re
 Dyad autopilot integration:
 
 ```bash
-# If --prompt is omitted, autopilot claims from sun.taskboard (or sun.taskboard legacy alias) and uses task.prompt.
+# If --prompt is omitted, autopilot claims from sun.taskboard and uses task.prompt.
 si dyad spawn release-bot --autopilot --profile main
 ```
 
@@ -229,7 +228,7 @@ si sun machine deny --machine worker-a --revoke op:ci@runner --as op:worker@remo
 
 ## Settings keys
 
-`[sun]` supports (with `[sun]` as a legacy alias):
+`[sun]` supports:
 - `base_url`
 - `account`
 - `token`

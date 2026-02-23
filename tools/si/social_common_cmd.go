@@ -12,6 +12,14 @@ import (
 	"time"
 )
 
+func socialPlatformDisplayName(platform socialPlatform) string {
+	label := strings.TrimSpace(socialPlatformLabel(platform))
+	if label == "" {
+		return ""
+	}
+	return strings.ToUpper(label[:1]) + label[1:]
+}
+
 func cmdSocialPlatformAuth(platform socialPlatform, args []string) {
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, fmt.Sprintf("usage: si social %s auth status [--account <alias>] [--env <prod|staging|dev>] [--json]", socialPlatformLabel(platform)))
 	if !routedOK {
@@ -94,12 +102,12 @@ func cmdSocialPlatformAuthStatus(platform socialPlatform, args []string) {
 		return
 	}
 	if verifyErr != nil {
-		fmt.Printf("%s %s\n", styleHeading(strings.Title(socialPlatformLabel(platform))+" auth:"), styleError("error"))
+		fmt.Printf("%s %s\n", styleHeading(socialPlatformDisplayName(platform)+" auth:"), styleError("error"))
 		fmt.Printf("%s %s\n", styleHeading("Context:"), formatSocialContext(runtime))
 		printSocialError(verifyErr)
 		return
 	}
-	fmt.Printf("%s %s\n", styleHeading(strings.Title(socialPlatformLabel(platform))+" auth:"), styleSuccess("ready"))
+	fmt.Printf("%s %s\n", styleHeading(socialPlatformDisplayName(platform)+" auth:"), styleSuccess("ready"))
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatSocialContext(runtime))
 	fmt.Printf("%s %s\n", styleHeading("Source:"), orDash(runtime.Source))
 	fmt.Printf("%s %s\n", styleHeading("Token preview:"), previewSocialSecret(runtime.Token))
@@ -356,9 +364,9 @@ func cmdSocialPlatformDoctor(platform socialPlatform, args []string) {
 		return
 	}
 	if ok {
-		fmt.Printf("%s %s\n", styleHeading(strings.Title(socialPlatformLabel(platform))+" doctor:"), styleSuccess("ok"))
+		fmt.Printf("%s %s\n", styleHeading(socialPlatformDisplayName(platform)+" doctor:"), styleSuccess("ok"))
 	} else {
-		fmt.Printf("%s %s\n", styleHeading(strings.Title(socialPlatformLabel(platform))+" doctor:"), styleError("issues found"))
+		fmt.Printf("%s %s\n", styleHeading(socialPlatformDisplayName(platform)+" doctor:"), styleError("issues found"))
 	}
 	fmt.Printf("%s %s\n", styleHeading("Context:"), formatSocialContext(runtime))
 	rows := make([][]string, 0, len(checks))

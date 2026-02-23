@@ -84,7 +84,7 @@ func cmdVaultCheck(args []string) {
 		var doc vault.DotenvFile
 		var err error
 		display := p
-		abs := p
+		var abs string
 		if *staged {
 			data, derr := vault.GitShowIndexFile(target.RepoRoot, p)
 			err = derr

@@ -841,7 +841,7 @@ func cmdGCPGeminiImageGenerate(args []string) {
 		query["key"] = key
 	}
 
-	requestBody := map[string]any{}
+	var requestBody map[string]any
 	if strings.TrimSpace(*jsonBody) != "" {
 		requestBody = parseGCPJSONBody(strings.TrimSpace(*jsonBody), nil)
 	} else {

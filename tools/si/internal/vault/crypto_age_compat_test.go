@@ -74,4 +74,3 @@ func TestDecryptStringV1_BackCompatBase64Encodings(t *testing.T) {
 		})
 	}
 }
-

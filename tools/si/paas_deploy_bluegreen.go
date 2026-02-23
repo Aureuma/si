@@ -680,10 +680,6 @@ func resolvePaasBlueGreenPolicyStorePathForContext(contextName string) (string, 
 	return filepath.Join(contextDir, "bluegreen.json"), nil
 }
 
-func resolvePaasBlueGreenPolicyStorePath() (string, error) {
-	return resolvePaasBlueGreenPolicyStorePathForContext(currentPaasContext())
-}
-
 func loadPaasBlueGreenPolicyStoreForContext(contextName string) (paasBlueGreenPolicyStore, error) {
 	path, err := resolvePaasBlueGreenPolicyStorePathForContext(contextName)
 	if err != nil {

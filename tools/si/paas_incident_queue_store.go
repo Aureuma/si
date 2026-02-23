@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -356,12 +355,4 @@ func loadPaasIncidentQueueSummary(limit int) ([]paasIncidentQueueEntry, string, 
 		rows = rows[:limit]
 	}
 	return rows, path, nil
-}
-
-func mustSyncPaasIncidentQueueFromCollectors(limit, maxEntries int, maxAge time.Duration) paasIncidentQueueSyncResult {
-	result, err := syncPaasIncidentQueueFromCollectors(limit, maxEntries, maxAge)
-	if err != nil {
-		fatal(fmt.Errorf("sync incident queue: %w", err))
-	}
-	return result
 }

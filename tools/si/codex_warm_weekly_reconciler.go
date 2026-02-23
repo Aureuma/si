@@ -554,13 +554,6 @@ func warmWeeklyResetWindowAdvanced(previousReset time.Time, currentReset time.Ti
 	return previousReset.UTC().Unix() != currentReset.UTC().Unix()
 }
 
-func warmWeeklySameReset(previousReset time.Time, currentReset time.Time, currentResetKnown bool) bool {
-	if !currentResetKnown || currentReset.IsZero() || previousReset.IsZero() {
-		return false
-	}
-	return previousReset.UTC().Unix() == currentReset.UTC().Unix()
-}
-
 func warmWeeklyNextDue(now, resetAt time.Time, resetKnown bool) time.Time {
 	if resetKnown && !resetAt.IsZero() {
 		return resetAt.Add(time.Duration(warmWeeklyResetJitterMinutes) * time.Minute)
