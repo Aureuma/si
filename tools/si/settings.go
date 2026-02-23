@@ -136,10 +136,9 @@ type VaultSettings struct {
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 	// SyncBackend selects how vault state sync is handled.
-	// Supported values: git, sun, dual
+	// Supported values: git, sun
 	// - git: local/git-based only
 	// - sun: Sun backup required on mutating vault operations
-	// - dual: local/git-based with best-effort Sun backup
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
 	// KeyBackend selects where the device private key is stored.
@@ -152,10 +151,9 @@ type VaultSettings struct {
 
 type PaasSettings struct {
 	// SyncBackend selects how paas state sync is handled.
-	// Supported values: git, sun, dual
+	// Supported values: git, sun
 	// - git: local/git-based only
 	// - sun: Sun snapshot backup required on mutating paas operations
-	// - dual: local/git-based with best-effort Sun snapshot backup
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
 	// SnapshotName is the Sun object name used for paas control plane snapshots.

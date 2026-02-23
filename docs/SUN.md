@@ -112,12 +112,11 @@ Select vault backend mode:
 
 ```bash
 si vault backend use --mode git   # local/git-only
-si vault backend use --mode dual  # local/git + best-effort Sun backup
 si vault backend use --mode sun   # Sun backup required on mutating vault commands
 si vault backend status
 ```
 
-When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt|recipients add|recipients remove` perform automatic backup behavior for the configured `sun.vault_backup` object.
+When vault backend is `sun`, `si vault init|set|unset|fmt|encrypt|recipients add|recipients remove` perform automatic backup behavior for the configured `sun.vault_backup` object.
 In `sun` mode, SI also auto-hydrates local vault state and vault identity material from Sun before vault commands run.
 In `sun` mode, new encrypted values created by `si vault set` and plaintext `si vault encrypt` are encrypted to the Sun vault identity recipient (existing legacy ciphertext remains unchanged).
 

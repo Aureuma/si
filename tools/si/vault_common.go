@@ -10,9 +10,8 @@ import (
 )
 
 const (
-	vaultSyncBackendGit  = "git"
-	vaultSyncBackendSun  = "sun"
-	vaultSyncBackendDual = "dual"
+	vaultSyncBackendGit = "git"
+	vaultSyncBackendSun = "sun"
 )
 
 type vaultSyncBackendResolution struct {
@@ -72,10 +71,9 @@ func normalizeVaultSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "git", "local":
 		return vaultSyncBackendGit
-	case "sun", "cloud":
+	case "sun", "cloud", "dual", "both":
+		// Backward-compatible alias: dual/both now resolve to strict sun mode.
 		return vaultSyncBackendSun
-	case "dual", "both":
-		return vaultSyncBackendDual
 	default:
 		return ""
 	}
@@ -85,20 +83,16 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 	if envRaw := strings.TrimSpace(os.Getenv("SI_VAULT_SYNC_BACKEND")); envRaw != "" {
 		mode := normalizeVaultSyncBackend(envRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git, sun, or dual)", envRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git or sun)", envRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Vault.SyncBackend); cfgRaw != "" {
 		mode := normalizeVaultSyncBackend(cfgRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git, sun, or dual)", cfgRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git or sun)", cfgRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "settings"}, nil
-	}
-	// Backward compatibility: historical Sun auto-sync implied best-effort vault backup.
-	if settings.Sun.AutoSync {
-		return vaultSyncBackendResolution{Mode: vaultSyncBackendDual, Source: "legacy_sun_auto_sync"}, nil
 	}
 	return vaultSyncBackendResolution{Mode: vaultSyncBackendGit, Source: "default"}, nil
 }
@@ -164,6 +158,13 @@ func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target,
 	target, err := vaultResolveTarget(settings, fileFlag, true)
 	if err == nil {
 		return target, nil
+	}
+	backend, backendErr := resolveVaultSyncBackend(settings)
+	if backendErr != nil {
+		return vault.Target{}, err
+	}
+	if backend.Mode == vaultSyncBackendSun {
+		return vault.Target{}, err
 	}
 	// Status commands should degrade gracefully when Sun sync/auth is unavailable.
 	fallback, fallbackErr := vault.ResolveTarget(vault.ResolveOptions{

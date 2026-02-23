@@ -25,7 +25,7 @@ func TestResolvePaasSyncBackendPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve settings backend: %v", err)
 	}
-	if got.Mode != paasSyncBackendDual || got.Source != "settings" {
+	if got.Mode != paasSyncBackendSun || got.Source != "settings" {
 		t.Fatalf("unexpected settings backend resolution: %#v", got)
 	}
 
@@ -102,8 +102,8 @@ func TestPaasCloudUseAndStatusE2E(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &status); err != nil {
 		t.Fatalf("decode cloud status payload after use: %v output=%q", err, stdout)
 	}
-	if strings.TrimSpace(status["mode"].(string)) != paasSyncBackendDual {
-		t.Fatalf("expected dual mode after cloud use, got %#v", status)
+	if strings.TrimSpace(status["mode"].(string)) != paasSyncBackendSun {
+		t.Fatalf("expected sun mode after cloud use alias, got %#v", status)
 	}
 }
 

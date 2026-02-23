@@ -26,7 +26,7 @@ func TestVaultTrustStatusMissingFileIsNonFatal(t *testing.T) {
 	}
 }
 
-func TestVaultStatusSunModeWithoutAuthIsNonFatal(t *testing.T) {
+func TestVaultStatusSunModeWithoutAuthFails(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip subprocess test in short mode")
 	}
@@ -37,11 +37,11 @@ func TestVaultStatusSunModeWithoutAuthIsNonFatal(t *testing.T) {
 		"SI_VAULT_SYNC_BACKEND": "sun",
 	}
 	stdout, stderr, err := runSICommand(t, env, "vault", "status")
-	if err != nil {
-		t.Fatalf("vault status should not fail when sun auth is missing: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+	if err == nil {
+		t.Fatalf("vault status should fail when sun auth is missing\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
-	if !strings.Contains(stdout, "env file:") {
-		t.Fatalf("expected env file line, got:\n%s", stdout)
+	combined := strings.ToLower(strings.TrimSpace(stdout + "\n" + stderr))
+	if !strings.Contains(combined, "sun token is required") {
+		t.Fatalf("expected sun auth failure, got stdout=%s stderr=%s", stdout, stderr)
 	}
-	_ = stderr
 }
