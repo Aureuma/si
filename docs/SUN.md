@@ -62,11 +62,15 @@ Push one profile:
 si sun profile push --profile america
 ```
 
-Push all configured profiles:
+Push all profiles resolved by SI profile discovery:
 
 ```bash
 si sun profile push
 ```
+
+Notes:
+- When Sun profile objects exist, SI profile discovery is driven by Sun profile object names.
+- If Sun is unavailable or has no profile objects, SI falls back to local `codex.profiles.entries.*`.
 
 Pull one profile:
 
@@ -111,7 +115,6 @@ si vault sync pull --file ~/.si/vault/.env --name default
 Select vault backend mode:
 
 ```bash
-si vault backend use --mode git   # local/git-only
 si vault backend use --mode sun   # Sun backup required on mutating vault commands
 si vault backend status
 ```

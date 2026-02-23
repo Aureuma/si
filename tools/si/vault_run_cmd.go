@@ -104,7 +104,7 @@ func cmdVaultRun(args []string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = append(os.Environ(), envPairs(dec.Values)...)
+	cmd.Env = append(envWithoutGitVars(os.Environ()), envPairs(dec.Values)...)
 	if err := cmd.Run(); err != nil {
 		fatal(err)
 	}
@@ -122,6 +122,25 @@ func envPairs(values map[string]string) []string {
 	out := make([]string, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, k+"="+values[k])
+	}
+	return out
+}
+
+func envWithoutGitVars(env []string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(env))
+	for _, pair := range env {
+		key, _, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if strings.HasPrefix(key, "GIT_") {
+			continue
+		}
+		out = append(out, pair)
 	}
 	return out
 }

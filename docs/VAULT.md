@@ -12,9 +12,10 @@ Goals:
 
 - One encrypted dotenv file on disk (default: `~/.si/vault/.env`).
 - Use `--file` to operate on a different file.
-- Choose sync backend policy with `si vault backend use --mode <git|sun>`:
-  - `git`: local/git-based only (default)
-  - `sun`: Sun-backed mode (cloud hydrate + required cloud backup on mutating vault commands)
+- Vault backend is Sun-backed (`si vault backend use --mode sun`).
+- `si vault` runs in:
+  - explicit Sun mode: `vault.sync_backend = "sun"` (or `SI_VAULT_SYNC_BACKEND=sun`)
+  - default mode: Sun-backed behavior with best-effort fallback when Sun auth is not configured
 
 ## Quickstart
 
@@ -186,12 +187,11 @@ si vault backend status
 Set backend mode:
 
 ```bash
-si vault backend use --mode git
 si vault backend use --mode sun
 ```
 
 Environment override:
-- `SI_VAULT_SYNC_BACKEND=git|sun`
+- `SI_VAULT_SYNC_BACKEND=sun`
 
 ## Key Storage
 

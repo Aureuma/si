@@ -91,7 +91,7 @@ func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve default backend: %v", err)
 	}
-	if got.Mode != vaultSyncBackendGit || got.Source != "default" {
+	if got.Mode != vaultSyncBackendSun || got.Source != "default" {
 		t.Fatalf("unexpected default resolution: %+v", got)
 	}
 
@@ -101,7 +101,7 @@ func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve backend with sun.auto_sync fallback removed: %v", err)
 	}
-	if got.Mode != vaultSyncBackendGit || got.Source != "default" {
+	if got.Mode != vaultSyncBackendSun || got.Source != "default" {
 		t.Fatalf("unexpected resolution when backend unset: %+v", got)
 	}
 }
@@ -138,12 +138,8 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")
-	got, err = resolveVaultSyncBackend(settings)
-	if err != nil {
-		t.Fatalf("resolve env backend: %v", err)
-	}
-	if got.Mode != vaultSyncBackendGit || got.Source != "env" {
-		t.Fatalf("unexpected env resolution: %+v", got)
+	if _, err := resolveVaultSyncBackend(settings); err == nil {
+		t.Fatalf("expected git env backend to fail in sun-only mode")
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "sun")

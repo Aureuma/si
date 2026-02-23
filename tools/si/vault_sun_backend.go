@@ -28,7 +28,7 @@ func isSunNotFoundError(err error) bool {
 }
 
 func vaultSyncBackendStrictSun(resolution vaultSyncBackendResolution) bool {
-	return resolution.Mode == vaultSyncBackendSun
+	return resolution.Mode == vaultSyncBackendSun && resolution.Source != "default"
 }
 
 func vaultEnsureSunIdentityEnv(settings Settings, source string) error {
@@ -40,9 +40,6 @@ func vaultEnsureSunIdentityEnv(settings Settings, source string) error {
 	backend, err := resolveVaultSyncBackend(settings)
 	if err != nil {
 		return err
-	}
-	if backend.Mode == vaultSyncBackendGit {
-		return nil
 	}
 	strict := vaultSyncBackendStrictSun(backend)
 
@@ -102,9 +99,6 @@ func vaultPersistIdentityToSun(settings Settings, identity *age.X25519Identity, 
 	backend, err := resolveVaultSyncBackend(settings)
 	if err != nil {
 		return err
-	}
-	if backend.Mode == vaultSyncBackendGit {
-		return nil
 	}
 	strict := vaultSyncBackendStrictSun(backend)
 
@@ -188,9 +182,6 @@ func vaultHydrateFromSun(settings Settings, target vault.Target, allowMissingFil
 	backend, err := resolveVaultSyncBackend(settings)
 	if err != nil {
 		return err
-	}
-	if backend.Mode == vaultSyncBackendGit {
-		return nil
 	}
 	strict := vaultSyncBackendStrictSun(backend)
 	if err := vaultEnsureSunIdentityEnv(settings, "vault_target_resolve"); err != nil {
