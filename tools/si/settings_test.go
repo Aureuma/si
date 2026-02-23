@@ -72,7 +72,7 @@ func TestSettingsHomeDirRootFallsBackFromForeignHome(t *testing.T) {
 	}
 }
 
-func TestSettingsHomeDirRootKeepsForeignHomeWithExistingSIState(t *testing.T) {
+func TestSettingsHomeDirRootFallsBackWithExistingSIState(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip("requires root euid")
 	}
@@ -96,8 +96,12 @@ func TestSettingsHomeDirRootKeepsForeignHomeWithExistingSIState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("settingsHomeDir() unexpected err: %v", err)
 	}
-	if got != foreignHome {
-		t.Fatalf("expected foreign home %q to be preserved, got %q", foreignHome, got)
+	rootHome, err := homeDirByUID(0)
+	if err != nil {
+		t.Fatalf("homeDirByUID(0): %v", err)
+	}
+	if got != rootHome {
+		t.Fatalf("expected root home %q, got %q", rootHome, got)
 	}
 }
 

@@ -583,12 +583,13 @@ func settingsHomeDir() (string, error) {
 	}
 	// Guardrail: avoid writing root-owned settings into a non-root HOME path
 	// when running as root with a preserved user HOME (e.g., sudo -E).
+	//
+	// If explicit SI_SETTINGS_HOME is needed for admin workflows, callers can
+	// still opt in via that override. Without explicit override we should avoid
+	// polluting user-owned ~/.si with root-owned files.
 	if os.Geteuid() == 0 {
 		rootHome, rootErr := homeDirByUID(0)
 		if rootErr == nil && strings.TrimSpace(rootHome) != "" && !pathsEqual(rootHome, home) {
-			if hasSIStateInHome(home) {
-				return home, nil
-			}
 			if ownedByRoot, ownErr := pathOwnedByUID(home, 0); ownErr != nil || !ownedByRoot {
 				home = rootHome
 			}
