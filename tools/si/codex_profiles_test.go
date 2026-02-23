@@ -46,6 +46,7 @@ func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
+	prevSunFn := syncProfileAuthFromSunStatusFn
 	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
 		path, err := codexProfileAuthPath(p)
 		if err != nil {
@@ -63,6 +64,7 @@ func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 	codexAuthSyncAttempts = sync.Map{}
 	defer func() {
 		syncProfileAuthFromContainerStatusFn = prevFn
+		syncProfileAuthFromSunStatusFn = prevSunFn
 		codexAuthSyncAttempts = sync.Map{}
 	}()
 
@@ -75,20 +77,72 @@ func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 	}
 }
 
+func TestCodexProfileAuthStatusRecoversViaSunSync(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+
+	prevContainerFn := syncProfileAuthFromContainerStatusFn
+	prevSunFn := syncProfileAuthFromSunStatusFn
+	var containerCalls int32
+	var sunCalls int32
+	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
+		atomic.AddInt32(&containerCalls, 1)
+		return profileAuthTokens{}, os.ErrNotExist
+	}
+	syncProfileAuthFromSunStatusFn = func(ctx context.Context, p codexProfile) (bool, error) {
+		atomic.AddInt32(&sunCalls, 1)
+		path, err := codexProfileAuthPath(p)
+		if err != nil {
+			return false, err
+		}
+		data, _ := json.Marshal(profileAuthFile{Tokens: &profileAuthTokens{RefreshToken: "refresh-token"}})
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return false, err
+		}
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	codexAuthSyncAttempts = sync.Map{}
+	defer func() {
+		syncProfileAuthFromContainerStatusFn = prevContainerFn
+		syncProfileAuthFromSunStatusFn = prevSunFn
+		codexAuthSyncAttempts = sync.Map{}
+	}()
+
+	status := codexProfileAuthStatus(profile)
+	if !status.Exists {
+		t.Fatalf("expected auth status to recover from sun sync")
+	}
+	if got := atomic.LoadInt32(&containerCalls); got != 1 {
+		t.Fatalf("expected one container sync attempt, got %d", got)
+	}
+	if got := atomic.LoadInt32(&sunCalls); got != 1 {
+		t.Fatalf("expected one sun sync attempt, got %d", got)
+	}
+}
+
 func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	profile := codexProfile{ID: "einsteina", Name: "Einsteina", Email: "einsteina@example.com"}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
+	prevSunFn := syncProfileAuthFromSunStatusFn
 	var calls int32
 	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
 		atomic.AddInt32(&calls, 1)
 		return profileAuthTokens{}, os.ErrNotExist
 	}
+	syncProfileAuthFromSunStatusFn = func(ctx context.Context, p codexProfile) (bool, error) {
+		return false, os.ErrNotExist
+	}
 	codexAuthSyncAttempts = sync.Map{}
 	defer func() {
 		syncProfileAuthFromContainerStatusFn = prevFn
+		syncProfileAuthFromSunStatusFn = prevSunFn
 		codexAuthSyncAttempts = sync.Map{}
 	}()
 
@@ -109,14 +163,21 @@ func TestCodexProfileAuthStatusSkipsRecoveryWhenProfileIsBlocked(t *testing.T) {
 	}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
+	prevSunFn := syncProfileAuthFromSunStatusFn
 	var calls int32
+	var sunCalls int32
 	syncProfileAuthFromContainerStatusFn = func(ctx context.Context, p codexProfile) (profileAuthTokens, error) {
 		atomic.AddInt32(&calls, 1)
 		return profileAuthTokens{AccessToken: "access-token"}, nil
 	}
+	syncProfileAuthFromSunStatusFn = func(ctx context.Context, p codexProfile) (bool, error) {
+		atomic.AddInt32(&sunCalls, 1)
+		return true, nil
+	}
 	codexAuthSyncAttempts = sync.Map{}
 	defer func() {
 		syncProfileAuthFromContainerStatusFn = prevFn
+		syncProfileAuthFromSunStatusFn = prevSunFn
 		codexAuthSyncAttempts = sync.Map{}
 	}()
 
@@ -126,6 +187,9 @@ func TestCodexProfileAuthStatusSkipsRecoveryWhenProfileIsBlocked(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&calls); got != 0 {
 		t.Fatalf("expected no sync attempts for blocked profile, got %d", got)
+	}
+	if got := atomic.LoadInt32(&sunCalls); got != 0 {
+		t.Fatalf("expected no sun sync attempts for blocked profile, got %d", got)
 	}
 }
 
