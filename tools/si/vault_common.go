@@ -142,6 +142,25 @@ func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile boo
 	return target, nil
 }
 
+func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target, error) {
+	target, err := vaultResolveTarget(settings, fileFlag, true)
+	if err == nil {
+		return target, nil
+	}
+	// Status commands should degrade gracefully when Sun sync/auth is unavailable.
+	fallback, fallbackErr := vault.ResolveTarget(vault.ResolveOptions{
+		CWD:              "",
+		File:             fileFlag,
+		DefaultFile:      vaultDefaultEnvFile(settings),
+		AllowMissingFile: true,
+	})
+	if fallbackErr != nil {
+		return vault.Target{}, err
+	}
+	warnf("vault status fallback without sun hydrate: %v", err)
+	return fallback, nil
+}
+
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
 // into containers. Returns empty when unresolved or missing.
 func vaultContainerEnvFileMountPath(settings Settings) string {

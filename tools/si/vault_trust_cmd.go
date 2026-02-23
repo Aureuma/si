@@ -55,15 +55,7 @@ func cmdVaultTrustStatus(args []string) {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
-	if err != nil {
-		fatal(err)
-	}
-	doc, err := vault.ReadDotenvFile(target.File)
-	if err != nil {
-		fatal(err)
-	}
-	fp, err := vaultTrustFingerprint(doc)
+	target, err := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
 	if err != nil {
 		fatal(err)
 	}
@@ -75,6 +67,25 @@ func cmdVaultTrustStatus(args []string) {
 	entry, ok := store.Find(target.RepoRoot, target.File)
 
 	fmt.Printf("env file:  %s\n", filepath.Clean(target.File))
+	doc, err := vault.ReadDotenvFile(target.File)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Printf("current fp: (unavailable: env file missing)\n")
+			if !ok {
+				fmt.Printf("stored fp:  (none)\n")
+				fmt.Printf("trust:      unavailable (env file missing)\n")
+			} else {
+				fmt.Printf("stored fp:  %s\n", strings.TrimSpace(entry.Fingerprint))
+				fmt.Printf("trust:      unavailable (env file missing)\n")
+			}
+			return
+		}
+		fatal(err)
+	}
+	fp, err := vaultTrustFingerprint(doc)
+	if err != nil {
+		fatal(err)
+	}
 	fmt.Printf("current fp: %s\n", fp)
 	if !ok {
 		fmt.Printf("stored fp:  (none)\n")
