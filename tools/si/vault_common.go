@@ -110,14 +110,31 @@ func vaultDefaultEnvFile(settings Settings) string {
 }
 
 func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
+	backend, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		return vault.Target{}, err
+	}
+	resolveAllowMissing := allowMissingFile
+	if backend.Mode != vaultSyncBackendGit {
+		// In Sun-backed modes we may hydrate the local file from cloud after resolution.
+		resolveAllowMissing = true
+	}
 	target, err := vault.ResolveTarget(vault.ResolveOptions{
 		CWD:              "",
 		File:             fileFlag,
 		DefaultFile:      vaultDefaultEnvFile(settings),
-		AllowMissingFile: allowMissingFile,
+		AllowMissingFile: resolveAllowMissing,
 	})
 	if err != nil {
 		return vault.Target{}, err
+	}
+	if err := vaultHydrateFromSun(settings, target, allowMissingFile); err != nil {
+		return vault.Target{}, err
+	}
+	if !allowMissingFile {
+		if _, statErr := os.Stat(target.File); statErr != nil {
+			return vault.Target{}, statErr
+		}
 	}
 	if err := vaultValidateImplicitTargetRepoScope(target); err != nil && isTruthyFlagValue(os.Getenv("SI_VAULT_STRICT_TARGET_SCOPE")) {
 		return vault.Target{}, err

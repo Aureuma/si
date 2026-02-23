@@ -32,6 +32,9 @@ func cmdVaultInit(args []string) {
 	}
 
 	// Ensure we have a device identity and public recipient.
+	if err := vaultEnsureSunIdentityEnv(settings, "vault_init"); err != nil {
+		fatal(err)
+	}
 	keyBackendOverride := strings.TrimSpace(*keyBackend)
 	keyFileOverride := strings.TrimSpace(*keyFile)
 	keyCfg := vaultKeyConfigFromSettings(settings)
@@ -159,6 +162,9 @@ func cmdVaultInit(args []string) {
 		fmt.Printf("key:       created (backend=%s)\n", vault.NormalizeKeyBackend(keyCfg.Backend))
 	} else {
 		fmt.Printf("key:       ok (backend=%s)\n", vault.NormalizeKeyBackend(keyCfg.Backend))
+	}
+	if err := vaultPersistIdentityToSun(settings, identityInfo.Identity, "vault_init"); err != nil {
+		fatal(err)
 	}
 	if err := maybeSunAutoBackupVault("vault_init", target.File); err != nil {
 		fatal(err)

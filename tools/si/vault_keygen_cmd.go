@@ -12,6 +12,9 @@ import (
 
 func cmdVaultKeygen(args []string) {
 	settings := loadSettingsOrDefault()
+	if err := vaultEnsureSunIdentityEnv(settings, "vault_keygen"); err != nil {
+		fatal(err)
+	}
 	fs := flag.NewFlagSet("vault keygen", flag.ExitOnError)
 	keyBackend := fs.String("key-backend", "", "override key backend: keyring, keychain, or file")
 	keyFile := fs.String("key-file", "", "override key file path (for key-backend=file)")
@@ -88,5 +91,8 @@ func cmdVaultKeygen(args []string) {
 	}
 	if strings.TrimSpace(info.Path) != "" {
 		fmt.Printf("path:      %s\n", strings.TrimSpace(info.Path))
+	}
+	if err := vaultPersistIdentityToSun(settings, info.Identity, "vault_keygen"); err != nil {
+		fatal(err)
 	}
 }

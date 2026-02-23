@@ -26,6 +26,9 @@ func cmdVaultEncrypt(args []string) {
 
 	var identity *age.X25519Identity
 	if *reencrypt {
+		if err := vaultEnsureSunIdentityEnv(settings, "vault_encrypt_reencrypt"); err != nil {
+			fatal(err)
+		}
 		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
 			fatal(err)
 		}
