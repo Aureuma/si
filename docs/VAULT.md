@@ -15,7 +15,7 @@ Goals:
 - Choose sync backend policy with `si vault backend use --mode <git|dual|sun>`:
   - `git`: local/git-based only (default)
   - `dual`: local/git-based with best-effort Sun backup
-  - `sun`: Sun backup required on mutating vault commands
+  - `sun`: Sun-backed mode (cloud hydrate + required cloud backup on mutating vault commands)
 
 ## Quickstart
 
@@ -25,6 +25,8 @@ From your host repo (or any local workspace):
 ```bash
 si vault keygen
 ```
+
+If you run `si sun auth login`, SI automatically sets `vault.sync_backend = "sun"` for that machine.
 
 1. Bootstrap the default env file:
 ```bash
@@ -145,6 +147,7 @@ si vault sync pull [--file <path>] [--name <name>]
 
 These commands map to the same Sun backup object flow used by `si sun vault backup ...`.
 In `dual`/`sun` backend mode, automatic backup hooks also run after recipient changes (`si vault recipients add/remove`).
+In `sun` mode, vault commands also hydrate the local vault file from the latest Sun object before command execution.
 
 ## Decrypting To Plaintext
 
@@ -197,8 +200,9 @@ Environment override:
 Device identities are age X25519 private keys. Resolution order:
 1. `SI_VAULT_IDENTITY` (or `SI_VAULT_PRIVATE_KEY`) (CI/ephemeral)
 2. `SI_VAULT_IDENTITY_FILE`
-3. OS secure store (Keychain on macOS, Secret Service on Linux) (`vault.key_backend = "keyring"` or `"keychain"`)
-4. file backend (`vault.key_backend = "file"`, `vault.key_file = "~/.si/vault/keys/age.key"`)
+3. Sun identity object (`vault_identity/<sun.vault_backup>`) when vault backend is `sun`/`dual` and Sun auth is configured
+4. OS secure store (Keychain on macOS, Secret Service on Linux) (`vault.key_backend = "keyring"` or `"keychain"`)
+5. file backend (`vault.key_backend = "file"`, `vault.key_file = "~/.si/vault/keys/age.key"`)
 
 To generate a new identity:
 ```bash

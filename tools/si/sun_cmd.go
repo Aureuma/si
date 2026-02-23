@@ -24,6 +24,7 @@ const (
 	sunAuditUsageText               = "usage: si sun audit list ..."
 	sunCodexProfileBundleKind       = "codex_profile_bundle"
 	sunVaultBackupKind              = "vault_backup"
+	sunVaultIdentityKind            = "vault_identity"
 	sunPaasControlPlaneSnapshotKind = "paas_control_plane_snapshot"
 )
 
@@ -134,6 +135,8 @@ func cmdSunAuthLogin(args []string) {
 	persisted.Sun.Account = who.AccountSlug
 	persisted.Sun.TimeoutSeconds = *timeoutSeconds
 	persisted.Sun.AutoSync = *autoSync
+	// Sun-authenticated machines should default to Sun-backed vault sync.
+	persisted.Vault.SyncBackend = vaultSyncBackendSun
 	if err := saveSettings(persisted); err != nil {
 		fatal(err)
 	}

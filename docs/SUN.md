@@ -13,6 +13,8 @@ Primary uses:
 - Share a Sun-backed dyad taskboard across machines/agents.
 - Manage Sun device tokens and inspect audit history.
 
+When `si sun auth login` succeeds, SI sets `vault.sync_backend = "sun"` for that machine so vault operations default to Sun-backed behavior.
+
 ## Prerequisites
 
 - Reachable Sun API URL (for example `http://127.0.0.1:8080`).
@@ -116,6 +118,7 @@ si vault backend status
 ```
 
 When vault backend is `dual` or `sun`, `si vault init|set|unset|fmt|encrypt|recipients add|recipients remove` perform automatic backup behavior for the configured `sun.vault_backup` object.
+In `sun` mode, SI also auto-hydrates local vault state and vault identity material from Sun before vault commands run.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.

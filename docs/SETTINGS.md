@@ -313,7 +313,7 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
-- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only), `dual` (local/git + best-effort Sun backup), `sun` (Sun backup required on mutating vault commands). Default resolution is `git`, with legacy fallback to `dual` when `sun.auto_sync=true` and `vault.sync_backend` is unset.
+- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only), `dual` (local/git + best-effort Sun backup), `sun` (Sun-backed hydrate + required Sun backup on mutating vault commands). Default resolution is `git`, with legacy fallback to `dual` when `sun.auto_sync=true` and `vault.sync_backend` is unset. `si sun auth login` sets this to `sun` for authenticated machines.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.
@@ -323,6 +323,7 @@ Defaults for `si sun` cloud sync.
 - `sun.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
 - `sun.auto_sync` (bool): enable automatic codex profile sync hooks (also acts as legacy vault backup fallback when `vault.sync_backend` is unset)
 - `sun.vault_backup` (string): default vault backup object name (default: `default`)
+  - Also used as the object name for Sun-managed vault identity material in Sun-backed vault mode.
 - `sun.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
 - `sun.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
 - `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)

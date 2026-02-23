@@ -48,6 +48,9 @@ func cmdVaultDecrypt(args []string) {
 		fatal(fmt.Errorf("stdout mode does not support multiple --file values (use --in-place for multi-file)"))
 	}
 
+	if err := vaultEnsureSunIdentityEnv(settings, "vault_decrypt"); err != nil {
+		fatal(err)
+	}
 	if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
 		fatal(err)
 	}
