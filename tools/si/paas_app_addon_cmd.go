@@ -380,10 +380,6 @@ func resolvePaasAddonStorePathForContext(contextName string) (string, error) {
 	return filepath.Join(contextDir, "addons.json"), nil
 }
 
-func resolvePaasAddonStorePath() (string, error) {
-	return resolvePaasAddonStorePathForContext(currentPaasContext())
-}
-
 func loadPaasAddonStoreForContext(contextName string) (paasAddonStore, error) {
 	path, err := resolvePaasAddonStorePathForContext(contextName)
 	if err != nil {

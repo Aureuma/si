@@ -20,10 +20,6 @@ type paasAppDeployHistory struct {
 	UpdatedAt        string   `json:"updated_at,omitempty"`
 }
 
-func resolvePaasDeployHistoryPath() (string, error) {
-	return resolvePaasDeployHistoryPathForContext(currentPaasContext())
-}
-
 func resolvePaasDeployHistoryPathForContext(contextName string) (string, error) {
 	contextDir, err := resolvePaasContextDir(contextName)
 	if err != nil {

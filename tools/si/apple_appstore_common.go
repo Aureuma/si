@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -221,16 +220,4 @@ func loadAppleAppStoreMetadataBundle(metadataDir string) (map[string]map[string]
 		versionMeta = nil
 	}
 	return appInfo, versionInfo, versionMeta, nil
-}
-
-func sortedStringKeys(m map[string]map[string]any) []string {
-	if len(m) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(m))
-	for key := range m {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
 }

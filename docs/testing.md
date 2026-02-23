@@ -190,6 +190,12 @@ cat docs/PAAS_AGENT_AUDIT_ARTIFACTS.md
 Run static analysis from the repo root:
 
 ```bash
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+```
+
+Then run:
+
+```bash
 ./si analyze
 ```
 

@@ -143,13 +143,6 @@ func resolveGoForSelfBuild(root string, output string, goBin string) (string, er
 	}
 
 	// Next-best options when "go" is missing from PATH.
-	// 0) The toolchain used to build this binary (useful for tests/dev).
-	if gr := strings.TrimSpace(runtime.GOROOT()); gr != "" {
-		p := filepath.Join(gr, "bin", "go")
-		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
-			return p, nil
-		}
-	}
 	// 1) A "go" shim next to the target output path (e.g. ~/.local/bin/go).
 	if p, ok := resolveSiblingGo(output); ok {
 		return p, nil

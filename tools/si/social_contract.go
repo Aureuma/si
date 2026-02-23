@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -440,36 +439,6 @@ func socialPlatformSettings(settings Settings, platform socialPlatform) SocialPl
 		return settings.Social.Reddit
 	default:
 		return SocialPlatformSettings{}
-	}
-}
-
-func socialDefaultBaseURL(platform socialPlatform) string {
-	switch platform {
-	case socialPlatformFacebook, socialPlatformInstagram:
-		return "https://graph.facebook.com"
-	case socialPlatformX:
-		return "https://api.twitter.com"
-	case socialPlatformLinkedIn:
-		return "https://api.linkedin.com"
-	case socialPlatformReddit:
-		return "https://oauth.reddit.com"
-	default:
-		return ""
-	}
-}
-
-func socialDefaultAPIVersion(platform socialPlatform) string {
-	switch platform {
-	case socialPlatformFacebook, socialPlatformInstagram:
-		return "v22.0"
-	case socialPlatformX:
-		return "2"
-	case socialPlatformLinkedIn:
-		return "v2"
-	case socialPlatformReddit:
-		return ""
-	default:
-		return ""
 	}
 }
 
@@ -1111,23 +1080,6 @@ func printSocialContextBanner(runtime socialRuntimeContext, jsonOut bool) {
 	fmt.Printf("%s %s\n", styleDim("social context:"), formatSocialContext(runtime))
 }
 
-func socialPlatformTokenEnvKey(platform socialPlatform) string {
-	switch platform {
-	case socialPlatformFacebook:
-		return "FACEBOOK_ACCESS_TOKEN"
-	case socialPlatformInstagram:
-		return "INSTAGRAM_ACCESS_TOKEN"
-	case socialPlatformX:
-		return "X_BEARER_TOKEN"
-	case socialPlatformLinkedIn:
-		return "LINKEDIN_ACCESS_TOKEN"
-	case socialPlatformReddit:
-		return "REDDIT_ACCESS_TOKEN"
-	default:
-		return "ACCESS_TOKEN"
-	}
-}
-
 func socialPlatformDefaultProbePath(platform socialPlatform, authStyle string) string {
 	if normalizeSocialAuthStyle(authStyle) == "none" {
 		if method, path, ok := providers.PublicProbe(socialProviderID(platform)); ok {
@@ -1165,10 +1117,6 @@ func socialPlatformDefaultProbeParams(platform socialPlatform, authStyle string)
 	}
 }
 
-func socialPlatformRequiresQueryToken(platform socialPlatform) bool {
-	return platform == socialPlatformFacebook || platform == socialPlatformInstagram
-}
-
 func socialPlatformContextID(platform socialPlatform, runtime socialRuntimeContext) string {
 	switch platform {
 	case socialPlatformFacebook:
@@ -1201,13 +1149,6 @@ func socialResolveIDArg(arg string, fallback string, label string) (string, erro
 		return "", fmt.Errorf("%s is required", label)
 	}
 	return value, nil
-}
-
-func socialParseFlagSet(name string, args []string, boolFlags map[string]bool) (*flag.FlagSet, []string) {
-	args = stripeFlagsFirst(args, boolFlags)
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	_ = fs.Parse(args)
-	return fs, args
 }
 
 func socialSummarizeItem(item map[string]any) string {

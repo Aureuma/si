@@ -199,12 +199,3 @@ func argsContain(args []string, key, value string) bool {
 	}
 	return false
 }
-
-func argsContainKey(args []string, key string) bool {
-	for _, arg := range args {
-		if arg == key {
-			return true
-		}
-	}
-	return false
-}

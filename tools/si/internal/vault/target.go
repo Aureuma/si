@@ -68,4 +68,3 @@ func ResolveTarget(opts ResolveOptions) (Target, error) {
 		FileIsExplicit: fileIsExplicit,
 	}, nil
 }
-

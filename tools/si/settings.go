@@ -562,13 +562,6 @@ func mergeSunSettings(settings *Settings) {
 	}
 }
 
-func mirrorSunToSun(settings *Settings) {
-	if settings == nil {
-		return
-	}
-	settings.Sun = settings.Sun
-}
-
 func settingsPath() (string, error) {
 	home, err := settingsHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
@@ -1024,7 +1017,6 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	settings.Sun.MachineID = strings.TrimSpace(settings.Sun.MachineID)
 	settings.Sun.OperatorID = strings.TrimSpace(settings.Sun.OperatorID)
-	mirrorSunToSun(settings)
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
 	if settings.OCI.Profile == "" {
@@ -1135,7 +1127,6 @@ func saveSettings(settings Settings) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	mirrorSunToSun(&settings)
 	settings.Metadata.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	data, err := toml.Marshal(settings)
 	if err != nil {

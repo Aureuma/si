@@ -8,7 +8,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
@@ -25,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/ssh"
 	"si/tools/si/internal/httpx"
 	"si/tools/si/internal/integrationruntime"
 	"si/tools/si/internal/netpolicy"
@@ -1422,40 +1422,49 @@ func loadOCIRSAPrivateKey(path string, passphrase string) (*rsa.PrivateKey, erro
 	if err != nil {
 		return nil, fmt.Errorf("read oci private key %q: %w", path, err)
 	}
-	var block *pem.Block
-	remaining := raw
-	for {
-		block, remaining = pem.Decode(remaining)
-		if block == nil {
-			return nil, fmt.Errorf("no private key PEM block found in %s", path)
-		}
-		if strings.Contains(block.Type, "PRIVATE KEY") {
-			break
-		}
-	}
-	keyDER := block.Bytes
-	if x509.IsEncryptedPEMBlock(block) {
-		if strings.TrimSpace(passphrase) == "" {
-			return nil, fmt.Errorf("encrypted oci private key requires passphrase")
-		}
-		decoded, err := x509.DecryptPEMBlock(block, []byte(passphrase))
+	passphrase = strings.TrimSpace(passphrase)
+	var parsed any
+	if passphrase != "" {
+		parsed, err = ssh.ParseRawPrivateKeyWithPassphrase(raw, []byte(passphrase))
 		if err != nil {
 			return nil, fmt.Errorf("decrypt oci private key: %w", err)
 		}
-		keyDER = decoded
-	}
-	if key, err := x509.ParsePKCS1PrivateKey(keyDER); err == nil {
-		return key, nil
-	}
-	parsed, err := x509.ParsePKCS8PrivateKey(keyDER)
-	if err != nil {
-		return nil, fmt.Errorf("parse oci private key: %w", err)
+	} else {
+		parsed, err = ssh.ParseRawPrivateKey(raw)
+		if err != nil {
+			if ociPrivateKeyNeedsPassphrase(raw) {
+				return nil, fmt.Errorf("encrypted oci private key requires passphrase")
+			}
+			return nil, fmt.Errorf("parse oci private key: %w", err)
+		}
 	}
 	key, ok := parsed.(*rsa.PrivateKey)
 	if !ok {
 		return nil, fmt.Errorf("oci private key must be RSA")
 	}
 	return key, nil
+}
+
+func ociPrivateKeyNeedsPassphrase(raw []byte) bool {
+	remaining := raw
+	for {
+		block, rest := pem.Decode(remaining)
+		if block == nil {
+			return false
+		}
+		if strings.Contains(strings.ToUpper(strings.TrimSpace(block.Type)), "PRIVATE KEY") {
+			if strings.EqualFold(strings.TrimSpace(block.Type), "ENCRYPTED PRIVATE KEY") {
+				return true
+			}
+			if value := strings.ToLower(strings.TrimSpace(block.Headers["Proc-Type"])); strings.Contains(value, "encrypted") {
+				return true
+			}
+			if strings.TrimSpace(block.Headers["DEK-Info"]) != "" {
+				return true
+			}
+		}
+		remaining = rest
+	}
 }
 
 func resolveOCIAccountSelection(settings Settings, accountFlag string) (string, OCIAccountEntry) {

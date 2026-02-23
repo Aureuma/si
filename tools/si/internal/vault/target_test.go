@@ -15,8 +15,8 @@ func TestResolveTargetUsesConfiguredDefaultFile(t *testing.T) {
 	}
 
 	target, err := ResolveTarget(ResolveOptions{
-		CWD:             repo,
-		DefaultFile:     ".env",
+		CWD:              repo,
+		DefaultFile:      ".env",
 		AllowMissingFile: false,
 	})
 	if err != nil {
@@ -41,8 +41,8 @@ func TestResolveTargetExplicitFile(t *testing.T) {
 	}
 
 	target, err := ResolveTarget(ResolveOptions{
-		CWD:             repo,
-		File:            path,
+		CWD:              repo,
+		File:             path,
 		AllowMissingFile: false,
 	})
 	if err != nil {

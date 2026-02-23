@@ -70,7 +70,7 @@ jobs:
 
       - name: Run Sun-focused unit tests
         run: |
-          go test ./tools/si -run 'Test(NewSunClientValidation|SunClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|SunClientFromSettingsEnvPrecedence|SunE2E_ProfilePushPullRoundTrip|SunE2E_VaultBackupPushPullRoundTrip|MaybeSunAutoBackupVaultSkipsPlaintext|ResolvePaasSyncBackendPrecedence|IsPaasCloudMutationCommand|PaasCloudUseAndStatusE2E|PaasCloudPushPullRoundTripE2E|PaasCloudStrictAutoSyncPreservesJSONOutput|NormalizeVaultSyncBackend|VaultBackendStatusAndUse|ResolveVaultSyncBackendOverridesAndValidation|LoadSettingsSunSectionOverridesLegacySunSection|SaveSettingsMirrorsSunIntoSunSection|SunEnvAliasesPreferSunThenSun|SunEnvAliasesFallbackToSun|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
+          go test ./tools/si -run 'Test(NewSunClientValidation|SunClientRoundTripMethods|SplitCSVScopes|ResolveVaultPath|SunClientFromSettingsEnvPrecedence|SunE2E_ProfilePushPullRoundTrip|SunE2E_VaultBackupPushPullRoundTrip|MaybeSunAutoBackupVaultSkipsPlaintext|ResolvePaasSyncBackendPrecedence|IsPaasCloudMutationCommand|PaasCloudUseAndStatusE2E|PaasCloudPushPullRoundTripE2E|PaasCloudStrictAutoSyncPreservesJSONOutput|NormalizeVaultSyncBackend|VaultBackendStatusAndUse|ResolveVaultSyncBackendOverridesAndValidation|LoadSettingsSunSection|SaveSettingsWritesSunSection|SunEnvReadsSunVariables|SunEnvEmptyWhenUnset|DispatchRootCommandAliases|GitHubWorkflowRunStatusFromData|GitHubWorkflowInt|GitHubWorkflowRunIsFailureConclusion)$'
 
       - name: Compile command package
         run: go test ./tools/si -run '^$'
