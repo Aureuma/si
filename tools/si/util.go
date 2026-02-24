@@ -350,7 +350,7 @@ paas:
   Running si paas target/app/alert/ai/context/agent/events with no subcommand opens an interactive command picker.
 
 sun:
-  si sun auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]
+  si sun auth login [--url <url>] [--token <token>] [--google] [--login-url <url>] [--open-browser] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]
   si sun auth status [--json]
   si sun auth logout [--clear-account]
   si sun doctor [--json]

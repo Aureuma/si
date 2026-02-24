@@ -94,9 +94,13 @@ func cmdSunAuth(args []string) {
 
 func cmdSunAuthLogin(args []string) {
 	settings := loadSettingsOrDefault()
+	autoSyncProvided := flagProvided(args, "auto-sync")
 	fs := flag.NewFlagSet("sun auth login", flag.ExitOnError)
 	urlFlag := fs.String("url", strings.TrimSpace(settings.Sun.BaseURL), "sun base url")
 	tokenFlag := fs.String("token", envSunToken(), "sun bearer token")
+	googleLogin := fs.Bool("google", false, "authenticate via aureuma.ai Google OAuth")
+	loginURLFlag := fs.String("login-url", firstNonEmpty(envSunLoginURL(), defaultSunGoogleLoginURL), "browser login start URL")
+	openBrowser := fs.Bool("open-browser", true, "open browser automatically for --google")
 	accountFlag := fs.String("account", strings.TrimSpace(settings.Sun.Account), "expected account slug")
 	timeoutSeconds := fs.Int("timeout-seconds", settings.Sun.TimeoutSeconds, "http timeout seconds")
 	autoSync := fs.Bool("auto-sync", settings.Sun.AutoSync, "enable automatic profile sync after login/swap")
@@ -104,12 +108,27 @@ func cmdSunAuthLogin(args []string) {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si sun auth login [--url <url>] [--token <token>] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]")
+		printUsage("usage: si sun auth login [--url <url>] [--token <token>] [--google] [--login-url <url>] [--open-browser] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]")
 		return
 	}
 
 	token := strings.TrimSpace(*tokenFlag)
-	if token == "" {
+	if *googleLogin {
+		result, err := runSunBrowserAuthFlow(strings.TrimSpace(*loginURLFlag), time.Duration(*timeoutSeconds)*time.Second, *openBrowser)
+		if err != nil {
+			fatal(err)
+		}
+		token = strings.TrimSpace(result.Token)
+		if !autoSyncProvided && result.AutoSync {
+			*autoSync = true
+		}
+		if strings.TrimSpace(*urlFlag) == "" && strings.TrimSpace(result.BaseURL) != "" {
+			*urlFlag = strings.TrimSpace(result.BaseURL)
+		}
+		if strings.TrimSpace(*accountFlag) == "" && strings.TrimSpace(result.Account) != "" {
+			*accountFlag = strings.TrimSpace(result.Account)
+		}
+	} else if token == "" {
 		token = strings.TrimSpace(settings.Sun.Token)
 	}
 	client, err := newSunClient(strings.TrimSpace(*urlFlag), token, time.Duration(*timeoutSeconds)*time.Second)

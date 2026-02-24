@@ -335,6 +335,7 @@ Defaults for `si sun` cloud sync.
 Environment overrides:
 - `SI_SUN_BASE_URL`
 - `SI_SUN_TOKEN`
+- `SI_SUN_LOGIN_URL`
 - `SI_SUN_ALLOW_INSECURE_HTTP`
 - `SI_SUN_PLUGIN_GATEWAY_REGISTRY`
 - `SI_SUN_PLUGIN_GATEWAY_SLOTS`
