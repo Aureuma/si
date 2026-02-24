@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -451,16 +452,6 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			fmt.Errorf("invalid remote release directory"),
 		)
 	}
-	bundleFiles, err := resolvePaasBundleUploadFiles(localBundleDir)
-	if err != nil {
-		return newPaasOperationFailure(
-			paasFailureBundleCreate,
-			"bundle_discover",
-			target.Name,
-			"verify local release bundle contents and retry",
-			err,
-		)
-	}
 	composeFiles, err := readPaasComposeFilesManifest(localBundleDir)
 	if err != nil {
 		return newPaasOperationFailure(
@@ -468,6 +459,25 @@ func runPaasRemoteComposeApply(ctx context.Context, target paasTarget, localBund
 			"bundle_manifest",
 			target.Name,
 			"fix compose bundle manifest and rerun deploy",
+			err,
+		)
+	}
+	if _, err := materializePaasComposeRuntimeEnv(localBundleDir, composeFiles, os.Environ()); err != nil {
+		return newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_env",
+			target.Name,
+			"ensure compose env values are available in process environment and retry deploy",
+			err,
+		)
+	}
+	bundleFiles, err := resolvePaasBundleUploadFiles(localBundleDir)
+	if err != nil {
+		return newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_discover",
+			target.Name,
+			"verify local release bundle contents and retry",
 			err,
 		)
 	}

@@ -188,6 +188,16 @@ func cmdPaasDeploy(args []string) {
 			err,
 		), nil)
 	}
+	composeEnvKeys, err := materializePaasComposeRuntimeEnv(bundleDir, preparedCompose.ComposeFiles, os.Environ())
+	if err != nil {
+		failPaasDeploy(jsonOut, newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_env",
+			"",
+			"ensure compose env values are available in process environment and retry deploy",
+			err,
+		), nil)
+	}
 	releaseID := filepath.Base(bundleDir)
 	rollbackReleaseID := ""
 	rollbackBundleDir := ""
@@ -262,6 +272,7 @@ func cmdPaasDeploy(args []string) {
 		"bundle_dir":               bundleDir,
 		"bundle_metadata":          bundleMetaPath,
 		"compose_files":            strings.Join(preparedCompose.ComposeFiles, ","),
+		"compose_env_keys":         intString(composeEnvKeys),
 		"addon_fragments":          intString(len(preparedCompose.AddonArtifacts)),
 		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
 		"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
