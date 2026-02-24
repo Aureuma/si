@@ -19,6 +19,7 @@ const paasComposeRuntimeEnvFileName = ".env"
 
 var paasMagicVariablePattern = regexp.MustCompile(`\{\{\s*paas\.[a-zA-Z0-9_.-]+\s*\}\}`)
 var paasComposeInterpolationVariablePattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)[^}]*\}`)
+var paasNamespacedSecretEnvPattern = regexp.MustCompile(`^PAAS__CTX_[A-Z0-9_]+__NS_[A-Z0-9_]+__APP_[A-Z0-9_]+__TARGET_[A-Z0-9_]+__VAR_([A-Z0-9_]+)$`)
 
 type paasComposePrepareOptions struct {
 	App         string
@@ -190,6 +191,7 @@ func materializePaasComposeRuntimeEnv(bundleDir string, composeFiles []string, e
 		return 0, nil
 	}
 	available := map[string]string{}
+	projected := map[string]string{}
 	for _, pair := range env {
 		key, value, ok := strings.Cut(pair, "=")
 		if !ok {
@@ -200,6 +202,20 @@ func materializePaasComposeRuntimeEnv(bundleDir string, composeFiles []string, e
 			continue
 		}
 		available[key] = value
+		if match := paasNamespacedSecretEnvPattern.FindStringSubmatch(key); len(match) == 2 {
+			candidate := strings.TrimSpace(match[1])
+			if candidate != "" {
+				if _, exists := projected[candidate]; !exists {
+					projected[candidate] = value
+				}
+			}
+		}
+	}
+	// Direct env keys win over projected namespaced aliases.
+	for key, value := range projected {
+		if _, ok := available[key]; !ok {
+			available[key] = value
+		}
 	}
 	lines := make([]string, 0, len(referenced))
 	for _, key := range referenced {
