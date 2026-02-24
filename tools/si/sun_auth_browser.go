@@ -17,6 +17,16 @@ import (
 const defaultSunGoogleLoginURL = "https://aureuma.ai/sun/auth/cli/start"
 
 var sunBrowserAuthOpenURLFn = func(url string) {
+	if cmdTemplate := envSunLoginOpenCmd(); cmdTemplate != "" {
+		cmdLine := expandLoginOpenCommand(cmdTemplate, url, codexProfile{})
+		if !strings.Contains(cmdTemplate, "{url}") {
+			cmdLine = strings.TrimSpace(cmdLine + " " + shellSingleQuote(url))
+		}
+		if err := runShellCommand(cmdLine); err != nil {
+			warnf("open login url failed: %v", err)
+		}
+		return
+	}
 	openLoginURL(url, codexProfile{}, "", "")
 }
 

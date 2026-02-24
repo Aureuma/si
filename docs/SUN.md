@@ -55,6 +55,7 @@ si sun auth login \
 
 This flow starts a loopback callback listener on `127.0.0.1`, opens your browser,
 and stores the returned Sun token in local SI settings.
+For headless/custom launchers, set `SI_SUN_LOGIN_OPEN_CMD` (supports `{url}` placeholder).
 
 Security note:
 - Use `https://` Sun URLs for any non-local deployment.
