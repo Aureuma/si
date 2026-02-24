@@ -11,6 +11,7 @@ import (
 
 func cmdVaultGet(args []string) {
 	settings := loadSettingsOrDefault()
+	args = stripeFlagsFirst(args, map[string]bool{"reveal": true})
 	fs := flag.NewFlagSet("vault get", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	reveal := fs.Bool("reveal", false, "print the decrypted value to stdout")
