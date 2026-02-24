@@ -9,6 +9,7 @@ node_modules/
 # Secrets/env
 secrets/
 .env
+.env.*
 !secrets/README.md
 !secrets/*.sops.*
 !secrets/**/*.sops.*
