@@ -506,6 +506,21 @@ func cmdSunVaultBackupPush(args []string) {
 		fatal(err)
 	}
 	successf("vault backup pushed (%s revision %d)", backupName, result.Result.Revision.Revision)
+	target, targetErr := vault.ResolveTarget(vault.ResolveOptions{
+		CWD:              "",
+		File:             path,
+		DefaultFile:      path,
+		AllowMissingFile: true,
+	})
+	if targetErr != nil {
+		fatal(targetErr)
+	}
+	doc := vault.ParseDotenv(data)
+	mirror, mirrorErr := vaultSunKVMirrorDoc(settings, target, doc, "vault_sync_push")
+	if mirrorErr != nil {
+		fatal(mirrorErr)
+	}
+	infof("sun vault key mirror complete (pushed=%d tombstone=%d)", mirror.Pushed, mirror.Tombstone)
 }
 
 func cmdSunVaultBackupPull(args []string) {

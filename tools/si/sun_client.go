@@ -38,6 +38,15 @@ type sunObjectMeta struct {
 	UpdatedAt      string                 `json:"updated_at"`
 }
 
+type sunObjectRevision struct {
+	Revision    int64                  `json:"revision"`
+	Checksum    string                 `json:"checksum"`
+	ContentType string                 `json:"content_type"`
+	SizeBytes   int64                  `json:"size_bytes"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt   string                 `json:"created_at"`
+}
+
 type sunPutResult struct {
 	Result struct {
 		Object struct {
@@ -242,6 +251,28 @@ func (c *sunClient) getPayload(ctx context.Context, kind string, name string) ([
 		return nil, decodeSunError(res)
 	}
 	return io.ReadAll(res.Body)
+}
+
+func (c *sunClient) listRevisions(ctx context.Context, kind string, name string, limit int) ([]sunObjectRevision, error) {
+	params := url.Values{}
+	if limit > 0 {
+		params.Set("limit", fmt.Sprintf("%d", limit))
+	}
+	path := "/v1/objects/" + url.PathEscape(strings.TrimSpace(kind)) + "/" + url.PathEscape(strings.TrimSpace(name)) + "/revisions"
+	if encoded := params.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	body, err := c.doJSON(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	var parsed struct {
+		Items []sunObjectRevision `json:"items"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, fmt.Errorf("parse list revisions response: %w", err)
+	}
+	return parsed.Items, nil
 }
 
 func (c *sunClient) listTokens(ctx context.Context, includeRevoked bool, limit int) ([]sunTokenRecord, error) {

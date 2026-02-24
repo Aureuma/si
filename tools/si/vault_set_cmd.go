@@ -70,6 +70,9 @@ func cmdVaultSet(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	if err := vaultSunKVPutRawValue(settings, target, key, vault.RenderDotenvValuePlain(cipher), "vault_set", false); err != nil {
+		fatal(err)
+	}
 	changed, err := doc.Set(key, cipher, vault.SetOptions{Section: *section})
 	if err != nil {
 		fatal(err)

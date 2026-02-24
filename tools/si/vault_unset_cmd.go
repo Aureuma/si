@@ -11,6 +11,7 @@ import (
 
 func cmdVaultUnset(args []string) {
 	settings := loadSettingsOrDefault()
+	args = stripeFlagsFirst(args, map[string]bool{"format": true})
 	fs := flag.NewFlagSet("vault unset", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	section := fs.String("section", "", "section name (accepted but unset removes all occurrences)")
@@ -39,6 +40,9 @@ func cmdVaultUnset(args []string) {
 		fatal(err)
 	}
 	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
+		fatal(err)
+	}
+	if err := vaultSunKVPutRawValue(settings, target, key, "", "vault_unset", true); err != nil {
 		fatal(err)
 	}
 	changed, err := doc.Unset(key)

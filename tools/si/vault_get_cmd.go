@@ -32,16 +32,28 @@ func cmdVaultGet(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	doc, err := vault.ReadDotenvFile(target.File)
-	if err != nil {
-		fatal(err)
+	raw := ""
+	ok := false
+	source := "local"
+	if sunRaw, found, used, sunErr := vaultSunKVGetRawValue(settings, target, key); sunErr != nil {
+		fatal(sunErr)
+	} else if used && found {
+		raw = sunRaw
+		ok = true
+		source = "sun-kv"
 	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-		fatal(err)
-	}
-	raw, ok := doc.Lookup(key)
 	if !ok {
-		fatal(fmt.Errorf("key not found: %s", key))
+		doc, err := vault.ReadDotenvFile(target.File)
+		if err != nil {
+			fatal(err)
+		}
+		if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
+			fatal(err)
+		}
+		raw, ok = doc.Lookup(key)
+		if !ok {
+			fatal(fmt.Errorf("key not found: %s", key))
+		}
 	}
 	val, err := vault.NormalizeDotenvValue(raw)
 	if err != nil {
@@ -50,6 +62,7 @@ func cmdVaultGet(args []string) {
 	if vault.IsEncryptedValueV1(val) {
 		if !*reveal {
 			fmt.Printf("file: %s\n", filepath.Clean(target.File))
+			fmt.Printf("source: %s\n", source)
 			fmt.Printf("%s: encrypted (use --reveal)\n", key)
 			return
 		}
@@ -78,6 +91,7 @@ func cmdVaultGet(args []string) {
 
 	if !*reveal {
 		fmt.Printf("file: %s\n", filepath.Clean(target.File))
+		fmt.Printf("source: %s\n", source)
 		fmt.Printf("%s: plaintext (run `si vault encrypt` to encrypt)\n", key)
 		return
 	}

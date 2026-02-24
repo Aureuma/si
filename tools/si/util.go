@@ -328,6 +328,7 @@ vault:
 	  si vault unset <KEY> [--file <path>] [--format]
 	  si vault get <KEY> [--file <path>] [--reveal]
 	  si vault list [--file <path>]
+	  si vault history <KEY> [--file <path>] [--limit <n>] [--json]
 	  si vault run [--file <path>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
 	  si vault docker exec --container <name|id> [--file <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
 	  si vault trust status|accept|forget [--file <path>]

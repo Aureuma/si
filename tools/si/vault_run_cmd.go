@@ -41,8 +41,25 @@ func cmdVaultRun(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-		fatal(err)
+	docSource := "local"
+	if values, used, sunErr := vaultSunKVLoadRawValues(settings, target); sunErr != nil {
+		fatal(sunErr)
+	} else if used && len(values) > 0 {
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		lines := make([]string, 0, len(keys))
+		for _, key := range keys {
+			lines = append(lines, key+"="+values[key])
+		}
+		doc = vault.ParseDotenv([]byte(strings.Join(lines, "\n") + "\n"))
+		docSource = "sun-kv"
+	} else {
+		if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
+			fatal(err)
+		}
 	}
 	if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
 		fatal(err)
@@ -77,6 +94,7 @@ func cmdVaultRun(args []string) {
 		"plainCount":   len(dec.PlaintextKeys),
 		"shell":        *shellFlag,
 		"shellI":       *shellInteractive,
+		"source":       docSource,
 	})
 
 	var cmd *exec.Cmd

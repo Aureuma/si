@@ -80,7 +80,14 @@ func cmdVaultStatus(args []string) {
 		} else {
 			fmt.Printf("key:       ok (backend=%s)\n", backend)
 		}
-		return
+	} else {
+		fmt.Printf("key:       missing (backend=%s)\n", backend)
 	}
-	fmt.Printf("key:       missing (backend=%s)\n", backend)
+	if values, used, sunErr := vaultSunKVLoadRawValues(settings, target); sunErr != nil {
+		fmt.Printf("cloud_kv:  error (%v)\n", sunErr)
+	} else if used {
+		fmt.Printf("cloud_kv:  ok (%d keys)\n", len(values))
+	} else {
+		fmt.Printf("cloud_kv:  unavailable\n")
+	}
 }
