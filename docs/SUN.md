@@ -122,6 +122,14 @@ si vault sync push --file ~/.si/vault/.env --name default
 si vault sync pull --file ~/.si/vault/.env --name default
 ```
 
+`si sun vault backup push` also mirrors each key to Sun KV objects (`vault_kv.<scope>/<KEY>`) so vault reads can use direct cloud key state.
+
+Inspect per-key cloud revision history:
+
+```bash
+si vault history <KEY> [--file <path>] [--limit <n>] [--json]
+```
+
 Select vault backend mode:
 
 ```bash
@@ -132,6 +140,7 @@ si vault backend status
 When vault backend is `sun`, `si vault init|set|unset|fmt|encrypt|recipients add|recipients remove` perform automatic backup behavior for the configured `sun.vault_backup` object.
 In `sun` mode, SI also auto-hydrates local vault state and vault identity material from Sun before vault commands run.
 In `sun` mode, new encrypted values created by `si vault set` and plaintext `si vault encrypt` are encrypted to the Sun vault identity recipient (existing legacy ciphertext remains unchanged).
+In `sun` mode, `si vault get`, `si vault list`, and `si vault run` prefer Sun KV key reads when available, then fall back to the local hydrated file.
 
 Security rule:
 - Auto-backup skips vault files that contain plaintext keys.

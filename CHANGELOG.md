@@ -11,6 +11,14 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Added
+- Added Sun-backed per-key vault KV sync (`vault_kv.<scope>/<KEY>`) with revision-history support via `si vault history`.
+- Added `cloud_kv` reporting in `si vault status` and KV metadata in `si vault sync status`.
+
+### Changed
+- Changed `si vault get`, `si vault list`, and `si vault run` to prefer Sun KV reads when available, with local vault fallback.
+- Changed `si sun vault backup push`/`si vault sync push` to mirror dotenv entries into Sun KV objects in addition to backup snapshot objects.
+- Improved vault command flag UX by allowing mixed flag order for `si vault history` and `si vault unset`.
 
 ## [v0.49.0] - 2026-02-24
 ### Added

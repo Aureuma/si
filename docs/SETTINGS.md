@@ -313,7 +313,7 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
-- `vault.sync_backend` (string): vault sync policy. Supported: `sun` (Sun-backed hydrate + required Sun backup on mutating vault commands). Default resolution is `sun`. `si sun auth login` also sets this to `sun` for authenticated machines.
+- `vault.sync_backend` (string): vault sync policy. Effective mode is Sun-backed vault (`sun`) with cloud hydrate + required Sun backup on mutating vault commands. Legacy values (`git`, `local`, `dual`, `both`, `cloud`) are accepted as aliases and normalize to `sun`. Default resolution is `sun`. `si sun auth login` also sets this to `sun` for authenticated machines.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.
@@ -324,6 +324,7 @@ Defaults for `si sun` cloud sync.
 - `sun.auto_sync` (bool): enable automatic codex profile sync hooks
 - `sun.vault_backup` (string): default vault backup object name (default: `default`)
   - Also used as the object name for Sun-managed vault identity material in Sun-backed vault mode.
+  - Per-key Sun KV objects are scoped automatically from `(repo_root, vault.file)` and do not require a separate setting.
 - `sun.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
 - `sun.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
 - `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
