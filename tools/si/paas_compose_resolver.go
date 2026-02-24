@@ -9,12 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"si/tools/si/internal/vault"
+
 	"gopkg.in/yaml.v3"
 )
 
 const paasComposeFilesManifestName = "compose.files"
+const paasComposeRuntimeEnvFileName = ".env"
 
 var paasMagicVariablePattern = regexp.MustCompile(`\{\{\s*paas\.[a-zA-Z0-9_.-]+\s*\}\}`)
+var paasComposeInterpolationVariablePattern = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)[^}]*\}`)
 
 type paasComposePrepareOptions struct {
 	App         string
@@ -175,6 +179,83 @@ func resolvePaasBundleUploadFiles(bundleDir string) ([]string, error) {
 	}
 	sort.Strings(files)
 	return files, nil
+}
+
+func materializePaasComposeRuntimeEnv(bundleDir string, composeFiles []string, env []string) (int, error) {
+	referenced, err := collectPaasComposeInterpolationVariables(bundleDir, composeFiles)
+	if err != nil {
+		return 0, err
+	}
+	if len(referenced) == 0 {
+		return 0, nil
+	}
+	available := map[string]string{}
+	for _, pair := range env {
+		key, value, ok := strings.Cut(pair, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		available[key] = value
+	}
+	lines := make([]string, 0, len(referenced))
+	for _, key := range referenced {
+		value, ok := available[key]
+		if !ok {
+			continue
+		}
+		lines = append(lines, key+"="+vault.RenderDotenvValuePlain(value))
+	}
+	envPath := filepath.Join(strings.TrimSpace(bundleDir), paasComposeRuntimeEnvFileName)
+	if len(lines) == 0 {
+		if err := os.Remove(envPath); err != nil && !os.IsNotExist(err) {
+			return 0, err
+		}
+		return 0, nil
+	}
+	payload := strings.Join(lines, "\n") + "\n"
+	if err := os.WriteFile(envPath, []byte(payload), 0o600); err != nil {
+		return 0, err
+	}
+	return len(lines), nil
+}
+
+func collectPaasComposeInterpolationVariables(bundleDir string, composeFiles []string) ([]string, error) {
+	files := composeFiles
+	if len(files) == 0 {
+		files = []string{"compose.yaml"}
+	}
+	seen := map[string]struct{}{}
+	for _, file := range files {
+		item := strings.TrimSpace(file)
+		if item == "" {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(strings.TrimSpace(bundleDir), item)) // #nosec G304 -- bundle path derived from local state root.
+		if err != nil {
+			return nil, err
+		}
+		matches := paasComposeInterpolationVariablePattern.FindAllStringSubmatch(string(raw), -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+			key := strings.TrimSpace(match[1])
+			if key == "" {
+				continue
+			}
+			seen[key] = struct{}{}
+		}
+	}
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys, nil
 }
 
 func buildPaasComposeFileArgs(composeFiles []string) string {

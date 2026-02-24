@@ -190,6 +190,16 @@ func cmdPaasDeployBlueGreen(args []string) {
 			err,
 		), nil)
 	}
+	composeEnvKeys, err := materializePaasComposeRuntimeEnv(bundleDir, preparedCompose.ComposeFiles, os.Environ())
+	if err != nil {
+		failPaasDeployBlueGreen(jsonOut, newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_env",
+			"",
+			"ensure compose env values are available in process environment and retry deploy",
+			err,
+		), nil)
+	}
 	releaseID := filepath.Base(bundleDir)
 
 	activeSlots := map[string]string{}
@@ -338,6 +348,7 @@ func cmdPaasDeployBlueGreen(args []string) {
 		"bundle_dir":               bundleDir,
 		"bundle_metadata":          bundleMetaPath,
 		"compose_files":            strings.Join(preparedCompose.ComposeFiles, ","),
+		"compose_env_keys":         intString(composeEnvKeys),
 		"compose_file":             strings.TrimSpace(*composeFile),
 		"compose_secret_guardrail": composeGuardrail["compose_secret_guardrail"],
 		"compose_secret_findings":  composeGuardrail["compose_secret_findings"],
@@ -491,6 +502,15 @@ func runPaasRemoteBlueGreenComposeApply(ctx context.Context, target paasTarget, 
 			target.Name,
 			"verify remote release root and retry",
 			fmt.Errorf("invalid remote release directory"),
+		)
+	}
+	if _, err := materializePaasComposeRuntimeEnv(localBundleDir, composeFiles, os.Environ()); err != nil {
+		return newPaasOperationFailure(
+			paasFailureBundleCreate,
+			"bundle_env",
+			target.Name,
+			"ensure compose env values are available in process environment and retry deploy",
+			err,
 		)
 	}
 	bundleFiles, err := resolvePaasBundleUploadFiles(localBundleDir)
