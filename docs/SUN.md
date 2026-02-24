@@ -29,7 +29,7 @@ When `si sun auth login` succeeds, SI sets `vault.sync_backend = "sun"` for that
   - `tokens:write`
 - Optional for audit listing:
   - `audit:read`
-- Optional for Sun dashboard dyad control endpoints:
+- Optional for dyad control endpoints:
   - `dyads:read`
   - `dyads:write`
 

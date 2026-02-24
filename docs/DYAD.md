@@ -56,7 +56,7 @@ si dyad logs --member critic <name> --tail 200
 si dyad logs --member actor <name> --tail 200
 ```
 
-Machine-readable output (used by Sun dashboard and automation):
+Machine-readable output (used by Sun automation and CLI integrations):
 
 ```bash
 si dyad list --json
