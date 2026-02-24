@@ -13,6 +13,10 @@ func envSunToken() string {
 	return strings.TrimSpace(os.Getenv("SI_SUN_TOKEN"))
 }
 
+func envSunLoginURL() string {
+	return strings.TrimSpace(os.Getenv("SI_SUN_LOGIN_URL"))
+}
+
 func envSunTaskboard() string {
 	return strings.TrimSpace(os.Getenv("SI_SUN_TASKBOARD"))
 }

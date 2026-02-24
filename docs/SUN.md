@@ -43,6 +43,19 @@ si sun auth login \
   --auto-sync
 ```
 
+Google browser flow (Aureuma auth broker):
+
+```bash
+si sun auth login \
+  --google \
+  --login-url https://aureuma.ai/sun/auth/cli/start \
+  --timeout-seconds 180 \
+  --auto-sync
+```
+
+This flow starts a loopback callback listener on `127.0.0.1`, opens your browser,
+and stores the returned Sun token in local SI settings.
+
 Security note:
 - Use `https://` Sun URLs for any non-local deployment.
 - `http://` is accepted only for loopback (`localhost`, `127.0.0.1`, `::1`) unless `SI_SUN_ALLOW_INSECURE_HTTP=1` is set.

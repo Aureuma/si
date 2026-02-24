@@ -5,6 +5,7 @@ import "testing"
 func TestSunEnvReadsSunVariables(t *testing.T) {
 	t.Setenv("SI_SUN_BASE_URL", "https://sun.example")
 	t.Setenv("SI_SUN_TOKEN", "sun-token")
+	t.Setenv("SI_SUN_LOGIN_URL", "https://aureuma.ai/sun/auth/cli/start")
 	t.Setenv("SI_SUN_TASKBOARD", "sun-board")
 	t.Setenv("SI_SUN_TASKBOARD_AGENT", "sun-agent")
 	t.Setenv("SI_SUN_TASKBOARD_LEASE_SECONDS", "77")
@@ -19,6 +20,9 @@ func TestSunEnvReadsSunVariables(t *testing.T) {
 	}
 	if got := envSunToken(); got != "sun-token" {
 		t.Fatalf("envSunToken=%q", got)
+	}
+	if got := envSunLoginURL(); got != "https://aureuma.ai/sun/auth/cli/start" {
+		t.Fatalf("envSunLoginURL=%q", got)
 	}
 	if got := envSunTaskboard(); got != "sun-board" {
 		t.Fatalf("envSunTaskboard=%q", got)
@@ -49,6 +53,7 @@ func TestSunEnvReadsSunVariables(t *testing.T) {
 func TestSunEnvEmptyWhenUnset(t *testing.T) {
 	t.Setenv("SI_SUN_BASE_URL", "")
 	t.Setenv("SI_SUN_TOKEN", "")
+	t.Setenv("SI_SUN_LOGIN_URL", "")
 	t.Setenv("SI_SUN_PLUGIN_GATEWAY_REGISTRY", "")
 	t.Setenv("SI_SUN_PLUGIN_GATEWAY_SLOTS", "")
 	t.Setenv("SI_SUN_ALLOW_INSECURE_HTTP", "")
@@ -58,6 +63,9 @@ func TestSunEnvEmptyWhenUnset(t *testing.T) {
 	}
 	if got := envSunToken(); got != "" {
 		t.Fatalf("envSunToken=%q", got)
+	}
+	if got := envSunLoginURL(); got != "" {
+		t.Fatalf("envSunLoginURL=%q", got)
 	}
 	if got := envSunPluginGatewayRegistry(); got != "" {
 		t.Fatalf("envSunPluginGatewayRegistry=%q", got)
