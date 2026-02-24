@@ -95,6 +95,8 @@ func cmdSunAuth(args []string) {
 func cmdSunAuthLogin(args []string) {
 	settings := loadSettingsOrDefault()
 	autoSyncProvided := flagProvided(args, "auto-sync")
+	urlProvided := flagProvided(args, "url")
+	accountProvided := flagProvided(args, "account")
 	fs := flag.NewFlagSet("sun auth login", flag.ExitOnError)
 	urlFlag := fs.String("url", strings.TrimSpace(settings.Sun.BaseURL), "sun base url")
 	tokenFlag := fs.String("token", envSunToken(), "sun bearer token")
@@ -122,10 +124,10 @@ func cmdSunAuthLogin(args []string) {
 		if !autoSyncProvided && result.AutoSync {
 			*autoSync = true
 		}
-		if strings.TrimSpace(*urlFlag) == "" && strings.TrimSpace(result.BaseURL) != "" {
+		if strings.TrimSpace(result.BaseURL) != "" && (!urlProvided || strings.TrimSpace(*urlFlag) == "") {
 			*urlFlag = strings.TrimSpace(result.BaseURL)
 		}
-		if strings.TrimSpace(*accountFlag) == "" && strings.TrimSpace(result.Account) != "" {
+		if strings.TrimSpace(result.Account) != "" && (!accountProvided || strings.TrimSpace(*accountFlag) == "") {
 			*accountFlag = strings.TrimSpace(result.Account)
 		}
 	} else if token == "" {
