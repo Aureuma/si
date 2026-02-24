@@ -111,8 +111,7 @@ si vault sync pull --file ~/.si/vault/.env --name default
 Select vault backend mode:
 
 ```bash
-si vault backend use --mode git   # local/git-only
-si vault backend use --mode sun   # Sun backup required on mutating vault commands
+si vault backend use --mode sun   # Sun backup required on mutating vault commands (only supported mode)
 si vault backend status
 ```
 

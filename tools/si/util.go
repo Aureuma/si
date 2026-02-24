@@ -333,15 +333,14 @@ vault:
 	  si vault trust status|accept|forget [--file <path>]
 	  si vault recipients list|add|remove [--file <path>]
 	  si vault backend status [--json]
-	  si vault backend use --mode <git|sun>
+	  si vault backend use --mode <sun>
 	  si vault sync status [--file <path>] [--name <name>] [--json]
 	  si vault sync push [--file <path>] [--name <name>] [--allow-plaintext]
 	  si vault sync pull [--file <path>] [--name <name>]
 
   Sync backend policy:
     SI_VAULT_SYNC_BACKEND (or vault.sync_backend) controls vault cloud behavior:
-      git: local/git-based only (default)
-      sun: Sun backup required for mutating vault commands
+      sun: Sun backup required for mutating vault commands (default and only supported backend)
 
   Alias:
     si creds ...

@@ -10,7 +10,6 @@ import (
 )
 
 const (
-	vaultSyncBackendGit = "git"
 	vaultSyncBackendSun = "sun"
 )
 
@@ -69,10 +68,11 @@ func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source str
 
 func normalizeVaultSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "git", "local":
-		return vaultSyncBackendGit
 	case "sun", "cloud", "dual", "both":
-		// Backward-compatible alias: dual/both now resolve to strict sun mode.
+		// Backward-compatible aliases all resolve to strict Sun mode.
+		return vaultSyncBackendSun
+	case "git", "local":
+		// Legacy git/local modes now map to Sun-only mode.
 		return vaultSyncBackendSun
 	default:
 		return ""
@@ -83,18 +83,18 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 	if envRaw := strings.TrimSpace(os.Getenv("SI_VAULT_SYNC_BACKEND")); envRaw != "" {
 		mode := normalizeVaultSyncBackend(envRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected git or sun)", envRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected sun)", envRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Vault.SyncBackend); cfgRaw != "" {
 		mode := normalizeVaultSyncBackend(cfgRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected git or sun)", cfgRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected sun)", cfgRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "settings"}, nil
 	}
-	return vaultSyncBackendResolution{Mode: vaultSyncBackendGit, Source: "default"}, nil
+	return vaultSyncBackendResolution{Mode: vaultSyncBackendSun, Source: "default"}, nil
 }
 
 func vaultTrustStorePath(settings Settings) string {
@@ -122,15 +122,12 @@ func vaultDefaultEnvFile(settings Settings) string {
 }
 
 func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
-	backend, err := resolveVaultSyncBackend(settings)
+	_, err := resolveVaultSyncBackend(settings)
 	if err != nil {
 		return vault.Target{}, err
 	}
-	resolveAllowMissing := allowMissingFile
-	if backend.Mode != vaultSyncBackendGit {
-		// In Sun-backed modes we may hydrate the local file from cloud after resolution.
-		resolveAllowMissing = true
-	}
+	// Sun-backed mode may hydrate the local file from cloud after resolution.
+	resolveAllowMissing := true
 	target, err := vault.ResolveTarget(vault.ResolveOptions{
 		CWD:              "",
 		File:             fileFlag,
@@ -157,29 +154,7 @@ func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile boo
 }
 
 func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target, error) {
-	target, err := vaultResolveTarget(settings, fileFlag, true)
-	if err == nil {
-		return target, nil
-	}
-	backend, backendErr := resolveVaultSyncBackend(settings)
-	if backendErr != nil {
-		return vault.Target{}, err
-	}
-	if backend.Mode == vaultSyncBackendSun {
-		return vault.Target{}, err
-	}
-	// Status commands should degrade gracefully when Sun sync/auth is unavailable.
-	fallback, fallbackErr := vault.ResolveTarget(vault.ResolveOptions{
-		CWD:              "",
-		File:             fileFlag,
-		DefaultFile:      vaultDefaultEnvFile(settings),
-		AllowMissingFile: true,
-	})
-	if fallbackErr != nil {
-		return vault.Target{}, err
-	}
-	warnf("vault status fallback without sun hydrate: %v", err)
-	return fallback, nil
+	return vaultResolveTarget(settings, fileFlag, true)
 }
 
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
@@ -300,11 +275,8 @@ func vaultValidateImplicitTargetRepoScope(target vault.Target) error {
 }
 
 func shouldEnforceVaultRepoScope(settings Settings) bool {
-	backend, err := resolveVaultSyncBackend(settings)
-	if err != nil {
-		return false
-	}
-	return backend.Mode == vaultSyncBackendGit
+	_ = settings
+	return true
 }
 
 func absPathOrSelf(path string) string {

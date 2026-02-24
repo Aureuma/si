@@ -27,8 +27,27 @@ func isSunNotFoundError(err error) bool {
 	return strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "status 404")
 }
 
-func vaultSyncBackendStrictSun(resolution vaultSyncBackendResolution) bool {
-	return resolution.Mode == vaultSyncBackendSun
+func vaultSyncBackendStrictSun(settings Settings, resolution vaultSyncBackendResolution) bool {
+	if resolution.Mode != vaultSyncBackendSun {
+		return false
+	}
+	if resolution.Source == "env" || resolution.Source == "settings" {
+		return true
+	}
+	token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Sun.Token))
+	return strings.TrimSpace(token) != ""
+}
+
+func vaultLocalFileExists(path string) bool {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.Mode().IsRegular()
 }
 
 func vaultEnsureSunIdentityEnv(settings Settings, source string) error {
@@ -41,7 +60,7 @@ func vaultEnsureSunIdentityEnv(settings Settings, source string) error {
 	if err != nil {
 		return err
 	}
-	strict := vaultSyncBackendStrictSun(backend)
+	strict := vaultSyncBackendStrictSun(settings, backend)
 
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
@@ -100,7 +119,7 @@ func vaultPersistIdentityToSun(settings Settings, identity *age.X25519Identity, 
 	if err != nil {
 		return err
 	}
-	strict := vaultSyncBackendStrictSun(backend)
+	strict := vaultSyncBackendStrictSun(settings, backend)
 
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
@@ -136,6 +155,17 @@ func vaultEnsureStrictSunIdentity(settings Settings, source string) (*age.X25519
 	}
 	if backend.Mode != vaultSyncBackendSun {
 		return nil, nil
+	}
+	if !vaultSyncBackendStrictSun(settings, backend) {
+		info, _, err := vault.EnsureIdentity(vaultKeyConfigFromSettings(settings))
+		if err != nil {
+			return nil, err
+		}
+		if info == nil || info.Identity == nil {
+			return nil, fmt.Errorf("sun vault identity sync failed (%s): missing identity", source)
+		}
+		_ = os.Setenv("SI_VAULT_IDENTITY", strings.TrimSpace(info.Identity.String()))
+		return info.Identity, nil
 	}
 
 	client, err := sunClientFromSettings(settings)
@@ -183,9 +213,14 @@ func vaultHydrateFromSun(settings Settings, target vault.Target, allowMissingFil
 	if err != nil {
 		return err
 	}
-	strict := vaultSyncBackendStrictSun(backend)
+	strict := vaultSyncBackendStrictSun(settings, backend)
+	path := filepath.Clean(strings.TrimSpace(target.File))
+	localExists := vaultLocalFileExists(path)
 	if err := vaultEnsureSunIdentityEnv(settings, "vault_target_resolve"); err != nil {
 		if strict {
+			if localExists {
+				return nil
+			}
 			return err
 		}
 		warnf("%v", err)
@@ -194,6 +229,9 @@ func vaultHydrateFromSun(settings Settings, target vault.Target, allowMissingFil
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		if strict {
+			if localExists {
+				return nil
+			}
 			return fmt.Errorf("sun vault sync failed: %w", err)
 		}
 		warnf("sun vault sync skipped: %v", err)
@@ -215,7 +253,6 @@ func vaultHydrateFromSun(settings Settings, target vault.Target, allowMissingFil
 		return nil
 	}
 
-	path := filepath.Clean(strings.TrimSpace(target.File))
 	if path == "" {
 		return fmt.Errorf("sun vault sync failed: empty local vault path")
 	}

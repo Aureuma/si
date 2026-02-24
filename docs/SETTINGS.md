@@ -313,7 +313,7 @@ Defaults for `si vault` (encrypted dotenv files).
 - `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
 - `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
 - `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
-- `vault.sync_backend` (string): vault sync policy. Supported: `git` (local/git-only) or `sun` (Sun-backed hydrate + required Sun backup on mutating vault commands). Default resolution is `git`. `si sun auth login` sets this to `sun` for authenticated machines.
+- `vault.sync_backend` (string): vault sync policy. Supported: `sun` (Sun-backed hydrate + required Sun backup on mutating vault commands). Default resolution is `sun`. `si sun auth login` also sets this to `sun` for authenticated machines.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.

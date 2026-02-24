@@ -328,7 +328,7 @@ func TestSunE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
 	}
 }
 
-func TestMaybeSunAutoBackupVaultSkipsPlaintext(t *testing.T) {
+func TestMaybeSunAutoBackupVaultDefaultModeFailsOnPlaintext(t *testing.T) {
 	server, store := newSunTestServer(t, "acme", "token-789")
 	defer server.Close()
 
@@ -354,8 +354,12 @@ func TestMaybeSunAutoBackupVaultSkipsPlaintext(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	if err := maybeSunAutoBackupVault("test_plaintext", vaultFile); err != nil {
-		t.Fatalf("expected best-effort mode to skip plaintext without hard error, got: %v", err)
+	err := maybeSunAutoBackupVault("test_plaintext", vaultFile)
+	if err == nil {
+		t.Fatalf("expected default mode to fail on plaintext vault")
+	}
+	if !strings.Contains(err.Error(), "plaintext keys detected") {
+		t.Fatalf("expected plaintext error, got: %v", err)
 	}
 	if got := store.putCount(); got != 0 {
 		t.Fatalf("expected no backup upload for plaintext vault, got %d put calls", got)
@@ -399,7 +403,7 @@ func TestMaybeSunAutoBackupVaultSunModeFailsOnPlaintext(t *testing.T) {
 	}
 }
 
-func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
+func TestMaybeSunAutoBackupVaultLegacyGitAliasActsAsStrictSun(t *testing.T) {
 	server, store := newSunTestServer(t, "acme", "token-git")
 	defer server.Close()
 
@@ -412,7 +416,7 @@ func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 	settings.Sun.AutoSync = true
 	settings.Sun.BaseURL = server.URL
 	settings.Sun.Token = "token-git"
-	settings.Vault.SyncBackend = vaultSyncBackendGit
+	settings.Vault.SyncBackend = "git"
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
@@ -425,11 +429,15 @@ func TestMaybeSunAutoBackupVaultGitModeSkipsCloudBackup(t *testing.T) {
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	if err := maybeSunAutoBackupVault("test_git_mode", vaultFile); err != nil {
-		t.Fatalf("git mode should skip cloud backup without error: %v", err)
+	err := maybeSunAutoBackupVault("test_git_mode_alias", vaultFile)
+	if err == nil {
+		t.Fatalf("expected legacy git alias to behave as strict sun mode")
+	}
+	if !strings.Contains(err.Error(), "plaintext keys detected") {
+		t.Fatalf("expected plaintext error, got: %v", err)
 	}
 	if got := store.putCount(); got != 0 {
-		t.Fatalf("expected no backup upload in git mode, got %d put calls", got)
+		t.Fatalf("expected no backup upload for plaintext vault, got %d put calls", got)
 	}
 }
 
