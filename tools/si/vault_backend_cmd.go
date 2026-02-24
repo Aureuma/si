@@ -45,11 +45,12 @@ func cmdVaultBackendStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	strict := vaultSyncBackendStrictSun(settings, resolution)
 	report := map[string]any{
 		"mode":               resolution.Mode,
 		"source":             resolution.Source,
-		"sun_backup_enabled": resolution.Mode == vaultSyncBackendSun,
-		"sun_backup_strict":  resolution.Mode == vaultSyncBackendSun,
+		"sun_backup_enabled": true,
+		"sun_backup_strict":  strict,
 	}
 	if *jsonOut {
 		printJSON(report)
@@ -57,24 +58,24 @@ func cmdVaultBackendStatus(args []string) {
 	}
 	fmt.Printf("%s %s\n", styleHeading("mode:"), resolution.Mode)
 	fmt.Printf("%s %s\n", styleHeading("source:"), resolution.Source)
-	fmt.Printf("%s %s\n", styleHeading("sun_backup_enabled:"), boolString(resolution.Mode == vaultSyncBackendSun))
-	fmt.Printf("%s %s\n", styleHeading("sun_backup_strict:"), boolString(resolution.Mode == vaultSyncBackendSun))
+	fmt.Printf("%s %s\n", styleHeading("sun_backup_enabled:"), boolString(true))
+	fmt.Printf("%s %s\n", styleHeading("sun_backup_strict:"), boolString(strict))
 }
 
 func cmdVaultBackendUse(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault backend use", flag.ExitOnError)
-	modeFlag := fs.String("mode", "", "vault sync backend mode: git or sun")
+	modeFlag := fs.String("mode", "", "vault sync backend mode: sun")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si vault backend use --mode <git|sun>")
+		printUsage("usage: si vault backend use --mode <sun>")
 		return
 	}
 	mode := normalizeVaultSyncBackend(*modeFlag)
 	if mode == "" {
-		fatal(fmt.Errorf("invalid --mode %q (expected git or sun)", strings.TrimSpace(*modeFlag)))
+		fatal(fmt.Errorf("invalid --mode %q (expected sun)", strings.TrimSpace(*modeFlag)))
 	}
 	settings.Vault.SyncBackend = mode
 	if err := saveSettings(settings); err != nil {

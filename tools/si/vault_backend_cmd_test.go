@@ -8,8 +8,8 @@ import (
 
 func TestNormalizeVaultSyncBackend(t *testing.T) {
 	cases := map[string]string{
-		"git":   vaultSyncBackendGit,
-		"local": vaultSyncBackendGit,
+		"git":   vaultSyncBackendSun,
+		"local": vaultSyncBackendSun,
 		"sun":   vaultSyncBackendSun,
 		"cloud": vaultSyncBackendSun,
 		"dual":  vaultSyncBackendSun,
@@ -43,8 +43,8 @@ func TestVaultBackendStatusAndUse(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &before); err != nil {
 		t.Fatalf("parse backend status json: %v\nstdout=%s", err, stdout)
 	}
-	if before["mode"] != vaultSyncBackendGit {
-		t.Fatalf("default mode=%v want=%s", before["mode"], vaultSyncBackendGit)
+	if before["mode"] != vaultSyncBackendSun {
+		t.Fatalf("default mode=%v want=%s", before["mode"], vaultSyncBackendSun)
 	}
 
 	stdout, stderr, err = runSICommand(t, env, "vault", "backend", "use", "--mode", "dual")
