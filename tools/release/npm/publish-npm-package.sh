@@ -30,6 +30,23 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"
 }
 
+wait_for_npm_package() {
+  local package="$1"
+  local version="$2"
+  local attempts="${3:-12}"
+  local delay_seconds="${4:-10}"
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if npm view "${package}@${version}" version >/dev/null 2>&1; then
+      return 0
+    fi
+    if (( i < attempts )); then
+      sleep "${delay_seconds}"
+    fi
+  done
+  return 1
+}
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_default="$(cd "${script_dir}/../../.." && pwd)"
 
@@ -128,7 +145,7 @@ fi
 
 npm publish "${pack_file}" --access public
 
-if ! npm view "@aureuma/si@${npm_version}" version >/dev/null 2>&1; then
+if ! wait_for_npm_package "@aureuma/si" "${npm_version}" 18 10; then
   die "package publish appears to have failed verification"
 fi
 
