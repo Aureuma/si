@@ -69,6 +69,10 @@ func cmdVaultSyncStatus(args []string) {
 			"",
 		),
 	}
+	target, targetErr := vaultResolveTargetStatus(settings, strings.TrimSpace(*file))
+	if targetErr == nil {
+		report["kv_kind"] = vaultSunKVKind(target)
+	}
 
 	client, clientErr := sunClientFromSettings(settings)
 	if clientErr != nil {
@@ -88,6 +92,20 @@ func cmdVaultSyncStatus(args []string) {
 		} else {
 			report["backup_exists"] = false
 		}
+		if targetErr == nil {
+			if items, listErr := client.listObjects(sunContext(settings), vaultSunKVKind(target), "", sunVaultKVListLimit); listErr != nil {
+				report["kv_lookup_error"] = listErr.Error()
+			} else {
+				keyCount := 0
+				for _, item := range items {
+					if vaultSunKVMetaBool(item.Metadata, "deleted") {
+						continue
+					}
+					keyCount++
+				}
+				report["kv_key_count"] = keyCount
+			}
+		}
 	}
 
 	if *jsonOut {
@@ -100,6 +118,9 @@ func cmdVaultSyncStatus(args []string) {
 	fmt.Printf("%s %s\n", styleHeading("file:"), report["file"])
 	fmt.Printf("%s %s\n", styleHeading("backup_name:"), report["backup_name"])
 	fmt.Printf("%s %s\n", styleHeading("sun_base_url:"), report["sun_base_url"])
+	if report["kv_kind"] != nil {
+		fmt.Printf("%s %v\n", styleHeading("kv_kind:"), report["kv_kind"])
+	}
 	if report["sun_account"] != "" {
 		fmt.Printf("%s %s\n", styleHeading("sun_account:"), report["sun_account"])
 	}
@@ -110,6 +131,12 @@ func cmdVaultSyncStatus(args []string) {
 	if msg, ok := report["backup_lookup_error"].(string); ok && strings.TrimSpace(msg) != "" {
 		fmt.Printf("%s %s\n", styleHeading("backup_lookup_error:"), msg)
 		return
+	}
+	if msg, ok := report["kv_lookup_error"].(string); ok && strings.TrimSpace(msg) != "" {
+		fmt.Printf("%s %s\n", styleHeading("kv_lookup_error:"), msg)
+	}
+	if report["kv_key_count"] != nil {
+		fmt.Printf("%s %v\n", styleHeading("kv_key_count:"), report["kv_key_count"])
 	}
 	if exists, _ := report["backup_exists"].(bool); exists {
 		fmt.Printf("%s %v\n", styleHeading("backup_revision:"), report["backup_revision"])
