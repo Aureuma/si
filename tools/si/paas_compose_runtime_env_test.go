@@ -91,3 +91,43 @@ func TestMaterializePaasComposeRuntimeEnvRemovesStaleFileWhenNoKeysResolved(t *t
 		t.Fatalf("expected runtime env file removed when unresolved; stat err=%v", err)
 	}
 }
+
+func TestMaterializePaasComposeRuntimeEnvProjectsNamespacedSecrets(t *testing.T) {
+	bundleDir := t.TempDir()
+	composeBody := strings.Join([]string{
+		"services:",
+		"  auth:",
+		"    environment:",
+		"      - RM_GOTRUE_EXTERNAL_GOOGLE_ENABLED=${RM_GOTRUE_EXTERNAL_GOOGLE_ENABLED}",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(bundleDir, "compose.yaml"), []byte(composeBody), 0o600); err != nil {
+		t.Fatalf("write compose: %v", err)
+	}
+
+	count, err := materializePaasComposeRuntimeEnv(bundleDir, []string{"compose.yaml"}, []string{
+		"PAAS__CTX_DEFAULT__NS_DEFAULT__APP_RM__TARGET_VANGUARDA__VAR_RM_GOTRUE_EXTERNAL_GOOGLE_ENABLED=true",
+	})
+	if err != nil {
+		t.Fatalf("materialize runtime env: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 resolved key, got %d", count)
+	}
+
+	doc, err := vault.ReadDotenvFile(filepath.Join(bundleDir, ".env"))
+	if err != nil {
+		t.Fatalf("read runtime env: %v", err)
+	}
+	raw, ok := doc.Lookup("RM_GOTRUE_EXTERNAL_GOOGLE_ENABLED")
+	if !ok {
+		t.Fatalf("expected projected RM_GOTRUE_EXTERNAL_GOOGLE_ENABLED key")
+	}
+	value, err := vault.NormalizeDotenvValue(raw)
+	if err != nil {
+		t.Fatalf("normalize projected key: %v", err)
+	}
+	if value != "true" {
+		t.Fatalf("unexpected projected value: got %q", value)
+	}
+}
