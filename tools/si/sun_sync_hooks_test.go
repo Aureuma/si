@@ -19,6 +19,8 @@ type sunObjectStore struct {
 	mu       sync.Mutex
 	payloads map[string][]byte
 	revs     map[string]int64
+	metadata map[string]map[string]any
+	history  map[string][]sunObjectRevision
 	created  map[string]string
 	updated  map[string]string
 	putCalls int
@@ -28,6 +30,8 @@ func newSunObjectStore() *sunObjectStore {
 	return &sunObjectStore{
 		payloads: map[string][]byte{},
 		revs:     map[string]int64{},
+		metadata: map[string]map[string]any{},
+		history:  map[string][]sunObjectRevision{},
 		created:  map[string]string{},
 		updated:  map[string]string{},
 	}
@@ -53,6 +57,17 @@ func (s *sunObjectStore) putCount() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.putCalls
+}
+
+func cloneAnyMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 func (s *sunObjectStore) list(kind string, name string, limit int) []map[string]any {
@@ -92,6 +107,7 @@ func (s *sunObjectStore) list(kind string, name string, limit int) []map[string]
 			"checksum":        sunPayloadSHA256Hex(payload),
 			"content_type":    "application/json",
 			"size_bytes":      len(payload),
+			"metadata":        cloneAnyMap(s.metadata[key]),
 			"created_at":      created,
 			"updated_at":      updated,
 		})
@@ -103,6 +119,35 @@ func (s *sunObjectStore) list(kind string, name string, limit int) []map[string]
 		items = items[:limit]
 	}
 	return items
+}
+
+func (s *sunObjectStore) revisions(kind string, name string, limit int) []map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 {
+		limit = 50
+	}
+	key := s.key(kind, name)
+	rows := s.history[key]
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for idx := len(rows) - 1; idx >= 0; idx-- {
+		row := rows[idx]
+		out = append(out, map[string]any{
+			"revision":     row.Revision,
+			"checksum":     row.Checksum,
+			"content_type": row.ContentType,
+			"size_bytes":   row.SizeBytes,
+			"metadata":     cloneAnyMap(row.Metadata),
+			"created_at":   row.CreatedAt,
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
 }
 
 func newSunTestServer(t *testing.T, account string, token string) (*httptest.Server, *sunObjectStore) {
@@ -156,8 +201,9 @@ func newSunTestServer(t *testing.T, account string, token string) (*httptest.Ser
 		switch {
 		case r.Method == http.MethodPut && len(parts) == 2:
 			var req struct {
-				PayloadBase64    string `json:"payload_base64"`
-				ExpectedRevision *int64 `json:"expected_revision"`
+				PayloadBase64    string         `json:"payload_base64"`
+				Metadata         map[string]any `json:"metadata"`
+				ExpectedRevision *int64         `json:"expected_revision"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -181,9 +227,18 @@ func newSunTestServer(t *testing.T, account string, token string) (*httptest.Ser
 				store.created[key] = "2026-01-01T00:00:00Z"
 			}
 			store.payloads[key] = payload
+			store.metadata[key] = cloneAnyMap(req.Metadata)
 			store.revs[key]++
 			rev := store.revs[key]
 			store.updated[key] = "2026-01-02T00:00:00Z"
+			store.history[key] = append(store.history[key], sunObjectRevision{
+				Revision:    rev,
+				Checksum:    sunPayloadSHA256Hex(payload),
+				ContentType: "application/json",
+				SizeBytes:   int64(len(payload)),
+				Metadata:    cloneAnyMap(req.Metadata),
+				CreatedAt:   "2026-01-02T00:00:00Z",
+			})
 			store.mu.Unlock()
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"result": map[string]any{
@@ -199,6 +254,15 @@ func newSunTestServer(t *testing.T, account string, token string) (*httptest.Ser
 				return
 			}
 			_, _ = w.Write(payload)
+			return
+		case r.Method == http.MethodGet && len(parts) == 3 && parts[2] == "revisions":
+			limit := 50
+			if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+				if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+					limit = parsed
+				}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": store.revisions(kind, name, limit)})
 			return
 		default:
 			http.NotFound(w, r)

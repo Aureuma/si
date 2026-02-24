@@ -90,7 +90,7 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 				"token_id":     "tok-1",
 				"scopes":       []string{"objects:read", "objects:write"},
 			})
-		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/objects") && !strings.HasSuffix(r.URL.Path, "/payload"):
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/objects") && !strings.HasSuffix(r.URL.Path, "/payload") && !strings.HasSuffix(r.URL.Path, "/revisions"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{{
 					"kind":            sunCodexProfileBundleKind,
@@ -123,6 +123,19 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/payload"):
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(payloadBytes)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/revisions"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{{
+					"revision":     4,
+					"checksum":     "abc",
+					"content_type": "application/json",
+					"size_bytes":   42,
+					"metadata": map[string]any{
+						"operation": "set",
+					},
+					"created_at": "2026-01-02T00:00:00Z",
+				}},
+			})
 		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/tokens"):
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{{
@@ -199,6 +212,13 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	}
 	if base64.StdEncoding.EncodeToString(gotPayload) != base64.StdEncoding.EncodeToString(payloadBytes) {
 		t.Fatalf("unexpected payload: %s", string(gotPayload))
+	}
+	revs, err := client.listRevisions(ctx, sunCodexProfileBundleKind, "cadma", 10)
+	if err != nil {
+		t.Fatalf("list revisions: %v", err)
+	}
+	if len(revs) != 1 || revs[0].Revision != 4 {
+		t.Fatalf("unexpected revisions response: %+v", revs)
 	}
 
 	tokens, err := client.listTokens(ctx, true, 10)
