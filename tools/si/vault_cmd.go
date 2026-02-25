@@ -5,30 +5,26 @@ import (
 	"strings"
 )
 
-const vaultUsageText = "usage: si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|dump|history|run|docker|trust|recipients|backend|sync>\n\nAlias:\n  si creds ..."
+const vaultUsageText = "usage: si vault <keypair|keygen|status|check|hooks|encrypt|decrypt|restore|set|unset|get|list|ls|run>\n\nAlias:\n  si creds ..."
 
 const vaultDockerUsageText = "usage: si vault docker <exec>"
 
 var vaultActions = []subcommandAction{
-	{Name: "init", Description: "initialize Sun-backed vault scope and identity"},
-	{Name: "status", Description: "show vault configuration and readiness"},
-	{Name: "check", Description: "validate encryption state for a Sun vault scope"},
-	{Name: "fmt", Description: "format vault dotenv files (unsupported in Sun mode)"},
-	{Name: "encrypt", Description: "encrypt plaintext values in Sun vault scope"},
-	{Name: "decrypt", Description: "decrypt values to stdout from Sun vault scope"},
-	{Name: "set", Description: "set/update encrypted secret value"},
-	{Name: "get", Description: "inspect a key (optionally reveal)"},
-	{Name: "list", Description: "list keys and encryption status"},
-	{Name: "dump", Description: "dump all keys in scope (dotenv format with --reveal)"},
-	{Name: "history", Description: "show cloud revision history for a key"},
-	{Name: "run", Description: "run a command with decrypted env injection"},
+	{Name: "keypair", Description: "ensure Sun-backed keypair for repo/env and print public key"},
+	{Name: "keygen", Description: "alias for keypair"},
+	{Name: "status", Description: "show vault repo/env, file, and key readiness"},
+	{Name: "check", Description: "check .env files for plaintext values (hook-safe)"},
+	{Name: "hooks", Description: "install/status/uninstall plaintext-guard pre-commit hooks"},
+	{Name: "encrypt", Description: "encrypt dotenv values using SI_VAULT_PUBLIC_KEY"},
+	{Name: "decrypt", Description: "decrypt dotenv values (stdout by default, --inplace optional)"},
+	{Name: "restore", Description: "restore last encrypted backup after an inplace decrypt"},
+	{Name: "set", Description: "set a key in dotenv (encrypted by default)"},
+	{Name: "unset", Description: "remove a key from dotenv"},
+	{Name: "get", Description: "get key value (optionally reveal decrypted value)"},
+	{Name: "list", Description: "list dotenv keys and encryption state"},
+	{Name: "ls", Description: "alias for list"},
+	{Name: "run", Description: "run command with dotenv values decrypted at runtime"},
 	{Name: "docker", Description: "run commands in containers with vault env"},
-	{Name: "trust", Description: "show trust status (sun-managed in remote mode)"},
-	{Name: "recipients", Description: "list Sun-managed recipient identity"},
-	{Name: "backend", Description: "show/set vault backend mode (sun)"},
-	{Name: "sync", Description: "show vault cloud sync status"},
-	{Name: "keygen", Description: "create or load vault identity key"},
-	{Name: "use", Description: "set the default vault scope in settings"},
 }
 
 var vaultDockerActions = []subcommandAction{
@@ -50,48 +46,34 @@ func cmdVault(args []string) {
 	switch cmd {
 	case "help", "-h", "--help":
 		printUsage(vaultUsageText)
-	case "init":
-		cmdVaultInit(rest)
+	case "keypair":
+		cmdVaultKeygen(rest)
 	case "keygen":
 		cmdVaultKeygen(rest)
-	case "use":
-		cmdVaultUse(rest)
 	case "status":
 		cmdVaultStatus(rest)
 	case "check":
 		cmdVaultCheck(rest)
 	case "hooks", "hook":
 		cmdVaultHooks(rest)
-	case "fmt":
-		cmdVaultFmt(rest)
 	case "encrypt":
 		cmdVaultEncrypt(rest)
 	case "decrypt":
 		cmdVaultDecrypt(rest)
+	case "restore":
+		cmdVaultRestore(rest)
 	case "set":
 		cmdVaultSet(rest)
 	case "unset":
 		cmdVaultUnset(rest)
 	case "get":
 		cmdVaultGet(rest)
-	case "list":
+	case "list", "ls":
 		cmdVaultList(rest)
-	case "dump":
-		cmdVaultDump(rest)
-	case "history":
-		cmdVaultHistory(rest)
 	case "run":
 		cmdVaultRun(rest)
 	case "docker":
 		cmdVaultDocker(rest)
-	case "trust":
-		cmdVaultTrust(rest)
-	case "recipients", "recipient":
-		cmdVaultRecipients(rest)
-	case "backend":
-		cmdVaultBackend(rest)
-	case "sync":
-		cmdVaultSync(rest)
 	default:
 		printUnknown("vault", cmd)
 		printUsage(vaultUsageText)

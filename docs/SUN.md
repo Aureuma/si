@@ -10,7 +10,7 @@ description: Use `si sun` to authenticate and operate Sun-backed SI workflows.
 Primary uses:
 - authenticate SI (`si sun auth ...`)
 - sync codex profiles (`si sun profile ...`)
-- power remote vault operations (`si vault ...` with Sun backend)
+- provide vault private keys to `si vault` by `repo/env`
 - manage tokens, audit, taskboard, and machine control
 
 ## Auth
@@ -35,34 +35,32 @@ si sun profile push --profile <id>
 si sun profile pull --profile <id>
 ```
 
-## Vault in Sun Mode
+## Vault Key Backend
 
-Vault is cloud-first and scope-based.
+Sun stores only vault key material (`repo/env` scoped).
+Encrypted secrets remain in local `.env` files.
 
 Use `si vault` directly:
 
 ```bash
-si vault init --scope default --set-default
-si vault set MY_KEY --stdin --scope default
-si vault get MY_KEY --scope default --reveal
-si vault list --scope default
-si vault history MY_KEY --scope default --json
-si vault run --scope default -- ./cmd
-si vault docker exec --scope default --container <id> -- ./cmd
+si vault keypair --repo <repo> --env dev
+si vault encrypt --env-file .env --repo <repo> --env dev
+si vault decrypt --env-file .env --repo <repo> --env dev --stdout
+si vault run --env-file .env --repo <repo> --env dev -- ./cmd
+si vault docker exec --env-file .env --repo <repo> --env dev --container <id> -- ./cmd
 ```
 
 Status/debug:
 
 ```bash
-si vault backend status
-si vault sync status --scope default --json
+si vault status --env-file .env --repo <repo> --env dev
 ```
 
 Notes:
-- `si vault sync push/pull` is unsupported in remote mode.
-- Legacy backup push/pull flows are superseded by direct Sun KV operations.
-- Trust is Sun-managed in remote mode.
-- `si vault fmt` and `si vault decrypt --in-place` are unsupported in remote mode (no local vault materialization).
+- private key name is always `SI_VAULT_PRIVATE_KEY`.
+- public key name is always `SI_VAULT_PUBLIC_KEY` (stored in `.env` file).
+- `si vault decrypt --inplace` writes plaintext and creates an encrypted restore backup.
+- `si vault restore` restores the prior encrypted file snapshot.
 
 ## Tokens and Audit
 

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -10,64 +11,71 @@ import (
 )
 
 func cmdVaultList(args []string) {
-	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault list", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
-	scopeFlag := fs.String("scope", "", "vault scope")
+	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
+	fileAlias := fs.String("file", "", "alias for --env-file")
+	scopeAlias := fs.String("scope", "", "alias for --env")
+	repoFlag := fs.String("repo", "", "vault repo slug")
+	envFlag := fs.String("env", "", "vault environment")
+	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
-
-	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault list [--scope <name>]")
+	if fs.NArg() > 0 {
+		printUsage("usage: si vault list [--env-file <path>] [--repo <slug>] [--env <name>] [--json]")
 		return
 	}
-
-	scope := strings.TrimSpace(*scopeFlag)
-	if scope == "" {
-		scope = strings.TrimSpace(*fileFlag)
+	envName := strings.TrimSpace(*envFlag)
+	if envName == "" {
+		envName = strings.TrimSpace(*scopeAlias)
 	}
-	target, err := vaultResolveTarget(settings, scope, false)
+	fileValue := strings.TrimSpace(*envFile)
+	if strings.TrimSpace(*fileAlias) != "" {
+		fileValue = strings.TrimSpace(*fileAlias)
+	}
+	target, err := resolveSIVaultTarget(strings.TrimSpace(*repoFlag), envName, fileValue)
 	if err != nil {
 		fatal(err)
 	}
-	if shouldEnforceVaultRepoScope(settings) {
-		if err := vaultValidateImplicitTargetRepoScope(target); err != nil {
-			warnf("%v", err)
+	doc, err := vault.ReadDotenvFile(target.EnvFile)
+	if err != nil {
+		fatal(err)
+	}
+	entries, err := vault.Entries(doc)
+	if err != nil {
+		fatal(err)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Key < entries[j].Key })
+	if *jsonOut {
+		type item struct {
+			Key       string `json:"key"`
+			Encrypted bool   `json:"encrypted"`
 		}
+		items := make([]item, 0, len(entries))
+		for _, entry := range entries {
+			if strings.TrimSpace(entry.Key) == vault.SIVaultPublicKeyName {
+				continue
+			}
+			items = append(items, item{Key: entry.Key, Encrypted: vault.IsSIVaultEncryptedValue(entry.ValueRaw)})
+		}
+		printJSON(map[string]interface{}{
+			"repo":     target.Repo,
+			"env":      target.Env,
+			"env_file": target.EnvFile,
+			"items":    items,
+		})
+		return
 	}
-	values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
-	if sunErr != nil {
-		fatal(sunErr)
-	}
-	if !used {
-		fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
-	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	entries := make([]vault.Entry, 0, len(keys))
-	for _, key := range keys {
-		value, normErr := vault.NormalizeDotenvValue(values[key])
-		if normErr != nil {
+	fmt.Printf("file:     %s\n", filepath.Clean(target.EnvFile))
+	fmt.Printf("repo/env: %s/%s\n", target.Repo, target.Env)
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Key) == vault.SIVaultPublicKeyName {
 			continue
 		}
-		entries = append(entries, vault.Entry{
-			Key:       key,
-			ValueRaw:  value,
-			Encrypted: vault.IsEncryptedValueV1(value),
-		})
-	}
-
-	fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
-	fmt.Printf("source: sun-kv\n")
-	for _, e := range entries {
-		if e.Encrypted {
-			fmt.Printf("%s\t(encrypted)\n", e.Key)
+		if vault.IsSIVaultEncryptedValue(entry.ValueRaw) {
+			fmt.Printf("%s\t(encrypted)\n", entry.Key)
 		} else {
-			fmt.Printf("%s\t(plaintext)\n", e.Key)
+			fmt.Printf("%s\t(plaintext)\n", entry.Key)
 		}
 	}
 }

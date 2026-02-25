@@ -39,6 +39,7 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	var revokedID string
 	var gatewayIndexPayload []byte
 	var gatewayShardPayload []byte
+	var vaultPrivateKeyDoc map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/readyz" {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
@@ -49,6 +50,31 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 			return
 		}
 		switch {
+		case r.Method == http.MethodPut && r.URL.Path == "/v1/vault/private-keys/releasemind/dev":
+			var body map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			vaultPrivateKeyDoc = map[string]any{
+				"repo":                "releasemind",
+				"env":                 "dev",
+				"public_key":          formatAny(body["public_key"]),
+				"private_key":         formatAny(body["private_key"]),
+				"backup_private_keys": body["backup_private_keys"],
+				"updated_at":          "2026-02-25T00:00:00Z",
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"vault": vaultPrivateKeyDoc,
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/vault/private-keys/releasemind/dev":
+			if vaultPrivateKeyDoc == nil {
+				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"vault": vaultPrivateKeyDoc,
+			})
 		case r.Method == http.MethodPut && r.URL.Path == "/v1/integrations/registries/team":
 			var body struct {
 				Payload json.RawMessage `json:"payload"`
@@ -249,6 +275,27 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	}
 	if revokedID != "new-token" {
 		t.Fatalf("unexpected revoked token id: %s", revokedID)
+	}
+
+	createdVault, err := client.putVaultPrivateKey(ctx, sunVaultPrivateKey{
+		Repo:              "releasemind",
+		Env:               "dev",
+		PublicKey:         "02aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+		PrivateKey:        "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+		BackupPrivateKeys: []string{"11bbccddeeff00112233445566778899aabbccddeeff00112233445566778899"},
+	}, nil)
+	if err != nil {
+		t.Fatalf("put vault private key: %v", err)
+	}
+	if createdVault.Repo != "releasemind" || createdVault.Env != "dev" {
+		t.Fatalf("unexpected created vault payload: %+v", createdVault)
+	}
+	gotVault, err := client.getVaultPrivateKey(ctx, "releasemind", "dev")
+	if err != nil {
+		t.Fatalf("get vault private key: %v", err)
+	}
+	if gotVault.PrivateKey == "" || gotVault.PublicKey == "" {
+		t.Fatalf("unexpected vault key payload: %+v", gotVault)
 	}
 
 	auditRows, err := client.listAuditEvents(ctx, "", sunCodexProfileBundleKind, "", 10)

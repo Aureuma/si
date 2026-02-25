@@ -15,90 +15,56 @@ import (
 func cmdVaultRun(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault run", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
-	scopeFlag := fs.String("scope", "", "vault scope")
-	allowPlaintext := fs.Bool("allow-plaintext", false, "allow running even if plaintext keys exist (not recommended)")
-	shellFlag := fs.Bool("shell", false, "run via a shell (exec: $SHELL -lc <cmd>); enables pipes/redirection/etc; does not inherit parent shell functions/aliases unless you source them")
-	shellInteractive := fs.Bool("shell-interactive", false, "when --shell is set, use -ic instead of -lc (loads interactive rc; may have side effects)")
-	shellPath := fs.String("shell-path", "", "when --shell is set, shell binary to use (default: $SHELL, fallback: /bin/bash)")
+	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
+	fileAlias := fs.String("file", "", "alias for --env-file")
+	scopeAlias := fs.String("scope", "", "alias for --env")
+	repoFlag := fs.String("repo", "", "vault repo slug")
+	envFlag := fs.String("env", "", "vault environment")
+	allowPlaintext := fs.Bool("allow-plaintext", false, "allow plaintext values")
+	shellFlag := fs.Bool("shell", false, "run command via shell")
+	shellInteractive := fs.Bool("shell-interactive", false, "use -ic instead of -lc when --shell")
+	shellPath := fs.String("shell-path", "", "shell binary for --shell")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
-
 	rest := fs.Args()
 	if len(rest) > 0 && rest[0] == "--" {
 		rest = rest[1:]
 	}
 	if len(rest) == 0 {
-		printUsage("usage: si vault run [--scope <name>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>")
+		printUsage("usage: si vault run [--env-file <path>] [--repo <slug>] [--env <name>] [--allow-plaintext] [--shell] -- <cmd...>")
 		return
 	}
-
-	scope := strings.TrimSpace(*scopeFlag)
-	if scope == "" {
-		scope = strings.TrimSpace(*fileFlag)
+	envName := strings.TrimSpace(*envFlag)
+	if envName == "" {
+		envName = strings.TrimSpace(*scopeAlias)
 	}
-	target, err := vaultResolveTarget(settings, scope, false)
+	fileValue := strings.TrimSpace(*envFile)
+	if strings.TrimSpace(*fileAlias) != "" {
+		fileValue = strings.TrimSpace(*fileAlias)
+	}
+	target, err := resolveSIVaultTarget(strings.TrimSpace(*repoFlag), envName, fileValue)
 	if err != nil {
 		fatal(err)
 	}
-	values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
-	if sunErr != nil {
-		fatal(sunErr)
-	}
-	if !used {
-		fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
-	}
-	sourceKeys := make([]string, 0, len(values))
-	for key := range values {
-		sourceKeys = append(sourceKeys, key)
-	}
-	sort.Strings(sourceKeys)
-	lines := make([]string, 0, len(sourceKeys))
-	for _, key := range sourceKeys {
-		lines = append(lines, key+"="+values[key])
-	}
-	doc := vault.ParseDotenv([]byte(strings.Join(lines, "\n") + "\n"))
-	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_run")
+	doc, err := vault.ReadDotenvFile(target.EnvFile)
 	if err != nil {
 		fatal(err)
 	}
-	if identity == nil {
-		fatal(fmt.Errorf("sun vault identity unavailable"))
-	}
-	dec, err := vault.DecryptEnv(doc, identity)
+	material, err := ensureSIVaultKeyMaterial(settings, target)
 	if err != nil {
 		fatal(err)
 	}
-	if len(dec.PlaintextKeys) > 0 {
-		sort.Strings(dec.PlaintextKeys)
-		if !*allowPlaintext {
-			fatal(fmt.Errorf("vault file contains plaintext keys: %s (run `si vault encrypt` or pass --allow-plaintext)", strings.Join(dec.PlaintextKeys, ", ")))
-		}
-		warnf("vault file contains plaintext keys (allowed): %s", strings.Join(dec.PlaintextKeys, ", "))
+	values, plaintextKeys, err := decryptDotenvValues(doc, siVaultPrivateKeyCandidates(material))
+	if err != nil {
+		fatal(err)
 	}
-
-	keys := make([]string, 0, len(dec.Values))
-	for k := range dec.Values {
-		keys = append(keys, k)
+	if len(plaintextKeys) > 0 && !*allowPlaintext {
+		fatal(fmt.Errorf("dotenv contains plaintext keys: %s (use --allow-plaintext or run `si vault encrypt`)", strings.Join(plaintextKeys, ", ")))
 	}
-	sort.Strings(keys)
-	vaultAuditEvent(settings, target, "run", map[string]any{
-		"scope":        strings.TrimSpace(target.File),
-		"cmd0":         rest[0],
-		"argsLen":      len(rest) - 1,
-		"keysCount":    len(keys),
-		"decryptCount": len(dec.DecryptedKeys),
-		"plainCount":   len(dec.PlaintextKeys),
-		"shell":        *shellFlag,
-		"shellI":       *shellInteractive,
-		"source":       "sun-kv",
-	})
 
 	var cmd *exec.Cmd
 	if *shellFlag {
-		// Note: This cannot "see" functions/aliases from the parent shell process.
-		// If you want those, you must explicitly source the defining file inside the shell command.
 		sh := strings.TrimSpace(*shellPath)
 		if sh == "" {
 			sh = strings.TrimSpace(os.Getenv("SHELL"))
@@ -110,17 +76,16 @@ func cmdVaultRun(args []string) {
 		if *shellInteractive {
 			mode = "-ic"
 		}
-		shellCmd := strings.Join(rest, " ")
-		// #nosec G204 -- shell command is explicitly provided by the local operator.
-		cmd = exec.CommandContext(context.Background(), sh, mode, shellCmd)
+		// #nosec G204 -- operator-provided command string.
+		cmd = exec.CommandContext(context.Background(), sh, mode, strings.Join(rest, " "))
 	} else {
-		// #nosec G204 -- command is explicitly provided by the local operator.
+		// #nosec G204 -- operator-provided command/args.
 		cmd = exec.CommandContext(context.Background(), rest[0], rest[1:]...)
 	}
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	cmd.Env = append(envWithoutGitVars(os.Environ()), envPairs(dec.Values)...)
+	cmd.Env = append(envWithoutGitVars(os.Environ()), envPairs(values)...)
 	if err := cmd.Run(); err != nil {
 		fatal(err)
 	}
@@ -136,8 +101,8 @@ func envPairs(values map[string]string) []string {
 	}
 	sort.Strings(keys)
 	out := make([]string, 0, len(keys))
-	for _, k := range keys {
-		out = append(out, k+"="+values[k])
+	for _, key := range keys {
+		out = append(out, key+"="+values[key])
 	}
 	return out
 }
@@ -152,8 +117,7 @@ func envWithoutGitVars(env []string) []string {
 		if !ok {
 			continue
 		}
-		key = strings.TrimSpace(key)
-		if strings.HasPrefix(key, "GIT_") {
+		if strings.HasPrefix(strings.TrimSpace(key), "GIT_") {
 			continue
 		}
 		out = append(out, pair)

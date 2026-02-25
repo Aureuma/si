@@ -3,133 +3,102 @@ package main
 import (
 	"flag"
 	"fmt"
-	"sort"
+	"os"
+	"path/filepath"
 	"strings"
-
-	"si/tools/si/internal/vault"
 )
 
 func cmdVaultDecrypt(args []string) {
 	settings := loadSettingsOrDefault()
-	args = stripeFlagsFirst(args, map[string]bool{"in-place": true, "yes": true, "stdout": true})
 	fs := flag.NewFlagSet("vault decrypt", flag.ExitOnError)
-	var files multiFlag
-	fs.Var(&files, "file", "vault scope (repeatable; preferred: --scope)")
-	scopeFlag := fs.String("scope", "", "vault scope")
-	inPlace := fs.Bool("in-place", false, "unsupported in Sun remote vault mode")
-	yes := fs.Bool("yes", false, "accepted for compatibility")
-	// Default remains stdout. This flag is retained for compatibility.
-	stdout := fs.Bool("stdout", false, "write decrypted values to stdout (default)")
+	var envFiles multiFlag
+	fs.Var(&envFiles, "env-file", "dotenv file path (repeatable)")
+	fs.Var(&envFiles, "f", "alias for --env-file")
+	fileAlias := fs.String("file", "", "alias for --env-file")
+	scopeAlias := fs.String("scope", "", "alias for --env")
+	repoFlag := fs.String("repo", "", "vault repo slug")
+	envFlag := fs.String("env", "", "vault environment")
+	var includeKeys multiFlag
+	var excludeKeys multiFlag
+	fs.Var(&includeKeys, "key", "key filter (repeatable, supports glob)")
+	fs.Var(&excludeKeys, "exclude-key", "exclude key filter (repeatable, supports glob)")
+	stdout := fs.Bool("stdout", false, "print transformed file to stdout")
+	inplace := fs.Bool("inplace", false, "write decrypted values back to file")
+	inPlaceAlias := fs.Bool("in-place", false, "alias for --inplace")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
-	rawKeys := fs.Args()
-	keys := make([]string, 0, len(rawKeys))
-	for _, k := range rawKeys {
-		k = strings.TrimSpace(k)
-		if k == "" {
-			continue
-		}
-		if err := vault.ValidateKeyName(k); err != nil {
-			fatal(err)
-		}
-		keys = append(keys, k)
+	if fs.NArg() > 0 {
+		printUsage("usage: si vault decrypt [--env-file <path>]... [--repo <slug>] [--env <name>] [--key <glob>] [--exclude-key <glob>] [--stdout] [--inplace]")
+		return
 	}
 
-	modeStdout := true
-	if *inPlace {
-		modeStdout = false
+	writeInPlace := *inplace || *inPlaceAlias
+	printStdout := *stdout || !writeInPlace
+	envName := strings.TrimSpace(*envFlag)
+	if envName == "" {
+		envName = strings.TrimSpace(*scopeAlias)
 	}
-	// --stdout is accepted but redundant; if both are set, stdout wins.
-	if *stdout {
-		modeStdout = true
+	paths := collectVaultEnvFiles(envFiles, strings.TrimSpace(*fileAlias))
+	if len(paths) == 0 {
+		paths = []string{defaultSIVaultDotenvFile}
 	}
-	if !modeStdout {
-		_ = yes
-		fatal(fmt.Errorf("vault decrypt --in-place is not supported in Sun remote vault mode (no local vault file)"))
-	}
-	if scope := strings.TrimSpace(*scopeFlag); scope != "" {
-		files = append(files, scope)
-	}
+	include := parseFilterPatterns(includeKeys)
+	exclude := parseFilterPatterns(excludeKeys)
 
-	if modeStdout && len(files) > 1 {
-		fatal(fmt.Errorf("stdout mode does not support multiple --file values"))
-	}
-	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_decrypt")
-	if err != nil {
-		fatal(err)
-	}
-	if identity == nil {
-		fatal(fmt.Errorf("sun vault identity unavailable"))
-	}
-
-	runOne := func(scope string) {
-		target, err := vaultResolveTarget(settings, scope, false)
+	for idx, candidate := range paths {
+		target, err := resolveSIVaultTarget(strings.TrimSpace(*repoFlag), envName, candidate)
 		if err != nil {
 			fatal(err)
 		}
-		values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
-		if sunErr != nil {
-			fatal(sunErr)
+		material, err := ensureSIVaultKeyMaterial(settings, target)
+		if err != nil {
+			fatal(err)
 		}
-		if !used {
-			fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
+		encryptedBytes, readErr := osReadFileIfExists(target.EnvFile)
+		if readErr != nil {
+			fatal(readErr)
+		}
+		doc, err := readDotenvOrEmpty(target.EnvFile)
+		if err != nil {
+			fatal(err)
+		}
+		stats, err := decryptDotenvDoc(&doc, siVaultPrivateKeyCandidates(material), include, exclude)
+		if err != nil {
+			fatal(err)
 		}
 
-		selected := make([]string, 0)
-		if len(keys) == 0 {
-			for key := range values {
-				selected = append(selected, key)
-			}
-		} else {
-			selected = append(selected, keys...)
-		}
-		sort.Strings(selected)
-
-		lines := make([]string, 0, len(selected))
-		decryptedCount := 0
-		missingCount := 0
-		for _, key := range selected {
-			raw, ok := values[key]
-			if !ok {
-				missingCount++
-				continue
-			}
-			val, normErr := vault.NormalizeDotenvValue(raw)
-			if normErr != nil {
-				fatal(fmt.Errorf("normalize %s: %w", key, normErr))
-			}
-			plain := val
-			if vault.IsEncryptedValueV1(val) {
-				dec, decErr := vault.DecryptStringV1(val, identity)
-				if decErr != nil {
-					fatal(fmt.Errorf("decrypt %s: %w", key, decErr))
+		if writeInPlace {
+			if len(encryptedBytes) > 0 {
+				if err := saveEncryptedRestoreBackup(target.EnvFile, encryptedBytes); err != nil {
+					fatal(err)
 				}
-				plain = dec
-				decryptedCount++
 			}
-			lines = append(lines, key+"="+vault.RenderDotenvValuePlain(plain))
+			if err := writeDotenv(target.EnvFile, doc); err != nil {
+				fatal(err)
+			}
+			fmt.Printf("file:      %s\n", filepath.Clean(target.EnvFile))
+			fmt.Printf("repo/env:  %s/%s\n", target.Repo, target.Env)
+			fmt.Printf("decrypted: %d\n", stats.Decrypted)
+			fmt.Printf("backup:    %s\n", filepath.Clean(restoreBackupPathForEnvFile(target.EnvFile)))
 		}
 
-		vaultAuditEvent(settings, target, "decrypt_stdout", map[string]any{
-			"scope":          strings.TrimSpace(target.File),
-			"decryptedCount": decryptedCount,
-			"keyCount":       len(selected),
-			"missingCount":   missingCount,
-			"source":         "sun-kv",
-		})
-		if len(lines) == 0 {
-			return
+		if printStdout {
+			if idx > 0 {
+				fmt.Print("\n")
+			}
+			fmt.Print(string(doc.Bytes()))
 		}
-		fmt.Print(strings.Join(lines, "\n"))
-		fmt.Print("\n")
 	}
+}
 
-	if len(files) == 0 {
-		runOne("")
-		return
+func osReadFileIfExists(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-	for _, file := range files {
-		runOne(file)
-	}
+	return data, nil
 }

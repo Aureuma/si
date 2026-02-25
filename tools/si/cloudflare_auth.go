@@ -193,25 +193,29 @@ func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
 	if key == "" {
 		return "", false
 	}
-	target, err := vaultResolveTarget(settings, "", false)
+	target, err := resolveSIVaultTarget("", "", "")
 	if err != nil {
 		return "", false
 	}
-	raw, found, used, err := vaultSunKVGetRawValue(settings, target, key)
-	if err != nil || !used || !found {
-		return "", false
-	}
-	value, err := vault.NormalizeDotenvValue(raw)
+	doc, err := vault.ReadDotenvFile(target.EnvFile)
 	if err != nil {
 		return "", false
 	}
-	if vault.IsEncryptedValueV1(value) {
-		identity, err := vaultEnsureStrictSunIdentity(settings, "vault_resolve_key")
-		if err != nil || identity == nil {
+	raw, found := doc.Lookup(key)
+	if !found {
+		return "", false
+	}
+	value, err := vault.NormalizeDotenvValue(strings.TrimSpace(raw))
+	if err != nil {
+		return "", false
+	}
+	if vault.IsSIVaultEncryptedValue(value) {
+		material, keyErr := ensureSIVaultKeyMaterial(settings, target)
+		if keyErr != nil {
 			return "", false
 		}
-		plain, err := vault.DecryptStringV1(value, identity)
-		if err != nil {
+		plain, decErr := vault.DecryptSIVaultValue(value, siVaultPrivateKeyCandidates(material))
+		if decErr != nil {
 			return "", false
 		}
 		return plain, strings.TrimSpace(plain) != ""

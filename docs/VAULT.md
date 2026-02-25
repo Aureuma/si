@@ -1,140 +1,95 @@
-# `si vault` (Sun Remote Vault)
+# `si vault` (dotenvx-style, Sun key-backed)
 
-`si vault` is now Sun-backed by default. Secrets are read/written through Sun APIs for every operation.
+`si vault` now encrypts local `.env` files and keeps decryption keys in Sun by `repo/env`.
 
-Core properties:
-- no local trust file management
-- no local vault backup file hydration/pull/push
-- no local private key file required in normal flow
-- per-scope cloud key storage and revision history
-- runtime env injection for shells, Docker, and any program (`go run`, binaries, scripts)
+Design goals:
+- dotenv-first workflow
+- no private key files on disk
+- deterministic key names:
+  - `SI_VAULT_PUBLIC_KEY` (stored in `.env` file)
+  - `SI_VAULT_PRIVATE_KEY` (fetched from Sun API only)
 
-## Mental Model
+## Core Model
 
-- A **scope** is a logical vault namespace (for example: `default`, `prod`, `billing`).
-- Commands target one scope at a time.
-- Use `--scope <name>` (preferred) or `--file <name>` (compat alias).
-- Default scope comes from `vault.file` (default: `default`).
+- Secrets live in local `.env` files (encrypted values).
+- `SI_VAULT_PUBLIC_KEY` is always inserted at the beginning of the file.
+- Encrypted values use prefix `encrypted:si-vault:`.
+- Sun stores key material per `repo/env`:
+  - `repo` inferred from current git repo directory name (or `--repo`)
+  - `env` defaults to `dev` (or `--env`)
 
-## Prerequisites
+## Quickstart
 
-Authenticate once:
+Authenticate to Sun:
 
 ```bash
 si sun auth login --url <sun-url> --token <token> --account <slug>
 ```
 
-Verify:
+Generate or load keypair for current repo/env:
 
 ```bash
-si sun auth status
-si vault status
+si vault keypair --env dev
 ```
 
-## Quickstart
-
-Initialize scope + ensure cloud identity:
+Encrypt `.env`:
 
 ```bash
-si vault init --scope default --set-default
+si vault encrypt --env-file .env --env dev
 ```
 
-Set secret:
+Decrypt to stdout:
 
 ```bash
-si vault set OPENAI_API_KEY --stdin --scope default
+si vault decrypt --env-file .env --env dev
 ```
 
-Get metadata (no plaintext):
+Decrypt in place:
 
 ```bash
-si vault get OPENAI_API_KEY --scope default
+si vault decrypt --env-file .env --env dev --inplace
 ```
 
-Reveal plaintext:
+Restore last encrypted state:
 
 ```bash
-si vault get OPENAI_API_KEY --scope default --reveal
+si vault restore --env-file .env
 ```
 
-List keys:
+Run commands with decrypted env at runtime:
 
 ```bash
-si vault list --scope default
+si vault run --env-file .env --env dev -- go run ./cmd/server
 ```
 
-Dump all keys in dotenv format:
+## Encryption Behavior
+
+- `si vault encrypt` does not re-encrypt already-encrypted values by default.
+- Use `--reencrypt` to rotate ciphertext.
+- `--reencrypt` decrypts first, then encrypts plaintext again (prevents double-encryption corruption).
+
+## Pre-commit Guard
+
+Install hook:
 
 ```bash
-# safe metadata view
-si vault dump --scope default
-
-# plaintext KEY=value output
-si vault dump --scope default --reveal
+si vault hooks install
 ```
 
-Unset key:
+The hook runs `si vault check --staged` and blocks commits if plaintext values are found in `.env*` files.
 
-```bash
-si vault unset OPENAI_API_KEY --scope default
-```
+## Commands
 
-History:
-
-```bash
-si vault history OPENAI_API_KEY --scope default --limit 20
-```
-
-Cloud encryption check and remediation:
-
-```bash
-si vault check --scope default
-si vault encrypt --scope default
-```
-
-## Runtime Injection
-
-Shell/scripts/Go:
-
-```bash
-si vault run --scope default -- go run ./cmd/server
-si vault run --scope default -- ./scripts/deploy.sh
-si vault run --scope default -- bash -lc 'echo "$OPENAI_API_KEY" | wc -c'
-```
-
-Docker exec (env for that exec only):
-
-```bash
-si vault docker exec --scope default --container <name> -- ./app
-```
-
-## Identity
-
-Vault encryption identity is Sun-managed.
-
-```bash
-si vault keygen           # ensure identity exists in Sun
-si vault keygen --rotate  # rotate identity (dangerous for old ciphertext)
-```
-
-## Important Behavior Changes
-
-- `si vault sync push` and `si vault sync pull` are intentionally unsupported in remote mode.
-- `si sun vault backup push/pull` is also not used for normal vault flow.
-- Trust commands are informational in Sun mode (`trust: n/a (sun-managed)`).
-- `si vault fmt` is unsupported in Sun mode (no local dotenv formatting target).
-- `si vault decrypt --in-place` is unsupported in Sun mode (no local plaintext materialization).
-- `si vault recipients add/remove` is unsupported in Sun mode (single Sun-managed identity recipient).
-
-## Environment Overrides
-
-- `SI_SUN_BASE_URL`
-- `SI_SUN_TOKEN`
-- `SI_VAULT_SCOPE` (preferred)
-- `SI_VAULT_FILE` (compat alias)
-
-## Security Notes
-
-- `--reveal` prints plaintext to stdout.
-- Prefer `--stdin` for `set` to avoid shell history leaks.
-- `si vault run` / `si vault docker exec` can block when plaintext values are present unless `--allow-plaintext` is explicitly set.
+- `si vault keypair` / `si vault keygen`
+- `si vault status`
+- `si vault check`
+- `si vault hooks <install|status|uninstall>`
+- `si vault encrypt`
+- `si vault decrypt`
+- `si vault restore`
+- `si vault set`
+- `si vault unset`
+- `si vault get`
+- `si vault list` / `si vault ls`
+- `si vault run`
+- `si vault docker exec`

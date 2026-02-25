@@ -5,8 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"filippo.io/age"
-
 	"si/tools/si/internal/vault"
 )
 
@@ -66,23 +64,27 @@ func shouldAutoHydrateVaultEnvForRootCommand(cmd string) bool {
 }
 
 func hydrateProcessEnvFromSunVault(settings Settings, source string) (int, error) {
-	backend, err := resolveVaultSyncBackend(settings)
+	_ = source
+	target, err := resolveSIVaultTarget("", "", "")
 	if err != nil {
 		return 0, err
 	}
-	if backend.Mode != vaultSyncBackendSun {
-		return 0, nil
+	doc, err := vault.ReadDotenvFile(target.EnvFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, err
 	}
-
-	target, err := vaultResolveTargetStatus(settings, "")
+	material, err := ensureSIVaultKeyMaterial(settings, target)
 	if err != nil {
 		return 0, err
 	}
-	values, used, err := vaultSunKVLoadRawValues(settings, target)
+	values, _, err := decryptDotenvValues(doc, siVaultPrivateKeyCandidates(material))
 	if err != nil {
 		return 0, err
 	}
-	if !used || len(values) == 0 {
+	if len(values) == 0 {
 		return 0, nil
 	}
 
@@ -92,40 +94,12 @@ func hydrateProcessEnvFromSunVault(settings Settings, source string) (int, error
 	}
 	sort.Strings(keys)
 
-	identityLoaded := false
-	var identity *age.X25519Identity
-
 	setCount := 0
 	for _, key := range keys {
-		raw := values[key]
-		normalized, normalizeErr := vault.NormalizeDotenvValue(raw)
-		if normalizeErr != nil {
-			continue
-		}
-
-		plain := normalized
-		if vault.IsEncryptedValueV1(normalized) {
-			if !identityLoaded {
-				id, identityErr := vaultEnsureStrictSunIdentity(settings, source)
-				if identityErr == nil {
-					identity = id
-				}
-				identityLoaded = true
-			}
-			if identity == nil {
-				continue
-			}
-			decrypted, decryptErr := vault.DecryptStringV1(normalized, identity)
-			if decryptErr != nil {
-				continue
-			}
-			plain = decrypted
-		}
-
 		if _, exists := os.LookupEnv(key); exists {
 			continue
 		}
-		if setErr := os.Setenv(key, plain); setErr != nil {
+		if setErr := os.Setenv(key, values[key]); setErr != nil {
 			continue
 		}
 		setCount++
