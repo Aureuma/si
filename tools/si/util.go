@@ -320,11 +320,11 @@ vault:
 		  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
 		  si vault use --scope <name>
 		  si vault status [--scope <name>]
-		  si vault check [--file <path>] [--staged] [--all]
+		  si vault check [--scope <name>] [--file <name>] [--staged] [--all] [--include-examples]
 		  si vault hooks install|status|uninstall [--force]
-		  si vault fmt [--file <path>] [--all] [--check]
-		  si vault encrypt [--file <path>] [--format] [--reencrypt]
-		  si vault decrypt [--file <path>] [KEY]... [--stdout] [--in-place] [--yes]
+		  si vault fmt [--file <path>] [--all] [--check]   (unsupported in Sun remote mode)
+		  si vault encrypt [--scope <name>] [--file <name>]... [--format] [--reencrypt]
+		  si vault decrypt [--scope <name>] [--file <name>] [KEY]... [--stdout] [--in-place]
 		  si vault set <KEY> <VALUE> [--scope <name>] [--section <name>] [--stdin]
 		  si vault unset <KEY> [--scope <name>]
 		  si vault get <KEY> [--scope <name>] [--reveal]
@@ -332,8 +332,9 @@ vault:
 		  si vault history <KEY> [--scope <name>] [--limit <n>] [--json]
 		  si vault run [--scope <name>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
 		  si vault docker exec --container <name|id> [--scope <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
-		  si vault trust status|accept|forget [--file <path>]
-		  si vault recipients list|add|remove [--file <path>]
+		  si vault trust status|accept|forget [--scope <name>] [--file <name>]
+		  si vault recipients list [--scope <name>] [--file <name>]
+		  si vault recipients add|remove ...   (unsupported in Sun remote mode)
 		  si vault backend status [--json]
 		  si vault backend use --mode <sun>
 		  si vault sync status [--scope <name>] [--name <name>] [--json]

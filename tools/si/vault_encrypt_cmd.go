@@ -3,7 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"path/filepath"
+	"sort"
+	"strings"
 
 	"filippo.io/age"
 	"si/tools/si/internal/vault"
@@ -11,88 +12,105 @@ import (
 
 func cmdVaultEncrypt(args []string) {
 	settings := loadSettingsOrDefault()
+	args = stripeFlagsFirst(args, map[string]bool{"format": true, "reencrypt": true})
 	fs := flag.NewFlagSet("vault encrypt", flag.ExitOnError)
 	var files multiFlag
-	fs.Var(&files, "file", "explicit env file path (repeatable; defaults to the configured vault.file when omitted)")
-	format := fs.Bool("format", false, "run `si vault fmt` after encrypting")
-	reencrypt := fs.Bool("reencrypt", false, "re-encrypt already-encrypted values (intentional git noise)")
+	fs.Var(&files, "file", "vault scope (repeatable; preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
+	format := fs.Bool("format", false, "ignored in Sun remote vault mode")
+	reencrypt := fs.Bool("reencrypt", false, "re-encrypt already-encrypted values (intentional ciphertext churn)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault encrypt [--file <path>]... [--format] [--reencrypt]")
+		printUsage("usage: si vault encrypt [--scope <name>] [--file <name>]... [--format] [--reencrypt]")
 		return
+	}
+	if scope := strings.TrimSpace(*scopeFlag); scope != "" {
+		files = append(files, scope)
 	}
 
 	var identity *age.X25519Identity
-	if *reencrypt {
-		if err := vaultEnsureSunIdentityEnv(settings, "vault_encrypt_reencrypt"); err != nil {
-			fatal(err)
-		}
-		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
-			fatal(err)
-		}
-		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
-		if err != nil {
-			fatal(err)
-		}
-		identity = info.Identity
+	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_encrypt")
+	if err != nil {
+		fatal(err)
+	}
+	if identity == nil {
+		fatal(fmt.Errorf("sun vault identity unavailable"))
+	}
+	recipients := []string{strings.TrimSpace(identity.Recipient().String())}
+	if *format {
+		warnf("--format is ignored in Sun remote vault mode")
 	}
 
-	runOne := func(file string) {
-		target, err := vaultResolveTarget(settings, file, false)
+	runOne := func(scope string) {
+		target, err := vaultResolveTarget(settings, scope, false)
 		if err != nil {
 			fatal(err)
 		}
-		doc, err := vault.ReadDotenvFile(target.File)
-		if err != nil {
-			fatal(err)
+		values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
+		if sunErr != nil {
+			fatal(sunErr)
 		}
-		if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-			fatal(err)
-		}
-		recipients, err := vaultRecipientsForWrite(settings, doc, "vault_encrypt")
-		if err != nil {
-			fatal(err)
+		if !used {
+			fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
 		}
 
-		res, err := vault.EncryptDotenvValuesWithRecipients(&doc, recipients, identity, *reencrypt)
-		if err != nil {
-			fatal(err)
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
 		}
-		if res.Changed {
-			if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
-				fatal(err)
+		sort.Strings(keys)
+
+		encryptedCount := 0
+		reencryptedCount := 0
+		skippedEncrypted := 0
+		for _, key := range keys {
+			norm, normErr := vault.NormalizeDotenvValue(values[key])
+			if normErr != nil {
+				fatal(fmt.Errorf("normalize %s: %w", key, normErr))
 			}
-		}
-		if *format {
-			formatted, changed, err := vault.FormatVaultDotenv(doc)
-			if err != nil {
-				fatal(err)
-			}
-			if changed {
-				if err := vaultWriteDotenvFileAtomic(target.File, formatted.Bytes()); err != nil {
-					fatal(err)
+			plain := norm
+			if vault.IsEncryptedValueV1(norm) {
+				if !*reencrypt {
+					skippedEncrypted++
+					continue
 				}
+				dec, decErr := vault.DecryptStringV1(norm, identity)
+				if decErr != nil {
+					fatal(fmt.Errorf("decrypt existing encrypted key %s: %w", key, decErr))
+				}
+				plain = dec
+			}
+			cipher, encErr := vault.EncryptStringV1(plain, recipients)
+			if encErr != nil {
+				fatal(fmt.Errorf("encrypt %s: %w", key, encErr))
+			}
+			if putErr := vaultSunKVPutRawValue(settings, target, key, vault.RenderDotenvValuePlain(cipher), "vault_encrypt", false); putErr != nil {
+				fatal(putErr)
+			}
+			if vault.IsEncryptedValueV1(norm) {
+				reencryptedCount++
+			} else {
+				encryptedCount++
 			}
 		}
 
 		vaultAuditEvent(settings, target, "encrypt", map[string]any{
-			"envFile":          filepath.Clean(target.File),
+			"scope":            strings.TrimSpace(target.File),
 			"reencrypt":        *reencrypt,
-			"encryptedCount":   len(res.EncryptedKeys),
-			"reencryptedCount": len(res.ReencryptedKeys),
-			"skippedEncrypted": res.SkippedEncrypted,
+			"encryptedCount":   encryptedCount,
+			"reencryptedCount": reencryptedCount,
+			"skippedEncrypted": skippedEncrypted,
+			"source":           "sun-kv",
 		})
 
-		fmt.Printf("file: %s\n", filepath.Clean(target.File))
-		fmt.Printf("encrypted: %d\n", len(res.EncryptedKeys))
+		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
+		fmt.Printf("encrypted: %d\n", encryptedCount)
 		if *reencrypt {
-			fmt.Printf("reencrypted: %d\n", len(res.ReencryptedKeys))
+			fmt.Printf("reencrypted: %d\n", reencryptedCount)
 		}
-		if err := maybeSunAutoBackupVault("vault_encrypt", target.File); err != nil {
-			fatal(err)
-		}
+		fmt.Printf("source: sun-kv\n")
 	}
 
 	if len(files) == 0 {

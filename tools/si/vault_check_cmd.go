@@ -15,16 +15,68 @@ func cmdVaultCheck(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault check", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "explicit env file path to check (defaults to the configured vault.file)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	staged := fs.Bool("staged", false, "check staged (git index) contents instead of working tree")
 	all := fs.Bool("all", false, "check all .env* files (staged mode: all staged dotenv files; working tree mode: all .env* in the same directory as the target file)")
 	includeExamples := fs.Bool("include-examples", false, "include example/template dotenv files (e.g. .env.example)")
 	_ = fs.Parse(args)
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault check [--file <path>] [--staged] [--all] [--include-examples]")
+		printUsage("usage: si vault check [--scope <name>] [--file <name>] [--staged] [--all] [--include-examples]")
 		return
 	}
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), *all)
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		if *staged || *all || *includeExamples {
+			warnf("vault check in Sun remote mode ignores --staged/--all/--include-examples")
+		}
+		target, targetErr := vaultResolveTarget(settings, scope, false)
+		if targetErr != nil {
+			fatal(targetErr)
+		}
+		values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
+		if sunErr != nil {
+			fatal(sunErr)
+		}
+		if !used {
+			fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
+		}
+		keys := make([]string, 0, len(values))
+		for key := range values {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		plaintext := make([]string, 0)
+		for _, key := range keys {
+			norm, normErr := vault.NormalizeDotenvValue(values[key])
+			if normErr != nil {
+				fatal(fmt.Errorf("invalid value for key %s: %w", key, normErr))
+			}
+			if !vault.IsEncryptedValueV1(norm) {
+				plaintext = append(plaintext, key)
+			}
+		}
+		if len(plaintext) == 0 {
+			return
+		}
+		var b strings.Builder
+		b.WriteString("[si vault] plaintext values detected in Sun scope; encrypt before running with this scope.\n")
+		b.WriteString("  - scope: ")
+		b.WriteString(strings.TrimSpace(target.File))
+		b.WriteString("\n  - keys: ")
+		b.WriteString(strings.Join(plaintext, ", "))
+		b.WriteString("\n\nFix:\n")
+		b.WriteString("  si vault encrypt --scope ")
+		b.WriteString(shellSingleQuote(strings.TrimSpace(target.File)))
+		b.WriteString("\n")
+		fmt.Fprint(os.Stderr, b.String())
+		os.Exit(2)
+	}
+
+	target, err := vaultResolveTarget(settings, scope, *all)
 	if err != nil {
 		fatal(err)
 	}
