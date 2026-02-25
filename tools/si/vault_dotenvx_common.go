@@ -150,6 +150,10 @@ func normalizeVaultRepoEnvSlug(raw string) string {
 }
 
 func ensureSIVaultKeyMaterial(settings Settings, target siVaultTarget) (sunVaultPrivateKey, error) {
+	// Best-effort legacy compatibility: hydrate the old age identity into the
+	// process environment so legacy encrypted:si:v1/v2 values can still decrypt.
+	_, _ = vaultEnsureStrictSunIdentity(settings, "si_vault_legacy_compat")
+
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		return sunVaultPrivateKey{}, err
