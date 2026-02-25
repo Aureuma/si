@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"si/tools/si/internal/vault"
 )
@@ -12,46 +14,88 @@ import (
 func cmdVaultKeygen(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault keygen", flag.ExitOnError)
-	keyBackend := fs.String("key-backend", "", "deprecated in sun mode; ignored")
-	keyFile := fs.String("key-file", "", "deprecated in sun mode; ignored")
-	rotate := fs.Bool("rotate", false, "rotate (replace) the existing identity (DANGEROUS: can break decryption of existing ciphertext)")
+	repoFlag := fs.String("repo", "", "vault repo slug (default: current git repo directory name)")
+	envFlag := fs.String("env", "", "vault environment (default: dev)")
+	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path used for context")
+	fileAlias := fs.String("file", "", "alias for --env-file")
+	rotate := fs.Bool("rotate", false, "generate a new keypair and keep previous private key in backups")
+	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
-	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault keygen [--rotate]")
+	if fs.NArg() > 0 {
+		printUsage("usage: si vault keypair [--repo <slug>] [--env <name>] [--env-file <path>] [--rotate] [--json]")
 		return
 	}
-	if strings.TrimSpace(*keyBackend) != "" || strings.TrimSpace(*keyFile) != "" {
-		warnf("--key-backend/--key-file are ignored in Sun remote vault mode")
+	fileValue := strings.TrimSpace(*envFile)
+	if strings.TrimSpace(*fileAlias) != "" {
+		fileValue = strings.TrimSpace(*fileAlias)
 	}
-
-	if *rotate {
-		if prev, err := vaultEnsureStrictSunIdentity(settings, "vault_keygen"); err == nil && prev != nil {
-			fmt.Printf("previous:  %s\n", strings.TrimSpace(prev.Recipient().String()))
-		}
-		next, err := vault.GenerateIdentity()
-		if err != nil {
-			fatal(err)
-		}
-		if err := vaultPersistIdentityToSun(settings, next, "vault_keygen_rotate"); err != nil {
-			fatal(err)
-		}
-		if err := os.Setenv("SI_VAULT_IDENTITY", strings.TrimSpace(next.String())); err != nil {
-			fatal(err)
-		}
-		fmt.Printf("recipient: %s\n", strings.TrimSpace(next.Recipient().String()))
-		fmt.Printf("key:       rotated (sun)\n")
-		fmt.Printf("warning:   rotating the identity can permanently break decryption for secrets encrypted to the old recipient unless you have a backup\n")
-		return
-	}
-	info, err := vaultEnsureStrictSunIdentity(settings, "vault_keygen")
+	target, err := resolveSIVaultTarget(strings.TrimSpace(*repoFlag), strings.TrimSpace(*envFlag), fileValue)
 	if err != nil {
 		fatal(err)
 	}
-	if info == nil {
-		fatal(fmt.Errorf("sun vault identity unavailable"))
+	material, err := ensureSIVaultKeyMaterial(settings, target)
+	if err != nil {
+		fatal(err)
 	}
-	fmt.Printf("recipient: %s\n", strings.TrimSpace(info.Recipient().String()))
-	fmt.Printf("key:       ok (sun)\n")
+	if *rotate {
+		client, clientErr := sunClientFromSettings(settings)
+		if clientErr != nil {
+			fatal(clientErr)
+		}
+		timeout := time.Duration(settings.Sun.TimeoutSeconds) * time.Second
+		if timeout <= 0 {
+			timeout = 20 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+		publicKey, privateKey, genErr := vault.GenerateSIVaultKeyPair()
+		if genErr != nil {
+			fatal(genErr)
+		}
+		backups := append([]string{}, material.BackupPrivateKeys...)
+		if strings.TrimSpace(material.PrivateKey) != "" {
+			backups = append(backups, strings.TrimSpace(material.PrivateKey))
+		}
+		sort.Strings(backups)
+		rotated, putErr := client.putVaultPrivateKey(ctx, sunVaultPrivateKey{
+			Repo:              target.Repo,
+			Env:               target.Env,
+			PublicKey:         publicKey,
+			PrivateKey:        privateKey,
+			BackupPrivateKeys: backups,
+		}, nil)
+		if putErr != nil {
+			fatal(putErr)
+		}
+		material, err = normalizeSunVaultMaterial(rotated, target)
+		if err != nil {
+			fatal(err)
+		}
+	}
+	if *jsonOut {
+		printJSON(map[string]interface{}{
+			"repo":               target.Repo,
+			"env":                target.Env,
+			"env_file":           target.EnvFile,
+			"public_key_name":    vault.SIVaultPublicKeyName,
+			"private_key_name":   vault.SIVaultPrivateKeyName,
+			"public_key":         material.PublicKey,
+			"backup_key_count":   len(material.BackupPrivateKeys),
+			"updated_at":         material.UpdatedAt,
+			"sun_account":        settings.Sun.Account,
+			"sun_base_url":       settings.Sun.BaseURL,
+			"private_key_source": "sun",
+		})
+		return
+	}
+	fmt.Printf("repo:             %s\n", target.Repo)
+	fmt.Printf("env:              %s\n", target.Env)
+	fmt.Printf("env_file:         %s\n", target.EnvFile)
+	fmt.Printf("public_key_name:  %s\n", vault.SIVaultPublicKeyName)
+	fmt.Printf("private_key_name: %s\n", vault.SIVaultPrivateKeyName)
+	fmt.Printf("public_key:       %s\n", material.PublicKey)
+	fmt.Printf("backup_keys:      %d\n", len(material.BackupPrivateKeys))
+	fmt.Printf("private_key:      sun\n")
 }

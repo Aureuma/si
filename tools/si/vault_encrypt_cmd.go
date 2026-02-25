@@ -3,121 +3,113 @@ package main
 import (
 	"flag"
 	"fmt"
-	"sort"
+	"os"
+	"path/filepath"
 	"strings"
-
-	"filippo.io/age"
-	"si/tools/si/internal/vault"
 )
 
 func cmdVaultEncrypt(args []string) {
 	settings := loadSettingsOrDefault()
-	args = stripeFlagsFirst(args, map[string]bool{"format": true, "reencrypt": true})
 	fs := flag.NewFlagSet("vault encrypt", flag.ExitOnError)
-	var files multiFlag
-	fs.Var(&files, "file", "vault scope (repeatable; preferred: --scope)")
-	scopeFlag := fs.String("scope", "", "vault scope")
-	format := fs.Bool("format", false, "ignored in Sun remote vault mode")
-	reencrypt := fs.Bool("reencrypt", false, "re-encrypt already-encrypted values (intentional ciphertext churn)")
+	var envFiles multiFlag
+	fs.Var(&envFiles, "env-file", "dotenv file path (repeatable)")
+	fs.Var(&envFiles, "f", "alias for --env-file")
+	fileAlias := fs.String("file", "", "alias for --env-file")
+	scopeAlias := fs.String("scope", "", "alias for --env")
+	repoFlag := fs.String("repo", "", "vault repo slug")
+	envFlag := fs.String("env", "", "vault environment")
+	var includeKeys multiFlag
+	var excludeKeys multiFlag
+	fs.Var(&includeKeys, "key", "key filter (repeatable, supports glob)")
+	fs.Var(&excludeKeys, "exclude-key", "exclude key filter (repeatable, supports glob)")
+	stdout := fs.Bool("stdout", false, "print transformed file to stdout instead of writing")
+	reencrypt := fs.Bool("reencrypt", false, "re-encrypt values already encrypted")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
-	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault encrypt [--scope <name>] [--file <name>]... [--format] [--reencrypt]")
+	if fs.NArg() > 0 {
+		printUsage("usage: si vault encrypt [--env-file <path>]... [--repo <slug>] [--env <name>] [--key <glob>] [--exclude-key <glob>] [--stdout] [--reencrypt]")
 		return
 	}
-	if scope := strings.TrimSpace(*scopeFlag); scope != "" {
-		files = append(files, scope)
+	envName := strings.TrimSpace(*envFlag)
+	if envName == "" {
+		envName = strings.TrimSpace(*scopeAlias)
 	}
+	paths := collectVaultEnvFiles(envFiles, strings.TrimSpace(*fileAlias))
+	if len(paths) == 0 {
+		paths = []string{defaultSIVaultDotenvFile}
+	}
+	include := parseFilterPatterns(includeKeys)
+	exclude := parseFilterPatterns(excludeKeys)
 
-	var identity *age.X25519Identity
-	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_encrypt")
-	if err != nil {
-		fatal(err)
-	}
-	if identity == nil {
-		fatal(fmt.Errorf("sun vault identity unavailable"))
-	}
-	recipients := []string{strings.TrimSpace(identity.Recipient().String())}
-	if *format {
-		warnf("--format is ignored in Sun remote vault mode")
-	}
-
-	runOne := func(scope string) {
-		target, err := vaultResolveTarget(settings, scope, false)
+	for idx, candidate := range paths {
+		target, err := resolveSIVaultTarget(strings.TrimSpace(*repoFlag), envName, candidate)
 		if err != nil {
 			fatal(err)
 		}
-		values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
-		if sunErr != nil {
-			fatal(sunErr)
+		material, err := ensureSIVaultKeyMaterial(settings, target)
+		if err != nil {
+			fatal(err)
 		}
-		if !used {
-			fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
+		doc, err := readDotenvOrEmpty(target.EnvFile)
+		if err != nil {
+			fatal(err)
 		}
-
-		keys := make([]string, 0, len(values))
-		for key := range values {
-			keys = append(keys, key)
+		if _, err := ensureSIVaultPublicKeyHeader(&doc, material.PublicKey); err != nil {
+			fatal(err)
 		}
-		sort.Strings(keys)
-
-		encryptedCount := 0
-		reencryptedCount := 0
-		skippedEncrypted := 0
-		for _, key := range keys {
-			norm, normErr := vault.NormalizeDotenvValue(values[key])
-			if normErr != nil {
-				fatal(fmt.Errorf("normalize %s: %w", key, normErr))
+		stats, err := encryptDotenvDoc(&doc, material.PublicKey, siVaultPrivateKeyCandidates(material), include, exclude, *reencrypt)
+		if err != nil {
+			fatal(err)
+		}
+		if *stdout {
+			if idx > 0 {
+				fmt.Print("\n")
 			}
-			plain := norm
-			if vault.IsEncryptedValueV1(norm) {
-				if !*reencrypt {
-					skippedEncrypted++
-					continue
-				}
-				dec, decErr := vault.DecryptStringV1(norm, identity)
-				if decErr != nil {
-					fatal(fmt.Errorf("decrypt existing encrypted key %s: %w", key, decErr))
-				}
-				plain = dec
-			}
-			cipher, encErr := vault.EncryptStringV1(plain, recipients)
-			if encErr != nil {
-				fatal(fmt.Errorf("encrypt %s: %w", key, encErr))
-			}
-			if putErr := vaultSunKVPutRawValue(settings, target, key, vault.RenderDotenvValuePlain(cipher), "vault_encrypt", false); putErr != nil {
-				fatal(putErr)
-			}
-			if vault.IsEncryptedValueV1(norm) {
-				reencryptedCount++
-			} else {
-				encryptedCount++
+			fmt.Print(string(doc.Bytes()))
+		} else {
+			if err := writeDotenv(target.EnvFile, doc); err != nil {
+				fatal(err)
 			}
 		}
-
-		vaultAuditEvent(settings, target, "encrypt", map[string]any{
-			"scope":            strings.TrimSpace(target.File),
-			"reencrypt":        *reencrypt,
-			"encryptedCount":   encryptedCount,
-			"reencryptedCount": reencryptedCount,
-			"skippedEncrypted": skippedEncrypted,
-			"source":           "sun-kv",
-		})
-
-		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
-		fmt.Printf("encrypted: %d\n", encryptedCount)
-		if *reencrypt {
-			fmt.Printf("reencrypted: %d\n", reencryptedCount)
+		if !*stdout {
+			fmt.Printf("file:       %s\n", filepath.Clean(target.EnvFile))
+			fmt.Printf("repo/env:   %s/%s\n", target.Repo, target.Env)
+			fmt.Printf("encrypted:  %d\n", stats.Encrypted)
+			if *reencrypt {
+				fmt.Printf("reencrypted:%d\n", stats.Reencrypted)
+			}
+			fmt.Printf("skipped:    %d\n", stats.SkippedEncrypted)
 		}
-		fmt.Printf("source: sun-kv\n")
 	}
+}
 
-	if len(files) == 0 {
-		runOne("")
-		return
+func collectVaultEnvFiles(values multiFlag, fallback string) []string {
+	out := []string{}
+	seen := map[string]struct{}{}
+	appendPath := func(pathValue string) {
+		pathValue = strings.TrimSpace(pathValue)
+		if pathValue == "" {
+			return
+		}
+		if !filepath.IsAbs(pathValue) {
+			cwd, err := os.Getwd()
+			if err == nil {
+				pathValue = filepath.Join(cwd, pathValue)
+			}
+		}
+		pathValue = filepath.Clean(pathValue)
+		if _, ok := seen[pathValue]; ok {
+			return
+		}
+		seen[pathValue] = struct{}{}
+		out = append(out, pathValue)
 	}
-	for _, file := range files {
-		runOne(file)
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			appendPath(part)
+		}
 	}
+	appendPath(fallback)
+	return out
 }

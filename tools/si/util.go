@@ -55,7 +55,7 @@ Usage:
 Core:
   si dyad spawn|list|remove|recreate|status|peek|exec|run|logs|start|stop|restart|cleanup
   si spawn|respawn|list|status|report|login|logout|swap|ps|run|logs|tail|clone|remove|stop|start
-  si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|run|docker|trust|recipients>   (alias: creds)
+  si vault <keypair|keygen|status|check|hooks|encrypt|decrypt|restore|set|unset|get|list|ls|run|docker>                  (alias: creds)
   si stripe <auth|context|doctor|object|raw|report|sync>
   si github <auth|context|doctor|git|repo|project|branch|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|status|smoke|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>
@@ -308,41 +308,28 @@ stripe:
     test is not accepted as a standalone environment mode.
 
 vault:
-	  Running si vault with no subcommand opens an interactive command picker.
-	  Running si vault trust/recipients/hooks/docker with no subcommand opens an interactive command picker.
+  Running si vault with no subcommand opens an interactive command picker.
+  Running si vault hooks/docker with no subcommand opens an interactive command picker.
 
-	  Target selection (most commands):
-	    --scope <name>              (preferred logical Sun scope)
-	    --file <name>               (compat alias for scope)
-	    Defaults to vault.file (or SI_VAULT_SCOPE / SI_VAULT_FILE).
+  Target selection (most commands):
+    --env-file <path>            (default: .env)
+    --repo <slug>                (default: current git repo directory name)
+    --env <name>                 (default: dev; --scope is alias)
 
-		  si vault init [--scope <name>] [--set-default] [--key-backend <...>] [--key-file <...>]
-		  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
-		  si vault use --scope <name>
-		  si vault status [--scope <name>]
-		  si vault check [--scope <name>] [--file <name>] [--staged] [--all] [--include-examples]
-		  si vault hooks install|status|uninstall [--force]
-		  si vault fmt [--file <path>] [--all] [--check]   (unsupported in Sun remote mode)
-		  si vault encrypt [--scope <name>] [--file <name>]... [--format] [--reencrypt]
-		  si vault decrypt [--scope <name>] [--file <name>] [KEY]... [--stdout] [--in-place]
-		  si vault set <KEY> <VALUE> [--scope <name>] [--section <name>] [--stdin]
-		  si vault unset <KEY> [--scope <name>]
-		  si vault get <KEY> [--scope <name>] [--reveal]
-		  si vault list [--scope <name>]
-		  si vault history <KEY> [--scope <name>] [--limit <n>] [--json]
-		  si vault run [--scope <name>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
-		  si vault docker exec --container <name|id> [--scope <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
-		  si vault trust status|accept|forget [--scope <name>] [--file <name>]
-		  si vault recipients list [--scope <name>] [--file <name>]
-		  si vault recipients add|remove ...   (unsupported in Sun remote mode)
-		  si vault backend status [--json]
-		  si vault backend use --mode <sun>
-		  si vault sync status [--scope <name>] [--name <name>] [--json]
-		  si vault sync push|pull             (unsupported in remote mode; informational error)
-
-  Sync backend policy:
-    SI_VAULT_SYNC_BACKEND (or vault.sync_backend) controls vault cloud behavior:
-      sun: Sun backup required for mutating vault commands (default and only supported backend)
+      si vault keypair [--repo <slug>] [--env <name>] [--env-file <path>] [--rotate] [--json]
+      si vault keygen  [same as keypair]
+      si vault status [--repo <slug>] [--env <name>] [--env-file <path>] [--json]
+      si vault check [--env-file <path>]... [--staged] [--all] [--include-examples]
+      si vault hooks install|status|uninstall [--force]
+      si vault encrypt [--env-file <path>]... [--repo <slug>] [--env <name>] [--key <glob>] [--exclude-key <glob>] [--stdout] [--reencrypt]
+      si vault decrypt [--env-file <path>]... [--repo <slug>] [--env <name>] [--key <glob>] [--exclude-key <glob>] [--stdout] [--inplace]
+      si vault restore [--env-file <path>]
+      si vault set <KEY> <VALUE> [--env-file <path>] [--repo <slug>] [--env <name>] [--stdin] [--plain]
+      si vault unset <KEY> [--env-file <path>] [--repo <slug>] [--env <name>]
+      si vault get <KEY> [--env-file <path>] [--repo <slug>] [--env <name>] [--reveal]
+      si vault list|ls [--env-file <path>] [--repo <slug>] [--env <name>] [--json]
+      si vault run [--env-file <path>] [--repo <slug>] [--env <name>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
+      si vault docker exec --container <name|id> [--env-file <path>] [--repo <slug>] [--env <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
 
   Alias:
     si creds ...
