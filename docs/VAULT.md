@@ -75,6 +75,13 @@ History:
 si vault history OPENAI_API_KEY --scope default --limit 20
 ```
 
+Cloud encryption check and remediation:
+
+```bash
+si vault check --scope default
+si vault encrypt --scope default
+```
+
 ## Runtime Injection
 
 Shell/scripts/Go:
@@ -105,6 +112,9 @@ si vault keygen --rotate  # rotate identity (dangerous for old ciphertext)
 - `si vault sync push` and `si vault sync pull` are intentionally unsupported in remote mode.
 - `si sun vault backup push/pull` is also not used for normal vault flow.
 - Trust commands are informational in Sun mode (`trust: n/a (sun-managed)`).
+- `si vault fmt` is unsupported in Sun mode (no local dotenv formatting target).
+- `si vault decrypt --in-place` is unsupported in Sun mode (no local plaintext materialization).
+- `si vault recipients add/remove` is unsupported in Sun mode (single Sun-managed identity recipient).
 
 ## Environment Overrides
 
