@@ -980,7 +980,7 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 		return fmt.Errorf("dyad container %s is missing host ~/.si mount required for full `si vault` support; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
 	requiredVaultFile := vaultContainerEnvFileMountPath(loadSettingsOrDefault())
-	if !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
+	if strings.TrimSpace(requiredVaultFile) != "" && !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
 		return fmt.Errorf("dyad container %s is missing the host vault env file mount required for `si vault`; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
 	opts := shared.ExecOptions{TTY: tty}

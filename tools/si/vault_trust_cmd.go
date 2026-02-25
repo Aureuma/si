@@ -54,6 +54,15 @@ func cmdVaultTrustStatus(args []string) {
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		target, targetErr := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
+		if targetErr != nil {
+			fatal(targetErr)
+		}
+		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
+		fmt.Printf("trust: n/a (sun-managed)\n")
+		return
+	}
 
 	target, err := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
 	if err != nil {
@@ -108,6 +117,15 @@ func cmdVaultTrustAccept(args []string) {
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		target, targetErr := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
+		if targetErr != nil {
+			fatal(targetErr)
+		}
+		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
+		fmt.Printf("trust: n/a (sun-managed)\n")
+		return
+	}
 
 	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
 	if err != nil {
@@ -159,6 +177,15 @@ func cmdVaultTrustForget(args []string) {
 	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
+	}
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		target, targetErr := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
+		if targetErr != nil {
+			fatal(targetErr)
+		}
+		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
+		fmt.Printf("trust: n/a (sun-managed)\n")
+		return
 	}
 
 	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), true)

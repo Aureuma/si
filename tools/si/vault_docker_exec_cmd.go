@@ -16,7 +16,8 @@ func cmdVaultDockerExec(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault docker exec", flag.ExitOnError)
 	container := fs.String("container", "", "container name or id")
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	allowInsecure := fs.Bool("allow-insecure-docker-host", false, "allow injecting secrets over an insecure remote DOCKER_HOST")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "allow injecting even if plaintext keys exist (not recommended)")
 	if err := fs.Parse(args); err != nil {
@@ -28,7 +29,7 @@ func cmdVaultDockerExec(args []string) {
 		rest = rest[1:]
 	}
 	if strings.TrimSpace(*container) == "" || len(rest) == 0 {
-		printUsage("usage: si vault docker exec --container <name|id> [--file <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>")
+		printUsage("usage: si vault docker exec --container <name|id> [--scope <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>")
 		return
 	}
 
@@ -36,25 +37,39 @@ func cmdVaultDockerExec(args []string) {
 		fatal(fmt.Errorf("refusing to inject secrets over insecure docker host (%s); set --allow-insecure-docker-host to override", reason))
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
-	doc, err := vault.ReadDotenvFile(target.File)
+	values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
+	if sunErr != nil {
+		fatal(sunErr)
+	}
+	if !used {
+		fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
+	}
+	sourceKeys := make([]string, 0, len(values))
+	for key := range values {
+		sourceKeys = append(sourceKeys, key)
+	}
+	sort.Strings(sourceKeys)
+	lines := make([]string, 0, len(sourceKeys))
+	for _, key := range sourceKeys {
+		lines = append(lines, key+"="+values[key])
+	}
+	doc := vault.ParseDotenv([]byte(strings.Join(lines, "\n") + "\n"))
+	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_docker_exec")
 	if err != nil {
 		fatal(err)
 	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-		fatal(err)
+	if identity == nil {
+		fatal(fmt.Errorf("sun vault identity unavailable"))
 	}
-	if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
-		fatal(err)
-	}
-	info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
-	if err != nil {
-		fatal(err)
-	}
-	dec, err := vault.DecryptEnv(doc, info.Identity)
+	dec, err := vault.DecryptEnv(doc, identity)
 	if err != nil {
 		fatal(err)
 	}
@@ -65,17 +80,17 @@ func cmdVaultDockerExec(args []string) {
 		}
 		warnf("vault file contains plaintext keys (allowed): %s", strings.Join(dec.PlaintextKeys, ", "))
 	}
-	keys := make([]string, 0, len(dec.Values))
+	keyNames := make([]string, 0, len(dec.Values))
 	for k := range dec.Values {
-		keys = append(keys, k)
+		keyNames = append(keyNames, k)
 	}
-	sort.Strings(keys)
+	sort.Strings(keyNames)
 	vaultAuditEvent(settings, target, "docker_exec", map[string]any{
-		"envFile":      target.File,
+		"scope":        strings.TrimSpace(target.File),
 		"container":    strings.TrimSpace(*container),
 		"cmd0":         rest[0],
 		"argsLen":      len(rest) - 1,
-		"keysCount":    len(keys),
+		"keysCount":    len(keyNames),
 		"remoteDocker": func() bool { insecure, _ := isInsecureDockerHost(); return insecure }(),
 	})
 

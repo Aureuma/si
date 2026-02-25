@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -15,7 +14,8 @@ func cmdVaultSet(args []string) {
 	settings := loadSettingsOrDefault()
 	args = stripeFlagsFirst(args, map[string]bool{"stdin": true, "format": true})
 	fs := flag.NewFlagSet("vault set", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	section := fs.String("section", "", "section name (e.g. stripe, workos)")
 	stdin := fs.Bool("stdin", false, "read value from stdin (avoids shell history)")
 	format := fs.Bool("format", false, "run `si vault fmt` after setting")
@@ -25,7 +25,7 @@ func cmdVaultSet(args []string) {
 
 	rest := fs.Args()
 	if len(rest) < 1 {
-		printUsage("usage: si vault set <KEY> <VALUE> [--file <path>] [--section <name>] [--stdin] [--format]")
+		printUsage("usage: si vault set <KEY> <VALUE> [--scope <name>] [--section <name>] [--stdin]")
 		return
 	}
 	key := strings.TrimSpace(rest[0])
@@ -47,64 +47,42 @@ func cmdVaultSet(args []string) {
 		value = rest[1]
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
-	doc, err := vault.ReadDotenvFile(target.File)
+	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_set")
 	if err != nil {
 		fatal(err)
 	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-		fatal(err)
-	}
-	recipients, err := vaultRecipientsForWrite(settings, doc, "vault_set")
-	if err != nil {
-		fatal(err)
-	}
-	if len(recipients) == 0 {
-		fatal(fmt.Errorf("no recipients found (expected %q lines); run `si vault init`", vault.VaultRecipientPrefix))
+	if identity == nil {
+		fatal(fmt.Errorf("sun vault identity unavailable"))
 	}
 
-	cipher, err := vault.EncryptStringV1(value, recipients)
+	cipher, err := vault.EncryptStringV1(value, []string{strings.TrimSpace(identity.Recipient().String())})
 	if err != nil {
 		fatal(err)
 	}
 	if err := vaultSunKVPutRawValue(settings, target, key, vault.RenderDotenvValuePlain(cipher), "vault_set", false); err != nil {
 		fatal(err)
 	}
-	changed, err := doc.Set(key, cipher, vault.SetOptions{Section: *section})
-	if err != nil {
-		fatal(err)
-	}
-	if changed {
-		if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
-			fatal(err)
-		}
-	}
+	changed := true
 	if *format {
-		formatted, fmtChanged, err := vault.FormatVaultDotenv(doc)
-		if err != nil {
-			fatal(err)
-		}
-		if fmtChanged {
-			if err := vaultWriteDotenvFileAtomic(target.File, formatted.Bytes()); err != nil {
-				fatal(err)
-			}
-		}
+		warnf("--format is ignored in Sun remote vault mode")
 	}
 
 	vaultAuditEvent(settings, target, "set", map[string]any{
-		"envFile":   filepath.Clean(target.File),
+		"scope":     strings.TrimSpace(target.File),
 		"key":       key,
 		"section":   strings.TrimSpace(*section),
 		"changed":   changed,
 		"fromStdin": *stdin,
 	})
 
-	fmt.Printf("file: %s\n", filepath.Clean(target.File))
+	fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
 	fmt.Printf("set:  %s\n", key)
-	if err := maybeSunAutoBackupVault("vault_set", target.File); err != nil {
-		fatal(err)
-	}
 }

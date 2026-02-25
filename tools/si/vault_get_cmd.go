@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -13,7 +12,8 @@ func cmdVaultGet(args []string) {
 	settings := loadSettingsOrDefault()
 	args = stripeFlagsFirst(args, map[string]bool{"reveal": true})
 	fs := flag.NewFlagSet("vault get", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	reveal := fs.Bool("reveal", false, "print the decrypted value to stdout")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
@@ -21,7 +21,7 @@ func cmdVaultGet(args []string) {
 
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault get <KEY> [--file <path>] [--reveal]")
+		printUsage("usage: si vault get <KEY> [--scope <name>] [--reveal]")
 		return
 	}
 	key := strings.TrimSpace(rest[0])
@@ -29,57 +29,47 @@ func cmdVaultGet(args []string) {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
-	raw := ""
-	ok := false
 	source := "local"
-	if sunRaw, found, used, sunErr := vaultSunKVGetRawValue(settings, target, key); sunErr != nil {
+	raw, found, used, sunErr := vaultSunKVGetRawValue(settings, target, key)
+	if sunErr != nil {
 		fatal(sunErr)
-	} else if used && found {
-		raw = sunRaw
-		ok = true
-		source = "sun-kv"
 	}
-	if !ok {
-		doc, err := vault.ReadDotenvFile(target.File)
-		if err != nil {
-			fatal(err)
-		}
-		if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-			fatal(err)
-		}
-		raw, ok = doc.Lookup(key)
-		if !ok {
-			fatal(fmt.Errorf("key not found: %s", key))
-		}
+	if !used || !found {
+		fatal(fmt.Errorf("key not found: %s", key))
 	}
+	source = "sun-kv"
 	val, err := vault.NormalizeDotenvValue(raw)
 	if err != nil {
 		fatal(err)
 	}
 	if vault.IsEncryptedValueV1(val) {
 		if !*reveal {
-			fmt.Printf("file: %s\n", filepath.Clean(target.File))
+			fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
 			fmt.Printf("source: %s\n", source)
 			fmt.Printf("%s: encrypted (use --reveal)\n", key)
 			return
 		}
-		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
-			fatal(err)
-		}
-		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
+		identity, err := vaultEnsureStrictSunIdentity(settings, "vault_get")
 		if err != nil {
 			fatal(err)
 		}
-		plain, err := vault.DecryptStringV1(val, info.Identity)
+		if identity == nil {
+			fatal(fmt.Errorf("sun vault identity unavailable"))
+		}
+		plain, err := vault.DecryptStringV1(val, identity)
 		if err != nil {
 			fatal(err)
 		}
 		vaultAuditEvent(settings, target, "reveal", map[string]any{
-			"envFile":   filepath.Clean(target.File),
+			"scope":     strings.TrimSpace(target.File),
 			"key":       key,
 			"encrypted": true,
 		})
@@ -91,13 +81,13 @@ func cmdVaultGet(args []string) {
 	}
 
 	if !*reveal {
-		fmt.Printf("file: %s\n", filepath.Clean(target.File))
+		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
 		fmt.Printf("source: %s\n", source)
-		fmt.Printf("%s: plaintext (run `si vault encrypt` to encrypt)\n", key)
+		fmt.Printf("%s: plaintext\n", key)
 		return
 	}
 	vaultAuditEvent(settings, target, "reveal", map[string]any{
-		"envFile":   filepath.Clean(target.File),
+		"scope":     strings.TrimSpace(target.File),
 		"key":       key,
 		"encrypted": false,
 	})

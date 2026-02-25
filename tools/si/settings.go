@@ -131,7 +131,7 @@ type DyadLoopSettings struct {
 }
 
 type VaultSettings struct {
-	// File is the default env file path for `si vault` commands when --file is not provided.
+	// File is the default logical Sun scope for `si vault` commands when --scope/--file is not provided.
 	File       string `toml:"file,omitempty"`
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
@@ -140,11 +140,10 @@ type VaultSettings struct {
 	// - sun: Sun backup required on mutating vault operations
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
-	// KeyBackend selects where the device private key is stored.
-	// Supported values: keyring, file
+	// KeyBackend is deprecated in Sun remote mode and kept only for compatibility.
 	KeyBackend string `toml:"key_backend,omitempty"`
 
-	// KeyFile is used when KeyBackend=file (or when file fallback is explicitly enabled).
+	// KeyFile is deprecated in Sun remote mode and kept only for compatibility.
 	KeyFile string `toml:"key_file,omitempty"`
 }
 
@@ -730,19 +729,19 @@ func applySettingsDefaults(settings *Settings) {
 		}
 	}
 	if settings.Vault.File == "" {
-		settings.Vault.File = "~/.si/vault/.env"
+		settings.Vault.File = defaultVaultScope
 	}
 	if settings.Vault.TrustStore == "" {
-		settings.Vault.TrustStore = "~/.si/vault/trust.json"
+		settings.Vault.TrustStore = ""
 	}
 	if settings.Vault.AuditLog == "" {
-		settings.Vault.AuditLog = "~/.si/logs/vault.log"
+		settings.Vault.AuditLog = ""
 	}
 	if settings.Vault.KeyBackend == "" {
 		settings.Vault.KeyBackend = "keyring"
 	}
 	if settings.Vault.KeyFile == "" {
-		settings.Vault.KeyFile = "~/.si/vault/keys/age.key"
+		settings.Vault.KeyFile = ""
 	}
 	settings.Vault.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Vault.SyncBackend))
 	settings.Paas.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Paas.SyncBackend))

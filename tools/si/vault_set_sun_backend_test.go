@@ -1,9 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -18,7 +15,7 @@ func TestVaultSetSunBackendEncryptsWithSunIdentity(t *testing.T) {
 	server, store := newSunTestServer(t, "acme", "token-vault-set-sun")
 	defer server.Close()
 
-	home, env := setupSunAuthState(t, server.URL, "acme", "token-vault-set-sun")
+	_, env := setupSunAuthState(t, server.URL, "acme", "token-vault-set-sun")
 	env["SI_VAULT_IDENTITY"] = ""
 	env["SI_VAULT_PRIVATE_KEY"] = ""
 	env["SI_VAULT_IDENTITY_FILE"] = ""
@@ -40,42 +37,32 @@ func TestVaultSetSunBackendEncryptsWithSunIdentity(t *testing.T) {
 	store.updated[storeKey] = "2026-01-02T00:00:00Z"
 	store.mu.Unlock()
 
-	legacyRecipient := strings.TrimSpace(legacyIdentity.Recipient().String())
-	legacyCipher, err := vault.EncryptStringV1("legacy-value", []string{legacyRecipient})
+	scope := "sun-backend-test"
+	stdout, stderr, err := runSICommand(t, env, "vault", "init", "--scope", scope, "--set-default")
 	if err != nil {
-		t.Fatalf("encrypt legacy value: %v", err)
-	}
-	vaultFile := filepath.Join(home, ".si", "vault", ".env")
-	if err := os.MkdirAll(filepath.Dir(vaultFile), 0o700); err != nil {
-		t.Fatalf("mkdir vault dir: %v", err)
-	}
-	initial := fmt.Sprintf(
-		"# si-vault:v2\n# si-vault:recipient %s\n\nLEGACY_ONLY=%s\n",
-		legacyRecipient,
-		legacyCipher,
-	)
-	if err := os.WriteFile(vaultFile, []byte(initial), 0o600); err != nil {
-		t.Fatalf("write vault file: %v", err)
+		t.Fatalf("vault init failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err := runSICommand(t, env, "vault", "trust", "accept", "--yes", "--file", vaultFile)
-	if err != nil {
-		t.Fatalf("vault trust accept failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
-	}
-
-	stdout, stderr, err = runSICommand(t, env, "vault", "set", "SUN_ONLY_NEW", "fresh-secret", "--file", vaultFile)
+	stdout, stderr, err = runSICommand(t, env, "vault", "set", "SUN_ONLY_NEW", "fresh-secret", "--scope", scope)
 	if err != nil {
 		t.Fatalf("vault set failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	doc, err := vault.ReadDotenvFile(vaultFile)
+	settings := Settings{}
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-vault-set-sun"
+	settings.Sun.Account = "acme"
+	settings.Vault.File = scope
+	target, err := vaultResolveTarget(settings, scope, true)
 	if err != nil {
-		t.Fatalf("read vault file: %v", err)
+		t.Fatalf("vaultResolveTarget: %v", err)
 	}
-	cipher, ok := doc.Lookup("SUN_ONLY_NEW")
-	if !ok {
-		t.Fatalf("expected SUN_ONLY_NEW key in vault file")
+	payload, ok := store.get(vaultSunKVKind(target), "SUN_ONLY_NEW")
+	if !ok || len(payload) == 0 {
+		t.Fatalf("expected SUN_ONLY_NEW key in Sun KV")
 	}
+	cipher := strings.TrimSpace(string(payload))
 	if !vault.IsEncryptedValueV1(cipher) {
 		t.Fatalf("expected encrypted value for SUN_ONLY_NEW, got: %q", cipher)
 	}

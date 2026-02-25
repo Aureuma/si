@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -13,17 +12,22 @@ import (
 func cmdVaultList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault list", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault list [--file <path>]")
+		printUsage("usage: si vault list [--scope <name>]")
 		return
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -32,42 +36,33 @@ func cmdVaultList(args []string) {
 			warnf("%v", err)
 		}
 	}
-	entries := []vault.Entry{}
-	source := "local"
-	if values, used, sunErr := vaultSunKVLoadRawValues(settings, target); sunErr != nil {
+	values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
+	if sunErr != nil {
 		fatal(sunErr)
-	} else if used && len(values) > 0 {
-		keys := make([]string, 0, len(values))
-		for key := range values {
-			keys = append(keys, key)
+	}
+	if !used {
+		fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	entries := make([]vault.Entry, 0, len(keys))
+	for _, key := range keys {
+		value, normErr := vault.NormalizeDotenvValue(values[key])
+		if normErr != nil {
+			continue
 		}
-		sort.Strings(keys)
-		entries = make([]vault.Entry, 0, len(keys))
-		for _, key := range keys {
-			value, normErr := vault.NormalizeDotenvValue(values[key])
-			if normErr != nil {
-				continue
-			}
-			entries = append(entries, vault.Entry{
-				Key:       key,
-				ValueRaw:  value,
-				Encrypted: vault.IsEncryptedValueV1(value),
-			})
-		}
-		source = "sun-kv"
-	} else {
-		doc, err := vault.ReadDotenvFile(target.File)
-		if err != nil {
-			fatal(err)
-		}
-		entries, err = vault.Entries(doc)
-		if err != nil {
-			fatal(err)
-		}
+		entries = append(entries, vault.Entry{
+			Key:       key,
+			ValueRaw:  value,
+			Encrypted: vault.IsEncryptedValueV1(value),
+		})
 	}
 
-	fmt.Printf("file: %s\n", filepath.Clean(target.File))
-	fmt.Printf("source: %s\n", source)
+	fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
+	fmt.Printf("source: sun-kv\n")
 	for _, e := range entries {
 		if e.Encrypted {
 			fmt.Printf("%s\t(encrypted)\n", e.Key)

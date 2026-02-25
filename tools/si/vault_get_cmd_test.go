@@ -1,7 +1,6 @@
 package main
 
 import (
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -11,33 +10,22 @@ func TestVaultGetAcceptsTrailingFlagsAfterKey(t *testing.T) {
 		t.Skip("skip subprocess CLI test in short mode")
 	}
 
-	tempState := t.TempDir()
-	envFile := filepath.Join(t.TempDir(), ".env.test")
-	keyFile := filepath.Join(tempState, "vault", "keys", "age.key")
-	trustFile := filepath.Join(tempState, "vault", "trust.json")
-	auditLog := filepath.Join(tempState, "vault", "audit.log")
+	server, _ := newSunTestServer(t, "acme", "token-vault-get")
+	defer server.Close()
 
-	env := map[string]string{
-		"HOME":                 tempState,
-		"GOFLAGS":              "-modcacherw",
-		"GOMODCACHE":           filepath.Join(tempState, "go-mod-cache"),
-		"GOCACHE":              filepath.Join(tempState, "go-build-cache"),
-		"SI_VAULT_KEY_BACKEND": "file",
-		"SI_VAULT_KEY_FILE":    keyFile,
-		"SI_VAULT_TRUST_STORE": trustFile,
-		"SI_VAULT_AUDIT_LOG":   auditLog,
-	}
+	_, env := setupSunAuthState(t, server.URL, "acme", "token-vault-get")
+	scope := "trailing-get"
 
-	stdout, stderr, err := runSICommand(t, env, "vault", "init", "--file", envFile)
+	stdout, stderr, err := runSICommand(t, env, "vault", "init", "--scope", scope)
 	if err != nil {
 		t.Fatalf("vault init failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, env, "vault", "set", "TRAILING_GET_KEY", "ok-value", "--file", envFile)
+	stdout, stderr, err = runSICommand(t, env, "vault", "set", "TRAILING_GET_KEY", "ok-value", "--scope", scope)
 	if err != nil {
 		t.Fatalf("vault set failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, env, "vault", "get", "TRAILING_GET_KEY", "--file", envFile, "--reveal")
+	stdout, stderr, err = runSICommand(t, env, "vault", "get", "TRAILING_GET_KEY", "--scope", scope, "--reveal")
 	if err != nil {
 		t.Fatalf("vault get failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}

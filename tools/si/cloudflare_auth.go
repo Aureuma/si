@@ -197,15 +197,8 @@ func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	doc, err := vault.ReadDotenvFile(target.File)
-	if err != nil {
-		return "", false
-	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-		return "", false
-	}
-	raw, ok := doc.Lookup(key)
-	if !ok {
+	raw, found, used, err := vaultSunKVGetRawValue(settings, target, key)
+	if err != nil || !used || !found {
 		return "", false
 	}
 	value, err := vault.NormalizeDotenvValue(raw)
@@ -213,14 +206,11 @@ func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
 		return "", false
 	}
 	if vault.IsEncryptedValueV1(value) {
-		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
+		identity, err := vaultEnsureStrictSunIdentity(settings, "vault_resolve_key")
+		if err != nil || identity == nil {
 			return "", false
 		}
-		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
-		if err != nil {
-			return "", false
-		}
-		plain, err := vault.DecryptStringV1(value, info.Identity)
+		plain, err := vault.DecryptStringV1(value, identity)
 		if err != nil {
 			return "", false
 		}

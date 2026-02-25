@@ -19,15 +19,15 @@ func TestResolveVaultPath(t *testing.T) {
 	settings := Settings{}
 	settings.Vault.File = "~/.si/vault/default.env"
 
-	if got := resolveVaultPath(settings, " /tmp/custom.env "); got != "/tmp/custom.env" {
-		t.Fatalf("explicit path=%q", got)
+	if got := resolveVaultPath(settings, " /tmp/custom.env "); got != "custom" {
+		t.Fatalf("explicit scope=%q", got)
 	}
-	if got := resolveVaultPath(settings, ""); got != "~/.si/vault/default.env" {
-		t.Fatalf("settings path=%q", got)
+	if got := resolveVaultPath(settings, ""); got != "default" {
+		t.Fatalf("settings scope=%q", got)
 	}
 	settings.Vault.File = ""
-	if got := resolveVaultPath(settings, ""); got != "~/.si/vault/.env" {
-		t.Fatalf("fallback path=%q", got)
+	if got := resolveVaultPath(settings, ""); got != "default" {
+		t.Fatalf("fallback scope=%q", got)
 	}
 }
 

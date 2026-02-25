@@ -31,12 +31,8 @@ func TestMaybeSunAutoBackupVaultSunModeRequiresAuthConfigAdditional(t *testing.T
 		t.Fatalf("write vault file: %v", err)
 	}
 
-	err := maybeSunAutoBackupVault("test_missing_auth", vaultFile)
-	if err == nil {
-		t.Fatalf("expected strict sun mode to fail without sun auth config")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "sun") {
-		t.Fatalf("expected sun context in error, got: %v", err)
+	if err := maybeSunAutoBackupVault("test_missing_auth", vaultFile); err != nil {
+		t.Fatalf("expected no-op in Sun remote vault mode, got: %v", err)
 	}
 }
 

@@ -4,25 +4,27 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
-
-	"si/tools/si/internal/vault"
 )
 
 func cmdVaultStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault status", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if len(fs.Args()) != 0 {
-		printUsage("usage: si vault status [--file <path>]")
+		printUsage("usage: si vault status [--scope <name>]")
 		return
 	}
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
 
-	target, err := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
+	target, err := vaultResolveTargetStatus(settings, scope)
 	if err != nil {
 		fatal(err)
 	}
@@ -32,62 +34,29 @@ func cmdVaultStatus(args []string) {
 		}
 	}
 
-	if strings.TrimSpace(target.RepoRoot) == "" {
-		fmt.Printf("repo root: (none)\n")
+	fmt.Printf("scope:     %s\n", strings.TrimSpace(target.File))
+	fmt.Printf("trust:     n/a (sun-managed)\n")
+	fmt.Printf("local:     disabled\n")
+	failed := false
+	if identity, err := vaultEnsureStrictSunIdentity(settings, "vault_status"); err != nil {
+		fmt.Printf("key:       error (%v)\n", err)
+		failed = true
+	} else if identity == nil {
+		fmt.Printf("key:       unavailable\n")
+		failed = true
 	} else {
-		fmt.Printf("repo root: %s\n", filepath.Clean(target.RepoRoot))
-	}
-	fmt.Printf("env file:  %s\n", filepath.Clean(target.File))
-
-	// Trust + recipients fingerprint.
-	if doc, err := vault.ReadDotenvFile(target.File); err == nil {
-		fp, fpErr := vaultTrustFingerprint(doc)
-		if fpErr == nil {
-			store, storeErr := vault.LoadTrustStore(vaultTrustStorePath(settings))
-			if storeErr != nil {
-				fmt.Printf("trust:     error (%v)\n", storeErr)
-			} else if entry, ok := store.Find(target.RepoRoot, target.File); !ok {
-				fmt.Printf("trust:     untrusted (%s)\n", fp)
-			} else if strings.TrimSpace(entry.Fingerprint) != fp {
-				fmt.Printf("trust:     mismatch (stored %s, current %s)\n", strings.TrimSpace(entry.Fingerprint), fp)
-			} else {
-				fmt.Printf("trust:     ok (%s)\n", fp)
-			}
-		} else {
-			fmt.Printf("trust:     unavailable (%v)\n", fpErr)
-		}
-	} else if os.IsNotExist(err) {
-		fmt.Printf("trust:     unavailable (env file missing)\n")
-	} else if err != nil {
-		fmt.Printf("trust:     error (%v)\n", err)
-	}
-
-	// Identity status (no secrets printed).
-	if err := vaultEnsureSunIdentityEnv(settings, "vault_status"); err != nil {
-		warnf("%v", err)
-	}
-	keyCfg := vaultKeyConfigFromSettings(settings)
-	backend := vault.NormalizeKeyBackend(keyCfg.Backend)
-	if err := vaultRefuseNonInteractiveOSKeyring(keyCfg); err != nil {
-		fmt.Printf("key:       unavailable (backend=%s)\n", backend)
-		return
-	}
-	info, err := vault.LoadIdentity(keyCfg)
-	if err == nil {
-		// Always show the configured backend; optionally add source detail when it differs.
-		if info.Source != "" && info.Source != backend {
-			fmt.Printf("key:       ok (backend=%s, source=%s)\n", backend, strings.TrimSpace(info.Source))
-		} else {
-			fmt.Printf("key:       ok (backend=%s)\n", backend)
-		}
-	} else {
-		fmt.Printf("key:       missing (backend=%s)\n", backend)
+		fmt.Printf("key:       ok (sun identity)\n")
 	}
 	if values, used, sunErr := vaultSunKVLoadRawValues(settings, target); sunErr != nil {
 		fmt.Printf("cloud_kv:  error (%v)\n", sunErr)
+		failed = true
 	} else if used {
 		fmt.Printf("cloud_kv:  ok (%d keys)\n", len(values))
 	} else {
 		fmt.Printf("cloud_kv:  unavailable\n")
+		failed = true
+	}
+	if failed {
+		os.Exit(1)
 	}
 }

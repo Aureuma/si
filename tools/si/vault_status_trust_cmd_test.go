@@ -18,11 +18,11 @@ func TestVaultTrustStatusMissingFileIsNonFatal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vault trust status should not fail for missing file: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "env file:") {
-		t.Fatalf("expected env file line, got:\n%s", stdout)
+	if !strings.Contains(stdout, "scope:") {
+		t.Fatalf("expected scope line, got:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "trust:      unavailable (env file missing)") {
-		t.Fatalf("expected missing-file trust status, got:\n%s", stdout)
+	if !strings.Contains(stdout, "trust: n/a (sun-managed)") {
+		t.Fatalf("expected sun-managed trust status, got:\n%s", stdout)
 	}
 }
 

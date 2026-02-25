@@ -24,15 +24,16 @@ func vaultSunKVKind(target vault.Target) string {
 }
 
 func vaultSunKVScope(target vault.Target) string {
-	repo := strings.TrimSpace(target.RepoRoot)
-	file := filepath.Clean(strings.TrimSpace(target.File))
-	sum := sha256.Sum256([]byte(repo + "|" + file))
-	return hex.EncodeToString(sum[:8])
+	scope := vaultNormalizeScope(target.File)
+	if strings.TrimSpace(scope) == "" {
+		return defaultVaultScope
+	}
+	return scope
 }
 
 func vaultSunKVTargetHashes(target vault.Target) (repoHash string, fileHash string) {
 	repo := strings.TrimSpace(target.RepoRoot)
-	file := filepath.Clean(strings.TrimSpace(target.File))
+	file := vaultSunKVScope(target)
 	repoSum := sha256.Sum256([]byte(repo))
 	fileSum := sha256.Sum256([]byte(file))
 	return hex.EncodeToString(repoSum[:8]), hex.EncodeToString(fileSum[:8])

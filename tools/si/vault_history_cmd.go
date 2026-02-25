@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -13,7 +12,8 @@ func cmdVaultHistory(args []string) {
 	settings := loadSettingsOrDefault()
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("vault history", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	limit := fs.Int("limit", 20, "max revisions to display")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
@@ -21,7 +21,7 @@ func cmdVaultHistory(args []string) {
 	}
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault history <KEY> [--file <path>] [--limit <n>] [--json]")
+		printUsage("usage: si vault history <KEY> [--scope <name>] [--limit <n>] [--json]")
 		return
 	}
 	key := strings.TrimSpace(rest[0])
@@ -32,7 +32,11 @@ func cmdVaultHistory(args []string) {
 		fatal(fmt.Errorf("invalid --limit %d", *limit))
 	}
 
-	target, err := vaultResolveTargetStatus(settings, strings.TrimSpace(*fileFlag))
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
+	target, err := vaultResolveTargetStatus(settings, scope)
 	if err != nil {
 		fatal(err)
 	}
@@ -45,7 +49,7 @@ func cmdVaultHistory(args []string) {
 	}
 	if *jsonOut {
 		printJSON(map[string]any{
-			"file":      filepath.Clean(target.File),
+			"scope":     strings.TrimSpace(target.File),
 			"source":    "sun-kv",
 			"key":       key,
 			"limit":     *limit,
@@ -54,7 +58,7 @@ func cmdVaultHistory(args []string) {
 		return
 	}
 
-	fmt.Printf("file: %s\n", filepath.Clean(target.File))
+	fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
 	fmt.Printf("source: sun-kv\n")
 	fmt.Printf("key: %s\n", key)
 	if len(revs) == 0 {

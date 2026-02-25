@@ -11,6 +11,7 @@ import (
 
 const (
 	vaultSyncBackendSun = "sun"
+	defaultVaultScope   = "default"
 )
 
 type vaultSyncBackendResolution struct {
@@ -98,6 +99,9 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 }
 
 func vaultTrustStorePath(settings Settings) string {
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		return ""
+	}
 	path := strings.TrimSpace(os.Getenv("SI_VAULT_TRUST_STORE"))
 	if path == "" {
 		path = settings.Vault.TrustStore
@@ -106,6 +110,9 @@ func vaultTrustStorePath(settings Settings) string {
 }
 
 func vaultAuditLogPath(settings Settings) string {
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		return ""
+	}
 	path := strings.TrimSpace(os.Getenv("SI_VAULT_AUDIT_LOG"))
 	if path == "" {
 		path = settings.Vault.AuditLog
@@ -114,37 +121,118 @@ func vaultAuditLogPath(settings Settings) string {
 }
 
 func vaultDefaultEnvFile(settings Settings) string {
-	// Allows per-invocation override without changing settings.
-	if path := strings.TrimSpace(os.Getenv("SI_VAULT_FILE")); path != "" {
-		return path
+	// SI_VAULT_SCOPE is the preferred override in Sun remote mode.
+	if scope := strings.TrimSpace(os.Getenv("SI_VAULT_SCOPE")); scope != "" {
+		return vaultNormalizeScope(scope)
 	}
-	return strings.TrimSpace(settings.Vault.File)
+	// Keep SI_VAULT_FILE for backward compatibility with existing automation.
+	if scope := strings.TrimSpace(os.Getenv("SI_VAULT_FILE")); scope != "" {
+		return vaultNormalizeScope(scope)
+	}
+	return vaultNormalizeScope(strings.TrimSpace(settings.Vault.File))
 }
 
-func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
-	_, err := resolveVaultSyncBackend(settings)
+func vaultNormalizeScope(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultVaultScope
+	}
+	normalized := strings.ReplaceAll(raw, "\\", "/")
+	normalizedLower := strings.ToLower(normalized)
+	looksLikePath := strings.HasPrefix(normalized, "/") ||
+		strings.HasPrefix(normalized, "~") ||
+		strings.Contains(normalized, "/") ||
+		strings.HasSuffix(normalizedLower, ".env")
+	if looksLikePath {
+		base := strings.TrimSpace(strings.ToLower(filepath.Base(normalized)))
+		switch base {
+		case "", ".", "..", ".env", "default.env":
+			return defaultVaultScope
+		}
+		if strings.HasPrefix(base, ".env.") {
+			normalized = strings.TrimPrefix(base, ".env.")
+		} else if strings.HasSuffix(base, ".env") {
+			normalized = strings.TrimSuffix(base, ".env")
+		} else {
+			normalized = strings.TrimPrefix(base, ".")
+		}
+	} else {
+		normalized = normalizedLower
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, ch := range normalized {
+		switch {
+		case ch >= 'a' && ch <= 'z':
+			b.WriteRune(ch)
+			lastDash = false
+		case ch >= '0' && ch <= '9':
+			b.WriteRune(ch)
+			lastDash = false
+		case ch == '-', ch == '_', ch == '.', ch == ':':
+			b.WriteRune(ch)
+			lastDash = false
+		default:
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	scope := strings.Trim(b.String(), "-_/.:")
+	if scope == "" {
+		return defaultVaultScope
+	}
+	if len(scope) > 120 {
+		scope = strings.Trim(scope[:120], "-_/.:")
+		if scope == "" {
+			return defaultVaultScope
+		}
+	}
+	return scope
+}
+
+func vaultResolveSunTarget(fileFlag string) (vault.Target, error) {
+	cwd, err := os.Getwd()
 	if err != nil {
 		return vault.Target{}, err
 	}
-	// Sun-backed mode may hydrate the local file from cloud after resolution.
-	resolveAllowMissing := true
+	scope := vaultNormalizeScope(fileFlag)
+	repoRoot, _ := vault.GitRoot(cwd)
+	return vault.Target{
+		CWD:            cwd,
+		RepoRoot:       repoRoot,
+		File:           scope,
+		FileIsExplicit: strings.TrimSpace(fileFlag) != "",
+	}, nil
+}
+
+func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
+	backend, err := resolveVaultSyncBackend(settings)
+	if err != nil {
+		return vault.Target{}, err
+	}
+	fileValue := strings.TrimSpace(fileFlag)
+	if fileValue == "" {
+		fileValue = vaultDefaultEnvFile(settings)
+	}
+	if backend.Mode == vaultSyncBackendSun {
+		target, err := vaultResolveSunTarget(fileValue)
+		if err != nil {
+			return vault.Target{}, err
+		}
+		return target, nil
+	}
 	target, err := vault.ResolveTarget(vault.ResolveOptions{
 		CWD:              "",
-		File:             fileFlag,
+		File:             fileValue,
 		DefaultFile:      vaultDefaultEnvFile(settings),
-		AllowMissingFile: resolveAllowMissing,
+		AllowMissingFile: allowMissingFile,
 	})
 	if err != nil {
 		return vault.Target{}, err
 	}
-	if err := vaultHydrateFromSun(settings, target, allowMissingFile); err != nil {
-		return vault.Target{}, err
-	}
-	if !allowMissingFile {
-		if _, statErr := os.Stat(target.File); statErr != nil {
-			return vault.Target{}, statErr
-		}
-	}
+	_ = allowMissingFile
 	if shouldEnforceVaultRepoScope(settings) {
 		if err := vaultValidateImplicitTargetRepoScope(target); err != nil && isTruthyFlagValue(os.Getenv("SI_VAULT_STRICT_TARGET_SCOPE")) {
 			return vault.Target{}, err
@@ -160,6 +248,9 @@ func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target,
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
 // into containers. Returns empty when unresolved or missing.
 func vaultContainerEnvFileMountPath(settings Settings) string {
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		return ""
+	}
 	target, err := vaultResolveTarget(settings, "", true)
 	if err != nil {
 		return ""
@@ -184,6 +275,9 @@ func vaultTrustFingerprint(doc vault.DotenvFile) (string, error) {
 }
 
 func vaultRequireTrusted(settings Settings, target vault.Target, doc vault.DotenvFile) (string, error) {
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		return "sun-managed", nil
+	}
 	fp, err := vaultTrustFingerprint(doc)
 	if err != nil {
 		return "", err

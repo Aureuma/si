@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -13,7 +12,8 @@ func cmdVaultUnset(args []string) {
 	settings := loadSettingsOrDefault()
 	args = stripeFlagsFirst(args, map[string]bool{"format": true})
 	fs := flag.NewFlagSet("vault unset", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	section := fs.String("section", "", "section name (accepted but unset removes all occurrences)")
 	format := fs.Bool("format", false, "run `si vault fmt` after unsetting")
 	if err := fs.Parse(args); err != nil {
@@ -22,7 +22,7 @@ func cmdVaultUnset(args []string) {
 
 	rest := fs.Args()
 	if len(rest) != 1 {
-		printUsage("usage: si vault unset <KEY> [--file <path>] [--format]")
+		printUsage("usage: si vault unset <KEY> [--scope <name>]")
 		return
 	}
 	_ = section
@@ -31,54 +31,35 @@ func cmdVaultUnset(args []string) {
 		fatal(err)
 	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
-	doc, err := vault.ReadDotenvFile(target.File)
+	_, changed, _, err := vaultSunKVGetRawValue(settings, target, key)
 	if err != nil {
-		fatal(err)
-	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
 		fatal(err)
 	}
 	if err := vaultSunKVPutRawValue(settings, target, key, "", "vault_unset", true); err != nil {
 		fatal(err)
 	}
-	changed, err := doc.Unset(key)
-	if err != nil {
-		fatal(err)
-	}
-	if changed {
-		if err := vaultWriteDotenvFileAtomic(target.File, doc.Bytes()); err != nil {
-			fatal(err)
-		}
-	}
 	if *format {
-		formatted, fmtChanged, err := vault.FormatVaultDotenv(doc)
-		if err != nil {
-			fatal(err)
-		}
-		if fmtChanged {
-			if err := vaultWriteDotenvFileAtomic(target.File, formatted.Bytes()); err != nil {
-				fatal(err)
-			}
-		}
+		warnf("--format is ignored in Sun remote vault mode")
 	}
 
 	vaultAuditEvent(settings, target, "unset", map[string]any{
-		"envFile": filepath.Clean(target.File),
+		"scope":   strings.TrimSpace(target.File),
 		"key":     key,
 		"changed": changed,
 	})
 
-	fmt.Printf("file:  %s\n", filepath.Clean(target.File))
+	fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
 	if changed {
 		fmt.Printf("unset: %s\n", key)
 	} else {
 		fmt.Printf("unset: %s (no-op)\n", key)
-	}
-	if err := maybeSunAutoBackupVault("vault_unset", target.File); err != nil {
-		fatal(err)
 	}
 }
