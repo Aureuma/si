@@ -92,8 +92,6 @@ func TestVaultCommandActionSetsArePopulated(t *testing.T) {
 	}{
 		{name: "vault", actions: vaultActions},
 		{name: "vault docker", actions: vaultDockerActions},
-		{name: "vault trust", actions: vaultTrustActions},
-		{name: "vault recipients", actions: vaultRecipientsActions},
 		{name: "vault hooks", actions: vaultHooksActions},
 	}
 	for _, tc := range tests {
@@ -113,11 +111,9 @@ func TestVaultCommandActionSetsArePopulated(t *testing.T) {
 
 func TestVaultActionNamesMatchDispatchSwitches(t *testing.T) {
 	expectActionNames(t, "vault", vaultActions, []string{
-		"init", "status", "check", "fmt", "encrypt", "decrypt", "set", "get", "list", "dump", "history", "run", "docker", "trust", "recipients", "backend", "sync", "keygen", "use",
+		"keypair", "keygen", "status", "check", "hooks", "encrypt", "decrypt", "restore", "set", "unset", "get", "list", "ls", "run", "docker",
 	})
 	expectActionNames(t, "vault docker", vaultDockerActions, []string{"exec"})
-	expectActionNames(t, "vault trust", vaultTrustActions, []string{"status", "accept", "forget"})
-	expectActionNames(t, "vault recipients", vaultRecipientsActions, []string{"list", "add", "remove"})
 	expectActionNames(t, "vault hooks", vaultHooksActions, []string{"install", "status", "uninstall"})
 }
 

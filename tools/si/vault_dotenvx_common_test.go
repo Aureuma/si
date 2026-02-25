@@ -86,7 +86,7 @@ func TestEncryptDotenvDocReencryptDecryptsPlaintextBeforeEncrypt(t *testing.T) {
 	}
 }
 
-func TestEnsureSIVaultPublicKeyHeaderOnlyHeaderLine(t *testing.T) {
+func TestEnsureSIVaultPublicKeyHeaderLeavesBlankLineAfterHeader(t *testing.T) {
 	publicKey, _, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {
 		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
@@ -106,7 +106,42 @@ func TestEnsureSIVaultPublicKeyHeaderOnlyHeaderLine(t *testing.T) {
 	if lines[0] != vault.SIVaultPublicKeyName+"="+publicKey {
 		t.Fatalf("unexpected header line: %q", lines[0])
 	}
-	if strings.HasPrefix(lines[1], "#") {
-		t.Fatalf("unexpected preamble/comment after header: %q", lines[1])
+	if lines[1] != "" {
+		t.Fatalf("expected blank line after header, got: %q", lines[1])
+	}
+	if lines[2] != "FOO=bar" {
+		t.Fatalf("unexpected first dotenv assignment line: %q", lines[2])
+	}
+}
+
+func TestEnsureSIVaultPublicKeyHeaderCollapsesExtraBlankLines(t *testing.T) {
+	publicKey, _, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
+	}
+	doc := vault.ParseDotenv([]byte(strings.Join([]string{
+		vault.SIVaultPublicKeyName + "=old",
+		"",
+		"",
+		"",
+		"FOO=bar",
+		"",
+	}, "\n")))
+	_, err = ensureSIVaultPublicKeyHeader(&doc, publicKey)
+	if err != nil {
+		t.Fatalf("ensureSIVaultPublicKeyHeader: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(doc.Bytes()), "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("unexpected rendered doc: %q", string(doc.Bytes()))
+	}
+	if lines[0] != vault.SIVaultPublicKeyName+"="+publicKey {
+		t.Fatalf("unexpected header line: %q", lines[0])
+	}
+	if lines[1] != "" {
+		t.Fatalf("expected exactly one blank line after header, got: %q", lines[1])
+	}
+	if lines[2] == "" {
+		t.Fatalf("expected header-adjacent blank lines to be collapsed")
 	}
 }

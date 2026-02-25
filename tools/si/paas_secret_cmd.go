@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -20,10 +21,10 @@ var paasSecretActions = []subcommandAction{
 }
 
 const (
-	paasSecretSetUsageText   = "usage: si paas secret set --app <slug> [--target <id>] [--namespace <name>] --name <key> --value <text> [--file <path>] [--json]"
-	paasSecretGetUsageText   = "usage: si paas secret get --app <slug> [--target <id>] [--namespace <name>] --name <key> [--reveal --allow-plaintext] [--file <path>] [--json]"
-	paasSecretUnsetUsageText = "usage: si paas secret unset --app <slug> [--target <id>] [--namespace <name>] --name <key> [--file <path>] [--json]"
-	paasSecretListUsageText  = "usage: si paas secret list --app <slug> [--target <id>] [--namespace <name>] [--file <path>] [--json]"
+	paasSecretSetUsageText   = "usage: si paas secret set --app <slug> [--target <id>] [--namespace <name>] --name <key> --value <text> [--file <scope>] [--json]"
+	paasSecretGetUsageText   = "usage: si paas secret get --app <slug> [--target <id>] [--namespace <name>] --name <key> [--reveal --allow-plaintext] [--file <scope>] [--json]"
+	paasSecretUnsetUsageText = "usage: si paas secret unset --app <slug> [--target <id>] [--namespace <name>] --name <key> [--file <scope>] [--json]"
+	paasSecretListUsageText  = "usage: si paas secret list --app <slug> [--target <id>] [--namespace <name>] [--file <scope>] [--json]"
 	paasSecretKeyUsageText   = "usage: si paas secret key --app <slug> [--target <id>] [--namespace <name>] --name <key> [--json]"
 )
 
@@ -70,7 +71,7 @@ func cmdPaasSecretSet(args []string) {
 	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	name := fs.String("name", "", "logical secret key name")
 	value := fs.String("value", "", "plaintext value (will be encrypted)")
-	fileFlag := fs.String("file", "", "explicit vault file")
+	fileFlag := fs.String("file", "", "vault scope (compat alias)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasSecretSetUsageText)
@@ -101,7 +102,7 @@ func cmdPaasSecretGet(args []string) {
 	name := fs.String("name", "", "logical secret key name")
 	reveal := fs.Bool("reveal", false, "reveal decrypted value")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "required with --reveal to acknowledge plaintext output risk")
-	fileFlag := fs.String("file", "", "explicit vault file")
+	fileFlag := fs.String("file", "", "vault scope (compat alias)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasSecretGetUsageText)
@@ -136,7 +137,7 @@ func cmdPaasSecretUnset(args []string) {
 	target := fs.String("target", "", "target id (default current)")
 	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
 	name := fs.String("name", "", "logical secret key name")
-	fileFlag := fs.String("file", "", "explicit vault file")
+	fileFlag := fs.String("file", "", "vault scope (compat alias)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasSecretUnsetUsageText)
@@ -164,7 +165,7 @@ func cmdPaasSecretList(args []string) {
 	app := fs.String("app", "", "app slug")
 	target := fs.String("target", "", "target id (default current)")
 	namespace := fs.String("namespace", "", "secret namespace (default context namespace)")
-	fileFlag := fs.String("file", "", "explicit vault file")
+	fileFlag := fs.String("file", "", "vault scope (compat alias)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasSecretListUsageText)
@@ -182,20 +183,20 @@ func cmdPaasSecretList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	doc, err := vault.ReadDotenvFile(targetPath.File)
+	values, used, err := vaultSunKVLoadRawValues(settings, targetPath)
 	if err != nil {
 		fatal(err)
 	}
-	entries, err := vault.Entries(doc)
-	if err != nil {
-		fatal(err)
+	if !used {
+		fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
 	}
 	matches := make([]string, 0)
-	for _, row := range entries {
-		if strings.HasPrefix(row.Key, prefix) {
-			matches = append(matches, row.Key)
+	for key := range values {
+		if strings.HasPrefix(key, prefix) {
+			matches = append(matches, key)
 		}
 	}
+	sort.Strings(matches)
 	if jsonOut {
 		payload := map[string]any{
 			"ok":         true,
@@ -216,7 +217,7 @@ func cmdPaasSecretList(args []string) {
 		}
 		return
 	}
-	fmt.Printf("paas secret list: app=%s target=%s namespace=%s file=%s\n", strings.TrimSpace(*app), resolvedTarget, resolvedNamespace, filepath.Clean(targetPath.File))
+	fmt.Printf("paas secret list: app=%s target=%s namespace=%s scope=%s\n", strings.TrimSpace(*app), resolvedTarget, resolvedNamespace, strings.TrimSpace(targetPath.File))
 	for _, key := range matches {
 		fmt.Printf("  %s\n", key)
 	}

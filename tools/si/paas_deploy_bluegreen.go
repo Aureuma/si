@@ -55,12 +55,12 @@ func cmdPaasDeployBlueGreen(args []string) {
 	continueOnError := fs.Bool("continue-on-error", false, "continue blue/green rollout on target errors")
 	keepStandby := fs.Bool("keep-standby", true, "keep previous active slot running after successful cutover")
 	cutoverCmd := fs.String("cutover-cmd", "", "optional remote cutover command template (supports {{app}}, {{target}}, {{release}}, {{from_slot}}, {{to_slot}}, {{state_dir}}, {{state_file}}, {{project}})")
-	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
+	vaultFile := fs.String("vault-file", "", "vault scope (compat alias)")
 	allowPlaintextSecrets := fs.Bool("allow-plaintext-secrets", false, "allow plaintext secret assignments in compose file (unsafe)")
 	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "allow deploy with untrusted vault fingerprint (unsafe)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si paas deploy bluegreen [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--release <id>] [--compose-file <path>] [--bundle-root <path>] [--apply] [--remote-dir <path>] [--apply-timeout <duration>] [--health-cmd <command>] [--health-timeout <duration>] [--cutover-timeout <duration>] [--continue-on-error] [--keep-standby[=true|false]] [--cutover-cmd <command>] [--vault-file <path>] [--allow-plaintext-secrets] [--allow-untrusted-vault] [--json]")
+		printUsage("usage: si paas deploy bluegreen [--app <slug>] [--target <id>] [--targets <id1,id2|all>] [--release <id>] [--compose-file <path>] [--bundle-root <path>] [--apply] [--remote-dir <path>] [--apply-timeout <duration>] [--health-cmd <command>] [--health-timeout <duration>] [--cutover-timeout <duration>] [--continue-on-error] [--keep-standby[=true|false]] [--cutover-cmd <command>] [--vault-file <scope>] [--allow-plaintext-secrets] [--allow-untrusted-vault] [--json]")
 		return
 	}
 

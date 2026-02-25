@@ -56,15 +56,14 @@ Use GitHub App tokens through `si vault` as a Git credential helper, then normal
 si vault run -- si github git setup --root ~/Development --account core --owner Aureuma
 ```
 
-Recommended for file-key vault backends (non-interactive git credential helper):
+Optional custom vault scope for helper auth:
 
 ```bash
 si github git setup \
   --root ~/Development \
   --account core \
   --owner Aureuma \
-  --vault-file ~/.si/vault/dev.env \
-  --vault-identity-file ~/.si/vault/keys/age.key
+  --vault-file default
 ```
 
 Common flags:

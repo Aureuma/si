@@ -505,8 +505,7 @@ func cmdGithubGitSetup(args []string) {
 	remote := fs.String("remote", "origin", "remote name")
 	dryRun := fs.Bool("dry-run", false, "preview changes without writing git config/remotes")
 	noVault := fs.Bool("no-vault", false, "configure helper without wrapping through `si vault run`")
-	vaultFile := fs.String("vault-file", "", "explicit vault env file for helper auth")
-	vaultIdentityFile := fs.String("vault-identity-file", "", "identity key path exported as SI_VAULT_IDENTITY_FILE in helper")
+	vaultFile := fs.String("vault-file", "", "vault scope for helper auth (compat alias)")
 	account := fs.String("account", "", "account alias passed to helper")
 	owner := fs.String("owner", "", "owner/org passed to helper and auth probe")
 	helperOwner := fs.String("helper-owner", "", "optional fixed owner/org for helper (defaults to deriving from git credential path)")
@@ -519,7 +518,7 @@ func cmdGithubGitSetup(args []string) {
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si github git setup [--root <path>] [--remote <name>] [--account <alias>] [--owner <owner>] [--helper-owner <owner>] [--vault-file <path>] [--vault-identity-file <path>] [--dry-run] [--json]")
+		printUsage("usage: si github git setup [--root <path>] [--remote <name>] [--account <alias>] [--owner <owner>] [--helper-owner <owner>] [--vault-file <scope>] [--dry-run] [--json]")
 		return
 	}
 
@@ -611,21 +610,9 @@ func cmdGithubGitSetup(args []string) {
 		fatal(err)
 	}
 
-	identityFile := strings.TrimSpace(*vaultIdentityFile)
-	if identityFile == "" {
-		identityFile = strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY_FILE"))
-	}
-	if identityFile == "" && !*noVault {
-		settings := loadSettingsOrDefault()
-		if strings.EqualFold(strings.TrimSpace(settings.Vault.KeyBackend), "file") {
-			identityFile = strings.TrimSpace(expandTilde(settings.Vault.KeyFile))
-		}
-	}
-
 	helperCommand := buildGitHubCredentialHelperCommand(githubGitHelperOptions{
 		UseVault:       !*noVault,
 		VaultFile:      strings.TrimSpace(*vaultFile),
-		VaultIdentity:  identityFile,
 		Account:        strings.TrimSpace(*account),
 		Owner:          strings.TrimSpace(*helperOwner),
 		BaseURL:        strings.TrimSpace(*baseURL),
@@ -1070,7 +1057,6 @@ func gitConfigHostUseHTTPPath(host string) error {
 type githubGitHelperOptions struct {
 	UseVault       bool
 	VaultFile      string
-	VaultIdentity  string
 	Account        string
 	Owner          string
 	BaseURL        string
@@ -1083,15 +1069,11 @@ type githubGitHelperOptions struct {
 
 func buildGitHubCredentialHelperCommand(opts githubGitHelperOptions) string {
 	parts := make([]string, 0, 16)
-	prefix := "!si"
-	if strings.TrimSpace(opts.VaultIdentity) != "" {
-		prefix = "!SI_VAULT_IDENTITY_FILE=" + shellQuote(strings.TrimSpace(opts.VaultIdentity)) + " si"
-	}
-	parts = append(parts, prefix)
+	parts = append(parts, "!si")
 	if opts.UseVault {
 		parts = append(parts, "vault", "run")
 		if strings.TrimSpace(opts.VaultFile) != "" {
-			parts = append(parts, "--file", shellQuote(strings.TrimSpace(opts.VaultFile)))
+			parts = append(parts, "--scope", shellQuote(strings.TrimSpace(opts.VaultFile)))
 		}
 		parts = append(parts, "--", "si")
 	}

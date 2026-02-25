@@ -322,9 +322,6 @@ Defaults for `si sun` cloud sync.
 - `sun.token` (string): Sun bearer token
 - `sun.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
 - `sun.auto_sync` (bool): enable automatic codex profile sync hooks
-- `sun.vault_backup` (string): default vault backup object name (default: `default`)
-  - Also used as the object name for Sun-managed vault identity material in Sun-backed vault mode.
-  - Per-key Sun KV objects are scoped from `vault.file` (logical scope), not host file paths.
 - `sun.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
 - `sun.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
 - `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
@@ -555,7 +552,6 @@ base_url = "http://127.0.0.1:8080"
 account = "acme"
 timeout_seconds = 15
 auto_sync = true
-vault_backup = "default"
 plugin_gateway_registry = "global"
 plugin_gateway_slots = 16
 taskboard = "default"

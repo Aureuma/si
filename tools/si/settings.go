@@ -450,7 +450,6 @@ type SunSettings struct {
 	Token                 string `toml:"token,omitempty"`
 	TimeoutSeconds        int    `toml:"timeout_seconds,omitempty"`
 	AutoSync              bool   `toml:"auto_sync,omitempty"`
-	VaultBackup           string `toml:"vault_backup,omitempty"`
 	PluginGatewayRegistry string `toml:"plugin_gateway_registry,omitempty"`
 	PluginGatewaySlots    int    `toml:"plugin_gateway_slots,omitempty"`
 	Taskboard             string `toml:"taskboard,omitempty"`
@@ -531,9 +530,6 @@ func mergeSunSettings(settings *Settings) {
 	// Bool zero-value cannot distinguish unset from explicit false; prefer true when set.
 	if sun.AutoSync {
 		settings.Sun.AutoSync = true
-	}
-	if trimmed := strings.TrimSpace(sun.VaultBackup); trimmed != "" {
-		settings.Sun.VaultBackup = trimmed
 	}
 	if trimmed := strings.TrimSpace(sun.PluginGatewayRegistry); trimmed != "" {
 		settings.Sun.PluginGatewayRegistry = trimmed
@@ -990,9 +986,6 @@ func applySettingsDefaults(settings *Settings) {
 	settings.Sun.Token = strings.TrimSpace(settings.Sun.Token)
 	if settings.Sun.TimeoutSeconds <= 0 {
 		settings.Sun.TimeoutSeconds = 15
-	}
-	if strings.TrimSpace(settings.Sun.VaultBackup) == "" {
-		settings.Sun.VaultBackup = "default"
 	}
 	settings.Sun.PluginGatewayRegistry = strings.TrimSpace(settings.Sun.PluginGatewayRegistry)
 	if settings.Sun.PluginGatewayRegistry == "" {

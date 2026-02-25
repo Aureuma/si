@@ -33,6 +33,11 @@ func IsSIVaultEncryptedValue(raw string) bool {
 }
 
 func EncryptSIVaultValue(plain string, publicKeyHex string) (string, error) {
+	if plain == "" {
+		// Canonical empty-value encoding. ECIES in our stack cannot decrypt
+		// ciphertext produced from zero-length plaintext reliably.
+		return SIVaultEncryptedPrefix, nil
+	}
 	publicKeyHex = strings.TrimSpace(publicKeyHex)
 	if publicKeyHex == "" {
 		return "", fmt.Errorf("public key is required")
@@ -62,6 +67,12 @@ func DecryptSIVaultValue(ciphertext string, privateKeyHexes []string) (string, e
 	default:
 		return "", fmt.Errorf("value is not encrypted")
 	}
+	encoded = strings.TrimSpace(encoded)
+	if encoded == "" {
+		// Backward-compatibility: older/broken encrypted placeholders such as
+		// "encrypted:" or "encrypted:si-vault:" should round-trip as empty.
+		return "", nil
+	}
 	blob, err := base64.StdEncoding.DecodeString(strings.TrimSpace(encoded))
 	if err != nil {
 		return "", fmt.Errorf("decode ciphertext: %w", err)
@@ -79,6 +90,11 @@ func DecryptSIVaultValue(ciphertext string, privateKeyHexes []string) (string, e
 		}
 		plain, decErr := ecies.Decrypt(priv, blob)
 		if decErr != nil {
+			if strings.Contains(strings.ToLower(decErr.Error()), "invalid length of message") && len(blob) == 97 {
+				// Backward-compatibility for previously emitted ECIES ciphertext for
+				// empty plaintext values. Those payloads decode but do not decrypt.
+				return "", nil
+			}
 			lastErr = fmt.Errorf("decrypt value: %w", decErr)
 			continue
 		}

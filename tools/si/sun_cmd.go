@@ -14,14 +14,12 @@ import (
 )
 
 const (
-	sunUsageText                    = "usage: si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> ..."
+	sunUsageText                    = "usage: si sun <auth|profile|token|audit|taskboard|machine|doctor> ..."
 	sunAuthUsageText                = "usage: si sun auth <login|status|logout> ..."
 	sunProfileUsageText             = "usage: si sun profile <list|push|pull> ..."
-	sunVaultUsageText               = "usage: si sun vault backup <push|pull> ..."
 	sunTokenUsageText               = "usage: si sun token <list|create|revoke> ..."
 	sunAuditUsageText               = "usage: si sun audit list ..."
 	sunCodexProfileBundleKind       = "codex_profile_bundle"
-	sunVaultBackupKind              = "vault_backup"
 	sunVaultIdentityKind            = "vault_identity"
 	sunPaasControlPlaneSnapshotKind = "paas_control_plane_snapshot"
 )
@@ -48,8 +46,6 @@ func cmdSun(args []string) {
 		cmdSunAuth(rest)
 	case "profile", "profiles":
 		cmdSunProfile(rest)
-	case "vault":
-		cmdSunVault(rest)
 	case "token", "tokens":
 		cmdSunToken(rest)
 	case "audit":
@@ -424,45 +420,6 @@ func cmdSunProfilePull(args []string) {
 	}
 }
 
-func cmdSunVault(args []string) {
-	if len(args) == 0 {
-		printUsage(sunVaultUsageText)
-		return
-	}
-	if strings.ToLower(strings.TrimSpace(args[0])) != "backup" {
-		printUsage(sunVaultUsageText)
-		return
-	}
-	rest := args[1:]
-	if len(rest) == 0 {
-		printUsage(sunVaultUsageText)
-		return
-	}
-	sub := strings.ToLower(strings.TrimSpace(rest[0]))
-	switch sub {
-	case "push":
-		cmdSunVaultBackupPush(rest[1:])
-	case "pull":
-		cmdSunVaultBackupPull(rest[1:])
-	case "help", "-h", "--help":
-		printUsage(sunVaultUsageText)
-	default:
-		printUnknown("sun vault backup", sub)
-		printUsage(sunVaultUsageText)
-		os.Exit(1)
-	}
-}
-
-func cmdSunVaultBackupPush(args []string) {
-	_ = args
-	fatal(fmt.Errorf("sun vault backup push is not supported in Sun remote vault mode (vault data is already in Sun KV)"))
-}
-
-func cmdSunVaultBackupPull(args []string) {
-	_ = args
-	fatal(fmt.Errorf("sun vault backup pull is not supported in Sun remote vault mode (no local vault file materialization)"))
-}
-
 func cmdSunToken(args []string) {
 	if len(args) == 0 {
 		printUsage(sunTokenUsageText)
@@ -798,16 +755,6 @@ func writeFileAtomic0600(path string, data []byte) error {
 		return err
 	}
 	return nil
-}
-
-func resolveVaultPath(settings Settings, explicit string) string {
-	if strings.TrimSpace(explicit) != "" {
-		return vaultNormalizeScope(strings.TrimSpace(explicit))
-	}
-	if strings.TrimSpace(settings.Vault.File) != "" {
-		return vaultNormalizeScope(strings.TrimSpace(settings.Vault.File))
-	}
-	return defaultVaultScope
 }
 
 func sunPayloadSHA256Hex(payload []byte) string {

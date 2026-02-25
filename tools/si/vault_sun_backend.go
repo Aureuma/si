@@ -12,12 +12,8 @@ import (
 	"si/tools/si/internal/vault"
 )
 
-func sunVaultObjectName(settings Settings) string {
-	name := strings.TrimSpace(settings.Sun.VaultBackup)
-	if name == "" {
-		name = "default"
-	}
-	return name
+func sunVaultObjectName(_ Settings) string {
+	return "default"
 }
 
 func isSunNotFoundError(err error) bool {

@@ -10,6 +10,7 @@ import (
 
 func cmdVaultGet(args []string) {
 	settings := loadSettingsOrDefault()
+	args = stripeFlagsFirst(args, map[string]bool{"reveal": true})
 	fs := flag.NewFlagSet("vault get", flag.ExitOnError)
 	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
 	fileAlias := fs.String("file", "", "alias for --env-file")

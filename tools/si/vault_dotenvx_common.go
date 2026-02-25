@@ -247,12 +247,11 @@ func ensureSIVaultPublicKeyHeader(doc *vault.DotenvFile, publicKey string) (bool
 	if doc.DefaultNL == "" {
 		doc.DefaultNL = "\n"
 	}
-	changed := false
+	before := string(doc.Bytes())
 	filtered := make([]vault.RawLine, 0, len(doc.Lines))
 	for _, line := range doc.Lines {
 		key, ok := dotenvAssignmentKey(line.Text)
 		if ok && key == vault.SIVaultPublicKeyName {
-			changed = true
 			continue
 		}
 		filtered = append(filtered, line)
@@ -266,19 +265,27 @@ func ensureSIVaultPublicKeyHeader(doc *vault.DotenvFile, publicKey string) (bool
 			doc.Lines[0].NL = doc.DefaultNL
 		}
 	}
-	line := vault.RawLine{
+	headerLine := vault.RawLine{
 		Text: vault.SIVaultPublicKeyName + "=" + vault.RenderDotenvValuePlain(publicKey),
 		NL:   doc.DefaultNL,
 	}
-	alreadyPresent := false
-	if insertAt < len(doc.Lines) && strings.TrimSpace(doc.Lines[insertAt].Text) == line.Text {
-		alreadyPresent = true
+	doc.Lines = append(doc.Lines[:insertAt], append([]vault.RawLine{headerLine}, doc.Lines[insertAt:]...)...)
+
+	blankIdx := insertAt + 1
+	hasBlankAfterHeader := blankIdx < len(doc.Lines) && strings.TrimSpace(doc.Lines[blankIdx].Text) == ""
+	if hasBlankAfterHeader {
+		if doc.Lines[blankIdx].NL == "" {
+			doc.Lines[blankIdx].NL = doc.DefaultNL
+		}
+	} else {
+		blankLine := vault.RawLine{Text: "", NL: doc.DefaultNL}
+		doc.Lines = append(doc.Lines[:blankIdx], append([]vault.RawLine{blankLine}, doc.Lines[blankIdx:]...)...)
 	}
-	if !alreadyPresent {
-		doc.Lines = append(doc.Lines[:insertAt], append([]vault.RawLine{line}, doc.Lines[insertAt:]...)...)
-		changed = true
+
+	for blankIdx+1 < len(doc.Lines) && strings.TrimSpace(doc.Lines[blankIdx+1].Text) == "" {
+		doc.Lines = append(doc.Lines[:blankIdx+1], doc.Lines[blankIdx+2:]...)
 	}
-	return changed, nil
+	return before != string(doc.Bytes()), nil
 }
 
 func dotenvAssignmentKey(line string) (string, bool) {

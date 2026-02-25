@@ -15,22 +15,6 @@ func TestSplitCSVScopes(t *testing.T) {
 	}
 }
 
-func TestResolveVaultPath(t *testing.T) {
-	settings := Settings{}
-	settings.Vault.File = "~/.si/vault/default.env"
-
-	if got := resolveVaultPath(settings, " /tmp/custom.env "); got != "custom" {
-		t.Fatalf("explicit scope=%q", got)
-	}
-	if got := resolveVaultPath(settings, ""); got != "default" {
-		t.Fatalf("settings scope=%q", got)
-	}
-	settings.Vault.File = ""
-	if got := resolveVaultPath(settings, ""); got != "default" {
-		t.Fatalf("fallback scope=%q", got)
-	}
-}
-
 func TestSunClientFromSettingsEnvPrecedence(t *testing.T) {
 	t.Setenv("SI_SUN_BASE_URL", "https://env-sun.local")
 	t.Setenv("SI_SUN_TOKEN", "env-token")

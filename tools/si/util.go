@@ -346,8 +346,6 @@ sun:
   si sun profile list [--json]
   si sun profile push [--profile <id>] [--json]
   si sun profile pull [--profile <id>] [--json]
-  si sun vault backup push [--file <path>] [--name <name>] [--allow-plaintext]
-  si sun vault backup pull [--file <path>] [--name <name>]
   si sun token list [--include-revoked] [--limit <n>] [--json]
   si sun token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]
   si sun token revoke --token-id <id>

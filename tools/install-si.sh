@@ -814,7 +814,7 @@ post_install() {
   if [[ "${BACKEND_MODE}" == "sun" ]]; then
     log info "  - selected: sun (cloud sync)"
     log info "  - next: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
-    log info "  - then: si sun profile push && si sun vault backup push"
+    log info "  - then: si sun profile push"
   else
     log info "  - selected: local (default)"
     log info "  - optional cloud sync later: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
