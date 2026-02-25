@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const vaultUsageText = "usage: si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|history|run|docker|trust|recipients|backend|sync>\n\nAlias:\n  si creds ..."
+const vaultUsageText = "usage: si vault <init|keygen|use|status|check|hooks|fmt|encrypt|decrypt|set|unset|get|list|dump|history|run|docker|trust|recipients|backend|sync>\n\nAlias:\n  si creds ..."
 
 const vaultDockerUsageText = "usage: si vault docker <exec>"
 
@@ -19,6 +19,7 @@ var vaultActions = []subcommandAction{
 	{Name: "set", Description: "set/update encrypted secret value"},
 	{Name: "get", Description: "inspect a key (optionally reveal)"},
 	{Name: "list", Description: "list keys and encryption status"},
+	{Name: "dump", Description: "dump all keys in scope (dotenv format with --reveal)"},
 	{Name: "history", Description: "show cloud revision history for a key"},
 	{Name: "run", Description: "run a command with decrypted env injection"},
 	{Name: "docker", Description: "run commands in containers with vault env"},
@@ -75,6 +76,8 @@ func cmdVault(args []string) {
 		cmdVaultGet(rest)
 	case "list":
 		cmdVaultList(rest)
+	case "dump":
+		cmdVaultDump(rest)
 	case "history":
 		cmdVaultHistory(rest)
 	case "run":

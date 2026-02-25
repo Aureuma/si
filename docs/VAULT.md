@@ -63,6 +63,16 @@ List keys:
 si vault list --scope default
 ```
 
+Dump all keys in dotenv format:
+
+```bash
+# safe metadata view
+si vault dump --scope default
+
+# plaintext KEY=value output
+si vault dump --scope default --reveal
+```
+
 Unset key:
 
 ```bash
