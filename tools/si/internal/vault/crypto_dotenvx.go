@@ -3,8 +3,10 @@ package vault
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"strings"
 
+	"filippo.io/age"
 	ecies "github.com/ecies/go/v2"
 )
 
@@ -58,6 +60,9 @@ func DecryptSIVaultValue(ciphertext string, privateKeyHexes []string) (string, e
 	if ciphertext == "" {
 		return "", fmt.Errorf("ciphertext is empty")
 	}
+	if IsEncryptedValueV1(ciphertext) {
+		return decryptLegacySIVaultAgeValue(ciphertext)
+	}
 	encoded := ""
 	switch {
 	case strings.HasPrefix(ciphertext, SIVaultEncryptedPrefix):
@@ -104,4 +109,20 @@ func DecryptSIVaultValue(ciphertext string, privateKeyHexes []string) (string, e
 		lastErr = fmt.Errorf("private key is required")
 	}
 	return "", lastErr
+}
+
+func decryptLegacySIVaultAgeValue(ciphertext string) (string, error) {
+	identityRaw := strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY"))
+	if identityRaw == "" {
+		return "", fmt.Errorf("legacy si-vault ciphertext requires SI_VAULT_IDENTITY")
+	}
+	identity, err := age.ParseX25519Identity(identityRaw)
+	if err != nil {
+		return "", fmt.Errorf("parse SI_VAULT_IDENTITY: %w", err)
+	}
+	plain, err := DecryptStringV1(ciphertext, identity)
+	if err != nil {
+		return "", fmt.Errorf("decrypt legacy value: %w", err)
+	}
+	return plain, nil
 }
