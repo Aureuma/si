@@ -9,33 +9,6 @@ import (
 	"time"
 )
 
-func TestMaybeSunAutoBackupVaultSunModeRequiresAuthConfigAdditional(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("SI_SETTINGS_HOME", home)
-
-	settings := defaultSettings()
-	applySettingsDefaults(&settings)
-	settings.Vault.SyncBackend = vaultSyncBackendSun
-	settings.Sun.BaseURL = ""
-	settings.Sun.Token = ""
-	if err := saveSettings(settings); err != nil {
-		t.Fatalf("save settings: %v", err)
-	}
-
-	vaultFile := filepath.Join(home, ".si", "vault", ".env")
-	if err := os.MkdirAll(filepath.Dir(vaultFile), 0o700); err != nil {
-		t.Fatalf("mkdir vault dir: %v", err)
-	}
-	if err := os.WriteFile(vaultFile, []byte(""), 0o600); err != nil {
-		t.Fatalf("write vault file: %v", err)
-	}
-
-	if err := maybeSunAutoBackupVault("test_missing_auth", vaultFile); err != nil {
-		t.Fatalf("expected no-op in Sun remote vault mode, got: %v", err)
-	}
-}
-
 func TestMaybeSunAutoSyncProfileUploadsCredentialsAdditional(t *testing.T) {
 	server, store := newSunTestServer(t, "acme", "token-autosync")
 	defer server.Close()

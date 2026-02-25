@@ -45,7 +45,7 @@ func cmdPaasDeploy(args []string) {
 	rollbackOnFailure := fs.Bool("rollback-on-failure", true, "attempt rollback to previous known-good release when health checks fail")
 	rollbackTimeout := fs.String("rollback-timeout", "2m", "per-target rollback apply timeout")
 	waitTimeout := fs.String("wait-timeout", "5m", "deployment wait timeout")
-	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
+	vaultFile := fs.String("vault-file", "", "vault scope (compat alias)")
 	allowPlaintextSecrets := fs.Bool("allow-plaintext-secrets", false, "allow plaintext secret assignments in compose file (unsafe)")
 	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "allow deploy with untrusted vault fingerprint (unsafe)")
 	_ = fs.Parse(args)
@@ -326,7 +326,7 @@ func cmdPaasRollback(args []string) {
 	healthCmd := fs.String("health-cmd", defaultPaasHealthCheckCommand, "remote health command executed after rollback")
 	healthTimeout := fs.String("health-timeout", "45s", "per-target health check timeout")
 	waitTimeout := fs.String("wait-timeout", "5m", "rollback wait timeout")
-	vaultFile := fs.String("vault-file", "", "explicit vault env file path")
+	vaultFile := fs.String("vault-file", "", "vault scope (compat alias)")
 	allowUntrustedVault := fs.Bool("allow-untrusted-vault", false, "allow rollback with untrusted vault fingerprint (unsafe)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {

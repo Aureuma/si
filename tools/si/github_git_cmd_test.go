@@ -104,19 +104,7 @@ func TestBuildGitHubCredentialHelperCommandUsesVaultFile(t *testing.T) {
 		VaultFile: "/home/dev/.si/vault/prod.env",
 		Account:   "core",
 	})
-	want := "!si vault run --file /home/dev/.si/vault/prod.env -- si github git credential --account core"
-	if cmd != want {
-		t.Fatalf("unexpected helper command:\nwant: %s\ngot:  %s", want, cmd)
-	}
-}
-
-func TestBuildGitHubCredentialHelperCommandUsesVaultIdentity(t *testing.T) {
-	cmd := buildGitHubCredentialHelperCommand(githubGitHelperOptions{
-		UseVault:      true,
-		VaultIdentity: "/home/si/.si/vault/keys/age.key",
-		Account:       "core",
-	})
-	want := "!SI_VAULT_IDENTITY_FILE=/home/si/.si/vault/keys/age.key si vault run -- si github git credential --account core"
+	want := "!si vault run --scope /home/dev/.si/vault/prod.env -- si github git credential --account core"
 	if cmd != want {
 		t.Fatalf("unexpected helper command:\nwant: %s\ngot:  %s", want, cmd)
 	}

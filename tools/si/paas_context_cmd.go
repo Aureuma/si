@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	paasContextCreateUsageText = "usage: si paas context create --name <name> [--type <internal-dogfood|oss-demo|customer>] [--state-root <path>] [--vault-file <path>] [--json]"
-	paasContextInitUsageText   = "usage: si paas context init [--name <name>] [--type <internal-dogfood|oss-demo|customer>] [--state-root <path>] [--vault-file <path>] [--json]"
+	paasContextCreateUsageText = "usage: si paas context create --name <name> [--type <internal-dogfood|oss-demo|customer>] [--state-root <path>] [--vault-file <scope>] [--json]"
+	paasContextInitUsageText   = "usage: si paas context init [--name <name>] [--type <internal-dogfood|oss-demo|customer>] [--state-root <path>] [--vault-file <scope>] [--json]"
 	paasContextListUsageText   = "usage: si paas context list [--json]"
 	paasContextUseUsageText    = "usage: si paas context use --name <name> [--json]"
 	paasContextShowUsageText   = "usage: si paas context show [--name <name>] [--json]"
@@ -78,7 +78,7 @@ func cmdPaasContextCreate(args []string) {
 	name := fs.String("name", "", "context name")
 	contextType := fs.String("type", "internal-dogfood", "context type")
 	stateRoot := fs.String("state-root", "", "context state root path")
-	vaultFile := fs.String("vault-file", "", "default vault file")
+	vaultFile := fs.String("vault-file", "", "default vault scope (compat alias)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
 		printUsage(paasContextCreateUsageText)
@@ -107,7 +107,7 @@ func cmdPaasContextInit(args []string) {
 	name := fs.String("name", "", "context name")
 	contextType := fs.String("type", "internal-dogfood", "context type")
 	stateRoot := fs.String("state-root", "", "context state root path")
-	vaultFile := fs.String("vault-file", "", "default vault file")
+	vaultFile := fs.String("vault-file", "", "default vault scope (compat alias)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 1 {
 		printUsage(paasContextInitUsageText)
