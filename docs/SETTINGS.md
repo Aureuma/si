@@ -307,13 +307,13 @@ Local OAuth token cache for `si google youtube auth login` is stored at:
 - `~/.si/google/youtube/oauth_tokens.json`
 
 ### `[vault]`
-Defaults for `si vault` (encrypted dotenv files).
-- `vault.file` (string): default env file path used when `--file` is not provided (default: `~/.si/vault/.env`)
-- `vault.trust_store` (string): local TOFU trust store path (default: `~/.si/vault/trust.json`)
-- `vault.audit_log` (string): JSONL audit log path (default: `~/.si/logs/vault.log`)
-- `vault.key_backend` (string): where the device private key is stored. Supported: `keyring` (OS secure store; Keychain on macOS), `keychain` (alias), `file` (default: `keyring`)
-- `vault.key_file` (string): identity file path used when `vault.key_backend = "file"` (default: `~/.si/vault/keys/age.key`)
-- `vault.sync_backend` (string): vault sync policy. Effective mode is Sun-backed vault (`sun`) with cloud hydrate + required Sun backup on mutating vault commands. Legacy values (`git`, `local`, `dual`, `both`, `cloud`) are accepted as aliases and normalize to `sun`. Default resolution is `sun`. `si sun auth login` also sets this to `sun` for authenticated machines.
+Defaults for `si vault` (Sun remote vault).
+- `vault.file` (string): default **scope** used when `--scope`/`--file` is not provided (default: `default`)
+- `vault.trust_store` (string): deprecated in Sun mode (`trust: n/a (sun-managed)`)
+- `vault.audit_log` (string): optional local JSONL audit sink (empty by default)
+- `vault.key_backend` (string): deprecated compatibility field in Sun mode
+- `vault.key_file` (string): deprecated compatibility field in Sun mode
+- `vault.sync_backend` (string): backend mode. `sun` is the effective/only mode. Legacy aliases (`git`, `local`, `dual`, `both`, `cloud`) normalize to `sun`.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.
@@ -324,7 +324,7 @@ Defaults for `si sun` cloud sync.
 - `sun.auto_sync` (bool): enable automatic codex profile sync hooks
 - `sun.vault_backup` (string): default vault backup object name (default: `default`)
   - Also used as the object name for Sun-managed vault identity material in Sun-backed vault mode.
-  - Per-key Sun KV objects are scoped automatically from `(repo_root, vault.file)` and do not require a separate setting.
+  - Per-key Sun KV objects are scoped from `vault.file` (logical scope), not host file paths.
 - `sun.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
 - `sun.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
 - `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
@@ -543,11 +543,11 @@ linkedin_person_urn = "urn:li:person:abc123"
 reddit_username = "acme_bot"
 
 [vault]
-file = "~/.si/vault/.env"
-trust_store = "~/.si/vault/trust.json"
-audit_log = "~/.si/logs/vault.log"
-key_backend = "keyring"
-key_file = "~/.si/vault/keys/age.key"
+file = "default"
+trust_store = ""
+audit_log = ""
+key_backend = "keyring" # compatibility only in Sun mode
+key_file = ""           # compatibility only in Sun mode
 sync_backend = "sun"
 
 [sun]
