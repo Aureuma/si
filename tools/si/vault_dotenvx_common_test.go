@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -143,5 +145,59 @@ func TestEnsureSIVaultPublicKeyHeaderCollapsesExtraBlankLines(t *testing.T) {
 	}
 	if lines[2] == "" {
 		t.Fatalf("expected header-adjacent blank lines to be collapsed")
+	}
+}
+
+func TestInferSIVaultEnvFromEnvFile(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{in: ".env.dev", want: "dev"},
+		{in: ".env.prod", want: "prod"},
+		{in: ".env.staging.local", want: "staging"},
+		{in: "/tmp/project/.env.qa", want: "qa"},
+		{in: ".env", want: ""},
+		{in: "env", want: ""},
+		{in: ".env.", want: ""},
+	}
+	for _, tc := range tests {
+		if got := inferSIVaultEnvFromEnvFile(tc.in); got != tc.want {
+			t.Fatalf("inferSIVaultEnvFromEnvFile(%q)=%q want=%q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestResolveSIVaultTargetInfersEnvFromEnvFile(t *testing.T) {
+	repoDir := t.TempDir()
+	t.Setenv("SI_VAULT_ENV", "")
+	t.Setenv("SI_VAULT_ENV_FILE", "")
+
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prevWD) })
+	if err := os.Chdir(repoDir); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+
+	target, err := resolveSIVaultTarget("", "", ".env.prod")
+	if err != nil {
+		t.Fatalf("resolveSIVaultTarget: %v", err)
+	}
+	if target.Env != "prod" {
+		t.Fatalf("target.Env=%q want=prod", target.Env)
+	}
+	if target.EnvFile != filepath.Join(repoDir, ".env.prod") {
+		t.Fatalf("target.EnvFile=%q", target.EnvFile)
+	}
+
+	override, err := resolveSIVaultTarget("", "dev", ".env.prod")
+	if err != nil {
+		t.Fatalf("resolveSIVaultTarget with explicit env: %v", err)
+	}
+	if override.Env != "dev" {
+		t.Fatalf("override env=%q want=dev", override.Env)
 	}
 }

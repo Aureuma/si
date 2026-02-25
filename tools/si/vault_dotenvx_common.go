@@ -63,9 +63,20 @@ func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (
 		return siVaultTarget{}, fmt.Errorf("invalid repo %q (allowed: [a-z0-9._-], max 64 chars, must start with [a-z0-9])", repo)
 	}
 
+	envFile := strings.TrimSpace(envFileFlag)
+	if envFile == "" {
+		envFile = strings.TrimSpace(os.Getenv("SI_VAULT_ENV_FILE"))
+	}
+	if envFile == "" {
+		envFile = defaultSIVaultDotenvFile
+	}
+
 	env := normalizeVaultRepoEnvSlug(envFlag)
 	if env == "" {
 		env = normalizeVaultRepoEnvSlug(os.Getenv("SI_VAULT_ENV"))
+	}
+	if env == "" {
+		env = inferSIVaultEnvFromEnvFile(envFile)
 	}
 	if env == "" {
 		env = defaultSIVaultEnv
@@ -74,13 +85,6 @@ func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (
 		return siVaultTarget{}, fmt.Errorf("invalid env %q (allowed: [a-z0-9._-], max 64 chars, must start with [a-z0-9])", env)
 	}
 
-	envFile := strings.TrimSpace(envFileFlag)
-	if envFile == "" {
-		envFile = strings.TrimSpace(os.Getenv("SI_VAULT_ENV_FILE"))
-	}
-	if envFile == "" {
-		envFile = defaultSIVaultDotenvFile
-	}
 	if !filepath.IsAbs(envFile) {
 		envFile = filepath.Join(cwd, envFile)
 	}
@@ -91,6 +95,26 @@ func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (
 		EnvFile: filepath.Clean(envFile),
 		RepoDir: filepath.Clean(repoDir),
 	}, nil
+}
+
+func inferSIVaultEnvFromEnvFile(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(path))
+	if !strings.HasPrefix(base, ".env.") {
+		return ""
+	}
+	suffix := strings.TrimPrefix(base, ".env.")
+	if suffix == "" {
+		return ""
+	}
+	envPart := suffix
+	if idx := strings.Index(envPart, "."); idx >= 0 {
+		envPart = envPart[:idx]
+	}
+	return normalizeVaultRepoEnvSlug(envPart)
 }
 
 func normalizeVaultRepoEnvSlug(raw string) string {
