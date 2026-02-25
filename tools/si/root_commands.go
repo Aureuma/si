@@ -96,6 +96,7 @@ func dispatchRootCommand(cmd string, args []string) bool {
 	if !ok {
 		return false
 	}
+	maybeAutoHydrateVaultEnvForRootCommand(cmd)
 	handler(cmd, args)
 	return true
 }

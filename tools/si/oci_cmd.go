@@ -1242,10 +1242,10 @@ func resolveOCIRuntimeContext(input ociRuntimeContextInput) (ociRuntimeContext, 
 		profile = strings.TrimSpace(account.Profile)
 	}
 	if profile == "" {
-		profile = strings.TrimSpace(settings.OCI.Profile)
+		profile = strings.TrimSpace(os.Getenv("OCI_CLI_PROFILE"))
 	}
 	if profile == "" {
-		profile = strings.TrimSpace(os.Getenv("OCI_CLI_PROFILE"))
+		profile = strings.TrimSpace(settings.OCI.Profile)
 	}
 	if profile == "" {
 		profile = "DEFAULT"
@@ -1256,10 +1256,10 @@ func resolveOCIRuntimeContext(input ociRuntimeContextInput) (ociRuntimeContext, 
 		configFile = strings.TrimSpace(account.ConfigFile)
 	}
 	if configFile == "" {
-		configFile = strings.TrimSpace(settings.OCI.ConfigFile)
+		configFile = strings.TrimSpace(os.Getenv("OCI_CONFIG_FILE"))
 	}
 	if configFile == "" {
-		configFile = strings.TrimSpace(os.Getenv("OCI_CONFIG_FILE"))
+		configFile = strings.TrimSpace(settings.OCI.ConfigFile)
 	}
 	if configFile == "" {
 		configFile = "~/.oci/config"
@@ -1271,10 +1271,10 @@ func resolveOCIRuntimeContext(input ociRuntimeContextInput) (ociRuntimeContext, 
 		region = strings.TrimSpace(account.Region)
 	}
 	if region == "" {
-		region = strings.TrimSpace(settings.OCI.Region)
+		region = strings.TrimSpace(os.Getenv("OCI_CLI_REGION"))
 	}
 	if region == "" {
-		region = strings.TrimSpace(os.Getenv("OCI_CLI_REGION"))
+		region = strings.TrimSpace(settings.OCI.Region)
 	}
 
 	baseURL := strings.TrimSpace(input.BaseURLFlag)
