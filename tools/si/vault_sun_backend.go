@@ -193,87 +193,23 @@ func vaultEnsureStrictSunIdentity(settings Settings, source string) (*age.X25519
 	return identity, nil
 }
 
+// vaultHydrateFromSun is intentionally a no-op in Sun remote vault mode.
+// Legacy implementations attempted to materialize a local vault file from
+// backup objects, which reintroduced local disk dependency and permission
+// failures. Sun mode now reads/writes keys directly from/to Sun KV only.
 func vaultHydrateFromSun(settings Settings, target vault.Target, allowMissingFile bool) error {
 	backend, err := resolveVaultSyncBackend(settings)
 	if err != nil {
 		return err
 	}
 	strict := vaultSyncBackendStrictSun(settings, backend)
-	path := filepath.Clean(strings.TrimSpace(target.File))
-	localExists := vaultLocalFileExists(path)
+	_ = target
+	_ = allowMissingFile
 	if err := vaultEnsureSunIdentityEnv(settings, "vault_target_resolve"); err != nil {
 		if strict {
-			if localExists {
-				return nil
-			}
 			return err
 		}
 		warnf("%v", err)
-	}
-
-	client, err := sunClientFromSettings(settings)
-	if err != nil {
-		if strict {
-			if localExists {
-				return nil
-			}
-			return fmt.Errorf("sun vault sync failed: %w", err)
-		}
-		warnf("sun vault sync skipped: %v", err)
-		return nil
-	}
-
-	name := sunVaultObjectName(settings)
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	payload, err := client.getPayload(ctx, sunVaultBackupKind, name)
-	if err != nil {
-		if isSunNotFoundError(err) {
-			return nil
-		}
-		if strict {
-			return fmt.Errorf("sun vault sync failed: %w", err)
-		}
-		warnf("sun vault sync skipped: %v", err)
-		return nil
-	}
-
-	if path == "" {
-		return fmt.Errorf("sun vault sync failed: empty local vault path")
-	}
-	if err := writeFileAtomic0600(path, payload); err != nil {
-		return fmt.Errorf("sun vault sync failed: write local vault file: %w", err)
-	}
-	if allowMissingFile {
-		return nil
-	}
-	doc, err := vault.ReadDotenvFile(path)
-	if err != nil {
-		return fmt.Errorf("sun vault sync failed: read hydrated vault file: %w", err)
-	}
-	fp, err := vaultTrustFingerprint(doc)
-	if err != nil {
-		return nil
-	}
-	storePath := vaultTrustStorePath(settings)
-	store, err := vault.LoadTrustStore(storePath)
-	if err != nil {
-		if strict {
-			return err
-		}
-		warnf("sun vault trust sync skipped: %v", err)
-		return nil
-	}
-	store.Upsert(vault.TrustEntry{
-		RepoRoot:    target.RepoRoot,
-		File:        target.File,
-		Fingerprint: fp,
-	})
-	if err := store.Save(storePath); err != nil {
-		if strict {
-			return err
-		}
-		warnf("sun vault trust sync skipped: %v", err)
 	}
 	return nil
 }
