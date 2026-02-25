@@ -166,3 +166,57 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 		t.Fatalf("expected invalid settings backend to fail")
 	}
 }
+
+func TestVaultNormalizeScopeRespectsSunObjectKeyLimit(t *testing.T) {
+	raw := strings.Repeat("a", 300)
+	scope := vaultNormalizeScope(raw)
+	if len(scope) > maxVaultScopeLen {
+		t.Fatalf("scope length=%d exceeds max=%d", len(scope), maxVaultScopeLen)
+	}
+	kind := "vault_kv." + scope
+	if len(kind) > 128 {
+		t.Fatalf("vault kind length=%d exceeds server key limit", len(kind))
+	}
+}
+
+func TestVaultNormalizeScopePreservesRepoEnvNamespace(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{raw: "Aureuma/Dev", want: "aureuma/dev"},
+		{raw: "releasemind//prod", want: "releasemind/prod"},
+		{raw: "shared/Prod@", want: "shared/prod"},
+		{raw: ".env.dev", want: "dev"},
+		{raw: "C:\\repo\\.env.prod", want: "prod"},
+	}
+	for _, tc := range tests {
+		if got := vaultNormalizeScope(tc.raw); got != tc.want {
+			t.Fatalf("vaultNormalizeScope(%q) = %q; want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
+func TestVaultSunKVKindForScopeCompatibilityAndNamespacedEncoding(t *testing.T) {
+	legacyScope := "legacy-scope"
+	if got := vaultSunKVKindForScope(legacyScope); got != "vault_kv."+legacyScope {
+		t.Fatalf("legacy scope kind mismatch: got %q", got)
+	}
+
+	kind := vaultSunKVKindForScope("aureuma/dev")
+	if strings.Contains(kind, "/") {
+		t.Fatalf("kind must not contain slash: %q", kind)
+	}
+	if !strings.HasPrefix(kind, "vault_kv.aureuma.dev.") {
+		t.Fatalf("unexpected namespaced kind format: %q", kind)
+	}
+	if len(kind) > 128 {
+		t.Fatalf("kind length=%d exceeds max 128", len(kind))
+	}
+
+	k1 := vaultSunKVKindForScope("aureuma/dev")
+	k2 := vaultSunKVKindForScope("aureuma/prod")
+	if k1 == k2 {
+		t.Fatalf("different namespaced scopes must map to different kinds")
+	}
+}

@@ -17,10 +17,12 @@ const (
 	sunVaultKVKindPrefix      = "vault_kv."
 	sunVaultKVMetadataVersion = 1
 	sunVaultKVListLimit       = 500
+	sunObjectKeyMaxLen        = 128
+	sunVaultKVScopedHashChars = 16
 )
 
 func vaultSunKVKind(target vault.Target) string {
-	return sunVaultKVKindPrefix + vaultSunKVScope(target)
+	return vaultSunKVKindForScope(vaultSunKVScope(target))
 }
 
 func vaultSunKVScope(target vault.Target) string {
@@ -29,6 +31,45 @@ func vaultSunKVScope(target vault.Target) string {
 		return defaultVaultScope
 	}
 	return scope
+}
+
+func vaultSunKVKindForScope(scope string) string {
+	scope = vaultNormalizeScope(scope)
+	if strings.TrimSpace(scope) == "" {
+		scope = defaultVaultScope
+	}
+	if !strings.Contains(scope, "/") {
+		kind := sunVaultKVKindPrefix + scope
+		if len(kind) <= sunObjectKeyMaxLen {
+			return kind
+		}
+		// Defensive fallback; normalized non-namespaced scopes should already fit.
+		scope = strings.Trim(scope, "-_/.:")
+		if len(scope) > maxVaultScopeLen {
+			scope = strings.Trim(scope[:maxVaultScopeLen], "-_/.:")
+		}
+		if scope == "" {
+			scope = defaultVaultScope
+		}
+		return sunVaultKVKindPrefix + scope
+	}
+
+	// Scoped namespaces (repo/env) retain readability while adding a hash suffix
+	// to avoid collisions when normalized/truncated.
+	human := strings.ReplaceAll(scope, "/", ".")
+	sum := sha256.Sum256([]byte(scope))
+	hashSuffix := "s." + hex.EncodeToString(sum[:])[:sunVaultKVScopedHashChars]
+	maxHumanLen := sunObjectKeyMaxLen - len(sunVaultKVKindPrefix) - 1 - len(hashSuffix)
+	if maxHumanLen < 1 {
+		return sunVaultKVKindPrefix + hashSuffix
+	}
+	if len(human) > maxHumanLen {
+		human = strings.Trim(human[:maxHumanLen], "-_.:")
+		if human == "" {
+			return sunVaultKVKindPrefix + hashSuffix
+		}
+	}
+	return sunVaultKVKindPrefix + human + "." + hashSuffix
 }
 
 func vaultSunKVTargetHashes(target vault.Target) (repoHash string, fileHash string) {
