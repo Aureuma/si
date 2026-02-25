@@ -49,15 +49,38 @@ func selectVaultRecipientsAction() (string, bool) {
 func cmdVaultRecipientsList(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients list", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
+	if backend, backendErr := resolveVaultSyncBackend(settings); backendErr == nil && backend.Mode == vaultSyncBackendSun {
+		identity, idErr := vaultEnsureStrictSunIdentity(settings, "vault_recipients_list")
+		if idErr != nil {
+			fatal(idErr)
+		}
+		if identity == nil {
+			fatal(fmt.Errorf("sun vault identity unavailable"))
+		}
+		recipient := strings.TrimSpace(identity.Recipient().String())
+		recipients := []string{recipient}
+		fp := vault.RecipientsFingerprint(recipients)
+		fmt.Printf("scope: %s\n", strings.TrimSpace(target.File))
+		fmt.Printf("source: sun-identity\n")
+		fmt.Printf("trust fp: %s\n", fp)
+		fmt.Printf("%s\n", recipient)
+		return
+	}
+
 	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		fatal(err)
@@ -75,7 +98,8 @@ func cmdVaultRecipientsList(args []string) {
 func cmdVaultRecipientsAdd(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients add", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -88,8 +112,15 @@ func cmdVaultRecipientsAdd(args []string) {
 	if recipient == "" {
 		fatal(fmt.Errorf("recipient required"))
 	}
+	if backend, backendErr := resolveVaultSyncBackend(settings); backendErr == nil && backend.Mode == vaultSyncBackendSun {
+		fatal(fmt.Errorf("vault recipients add is not supported in Sun remote vault mode; rotate identity with `si vault keygen --rotate` if needed"))
+	}
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -140,7 +171,8 @@ func cmdVaultRecipientsAdd(args []string) {
 func cmdVaultRecipientsRemove(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault recipients remove", flag.ExitOnError)
-	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
+	fileFlag := fs.String("file", "", "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -153,8 +185,15 @@ func cmdVaultRecipientsRemove(args []string) {
 	if recipient == "" {
 		fatal(fmt.Errorf("recipient required"))
 	}
+	if backend, backendErr := resolveVaultSyncBackend(settings); backendErr == nil && backend.Mode == vaultSyncBackendSun {
+		fatal(fmt.Errorf("vault recipients remove is not supported in Sun remote vault mode; rotate identity with `si vault keygen --rotate` if needed"))
+	}
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*fileFlag)
+	}
 
-	target, err := vaultResolveTarget(settings, strings.TrimSpace(*fileFlag), false)
+	target, err := vaultResolveTarget(settings, scope, false)
 	if err != nil {
 		fatal(err)
 	}

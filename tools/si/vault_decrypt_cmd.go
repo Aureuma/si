@@ -3,8 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
+	"sort"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -12,13 +11,15 @@ import (
 
 func cmdVaultDecrypt(args []string) {
 	settings := loadSettingsOrDefault()
+	args = stripeFlagsFirst(args, map[string]bool{"in-place": true, "yes": true, "stdout": true})
 	fs := flag.NewFlagSet("vault decrypt", flag.ExitOnError)
 	var files multiFlag
-	fs.Var(&files, "file", "explicit env file path (repeatable; defaults to the configured vault.file when omitted)")
-	inPlace := fs.Bool("in-place", false, "decrypt in place to plaintext on disk (DANGEROUS)")
-	yes := fs.Bool("yes", false, "do not prompt (required for in-place decrypt in non-interactive mode)")
-	// Default is stdout. This flag remains for compatibility and explicitness.
-	stdout := fs.Bool("stdout", false, "write decrypted file to stdout (default; does not modify the file)")
+	fs.Var(&files, "file", "vault scope (repeatable; preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
+	inPlace := fs.Bool("in-place", false, "unsupported in Sun remote vault mode")
+	yes := fs.Bool("yes", false, "accepted for compatibility")
+	// Default remains stdout. This flag is retained for compatibility.
+	stdout := fs.Bool("stdout", false, "write decrypted values to stdout (default)")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
@@ -39,120 +40,94 @@ func cmdVaultDecrypt(args []string) {
 	if *inPlace {
 		modeStdout = false
 	}
-	// --stdout is accepted but is redundant; if both are set, stdout wins.
+	// --stdout is accepted but redundant; if both are set, stdout wins.
 	if *stdout {
 		modeStdout = true
 	}
+	if !modeStdout {
+		_ = yes
+		fatal(fmt.Errorf("vault decrypt --in-place is not supported in Sun remote vault mode (no local vault file)"))
+	}
+	if scope := strings.TrimSpace(*scopeFlag); scope != "" {
+		files = append(files, scope)
+	}
 
 	if modeStdout && len(files) > 1 {
-		fatal(fmt.Errorf("stdout mode does not support multiple --file values (use --in-place for multi-file)"))
+		fatal(fmt.Errorf("stdout mode does not support multiple --file values"))
 	}
-
-	if err := vaultEnsureSunIdentityEnv(settings, "vault_decrypt"); err != nil {
-		fatal(err)
-	}
-	if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
-		fatal(err)
-	}
-	info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
+	identity, err := vaultEnsureStrictSunIdentity(settings, "vault_decrypt")
 	if err != nil {
 		fatal(err)
 	}
-
-	runOne := func(file string) {
-		target, err := vaultResolveTarget(settings, file, false)
-		if err != nil {
-			fatal(err)
-		}
-		doc, err := vault.ReadDotenvFile(target.File)
-		if err != nil {
-			fatal(err)
-		}
-		if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-			fatal(err)
-		}
-
-		working := doc
-		// If positional args are provided, only decrypt those keys.
-		// Example:
-		//   si vault decrypt --stdout STRIPE_API_KEY
-		res, err := vault.DecryptDotenvKeys(&working, info.Identity, keys)
-		if err != nil {
-			fatal(err)
-		}
-
-		if modeStdout {
-			vaultAuditEvent(settings, target, "decrypt_stdout", map[string]any{
-				"envFile":        filepath.Clean(target.File),
-				"decryptedCount": len(res.DecryptedKeys),
-				"keyCount":       len(keys),
-				"missingCount":   res.SkippedMissing,
-			})
-			_, _ = os.Stdout.Write(working.Bytes())
-			return
-		}
-
-		// In-place decrypt is dangerous: it writes plaintext secrets to disk.
-		if res.Changed {
-			if err := vaultWriteDotenvFileAtomic(target.File, working.Bytes()); err != nil {
-				fatal(err)
-			}
-		}
-		vaultAuditEvent(settings, target, "decrypt_inplace", map[string]any{
-			"envFile":        filepath.Clean(target.File),
-			"decryptedCount": len(res.DecryptedKeys),
-			"keyCount":       len(keys),
-			"missingCount":   res.SkippedMissing,
-		})
-		fmt.Printf("file: %s\n", filepath.Clean(target.File))
-		fmt.Printf("decrypted: %d\n", len(res.DecryptedKeys))
+	if identity == nil {
+		fatal(fmt.Errorf("sun vault identity unavailable"))
 	}
 
-	// If doing an in-place decrypt for multiple files, confirm once up-front.
-	if !modeStdout && len(files) > 1 && !*yes {
-		prompt := fmt.Sprintf("Decrypt %d files in place to plaintext? This will write secrets to disk.", len(files))
-		if len(keys) > 0 {
-			prompt = fmt.Sprintf("Decrypt selected keys in %d files in place to plaintext? This will write secrets to disk.", len(files))
+	runOne := func(scope string) {
+		target, err := vaultResolveTarget(settings, scope, false)
+		if err != nil {
+			fatal(err)
 		}
-		confirmed, ok := confirmYN(prompt, false)
-		if !ok {
-			fatal(fmt.Errorf("non-interactive: re-run with --in-place --yes"))
+		values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
+		if sunErr != nil {
+			fatal(sunErr)
 		}
-		if !confirmed {
-			fatal(fmt.Errorf("canceled"))
+		if !used {
+			fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
 		}
+
+		selected := make([]string, 0)
+		if len(keys) == 0 {
+			for key := range values {
+				selected = append(selected, key)
+			}
+		} else {
+			selected = append(selected, keys...)
+		}
+		sort.Strings(selected)
+
+		lines := make([]string, 0, len(selected))
+		decryptedCount := 0
+		missingCount := 0
+		for _, key := range selected {
+			raw, ok := values[key]
+			if !ok {
+				missingCount++
+				continue
+			}
+			val, normErr := vault.NormalizeDotenvValue(raw)
+			if normErr != nil {
+				fatal(fmt.Errorf("normalize %s: %w", key, normErr))
+			}
+			plain := val
+			if vault.IsEncryptedValueV1(val) {
+				dec, decErr := vault.DecryptStringV1(val, identity)
+				if decErr != nil {
+					fatal(fmt.Errorf("decrypt %s: %w", key, decErr))
+				}
+				plain = dec
+				decryptedCount++
+			}
+			lines = append(lines, key+"="+vault.RenderDotenvValuePlain(plain))
+		}
+
+		vaultAuditEvent(settings, target, "decrypt_stdout", map[string]any{
+			"scope":          strings.TrimSpace(target.File),
+			"decryptedCount": decryptedCount,
+			"keyCount":       len(selected),
+			"missingCount":   missingCount,
+			"source":         "sun-kv",
+		})
+		if len(lines) == 0 {
+			return
+		}
+		fmt.Print(strings.Join(lines, "\n"))
+		fmt.Print("\n")
 	}
 
 	if len(files) == 0 {
-		if !modeStdout && !*yes {
-			prompt := "Decrypt in place to plaintext? This will write secrets to disk."
-			if len(keys) > 0 {
-				prompt = "Decrypt selected keys in place to plaintext? This will write secrets to disk."
-			}
-			confirmed, ok := confirmYN(prompt, false)
-			if !ok {
-				fatal(fmt.Errorf("non-interactive: re-run with --in-place --yes"))
-			}
-			if !confirmed {
-				fatal(fmt.Errorf("canceled"))
-			}
-		}
 		runOne("")
 		return
-	}
-
-	if !modeStdout && len(files) == 1 && !*yes {
-		prompt := "Decrypt in place to plaintext? This will write secrets to disk."
-		if len(keys) > 0 {
-			prompt = "Decrypt selected keys in place to plaintext? This will write secrets to disk."
-		}
-		confirmed, ok := confirmYN(prompt, false)
-		if !ok {
-			fatal(fmt.Errorf("non-interactive: re-run with --in-place --yes"))
-		}
-		if !confirmed {
-			fatal(fmt.Errorf("canceled"))
-		}
 	}
 	for _, file := range files {
 		runOne(file)

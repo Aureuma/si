@@ -12,6 +12,9 @@ import (
 
 func cmdVaultFmt(args []string) {
 	settings := loadSettingsOrDefault()
+	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
+		fatal(fmt.Errorf("vault fmt is not supported in Sun remote vault mode (no local vault file)"))
+	}
 	fs := flag.NewFlagSet("vault fmt", flag.ExitOnError)
 	fileFlag := fs.String("file", "", "explicit env file path (defaults to the configured vault.file)")
 	all := fs.Bool("all", false, "format all .env* files in the same directory as the target file")
