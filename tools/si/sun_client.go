@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,6 +19,16 @@ type sunClient struct {
 	token   string
 	http    *http.Client
 }
+
+const (
+	maxSunBearerTokenChars = 256
+	sunHTTPMaxAttempts     = 4
+)
+
+var (
+	sunHTTPRetryBaseDelay = 200 * time.Millisecond
+	sunHTTPRetryMaxDelay  = 2 * time.Second
+)
 
 type sunWhoAmI struct {
 	AccountID   string   `json:"account_id"`
@@ -121,8 +132,8 @@ func newSunClient(baseURL string, token string, timeout time.Duration) (*sunClie
 		return nil, fmt.Errorf("sun base url must use https for non-local hosts (set SI_SUN_ALLOW_INSECURE_HTTP=1 to override)")
 	}
 	token = strings.TrimSpace(token)
-	if token == "" {
-		return nil, fmt.Errorf("sun token is required (run `si sun auth login` or set SI_SUN_TOKEN)")
+	if err := validateSunBearerToken(token); err != nil {
+		return nil, err
 	}
 	if timeout <= 0 {
 		timeout = 15 * time.Second
@@ -132,6 +143,22 @@ func newSunClient(baseURL string, token string, timeout time.Duration) (*sunClie
 		token:   token,
 		http:    &http.Client{Timeout: timeout},
 	}, nil
+}
+
+func validateSunBearerToken(token string) error {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("sun token is required (run `si sun auth login` or set SI_SUN_TOKEN)")
+	}
+	if len(token) > maxSunBearerTokenChars {
+		return fmt.Errorf("sun token is too long")
+	}
+	for _, ch := range token {
+		if ch <= 0x20 || ch == 0x7f {
+			return fmt.Errorf("sun token must not contain whitespace or control characters")
+		}
+	}
+	return nil
 }
 
 func sunAllowsInsecureHTTP(u *url.URL) bool {
@@ -237,20 +264,59 @@ func (c *sunClient) putObject(ctx context.Context, kind string, name string, pay
 
 func (c *sunClient) getPayload(ctx context.Context, kind string, name string) ([]byte, error) {
 	endpoint := c.baseURL + "/v1/objects/" + url.PathEscape(kind) + "/" + url.PathEscape(name) + "/payload"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
+
+	var lastErr error
+	for attempt := 1; attempt <= sunHTTPMaxAttempts; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+
+		res, err := c.http.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < sunHTTPMaxAttempts {
+				if sleepErr := sunSleepWithContext(ctx, sunRetryDelay(attempt, "")); sleepErr != nil {
+					return nil, sleepErr
+				}
+				continue
+			}
+			return nil, err
+		}
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			retryAfter := strings.TrimSpace(res.Header.Get("Retry-After"))
+			if attempt < sunHTTPMaxAttempts && sunShouldRetryStatus(res.StatusCode) {
+				_, _ = io.Copy(io.Discard, res.Body)
+				_ = res.Body.Close()
+				if sleepErr := sunSleepWithContext(ctx, sunRetryDelay(attempt, retryAfter)); sleepErr != nil {
+					return nil, sleepErr
+				}
+				continue
+			}
+			err := decodeSunError(res)
+			_ = res.Body.Close()
+			return nil, err
+		}
+		body, readErr := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			if attempt < sunHTTPMaxAttempts {
+				if sleepErr := sunSleepWithContext(ctx, sunRetryDelay(attempt, "")); sleepErr != nil {
+					return nil, sleepErr
+				}
+				continue
+			}
+			return nil, readErr
+		}
+		return body, nil
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	res, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("sun payload request failed")
 	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, decodeSunError(res)
-	}
-	return io.ReadAll(res.Body)
+	return nil, lastErr
 }
 
 func (c *sunClient) listRevisions(ctx context.Context, kind string, name string, limit int) ([]sunObjectRevision, error) {
@@ -419,31 +485,75 @@ func (c *sunClient) putIntegrationRegistryShard(ctx context.Context, registry st
 
 func (c *sunClient) doJSON(ctx context.Context, method string, path string, payload interface{}) ([]byte, error) {
 	endpoint := c.baseURL + path
-	var body io.Reader
+	var encoded []byte
 	if payload != nil {
-		encoded, err := json.Marshal(payload)
+		var err error
+		encoded, err = json.Marshal(payload)
 		if err != nil {
 			return nil, err
 		}
-		body = bytes.NewReader(encoded)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
-	if err != nil {
-		return nil, err
+
+	var lastErr error
+	for attempt := 1; attempt <= sunHTTPMaxAttempts; attempt++ {
+		var body io.Reader
+		if encoded != nil {
+			body = bytes.NewReader(encoded)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, endpoint, body)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		if encoded != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
+
+		res, err := c.http.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < sunHTTPMaxAttempts {
+				if sleepErr := sunSleepWithContext(ctx, sunRetryDelay(attempt, "")); sleepErr != nil {
+					return nil, sleepErr
+				}
+				continue
+			}
+			return nil, err
+		}
+
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			retryAfter := strings.TrimSpace(res.Header.Get("Retry-After"))
+			if attempt < sunHTTPMaxAttempts && sunShouldRetryStatus(res.StatusCode) {
+				_, _ = io.Copy(io.Discard, res.Body)
+				_ = res.Body.Close()
+				if sleepErr := sunSleepWithContext(ctx, sunRetryDelay(attempt, retryAfter)); sleepErr != nil {
+					return nil, sleepErr
+				}
+				continue
+			}
+			err := decodeSunError(res)
+			_ = res.Body.Close()
+			return nil, err
+		}
+
+		responseBody, readErr := io.ReadAll(res.Body)
+		_ = res.Body.Close()
+		if readErr != nil {
+			lastErr = readErr
+			if attempt < sunHTTPMaxAttempts {
+				if sleepErr := sunSleepWithContext(ctx, sunRetryDelay(attempt, "")); sleepErr != nil {
+					return nil, sleepErr
+				}
+				continue
+			}
+			return nil, readErr
+		}
+		return responseBody, nil
 	}
-	req.Header.Set("Authorization", "Bearer "+c.token)
-	if payload != nil {
-		req.Header.Set("Content-Type", "application/json")
+	if lastErr == nil {
+		lastErr = fmt.Errorf("sun request failed")
 	}
-	res, err := c.http.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, decodeSunError(res)
-	}
-	return io.ReadAll(res.Body)
+	return nil, lastErr
 }
 
 func decodeSunError(res *http.Response) error {
@@ -457,4 +567,58 @@ func decodeSunError(res *http.Response) error {
 		trimmed = http.StatusText(res.StatusCode)
 	}
 	return fmt.Errorf("sun: %s (status %d)", trimmed, res.StatusCode)
+}
+
+func sunShouldRetryStatus(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusRequestTimeout, http.StatusTooEarly:
+		return true
+	default:
+		return status >= 500 && status <= 599
+	}
+}
+
+func sunRetryDelay(attempt int, retryAfter string) time.Duration {
+	retryAfter = strings.TrimSpace(retryAfter)
+	if retryAfter != "" {
+		if seconds, err := strconv.Atoi(retryAfter); err == nil && seconds >= 0 {
+			delay := time.Duration(seconds) * time.Second
+			if delay > sunHTTPRetryMaxDelay {
+				delay = sunHTTPRetryMaxDelay
+			}
+			return delay
+		}
+		if retryAt, err := http.ParseTime(retryAfter); err == nil {
+			delay := time.Until(retryAt)
+			if delay < 0 {
+				delay = 0
+			}
+			if delay > sunHTTPRetryMaxDelay {
+				delay = sunHTTPRetryMaxDelay
+			}
+			return delay
+		}
+	}
+	if attempt < 1 {
+		attempt = 1
+	}
+	delay := sunHTTPRetryBaseDelay * time.Duration(1<<(attempt-1))
+	if delay > sunHTTPRetryMaxDelay {
+		delay = sunHTTPRetryMaxDelay
+	}
+	return delay
+}
+
+func sunSleepWithContext(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

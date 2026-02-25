@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -17,6 +18,12 @@ func TestNewSunClientValidation(t *testing.T) {
 	}
 	if _, err := newSunClient("http://127.0.0.1:8080", "", time.Second); err == nil {
 		t.Fatalf("expected token validation error")
+	}
+	if _, err := newSunClient("http://127.0.0.1:8080", "token with-space", time.Second); err == nil {
+		t.Fatalf("expected token whitespace validation error")
+	}
+	if _, err := newSunClient("http://127.0.0.1:8080", strings.Repeat("x", maxSunBearerTokenChars+1), time.Second); err == nil {
+		t.Fatalf("expected token length validation error")
 	}
 	if _, err := newSunClient("http://example.com", "token", time.Second); err == nil {
 		t.Fatalf("expected non-local insecure http URL to be rejected")
@@ -282,5 +289,70 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	}
 	if strings.TrimSpace(string(shardBack)) != strings.TrimSpace(string(shardPayload)) {
 		t.Fatalf("unexpected shard payload: %s", string(shardBack))
+	}
+}
+
+func TestSunClientRetriesRateLimitedRequests(t *testing.T) {
+	var whoamiHits int32
+	var payloadHits int32
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer token123" {
+			http.Error(w, `{"error":"missing auth"}`, http.StatusUnauthorized)
+			return
+		}
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/auth/whoami":
+			if atomic.AddInt32(&whoamiHits, 1) == 1 {
+				w.Header().Set("Retry-After", "0")
+				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"account_id":   "acc-1",
+				"account_slug": "acme",
+				"token_id":     "tok-1",
+				"scopes":       []string{"objects:read", "objects:write"},
+			})
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/payload"):
+			if atomic.AddInt32(&payloadHits, 1) == 1 {
+				w.Header().Set("Retry-After", "0")
+				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+				return
+			}
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("ok"))
+		default:
+			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client, err := newSunClient(server.URL, "token123", 3*time.Second)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	ctx := context.Background()
+	who, err := client.whoAmI(ctx)
+	if err != nil {
+		t.Fatalf("whoami: %v", err)
+	}
+	if who.AccountSlug != "acme" {
+		t.Fatalf("unexpected account slug: %s", who.AccountSlug)
+	}
+	if atomic.LoadInt32(&whoamiHits) < 2 {
+		t.Fatalf("expected retry on whoami, hits=%d", atomic.LoadInt32(&whoamiHits))
+	}
+
+	payload, err := client.getPayload(ctx, "vault_kv.scope", "KEY_ONE")
+	if err != nil {
+		t.Fatalf("get payload: %v", err)
+	}
+	if strings.TrimSpace(string(payload)) != "ok" {
+		t.Fatalf("unexpected payload: %q", string(payload))
+	}
+	if atomic.LoadInt32(&payloadHits) < 2 {
+		t.Fatalf("expected retry on payload, hits=%d", atomic.LoadInt32(&payloadHits))
 	}
 }

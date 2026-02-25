@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -12,7 +13,11 @@ import (
 const (
 	vaultSyncBackendSun = "sun"
 	defaultVaultScope   = "default"
+	// "vault_kv." prefix (9) + scope must remain <= Sun object key max (128).
+	maxVaultScopeLen = 119
 )
+
+var windowsDrivePrefixPattern = regexp.MustCompile(`^[a-zA-Z]:[\\/]`)
 
 type vaultSyncBackendResolution struct {
 	Mode   string
@@ -139,12 +144,8 @@ func vaultNormalizeScope(raw string) string {
 	}
 	normalized := strings.ReplaceAll(raw, "\\", "/")
 	normalizedLower := strings.ToLower(normalized)
-	looksLikePath := strings.HasPrefix(normalized, "/") ||
-		strings.HasPrefix(normalized, "~") ||
-		strings.Contains(normalized, "/") ||
-		strings.HasSuffix(normalizedLower, ".env")
-	if looksLikePath {
-		base := strings.TrimSpace(strings.ToLower(filepath.Base(normalized)))
+	if vaultLooksLikeLegacyPath(normalizedLower) {
+		base := strings.TrimSpace(strings.ToLower(filepath.Base(normalizedLower)))
 		switch base {
 		case "", ".", "..", ".env", "default.env":
 			return defaultVaultScope
@@ -156,12 +157,86 @@ func vaultNormalizeScope(raw string) string {
 		} else {
 			normalized = strings.TrimPrefix(base, ".")
 		}
+		normalized = strings.ToLower(normalized)
 	} else {
 		normalized = normalizedLower
 	}
+	parts := splitVaultScopeParts(normalized)
+	if len(parts) == 0 {
+		return defaultVaultScope
+	}
+	cleanParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		clean := vaultNormalizeScopePart(part)
+		if clean == "" {
+			continue
+		}
+		cleanParts = append(cleanParts, clean)
+	}
+	if len(cleanParts) == 0 {
+		return defaultVaultScope
+	}
+	scope := strings.Join(cleanParts, "/")
+	scope = strings.Trim(strings.ReplaceAll(scope, "//", "/"), "-_/.:")
+	if scope == "" {
+		return defaultVaultScope
+	}
+	if len(scope) > maxVaultScopeLen {
+		scope = strings.Trim(scope[:maxVaultScopeLen], "-_/.:")
+		scope = strings.Trim(strings.ReplaceAll(scope, "//", "/"), "-_/.:")
+		if scope == "" {
+			return defaultVaultScope
+		}
+	}
+	return scope
+}
+
+func vaultLooksLikeLegacyPath(normalizedLower string) bool {
+	normalizedLower = strings.TrimSpace(strings.ReplaceAll(normalizedLower, "\\", "/"))
+	if normalizedLower == "" {
+		return false
+	}
+	if strings.HasPrefix(normalizedLower, "/") || strings.HasPrefix(normalizedLower, "~") {
+		return true
+	}
+	if windowsDrivePrefixPattern.MatchString(normalizedLower) {
+		return true
+	}
+	base := strings.TrimSpace(strings.ToLower(filepath.Base(normalizedLower)))
+	if base == ".env" || base == "default.env" || strings.HasPrefix(base, ".env.") || strings.HasSuffix(base, ".env") {
+		return true
+	}
+	return false
+}
+
+func splitVaultScopeParts(scope string) []string {
+	scope = strings.TrimSpace(strings.ReplaceAll(scope, "\\", "/"))
+	if scope == "" {
+		return nil
+	}
+	raw := strings.Split(scope, "/")
+	parts := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		parts = append(parts, part)
+	}
+	if len(parts) == 0 {
+		return []string{scope}
+	}
+	return parts
+}
+
+func vaultNormalizeScopePart(part string) string {
+	part = strings.TrimSpace(strings.ToLower(part))
+	if part == "" {
+		return ""
+	}
 	var b strings.Builder
 	lastDash := false
-	for _, ch := range normalized {
+	for _, ch := range part {
 		switch {
 		case ch >= 'a' && ch <= 'z':
 			b.WriteRune(ch)
@@ -179,17 +254,7 @@ func vaultNormalizeScope(raw string) string {
 			}
 		}
 	}
-	scope := strings.Trim(b.String(), "-_/.:")
-	if scope == "" {
-		return defaultVaultScope
-	}
-	if len(scope) > 120 {
-		scope = strings.Trim(scope[:120], "-_/.:")
-		if scope == "" {
-			return defaultVaultScope
-		}
-	}
-	return scope
+	return strings.Trim(b.String(), "-_.:")
 }
 
 func vaultResolveSunTarget(fileFlag string) (vault.Target, error) {
