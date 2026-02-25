@@ -18,9 +18,9 @@ func cmdVaultSync(args []string) {
 	rest := args[1:]
 	switch sub {
 	case "push":
-		cmdSunVaultBackupPush(rest)
+		fatal(fmt.Errorf("vault sync push is not supported in Sun remote vault mode (vault data is already stored in Sun KV)"))
 	case "pull":
-		cmdSunVaultBackupPull(rest)
+		fatal(fmt.Errorf("vault sync pull is not supported in Sun remote vault mode (no local vault file materialization)"))
 	case "status":
 		cmdVaultSyncStatus(rest)
 	case "help", "-h", "--help":
@@ -35,15 +35,20 @@ func cmdVaultSync(args []string) {
 func cmdVaultSyncStatus(args []string) {
 	settings := loadSettingsOrDefault()
 	fs := flag.NewFlagSet("vault sync status", flag.ExitOnError)
-	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
+	file := fs.String("file", resolveVaultPath(settings, ""), "vault scope (preferred: --scope)")
+	scopeFlag := fs.String("scope", "", "vault scope")
 	name := fs.String("name", strings.TrimSpace(settings.Sun.VaultBackup), "backup object name")
 	jsonOut := fs.Bool("json", false, "json output")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		printUsage("usage: si vault sync status [--file <path>] [--name <name>] [--json]")
+		printUsage("usage: si vault sync status [--scope <name>] [--name <name>] [--json]")
 		return
+	}
+	scope := strings.TrimSpace(*scopeFlag)
+	if scope == "" {
+		scope = strings.TrimSpace(*file)
 	}
 
 	backend, err := resolveVaultSyncBackend(settings)
@@ -58,7 +63,7 @@ func cmdVaultSyncStatus(args []string) {
 	report := map[string]interface{}{
 		"mode":        backend.Mode,
 		"source":      backend.Source,
-		"file":        expandTilde(strings.TrimSpace(*file)),
+		"scope":       vaultNormalizeScope(scope),
 		"backup_name": backupName,
 		"sun_base_url": firstNonEmpty(
 			envSunBaseURL(),
@@ -69,7 +74,7 @@ func cmdVaultSyncStatus(args []string) {
 			"",
 		),
 	}
-	target, targetErr := vaultResolveTargetStatus(settings, strings.TrimSpace(*file))
+	target, targetErr := vaultResolveTargetStatus(settings, scope)
 	if targetErr == nil {
 		report["kv_kind"] = vaultSunKVKind(target)
 	}
@@ -115,7 +120,7 @@ func cmdVaultSyncStatus(args []string) {
 
 	fmt.Printf("%s %s\n", styleHeading("mode:"), report["mode"])
 	fmt.Printf("%s %s\n", styleHeading("source:"), report["source"])
-	fmt.Printf("%s %s\n", styleHeading("file:"), report["file"])
+	fmt.Printf("%s %s\n", styleHeading("scope:"), report["scope"])
 	fmt.Printf("%s %s\n", styleHeading("backup_name:"), report["backup_name"])
 	fmt.Printf("%s %s\n", styleHeading("sun_base_url:"), report["sun_base_url"])
 	if report["kv_kind"] != nil {

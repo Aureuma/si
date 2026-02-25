@@ -13,7 +13,13 @@ import (
 	"si/tools/si/internal/vault"
 )
 
+func skipLegacyLocalVaultE2E(t *testing.T) {
+	t.Helper()
+	t.Skip("legacy local dotenv vault e2e tests are disabled in Sun remote vault mode")
+}
+
 func TestVaultE2E_InitSupportsArbitraryDotenvPath(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -66,6 +72,7 @@ func TestVaultE2E_InitSupportsArbitraryDotenvPath(t *testing.T) {
 }
 
 func TestVaultE2E_EncryptDecryptReencryptFlows(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -181,6 +188,7 @@ func TestVaultE2E_EncryptDecryptReencryptFlows(t *testing.T) {
 }
 
 func TestVaultE2E_DecryptBackCompatCiphertextEncodings(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -255,6 +263,7 @@ func TestVaultE2E_DecryptBackCompatCiphertextEncodings(t *testing.T) {
 }
 
 func TestVaultE2E_DecryptSelectiveKeys(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -372,6 +381,7 @@ func TestVaultE2E_DecryptSelectiveKeys(t *testing.T) {
 }
 
 func TestVaultE2E_DecryptDefaultStdoutInPlaceRequiresFlag(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -461,6 +471,7 @@ func TestVaultE2E_DecryptDefaultStdoutInPlaceRequiresFlag(t *testing.T) {
 }
 
 func TestVaultE2E_InitDoesNotSwitchDefaultWithoutSetDefault(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -505,6 +516,7 @@ func TestVaultE2E_InitDoesNotSwitchDefaultWithoutSetDefault(t *testing.T) {
 }
 
 func TestVaultE2E_VaultUseSwitchesDefaultFile(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -552,6 +564,7 @@ func TestVaultE2E_VaultUseSwitchesDefaultFile(t *testing.T) {
 }
 
 func TestVaultE2E_StrictTargetScopeBlocksCrossRepoImplicitDefault(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -592,6 +605,7 @@ func TestVaultE2E_StrictTargetScopeBlocksCrossRepoImplicitDefault(t *testing.T) 
 }
 
 func TestVaultE2E_SetRefusesSkipWorktreeVaultFile(t *testing.T) {
+	skipLegacyLocalVaultE2E(t)
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}

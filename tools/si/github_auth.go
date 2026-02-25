@@ -13,7 +13,6 @@ import (
 
 	"si/tools/si/internal/githubbridge"
 	"si/tools/si/internal/providers"
-	"si/tools/si/internal/vault"
 )
 
 type githubAuthOverrides struct {
@@ -305,40 +304,8 @@ func resolveGitHubOAuthAccessTokenFromVault(settings Settings, account GitHubAcc
 	if key == "" {
 		return "", ""
 	}
-	target, err := vaultResolveTarget(settings, "", false)
-	if err != nil {
-		return "", ""
-	}
-	doc, err := vault.ReadDotenvFile(target.File)
-	if err != nil {
-		return "", ""
-	}
-	if _, err := vaultRequireTrusted(settings, target, doc); err != nil {
-		return "", ""
-	}
-	raw, ok := doc.Lookup(key)
-	if !ok {
-		return "", ""
-	}
-	value, err := vault.NormalizeDotenvValue(raw)
-	if err != nil {
-		return "", ""
-	}
-	if vault.IsEncryptedValueV1(value) {
-		if err := vaultRefuseNonInteractiveOSKeyring(vaultKeyConfigFromSettings(settings)); err != nil {
-			return "", ""
-		}
-		info, err := vault.LoadIdentity(vaultKeyConfigFromSettings(settings))
-		if err != nil {
-			return "", ""
-		}
-		plain, err := vault.DecryptStringV1(value, info.Identity)
-		if err != nil {
-			return "", ""
-		}
-		return plain, "vault:" + key
-	}
-	if strings.TrimSpace(value) == "" {
+	value, ok := resolveVaultKeyValue(settings, key)
+	if !ok || strings.TrimSpace(value) == "" {
 		return "", ""
 	}
 	return value, "vault:" + key

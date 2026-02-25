@@ -10,7 +10,7 @@ const vaultUsageText = "usage: si vault <init|keygen|use|status|check|hooks|fmt|
 const vaultDockerUsageText = "usage: si vault docker <exec>"
 
 var vaultActions = []subcommandAction{
-	{Name: "init", Description: "initialize vault metadata for a dotenv file"},
+	{Name: "init", Description: "initialize Sun-backed vault scope and identity"},
 	{Name: "status", Description: "show vault configuration and readiness"},
 	{Name: "check", Description: "validate vault formatting and encryption rules"},
 	{Name: "fmt", Description: "format vault dotenv files"},
@@ -22,12 +22,12 @@ var vaultActions = []subcommandAction{
 	{Name: "history", Description: "show cloud revision history for a key"},
 	{Name: "run", Description: "run a command with decrypted env injection"},
 	{Name: "docker", Description: "run commands in containers with vault env"},
-	{Name: "trust", Description: "manage trust state for vault files"},
+	{Name: "trust", Description: "show trust status (sun-managed in remote mode)"},
 	{Name: "recipients", Description: "manage recipient keys"},
-	{Name: "backend", Description: "manage vault sync backend mode"},
-	{Name: "sync", Description: "push/pull vault backups with Sun"},
+	{Name: "backend", Description: "show/set vault backend mode (sun)"},
+	{Name: "sync", Description: "show vault cloud sync status"},
 	{Name: "keygen", Description: "create or load vault identity key"},
-	{Name: "use", Description: "set the default vault file in settings"},
+	{Name: "use", Description: "set the default vault scope in settings"},
 }
 
 var vaultDockerActions = []subcommandAction{

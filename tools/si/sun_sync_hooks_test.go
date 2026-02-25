@@ -343,6 +343,7 @@ func TestSunE2E_ProfilePushPullRoundTrip(t *testing.T) {
 }
 
 func TestSunE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
+	t.Skip("legacy vault backup push/pull flow removed in Sun remote vault mode")
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -393,6 +394,7 @@ func TestSunE2E_VaultBackupPushPullRoundTrip(t *testing.T) {
 }
 
 func TestMaybeSunAutoBackupVaultDefaultModeFailsOnPlaintext(t *testing.T) {
+	t.Skip("vault auto-backup is disabled in Sun remote vault mode")
 	server, store := newSunTestServer(t, "acme", "token-789")
 	defer server.Close()
 
@@ -431,6 +433,7 @@ func TestMaybeSunAutoBackupVaultDefaultModeFailsOnPlaintext(t *testing.T) {
 }
 
 func TestMaybeSunAutoBackupVaultSunModeFailsOnPlaintext(t *testing.T) {
+	t.Skip("vault auto-backup is disabled in Sun remote vault mode")
 	server, store := newSunTestServer(t, "acme", "token-plain")
 	defer server.Close()
 
@@ -468,6 +471,7 @@ func TestMaybeSunAutoBackupVaultSunModeFailsOnPlaintext(t *testing.T) {
 }
 
 func TestMaybeSunAutoBackupVaultLegacyGitAliasActsAsStrictSun(t *testing.T) {
+	t.Skip("legacy git/local vault sync aliases now map to Sun remote mode")
 	server, store := newSunTestServer(t, "acme", "token-git")
 	defer server.Close()
 
@@ -821,6 +825,7 @@ func TestSunE2E_MachineRunRemoteLoginAndList(t *testing.T) {
 }
 
 func TestMaybeSunAutoBackupVaultSunModeRequiresAuthConfig(t *testing.T) {
+	t.Skip("vault auto-backup is disabled in Sun remote vault mode")
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_SETTINGS_HOME", home)

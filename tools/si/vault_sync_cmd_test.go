@@ -9,6 +9,7 @@ import (
 )
 
 func TestSunE2E_VaultSyncPushPullRoundTripViaVaultCommand(t *testing.T) {
+	t.Skip("vault sync push/pull removed in Sun remote vault mode")
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -71,6 +72,7 @@ func TestSunE2E_VaultSyncPushPullRoundTripViaVaultCommand(t *testing.T) {
 }
 
 func TestSunE2E_VaultRecipientsMutationsAutoBackup(t *testing.T) {
+	t.Skip("legacy recipients auto-backup behavior removed in Sun remote vault mode")
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -121,21 +123,13 @@ func TestSunE2E_VaultSunBackendWorksWithoutLocalKeyMaterial(t *testing.T) {
 	server, _ := newSunTestServer(t, "acme", "token-vault-sun-backend")
 	defer server.Close()
 
-	homeA, envA := setupSunAuthState(t, server.URL, "acme", "token-vault-sun-backend")
-	keyFileA := filepath.Join(homeA, ".si", "vault", "keys", "age.key")
-	trustFileA := filepath.Join(homeA, ".si", "vault", "trust.json")
-	auditLogA := filepath.Join(homeA, ".si", "vault", "audit.log")
-	envA["SI_VAULT_KEY_BACKEND"] = "file"
-	envA["SI_VAULT_KEY_FILE"] = keyFileA
-	envA["SI_VAULT_TRUST_STORE"] = trustFileA
-	envA["SI_VAULT_AUDIT_LOG"] = auditLogA
-
-	vaultFileA := filepath.Join(homeA, ".si", "vault", ".env")
-	stdout, stderr, err := runSICommand(t, envA, "vault", "init", "--file", vaultFileA, "--set-default")
+	_, envA := setupSunAuthState(t, server.URL, "acme", "token-vault-sun-backend")
+	scope := "cross-machine"
+	stdout, stderr, err := runSICommand(t, envA, "vault", "init", "--scope", scope, "--set-default")
 	if err != nil {
 		t.Fatalf("vault init (machine A) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, envA, "vault", "set", "SUN_BACKEND_SECRET", "cross-machine-secret", "--file", vaultFileA)
+	stdout, stderr, err = runSICommand(t, envA, "vault", "set", "SUN_BACKEND_SECRET", "cross-machine-secret", "--scope", scope)
 	if err != nil {
 		t.Fatalf("vault set (machine A) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -162,7 +156,7 @@ func TestSunE2E_VaultSunBackendWorksWithoutLocalKeyMaterial(t *testing.T) {
 		t.Fatalf("expected machine B backend mode=%s, got %q", vaultSyncBackendSun, got)
 	}
 
-	stdout, stderr, err = runSICommand(t, envB, "vault", "get", "--reveal", "SUN_BACKEND_SECRET")
+	stdout, stderr, err = runSICommand(t, envB, "vault", "get", "--scope", scope, "--reveal", "SUN_BACKEND_SECRET")
 	if err != nil {
 		t.Fatalf("vault get --reveal (machine B) failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}

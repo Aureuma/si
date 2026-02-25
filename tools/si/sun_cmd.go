@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"si/tools/si/internal/vault"
 )
 
 const (
@@ -456,119 +454,13 @@ func cmdSunVault(args []string) {
 }
 
 func cmdSunVaultBackupPush(args []string) {
-	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("sun vault backup push", flag.ExitOnError)
-	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
-	name := fs.String("name", strings.TrimSpace(settings.Sun.VaultBackup), "backup object name")
-	allowPlaintext := fs.Bool("allow-plaintext", false, "allow plaintext vault values in backup payload")
-	if err := fs.Parse(args); err != nil {
-		fatal(err)
-	}
-	if fs.NArg() > 0 {
-		printUsage("usage: si sun vault backup push [--file <path>] [--name <name>] [--allow-plaintext]")
-		return
-	}
-	client, err := sunClientFromSettings(settings)
-	if err != nil {
-		fatal(err)
-	}
-	path := strings.TrimSpace(*file)
-	if path == "" {
-		fatal(fmt.Errorf("vault file path required"))
-	}
-	backupName := strings.TrimSpace(*name)
-	if backupName == "" {
-		fatal(fmt.Errorf("backup name required (--name or sun.vault_backup)"))
-	}
-	path = expandTilde(path)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		fatal(err)
-	}
-	if !*allowPlaintext {
-		doc, err := vault.ReadDotenvFile(path)
-		if err != nil {
-			fatal(fmt.Errorf("read vault dotenv: %w", err))
-		}
-		scan, err := vault.ScanDotenvEncryption(doc)
-		if err != nil {
-			fatal(fmt.Errorf("scan vault encryption: %w", err))
-		}
-		if len(scan.PlaintextKeys) > 0 {
-			fatal(fmt.Errorf("vault file contains plaintext keys; run `si vault encrypt` first or re-run with --allow-plaintext"))
-		}
-	}
-	result, err := client.putObject(context.Background(), sunVaultBackupKind, backupName, data, "text/plain", map[string]interface{}{
-		"path":   filepath.Base(path),
-		"sha256": sunPayloadSHA256Hex(data),
-	}, nil)
-	if err != nil {
-		fatal(err)
-	}
-	successf("vault backup pushed (%s revision %d)", backupName, result.Result.Revision.Revision)
-	target, targetErr := vault.ResolveTarget(vault.ResolveOptions{
-		CWD:              "",
-		File:             path,
-		DefaultFile:      path,
-		AllowMissingFile: true,
-	})
-	if targetErr != nil {
-		fatal(targetErr)
-	}
-	doc := vault.ParseDotenv(data)
-	mirror, mirrorErr := vaultSunKVMirrorDoc(settings, target, doc, "vault_sync_push")
-	if mirrorErr != nil {
-		fatal(mirrorErr)
-	}
-	infof("sun vault key mirror complete (pushed=%d tombstone=%d)", mirror.Pushed, mirror.Tombstone)
+	_ = args
+	fatal(fmt.Errorf("sun vault backup push is not supported in Sun remote vault mode (vault data is already in Sun KV)"))
 }
 
 func cmdSunVaultBackupPull(args []string) {
-	settings := loadSettingsOrDefault()
-	fs := flag.NewFlagSet("sun vault backup pull", flag.ExitOnError)
-	file := fs.String("file", resolveVaultPath(settings, ""), "vault file path")
-	name := fs.String("name", strings.TrimSpace(settings.Sun.VaultBackup), "backup object name")
-	if err := fs.Parse(args); err != nil {
-		fatal(err)
-	}
-	if fs.NArg() > 0 {
-		printUsage("usage: si sun vault backup pull [--file <path>] [--name <name>]")
-		return
-	}
-	client, err := sunClientFromSettings(settings)
-	if err != nil {
-		fatal(err)
-	}
-	backupName := strings.TrimSpace(*name)
-	if backupName == "" {
-		fatal(fmt.Errorf("backup name required (--name or sun.vault_backup)"))
-	}
-	meta, metaErr := sunLookupObjectMeta(sunContext(settings), client, sunVaultBackupKind, backupName)
-	if metaErr != nil {
-		warnf("vault backup checksum verification preflight skipped: %v", metaErr)
-	}
-	data, err := client.getPayload(context.Background(), sunVaultBackupKind, backupName)
-	if err != nil {
-		fatal(err)
-	}
-	if meta != nil && strings.TrimSpace(meta.Checksum) != "" {
-		got := sunPayloadSHA256Hex(data)
-		want := strings.TrimSpace(meta.Checksum)
-		if !strings.EqualFold(got, want) {
-			fatal(fmt.Errorf("vault backup checksum mismatch for %s: expected %s got %s", backupName, want, got))
-		}
-	}
-	if meta != nil && meta.SizeBytes > 0 && int64(len(data)) != meta.SizeBytes {
-		fatal(fmt.Errorf("vault backup size mismatch for %s: expected %d bytes got %d", backupName, meta.SizeBytes, len(data)))
-	}
-	path := expandTilde(strings.TrimSpace(*file))
-	if path == "" {
-		fatal(fmt.Errorf("vault file path required"))
-	}
-	if err := writeFileAtomic0600(path, data); err != nil {
-		fatal(err)
-	}
-	successf("vault backup pulled to %s", path)
+	_ = args
+	fatal(fmt.Errorf("sun vault backup pull is not supported in Sun remote vault mode (no local vault file materialization)"))
 }
 
 func cmdSunToken(args []string) {
@@ -910,12 +802,12 @@ func writeFileAtomic0600(path string, data []byte) error {
 
 func resolveVaultPath(settings Settings, explicit string) string {
 	if strings.TrimSpace(explicit) != "" {
-		return strings.TrimSpace(explicit)
+		return vaultNormalizeScope(strings.TrimSpace(explicit))
 	}
 	if strings.TrimSpace(settings.Vault.File) != "" {
-		return strings.TrimSpace(settings.Vault.File)
+		return vaultNormalizeScope(strings.TrimSpace(settings.Vault.File))
 	}
-	return "~/.si/vault/.env"
+	return defaultVaultScope
 }
 
 func sunPayloadSHA256Hex(payload []byte) string {

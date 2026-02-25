@@ -145,6 +145,25 @@ func runPaasVaultDeployGuardrail(vaultFile string, allowUntrustedVault bool) (pa
 	if err != nil {
 		return paasVaultGuardrailResult{}, err
 	}
+	backend, backendErr := resolveVaultSyncBackend(settings)
+	if backendErr != nil {
+		return paasVaultGuardrailResult{}, backendErr
+	}
+	if backend.Mode == vaultSyncBackendSun {
+		values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
+		if sunErr != nil {
+			return paasVaultGuardrailResult{}, sunErr
+		}
+		if !used {
+			return paasVaultGuardrailResult{}, fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`")
+		}
+		return paasVaultGuardrailResult{
+			File:           strings.TrimSpace(target.File),
+			RecipientCount: 1,
+			Trusted:        true,
+			TrustWarning:   fmt.Sprintf("sun-kv keys=%d", len(values)),
+		}, nil
+	}
 	doc, err := vault.ReadDotenvFile(target.File)
 	if err != nil {
 		return paasVaultGuardrailResult{}, err

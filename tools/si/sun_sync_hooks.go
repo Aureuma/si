@@ -72,6 +72,9 @@ func maybeSunAutoBackupVault(source string, vaultPath string) error {
 	if err != nil {
 		return err
 	}
+	if backend.Mode == vaultSyncBackendSun {
+		return nil
+	}
 	requireSunBackend := vaultSyncBackendStrictSun(settings, backend)
 	vaultPath = expandTilde(strings.TrimSpace(vaultPath))
 	if vaultPath == "" {

@@ -308,36 +308,36 @@ stripe:
     test is not accepted as a standalone environment mode.
 
 vault:
-  Running si vault with no subcommand opens an interactive command picker.
-  Running si vault trust/recipients/hooks/docker with no subcommand opens an interactive command picker.
+	  Running si vault with no subcommand opens an interactive command picker.
+	  Running si vault trust/recipients/hooks/docker with no subcommand opens an interactive command picker.
 
-  Target selection (most commands):
-    --file <path>               (explicit env file path; otherwise uses vault.file from settings or SI_VAULT_FILE)
-    Guardrail (git mode): implicit cross-repo defaults emit warnings; set SI_VAULT_STRICT_TARGET_SCOPE=1 to fail-fast, or SI_VAULT_ALLOW_CROSS_REPO=1 to silence.
+	  Target selection (most commands):
+	    --scope <name>              (preferred logical Sun scope)
+	    --file <name>               (compat alias for scope)
+	    Defaults to vault.file (or SI_VAULT_SCOPE / SI_VAULT_FILE).
 
-	  si vault init [--file <path>] [--set-default] [--key-backend <keyring|keychain|file>] [--key-file <path>]
-	  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
-	  si vault use --file <path>
-	  si vault status [--file <path>]
-	  si vault check [--file <path>] [--staged] [--all]
-	  si vault hooks install|status|uninstall [--force]
-	  si vault fmt [--file <path>] [--all] [--check]
-	  si vault encrypt [--file <path>] [--format] [--reencrypt]
-	  si vault decrypt [--file <path>] [KEY]... [--stdout] [--in-place] [--yes]
-	  si vault set <KEY> <VALUE> [--file <path>] [--section <name>] [--stdin] [--format]
-	  si vault unset <KEY> [--file <path>] [--format]
-	  si vault get <KEY> [--file <path>] [--reveal]
-	  si vault list [--file <path>]
-	  si vault history <KEY> [--file <path>] [--limit <n>] [--json]
-	  si vault run [--file <path>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
-	  si vault docker exec --container <name|id> [--file <path>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
-	  si vault trust status|accept|forget [--file <path>]
-	  si vault recipients list|add|remove [--file <path>]
-	  si vault backend status [--json]
-	  si vault backend use --mode <sun>
-	  si vault sync status [--file <path>] [--name <name>] [--json]
-	  si vault sync push [--file <path>] [--name <name>] [--allow-plaintext]
-	  si vault sync pull [--file <path>] [--name <name>]
+		  si vault init [--scope <name>] [--set-default] [--key-backend <...>] [--key-file <...>]
+		  si vault keygen [--key-backend <keyring|keychain|file>] [--key-file <path>]
+		  si vault use --scope <name>
+		  si vault status [--scope <name>]
+		  si vault check [--file <path>] [--staged] [--all]
+		  si vault hooks install|status|uninstall [--force]
+		  si vault fmt [--file <path>] [--all] [--check]
+		  si vault encrypt [--file <path>] [--format] [--reencrypt]
+		  si vault decrypt [--file <path>] [KEY]... [--stdout] [--in-place] [--yes]
+		  si vault set <KEY> <VALUE> [--scope <name>] [--section <name>] [--stdin]
+		  si vault unset <KEY> [--scope <name>]
+		  si vault get <KEY> [--scope <name>] [--reveal]
+		  si vault list [--scope <name>]
+		  si vault history <KEY> [--scope <name>] [--limit <n>] [--json]
+		  si vault run [--scope <name>] [--allow-plaintext] [--shell] [--shell-interactive] [--shell-path <path>] -- <cmd...>
+		  si vault docker exec --container <name|id> [--scope <name>] [--allow-insecure-docker-host] [--allow-plaintext] -- <cmd...>
+		  si vault trust status|accept|forget [--file <path>]
+		  si vault recipients list|add|remove [--file <path>]
+		  si vault backend status [--json]
+		  si vault backend use --mode <sun>
+		  si vault sync status [--scope <name>] [--name <name>] [--json]
+		  si vault sync push|pull             (unsupported in remote mode; informational error)
 
   Sync backend policy:
     SI_VAULT_SYNC_BACKEND (or vault.sync_backend) controls vault cloud behavior:

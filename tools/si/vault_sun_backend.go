@@ -31,11 +31,8 @@ func vaultSyncBackendStrictSun(settings Settings, resolution vaultSyncBackendRes
 	if resolution.Mode != vaultSyncBackendSun {
 		return false
 	}
-	if resolution.Source == "env" || resolution.Source == "settings" {
-		return true
-	}
-	token := firstNonEmpty(envSunToken(), strings.TrimSpace(settings.Sun.Token))
-	return strings.TrimSpace(token) != ""
+	_ = settings
+	return true
 }
 
 func vaultLocalFileExists(path string) bool {
@@ -156,18 +153,6 @@ func vaultEnsureStrictSunIdentity(settings Settings, source string) (*age.X25519
 	if backend.Mode != vaultSyncBackendSun {
 		return nil, nil
 	}
-	if !vaultSyncBackendStrictSun(settings, backend) {
-		info, _, err := vault.EnsureIdentity(vaultKeyConfigFromSettings(settings))
-		if err != nil {
-			return nil, err
-		}
-		if info == nil || info.Identity == nil {
-			return nil, fmt.Errorf("sun vault identity sync failed (%s): missing identity", source)
-		}
-		_ = os.Setenv("SI_VAULT_IDENTITY", strings.TrimSpace(info.Identity.String()))
-		return info.Identity, nil
-	}
-
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		return nil, fmt.Errorf("sun vault identity sync failed (%s): %w", source, err)

@@ -1152,41 +1152,35 @@ func TestEnforcePaasPlaintextSecretGuardrailDoesNotLeakValue(t *testing.T) {
 }
 
 func TestRunPaasVaultDeployGuardrailTrusted(t *testing.T) {
-	root := t.TempDir()
-	vaultFile := filepath.Join(root, ".env")
-	trustStore := filepath.Join(root, "trust.json")
-	doc := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
-	if err := os.WriteFile(vaultFile, []byte(doc), 0o600); err != nil {
-		t.Fatalf("write vault file: %v", err)
-	}
-	t.Setenv("SI_VAULT_FILE", vaultFile)
-	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+	t.Setenv("SI_SUN_BASE_URL", "")
+	t.Setenv("SI_SUN_TOKEN", "")
+	server, store := newSunTestServer(t, "acme", "token-paas-vault-guardrail")
+	defer server.Close()
 
-	settings := loadSettingsOrDefault()
-	target, err := vaultResolveTarget(settings, "", false)
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-paas-vault-guardrail"
+	settings.Sun.Account = "acme"
+	settings.Vault.File = "paas-guardrail"
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	target, err := vaultResolveTarget(settings, "", true)
 	if err != nil {
 		t.Fatalf("resolve target: %v", err)
 	}
-	parsedDoc, err := vault.ReadDotenvFile(target.File)
-	if err != nil {
-		t.Fatalf("read dotenv: %v", err)
-	}
-	fp, err := vaultTrustFingerprint(parsedDoc)
-	if err != nil {
-		t.Fatalf("fingerprint: %v", err)
-	}
-	store, err := vault.LoadTrustStore(trustStore)
-	if err != nil {
-		t.Fatalf("load trust store: %v", err)
-	}
-	store.Upsert(vault.TrustEntry{
-		RepoRoot:    target.RepoRoot,
-		File:        target.File,
-		Fingerprint: fp,
-	})
-	if err := store.Save(trustStore); err != nil {
-		t.Fatalf("save trust store: %v", err)
-	}
+	store.mu.Lock()
+	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
+	store.payloads[objectKey] = []byte("prod\n")
+	store.revs[objectKey] = 1
+	store.metadata[objectKey] = map[string]any{"deleted": false}
+	store.created[objectKey] = "2026-01-01T00:00:00Z"
+	store.updated[objectKey] = "2026-01-02T00:00:00Z"
+	store.mu.Unlock()
 
 	result, err := runPaasVaultDeployGuardrail("", false)
 	if err != nil {
@@ -1202,8 +1196,13 @@ func TestRunPaasVaultDeployGuardrailTrusted(t *testing.T) {
 
 func TestRunPaasVaultDeployGuardrailAllowUntrusted(t *testing.T) {
 	root := t.TempDir()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
 	vaultFile := filepath.Join(root, ".env")
 	trustStore := filepath.Join(root, "trust.json")
+	t.Setenv("SI_SUN_BASE_URL", "")
+	t.Setenv("SI_SUN_TOKEN", "")
 	doc := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
 	if err := os.WriteFile(vaultFile, []byte(doc), 0o600); err != nil {
 		t.Fatalf("write vault file: %v", err)
@@ -1211,18 +1210,19 @@ func TestRunPaasVaultDeployGuardrailAllowUntrusted(t *testing.T) {
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
 
-	if _, err := runPaasVaultDeployGuardrail("", false); err == nil {
-		t.Fatalf("expected trust error without allow-untrusted override")
+	_, err := runPaasVaultDeployGuardrail("", false)
+	if err == nil {
+		t.Fatalf("expected sun auth error without configured token")
 	}
-	result, err := runPaasVaultDeployGuardrail("", true)
-	if err != nil {
-		t.Fatalf("expected allow-untrusted to bypass trust mismatch: %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "sun token is required") {
+		t.Fatalf("expected sun token error, got: %v", err)
 	}
-	if result.Trusted {
-		t.Fatalf("expected untrusted status with override, got %#v", result)
+	_, err = runPaasVaultDeployGuardrail("", true)
+	if err == nil {
+		t.Fatalf("expected sun auth error even with allow-untrusted override")
 	}
-	if strings.TrimSpace(result.TrustWarning) == "" {
-		t.Fatalf("expected trust warning message, got %#v", result)
+	if !strings.Contains(strings.ToLower(err.Error()), "sun token is required") {
+		t.Fatalf("expected sun token error with override, got: %v", err)
 	}
 }
 

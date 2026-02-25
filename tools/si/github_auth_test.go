@@ -1,8 +1,7 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 
 	"si/tools/si/internal/vault"
@@ -117,57 +116,44 @@ func TestResolveGitHubAuthMode_OAuthFromEnv(t *testing.T) {
 }
 
 func TestResolveGitHubOAuthAccessTokenFromVaultEncrypted(t *testing.T) {
-	tempDir := t.TempDir()
-	vaultFile := filepath.Join(tempDir, ".env")
-	trustFile := filepath.Join(tempDir, "trust.json")
-	keyFile := filepath.Join(tempDir, "age.key")
+	server, store := newSunTestServer(t, "acme", "token-github-vault")
+	defer server.Close()
 
 	identity, err := vault.GenerateIdentity()
 	if err != nil {
 		t.Fatalf("GenerateIdentity: %v", err)
 	}
-	if err := os.WriteFile(keyFile, []byte(identity.String()+"\n"), 0o600); err != nil {
-		t.Fatalf("WriteFile key: %v", err)
-	}
-
-	doc := vault.ParseDotenv(nil)
-	if _, err := vault.EnsureVaultHeader(&doc, []string{identity.Recipient().String()}); err != nil {
-		t.Fatalf("EnsureVaultHeader: %v", err)
-	}
 	cipher, err := vault.EncryptStringV1("token-from-vault", []string{identity.Recipient().String()})
 	if err != nil {
 		t.Fatalf("EncryptStringV1: %v", err)
 	}
-	if _, err := doc.Set("GH_PAT_AUREUMA_VANGUARDA", cipher, vault.SetOptions{}); err != nil {
-		t.Fatalf("doc.Set: %v", err)
-	}
-	if err := os.WriteFile(vaultFile, doc.Bytes(), 0o600); err != nil {
-		t.Fatalf("WriteFile vault: %v", err)
-	}
-
-	target, err := vault.ResolveTarget(vault.ResolveOptions{File: vaultFile, DefaultFile: vaultFile})
-	if err != nil {
-		t.Fatalf("ResolveTarget: %v", err)
-	}
-	store, err := vault.LoadTrustStore(trustFile)
-	if err != nil {
-		t.Fatalf("LoadTrustStore: %v", err)
-	}
-	store.Upsert(vault.TrustEntry{
-		RepoRoot:    target.RepoRoot,
-		File:        target.File,
-		Fingerprint: vault.RecipientsFingerprint(vault.ParseRecipientsFromDotenv(doc)),
-	})
-	if err := store.Save(trustFile); err != nil {
-		t.Fatalf("Save trust store: %v", err)
-	}
 
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Vault.File = vaultFile
-	settings.Vault.TrustStore = trustFile
-	settings.Vault.KeyBackend = "file"
-	settings.Vault.KeyFile = keyFile
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-github-vault"
+	settings.Sun.Account = "acme"
+	settings.Vault.File = "default"
+
+	target, err := vaultResolveTarget(settings, "", true)
+	if err != nil {
+		t.Fatalf("vaultResolveTarget: %v", err)
+	}
+	kind := vaultSunKVKind(target)
+	store.mu.Lock()
+	identityKey := store.key(sunVaultIdentityKind, "default")
+	store.payloads[identityKey] = []byte(strings.TrimSpace(identity.String()) + "\n")
+	store.revs[identityKey] = 1
+	store.metadata[identityKey] = map[string]any{}
+	store.created[identityKey] = "2026-01-01T00:00:00Z"
+	store.updated[identityKey] = "2026-01-02T00:00:00Z"
+	valueKey := store.key(kind, "GH_PAT_AUREUMA_VANGUARDA")
+	store.payloads[valueKey] = []byte(strings.TrimSpace(cipher) + "\n")
+	store.revs[valueKey] = 1
+	store.metadata[valueKey] = map[string]any{"deleted": false}
+	store.created[valueKey] = "2026-01-01T00:00:00Z"
+	store.updated[valueKey] = "2026-01-02T00:00:00Z"
+	store.mu.Unlock()
 
 	token, source := resolveGitHubOAuthAccessTokenFromVault(settings, GitHubAccountEntry{OAuthTokenEnv: "GH_PAT_AUREUMA_VANGUARDA"})
 	if token != "token-from-vault" {
