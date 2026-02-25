@@ -62,6 +62,7 @@ Notes:
 - `si vault sync push/pull` is unsupported in remote mode.
 - Legacy backup push/pull flows are superseded by direct Sun KV operations.
 - Trust is Sun-managed in remote mode.
+- `si vault fmt` and `si vault decrypt --in-place` are unsupported in remote mode (no local vault materialization).
 
 ## Tokens and Audit
 
