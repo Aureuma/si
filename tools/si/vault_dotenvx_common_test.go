@@ -201,3 +201,49 @@ func TestResolveSIVaultTargetInfersEnvFromEnvFile(t *testing.T) {
 		t.Fatalf("override env=%q want=dev", override.Env)
 	}
 }
+
+func TestResolveSIVaultTargetInfersRepoFromEnvFileParent(t *testing.T) {
+	workspace := t.TempDir()
+	safePath := filepath.Join(workspace, "safe", "lingospeak")
+	if err := os.MkdirAll(safePath, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	envFile := filepath.Join(safePath, ".env.dev")
+
+	prevWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(prevWD) })
+	if err := os.Chdir(workspace); err != nil {
+		t.Fatalf("Chdir: %v", err)
+	}
+
+	target, err := resolveSIVaultTarget("", "", envFile)
+	if err != nil {
+		t.Fatalf("resolveSIVaultTarget: %v", err)
+	}
+	if target.Repo != "lingospeak" {
+		t.Fatalf("target.Repo=%q want=lingospeak", target.Repo)
+	}
+	if target.Env != "dev" {
+		t.Fatalf("target.Env=%q want=dev", target.Env)
+	}
+}
+
+func TestResolveSIVaultTargetRepoFlagOverridesEnvFileInference(t *testing.T) {
+	workspace := t.TempDir()
+	safePath := filepath.Join(workspace, "safe", "lingospeak")
+	if err := os.MkdirAll(safePath, 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	envFile := filepath.Join(safePath, ".env.dev")
+
+	target, err := resolveSIVaultTarget("override-repo", "", envFile)
+	if err != nil {
+		t.Fatalf("resolveSIVaultTarget: %v", err)
+	}
+	if target.Repo != "override-repo" {
+		t.Fatalf("target.Repo=%q want=override-repo", target.Repo)
+	}
+}

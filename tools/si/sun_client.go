@@ -614,6 +614,9 @@ func decodeSunError(res *http.Response) error {
 		return fmt.Errorf("sun: %s (status %d)", parsed.Error, res.StatusCode)
 	}
 	trimmed := strings.TrimSpace(string(body))
+	if res.StatusCode == http.StatusForbidden && strings.Contains(strings.ToLower(trimmed), "error code: 1010") {
+		return fmt.Errorf("sun: access denied by cloudflare (error 1010); check firewall/bot rules for this client IP and user-agent")
+	}
 	if trimmed == "" {
 		trimmed = http.StatusText(res.StatusCode)
 	}
