@@ -14,6 +14,9 @@ func TestBuildDyadSpecsIncludesHostSiMounts(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
 		t.Fatalf("mkdir .si: %v", err)
 	}
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatalf("mkdir .ssh: %v", err)
+	}
 	workspace := t.TempDir()
 	configs := filepath.Join(workspace, "configs")
 	if err := os.MkdirAll(configs, 0o755); err != nil {
@@ -38,6 +41,12 @@ func TestBuildDyadSpecsIncludesHostSiMounts(t *testing.T) {
 	}
 	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".si"), "/root/.si") {
 		t.Fatalf("critic spec missing host ~/.si mount: %+v", critic.HostConfig.Mounts)
+	}
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".ssh"), "/root/.ssh") {
+		t.Fatalf("actor spec missing host ~/.ssh mount: %+v", actor.HostConfig.Mounts)
+	}
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".ssh"), "/root/.ssh") {
+		t.Fatalf("critic spec missing host ~/.ssh mount: %+v", critic.HostConfig.Mounts)
 	}
 	if !mountExists(actor.HostConfig.Mounts, DefaultCodexSkillsVolume, "/root/.codex/skills") {
 		t.Fatalf("actor spec missing shared skills volume mount: %+v", actor.HostConfig.Mounts)

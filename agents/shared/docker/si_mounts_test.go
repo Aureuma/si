@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,6 +116,96 @@ func TestHasHostDockerConfigMount(t *testing.T) {
 	}
 	if HasHostDockerConfigMount(info, "/home/si") {
 		t.Fatalf("expected wrong target home to fail detection")
+	}
+}
+
+func TestHostSSHDirMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sshDir := filepath.Join(home, ".ssh")
+	if err := ensureDir(sshDir); err != nil {
+		t.Fatalf("ensure .ssh dir: %v", err)
+	}
+
+	got, ok := HostSSHDirMount("/home/si")
+	if !ok {
+		t.Fatalf("expected ssh dir mount to be returned")
+	}
+	if got.Source != sshDir {
+		t.Fatalf("unexpected source %q", got.Source)
+	}
+	if got.Target != "/home/si/.ssh" {
+		t.Fatalf("unexpected target %q", got.Target)
+	}
+}
+
+func TestHasHostSSHDirMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sshDir := filepath.Join(home, ".ssh")
+	if err := ensureDir(sshDir); err != nil {
+		t.Fatalf("ensure .ssh dir: %v", err)
+	}
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "bind",
+				Source:      sshDir,
+				Destination: "/root/.ssh",
+			},
+		},
+	}
+	if !HasHostSSHDirMount(info, "/root") {
+		t.Fatalf("expected host ~/.ssh mount to be detected")
+	}
+	if HasHostSSHDirMount(info, "/home/si") {
+		t.Fatalf("expected wrong target home to fail detection")
+	}
+}
+
+func TestHostSSHAuthSockMount(t *testing.T) {
+	home := t.TempDir()
+	sockPath := filepath.Join(home, "ssh-agent.sock")
+	listener, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	t.Setenv("SSH_AUTH_SOCK", sockPath)
+
+	got, ok := HostSSHAuthSockMount()
+	if !ok {
+		t.Fatalf("expected ssh auth sock mount to be returned")
+	}
+	if got.Source != sockPath {
+		t.Fatalf("unexpected source %q", got.Source)
+	}
+	if got.Target != filepath.ToSlash(sockPath) {
+		t.Fatalf("unexpected target %q", got.Target)
+	}
+}
+
+func TestHasHostSSHAuthSockMount(t *testing.T) {
+	home := t.TempDir()
+	sockPath := filepath.Join(home, "ssh-agent.sock")
+	listener, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	t.Setenv("SSH_AUTH_SOCK", sockPath)
+
+	info := &types.ContainerJSON{
+		Mounts: []types.MountPoint{
+			{
+				Type:        "bind",
+				Source:      sockPath,
+				Destination: filepath.ToSlash(sockPath),
+			},
+		},
+	}
+	if !HasHostSSHAuthSockMount(info) {
+		t.Fatalf("expected host SSH_AUTH_SOCK mount to be detected")
 	}
 }
 

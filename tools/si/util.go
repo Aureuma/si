@@ -639,15 +639,25 @@ func isEscCancelInput(value string) bool {
 }
 
 func hostUserEnv() []string {
+	env := []string{}
 	uid := os.Getuid()
 	gid := os.Getgid()
-	if uid <= 0 || gid <= 0 {
+	if uid > 0 && gid > 0 {
+		env = append(env,
+			"SI_HOST_UID="+strconv.Itoa(uid),
+			"SI_HOST_GID="+strconv.Itoa(gid),
+		)
+	}
+	sock := filepath.Clean(strings.TrimSpace(os.Getenv("SSH_AUTH_SOCK")))
+	if sock != "" && strings.HasPrefix(sock, "/") {
+		if info, err := os.Stat(sock); err == nil && info.Mode()&os.ModeSocket != 0 {
+			env = append(env, "SSH_AUTH_SOCK="+sock)
+		}
+	}
+	if len(env) == 0 {
 		return nil
 	}
-	return []string{
-		"SI_HOST_UID=" + strconv.Itoa(uid),
-		"SI_HOST_GID=" + strconv.Itoa(gid),
-	}
+	return env
 }
 
 func mustRepoRoot() string {

@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -143,5 +144,42 @@ func TestBuildContainerCoreMountsIncludesHostDockerAndGoToolingMounts(t *testing
 	}
 	if !mounts[3].ReadOnly {
 		t.Fatalf("expected host go toolchain mount to be read-only")
+	}
+}
+
+func TestBuildContainerCoreMountsIncludesHostSSHDirAndAgentSocketMounts(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatalf("mkdir .ssh: %v", err)
+	}
+	sockPath := filepath.Join(home, "ssh-agent.sock")
+	listener, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listen unix: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	t.Setenv("SSH_AUTH_SOCK", sockPath)
+
+	workspace := t.TempDir()
+	mounts := BuildContainerCoreMounts(ContainerCoreMountPlan{
+		WorkspaceHost:          workspace,
+		WorkspacePrimaryTarget: "/workspace",
+		ContainerHome:          "/home/si",
+	})
+	if len(mounts) != 4 {
+		t.Fatalf("expected 4 mounts, got %d: %+v", len(mounts), mounts)
+	}
+	if mounts[0].Source != workspace || mounts[0].Target != "/workspace" {
+		t.Fatalf("unexpected workspace mount: %+v", mounts[0])
+	}
+	if mounts[1].Source != filepath.Join(home, ".ssh") || mounts[1].Target != "/home/si/.ssh" {
+		t.Fatalf("unexpected host .ssh mount: %+v", mounts[1])
+	}
+	if mounts[2].Source != filepath.Join(home, ".ssh") || mounts[2].Target != "/root/.ssh" {
+		t.Fatalf("unexpected root .ssh mount: %+v", mounts[2])
+	}
+	if mounts[3].Source != sockPath || mounts[3].Target != filepath.ToSlash(sockPath) {
+		t.Fatalf("unexpected ssh auth socket mount: %+v", mounts[3])
 	}
 }

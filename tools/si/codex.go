@@ -823,11 +823,13 @@ func cmdCodexExec(args []string) {
 			if containerInfo != nil &&
 				(!shared.HasHostSiMount(containerInfo, "/home/si") ||
 					!shared.HasHostDockerConfigMount(containerInfo, "/home/si") ||
+					!shared.HasHostSSHDirMount(containerInfo, "/home/si") ||
+					!shared.HasHostSSHDirMount(containerInfo, "/root") ||
 					!shared.HasHostSiGoToolchainMount(containerInfo, "/home/si") ||
 					!shared.HasHostVaultEnvFileMount(containerInfo, requiredVaultFile)) {
 				slug := codexContainerSlug(containerName)
 				if strings.TrimSpace(slug) == "" {
-					fatal(fmt.Errorf("codex container %s is missing required host mounts (si/docker/go/vault); run `si respawn %s`", containerName, containerName))
+					fatal(fmt.Errorf("codex container %s is missing required host mounts (si/docker/ssh/go/vault); run `si respawn %s`", containerName, containerName))
 				}
 				if err := reconcileCodexRunMountDrift(tmuxMode, containerName, slug, func() error {
 					spawnArgs := []string{slug}
@@ -852,9 +854,11 @@ func cmdCodexExec(args []string) {
 					}
 					if !shared.HasHostSiMount(info, "/home/si") ||
 						!shared.HasHostDockerConfigMount(info, "/home/si") ||
+						!shared.HasHostSSHDirMount(info, "/home/si") ||
+						!shared.HasHostSSHDirMount(info, "/root") ||
 						!shared.HasHostSiGoToolchainMount(info, "/home/si") ||
 						!shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
-						return fmt.Errorf("codex container %s recreation missing required host mounts (si/docker/go/vault); run `si respawn %s`", containerName, codexContainerSlug(containerName))
+						return fmt.Errorf("codex container %s recreation missing required host mounts (si/docker/ssh/go/vault); run `si respawn %s`", containerName, codexContainerSlug(containerName))
 					}
 					containerID = id
 					containerInfo = info
@@ -1348,13 +1352,13 @@ func codexRunShouldRecreateContainerForMissingVaultMounts(tmuxMode bool) bool {
 
 func reconcileCodexRunMountDrift(tmuxMode bool, containerName string, slug string, recreate func() error) error {
 	if codexRunShouldRecreateContainerForMissingVaultMounts(tmuxMode) {
-		warnf("codex container %s is missing required host mounts (si/docker/go/vault); recreating for full host-tooling support", containerName)
+		warnf("codex container %s is missing required host mounts (si/docker/ssh/go/vault); recreating for full host-tooling support", containerName)
 		if recreate == nil {
 			return errors.New("recreate callback required")
 		}
 		return recreate()
 	}
-	warnf("codex container %s is missing required host mounts (si/docker/go/vault); preserving running container and tmux session (run `si respawn %s` to reconcile mounts)", containerName, slug)
+	warnf("codex container %s is missing required host mounts (si/docker/ssh/go/vault); preserving running container and tmux session (run `si respawn %s` to reconcile mounts)", containerName, slug)
 	return nil
 }
 
@@ -1524,6 +1528,8 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 	}
 	if !shared.HasHostSiMount(info, "/home/si") ||
 		!shared.HasHostDockerConfigMount(info, "/home/si") ||
+		!shared.HasHostSSHDirMount(info, "/home/si") ||
+		!shared.HasHostSSHDirMount(info, "/root") ||
 		!shared.HasHostSiGoToolchainMount(info, "/home/si") ||
 		!shared.HasDevelopmentMount(info, desiredHost, "/home/si") ||
 		!shared.HasHostDevelopmentMount(info, desiredHost) ||
