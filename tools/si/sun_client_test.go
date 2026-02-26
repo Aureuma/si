@@ -403,3 +403,28 @@ func TestSunClientRetriesRateLimitedRequests(t *testing.T) {
 		t.Fatalf("expected retry on payload, hits=%d", atomic.LoadInt32(&payloadHits))
 	}
 }
+
+func TestSunClientCloudflare1010ErrorMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer token123" {
+			http.Error(w, `{"error":"missing auth"}`, http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("error code: 1010"))
+	}))
+	defer server.Close()
+
+	client, err := newSunClient(server.URL, "token123", 3*time.Second)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+
+	_, err = client.whoAmI(context.Background())
+	if err == nil {
+		t.Fatalf("expected whoami to fail")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "cloudflare") {
+		t.Fatalf("expected cloudflare hint in error, got: %v", err)
+	}
+}

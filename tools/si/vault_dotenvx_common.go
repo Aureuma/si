@@ -52,7 +52,22 @@ func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (
 		repoDir = gitRoot
 	}
 
+	envFile := strings.TrimSpace(envFileFlag)
+	if envFile == "" {
+		envFile = strings.TrimSpace(os.Getenv("SI_VAULT_ENV_FILE"))
+	}
+	if envFile == "" {
+		envFile = defaultSIVaultDotenvFile
+	}
+	if !filepath.IsAbs(envFile) {
+		envFile = filepath.Join(cwd, envFile)
+	}
+	envFile = filepath.Clean(envFile)
+
 	repo := normalizeVaultRepoEnvSlug(repoFlag)
+	if repo == "" {
+		repo = inferSIVaultRepoFromEnvFile(envFile)
+	}
 	if repo == "" {
 		repo = normalizeVaultRepoEnvSlug(filepath.Base(repoDir))
 	}
@@ -61,14 +76,6 @@ func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (
 	}
 	if !vaultRepoEnvSlugPattern.MatchString(repo) {
 		return siVaultTarget{}, fmt.Errorf("invalid repo %q (allowed: [a-z0-9._-], max 64 chars, must start with [a-z0-9])", repo)
-	}
-
-	envFile := strings.TrimSpace(envFileFlag)
-	if envFile == "" {
-		envFile = strings.TrimSpace(os.Getenv("SI_VAULT_ENV_FILE"))
-	}
-	if envFile == "" {
-		envFile = defaultSIVaultDotenvFile
 	}
 
 	env := normalizeVaultRepoEnvSlug(envFlag)
@@ -85,14 +92,10 @@ func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (
 		return siVaultTarget{}, fmt.Errorf("invalid env %q (allowed: [a-z0-9._-], max 64 chars, must start with [a-z0-9])", env)
 	}
 
-	if !filepath.IsAbs(envFile) {
-		envFile = filepath.Join(cwd, envFile)
-	}
-
 	return siVaultTarget{
 		Repo:    repo,
 		Env:     env,
-		EnvFile: filepath.Clean(envFile),
+		EnvFile: envFile,
 		RepoDir: filepath.Clean(repoDir),
 	}, nil
 }
@@ -115,6 +118,22 @@ func inferSIVaultEnvFromEnvFile(path string) string {
 		envPart = envPart[:idx]
 	}
 	return normalizeVaultRepoEnvSlug(envPart)
+}
+
+func inferSIVaultRepoFromEnvFile(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(path))
+	if !strings.HasPrefix(base, ".env") {
+		return ""
+	}
+	parent := normalizeVaultRepoEnvSlug(filepath.Base(filepath.Dir(path)))
+	if parent == "" || parent == "safe" {
+		return ""
+	}
+	return parent
 }
 
 func normalizeVaultRepoEnvSlug(raw string) string {
