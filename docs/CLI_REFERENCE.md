@@ -42,6 +42,17 @@ si dyad spawn app-hardening --profile main
 si dyad status app-hardening
 ```
 
+### Viva tunnel via SI wrapper
+
+```bash
+si viva --repo /home/shawn/Development/viva --build -- \
+  tunnel up --config /home/shawn/Development/safe/viva/cloudflare.tunnel.dev.toml
+si viva --repo /home/shawn/Development/viva -- \
+  tunnel status --config /home/shawn/Development/safe/viva/cloudflare.tunnel.dev.toml
+si viva --repo /home/shawn/Development/viva -- \
+  tunnel down --config /home/shawn/Development/safe/viva/cloudflare.tunnel.dev.toml
+```
+
 ### Shared dyad taskboard
 
 ```bash
