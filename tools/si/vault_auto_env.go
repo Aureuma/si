@@ -4,8 +4,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-
-	"si/tools/si/internal/vault"
 )
 
 const siVaultAutoEnvKey = "SI_VAULT_AUTO_ENV"
@@ -65,31 +63,20 @@ func shouldAutoHydrateVaultEnvForRootCommand(cmd string) bool {
 
 func hydrateProcessEnvFromSunVault(settings Settings, source string) (int, error) {
 	_ = source
-	target, err := resolveSIVaultTarget("", "", "")
+	target, err := vaultResolveTarget(settings, "", true)
 	if err != nil {
 		return 0, err
 	}
-	doc, err := vault.ReadDotenvFile(target.EnvFile)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return 0, nil
-		}
-		return 0, err
-	}
-	material, err := ensureSIVaultKeyMaterial(settings, target)
+	rawValues, supported, err := vaultSunKVLoadRawValues(settings, target)
 	if err != nil {
 		return 0, err
 	}
-	values, _, err := decryptDotenvValues(doc, siVaultPrivateKeyCandidates(material))
-	if err != nil {
-		return 0, err
-	}
-	if len(values) == 0 {
+	if !supported || len(rawValues) == 0 {
 		return 0, nil
 	}
 
-	keys := make([]string, 0, len(values))
-	for key := range values {
+	keys := make([]string, 0, len(rawValues))
+	for key := range rawValues {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
@@ -99,7 +86,11 @@ func hydrateProcessEnvFromSunVault(settings Settings, source string) (int, error
 		if _, exists := os.LookupEnv(key); exists {
 			continue
 		}
-		if setErr := os.Setenv(key, values[key]); setErr != nil {
+		value, ok := resolveVaultRawValue(settings, target.File, rawValues[key])
+		if !ok {
+			continue
+		}
+		if setErr := os.Setenv(key, value); setErr != nil {
 			continue
 		}
 		setCount++

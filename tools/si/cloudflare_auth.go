@@ -193,11 +193,19 @@ func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
 	if key == "" {
 		return "", false
 	}
-	target, err := resolveSIVaultTarget("", "", "")
+	vaultTarget, targetErr := vaultResolveTarget(settings, "", true)
+	if targetErr == nil {
+		raw, found, supported, err := vaultSunKVGetRawValue(settings, vaultTarget, key)
+		if err == nil && supported && found {
+			return resolveVaultRawValue(settings, vaultTarget.File, raw)
+		}
+	}
+
+	localTarget, err := resolveSIVaultTarget("", "", "")
 	if err != nil {
 		return "", false
 	}
-	doc, err := vault.ReadDotenvFile(target.EnvFile)
+	doc, err := vault.ReadDotenvFile(localTarget.EnvFile)
 	if err != nil {
 		return "", false
 	}
@@ -205,22 +213,42 @@ func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
 	if !found {
 		return "", false
 	}
+	return resolveVaultRawValue(settings, localTarget.EnvFile, raw)
+}
+
+func resolveVaultRawValue(settings Settings, envFile string, raw string) (string, bool) {
 	value, err := vault.NormalizeDotenvValue(strings.TrimSpace(raw))
 	if err != nil {
 		return "", false
 	}
-	if vault.IsSIVaultEncryptedValue(value) {
-		material, keyErr := ensureSIVaultKeyMaterial(settings, target)
-		if keyErr != nil {
+	if !vault.IsSIVaultEncryptedValue(value) {
+		return value, strings.TrimSpace(value) != ""
+	}
+	if vault.IsEncryptedValueV1(value) {
+		// Legacy age-encrypted values only require SI_VAULT_IDENTITY.
+		// Force-refresh identity from Sun to avoid stale process env identities.
+		if _, err := vaultEnsureStrictSunIdentity(settings, "vault_key_read_legacy"); err != nil {
 			return "", false
 		}
-		plain, decErr := vault.DecryptSIVaultValue(value, siVaultPrivateKeyCandidates(material))
+		plain, decErr := vault.DecryptSIVaultValue(value, nil)
 		if decErr != nil {
 			return "", false
 		}
 		return plain, strings.TrimSpace(plain) != ""
 	}
-	return value, strings.TrimSpace(value) != ""
+	target, err := resolveSIVaultTarget("", "", envFile)
+	if err != nil {
+		return "", false
+	}
+	material, keyErr := ensureSIVaultKeyMaterial(settings, target)
+	if keyErr != nil {
+		return "", false
+	}
+	plain, decErr := vault.DecryptSIVaultValue(value, siVaultPrivateKeyCandidates(material))
+	if decErr != nil {
+		return "", false
+	}
+	return plain, strings.TrimSpace(plain) != ""
 }
 
 func resolveCloudflareZoneID(alias string, account CloudflareAccountEntry, env string, override string) (string, string) {
