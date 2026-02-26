@@ -70,8 +70,8 @@ var (
 	loadMintlifyRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdMintlify(args) }
 	}
-	loadBrowserRootHandler = func() rootCommandHandler {
-		return func(_ string, args []string) { cmdBrowser(args) }
+	loadSurfRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdSurf(args) }
 	}
 	loadPaasRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdPaas(args) }
@@ -137,7 +137,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadPublishRootHandler), "publish", "pub")
 	register(newLazyRootHandler(loadProvidersRootHandler), "providers", "provider", "integrations", "apis")
 	register(newLazyRootHandler(loadDockerRootHandler), "docker")
-	register(newLazyRootHandler(loadBrowserRootHandler), "browser")
+	register(newLazyRootHandler(loadSurfRootHandler), "surf")
 	register(newLazyRootHandler(loadDyadRootHandler), "dyad")
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
 	register(newLazyRootHandler(loadMintlifyRootHandler), "mintlify")

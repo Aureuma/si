@@ -1,8 +1,8 @@
-# Browser Runtime (`si browser`)
+# Surf Runtime (`si surf`)
 
-![Browser MCP](/docs/images/integrations/browser.svg)
+![Surf runtime](/docs/images/integrations/browser.svg)
 
-`si browser` manages the Dockerized Playwright MCP runtime used by SI agents.
+`si surf` manages the Dockerized Playwright MCP runtime used by SI agents.
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
@@ -11,20 +11,20 @@ Related:
 ## Commands
 
 ```bash
-si browser build
-si browser start
-si browser status
-si browser logs
-si browser stop
-si browser proxy
+si surf build
+si surf start
+si surf status
+si surf logs
+si surf stop
+si surf proxy
 ```
 
 ## Quickstart
 
 ```bash
-si browser build
-si browser start
-si browser status
+si surf build
+si surf start
+si surf status
 ```
 
 Default endpoints after start:
@@ -38,13 +38,13 @@ Default endpoints after start:
 Use proxy mode for legacy `/mcp` SSE clients:
 
 ```bash
-si browser proxy --upstream http://127.0.0.1:8932
+si surf proxy --upstream http://127.0.0.1:8932
 ```
 
 ## Operational notes
 
-- `si browser start` can build the image automatically unless `--skip-build` is set.
-- `si browser start` attaches the browser runtime to the SI Docker network (`si` by default, override with `--network` / `SI_BROWSER_NETWORK`).
+- `si surf start` can build the image automatically unless `--skip-build` is set.
+- `si surf start` attaches the browser runtime to the SI Docker network (`si` by default, override with `--network` / `SI_BROWSER_NETWORK`).
 - SI-managed codex/dyad containers auto-register MCP server `si_browser` to the browser MCP endpoint.
 - Keep profile directories isolated per environment.
-- Use `si browser logs --follow` during smoke tests and rollout checks.
+- Use `si surf logs --follow` during smoke tests and rollout checks.

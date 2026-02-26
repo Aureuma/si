@@ -28,7 +28,7 @@ This page is the canonical map of SI integration families.
 | Apple App Store | `si apple appstore ...` | [Apple App Store](./APPLE_APPSTORE) |
 | Publish bridge | `si publish ...` | [Publish](./PUBLISH) |
 | Provider meta-health | `si providers ...` | [Providers](./PROVIDERS) |
-| Browser MCP runtime | `si browser ...` | [Browser Runtime](./BROWSER) |
+| Surf browser runtime | `si surf ...` | [Browser Runtime](./BROWSER) |
 | Plugin marketplace | `si plugins ...` | [Plugin Marketplace](./PLUGIN_MARKETPLACE) |
 
 ## Integration capability matrix
@@ -50,7 +50,7 @@ This page is the canonical map of SI integration families.
 | Apple App Store | Yes | Yes | Yes | Yes | auth + API checks |
 | Publish | N/A (depends on target) | target-specific | Curated publishing flows | N/A | pre-publish checks |
 | Providers | N/A | N/A | Aggregated telemetry | N/A | `si providers health` |
-| Browser MCP | runtime status | runtime profile dir | browser actions through MCP | N/A | `si browser status` |
+| Surf runtime | runtime status | runtime profile dir | browser actions through MCP | N/A | `si surf status` |
 | Plugin marketplace | policy + install diagnostics | N/A | catalog/install records | N/A | `si plugins doctor` |
 
 ## Integration visuals
@@ -68,7 +68,7 @@ This page is the canonical map of SI integration families.
 | Apple App Store | ![Apple App Store](/docs/images/integrations/apple-appstore.svg) |
 | Publish | ![Publish](/docs/images/integrations/publish.svg) |
 | Providers | ![Providers](/docs/images/integrations/providers.svg) |
-| Browser MCP | ![Browser](/docs/images/integrations/browser.svg) |
+| Surf runtime | ![Browser](/docs/images/integrations/browser.svg) |
 | Plugin Marketplace | ![Plugin Marketplace](/docs/images/integrations/plugins.svg) |
 
 ## Operator checklist before production writes

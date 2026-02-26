@@ -220,7 +220,7 @@ After CLI command-surface changes, run targeted help checks:
 ./si paas --help
 ./si paas backup --help
 ./si gcp gemini image generate --help
-./si browser --help
+./si surf --help
 ```
 
 ## Image build smoke check
