@@ -2429,10 +2429,10 @@
         "schema_version": 1,
         "id": "si/browser-mcp",
         "namespace": "si",
-        "name": "SI Browser MCP",
+        "name": "SI Surf Runtime",
         "version": "1.0.0",
         "summary": "Expose Playwright MCP over Docker for Codex and dyad containers.",
-        "description": "Uses `si browser start` to provide a shared MCP endpoint for browser automation.",
+        "description": "Uses `si surf start` to provide a shared MCP endpoint for browser automation through the external surf runtime.",
         "homepage": "https://docs.si.aureuma.ai/docs/BROWSER",
         "terms_url": "https://docs.si.aureuma.ai/docs/BROWSER",
         "privacy_url": "https://docs.si.aureuma.ai/docs/BROWSER",
@@ -2444,8 +2444,8 @@
         },
         "integration": {
           "commands": [
-            "si browser start",
-            "si browser status"
+            "si surf start",
+            "si surf status"
           ],
           "mcp_servers": [
             {

@@ -43,7 +43,7 @@ Features:
   - Image build for local dev.
   - Mintlify docs workflow wrapper.
   - Docker passthrough for raw docker CLI calls.
-  - Browser MCP Docker runner for Playwright headed sessions.
+  - Surf browser runtime bridge for Playwright headed sessions.
   - Plugin marketplace and integration registry (catalog/install/enable/doctor/scaffold).
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
@@ -75,7 +75,7 @@ Core:
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
-  si browser <build|start|stop|status|logs|proxy> [args...]
+  si surf [--repo <path>] [--bin <path>] [--build] -- <surf-args...>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 

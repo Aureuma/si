@@ -26,7 +26,7 @@ si <command> <subcommand> --help
 | Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si sun` |
 | Provider telemetry | `si providers` |
 | Platform operations | `si paas` |
-| Browser MCP runtime | `si browser` |
+| Surf browser runtime | `si surf` |
 | Plugin ecosystem | `si plugins` |
 | Build and quality | `si build`, `si analyze` (`si lint`), `si docker` |
 | Docs workflow | `si mintlify` |
