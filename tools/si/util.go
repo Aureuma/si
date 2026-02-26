@@ -74,6 +74,7 @@ Core:
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
+  si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
   si browser <build|start|stop|status|logs|proxy> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
