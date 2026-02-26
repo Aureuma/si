@@ -42,7 +42,7 @@ RUN apt-get update -y \
     && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm i -g @openai/codex@0.104.0
+RUN npm i -g @openai/codex@0.105.0
 
 RUN curl -LsSf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin sh
 
