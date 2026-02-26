@@ -32,15 +32,16 @@ func ReadDotenvFile(path string) (DotenvFile, error) {
 
 func WriteDotenvFileAtomic(path string, contents []byte) error {
 	path = filepath.Clean(path)
-	if err := ensureNoSymlinkWriteTarget(path); err != nil {
+	writePath, err := resolveDotenvWriteTarget(path)
+	if err != nil {
 		return err
 	}
-	dir := filepath.Dir(path)
+	dir := filepath.Dir(writePath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	mode := os.FileMode(0o644)
-	if info, err := os.Stat(path); err == nil {
+	if info, err := os.Stat(writePath); err == nil {
 		mode = info.Mode() & os.ModePerm
 	}
 	tmp, err := os.CreateTemp(dir, ".env.tmp-*")
@@ -62,7 +63,7 @@ func WriteDotenvFileAtomic(path string, contents []byte) error {
 	if err := os.Chmod(tmp.Name(), mode); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return os.Rename(tmp.Name(), writePath)
 }
 
 func ParseDotenv(data []byte) DotenvFile {
@@ -441,21 +442,33 @@ func leadingWhitespace(s string) string {
 	return s[:i]
 }
 
-func ensureNoSymlinkWriteTarget(path string) error {
-	if isTruthyEnv("SI_VAULT_ALLOW_SYMLINK_ENV_FILE") {
-		return nil
-	}
+func resolveDotenvWriteTarget(path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return path, nil
 		}
-		return err
+		return "", err
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("refusing to write vault env file through symlink: %s (set SI_VAULT_ALLOW_SYMLINK_ENV_FILE=1 to override)", filepath.Clean(path))
+		if !isTruthyEnv("SI_VAULT_ALLOW_SYMLINK_ENV_FILE") {
+			return "", fmt.Errorf("refusing to write vault env file through symlink: %s (set SI_VAULT_ALLOW_SYMLINK_ENV_FILE=1 to override)", filepath.Clean(path))
+		}
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return "", fmt.Errorf("resolve vault env symlink %s: %w", filepath.Clean(path), err)
+		}
+		resolved = filepath.Clean(resolved)
+		targetInfo, err := os.Stat(resolved)
+		if err != nil {
+			return "", err
+		}
+		if targetInfo.IsDir() {
+			return "", fmt.Errorf("vault env symlink resolves to directory: %s", resolved)
+		}
+		return resolved, nil
 	}
-	return nil
+	return path, nil
 }
 
 func normalizeSectionName(name string) string {

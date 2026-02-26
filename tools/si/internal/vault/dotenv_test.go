@@ -309,6 +309,61 @@ func TestWriteDotenvFileAtomicSymlinkOverrideRequiresTruthyValue(t *testing.T) {
 	if err := WriteDotenvFileAtomic(link, []byte("A=3\n")); err != nil {
 		t.Fatalf("expected truthy override to allow write: %v", err)
 	}
+	linkInfo, err := os.Lstat(link)
+	if err != nil {
+		t.Fatalf("lstat symlink after write: %v", err)
+	}
+	if linkInfo.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("expected link path to remain symlink, mode=%v", linkInfo.Mode())
+	}
+	got, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("read target after write: %v", err)
+	}
+	if string(got) != "A=3\n" {
+		t.Fatalf("target got %q", string(got))
+	}
+}
+
+func TestReadDotenvFileRejectsSymlinkTargetByDefault(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real.env")
+	if err := os.WriteFile(target, []byte("A=1\n"), 0o600); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	link := filepath.Join(dir, "link.env")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+	if _, err := ReadDotenvFile(link); err == nil {
+		t.Fatalf("expected symlink read rejection")
+	}
+}
+
+func TestReadDotenvFileSymlinkOverrideRequiresTruthyValue(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real.env")
+	if err := os.WriteFile(target, []byte("A=1\n"), 0o600); err != nil {
+		t.Fatalf("seed file: %v", err)
+	}
+	link := filepath.Join(dir, "link.env")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink not supported: %v", err)
+	}
+
+	t.Setenv("SI_VAULT_ALLOW_SYMLINK_ENV_FILE", "0")
+	if _, err := ReadDotenvFile(link); err == nil {
+		t.Fatalf("expected rejection when override is non-truthy")
+	}
+
+	t.Setenv("SI_VAULT_ALLOW_SYMLINK_ENV_FILE", "1")
+	f, err := ReadDotenvFile(link)
+	if err != nil {
+		t.Fatalf("expected truthy override to allow read: %v", err)
+	}
+	if got, ok := f.Lookup("A"); !ok || got != "1" {
+		t.Fatalf("lookup A => %q %v", got, ok)
+	}
 }
 
 func TestSplitValueAndCommentCommentOnlyRHS(t *testing.T) {
