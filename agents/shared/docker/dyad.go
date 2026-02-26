@@ -162,12 +162,14 @@ func (c *Client) EnsureDyad(ctx context.Context, opts DyadOptions) (string, stri
 		return c.CreateDyad(ctx, opts)
 	}
 	// Backward compatibility: recreate older dyads that were created before host
-	// ~/.si and vault env file mounts were added, so full `si`/`si vault` works
-	// inside both members.
+	// ~/.si, ~/.ssh, and vault env file mounts were added, so full `si`/`si vault`
+	// and SSH Git workflows work inside both members.
 	if !HasHostSiMount(actorInfo, "/root") ||
 		!HasHostSiMount(criticInfo, "/root") ||
 		!HasHostDockerConfigMount(actorInfo, "/root") ||
 		!HasHostDockerConfigMount(criticInfo, "/root") ||
+		!HasHostSSHDirMount(actorInfo, "/root") ||
+		!HasHostSSHDirMount(criticInfo, "/root") ||
 		!HasHostSiGoToolchainMount(actorInfo, "/root") ||
 		!HasHostSiGoToolchainMount(criticInfo, "/root") ||
 		!HasDevelopmentMount(actorInfo, opts.WorkspaceHost, "/root") ||
@@ -429,6 +431,7 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 		"SI_BROWSER_MCP_URL_INTERNAL",
 		"SI_BROWSER_CONTAINER",
 		"SI_BROWSER_MCP_PORT",
+		"SSH_AUTH_SOCK",
 	} {
 		env = appendHostEnvIfSet(env, key)
 	}

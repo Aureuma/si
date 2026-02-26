@@ -51,6 +51,39 @@ func HostDockerConfigMount(containerHome string) (mount.Mount, bool) {
 	}, true
 }
 
+// HostSSHDirMount returns a bind mount that exposes host ~/.ssh into container
+// HOME for SSH-based Git workflows (push/pull/fetch over SSH).
+func HostSSHDirMount(containerHome string) (mount.Mount, bool) {
+	containerHome = strings.TrimSpace(containerHome)
+	if containerHome == "" {
+		return mount.Mount{}, false
+	}
+	source, ok := hostSSHDirSource()
+	if !ok {
+		return mount.Mount{}, false
+	}
+	return mount.Mount{
+		Type:   mount.TypeBind,
+		Source: source,
+		Target: path.Join(containerHome, ".ssh"),
+	}, true
+}
+
+// HostSSHAuthSockMount returns a bind mount for SSH_AUTH_SOCK when it points
+// to a valid host unix socket. The socket is mounted at the same absolute path
+// so forwarded SSH_AUTH_SOCK values work unchanged inside containers.
+func HostSSHAuthSockMount() (mount.Mount, bool) {
+	source, ok := hostSSHAuthSockSource()
+	if !ok {
+		return mount.Mount{}, false
+	}
+	return mount.Mount{
+		Type:   mount.TypeBind,
+		Source: source,
+		Target: filepath.ToSlash(source),
+	}, true
+}
+
 // HostSiGoToolchainMount returns a bind mount that exposes SI-managed host Go
 // toolchains into container HOME for parity with host-installed SI bootstrap.
 func HostSiGoToolchainMount(containerHome string) (mount.Mount, bool) {
@@ -122,6 +155,57 @@ func HasHostDockerConfigMount(info *types.ContainerJSON, containerHome string) b
 		return false
 	}
 	target := path.Join(containerHome, ".docker")
+	for _, point := range info.Mounts {
+		if !strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
+			continue
+		}
+		pointSource := filepath.Clean(strings.TrimSpace(point.Source))
+		pointTarget := filepath.ToSlash(strings.TrimSpace(point.Destination))
+		if pointSource == source && pointTarget == target {
+			return true
+		}
+	}
+	return false
+}
+
+// HasHostSSHDirMount reports whether container info includes the host ~/.ssh
+// bind mount at <containerHome>/.ssh. If host ~/.ssh is unavailable, this
+// returns true.
+func HasHostSSHDirMount(info *types.ContainerJSON, containerHome string) bool {
+	source, required := hostSSHDirSource()
+	if !required {
+		return true
+	}
+	containerHome = strings.TrimSpace(containerHome)
+	if info == nil || containerHome == "" {
+		return false
+	}
+	target := path.Join(containerHome, ".ssh")
+	for _, point := range info.Mounts {
+		if !strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
+			continue
+		}
+		pointSource := filepath.Clean(strings.TrimSpace(point.Source))
+		pointTarget := filepath.ToSlash(strings.TrimSpace(point.Destination))
+		if pointSource == source && pointTarget == target {
+			return true
+		}
+	}
+	return false
+}
+
+// HasHostSSHAuthSockMount reports whether container info includes the bind
+// mount for host SSH_AUTH_SOCK at the same absolute path. If SSH_AUTH_SOCK is
+// unavailable/invalid on host, this returns true.
+func HasHostSSHAuthSockMount(info *types.ContainerJSON) bool {
+	source, required := hostSSHAuthSockSource()
+	if !required {
+		return true
+	}
+	if info == nil {
+		return false
+	}
+	target := filepath.ToSlash(source)
 	for _, point := range info.Mounts {
 		if !strings.EqualFold(strings.TrimSpace(string(point.Type)), "bind") {
 			continue
@@ -210,6 +294,18 @@ func hostDockerConfigSource() (string, bool) {
 	return dockerDir, true
 }
 
+func hostSSHDirSource() (string, bool) {
+	hostHome, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(hostHome) == "" {
+		return "", false
+	}
+	sshDir := filepath.Clean(filepath.Join(hostHome, ".ssh"))
+	if !isDir(sshDir) {
+		return "", false
+	}
+	return sshDir, true
+}
+
 func hostSiGoToolchainSource() (string, bool) {
 	hostHome, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(hostHome) == "" {
@@ -220,6 +316,22 @@ func hostSiGoToolchainSource() (string, bool) {
 		return "", false
 	}
 	return goDir, true
+}
+
+func hostSSHAuthSockSource() (string, bool) {
+	source := filepath.Clean(strings.TrimSpace(os.Getenv("SSH_AUTH_SOCK")))
+	if source == "" {
+		return "", false
+	}
+	source = filepath.ToSlash(source)
+	if !strings.HasPrefix(source, "/") {
+		return "", false
+	}
+	source = filepath.Clean(source)
+	if !socketExists(source) {
+		return "", false
+	}
+	return source, true
 }
 
 func isDir(p string) bool {

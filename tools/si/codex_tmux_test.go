@@ -468,6 +468,52 @@ func TestCodexContainerWorkspaceMatchesRequiresHostDockerAndGoToolingMounts(t *t
 	}
 }
 
+func TestCodexContainerWorkspaceMatchesRequiresHostSSHMount(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
+		t.Fatalf("mkdir .ssh: %v", err)
+	}
+	desiredHost := "/home/ubuntu/Development/si"
+	mirror := desiredHost
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			WorkingDir: mirror,
+			Env: []string{
+				"SI_WORKSPACE_MIRROR=" + mirror,
+				"SI_WORKSPACE_HOST=" + desiredHost,
+			},
+		},
+		Mounts: []types.MountPoint{
+			{Type: "bind", Source: desiredHost, Destination: "/workspace"},
+			{Type: "bind", Source: desiredHost, Destination: mirror},
+			{Type: "bind", Source: filepath.Join(home, ".si"), Destination: "/home/si/.si"},
+		},
+	}
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
+		t.Fatalf("expected match to fail when host ~/.ssh mount is missing")
+	}
+	info.Mounts = append(info.Mounts, types.MountPoint{
+		Type:        "bind",
+		Source:      filepath.Join(home, ".ssh"),
+		Destination: "/home/si/.ssh",
+	})
+	if codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
+		t.Fatalf("expected match to fail when root ~/.ssh mount is missing")
+	}
+	info.Mounts = append(info.Mounts, types.MountPoint{
+		Type:        "bind",
+		Source:      filepath.Join(home, ".ssh"),
+		Destination: "/root/.ssh",
+	})
+	if !codexContainerWorkspaceMatches(info, desiredHost, mirror, "") {
+		t.Fatalf("expected match when host ~/.ssh mounts are present")
+	}
+}
+
 func TestCodexContainerWorkspaceSource(t *testing.T) {
 	info := &types.ContainerJSON{
 		Mounts: []types.MountPoint{

@@ -58,6 +58,17 @@ func BuildContainerCoreMounts(plan ContainerCoreMountPlan) []mount.Mount {
 	if m, ok := HostDockerConfigMount(plan.ContainerHome); ok {
 		appendUniqueMount(&mounts, m)
 	}
+	if m, ok := HostSSHDirMount(plan.ContainerHome); ok {
+		appendUniqueMount(&mounts, m)
+	}
+	if containerHome := filepath.ToSlash(strings.TrimSpace(plan.ContainerHome)); containerHome != "" && containerHome != "/root" {
+		if m, ok := HostSSHDirMount("/root"); ok {
+			appendUniqueMount(&mounts, m)
+		}
+	}
+	if m, ok := HostSSHAuthSockMount(); ok {
+		appendUniqueMount(&mounts, m)
+	}
 	if m, ok := HostSiGoToolchainMount(plan.ContainerHome); ok {
 		appendUniqueMount(&mounts, m)
 	}

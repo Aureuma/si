@@ -27,6 +27,19 @@ func TestBuildDyadEnvForwardsBrowserMCPOverrides(t *testing.T) {
 	}
 }
 
+func TestBuildDyadEnvForwardsSSHAuthSock(t *testing.T) {
+	t.Setenv("SSH_AUTH_SOCK", "/tmp/agent.sock")
+
+	env := buildDyadEnv(DyadOptions{
+		Dyad:       "ssh-env",
+		Role:       "generic",
+		CodexModel: "gpt-5.2-codex",
+	}, "actor", "medium")
+	if !containsEnv(env, "SSH_AUTH_SOCK=/tmp/agent.sock") {
+		t.Fatalf("buildDyadEnv missing SSH_AUTH_SOCK forwarding in env: %v", env)
+	}
+}
+
 func containsEnv(env []string, want string) bool {
 	for _, item := range env {
 		if strings.TrimSpace(item) == want {
