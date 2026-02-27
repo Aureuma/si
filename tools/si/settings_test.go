@@ -132,7 +132,7 @@ func TestLoadSettingsCreatesDefaultWhenMissing(t *testing.T) {
 		t.Fatalf("settingsPath: %v", err)
 	}
 	if _, statErr := os.Stat(path); statErr != nil {
-		t.Fatalf("expected settings file to be created at %s: %v", path, statErr)
+		t.Fatalf("expected core settings file to be created at %s: %v", path, statErr)
 	}
 	data, readErr := os.ReadFile(path)
 	if readErr != nil {
@@ -141,13 +141,23 @@ func TestLoadSettingsCreatesDefaultWhenMissing(t *testing.T) {
 	if !strings.Contains(string(data), "schema_version") {
 		t.Fatalf("expected settings file to contain schema_version, got:\n%s", string(data))
 	}
+	dyadPath, err := settingsModulePath(settingsModuleDyad)
+	if err != nil {
+		t.Fatalf("settingsModulePath(dyad): %v", err)
+	}
+	if _, statErr := os.Stat(dyadPath); statErr != nil {
+		t.Fatalf("expected dyad settings file to be created at %s: %v", dyadPath, statErr)
+	}
 }
 
 func TestLoadSettingsInvalidTomlReturnsDefaultsAndError(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
-	path := filepath.Join(tmp, ".si", "settings.toml")
+	path, err := settingsModulePath(settingsModuleDyad)
+	if err != nil {
+		t.Fatalf("settingsModulePath(dyad): %v", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -239,18 +249,33 @@ func TestLoadSettingsParsesSkillsVolumeFields(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
-	path := filepath.Join(tmp, ".si", "settings.toml")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	codexPath, err := settingsModulePath(settingsModuleCodex)
+	if err != nil {
+		t.Fatalf("settingsModulePath(codex): %v", err)
+	}
+	dyadPath, err := settingsModulePath(settingsModuleDyad)
+	if err != nil {
+		t.Fatalf("settingsModulePath(dyad): %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(codexPath), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	content := `
+	if err := os.MkdirAll(filepath.Dir(dyadPath), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	codexContent := `
 [codex]
 skills_volume = "si-codex-skills-custom"
+`
+	dyadContent := `
 
 [dyad]
 skills_volume = "si-dyad-skills-custom"
 `
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(codexPath, []byte(codexContent), 0o600); err != nil {
+		t.Fatalf("write codex settings: %v", err)
+	}
+	if err := os.WriteFile(dyadPath, []byte(dyadContent), 0o600); err != nil {
 		t.Fatalf("write settings: %v", err)
 	}
 
@@ -347,7 +372,10 @@ func TestLoadSettingsSunSection(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
-	path := filepath.Join(tmp, ".si", "settings.toml")
+	path, err := settingsModulePath(settingsModuleSun)
+	if err != nil {
+		t.Fatalf("settingsModulePath(sun): %v", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -393,9 +421,9 @@ func TestSaveSettingsWritesSunSection(t *testing.T) {
 		t.Fatalf("saveSettings: %v", err)
 	}
 
-	path, err := settingsPath()
+	path, err := settingsModulePath(settingsModuleSun)
 	if err != nil {
-		t.Fatalf("settingsPath: %v", err)
+		t.Fatalf("settingsModulePath(sun): %v", err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -414,7 +442,10 @@ func TestLoadSettingsSurfSection(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
 
-	path := filepath.Join(tmp, ".si", "settings.toml")
+	path, err := settingsModulePath(settingsModuleSurf)
+	if err != nil {
+		t.Fatalf("settingsModulePath(surf): %v", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
@@ -456,5 +487,18 @@ func TestApplySettingsDefaultsNormalizesSurfTunnelMode(t *testing.T) {
 	applySettingsDefaults(&settings)
 	if settings.Surf.Tunnel.Mode != "" {
 		t.Fatalf("expected invalid surf.tunnel.mode to normalize empty, got %q", settings.Surf.Tunnel.Mode)
+	}
+}
+
+func TestSettingsModulePathViva(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+	path, err := settingsModulePath(settingsModuleViva)
+	if err != nil {
+		t.Fatalf("settingsModulePath(viva): %v", err)
+	}
+	want := filepath.Join(tmp, ".si", "viva", "settings.toml")
+	if path != want {
+		t.Fatalf("unexpected viva settings path: got %q want %q", path, want)
 	}
 }

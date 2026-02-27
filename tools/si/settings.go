@@ -35,6 +35,7 @@ type Settings struct {
 	GCP           GCPSettings        `toml:"gcp,omitempty"`
 	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
 	Surf          SurfSettings       `toml:"surf,omitempty"`
+	Viva          VivaSettings       `toml:"viva,omitempty"`
 	Sun           SunSettings        `toml:"sun,omitempty"`
 	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
@@ -460,6 +461,12 @@ type SurfTunnelSettings struct {
 	VaultKey string `toml:"vault_key,omitempty"`
 }
 
+type VivaSettings struct {
+	Repo  string `toml:"repo,omitempty"`
+	Bin   string `toml:"bin,omitempty"`
+	Build *bool  `toml:"build,omitempty"`
+}
+
 type SunSettings struct {
 	BaseURL               string `toml:"base_url,omitempty"`
 	Account               string `toml:"account,omitempty"`
@@ -570,7 +577,53 @@ func mergeSunSettings(settings *Settings) {
 	}
 }
 
-func settingsPath() (string, error) {
+const (
+	settingsModuleCore       = "core"
+	settingsModuleCodex      = "codex"
+	settingsModuleDyad       = "dyad"
+	settingsModuleVault      = "vault"
+	settingsModulePaas       = "paas"
+	settingsModuleStripe     = "stripe"
+	settingsModuleGitHub     = "github"
+	settingsModuleCloudflare = "cloudflare"
+	settingsModuleGoogle     = "google"
+	settingsModuleApple      = "apple"
+	settingsModuleSocial     = "social"
+	settingsModuleWorkOS     = "workos"
+	settingsModuleAWS        = "aws"
+	settingsModuleGCP        = "gcp"
+	settingsModuleOpenAI     = "openai"
+	settingsModuleSurf       = "surf"
+	settingsModuleViva       = "viva"
+	settingsModuleSun        = "sun"
+	settingsModuleOCI        = "oci"
+)
+
+func settingsModuleNames() []string {
+	return []string{
+		settingsModuleCore,
+		settingsModuleCodex,
+		settingsModuleDyad,
+		settingsModuleVault,
+		settingsModulePaas,
+		settingsModuleStripe,
+		settingsModuleGitHub,
+		settingsModuleCloudflare,
+		settingsModuleGoogle,
+		settingsModuleApple,
+		settingsModuleSocial,
+		settingsModuleWorkOS,
+		settingsModuleAWS,
+		settingsModuleGCP,
+		settingsModuleOpenAI,
+		settingsModuleSurf,
+		settingsModuleViva,
+		settingsModuleSun,
+		settingsModuleOCI,
+	}
+}
+
+func settingsRootPath() (string, error) {
 	home, err := settingsHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
 		if err == nil {
@@ -578,7 +631,31 @@ func settingsPath() (string, error) {
 		}
 		return "", err
 	}
-	return filepath.Join(home, ".si", "settings.toml"), nil
+	return filepath.Join(home, ".si"), nil
+}
+
+func settingsPath() (string, error) {
+	return settingsModulePath(settingsModuleCore)
+}
+
+func settingsModulePath(module string) (string, error) {
+	root, err := settingsRootPath()
+	if err != nil {
+		return "", err
+	}
+	module = strings.TrimSpace(strings.ToLower(module))
+	switch module {
+	case settingsModuleCore:
+		return filepath.Join(root, "settings.toml"), nil
+	case settingsModuleSurf:
+		// surf runtime already owns ~/.si/surf/settings.toml; keep SI wrapper
+		// settings in a dedicated sibling file to avoid schema conflicts.
+		return filepath.Join(root, "surf", "si.settings.toml"), nil
+	case "":
+		return "", fmt.Errorf("settings module required")
+	default:
+		return filepath.Join(root, module, "settings.toml"), nil
+	}
 }
 
 func settingsHomeDir() (string, error) {
@@ -615,6 +692,16 @@ func hasSIStateInHome(home string) bool {
 		filepath.Join(home, ".si", "settings.toml"),
 		filepath.Join(home, ".si", "vault", "keys", "age.key"),
 		filepath.Join(home, ".si", "vault", "trust.json"),
+	}
+	for _, module := range settingsModuleNames() {
+		if module == settingsModuleCore {
+			continue
+		}
+		moduleFile := "settings.toml"
+		if module == settingsModuleSurf {
+			moduleFile = "si.settings.toml"
+		}
+		candidates = append(candidates, filepath.Join(home, ".si", module, moduleFile))
 	}
 	for _, path := range candidates {
 		info, err := os.Stat(path)
@@ -1005,6 +1092,8 @@ func applySettingsDefaults(settings *Settings) {
 	default:
 		settings.Surf.Tunnel.Mode = ""
 	}
+	settings.Viva.Repo = strings.TrimSpace(settings.Viva.Repo)
+	settings.Viva.Bin = strings.TrimSpace(settings.Viva.Bin)
 	mergeSunSettings(settings)
 	settings.Sun.BaseURL = strings.TrimSpace(settings.Sun.BaseURL)
 	if settings.Sun.BaseURL == "" {
@@ -1065,31 +1154,36 @@ func normalizeIntegrationEnvironment(raw string) string {
 }
 
 func loadSettings() (Settings, error) {
-	path, err := settingsPath()
-	if err != nil {
-		settings := defaultSettings()
-		applySettingsDefaults(&settings)
-		return settings, err
-	}
-	data, err := readLocalFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			settings := defaultSettings()
-			applySettingsDefaults(&settings)
-			_ = saveSettings(settings)
-			return settings, nil
-		}
-		settings := defaultSettings()
-		applySettingsDefaults(&settings)
-		return settings, fmt.Errorf("read settings %s: %w", path, err)
-	}
 	settings := defaultSettings()
-	if err := toml.Unmarshal(data, &settings); err != nil {
-		fallback := defaultSettings()
-		applySettingsDefaults(&fallback)
-		return fallback, fmt.Errorf("parse settings %s: %w", path, err)
+	applySettingsDefaults(&settings)
+	var loadedAny bool
+	var missingAny bool
+	for _, module := range settingsModuleNames() {
+		path, err := settingsModulePath(module)
+		if err != nil {
+			return settings, err
+		}
+		data, err := readLocalFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				missingAny = true
+				continue
+			}
+			fallback := defaultSettings()
+			applySettingsDefaults(&fallback)
+			return fallback, fmt.Errorf("read settings module %s (%s): %w", module, path, err)
+		}
+		if err := decodeSettingsModule(module, data, &settings); err != nil {
+			fallback := defaultSettings()
+			applySettingsDefaults(&fallback)
+			return fallback, fmt.Errorf("parse settings module %s (%s): %w", module, path, err)
+		}
+		loadedAny = true
 	}
 	applySettingsDefaults(&settings)
+	if !loadedAny || missingAny {
+		_ = saveSettings(settings)
+	}
 	return settings, nil
 }
 
@@ -1137,17 +1231,27 @@ func loadSettingsOrDefault() Settings {
 }
 
 func saveSettings(settings Settings) error {
-	path, err := settingsPath()
-	if err != nil {
-		return err
+	applySettingsDefaults(&settings)
+	settings.Metadata.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	for _, module := range settingsModuleNames() {
+		path, err := settingsModulePath(module)
+		if err != nil {
+			return err
+		}
+		data, err := encodeSettingsModule(module, settings)
+		if err != nil {
+			return fmt.Errorf("marshal settings module %s: %w", module, err)
+		}
+		if err := writeSettingsFileAtomic(path, data); err != nil {
+			return fmt.Errorf("write settings module %s (%s): %w", module, path, err)
+		}
 	}
+	return nil
+}
+
+func writeSettingsFileAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	settings.Metadata.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-	data, err := toml.Marshal(settings)
-	if err != nil {
 		return err
 	}
 	tmp, err := os.CreateTemp(dir, "settings-*.toml")
@@ -1170,6 +1274,306 @@ func saveSettings(settings Settings) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), path)
+}
+
+func decodeSettingsModule(module string, data []byte, settings *Settings) error {
+	if settings == nil {
+		return fmt.Errorf("settings is nil")
+	}
+	switch module {
+	case settingsModuleCore:
+		var payload struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Paths         SettingsPaths    `toml:"paths,omitempty"`
+			Shell         ShellSettings    `toml:"shell,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		if payload.SchemaVersion > 0 {
+			settings.SchemaVersion = payload.SchemaVersion
+		}
+		settings.Paths = payload.Paths
+		settings.Shell = payload.Shell
+		if strings.TrimSpace(payload.Metadata.UpdatedAt) != "" {
+			settings.Metadata = payload.Metadata
+		}
+	case settingsModuleCodex:
+		var payload struct {
+			Codex CodexSettings `toml:"codex"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Codex = payload.Codex
+	case settingsModuleDyad:
+		var payload struct {
+			Dyad DyadSettings `toml:"dyad"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Dyad = payload.Dyad
+	case settingsModuleVault:
+		var payload struct {
+			Vault VaultSettings `toml:"vault,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Vault = payload.Vault
+	case settingsModulePaas:
+		var payload struct {
+			Paas PaasSettings `toml:"paas,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Paas = payload.Paas
+	case settingsModuleStripe:
+		var payload struct {
+			Stripe StripeSettings `toml:"stripe,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Stripe = payload.Stripe
+	case settingsModuleGitHub:
+		var payload struct {
+			Github GitHubSettings `toml:"github,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Github = payload.Github
+	case settingsModuleCloudflare:
+		var payload struct {
+			Cloudflare CloudflareSettings `toml:"cloudflare,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Cloudflare = payload.Cloudflare
+	case settingsModuleGoogle:
+		var payload struct {
+			Google GoogleSettings `toml:"google,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Google = payload.Google
+	case settingsModuleApple:
+		var payload struct {
+			Apple AppleSettings `toml:"apple,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Apple = payload.Apple
+	case settingsModuleSocial:
+		var payload struct {
+			Social SocialSettings `toml:"social,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Social = payload.Social
+	case settingsModuleWorkOS:
+		var payload struct {
+			WorkOS WorkOSSettings `toml:"workos,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.WorkOS = payload.WorkOS
+	case settingsModuleAWS:
+		var payload struct {
+			AWS AWSSettings `toml:"aws,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.AWS = payload.AWS
+	case settingsModuleGCP:
+		var payload struct {
+			GCP GCPSettings `toml:"gcp,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.GCP = payload.GCP
+	case settingsModuleOpenAI:
+		var payload struct {
+			OpenAI OpenAISettings `toml:"openai,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.OpenAI = payload.OpenAI
+	case settingsModuleSurf:
+		var payload struct {
+			Surf SurfSettings `toml:"surf,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Surf = payload.Surf
+	case settingsModuleViva:
+		var payload struct {
+			Viva VivaSettings `toml:"viva,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Viva = payload.Viva
+	case settingsModuleSun:
+		var payload struct {
+			Sun SunSettings `toml:"sun,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Sun = payload.Sun
+	case settingsModuleOCI:
+		var payload struct {
+			OCI OCISettings `toml:"oci,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.OCI = payload.OCI
+	default:
+		return fmt.Errorf("unsupported settings module: %s", module)
+	}
+	return nil
+}
+
+func encodeSettingsModule(module string, settings Settings) ([]byte, error) {
+	switch module {
+	case settingsModuleCore:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Paths         SettingsPaths    `toml:"paths,omitempty"`
+			Shell         ShellSettings    `toml:"shell,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{
+			SchemaVersion: settings.SchemaVersion,
+			Paths:         settings.Paths,
+			Shell:         settings.Shell,
+			Metadata:      settings.Metadata,
+		})
+	case settingsModuleCodex:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Codex         CodexSettings    `toml:"codex"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Codex, settings.Metadata})
+	case settingsModuleDyad:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Dyad          DyadSettings     `toml:"dyad"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Dyad, settings.Metadata})
+	case settingsModuleVault:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Vault         VaultSettings    `toml:"vault,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Vault, settings.Metadata})
+	case settingsModulePaas:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Paas          PaasSettings     `toml:"paas,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Paas, settings.Metadata})
+	case settingsModuleStripe:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Stripe        StripeSettings   `toml:"stripe,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Stripe, settings.Metadata})
+	case settingsModuleGitHub:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Github        GitHubSettings   `toml:"github,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Github, settings.Metadata})
+	case settingsModuleCloudflare:
+		return toml.Marshal(struct {
+			SchemaVersion int                `toml:"schema_version"`
+			Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
+			Metadata      SettingsMetadata   `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Cloudflare, settings.Metadata})
+	case settingsModuleGoogle:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Google        GoogleSettings   `toml:"google,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Google, settings.Metadata})
+	case settingsModuleApple:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Apple         AppleSettings    `toml:"apple,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Apple, settings.Metadata})
+	case settingsModuleSocial:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Social        SocialSettings   `toml:"social,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Social, settings.Metadata})
+	case settingsModuleWorkOS:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			WorkOS        WorkOSSettings   `toml:"workos,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.WorkOS, settings.Metadata})
+	case settingsModuleAWS:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			AWS           AWSSettings      `toml:"aws,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.AWS, settings.Metadata})
+	case settingsModuleGCP:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			GCP           GCPSettings      `toml:"gcp,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.GCP, settings.Metadata})
+	case settingsModuleOpenAI:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			OpenAI        OpenAISettings   `toml:"openai,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.OpenAI, settings.Metadata})
+	case settingsModuleSurf:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Surf          SurfSettings     `toml:"surf,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Surf, settings.Metadata})
+	case settingsModuleViva:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Viva          VivaSettings     `toml:"viva,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Viva, settings.Metadata})
+	case settingsModuleSun:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Sun           SunSettings      `toml:"sun,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Sun, settings.Metadata})
+	case settingsModuleOCI:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			OCI           OCISettings      `toml:"oci,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.OCI, settings.Metadata})
+	default:
+		return nil, fmt.Errorf("unsupported settings module: %s", module)
+	}
 }
 
 func updateSettingsProfile(profile codexProfile) error {
