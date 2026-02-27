@@ -43,6 +43,12 @@ type siVaultDecryptStats struct {
 	Decrypted int
 }
 
+type siVaultDecryptabilityStats struct {
+	Encrypted     int
+	Decryptable   int
+	Undecryptable []string
+}
+
 func loadVaultSettingsOrFail() Settings {
 	settings, err := loadSettings()
 	if err != nil {
@@ -433,6 +439,33 @@ func ensureSIVaultDecryptMaterialCompatibility(doc vault.DotenvFile, material su
 		target.Repo,
 		target.Env,
 	)
+}
+
+func analyzeDotenvDecryptability(doc vault.DotenvFile, privateKeyCandidates []string) (siVaultDecryptabilityStats, error) {
+	stats := siVaultDecryptabilityStats{
+		Undecryptable: []string{},
+	}
+	entries, err := vault.Entries(doc)
+	if err != nil {
+		return stats, err
+	}
+	for _, entry := range entries {
+		key := strings.TrimSpace(entry.Key)
+		if key == "" || key == vault.SIVaultPublicKeyName {
+			continue
+		}
+		if !vault.IsSIVaultEncryptedValue(entry.ValueRaw) {
+			continue
+		}
+		stats.Encrypted++
+		if _, decErr := vault.DecryptSIVaultValue(entry.ValueRaw, privateKeyCandidates); decErr != nil {
+			stats.Undecryptable = append(stats.Undecryptable, key)
+			continue
+		}
+		stats.Decryptable++
+	}
+	sort.Strings(stats.Undecryptable)
+	return stats, nil
 }
 
 func dotenvAssignmentKey(line string) (string, bool) {

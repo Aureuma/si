@@ -311,3 +311,40 @@ func TestEnsureSIVaultDecryptMaterialCompatibilityAllowsBackupKeyMatch(t *testin
 		t.Fatalf("expected compatibility with backup key match, got %v", err)
 	}
 }
+
+func TestAnalyzeDotenvDecryptabilityDetectsUndecryptableEntries(t *testing.T) {
+	pubA, privA, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair A: %v", err)
+	}
+	pubB, _, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair B: %v", err)
+	}
+	cipherA, err := vault.EncryptSIVaultValue("alpha", pubA)
+	if err != nil {
+		t.Fatalf("EncryptSIVaultValue A: %v", err)
+	}
+	cipherB, err := vault.EncryptSIVaultValue("beta", pubB)
+	if err != nil {
+		t.Fatalf("EncryptSIVaultValue B: %v", err)
+	}
+	doc := vault.ParseDotenv([]byte(strings.Join([]string{
+		vault.SIVaultPublicKeyName + "=" + pubA,
+		"A=" + cipherA,
+		"B=" + cipherB,
+		"C=plain",
+		"",
+	}, "\n")))
+
+	stats, err := analyzeDotenvDecryptability(doc, []string{privA})
+	if err != nil {
+		t.Fatalf("analyzeDotenvDecryptability: %v", err)
+	}
+	if stats.Encrypted != 2 || stats.Decryptable != 1 {
+		t.Fatalf("unexpected decryptability stats: %+v", stats)
+	}
+	if len(stats.Undecryptable) != 1 || stats.Undecryptable[0] != "B" {
+		t.Fatalf("unexpected undecryptable keys: %+v", stats.Undecryptable)
+	}
+}
