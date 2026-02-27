@@ -68,6 +68,7 @@ metrics_addr = "127.0.0.1:20241"
 [runtime]
 image = "cloudflare/cloudflared:latest"
 network_mode = "host"
+additional_networks = ["si", "host", " ", "si"]
 no_autoupdate = true
 pull_image = true
 dir = "../../viva/.tmp/viva/cloudflared"
@@ -97,6 +98,9 @@ service = "http://127.0.0.1:3000"
 	}
 	if profile.RuntimeDir != filepath.Clean(filepath.Join(dir, "../../viva/.tmp/viva/cloudflared")) {
 		t.Fatalf("expected absolute runtime dir, got %q", profile.RuntimeDir)
+	}
+	if len(profile.AdditionalNetworks) != 1 || profile.AdditionalNetworks[0] != "si" {
+		t.Fatalf("unexpected additional networks: %#v", profile.AdditionalNetworks)
 	}
 	if len(profile.Routes) != 1 {
 		t.Fatalf("expected one route, got %d", len(profile.Routes))

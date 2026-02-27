@@ -463,11 +463,12 @@ type legacyTunnelConfig struct {
 		MetricsAddr       string `toml:"metrics_addr"`
 	} `toml:"tunnel"`
 	Runtime struct {
-		Image        string `toml:"image"`
-		NetworkMode  string `toml:"network_mode"`
-		NoAutoupdate bool   `toml:"no_autoupdate"`
-		PullImage    bool   `toml:"pull_image"`
-		Dir          string `toml:"dir"`
+		Image              string   `toml:"image"`
+		NetworkMode        string   `toml:"network_mode"`
+		AdditionalNetworks []string `toml:"additional_networks"`
+		NoAutoupdate       bool     `toml:"no_autoupdate"`
+		PullImage          bool     `toml:"pull_image"`
+		Dir                string   `toml:"dir"`
 	} `toml:"runtime"`
 	Vault struct {
 		EnvFile string `toml:"env_file"`
@@ -488,20 +489,21 @@ func importLegacyTunnelProfile(path string) (VivaTunnelProfile, error) {
 	}
 	baseDir := filepath.Dir(path)
 	p := VivaTunnelProfile{
-		Name:              strings.TrimSpace(legacy.Tunnel.Name),
-		ContainerName:     strings.TrimSpace(legacy.Tunnel.ContainerName),
-		TunnelIDEnvKey:    strings.TrimSpace(legacy.Tunnel.TunnelIDEnvKey),
-		CredentialsEnvKey: strings.TrimSpace(legacy.Tunnel.CredentialsEnvKey),
-		MetricsAddr:       strings.TrimSpace(legacy.Tunnel.MetricsAddr),
-		Image:             strings.TrimSpace(legacy.Runtime.Image),
-		NetworkMode:       strings.TrimSpace(legacy.Runtime.NetworkMode),
-		NoAutoupdate:      boolPtr(legacy.Runtime.NoAutoupdate),
-		PullImage:         boolPtr(legacy.Runtime.PullImage),
-		RuntimeDir:        resolveLegacyPath(baseDir, strings.TrimSpace(legacy.Runtime.Dir)),
-		VaultEnvFile:      resolveLegacyPath(baseDir, strings.TrimSpace(legacy.Vault.EnvFile)),
-		VaultRepo:         strings.TrimSpace(legacy.Vault.Repo),
-		VaultEnv:          strings.TrimSpace(legacy.Vault.Env),
-		Routes:            legacy.Routes,
+		Name:               strings.TrimSpace(legacy.Tunnel.Name),
+		ContainerName:      strings.TrimSpace(legacy.Tunnel.ContainerName),
+		TunnelIDEnvKey:     strings.TrimSpace(legacy.Tunnel.TunnelIDEnvKey),
+		CredentialsEnvKey:  strings.TrimSpace(legacy.Tunnel.CredentialsEnvKey),
+		MetricsAddr:        strings.TrimSpace(legacy.Tunnel.MetricsAddr),
+		Image:              strings.TrimSpace(legacy.Runtime.Image),
+		NetworkMode:        strings.TrimSpace(legacy.Runtime.NetworkMode),
+		AdditionalNetworks: append([]string(nil), legacy.Runtime.AdditionalNetworks...),
+		NoAutoupdate:       boolPtr(legacy.Runtime.NoAutoupdate),
+		PullImage:          boolPtr(legacy.Runtime.PullImage),
+		RuntimeDir:         resolveLegacyPath(baseDir, strings.TrimSpace(legacy.Runtime.Dir)),
+		VaultEnvFile:       resolveLegacyPath(baseDir, strings.TrimSpace(legacy.Vault.EnvFile)),
+		VaultRepo:          strings.TrimSpace(legacy.Vault.Repo),
+		VaultEnv:           strings.TrimSpace(legacy.Vault.Env),
+		Routes:             legacy.Routes,
 	}
 	return normalizeVivaTunnelProfile(p), nil
 }
