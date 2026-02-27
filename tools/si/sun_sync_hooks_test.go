@@ -274,15 +274,14 @@ func newSunTestServer(t *testing.T, account string, token string) (*httptest.Ser
 
 func appendCodexProfileToSettings(t *testing.T, home string, id string, name string, email string) {
 	t.Helper()
-	settingsPath := filepath.Join(home, ".si", "settings.toml")
-	f, err := os.OpenFile(settingsPath, os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		t.Fatalf("open settings: %v", err)
+	settingsDir := filepath.Join(home, ".si", "codex")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir codex settings dir: %v", err)
 	}
-	defer f.Close()
-	_, err = fmt.Fprintf(f, "\n[codex.profiles]\nactive = %q\n[codex.profiles.entries.%s]\nname = %q\nemail = %q\n", id, id, name, email)
-	if err != nil {
-		t.Fatalf("append settings: %v", err)
+	settingsPath := filepath.Join(settingsDir, "settings.toml")
+	content := fmt.Sprintf("schema_version = 1\n\n[codex.profiles]\nactive = %q\n[codex.profiles.entries.%s]\nname = %q\nemail = %q\n", id, id, name, email)
+	if err := os.WriteFile(settingsPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write codex settings: %v", err)
 	}
 }
 
