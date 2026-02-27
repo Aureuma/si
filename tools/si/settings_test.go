@@ -409,3 +409,52 @@ func TestSaveSettingsWritesSunSection(t *testing.T) {
 		t.Fatalf("expected sun base_url in saved settings, got:\n%s", text)
 	}
 }
+
+func TestLoadSettingsSurfSection(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+
+	path := filepath.Join(tmp, ".si", "settings.toml")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	content := `
+[surf]
+repo = "/work/surf"
+bin = "/work/surf/bin/surf"
+build = true
+settings_file = "/home/user/.si/surf/settings.toml"
+state_dir = "/home/user/.surf-state"
+
+[surf.tunnel]
+name = "surf-cloudflared"
+mode = "token"
+vault_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got, err := loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if got.Surf.Repo != "/work/surf" || got.Surf.Bin != "/work/surf/bin/surf" {
+		t.Fatalf("unexpected surf repo/bin: %#v", got.Surf)
+	}
+	if got.Surf.Build == nil || !*got.Surf.Build {
+		t.Fatalf("expected surf.build=true")
+	}
+	if got.Surf.Tunnel.Mode != "token" || got.Surf.Tunnel.VaultKey != "SURF_CLOUDFLARE_TUNNEL_TOKEN" {
+		t.Fatalf("unexpected surf tunnel settings: %#v", got.Surf.Tunnel)
+	}
+}
+
+func TestApplySettingsDefaultsNormalizesSurfTunnelMode(t *testing.T) {
+	settings := defaultSettings()
+	settings.Surf.Tunnel.Mode = "BAD"
+	applySettingsDefaults(&settings)
+	if settings.Surf.Tunnel.Mode != "" {
+		t.Fatalf("expected invalid surf.tunnel.mode to normalize empty, got %q", settings.Surf.Tunnel.Mode)
+	}
+}

@@ -34,6 +34,7 @@ type Settings struct {
 	AWS           AWSSettings        `toml:"aws,omitempty"`
 	GCP           GCPSettings        `toml:"gcp,omitempty"`
 	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
+	Surf          SurfSettings       `toml:"surf,omitempty"`
 	Sun           SunSettings        `toml:"sun,omitempty"`
 	OCI           OCISettings        `toml:"oci,omitempty"`
 	Dyad          DyadSettings       `toml:"dyad"`
@@ -442,6 +443,21 @@ type OpenAIAccountEntry struct {
 	OrganizationIDEnv string `toml:"organization_id_env,omitempty"`
 	ProjectID         string `toml:"project_id,omitempty"`
 	ProjectIDEnv      string `toml:"project_id_env,omitempty"`
+}
+
+type SurfSettings struct {
+	Repo         string             `toml:"repo,omitempty"`
+	Bin          string             `toml:"bin,omitempty"`
+	Build        *bool              `toml:"build,omitempty"`
+	SettingsFile string             `toml:"settings_file,omitempty"`
+	StateDir     string             `toml:"state_dir,omitempty"`
+	Tunnel       SurfTunnelSettings `toml:"tunnel,omitempty"`
+}
+
+type SurfTunnelSettings struct {
+	Name     string `toml:"name,omitempty"`
+	Mode     string `toml:"mode,omitempty"`
+	VaultKey string `toml:"vault_key,omitempty"`
 }
 
 type SunSettings struct {
@@ -976,6 +992,18 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.OpenAI.APIBaseURL == "" {
 		openAISpec := providers.Resolve(providers.OpenAI)
 		settings.OpenAI.APIBaseURL = firstNonEmpty(openAISpec.BaseURL, "https://api.openai.com")
+	}
+	settings.Surf.Repo = strings.TrimSpace(settings.Surf.Repo)
+	settings.Surf.Bin = strings.TrimSpace(settings.Surf.Bin)
+	settings.Surf.SettingsFile = strings.TrimSpace(settings.Surf.SettingsFile)
+	settings.Surf.StateDir = strings.TrimSpace(settings.Surf.StateDir)
+	settings.Surf.Tunnel.Name = strings.TrimSpace(settings.Surf.Tunnel.Name)
+	settings.Surf.Tunnel.VaultKey = strings.TrimSpace(settings.Surf.Tunnel.VaultKey)
+	settings.Surf.Tunnel.Mode = strings.ToLower(strings.TrimSpace(settings.Surf.Tunnel.Mode))
+	switch settings.Surf.Tunnel.Mode {
+	case "", "quick", "token":
+	default:
+		settings.Surf.Tunnel.Mode = ""
 	}
 	mergeSunSettings(settings)
 	settings.Sun.BaseURL = strings.TrimSpace(settings.Sun.BaseURL)
