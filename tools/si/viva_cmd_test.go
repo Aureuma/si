@@ -130,3 +130,47 @@ func TestNormalizeVivaTunnelProfileDefaults(t *testing.T) {
 		t.Fatalf("unexpected default vault env: %q", profile.VaultEnv)
 	}
 }
+
+func TestDefaultVivaRepoPathFindsSiblingRepo(t *testing.T) {
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(orig)
+	}()
+
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "viva"), 0o755); err != nil {
+		t.Fatalf("mkdir viva sibling: %v", err)
+	}
+	if err := os.Chdir(base); err != nil {
+		t.Fatalf("chdir base: %v", err)
+	}
+
+	got := defaultVivaRepoPath()
+	want := filepath.Join(base, "viva")
+	if got != want {
+		t.Fatalf("defaultVivaRepoPath()=%q want=%q", got, want)
+	}
+}
+
+func TestDefaultVivaRepoPathEmptyWhenMissing(t *testing.T) {
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(orig)
+	}()
+
+	base := t.TempDir()
+	if err := os.Chdir(base); err != nil {
+		t.Fatalf("chdir base: %v", err)
+	}
+
+	got := defaultVivaRepoPath()
+	if got != "" {
+		t.Fatalf("defaultVivaRepoPath()=%q want empty", got)
+	}
+}
