@@ -27,3 +27,5 @@ data/
 TASK_BOARD.md
 tools/si/vault.test
 tools/codex-stdout-parser/bin/
+
+tickets/
