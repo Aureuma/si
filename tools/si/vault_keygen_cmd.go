@@ -12,7 +12,7 @@ import (
 )
 
 func cmdVaultKeygen(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	fs := flag.NewFlagSet("vault keygen", flag.ExitOnError)
 	repoFlag := fs.String("repo", "", "vault repo slug (default: current git repo directory name)")
 	envFlag := fs.String("env", "", "vault environment (default: dev)")

@@ -247,3 +247,67 @@ func TestResolveSIVaultTargetRepoFlagOverridesEnvFileInference(t *testing.T) {
 		t.Fatalf("target.Repo=%q want=override-repo", target.Repo)
 	}
 }
+
+func TestEnsureSIVaultDecryptMaterialCompatibilityDetectsDrift(t *testing.T) {
+	pubExpected, _, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair expected: %v", err)
+	}
+	_, privActive, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair active: %v", err)
+	}
+	doc := vault.ParseDotenv([]byte(strings.Join([]string{
+		vault.SIVaultPublicKeyName + "=" + pubExpected,
+		"SECRET_TOKEN=encrypted:si-vault:Zm9v",
+		"",
+	}, "\n")))
+	material := sunVaultPrivateKey{
+		PublicKey:  "",
+		PrivateKey: privActive,
+	}
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = "https://sun.example"
+	settings.Sun.Account = "acme"
+	target := siVaultTarget{Repo: "viva", Env: "dev", EnvFile: "/tmp/.env.dev"}
+
+	err = ensureSIVaultDecryptMaterialCompatibility(doc, material, target, settings)
+	if err == nil {
+		t.Fatalf("expected drift error")
+	}
+	msg := strings.ToLower(err.Error())
+	if !strings.Contains(msg, "vault key drift detected") {
+		t.Fatalf("expected key drift error message, got %q", err.Error())
+	}
+	if !strings.Contains(msg, "viva/dev") {
+		t.Fatalf("expected repo/env in message, got %q", err.Error())
+	}
+}
+
+func TestEnsureSIVaultDecryptMaterialCompatibilityAllowsBackupKeyMatch(t *testing.T) {
+	pubExpected, privExpected, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair expected: %v", err)
+	}
+	_, privActive, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair active: %v", err)
+	}
+	doc := vault.ParseDotenv([]byte(strings.Join([]string{
+		vault.SIVaultPublicKeyName + "=" + pubExpected,
+		"SECRET_TOKEN=encrypted:si-vault:Zm9v",
+		"",
+	}, "\n")))
+	material := sunVaultPrivateKey{
+		PrivateKey:        privActive,
+		BackupPrivateKeys: []string{privExpected},
+	}
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	target := siVaultTarget{Repo: "viva", Env: "dev", EnvFile: "/tmp/.env.dev"}
+
+	if err := ensureSIVaultDecryptMaterialCompatibility(doc, material, target, settings); err != nil {
+		t.Fatalf("expected compatibility with backup key match, got %v", err)
+	}
+}

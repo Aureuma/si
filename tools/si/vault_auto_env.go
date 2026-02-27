@@ -39,7 +39,7 @@ func maybeAutoHydrateVaultEnvForRootCommand(cmd string) {
 	if !shouldAutoHydrateVaultEnvForRootCommand(cmd) {
 		return
 	}
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	_, _ = hydrateProcessEnvFromSunVault(settings, "root:"+strings.TrimSpace(cmd))
 }
 

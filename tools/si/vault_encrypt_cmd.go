@@ -9,7 +9,7 @@ import (
 )
 
 func cmdVaultEncrypt(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	fs := flag.NewFlagSet("vault encrypt", flag.ExitOnError)
 	var envFiles multiFlag
 	fs.Var(&envFiles, "env-file", "dotenv file path (repeatable)")

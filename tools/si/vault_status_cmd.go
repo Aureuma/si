@@ -12,7 +12,7 @@ import (
 )
 
 func cmdVaultStatus(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	fs := flag.NewFlagSet("vault status", flag.ExitOnError)
 	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
 	fileAlias := fs.String("file", "", "alias for --env-file")

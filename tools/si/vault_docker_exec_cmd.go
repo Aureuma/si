@@ -13,7 +13,7 @@ import (
 )
 
 func cmdVaultDockerExec(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	fs := flag.NewFlagSet("vault docker exec", flag.ExitOnError)
 	container := fs.String("container", "", "container name or id")
 	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")

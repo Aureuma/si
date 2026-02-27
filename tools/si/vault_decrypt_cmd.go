@@ -9,7 +9,7 @@ import (
 )
 
 func cmdVaultDecrypt(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	fs := flag.NewFlagSet("vault decrypt", flag.ExitOnError)
 	var envFiles multiFlag
 	fs.Var(&envFiles, "env-file", "dotenv file path (repeatable)")
@@ -61,6 +61,9 @@ func cmdVaultDecrypt(args []string) {
 		}
 		doc, err := readDotenvOrEmpty(target.EnvFile)
 		if err != nil {
+			fatal(err)
+		}
+		if err := ensureSIVaultDecryptMaterialCompatibility(doc, material, target, settings); err != nil {
 			fatal(err)
 		}
 		stats, err := decryptDotenvDoc(&doc, siVaultPrivateKeyCandidates(material), include, exclude)

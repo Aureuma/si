@@ -9,7 +9,7 @@ import (
 )
 
 func cmdVaultGet(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	args = stripeFlagsFirst(args, map[string]bool{"reveal": true})
 	fs := flag.NewFlagSet("vault get", flag.ExitOnError)
 	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
@@ -67,6 +67,9 @@ func cmdVaultGet(args []string) {
 	}
 	material, err := ensureSIVaultKeyMaterial(settings, target)
 	if err != nil {
+		fatal(err)
+	}
+	if err := ensureSIVaultDecryptMaterialCompatibility(doc, material, target, settings); err != nil {
 		fatal(err)
 	}
 	plain, err := vault.DecryptSIVaultValue(value, siVaultPrivateKeyCandidates(material))

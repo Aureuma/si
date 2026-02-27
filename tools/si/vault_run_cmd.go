@@ -13,7 +13,7 @@ import (
 )
 
 func cmdVaultRun(args []string) {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	fs := flag.NewFlagSet("vault run", flag.ExitOnError)
 	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
 	fileAlias := fs.String("file", "", "alias for --env-file")
@@ -53,6 +53,9 @@ func cmdVaultRun(args []string) {
 	}
 	material, err := ensureSIVaultKeyMaterial(settings, target)
 	if err != nil {
+		fatal(err)
+	}
+	if err := ensureSIVaultDecryptMaterialCompatibility(doc, material, target, settings); err != nil {
 		fatal(err)
 	}
 	values, plaintextKeys, err := decryptDotenvValues(doc, siVaultPrivateKeyCandidates(material))
