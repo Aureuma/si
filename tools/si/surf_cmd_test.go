@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestApplySurfConfigSet(t *testing.T) {
 	settings := defaultSettings()
@@ -84,5 +88,49 @@ func TestApplySurfSettingsEnv(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected existing SURF_STATE_DIR to be preserved once, got %d", count)
+	}
+}
+
+func TestDefaultSurfRepoPathFindsSiblingRepo(t *testing.T) {
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(orig)
+	}()
+
+	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "surf"), 0o755); err != nil {
+		t.Fatalf("mkdir surf sibling: %v", err)
+	}
+	if err := os.Chdir(base); err != nil {
+		t.Fatalf("chdir base: %v", err)
+	}
+
+	got := defaultSurfRepoPath()
+	want := filepath.Join(base, "surf")
+	if got != want {
+		t.Fatalf("defaultSurfRepoPath()=%q want=%q", got, want)
+	}
+}
+
+func TestDefaultSurfRepoPathEmptyWhenMissing(t *testing.T) {
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(orig)
+	}()
+
+	base := t.TempDir()
+	if err := os.Chdir(base); err != nil {
+		t.Fatalf("chdir base: %v", err)
+	}
+
+	got := defaultSurfRepoPath()
+	if got != "" {
+		t.Fatalf("defaultSurfRepoPath()=%q want empty", got)
 	}
 }

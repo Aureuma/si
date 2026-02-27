@@ -108,7 +108,7 @@ func defaultSurfRepoPath() string {
 			return cand
 		}
 	}
-	return filepath.Join("/home", "shawn", "Development", "surf")
+	return ""
 }
 
 func detectSurfBinary(repo string) string {

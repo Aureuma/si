@@ -239,7 +239,7 @@ func defaultVivaRepoPath() string {
 			return cand
 		}
 	}
-	return filepath.Join("/home", "shawn", "Development", "viva")
+	return ""
 }
 
 func detectVivaBinary(repo string) string {
