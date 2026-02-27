@@ -502,3 +502,60 @@ func TestSettingsModulePathViva(t *testing.T) {
 		t.Fatalf("unexpected viva settings path: got %q want %q", path, want)
 	}
 }
+
+func TestLoadSettingsParsesVivaTunnelProfiles(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+
+	vivaPath, err := settingsModulePath(settingsModuleViva)
+	if err != nil {
+		t.Fatalf("settingsModulePath(viva): %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(vivaPath), 0o700); err != nil {
+		t.Fatalf("mkdir viva settings dir: %v", err)
+	}
+	content := `
+schema_version = 1
+
+[viva]
+repo = "/work/viva"
+bin = "/work/viva/bin/viva"
+
+[viva.tunnel]
+default_profile = "dev"
+
+[viva.tunnel.profiles.dev]
+container_name = "viva-cloudflared-rm-dev-browser"
+vault_env_file = "/work/safe/viva/.env.dev"
+vault_repo = "viva"
+vault_env = "dev"
+
+[[viva.tunnel.profiles.dev.routes]]
+hostname = "ls-dev.lingospeak.ai"
+service = "http://127.0.0.1:3000"
+`
+	if err := os.WriteFile(vivaPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write viva settings: %v", err)
+	}
+
+	settings, err := loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if settings.Viva.Repo != "/work/viva" || settings.Viva.Bin != "/work/viva/bin/viva" {
+		t.Fatalf("unexpected viva wrapper settings: %#v", settings.Viva)
+	}
+	if settings.Viva.Tunnel.DefaultProfile != "dev" {
+		t.Fatalf("unexpected default profile: %q", settings.Viva.Tunnel.DefaultProfile)
+	}
+	profile, ok := settings.Viva.Tunnel.Profiles["dev"]
+	if !ok {
+		t.Fatalf("expected dev profile")
+	}
+	if profile.ContainerName != "viva-cloudflared-rm-dev-browser" {
+		t.Fatalf("unexpected container name: %q", profile.ContainerName)
+	}
+	if len(profile.Routes) != 1 || profile.Routes[0].Hostname != "ls-dev.lingospeak.ai" {
+		t.Fatalf("unexpected routes: %#v", profile.Routes)
+	}
+}

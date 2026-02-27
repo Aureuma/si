@@ -345,6 +345,35 @@ Environment overrides:
 - `SI_SUN_OPERATOR_ID`
 - `SI_VAULT_SYNC_BACKEND`
 
+### `[viva]`
+Defaults for `si viva` wrapper and Viva tunnel profile config.
+- `viva.repo` (string): default local `viva` repo path.
+- `viva.bin` (string): default `viva` binary path.
+- `viva.build` (bool): default `--build` behavior for wrapper executions.
+
+#### `[viva.tunnel]`
+- `viva.tunnel.default_profile` (string): default profile used by `viva tunnel` when `--profile` is omitted.
+
+#### `[viva.tunnel.profiles.<name>]`
+Per-profile Cloudflare tunnel runtime settings consumed by `viva tunnel`.
+- `name` (string): logical tunnel name.
+- `container_name` (string): docker container name for cloudflared.
+- `tunnel_id_env_key` (string): dotenv key for Cloudflare tunnel id (default: `VIVA_CLOUDFLARE_TUNNEL_ID`).
+- `credentials_env_key` (string): dotenv key for tunnel credentials JSON (default: `CLOUDFLARE_TUNNEL_CREDENTIALS_JSON`).
+- `metrics_addr` (string): cloudflared metrics bind address.
+- `image` (string): cloudflared image (default: `cloudflare/cloudflared:latest`).
+- `network_mode` (string): docker network mode (default: `host`).
+- `no_autoupdate` (bool): pass `--no-autoupdate`.
+- `pull_image` (bool): pull image before run.
+- `runtime_dir` (string): host runtime directory for generated files.
+- `vault_env_file` (string): encrypted dotenv file path used by `si vault`.
+- `vault_repo` (string): repo argument passed to `si vault` (default: `viva`).
+- `vault_env` (string): env argument passed to `si vault` (default: `dev`).
+
+##### `[[viva.tunnel.profiles.<name>.routes]]`
+- `hostname` (string, optional): ingress hostname.
+- `service` (string, required): upstream service URL or `http_status:404`.
+
 ### `[shell.prompt]`
 Prompt rendering for `si run` interactive shells. This applies without modifying `.bashrc`.
 - `shell.prompt.enabled` (bool): enable/disable prompt customization

@@ -462,9 +462,37 @@ type SurfTunnelSettings struct {
 }
 
 type VivaSettings struct {
-	Repo  string `toml:"repo,omitempty"`
-	Bin   string `toml:"bin,omitempty"`
-	Build *bool  `toml:"build,omitempty"`
+	Repo   string             `toml:"repo,omitempty"`
+	Bin    string             `toml:"bin,omitempty"`
+	Build  *bool              `toml:"build,omitempty"`
+	Tunnel VivaTunnelSettings `toml:"tunnel,omitempty"`
+}
+
+type VivaTunnelSettings struct {
+	DefaultProfile string                       `toml:"default_profile,omitempty"`
+	Profiles       map[string]VivaTunnelProfile `toml:"profiles,omitempty"`
+}
+
+type VivaTunnelProfile struct {
+	Name              string            `toml:"name,omitempty"`
+	ContainerName     string            `toml:"container_name,omitempty"`
+	TunnelIDEnvKey    string            `toml:"tunnel_id_env_key,omitempty"`
+	CredentialsEnvKey string            `toml:"credentials_env_key,omitempty"`
+	MetricsAddr       string            `toml:"metrics_addr,omitempty"`
+	Image             string            `toml:"image,omitempty"`
+	NetworkMode       string            `toml:"network_mode,omitempty"`
+	NoAutoupdate      *bool             `toml:"no_autoupdate,omitempty"`
+	PullImage         *bool             `toml:"pull_image,omitempty"`
+	RuntimeDir        string            `toml:"runtime_dir,omitempty"`
+	VaultEnvFile      string            `toml:"vault_env_file,omitempty"`
+	VaultRepo         string            `toml:"vault_repo,omitempty"`
+	VaultEnv          string            `toml:"vault_env,omitempty"`
+	Routes            []VivaTunnelRoute `toml:"routes,omitempty"`
+}
+
+type VivaTunnelRoute struct {
+	Hostname string `toml:"hostname,omitempty"`
+	Service  string `toml:"service,omitempty"`
 }
 
 type SunSettings struct {
@@ -1094,6 +1122,29 @@ func applySettingsDefaults(settings *Settings) {
 	}
 	settings.Viva.Repo = strings.TrimSpace(settings.Viva.Repo)
 	settings.Viva.Bin = strings.TrimSpace(settings.Viva.Bin)
+	settings.Viva.Tunnel.DefaultProfile = strings.TrimSpace(settings.Viva.Tunnel.DefaultProfile)
+	if len(settings.Viva.Tunnel.Profiles) > 0 {
+		norm := make(map[string]VivaTunnelProfile, len(settings.Viva.Tunnel.Profiles))
+		for key, profile := range settings.Viva.Tunnel.Profiles {
+			profileKey := strings.ToLower(strings.TrimSpace(key))
+			if profileKey == "" {
+				continue
+			}
+			norm[profileKey] = normalizeVivaTunnelProfile(profile)
+		}
+		settings.Viva.Tunnel.Profiles = norm
+		if settings.Viva.Tunnel.DefaultProfile == "" {
+			if _, ok := norm["dev"]; ok {
+				settings.Viva.Tunnel.DefaultProfile = "dev"
+			}
+		}
+		if settings.Viva.Tunnel.DefaultProfile != "" {
+			settings.Viva.Tunnel.DefaultProfile = strings.ToLower(settings.Viva.Tunnel.DefaultProfile)
+			if _, ok := settings.Viva.Tunnel.Profiles[settings.Viva.Tunnel.DefaultProfile]; !ok {
+				settings.Viva.Tunnel.DefaultProfile = ""
+			}
+		}
+	}
 	mergeSunSettings(settings)
 	settings.Sun.BaseURL = strings.TrimSpace(settings.Sun.BaseURL)
 	if settings.Sun.BaseURL == "" {
@@ -1599,6 +1650,59 @@ func updateSettingsProfile(profile codexProfile) error {
 		settings.Codex.Profiles.Entries[profile.ID] = entry
 	}
 	return saveSettings(settings)
+}
+
+func normalizeVivaTunnelProfile(profile VivaTunnelProfile) VivaTunnelProfile {
+	profile.Name = strings.TrimSpace(profile.Name)
+	profile.ContainerName = strings.TrimSpace(profile.ContainerName)
+	profile.TunnelIDEnvKey = strings.TrimSpace(profile.TunnelIDEnvKey)
+	if profile.TunnelIDEnvKey == "" {
+		profile.TunnelIDEnvKey = "VIVA_CLOUDFLARE_TUNNEL_ID"
+	}
+	profile.CredentialsEnvKey = strings.TrimSpace(profile.CredentialsEnvKey)
+	if profile.CredentialsEnvKey == "" {
+		profile.CredentialsEnvKey = "CLOUDFLARE_TUNNEL_CREDENTIALS_JSON"
+	}
+	profile.MetricsAddr = strings.TrimSpace(profile.MetricsAddr)
+	profile.Image = strings.TrimSpace(profile.Image)
+	if profile.Image == "" {
+		profile.Image = "cloudflare/cloudflared:latest"
+	}
+	profile.NetworkMode = strings.TrimSpace(profile.NetworkMode)
+	if profile.NetworkMode == "" {
+		profile.NetworkMode = "host"
+	}
+	if profile.NoAutoupdate == nil {
+		profile.NoAutoupdate = boolPtr(true)
+	}
+	if profile.PullImage == nil {
+		profile.PullImage = boolPtr(true)
+	}
+	profile.RuntimeDir = strings.TrimSpace(profile.RuntimeDir)
+	profile.VaultEnvFile = strings.TrimSpace(profile.VaultEnvFile)
+	profile.VaultRepo = strings.TrimSpace(profile.VaultRepo)
+	if profile.VaultRepo == "" {
+		profile.VaultRepo = "viva"
+	}
+	profile.VaultEnv = strings.ToLower(strings.TrimSpace(profile.VaultEnv))
+	if profile.VaultEnv == "" {
+		profile.VaultEnv = "dev"
+	}
+	if len(profile.Routes) > 0 {
+		routes := make([]VivaTunnelRoute, 0, len(profile.Routes))
+		for _, r := range profile.Routes {
+			route := VivaTunnelRoute{
+				Hostname: strings.TrimSpace(r.Hostname),
+				Service:  strings.TrimSpace(r.Service),
+			}
+			if route.Service == "" {
+				continue
+			}
+			routes = append(routes, route)
+		}
+		profile.Routes = routes
+	}
+	return profile
 }
 
 func boolPtr(val bool) *bool {
