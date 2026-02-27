@@ -46,6 +46,8 @@ func cmdVaultStatus(args []string) {
 	plaintextCount := 0
 	keyCount := 0
 	var plaintextKeys []string
+	decryptability := siVaultDecryptabilityStats{Undecryptable: []string{}}
+	var decryptabilityErr error
 	if readErr == nil {
 		entries, entriesErr := vault.Entries(doc)
 		if entriesErr == nil {
@@ -64,6 +66,9 @@ func cmdVaultStatus(args []string) {
 			sort.Strings(plaintextKeys)
 		} else {
 			readErr = entriesErr
+		}
+		if readErr == nil && keyErr == nil {
+			decryptability, decryptabilityErr = analyzeDotenvDecryptability(doc, siVaultPrivateKeyCandidates(material))
 		}
 	}
 
@@ -87,11 +92,18 @@ func cmdVaultStatus(args []string) {
 		} else {
 			payload["key_error"] = keyErr.Error()
 		}
+		if decryptabilityErr == nil {
+			payload["decryptable_encrypted_keys"] = decryptability.Decryptable
+			payload["undecryptable_encrypted_keys"] = len(decryptability.Undecryptable)
+			payload["undecryptable_keys"] = decryptability.Undecryptable
+		} else {
+			payload["decryptability_error"] = decryptabilityErr.Error()
+		}
 		if readErr != nil {
 			payload["file_error"] = readErr.Error()
 		}
 		printJSON(payload)
-		if keyErr != nil || readErr != nil {
+		if keyErr != nil || readErr != nil || decryptabilityErr != nil || len(decryptability.Undecryptable) > 0 {
 			os.Exit(1)
 		}
 		return
@@ -113,10 +125,20 @@ func cmdVaultStatus(args []string) {
 	fmt.Printf("file_keys:      %d\n", keyCount)
 	fmt.Printf("encrypted:      %d\n", encryptedCount)
 	fmt.Printf("plaintext:      %d\n", plaintextCount)
+	if keyErr == nil {
+		switch {
+		case decryptabilityErr != nil:
+			fmt.Printf("decryptability: error (%v)\n", decryptabilityErr)
+		case len(decryptability.Undecryptable) > 0:
+			fmt.Printf("decryptability: error (%d undecryptable encrypted keys: %s)\n", len(decryptability.Undecryptable), strings.Join(decryptability.Undecryptable, ", "))
+		default:
+			fmt.Printf("decryptability: ok (%d/%d encrypted keys)\n", decryptability.Decryptable, decryptability.Encrypted)
+		}
+	}
 	if plaintextCount > 0 {
 		fmt.Printf("plaintext_keys: %s\n", strings.Join(plaintextKeys, ", "))
 	}
-	if keyErr != nil {
+	if keyErr != nil || decryptabilityErr != nil || len(decryptability.Undecryptable) > 0 {
 		os.Exit(1)
 	}
 }
