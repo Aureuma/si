@@ -474,20 +474,21 @@ type VivaTunnelSettings struct {
 }
 
 type VivaTunnelProfile struct {
-	Name              string            `toml:"name,omitempty"`
-	ContainerName     string            `toml:"container_name,omitempty"`
-	TunnelIDEnvKey    string            `toml:"tunnel_id_env_key,omitempty"`
-	CredentialsEnvKey string            `toml:"credentials_env_key,omitempty"`
-	MetricsAddr       string            `toml:"metrics_addr,omitempty"`
-	Image             string            `toml:"image,omitempty"`
-	NetworkMode       string            `toml:"network_mode,omitempty"`
-	NoAutoupdate      *bool             `toml:"no_autoupdate,omitempty"`
-	PullImage         *bool             `toml:"pull_image,omitempty"`
-	RuntimeDir        string            `toml:"runtime_dir,omitempty"`
-	VaultEnvFile      string            `toml:"vault_env_file,omitempty"`
-	VaultRepo         string            `toml:"vault_repo,omitempty"`
-	VaultEnv          string            `toml:"vault_env,omitempty"`
-	Routes            []VivaTunnelRoute `toml:"routes,omitempty"`
+	Name               string            `toml:"name,omitempty"`
+	ContainerName      string            `toml:"container_name,omitempty"`
+	TunnelIDEnvKey     string            `toml:"tunnel_id_env_key,omitempty"`
+	CredentialsEnvKey  string            `toml:"credentials_env_key,omitempty"`
+	MetricsAddr        string            `toml:"metrics_addr,omitempty"`
+	Image              string            `toml:"image,omitempty"`
+	NetworkMode        string            `toml:"network_mode,omitempty"`
+	AdditionalNetworks []string          `toml:"additional_networks,omitempty"`
+	NoAutoupdate       *bool             `toml:"no_autoupdate,omitempty"`
+	PullImage          *bool             `toml:"pull_image,omitempty"`
+	RuntimeDir         string            `toml:"runtime_dir,omitempty"`
+	VaultEnvFile       string            `toml:"vault_env_file,omitempty"`
+	VaultRepo          string            `toml:"vault_repo,omitempty"`
+	VaultEnv           string            `toml:"vault_env,omitempty"`
+	Routes             []VivaTunnelRoute `toml:"routes,omitempty"`
 }
 
 type VivaTunnelRoute struct {
@@ -1671,6 +1672,26 @@ func normalizeVivaTunnelProfile(profile VivaTunnelProfile) VivaTunnelProfile {
 	profile.NetworkMode = strings.TrimSpace(profile.NetworkMode)
 	if profile.NetworkMode == "" {
 		profile.NetworkMode = "host"
+	}
+	if len(profile.AdditionalNetworks) > 0 {
+		seen := map[string]bool{}
+		primary := strings.TrimSpace(profile.NetworkMode)
+		if primary != "" {
+			seen[primary] = true
+		}
+		networks := make([]string, 0, len(profile.AdditionalNetworks))
+		for _, raw := range profile.AdditionalNetworks {
+			nw := strings.TrimSpace(raw)
+			if nw == "" {
+				continue
+			}
+			if seen[nw] {
+				continue
+			}
+			seen[nw] = true
+			networks = append(networks, nw)
+		}
+		profile.AdditionalNetworks = networks
 	}
 	if profile.NoAutoupdate == nil {
 		profile.NoAutoupdate = boolPtr(true)

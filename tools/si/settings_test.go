@@ -526,6 +526,8 @@ default_profile = "dev"
 
 [viva.tunnel.profiles.dev]
 container_name = "viva-cloudflared-rm-dev-browser"
+network_mode = "viva-shared"
+additional_networks = ["si", "viva-shared", " ", "supabase_default"]
 vault_env_file = "/work/safe/viva/.env.dev"
 vault_repo = "viva"
 vault_env = "dev"
@@ -554,6 +556,9 @@ service = "http://127.0.0.1:3000"
 	}
 	if profile.ContainerName != "viva-cloudflared-rm-dev-browser" {
 		t.Fatalf("unexpected container name: %q", profile.ContainerName)
+	}
+	if len(profile.AdditionalNetworks) != 2 || profile.AdditionalNetworks[0] != "si" || profile.AdditionalNetworks[1] != "supabase_default" {
+		t.Fatalf("unexpected additional networks: %#v", profile.AdditionalNetworks)
 	}
 	if len(profile.Routes) != 1 || profile.Routes[0].Hostname != "ls-dev.lingospeak.ai" {
 		t.Fatalf("unexpected routes: %#v", profile.Routes)
