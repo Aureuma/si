@@ -26,7 +26,7 @@ func vaultWriteDotenvFileAtomic(path string, contents []byte) error {
 }
 
 func shouldEnforceVaultGitIndexGuard() bool {
-	settings := loadSettingsOrDefault()
+	settings := loadVaultSettingsOrFail()
 	return shouldEnforceVaultRepoScope(settings)
 }
 

@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -40,6 +41,14 @@ type siVaultEncryptStats struct {
 
 type siVaultDecryptStats struct {
 	Decrypted int
+}
+
+func loadVaultSettingsOrFail() Settings {
+	settings, err := loadSettings()
+	if err != nil {
+		fatal(fmt.Errorf("vault settings load failed; refusing default fallback: %w", err))
+	}
+	return settings
 }
 
 func resolveSIVaultTarget(repoFlag string, envFlag string, envFileFlag string) (siVaultTarget, error) {
@@ -333,6 +342,97 @@ func ensureSIVaultPublicKeyHeader(doc *vault.DotenvFile, publicKey string) (bool
 		doc.Lines = append(doc.Lines[:blankIdx+1], doc.Lines[blankIdx+2:]...)
 	}
 	return before != string(doc.Bytes()), nil
+}
+
+func dotenvSIVaultPublicKey(doc vault.DotenvFile) (string, bool, error) {
+	raw, ok := doc.Lookup(vault.SIVaultPublicKeyName)
+	if !ok {
+		return "", false, nil
+	}
+	value, err := vault.NormalizeDotenvValue(raw)
+	if err != nil {
+		return "", true, fmt.Errorf("normalize %s: %w", vault.SIVaultPublicKeyName, err)
+	}
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return "", true, fmt.Errorf("%s is empty", vault.SIVaultPublicKeyName)
+	}
+	return value, true, nil
+}
+
+func siVaultPublicKeyCandidates(material sunVaultPrivateKey) []string {
+	seen := map[string]struct{}{}
+	out := []string{}
+	appendPublic := func(raw string) {
+		raw = strings.TrimSpace(strings.ToLower(raw))
+		if raw == "" {
+			return
+		}
+		if _, ok := seen[raw]; ok {
+			return
+		}
+		seen[raw] = struct{}{}
+		out = append(out, raw)
+	}
+	appendPublic(material.PublicKey)
+	for _, privateKey := range siVaultPrivateKeyCandidates(material) {
+		priv, err := ecies.NewPrivateKeyFromHex(privateKey)
+		if err != nil {
+			continue
+		}
+		appendPublic(priv.PublicKey.Hex(true))
+	}
+	return out
+}
+
+func ensureSIVaultDecryptMaterialCompatibility(doc vault.DotenvFile, material sunVaultPrivateKey, target siVaultTarget, settings Settings) error {
+	entries, err := vault.Entries(doc)
+	if err != nil {
+		return err
+	}
+	hasEncrypted := false
+	for _, entry := range entries {
+		key := strings.TrimSpace(entry.Key)
+		if key == "" || key == vault.SIVaultPublicKeyName {
+			continue
+		}
+		if vault.IsSIVaultEncryptedValue(entry.ValueRaw) {
+			hasEncrypted = true
+			break
+		}
+	}
+	if !hasEncrypted {
+		return nil
+	}
+
+	expected, hasHeader, err := dotenvSIVaultPublicKey(doc)
+	if err != nil {
+		return err
+	}
+	if !hasHeader {
+		return nil
+	}
+	candidates := siVaultPublicKeyCandidates(material)
+	if slices.Contains(candidates, expected) {
+		return nil
+	}
+	active := strings.TrimSpace(strings.ToLower(material.PublicKey))
+	if active == "" && len(candidates) > 0 {
+		active = candidates[0]
+	}
+	return fmt.Errorf(
+		"vault key drift detected for %s/%s (%s): dotenv %s=%s does not match active Sun key material (base_url=%s account=%s active_public_key=%s); verify SI_SETTINGS_HOME and Sun auth context, then rerun `si sun auth status` and `si vault keypair --repo %s --env %s`",
+		target.Repo,
+		target.Env,
+		target.EnvFile,
+		vault.SIVaultPublicKeyName,
+		expected,
+		strings.TrimSpace(settings.Sun.BaseURL),
+		strings.TrimSpace(settings.Sun.Account),
+		active,
+		target.Repo,
+		target.Env,
+	)
 }
 
 func dotenvAssignmentKey(line string) (string, bool) {
