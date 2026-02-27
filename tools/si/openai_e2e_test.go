@@ -268,11 +268,12 @@ func TestOpenAIE2E_AuthCodexStatusRequiresProfileWhenMultipleConfigured(t *testi
 
 func writeCodexOpenAIE2ESettings(t *testing.T, home string, profiles map[string]map[string]string, active string) {
 	t.Helper()
-	settingsDir := filepath.Join(home, ".si")
+	settingsDir := filepath.Join(home, ".si", "codex")
 	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
 		t.Fatalf("mkdir settings dir: %v", err)
 	}
 	var b strings.Builder
+	b.WriteString("schema_version = 1\n\n")
 	b.WriteString("[codex]\n")
 	if strings.TrimSpace(active) != "" {
 		b.WriteString(`profile = "` + active + "\"\n")

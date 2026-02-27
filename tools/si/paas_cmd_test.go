@@ -55,6 +55,39 @@ type paasDoctorPayload struct {
 	Checks  []doctorCheck `json:"checks"`
 }
 
+func setupPaasMockSunVault(t *testing.T, vaultFile string, token string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+	t.Setenv("SI_SUN_BASE_URL", "")
+	t.Setenv("SI_SUN_TOKEN", "")
+
+	server, store := newSunTestServer(t, "acme", token)
+	t.Cleanup(server.Close)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = token
+	settings.Sun.Account = "acme"
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	target, err := vaultResolveTarget(settings, vaultFile, false)
+	if err != nil {
+		t.Fatalf("resolve target: %v", err)
+	}
+	store.mu.Lock()
+	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
+	store.payloads[objectKey] = []byte("prod\n")
+	store.revs[objectKey] = 1
+	store.metadata[objectKey] = map[string]any{"deleted": false}
+	store.created[objectKey] = "2026-01-01T00:00:00Z"
+	store.updated[objectKey] = "2026-01-02T00:00:00Z"
+	store.mu.Unlock()
+}
+
 func TestPaasNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
 	out := captureStdout(t, func() {
 		cmdPaas(nil)
@@ -1239,6 +1272,14 @@ func TestEnforcePaasSecretRevealGuardrail(t *testing.T) {
 }
 
 func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+	t.Setenv("SI_SUN_BASE_URL", "")
+	t.Setenv("SI_SUN_TOKEN", "")
+	server, store := newSunTestServer(t, "acme", "token-paas-prune")
+	defer server.Close()
+
 	stateRoot := t.TempDir()
 	composePath := filepath.Join(t.TempDir(), "compose.yaml")
 	vaultFile := filepath.Join(t.TempDir(), ".env")
@@ -1246,6 +1287,27 @@ func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-paas-prune"
+	settings.Sun.Account = "acme"
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	target, err := vaultResolveTarget(settings, vaultFile, false)
+	if err != nil {
+		t.Fatalf("resolve target: %v", err)
+	}
+	store.mu.Lock()
+	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
+	store.payloads[objectKey] = []byte("prod\n")
+	store.revs[objectKey] = 1
+	store.metadata[objectKey] = map[string]any{"deleted": false}
+	store.created[objectKey] = "2026-01-01T00:00:00Z"
+	store.updated[objectKey] = "2026-01-02T00:00:00Z"
+	store.mu.Unlock()
 
 	composeBody := strings.Join([]string{
 		"services:",
@@ -1325,6 +1387,14 @@ func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
 }
 
 func TestPaasDeployReconcileDetectsDriftAndOrphans(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_SETTINGS_HOME", home)
+	t.Setenv("SI_SUN_BASE_URL", "")
+	t.Setenv("SI_SUN_TOKEN", "")
+	server, store := newSunTestServer(t, "acme", "token-paas-reconcile")
+	defer server.Close()
+
 	stateRoot := t.TempDir()
 	composePath := filepath.Join(t.TempDir(), "compose.yaml")
 	vaultFile := filepath.Join(t.TempDir(), ".env")
@@ -1334,6 +1404,27 @@ func TestPaasDeployReconcileDetectsDriftAndOrphans(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	settings := defaultSettings()
+	applySettingsDefaults(&settings)
+	settings.Sun.BaseURL = server.URL
+	settings.Sun.Token = "token-paas-reconcile"
+	settings.Sun.Account = "acme"
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	target, err := vaultResolveTarget(settings, vaultFile, false)
+	if err != nil {
+		t.Fatalf("resolve target: %v", err)
+	}
+	store.mu.Lock()
+	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
+	store.payloads[objectKey] = []byte("prod\n")
+	store.revs[objectKey] = 1
+	store.metadata[objectKey] = map[string]any{"deleted": false}
+	store.created[objectKey] = "2026-01-01T00:00:00Z"
+	store.updated[objectKey] = "2026-01-02T00:00:00Z"
+	store.mu.Unlock()
 
 	composeBody := strings.Join([]string{
 		"services:",
@@ -1419,6 +1510,7 @@ func TestPaasDeployCreatesReleaseBundleMetadata(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+	setupPaasMockSunVault(t, vaultFile, "token-paas-bundle")
 
 	composeBody := strings.Join([]string{
 		"services:",
@@ -1488,6 +1580,7 @@ func TestPaasDeployApplyUsesRemoteTransport(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+	setupPaasMockSunVault(t, vaultFile, "token-paas-apply")
 
 	composeBody := strings.Join([]string{
 		"services:",
@@ -1581,6 +1674,7 @@ func TestPaasDeployResolvesMagicVariablesAndAddonComposeManifest(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+	setupPaasMockSunVault(t, vaultFile, "token-paas-magic")
 
 	composeBody := strings.Join([]string{
 		"services:",
@@ -1743,6 +1837,7 @@ func TestPaasDeployBlueGreenApplyUsesComposeOnlyCutoverPolicy(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+	setupPaasMockSunVault(t, vaultFile, "token-paas-bluegreen")
 
 	composeBody := strings.Join([]string{
 		"services:",
@@ -2960,6 +3055,7 @@ func TestPaasRegressionUpgradeDeployRollbackPath(t *testing.T) {
 	t.Setenv(paasStateRootEnvKey, stateRoot)
 	t.Setenv("SI_VAULT_FILE", vaultFile)
 	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+	setupPaasMockSunVault(t, vaultFile, "token-paas-regression")
 
 	composeBody := strings.Join([]string{
 		"services:",
