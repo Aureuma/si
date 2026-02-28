@@ -442,9 +442,19 @@ func encryptGitHubSecretValue(base64PublicKey string, plaintext string) (string,
 	if err != nil {
 		return "", fmt.Errorf("generate ephemeral key: %w", err)
 	}
-	nonceBytes := blake2b.Sum256(append(ephemeralPub[:], recipientPub[:]...))
+	nonceHash, err := blake2b.New(24, nil)
+	if err != nil {
+		return "", fmt.Errorf("init nonce hash: %w", err)
+	}
+	if _, err := nonceHash.Write(ephemeralPub[:]); err != nil {
+		return "", fmt.Errorf("hash ephemeral key: %w", err)
+	}
+	if _, err := nonceHash.Write(recipientPub[:]); err != nil {
+		return "", fmt.Errorf("hash recipient key: %w", err)
+	}
+	nonceBytes := nonceHash.Sum(nil)
 	var nonce [24]byte
-	copy(nonce[:], nonceBytes[:24])
+	copy(nonce[:], nonceBytes)
 	sealed := box.Seal(nil, []byte(plaintext), &nonce, &recipientPub, ephemeralPriv)
 	out := make([]byte, 0, len(ephemeralPub)+len(sealed))
 	out = append(out, ephemeralPub[:]...)
