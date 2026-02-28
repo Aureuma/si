@@ -48,7 +48,7 @@ SI mapping:
 
 ### SI (`tools/si`)
 
-- `orbitmarket` now includes sharded gateway types:
+- `orbital` now includes sharded gateway types:
   - `GatewayIndex`
   - `GatewayShard`
   - deterministic `GatewayShardKey(...)`

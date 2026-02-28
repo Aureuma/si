@@ -45,7 +45,7 @@ Features:
   - Docker passthrough for raw docker CLI calls.
   - Surf browser runtime bridge for Playwright headed sessions.
   - Remote control bridge for sharing local terminal sessions in a browser.
-  - Orbit marketplace and integration registry (catalog/install/enable/doctor/scaffold).
+  - Orbital and integration registry (catalog/install/enable/doctor/scaffold).
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
 Usage:
