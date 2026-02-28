@@ -1,4 +1,4 @@
-# si
+# ⚛️ si
 
 <p align="center">
   <img src="assets/images/si-hero.png" alt="si hero illustration" width="780" />
