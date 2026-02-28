@@ -89,24 +89,7 @@ git push origin vX.Y.Z
 - If you let `gh release create` auto-create a tag, fetch tags afterward to sync locally: `git fetch --tags origin`.
 - If you do let it auto-create a tag, use `--target <branch|sha>` to pin the release to the desired commit.
 
-### 7) Prefer automated ReleaseMind runbook
-After pushing `vX.Y.Z`, workflow `.github/workflows/releasemind-release.yml` can:
-- create/verify a draft release for the tag
-- generate release notes via ReleaseMind automation
-- publish the release non-interactively
-- run preflight tag/version validation before ReleaseMind prepare
-- wait for `CLI Release Assets` workflow success after publish
-
-Required repository secrets:
-- `RELEASEMIND_API_BASE_URL`
-- `RELEASEMIND_AUTOMATION_TOKEN`
-
-Manual trigger:
-```
-gh workflow run releasemind-release.yml -f tag=vX.Y.Z -f publish=true
-```
-
-### 8) Prepare release notes manually (fallback)
+### 7) Prepare release notes and publish release
 If you need a quick summary of commits since the last release:
 ```
 git log --oneline "$(git describe --tags --abbrev=0)..HEAD"
@@ -145,20 +128,14 @@ Notes:
 - Add `--notes-start-tag vA.B.C` to define the start tag for generated notes when needed.
 - Add `--fail-on-no-commits` if you want to prevent duplicate releases when there are no new commits.
 
-### 9) Verify the published release
+### 8) Verify the published release
 ```
 gh release view vX.Y.Z --web
 ```
 - Confirm title, notes, and tag target are correct.
 - Optional: if your repo uses release attestations, run `gh release verify vX.Y.Z`.
 
-### 10) Verify automated release workflows
-Check ReleaseMind release workflow:
-```
-gh run list --workflow "ReleaseMind Release Runbook" --limit 1
-```
-
-### 11) Verify automated CLI release assets
+### 9) Verify automated CLI release assets
 When a GitHub Release is published, workflow `.github/workflows/cli-release-assets.yml`
 builds and uploads CLI archives automatically, then:
 - publishes npm package `@aureuma/si` (when `NPM_TOKEN` secret is configured)

@@ -525,15 +525,15 @@ bin = "/work/viva/bin/viva"
 default_profile = "dev"
 
 [viva.tunnel.profiles.dev]
-container_name = "viva-cloudflared-rm-dev-browser"
+container_name = "viva-cloudflared-dev-browser"
 network_mode = "viva-shared"
 additional_networks = ["si", "viva-shared", " ", "supabase_default"]
-vault_env_file = "/work/safe/viva/.env.dev"
-vault_repo = "viva"
+vault_env_file = "/work/safe/sampleapp/.env.dev"
+vault_repo = "sampleapp"
 vault_env = "dev"
 
 [[viva.tunnel.profiles.dev.routes]]
-hostname = "ls-dev.lingospeak.ai"
+hostname = "dev.example.app"
 service = "http://127.0.0.1:3000"
 `
 	if err := os.WriteFile(vivaPath, []byte(content), 0o600); err != nil {
@@ -554,13 +554,13 @@ service = "http://127.0.0.1:3000"
 	if !ok {
 		t.Fatalf("expected dev profile")
 	}
-	if profile.ContainerName != "viva-cloudflared-rm-dev-browser" {
+	if profile.ContainerName != "viva-cloudflared-dev-browser" {
 		t.Fatalf("unexpected container name: %q", profile.ContainerName)
 	}
 	if len(profile.AdditionalNetworks) != 2 || profile.AdditionalNetworks[0] != "si" || profile.AdditionalNetworks[1] != "supabase_default" {
 		t.Fatalf("unexpected additional networks: %#v", profile.AdditionalNetworks)
 	}
-	if len(profile.Routes) != 1 || profile.Routes[0].Hostname != "ls-dev.lingospeak.ai" {
+	if len(profile.Routes) != 1 || profile.Routes[0].Hostname != "dev.example.app" {
 		t.Fatalf("unexpected routes: %#v", profile.Routes)
 	}
 }
