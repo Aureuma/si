@@ -14,7 +14,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"si/tools/si/internal/pluginmarket"
+	"si/tools/si/internal/orbitmarket"
 	"si/tools/si/internal/providers"
 )
 
@@ -509,8 +509,8 @@ type SunSettings struct {
 	Token                 string `toml:"token,omitempty"`
 	TimeoutSeconds        int    `toml:"timeout_seconds,omitempty"`
 	AutoSync              bool   `toml:"auto_sync,omitempty"`
-	PluginGatewayRegistry string `toml:"plugin_gateway_registry,omitempty"`
-	PluginGatewaySlots    int    `toml:"plugin_gateway_slots,omitempty"`
+	OrbitGatewayRegistry  string `toml:"orbit_gateway_registry,omitempty"`
+	OrbitGatewaySlots     int    `toml:"orbit_gateway_slots,omitempty"`
 	Taskboard             string `toml:"taskboard,omitempty"`
 	TaskboardAgent        string `toml:"taskboard_agent,omitempty"`
 	TaskboardLeaseSeconds int    `toml:"taskboard_lease_seconds,omitempty"`
@@ -590,11 +590,11 @@ func mergeSunSettings(settings *Settings) {
 	if sun.AutoSync {
 		settings.Sun.AutoSync = true
 	}
-	if trimmed := strings.TrimSpace(sun.PluginGatewayRegistry); trimmed != "" {
-		settings.Sun.PluginGatewayRegistry = trimmed
+	if trimmed := strings.TrimSpace(sun.OrbitGatewayRegistry); trimmed != "" {
+		settings.Sun.OrbitGatewayRegistry = trimmed
 	}
-	if sun.PluginGatewaySlots > 0 {
-		settings.Sun.PluginGatewaySlots = sun.PluginGatewaySlots
+	if sun.OrbitGatewaySlots > 0 {
+		settings.Sun.OrbitGatewaySlots = sun.OrbitGatewaySlots
 	}
 	if trimmed := strings.TrimSpace(sun.Taskboard); trimmed != "" {
 		settings.Sun.Taskboard = trimmed
@@ -1169,15 +1169,15 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Sun.TimeoutSeconds <= 0 {
 		settings.Sun.TimeoutSeconds = 15
 	}
-	settings.Sun.PluginGatewayRegistry = strings.TrimSpace(settings.Sun.PluginGatewayRegistry)
-	if settings.Sun.PluginGatewayRegistry == "" {
-		settings.Sun.PluginGatewayRegistry = defaultPluginGatewayName
+	settings.Sun.OrbitGatewayRegistry = strings.TrimSpace(settings.Sun.OrbitGatewayRegistry)
+	if settings.Sun.OrbitGatewayRegistry == "" {
+		settings.Sun.OrbitGatewayRegistry = defaultOrbitGatewayName
 	}
-	if settings.Sun.PluginGatewaySlots <= 0 {
-		settings.Sun.PluginGatewaySlots = pluginmarket.GatewayDefaultSlotsPerNamespace
+	if settings.Sun.OrbitGatewaySlots <= 0 {
+		settings.Sun.OrbitGatewaySlots = orbitmarket.GatewayDefaultSlotsPerNamespace
 	}
-	if settings.Sun.PluginGatewaySlots > pluginmarket.GatewayMaxSlotsPerNamespace {
-		settings.Sun.PluginGatewaySlots = pluginmarket.GatewayMaxSlotsPerNamespace
+	if settings.Sun.OrbitGatewaySlots > orbitmarket.GatewayMaxSlotsPerNamespace {
+		settings.Sun.OrbitGatewaySlots = orbitmarket.GatewayMaxSlotsPerNamespace
 	}
 	settings.Sun.Taskboard = strings.TrimSpace(settings.Sun.Taskboard)
 	if settings.Sun.Taskboard == "" {

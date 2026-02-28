@@ -1,16 +1,19 @@
-package pluginmarket
+package orbitmarket
 
 import (
 	"archive/tar"
 	"archive/zip"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -21,28 +24,30 @@ import (
 )
 
 const (
-	ManifestFileName = "si.plugin.json"
+	ManifestFileName = "si.orbit.json"
 	SchemaVersion    = 1
-	CatalogPathsEnv  = "SI_PLUGIN_CATALOG_PATHS"
+	CatalogPathsEnv  = "SI_ORBIT_CATALOG_PATHS"
 )
 
 const (
-	InstallTypeNone      = "none"
-	InstallTypeLocalPath = "local_path"
-	InstallTypeMCPHTTP   = "mcp_http"
-	InstallTypeOCIImage  = "oci_image"
-	InstallTypeGit       = "git"
+	InstallTypeNone       = "none"
+	InstallTypeLocalPath  = "local_path"
+	InstallTypeURLArchive = "url_archive"
+	InstallTypeMCPHTTP    = "mcp_http"
+	InstallTypeOCIImage   = "oci_image"
+	InstallTypeGit        = "git"
 )
 
 var (
-	pluginIDSegmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
-	maturityValues         = map[string]bool{"": true, "experimental": true, "beta": true, "ga": true}
-	installTypeValues      = map[string]bool{
-		InstallTypeNone:      true,
-		InstallTypeLocalPath: true,
-		InstallTypeMCPHTTP:   true,
-		InstallTypeOCIImage:  true,
-		InstallTypeGit:       true,
+	orbitIDSegmentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
+	maturityValues        = map[string]bool{"": true, "experimental": true, "beta": true, "ga": true}
+	installTypeValues     = map[string]bool{
+		InstallTypeNone:       true,
+		InstallTypeLocalPath:  true,
+		InstallTypeURLArchive: true,
+		InstallTypeMCPHTTP:    true,
+		InstallTypeOCIImage:   true,
+		InstallTypeGit:        true,
 	}
 )
 
@@ -157,7 +162,7 @@ func DefaultPaths() (Paths, error) {
 		}
 		return Paths{}, err
 	}
-	root := filepath.Join(home, ".si", "plugins")
+	root := filepath.Join(home, ".si", "orbits")
 	return Paths{
 		RootDir:     root,
 		InstallsDir: filepath.Join(root, "installed"),
@@ -268,21 +273,21 @@ func NamespaceFromID(id string) string {
 	return parts[0]
 }
 
-func ValidatePluginID(id string) error {
+func ValidateOrbitID(id string) error {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return fmt.Errorf("plugin id required")
+		return fmt.Errorf("orbit id required")
 	}
 	parts := strings.Split(id, "/")
 	if len(parts) != 2 {
-		return fmt.Errorf("plugin id must be namespaced as <namespace>/<name>")
+		return fmt.Errorf("orbit id must be namespaced as <namespace>/<name>")
 	}
 	for _, part := range parts {
-		if !pluginIDSegmentPattern.MatchString(part) {
-			return fmt.Errorf("invalid plugin id segment %q", part)
+		if !orbitIDSegmentPattern.MatchString(part) {
+			return fmt.Errorf("invalid orbit id segment %q", part)
 		}
 		if part == "." || part == ".." {
-			return fmt.Errorf("invalid plugin id segment %q", part)
+			return fmt.Errorf("invalid orbit id segment %q", part)
 		}
 	}
 	return nil
@@ -296,12 +301,12 @@ func ValidatePolicySelector(selector string) error {
 	if wildcardPolicyPattern.MatchString(selector) {
 		return nil
 	}
-	return ValidatePluginID(selector)
+	return ValidateOrbitID(selector)
 }
 
 func ValidateManifest(manifest Manifest) error {
 	normalizeManifest(&manifest)
-	if err := ValidatePluginID(manifest.ID); err != nil {
+	if err := ValidateOrbitID(manifest.ID); err != nil {
 		return err
 	}
 	ns := NamespaceFromID(manifest.ID)
@@ -319,6 +324,14 @@ func ValidateManifest(manifest Manifest) error {
 	}
 	if manifest.Install.Type == InstallTypeLocalPath && manifest.Install.Source == "" {
 		return fmt.Errorf("install.source required for install.type=%s", InstallTypeLocalPath)
+	}
+	if manifest.Install.Type == InstallTypeURLArchive {
+		if strings.TrimSpace(manifest.Install.Source) == "" {
+			return fmt.Errorf("install.source required for install.type=%s", InstallTypeURLArchive)
+		}
+		if err := validateOptionalURL(manifest.Install.Source, "install.source"); err != nil {
+			return err
+		}
 	}
 	if manifest.Install.Type == InstallTypeMCPHTTP {
 		if manifest.Install.Source == "" && len(manifest.Integration.MCPServers) == 0 {
@@ -767,7 +780,7 @@ func BuildCatalogFromSource(source string, options BuildCatalogOptions) (Catalog
 			diagnostics = append(diagnostics, Diagnostic{
 				Level:   "warn",
 				Source:  path,
-				Message: fmt.Sprintf("duplicate plugin id %q skipped (already loaded from %s)", manifest.ID, previous),
+				Message: fmt.Sprintf("duplicate orbit id %q skipped (already loaded from %s)", manifest.ID, previous),
 			})
 			continue
 		}
@@ -986,7 +999,7 @@ func SaveState(paths Paths, state State) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(paths.RootDir, "plugins-state-*.json")
+	tmp, err := os.CreateTemp(paths.RootDir, "orbits-state-*.json")
 	if err != nil {
 		return err
 	}
@@ -1017,7 +1030,7 @@ func SaveUserCatalog(paths Paths, catalog Catalog) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(paths.RootDir, "plugins-catalog-*.json")
+	tmp, err := os.CreateTemp(paths.RootDir, "orbits-catalog-*.json")
 	if err != nil {
 		return err
 	}
@@ -1117,7 +1130,7 @@ func InstallFromArchive(paths Paths, archivePath string, enabled bool, now time.
 	if kind == "" {
 		return InstallRecord{}, fmt.Errorf("unsupported archive: %s", resolvedArchive)
 	}
-	tmpDir, err := os.MkdirTemp("", "si-plugin-archive-*")
+	tmpDir, err := os.MkdirTemp("", "si-orbit-archive-*")
 	if err != nil {
 		return InstallRecord{}, err
 	}
@@ -1143,6 +1156,68 @@ func InstallFromArchive(paths Paths, archivePath string, enabled bool, now time.
 		return InstallRecord{}, err
 	}
 	return installFromResolvedRoot(paths, manifest, rootDir, "archive:"+resolvedArchive, enabled, now)
+}
+
+func InstallFromURLArchive(paths Paths, archiveURL string, expectedSHA256 string, enabled bool, now time.Time) (InstallRecord, error) {
+	archiveURL = strings.TrimSpace(archiveURL)
+	if archiveURL == "" {
+		return InstallRecord{}, fmt.Errorf("archive URL required")
+	}
+	parsed, err := url.Parse(archiveURL)
+	if err != nil {
+		return InstallRecord{}, fmt.Errorf("invalid archive URL: %w", err)
+	}
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return InstallRecord{}, fmt.Errorf("unsupported archive URL scheme %q", parsed.Scheme)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, archiveURL, nil)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Do(req)
+	if err != nil {
+		return InstallRecord{}, fmt.Errorf("download archive: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return InstallRecord{}, fmt.Errorf("download archive: unexpected status %s", resp.Status)
+	}
+
+	archiveExt := filepath.Ext(parsed.Path)
+	if strings.HasSuffix(strings.ToLower(parsed.Path), ".tar.gz") {
+		archiveExt = ".tar.gz"
+	}
+	tmpFile, err := os.CreateTemp("", "si-orbit-remote-*"+archiveExt)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+	defer tmpFile.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(io.MultiWriter(tmpFile, hasher), resp.Body); err != nil {
+		return InstallRecord{}, fmt.Errorf("download archive: %w", err)
+	}
+	computedSHA256 := strings.ToLower(hex.EncodeToString(hasher.Sum(nil)))
+	normalizedExpected := normalizeSHA256(expectedSHA256)
+	if normalizedExpected != "" && computedSHA256 != normalizedExpected {
+		return InstallRecord{}, fmt.Errorf("archive checksum mismatch: expected %s got %s", normalizedExpected, computedSHA256)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return InstallRecord{}, err
+	}
+
+	record, err := InstallFromArchive(paths, tmpPath, enabled, now)
+	if err != nil {
+		return InstallRecord{}, err
+	}
+	record.Source = "url:" + archiveURL
+	return record, nil
 }
 
 func installFromResolvedRoot(paths Paths, manifest Manifest, rootDir string, source string, enabled bool, now time.Time) (InstallRecord, error) {
@@ -1178,8 +1253,21 @@ func InstallFromCatalog(paths Paths, entry CatalogEntry, enabled bool, now time.
 	if err := ValidateManifest(entry.Manifest); err != nil {
 		return InstallRecord{}, err
 	}
-	if entry.Manifest.Install.Type == InstallTypeLocalPath {
+	switch entry.Manifest.Install.Type {
+	case InstallTypeLocalPath:
 		record, err := InstallFromPath(paths, entry.Manifest.Install.Source, enabled, now)
+		if err != nil {
+			return InstallRecord{}, err
+		}
+		record.Source = "catalog:" + entry.Manifest.ID
+		record.CatalogSource = entry.Manifest.Install.Source
+		return record, nil
+	case InstallTypeURLArchive:
+		expectedSHA256 := ""
+		if entry.Manifest.Install.Params != nil {
+			expectedSHA256 = entry.Manifest.Install.Params["sha256"]
+		}
+		record, err := InstallFromURLArchive(paths, entry.Manifest.Install.Source, expectedSHA256, enabled, now)
 		if err != nil {
 			return InstallRecord{}, err
 		}
@@ -1223,7 +1311,7 @@ func resolveSafeInstallDir(baseDir string, id string) (string, error) {
 	if resolvedBase == "" {
 		return "", fmt.Errorf("base dir required")
 	}
-	if err := ValidatePluginID(id); err != nil {
+	if err := ValidateOrbitID(id); err != nil {
 		return "", err
 	}
 	target := filepath.Join(resolvedBase, safeDirName(id))
@@ -1233,9 +1321,27 @@ func resolveSafeInstallDir(baseDir string, id string) (string, error) {
 		return "", err
 	}
 	if rel == "." || rel == "" || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-		return "", fmt.Errorf("invalid plugin name: path traversal detected")
+		return "", fmt.Errorf("invalid orbit name: path traversal detected")
 	}
 	return resolvedTarget, nil
+}
+
+func normalizeSHA256(raw string) string {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	value = strings.TrimPrefix(value, "sha256:")
+	if value == "" {
+		return ""
+	}
+	if len(value) != 64 {
+		return ""
+	}
+	for _, r := range value {
+		isHexDigit := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')
+		if !isHexDigit {
+			return ""
+		}
+	}
+	return value
 }
 
 func safeDirName(id string) string {
@@ -1245,7 +1351,7 @@ func safeDirName(id string) string {
 	id = strings.ReplaceAll(id, " ", "-")
 	id = strings.ReplaceAll(id, "..", "-")
 	if id == "" {
-		return "plugin"
+		return "orbit"
 	}
 	return id
 }
@@ -1269,13 +1375,13 @@ func copyDirectoryTree(src, dst string) error {
 		}
 		target := filepath.Join(dst, rel)
 		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("refusing to copy symlink in plugin source: %s", path)
+			return fmt.Errorf("refusing to copy symlink in orbit source: %s", path)
 		}
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
 		if !entry.Type().IsRegular() {
-			return fmt.Errorf("unsupported file type in plugin source: %s", path)
+			return fmt.Errorf("unsupported file type in orbit source: %s", path)
 		}
 		return copyFile(path, target)
 	})
@@ -1311,7 +1417,7 @@ func copyFile(src, dst string) error {
 func ResolveEnableState(id string, record InstallRecord, policy Policy) (bool, string) {
 	id = strings.TrimSpace(id)
 	if !policy.Enabled {
-		return false, "blocked: plugins policy disabled"
+		return false, "blocked: orbits policy disabled"
 	}
 	if matchPolicySelectors(policy.Deny, id) {
 		return false, "blocked: denylist"
@@ -1376,7 +1482,7 @@ func Doctor(catalog Catalog, state State, paths Paths) []Diagnostic {
 		}
 	}
 	for id, record := range state.Installs {
-		if err := ValidatePluginID(id); err != nil {
+		if err := ValidateOrbitID(id); err != nil {
 			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("installed id %q invalid: %v", id, err)})
 			continue
 		}
@@ -1387,7 +1493,7 @@ func Doctor(catalog Catalog, state State, paths Paths) []Diagnostic {
 			diagnostics = append(diagnostics, Diagnostic{Level: "error", Message: fmt.Sprintf("installed manifest id mismatch for %q (manifest=%q)", id, record.Manifest.ID)})
 		}
 		if _, ok := catalogByID[id]; !ok {
-			diagnostics = append(diagnostics, Diagnostic{Level: "warn", Message: fmt.Sprintf("installed plugin %q is not present in merged catalog", id)})
+			diagnostics = append(diagnostics, Diagnostic{Level: "warn", Message: fmt.Sprintf("installed orbit %q is not present in merged catalog", id)})
 		}
 		if strings.TrimSpace(record.InstallDir) != "" {
 			if err := verifyInstallDirWithin(paths.InstallsDir, record.InstallDir); err != nil {
@@ -1402,12 +1508,12 @@ func Doctor(catalog Catalog, state State, paths Paths) []Diagnostic {
 		if enabled, reason := ResolveEnableState(id, record, state.Policy); !enabled {
 			diagnostics = append(diagnostics, Diagnostic{
 				Level:   "info",
-				Message: fmt.Sprintf("plugin %q inactive: %s", id, reason),
+				Message: fmt.Sprintf("orbit %q inactive: %s", id, reason),
 			})
 		}
 	}
 	if len(state.Installs) == 0 {
-		diagnostics = append(diagnostics, Diagnostic{Level: "info", Message: "no plugins installed"})
+		diagnostics = append(diagnostics, Diagnostic{Level: "info", Message: "no orbits installed"})
 	}
 	if len(catalog.Entries) == 0 {
 		diagnostics = append(diagnostics, Diagnostic{Level: "warn", Message: "catalog has no entries"})
@@ -1456,7 +1562,7 @@ func overlapStrings(a []string, b []string) []string {
 
 func ScaffoldManifest(id string) (Manifest, error) {
 	id = strings.TrimSpace(id)
-	if err := ValidatePluginID(id); err != nil {
+	if err := ValidateOrbitID(id); err != nil {
 		return Manifest{}, err
 	}
 	namespace := NamespaceFromID(id)
@@ -1467,14 +1573,14 @@ func ScaffoldManifest(id string) (Manifest, error) {
 		Namespace:     namespace,
 		Name:          strings.ReplaceAll(name, "-", " "),
 		Version:       "0.1.0",
-		Summary:       "Describe what this integration/plugin adds.",
+		Summary:       "Describe what this integration/orbit adds.",
 		Maturity:      "experimental",
 		Kind:          "integration",
 		Install: InstallSpec{
 			Type: InstallTypeNone,
 		},
 		Integration: IntegrationSpec{
-			Commands: []string{"si plugins install " + id},
+			Commands: []string{"si orbits install " + id},
 			MCPServers: []MCPServer{
 				{
 					Name:      "replace_me",

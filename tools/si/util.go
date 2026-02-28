@@ -45,7 +45,7 @@ Features:
   - Docker passthrough for raw docker CLI calls.
   - Surf browser runtime bridge for Playwright headed sessions.
   - Remote control bridge for sharing local terminal sessions in a browser.
-  - Plugin marketplace and integration registry (catalog/install/enable/doctor/scaffold).
+  - Orbit marketplace and integration registry (catalog/install/enable/doctor/scaffold).
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
 Usage:
@@ -70,7 +70,7 @@ Core:
   si openai <auth|context|doctor|model|project|key|usage|monitor|codex|raw>
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
-  si plugins <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
+  si orbits <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
@@ -596,21 +596,21 @@ providers:
   si providers health [--provider <id>] [--json]
   Aliases: si integrations ..., si apis ...
 
-plugins:
-  si plugins list [--installed] [--json]
-  si plugins info <id> [--json]
-  si plugins install <id-or-path> [--disabled] [--json]  (path supports manifest dir/file and .zip/.tgz/.tar.gz/.tar)
-  si plugins update <id>|--all [--json]
-  si plugins uninstall <id> [--keep-files] [--json]
-  si plugins enable|disable <id> [--json]
-  si plugins doctor [--json]
-  si plugins register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]
-  si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]
-  si plugins policy show|set ... [--json]
-  si plugins gateway build --source <path> [--registry <name>] [--slots <n>] [--output-dir <dir>] [--json]
-  si plugins gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]
-  si plugins gateway pull [--registry <name>] [--namespace <ns>] [--capability <cap>] [--prefix <prefix>] [--limit <n>] [--out <file>] [--json]
-  si plugins gateway status [--registry <name>] [--json]
+orbits:
+  si orbits list [--installed] [--json]
+  si orbits info <id> [--json]
+  si orbits install <id-or-path> [--disabled] [--json]  (path supports manifest dir/file and .zip/.tgz/.tar.gz/.tar)
+  si orbits update <id>|--all [--json]
+  si orbits uninstall <id> [--keep-files] [--json]
+  si orbits enable|disable <id> [--json]
+  si orbits doctor [--json]
+  si orbits register [--manifest <path>|<path>] [--channel <name>] [--verified] [--json]
+  si orbits scaffold <namespace/name> [--dir <path>] [--force] [--json]
+  si orbits policy show|set ... [--json]
+  si orbits gateway build --source <path> [--registry <name>] [--slots <n>] [--output-dir <dir>] [--json]
+  si orbits gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]
+  si orbits gateway pull [--registry <name>] [--namespace <ns>] [--capability <cap>] [--prefix <prefix>] [--limit <n>] [--out <file>] [--json]
+  si orbits gateway status [--registry <name>] [--json]
 
 	Environment defaults (selected)
 	-------------------------------

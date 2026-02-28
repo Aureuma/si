@@ -1,8 +1,13 @@
-package pluginmarket
+package orbitmarket
 
 import (
 	"archive/zip"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,13 +15,13 @@ import (
 	"time"
 )
 
-func TestValidatePluginIDRequiresNamespace(t *testing.T) {
-	if err := ValidatePluginID("acme/release-mind"); err != nil {
+func TestValidateOrbitIDRequiresNamespace(t *testing.T) {
+	if err := ValidateOrbitID("acme/release-mind"); err != nil {
 		t.Fatalf("expected namespaced id to be valid: %v", err)
 	}
 	for _, invalid := range []string{"", "release-mind", "acme/../oops", "ACME/release"} {
-		if err := ValidatePluginID(invalid); err == nil {
-			t.Fatalf("expected invalid plugin id error for %q", invalid)
+		if err := ValidateOrbitID(invalid); err == nil {
+			t.Fatalf("expected invalid orbit id error for %q", invalid)
 		}
 	}
 }
@@ -72,7 +77,7 @@ func TestResolveSafeInstallDirRejectsTraversal(t *testing.T) {
 	}
 }
 
-func TestInstallFromPathCopiesPluginDir(t *testing.T) {
+func TestInstallFromPathCopiesOrbitDir(t *testing.T) {
 	root := t.TempDir()
 	paths := Paths{
 		RootDir:     root,
@@ -81,7 +86,7 @@ func TestInstallFromPathCopiesPluginDir(t *testing.T) {
 		CatalogFile: filepath.Join(root, "catalog.json"),
 		CatalogDir:  filepath.Join(root, "catalog.d"),
 	}
-	sourceDir := filepath.Join(root, "source-plugin")
+	sourceDir := filepath.Join(root, "source-orbit")
 	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
 		t.Fatalf("mkdir source dir: %v", err)
 	}
@@ -115,7 +120,7 @@ func TestInstallFromPathCopiesPluginDir(t *testing.T) {
 		t.Fatalf("unexpected record id: %s", record.ID)
 	}
 	if !record.Enabled {
-		t.Fatalf("expected installed plugin to be enabled")
+		t.Fatalf("expected installed orbit to be enabled")
 	}
 	if !strings.Contains(record.Source, sourceDir) {
 		t.Fatalf("expected source path reference, got: %s", record.Source)
@@ -137,7 +142,7 @@ func TestInstallFromPathRejectsSymlink(t *testing.T) {
 		CatalogFile: filepath.Join(root, "catalog.json"),
 		CatalogDir:  filepath.Join(root, "catalog.d"),
 	}
-	sourceDir := filepath.Join(root, "source-plugin")
+	sourceDir := filepath.Join(root, "source-orbit")
 	if err := os.MkdirAll(sourceDir, 0o755); err != nil {
 		t.Fatalf("mkdir source dir: %v", err)
 	}
@@ -225,14 +230,14 @@ func TestResolveEnableStatePolicy(t *testing.T) {
 	policy.Allow = []string{"acme/*"}
 	enabled, reason = ResolveEnableState(record.ID, record, policy)
 	if !enabled || reason != "enabled" {
-		t.Fatalf("expected wildcard allow to enable plugin, got enabled=%v reason=%q", enabled, reason)
+		t.Fatalf("expected wildcard allow to enable orbit, got enabled=%v reason=%q", enabled, reason)
 	}
 
 	policy = DefaultPolicy()
 	policy.Deny = []string{"acme/*"}
 	enabled, reason = ResolveEnableState(record.ID, record, policy)
 	if enabled || !strings.Contains(reason, "denylist") {
-		t.Fatalf("expected wildcard deny to block plugin, got enabled=%v reason=%q", enabled, reason)
+		t.Fatalf("expected wildcard deny to block orbit, got enabled=%v reason=%q", enabled, reason)
 	}
 
 	policy = DefaultPolicy()
@@ -351,21 +356,21 @@ func TestInstallFromArchiveZIP(t *testing.T) {
 		CatalogFile: filepath.Join(root, "catalog.json"),
 		CatalogDir:  filepath.Join(root, "catalog.d"),
 	}
-	archivePath := filepath.Join(root, "plugin.zip")
+	archivePath := filepath.Join(root, "orbit.zip")
 	zipFile, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("create zip: %v", err)
 	}
 	writer := zip.NewWriter(zipFile)
-	manifestRaw := `{"schema_version":1,"id":"acme/archive-plugin","namespace":"acme","install":{"type":"none"}}`
-	manifestEntry, err := writer.Create("acme/archive-plugin/si.plugin.json")
+	manifestRaw := `{"schema_version":1,"id":"acme/archive-orbit","namespace":"acme","install":{"type":"none"}}`
+	manifestEntry, err := writer.Create("acme/archive-orbit/si.orbit.json")
 	if err != nil {
 		t.Fatalf("create manifest entry: %v", err)
 	}
 	if _, err := manifestEntry.Write([]byte(manifestRaw)); err != nil {
 		t.Fatalf("write manifest entry: %v", err)
 	}
-	readmeEntry, err := writer.Create("acme/archive-plugin/README.md")
+	readmeEntry, err := writer.Create("acme/archive-orbit/README.md")
 	if err != nil {
 		t.Fatalf("create readme entry: %v", err)
 	}
@@ -383,7 +388,7 @@ func TestInstallFromArchiveZIP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("install from archive: %v", err)
 	}
-	if record.ID != "acme/archive-plugin" {
+	if record.ID != "acme/archive-orbit" {
 		t.Fatalf("unexpected record id: %s", record.ID)
 	}
 	if !strings.HasPrefix(record.Source, "archive:") {
@@ -409,7 +414,7 @@ func TestInstallFromArchiveRejectsTraversal(t *testing.T) {
 		t.Fatalf("create zip: %v", err)
 	}
 	writer := zip.NewWriter(zipFile)
-	entry, err := writer.Create("../si.plugin.json")
+	entry, err := writer.Create("../si.orbit.json")
 	if err != nil {
 		t.Fatalf("create traversal entry: %v", err)
 	}
@@ -439,13 +444,128 @@ func TestInstallFromSourceRejectsUnsupportedFile(t *testing.T) {
 		CatalogFile: filepath.Join(root, "catalog.json"),
 		CatalogDir:  filepath.Join(root, "catalog.d"),
 	}
-	source := filepath.Join(root, "plugin.bin")
-	if err := os.WriteFile(source, []byte("not-a-plugin"), 0o644); err != nil {
+	source := filepath.Join(root, "orbit.bin")
+	if err := os.WriteFile(source, []byte("not-a-orbit"), 0o644); err != nil {
 		t.Fatalf("write source: %v", err)
 	}
 	if _, err := InstallFromSource(paths, source, true, time.Time{}); err == nil {
 		t.Fatalf("expected unsupported source to fail")
 	}
+}
+
+func TestInstallFromCatalogURLArchive(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		RootDir:     root,
+		InstallsDir: filepath.Join(root, "installed"),
+		StateFile:   filepath.Join(root, "state.json"),
+		CatalogFile: filepath.Join(root, "catalog.json"),
+		CatalogDir:  filepath.Join(root, "catalog.d"),
+	}
+	archiveBytes := buildOrbitArchiveBytes(t, "acme/remote-orbit")
+	sum := sha256.Sum256(archiveBytes)
+	sha := hex.EncodeToString(sum[:])
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/orbit.zip" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(archiveBytes)
+	}))
+	defer server.Close()
+
+	entry := CatalogEntry{
+		Manifest: Manifest{
+			SchemaVersion: 1,
+			ID:            "acme/remote-orbit",
+			Namespace:     "acme",
+			Install: InstallSpec{
+				Type:   InstallTypeURLArchive,
+				Source: server.URL + "/orbit.zip",
+				Params: map[string]string{"sha256": sha},
+			},
+		},
+	}
+
+	record, err := InstallFromCatalog(paths, entry, true, time.Time{})
+	if err != nil {
+		t.Fatalf("install from URL archive: %v", err)
+	}
+	if record.Source != "catalog:acme/remote-orbit" {
+		t.Fatalf("unexpected source: %s", record.Source)
+	}
+	if record.CatalogSource != server.URL+"/orbit.zip" {
+		t.Fatalf("unexpected catalog source: %s", record.CatalogSource)
+	}
+	if _, err := os.Stat(filepath.Join(record.InstallDir, "README.md")); err != nil {
+		t.Fatalf("installed archive file missing: %v", err)
+	}
+}
+
+func TestInstallFromCatalogURLArchiveChecksumMismatch(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		RootDir:     root,
+		InstallsDir: filepath.Join(root, "installed"),
+		StateFile:   filepath.Join(root, "state.json"),
+		CatalogFile: filepath.Join(root, "catalog.json"),
+		CatalogDir:  filepath.Join(root, "catalog.d"),
+	}
+	archiveBytes := buildOrbitArchiveBytes(t, "acme/remote-orbit")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(archiveBytes)
+	}))
+	defer server.Close()
+
+	entry := CatalogEntry{
+		Manifest: Manifest{
+			SchemaVersion: 1,
+			ID:            "acme/remote-orbit",
+			Namespace:     "acme",
+			Install: InstallSpec{
+				Type:   InstallTypeURLArchive,
+				Source: server.URL + "/orbit.zip",
+				Params: map[string]string{"sha256": strings.Repeat("0", 64)},
+			},
+		},
+	}
+
+	if _, err := InstallFromCatalog(paths, entry, true, time.Time{}); err == nil {
+		t.Fatalf("expected checksum mismatch error")
+	} else if !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func buildOrbitArchiveBytes(t *testing.T, id string) []byte {
+	t.Helper()
+	buf := bytes.Buffer{}
+	writer := zip.NewWriter(&buf)
+	manifestPath := id + "/" + ManifestFileName
+	manifestEntry, err := writer.Create(manifestPath)
+	if err != nil {
+		t.Fatalf("create manifest entry: %v", err)
+	}
+	namespace := strings.Split(id, "/")[0]
+	manifestRaw := `{"schema_version":1,"id":"` + id + `","namespace":"` + namespace + `","install":{"type":"none"}}`
+	if _, err := manifestEntry.Write([]byte(manifestRaw)); err != nil {
+		t.Fatalf("write manifest entry: %v", err)
+	}
+	readmeEntry, err := writer.Create(id + "/README.md")
+	if err != nil {
+		t.Fatalf("create readme entry: %v", err)
+	}
+	if _, err := readmeEntry.Write([]byte("remote orbit archive")); err != nil {
+		t.Fatalf("write readme entry: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close zip writer: %v", err)
+	}
+	return buf.Bytes()
 }
 
 func TestDiscoverManifestPathsFromTree(t *testing.T) {
