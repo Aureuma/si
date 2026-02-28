@@ -266,7 +266,7 @@ func buildRemoteControlBinary(repo, out string) error {
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return err
 	}
-	cmd := exec.Command("go", "build", "-o", out, "./cmd/remote-control")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", out, "./cmd/remote-control")
 	cmd.Dir = repo
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
