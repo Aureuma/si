@@ -13,7 +13,7 @@ description: Using si providers to inspect integration characteristics, runtime 
 
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
 - [API Characteristics](./API_CHARACTERISTICS)
-- [Orbit Marketplace](./ORBITS)
+- [Orbital](./ORBITAL)
 
 ## Command surface
 

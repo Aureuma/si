@@ -14,7 +14,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"si/tools/si/internal/orbitmarket"
+	"si/tools/si/internal/orbital"
 	"si/tools/si/internal/providers"
 )
 
@@ -1174,10 +1174,10 @@ func applySettingsDefaults(settings *Settings) {
 		settings.Sun.OrbitGatewayRegistry = defaultOrbitGatewayName
 	}
 	if settings.Sun.OrbitGatewaySlots <= 0 {
-		settings.Sun.OrbitGatewaySlots = orbitmarket.GatewayDefaultSlotsPerNamespace
+		settings.Sun.OrbitGatewaySlots = orbital.GatewayDefaultSlotsPerNamespace
 	}
-	if settings.Sun.OrbitGatewaySlots > orbitmarket.GatewayMaxSlotsPerNamespace {
-		settings.Sun.OrbitGatewaySlots = orbitmarket.GatewayMaxSlotsPerNamespace
+	if settings.Sun.OrbitGatewaySlots > orbital.GatewayMaxSlotsPerNamespace {
+		settings.Sun.OrbitGatewaySlots = orbital.GatewayMaxSlotsPerNamespace
 	}
 	settings.Sun.Taskboard = strings.TrimSpace(settings.Sun.Taskboard)
 	if settings.Sun.Taskboard == "" {

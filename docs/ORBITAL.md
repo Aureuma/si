@@ -1,8 +1,8 @@
-# Orbit Marketplace and Integration Plan
+# Orbital and Integration Plan
 
-![Orbit Marketplace](/docs/images/integrations/orbits.svg)
+![Orbital](/docs/images/integrations/orbits.svg)
 
-This document defines SI's orbit marketplace model and the implementation now available in `si orbits ...`.
+This document defines SI's Orbital model and the implementation now available in `si orbits ...`.
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
@@ -13,7 +13,7 @@ Related:
 
 - Provide a fast, operator-friendly path to add integrations without modifying SI core code for every new ecosystem.
 - Enforce namespaced orbit identity and safety checks before installation.
-- Keep a catalog/marketplace model that can evolve from local-first to hosted registries.
+- Keep a orbital model that can evolve from local-first to hosted registries.
 - Support MCP-focused integrations (HTTP/SSE/stdio), provider metadata, and command hints.
 
 ## OpenClaw Lessons Applied
@@ -74,7 +74,7 @@ Important rules:
   - `integration.mcp_servers`
   - `integration.capabilities`
 
-## Marketplace Sources
+## Orbital Sources
 
 SI now loads catalog entries from:
 
@@ -166,7 +166,7 @@ si orbits scaffold acme/release-mind --dir ./integrations
 
 2. Fill manifest details (`terms_url`, `privacy_url`, MCP/provider metadata).
 
-3. Register into local marketplace catalog:
+3. Register into local Orbital catalog:
 
 ```bash
 si orbits register ./integrations/acme/release-mind --channel community
