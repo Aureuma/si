@@ -75,6 +75,12 @@ note "dry-run: --yes accepted"
 note "dry-run: backend intent sun accepted"
 "${INSTALLER}" --dry-run --backend sun --source-dir "${ROOT}" --force >/dev/null
 
+note "dry-run: sun auth flags accepted"
+"${INSTALLER}" --dry-run --backend sun --sun-url "https://sun.example" --sun-account "acme" --sun-token "token-123" --no-sun-auto-sync --source-dir "${ROOT}" --force >/dev/null
+
+note "dry-run: skip sun auth accepted"
+"${INSTALLER}" --dry-run --backend sun --skip-sun-auth --source-dir "${ROOT}" --force >/dev/null
+
 note "edge: invalid backend rejected"
 set +e
 "${INSTALLER}" --dry-run --backend bad-backend --source-dir "${ROOT}" --force >/dev/null 2>&1
