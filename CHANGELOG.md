@@ -75,7 +75,7 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.47.0] - 2026-02-19
 ### Added
-- Added a full plugin marketplace command surface (`si plugins`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
+- Added a full Orbital command surface (`si orbits`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
 - Added `si browser` Docker runtime integration for Playwright MCP and wired browser MCP endpoints into spawned codex and dyad containers.
 - Added SI-managed Supabase backup workflows with WAL-G/Databackup profile support under `si paas backup`, including contract/run/status/restore operations.
 - Added GitHub git-credential helper and remote normalization workflows under `si github git`, plus expanded PAT OAuth guidance for multi-repo operations.
