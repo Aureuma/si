@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"testing"
 
+	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/nacl/box"
 )
 
@@ -16,7 +17,7 @@ func TestParseGitHubCSVInts(t *testing.T) {
 }
 
 func TestEncryptGitHubSecretValue(t *testing.T) {
-	pub, _, err := box.GenerateKey(rand.Reader)
+	pub, priv, err := box.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generate keypair: %v", err)
 	}
@@ -31,5 +32,27 @@ func TestEncryptGitHubSecretValue(t *testing.T) {
 	}
 	if len(data) <= 32 {
 		t.Fatalf("sealed payload too short: %d", len(data))
+	}
+	var ephemeralPub [32]byte
+	copy(ephemeralPub[:], data[:32])
+	nonceHash, err := blake2b.New(24, nil)
+	if err != nil {
+		t.Fatalf("nonce hash init: %v", err)
+	}
+	if _, err := nonceHash.Write(ephemeralPub[:]); err != nil {
+		t.Fatalf("nonce hash write ephemeral: %v", err)
+	}
+	if _, err := nonceHash.Write(pub[:]); err != nil {
+		t.Fatalf("nonce hash write recipient: %v", err)
+	}
+	nonceBytes := nonceHash.Sum(nil)
+	var nonce [24]byte
+	copy(nonce[:], nonceBytes)
+	opened, ok := box.Open(nil, data[32:], &nonce, &ephemeralPub, priv)
+	if !ok {
+		t.Fatalf("decrypt sealed payload failed")
+	}
+	if got := string(opened); got != "hello" {
+		t.Fatalf("unexpected plaintext: %q", got)
 	}
 }
