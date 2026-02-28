@@ -21,6 +21,14 @@ Usage:
 
 Flags:
   --backend <local|sun> Backend intent for post-install guidance (default: local)
+  --sun-url <url>         Sun base URL used when --backend sun
+                          (default: SI_INSTALL_SUN_URL, SI_SUN_BASE_URL, or https://sun.aureuma.ai)
+  --sun-token <token>     Sun token used for optional post-install `si sun auth login`
+                          (default: SI_INSTALL_SUN_TOKEN or SI_SUN_TOKEN)
+  --sun-account <slug>    Expected Sun account slug for auth login
+  --sun-auto-sync         Enable Sun auto-sync during installer login (default)
+  --no-sun-auto-sync      Disable Sun auto-sync during installer login
+  --skip-sun-auth         Skip post-install Sun auth even when --backend sun
   --source-dir <path>     Build from an existing si repo checkout (auto-detected if omitted)
   --repo <owner/repo>     GitHub repo to clone when not building locally (default: Aureuma/si)
   --repo-url <url>        Full git URL to clone (overrides --repo)
@@ -64,8 +72,8 @@ Notes:
     it prints the exact line to add for bash/zsh.
   - Backend selection is configuration guidance only:
       - local (default): keep secrets/profile state local-first.
-      - sun: installer prints follow-up `si sun auth login` steps.
-    The installer intentionally does not collect or store Sun tokens.
+      - sun: installer can run `si sun auth login` when token is provided
+        (or skip and configure later).
   - Advanced CI checks for installer settings mutation are available via:
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --check
       tools/install-si-settings.sh --settings <path> --default-browser <safari|chrome> --print
@@ -813,7 +821,39 @@ post_install() {
   log info "🗄️  Backend:"
   if [[ "${BACKEND_MODE}" == "sun" ]]; then
     log info "  - selected: sun (cloud sync)"
-    log info "  - next: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
+    local effective_sun_token=""
+    effective_sun_token="${SUN_TOKEN}"
+    if [[ -z "${effective_sun_token}" && "${SUN_SKIP_AUTH}" -eq 0 && "${ASSUME_YES}" -eq 0 ]] && is_tty; then
+      if confirm_yes_no "Configure Sun auth now?"; then
+        read -r -s -p "Enter Sun token (input hidden): " effective_sun_token
+        printf '\n'
+      fi
+    fi
+    if [[ "${SUN_SKIP_AUTH}" -eq 1 ]]; then
+      log info "  - auth: skipped (--skip-sun-auth)"
+      log info "  - next: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
+    elif [[ -n "${effective_sun_token}" ]]; then
+      local -a sun_login_cmd
+      sun_login_cmd=("${dst}" sun auth login --url "${SUN_URL}")
+      if [[ -n "${SUN_ACCOUNT}" ]]; then
+        sun_login_cmd+=(--account "${SUN_ACCOUNT}")
+      fi
+      if [[ "${SUN_AUTO_SYNC}" -eq 1 ]]; then
+        sun_login_cmd+=(--auto-sync)
+      else
+        sun_login_cmd+=(--auto-sync=false)
+      fi
+      if SI_SUN_TOKEN="${effective_sun_token}" "${sun_login_cmd[@]}" >/dev/null 2>&1; then
+        log info "  - auth: ✅ configured"
+        log info "  - verify: si sun auth status"
+      else
+        log warn "  - auth: auto-config failed; run manually:"
+        log info "    si sun auth login --url ${SUN_URL} --token <sun-token> --account <slug> --auto-sync"
+      fi
+    else
+      log info "  - auth: skipped (no token provided)"
+      log info "  - next: si sun auth login --url <sun-url> --token <sun-token> --account <slug> --auto-sync"
+    fi
     log info "  - then: si sun profile push"
   else
     log info "  - selected: local (default)"
@@ -836,6 +876,11 @@ ASSUME_YES=0
 LINK_GO_MODE="auto"
 BUILDX_MODE="auto"
 BACKEND_MODE="${SI_INSTALL_BACKEND:-local}"
+SUN_URL="${SI_INSTALL_SUN_URL:-${SI_SUN_BASE_URL:-https://sun.aureuma.ai}}"
+SUN_TOKEN="${SI_INSTALL_SUN_TOKEN:-${SI_SUN_TOKEN:-}}"
+SUN_ACCOUNT="${SI_INSTALL_SUN_ACCOUNT:-}"
+SUN_AUTO_SYNC=1
+SUN_SKIP_AUTH=0
 
 REPO="Aureuma/si"
 REPO_URL=""
@@ -857,6 +902,12 @@ while [[ $# -gt 0 ]]; do
     -h|--help) usage; exit 0 ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     --backend) BACKEND_MODE="$2"; shift 2 ;;
+    --sun-url) SUN_URL="$2"; shift 2 ;;
+    --sun-token) SUN_TOKEN="$2"; shift 2 ;;
+    --sun-account) SUN_ACCOUNT="$2"; shift 2 ;;
+    --sun-auto-sync) SUN_AUTO_SYNC=1; shift ;;
+    --no-sun-auto-sync) SUN_AUTO_SYNC=0; shift ;;
+    --skip-sun-auth) SUN_SKIP_AUTH=1; shift ;;
     --source-dir) SOURCE_DIR="$2"; shift 2 ;;
     --repo) REPO="$2"; shift 2 ;;
     --repo-url) REPO_URL="$2"; shift 2 ;;
@@ -904,6 +955,18 @@ BACKEND_MODE="$(echo "$(trim "${BACKEND_MODE}")" | tr '[:upper:]' '[:lower:]')"
 case "${BACKEND_MODE}" in
   local|sun) ;;
   *) die "invalid --backend ${BACKEND_MODE} (expected local or sun)" ;;
+esac
+
+SUN_URL="$(trim "${SUN_URL}")"
+SUN_TOKEN="$(trim "${SUN_TOKEN}")"
+SUN_ACCOUNT="$(trim "${SUN_ACCOUNT}")"
+case "${SUN_AUTO_SYNC}" in
+  0|1) ;;
+  *) die "invalid sun auto-sync value (expected 0 or 1)" ;;
+esac
+case "${SUN_SKIP_AUTH}" in
+  0|1) ;;
+  *) die "invalid skip-sun-auth value (expected 0 or 1)" ;;
 esac
 
 if [[ "${DRY_RUN}" -eq 0 ]]; then

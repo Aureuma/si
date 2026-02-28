@@ -58,6 +58,14 @@ Direct installer script remains available:
 curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh | bash
 ```
 
+Optional Sun-aware install (configures `si sun auth login` during install):
+
+```bash
+SI_INSTALL_SUN_TOKEN="<sun-token>" \
+bash <(curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh) \
+  --backend sun --sun-url https://sun.aureuma.ai --sun-account sun
+```
+
 ## Quickstart
 
 Prerequisites:
