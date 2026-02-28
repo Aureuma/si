@@ -24,7 +24,7 @@ si <command> <subcommand> --help
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
 | `si sun` | Cloud sync and machine orchestration for profiles, taskboards, and remote SI control | `auth`, `profile`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
-| `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build/push/pull/status)` | [Orbit Marketplace](./ORBITS) |
+| `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build/push/pull/status)` | [Orbital](./ORBITAL) |
 
 ## Provider and integration command families
 

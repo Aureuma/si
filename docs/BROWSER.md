@@ -6,7 +6,7 @@
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Orbit Marketplace](./ORBITS)
+- [Orbital](./ORBITAL)
 
 ## Commands
 

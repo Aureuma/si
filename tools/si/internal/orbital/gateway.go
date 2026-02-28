@@ -1,4 +1,4 @@
-package orbitmarket
+package orbital
 
 import (
 	"crypto/sha256"
