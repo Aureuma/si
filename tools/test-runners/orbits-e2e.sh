@@ -5,9 +5,9 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common.sh"
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'USAGE'
-Usage: ./tools/test-runners/plugins-policy.sh
+Usage: ./tools/test-runners/orbits-e2e.sh
 
-Runs plugin policy command regression tests.
+Runs the full orbit command regression suite (subprocess-based tests in tools/si).
 USAGE
   exit 0
 fi
@@ -15,4 +15,4 @@ fi
 ensure_repo_root
 ensure_go
 
-run_go_test -count=1 ./tools/si -run 'TestPlugins(PolicyAffectsEffectiveState|PolicySetSupportsNamespaceWildcard)'
+run_go_test -count=1 ./tools/si -run 'TestOrbits'
