@@ -20,6 +20,25 @@ All notable changes to this project will be documented in this file.
 - Changed `si sun vault backup push`/`si vault sync push` to mirror dotenv entries into Sun KV objects in addition to backup snapshot objects.
 - Improved vault command flag UX by allowing mixed flag order for `si vault history` and `si vault unset`.
 
+## [v0.50.0] - 2026-02-27
+### Added
+- Added Sun-backed per-key vault KV mirroring (`vault_kv.<scope>/<KEY>`) with revision history via `si vault history`.
+- Added SSH directory and agent socket mounts for dyad Docker runtimes to support in-container Git/SSH workflows.
+- Added the `si viva` wrapper command and migrated browser runtime integration to `surf bridge`.
+
+### Changed
+- Modernized vault crypto behavior to dotenvx-style file encryption backed by Sun keys for portability.
+- Enforced Sun-only remote scope behavior in vault cloud workflows to keep remote data consistent.
+
+### Fixed
+- Fixed vault flag parsing for `si vault get` and `si vault unset` with trailing/mixed-order flags.
+- Fixed environment inference from dotenv filenames in prod/dev vault flows.
+- Fixed npm publish verification flakiness in release automation by adding retry handling.
+- Fixed compatibility handling for legacy `si-v1` and `si-v2` vault formats.
+
+### Removed
+- Removed legacy command surfaces in vault/dotenv workflows to simplify and harden the current CLI path.
+
 ## [v0.49.0] - 2026-02-24
 ### Added
 - Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `sun` vault sync modes.
