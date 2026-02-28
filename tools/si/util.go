@@ -44,6 +44,7 @@ Features:
   - Mintlify docs workflow wrapper.
   - Docker passthrough for raw docker CLI calls.
   - Surf browser runtime bridge for Playwright headed sessions.
+  - Remote control bridge for sharing local terminal sessions in a browser.
   - Plugin marketplace and integration registry (catalog/install/enable/doctor/scaffold).
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
@@ -76,6 +77,7 @@ Core:
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
   si surf [--repo <path>] [--bin <path>] [--build] -- <surf-args...>
+  si remote-control|rc [--repo <path>] [--bin <path>] [--build] -- <remote-control-args...>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
