@@ -1,4 +1,4 @@
-package pluginmarket
+package orbitmarket
 
 import (
 	"testing"

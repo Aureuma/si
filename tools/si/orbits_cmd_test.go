@@ -12,12 +12,12 @@ import (
 	"testing"
 )
 
-func TestPluginsListCommandJSON(t *testing.T) {
+func TestOrbitsListCommandJSON(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "list", "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "list", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -46,36 +46,36 @@ func TestPluginsListCommandJSON(t *testing.T) {
 	}
 	for id, found := range required {
 		if !found {
-			t.Fatalf("expected built-in plugin %s in list output: %#v", id, payload)
+			t.Fatalf("expected built-in orbit %s in list output: %#v", id, payload)
 		}
 	}
 }
 
-func TestPluginsLifecycleViaCatalogJSON(t *testing.T) {
+func TestOrbitsLifecycleViaCatalogJSON(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
 	workspace := t.TempDir()
-	pluginID := "acme/release-mind"
+	orbitID := "acme/release-mind"
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "scaffold", pluginID, "--dir", workspace, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "scaffold", orbitID, "--dir", workspace, "--json")
 	if err != nil {
 		t.Fatalf("scaffold failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	pluginPath := filepath.Join(workspace, "acme", "release-mind")
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "register", pluginPath, "--channel", "community", "--json")
+	orbitPath := filepath.Join(workspace, "acme", "release-mind")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "register", orbitPath, "--channel", "community", "--json")
 	if err != nil {
 		t.Fatalf("register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "install", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "info", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -83,8 +83,8 @@ func TestPluginsLifecycleViaCatalogJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &infoPayload); err != nil {
 		t.Fatalf("info json parse failed: %v\nstdout=%s", err, stdout)
 	}
-	if infoPayload["id"] != pluginID {
-		t.Fatalf("unexpected plugin id payload: %#v", infoPayload)
+	if infoPayload["id"] != orbitID {
+		t.Fatalf("unexpected orbit id payload: %#v", infoPayload)
 	}
 	if installed, _ := infoPayload["installed"].(bool); !installed {
 		t.Fatalf("expected installed=true in info payload: %#v", infoPayload)
@@ -93,7 +93,7 @@ func TestPluginsLifecycleViaCatalogJSON(t *testing.T) {
 		t.Fatalf("expected in_catalog=true in info payload: %#v", infoPayload)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "doctor", "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "doctor", "--json")
 	if err != nil {
 		t.Fatalf("doctor failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -106,34 +106,34 @@ func TestPluginsLifecycleViaCatalogJSON(t *testing.T) {
 	}
 }
 
-func TestPluginsPolicyAffectsEffectiveState(t *testing.T) {
+func TestOrbitsPolicyAffectsEffectiveState(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
 	workspace := t.TempDir()
-	pluginID := "acme/release-mind"
-	pluginPath := filepath.Join(workspace, "acme", "release-mind")
+	orbitID := "acme/release-mind"
+	orbitPath := filepath.Join(workspace, "acme", "release-mind")
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "scaffold", pluginID, "--dir", workspace, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "scaffold", orbitID, "--dir", workspace, "--json")
 	if err != nil {
 		t.Fatalf("scaffold failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "register", pluginPath, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "register", orbitPath, "--json")
 	if err != nil {
 		t.Fatalf("register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "install", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "policy", "set", "--deny", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "policy", "set", "--deny", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("policy set failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "info", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -149,7 +149,7 @@ func TestPluginsPolicyAffectsEffectiveState(t *testing.T) {
 		t.Fatalf("expected effective_reason in info payload: %#v", infoPayload)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "list", "--installed", "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "list", "--installed", "--json")
 	if err != nil {
 		t.Fatalf("list failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -165,7 +165,7 @@ func TestPluginsPolicyAffectsEffectiveState(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected row shape: %#v", rows[0])
 	}
-	if row["id"] != pluginID {
+	if row["id"] != orbitID {
 		t.Fatalf("unexpected row id: %#v", row)
 	}
 	if effective, _ := row["effective_enabled"].(bool); effective {
@@ -173,7 +173,7 @@ func TestPluginsPolicyAffectsEffectiveState(t *testing.T) {
 	}
 }
 
-func TestPluginsListReadsEnvCatalogPaths(t *testing.T) {
+func TestOrbitsListReadsEnvCatalogPaths(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -198,9 +198,9 @@ func TestPluginsListReadsEnvCatalogPaths(t *testing.T) {
 		t.Fatalf("write catalog: %v", err)
 	}
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"HOME":                    home,
-		"SI_PLUGIN_CATALOG_PATHS": catalogPath,
-	}, "plugins", "list", "--json")
+		"HOME":                   home,
+		"SI_ORBIT_CATALOG_PATHS": catalogPath,
+	}, "orbits", "list", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -235,22 +235,22 @@ func TestPluginsListReadsEnvCatalogPaths(t *testing.T) {
 	}
 }
 
-func TestPluginsInstallFromArchivePath(t *testing.T) {
+func TestOrbitsInstallFromArchivePath(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
-	archivePath := filepath.Join(t.TempDir(), "plugin.zip")
+	archivePath := filepath.Join(t.TempDir(), "orbit.zip")
 	zipFile, err := os.Create(archivePath)
 	if err != nil {
 		t.Fatalf("create zip: %v", err)
 	}
 	writer := zip.NewWriter(zipFile)
-	manifestEntry, err := writer.Create("acme/archive-plugin/si.plugin.json")
+	manifestEntry, err := writer.Create("acme/archive-orbit/si.orbit.json")
 	if err != nil {
 		t.Fatalf("create manifest entry: %v", err)
 	}
-	manifest := `{"schema_version":1,"id":"acme/archive-plugin","namespace":"acme","install":{"type":"none"}}`
+	manifest := `{"schema_version":1,"id":"acme/archive-orbit","namespace":"acme","install":{"type":"none"}}`
 	if _, err := manifestEntry.Write([]byte(manifest)); err != nil {
 		t.Fatalf("write manifest entry: %v", err)
 	}
@@ -261,7 +261,7 @@ func TestPluginsInstallFromArchivePath(t *testing.T) {
 		t.Fatalf("close zip file: %v", err)
 	}
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", archivePath, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "install", archivePath, "--json")
 	if err != nil {
 		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -273,23 +273,23 @@ func TestPluginsInstallFromArchivePath(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected record payload: %#v", installPayload)
 	}
-	if recordRaw["id"] != "acme/archive-plugin" {
+	if recordRaw["id"] != "acme/archive-orbit" {
 		t.Fatalf("unexpected record id: %#v", recordRaw)
 	}
 }
 
-func TestPluginsUpdateCommandJSON(t *testing.T) {
+func TestOrbitsUpdateCommandJSON(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
-	pluginID := "si/browser-mcp"
+	orbitID := "si/browser-mcp"
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "install", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "update", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "update", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("update failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -302,14 +302,14 @@ func TestPluginsUpdateCommandJSON(t *testing.T) {
 	}
 	updated, ok := payload["updated"].([]any)
 	if !ok || len(updated) != 1 {
-		t.Fatalf("expected one updated plugin: %#v", payload)
+		t.Fatalf("expected one updated orbit: %#v", payload)
 	}
-	if updated[0] != pluginID {
-		t.Fatalf("unexpected updated plugin: %#v", updated)
+	if updated[0] != orbitID {
+		t.Fatalf("unexpected updated orbit: %#v", updated)
 	}
 }
 
-func TestPluginsCatalogBuildAndValidateJSON(t *testing.T) {
+func TestOrbitsCatalogBuildAndValidateJSON(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
@@ -324,14 +324,14 @@ func TestPluginsCatalogBuildAndValidateJSON(t *testing.T) {
 	if err := os.MkdirAll(slackDir, 0o755); err != nil {
 		t.Fatalf("mkdir slack dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(discordDir, "si.plugin.json"), []byte(`{"schema_version":1,"id":"openclaw/discord","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(discordDir, "si.orbit.json"), []byte(`{"schema_version":1,"id":"openclaw/discord","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
 		t.Fatalf("write discord manifest: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(slackDir, "si.plugin.json"), []byte(`{"schema_version":1,"id":"openclaw/slack","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(slackDir, "si.orbit.json"), []byte(`{"schema_version":1,"id":"openclaw/slack","namespace":"openclaw","install":{"type":"none"}}`), 0o644); err != nil {
 		t.Fatalf("write slack manifest: %v", err)
 	}
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "catalog", "build", "--source", sourceRoot, "--output", outputPath, "--channel", "ecosystem", "--verified", "--tag", "openclaw", "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "catalog", "build", "--source", sourceRoot, "--output", outputPath, "--channel", "ecosystem", "--verified", "--tag", "openclaw", "--json")
 	if err != nil {
 		t.Fatalf("catalog build failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -349,7 +349,7 @@ func TestPluginsCatalogBuildAndValidateJSON(t *testing.T) {
 		t.Fatalf("expected output file written: %v", err)
 	}
 
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "catalog", "validate", "--source", sourceRoot, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "catalog", "validate", "--source", sourceRoot, "--json")
 	if err != nil {
 		t.Fatalf("catalog validate failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -365,34 +365,34 @@ func TestPluginsCatalogBuildAndValidateJSON(t *testing.T) {
 	}
 }
 
-func TestPluginsPolicySetSupportsNamespaceWildcard(t *testing.T) {
+func TestOrbitsPolicySetSupportsNamespaceWildcard(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
 	workspace := t.TempDir()
-	pluginID := "acme/release-mind"
-	pluginPath := filepath.Join(workspace, "acme", "release-mind")
+	orbitID := "acme/release-mind"
+	orbitPath := filepath.Join(workspace, "acme", "release-mind")
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "scaffold", pluginID, "--dir", workspace, "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "scaffold", orbitID, "--dir", workspace, "--json")
 	if err != nil {
 		t.Fatalf("scaffold failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "register", pluginPath, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "register", orbitPath, "--json")
 	if err != nil {
 		t.Fatalf("register failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "install", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "install", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("install failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
 
-	// Wildcard allow should keep acme/* plugins active.
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "policy", "set", "--clear-allow", "--clear-deny", "--allow", "acme/*", "--json")
+	// Wildcard allow should keep acme/* orbits active.
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "policy", "set", "--clear-allow", "--clear-deny", "--allow", "acme/*", "--json")
 	if err != nil {
 		t.Fatalf("policy wildcard allow failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "info", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -404,12 +404,12 @@ func TestPluginsPolicySetSupportsNamespaceWildcard(t *testing.T) {
 		t.Fatalf("expected effective_enabled=true with wildcard allow: %#v", infoAllow)
 	}
 
-	// Wildcard deny should block acme/* plugins.
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "policy", "set", "--clear-allow", "--clear-deny", "--deny", "acme/*", "--json")
+	// Wildcard deny should block acme/* orbits.
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "policy", "set", "--clear-allow", "--clear-deny", "--deny", "acme/*", "--json")
 	if err != nil {
 		t.Fatalf("policy wildcard deny failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", pluginID, "--json")
+	stdout, stderr, err = runSICommand(t, map[string]string{"HOME": home}, "orbits", "info", orbitID, "--json")
 	if err != nil {
 		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -422,12 +422,12 @@ func TestPluginsPolicySetSupportsNamespaceWildcard(t *testing.T) {
 	}
 }
 
-func TestPluginsInfoIncludesCatalogSourceForBuiltin(t *testing.T) {
+func TestOrbitsInfoIncludesCatalogSourceForBuiltin(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "info", "si/browser-mcp", "--json")
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "info", "si/browser-mcp", "--json")
 	if err != nil {
 		t.Fatalf("info failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
@@ -441,23 +441,23 @@ func TestPluginsInfoIncludesCatalogSourceForBuiltin(t *testing.T) {
 	}
 }
 
-func TestPluginsGatewayBuildWritesBundle(t *testing.T) {
+func TestOrbitsGatewayBuildWritesBundle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
 	outputDir := filepath.Join(t.TempDir(), "gateway-out")
-	pluginDir := filepath.Join(sourceRoot, "acme", "gateway")
-	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
-		t.Fatalf("mkdir plugin dir: %v", err)
+	orbitDir := filepath.Join(sourceRoot, "acme", "gateway")
+	if err := os.MkdirAll(orbitDir, 0o755); err != nil {
+		t.Fatalf("mkdir orbit dir: %v", err)
 	}
 	manifest := `{"schema_version":1,"id":"acme/gateway","namespace":"acme","install":{"type":"none"},"integration":{"capabilities":["chat.send"]}}`
-	if err := os.WriteFile(filepath.Join(pluginDir, "si.plugin.json"), []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(orbitDir, "si.orbit.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "plugins", "gateway", "build",
+	stdout, stderr, err := runSICommand(t, map[string]string{"HOME": home}, "orbits", "gateway", "build",
 		"--source", sourceRoot,
 		"--registry", "team",
 		"--slots", "8",
@@ -482,19 +482,19 @@ func TestPluginsGatewayBuildWritesBundle(t *testing.T) {
 	}
 }
 
-func TestPluginsGatewayPushPullRoundTrip(t *testing.T) {
+func TestOrbitsGatewayPushPullRoundTrip(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
 	outPath := filepath.Join(t.TempDir(), "pulled-catalog.json")
-	pluginDir := filepath.Join(sourceRoot, "acme", "chat")
-	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
-		t.Fatalf("mkdir plugin dir: %v", err)
+	orbitDir := filepath.Join(sourceRoot, "acme", "chat")
+	if err := os.MkdirAll(orbitDir, 0o755); err != nil {
+		t.Fatalf("mkdir orbit dir: %v", err)
 	}
 	manifest := `{"schema_version":1,"id":"acme/chat","namespace":"acme","install":{"type":"none"},"integration":{"capabilities":["chat.send"]}}`
-	if err := os.WriteFile(filepath.Join(pluginDir, "si.plugin.json"), []byte(manifest), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(orbitDir, "si.orbit.json"), []byte(manifest), 0o644); err != nil {
 		t.Fatalf("write manifest: %v", err)
 	}
 
@@ -575,11 +575,11 @@ func TestPluginsGatewayPushPullRoundTrip(t *testing.T) {
 		"SI_SUN_BASE_URL": server.URL,
 		"SI_SUN_TOKEN":    "token-123",
 	}
-	stdout, stderr, err := runSICommand(t, env, "plugins", "gateway", "push", "--source", sourceRoot, "--registry", "team", "--json")
+	stdout, stderr, err := runSICommand(t, env, "orbits", "gateway", "push", "--source", sourceRoot, "--registry", "team", "--json")
 	if err != nil {
 		t.Fatalf("gateway push failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, env, "plugins", "gateway", "pull", "--registry", "team", "--out", outPath, "--json")
+	stdout, stderr, err = runSICommand(t, env, "orbits", "gateway", "pull", "--registry", "team", "--out", outPath, "--json")
 	if err != nil {
 		t.Fatalf("gateway pull failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}

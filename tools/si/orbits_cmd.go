@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"si/tools/si/internal/pluginmarket"
+	"si/tools/si/internal/orbitmarket"
 )
 
-const pluginsUsageText = "usage: si plugins <list|catalog|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy|gateway>"
+const orbitsUsageText = "usage: si orbits <list|catalog|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy|gateway>"
 
-func cmdPlugins(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, pluginsUsageText)
+func cmdOrbits(args []string) {
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, orbitsUsageText)
 	if !routedOK {
 		return
 	}
@@ -25,95 +25,95 @@ func cmdPlugins(args []string) {
 	rest := args[1:]
 	switch sub {
 	case "help", "-h", "--help":
-		printUsage(pluginsUsageText)
+		printUsage(orbitsUsageText)
 	case "list", "ls":
-		cmdPluginsList(rest)
+		cmdOrbitsList(rest)
 	case "catalog":
-		cmdPluginsCatalog(rest)
+		cmdOrbitsCatalog(rest)
 	case "info":
-		cmdPluginsInfo(rest)
+		cmdOrbitsInfo(rest)
 	case "install", "add":
-		cmdPluginsInstall(rest)
+		cmdOrbitsInstall(rest)
 	case "update", "upgrade":
-		cmdPluginsUpdate(rest)
+		cmdOrbitsUpdate(rest)
 	case "uninstall", "remove", "rm", "delete":
-		cmdPluginsUninstall(rest)
+		cmdOrbitsUninstall(rest)
 	case "enable":
-		cmdPluginsEnableDisable(rest, true)
+		cmdOrbitsEnableDisable(rest, true)
 	case "disable":
-		cmdPluginsEnableDisable(rest, false)
+		cmdOrbitsEnableDisable(rest, false)
 	case "doctor", "health":
-		cmdPluginsDoctor(rest)
+		cmdOrbitsDoctor(rest)
 	case "register":
-		cmdPluginsRegister(rest)
+		cmdOrbitsRegister(rest)
 	case "scaffold", "init":
-		cmdPluginsScaffold(rest)
+		cmdOrbitsScaffold(rest)
 	case "policy":
-		cmdPluginsPolicy(rest)
+		cmdOrbitsPolicy(rest)
 	case "gateway":
-		cmdPluginsGateway(rest)
+		cmdOrbitsGateway(rest)
 	default:
-		printUnknown("plugins", sub)
-		printUsage(pluginsUsageText)
+		printUnknown("orbits", sub)
+		printUsage(orbitsUsageText)
 	}
 }
 
-func cmdPluginsCatalog(args []string) {
+func cmdOrbitsCatalog(args []string) {
 	if len(args) == 0 {
-		cmdPluginsList(args)
+		cmdOrbitsList(args)
 		return
 	}
 	first := strings.TrimSpace(args[0])
 	if strings.HasPrefix(first, "-") {
-		cmdPluginsList(args)
+		cmdOrbitsList(args)
 		return
 	}
 	sub := strings.ToLower(first)
 	rest := args[1:]
 	switch sub {
 	case "list", "ls":
-		cmdPluginsList(rest)
+		cmdOrbitsList(rest)
 	case "build":
-		cmdPluginsCatalogBuild(rest)
+		cmdOrbitsCatalogBuild(rest)
 	case "validate", "check":
-		cmdPluginsCatalogValidate(rest)
+		cmdOrbitsCatalogValidate(rest)
 	default:
-		printUnknown("plugins catalog", sub)
-		printUsage("usage: si plugins catalog <list|build|validate>")
+		printUnknown("orbits catalog", sub)
+		printUsage("usage: si orbits catalog <list|build|validate>")
 	}
 }
 
-func loadPluginRuntime() (pluginmarket.Paths, pluginmarket.Catalog, pluginmarket.State, []pluginmarket.Diagnostic, error) {
-	paths, err := pluginmarket.DefaultPaths()
+func loadOrbitRuntime() (orbitmarket.Paths, orbitmarket.Catalog, orbitmarket.State, []orbitmarket.Diagnostic, error) {
+	paths, err := orbitmarket.DefaultPaths()
 	if err != nil {
-		return pluginmarket.Paths{}, pluginmarket.Catalog{}, pluginmarket.State{}, nil, err
+		return orbitmarket.Paths{}, orbitmarket.Catalog{}, orbitmarket.State{}, nil, err
 	}
-	catalog, catalogDiagnostics, err := pluginmarket.LoadCatalog(paths)
+	catalog, catalogDiagnostics, err := orbitmarket.LoadCatalog(paths)
 	if err != nil {
-		return pluginmarket.Paths{}, pluginmarket.Catalog{}, pluginmarket.State{}, nil, err
+		return orbitmarket.Paths{}, orbitmarket.Catalog{}, orbitmarket.State{}, nil, err
 	}
-	state, err := pluginmarket.LoadState(paths)
+	state, err := orbitmarket.LoadState(paths)
 	if err != nil {
-		return pluginmarket.Paths{}, pluginmarket.Catalog{}, pluginmarket.State{}, nil, err
+		return orbitmarket.Paths{}, orbitmarket.Catalog{}, orbitmarket.State{}, nil, err
 	}
 	return paths, catalog, state, catalogDiagnostics, nil
 }
 
-func cmdPluginsList(args []string) {
+func cmdOrbitsList(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins list", flag.ExitOnError)
-	installedOnly := fs.Bool("installed", false, "show only installed plugins")
+	fs := flag.NewFlagSet("orbits list", flag.ExitOnError)
+	installedOnly := fs.Bool("installed", false, "show only installed orbits")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si plugins list [--installed] [--json]")
+		printUsage("usage: si orbits list [--installed] [--json]")
 		return
 	}
-	paths, catalog, state, catalogDiagnostics, err := loadPluginRuntime()
+	paths, catalog, state, catalogDiagnostics, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
-	catalogByID := pluginmarket.CatalogByID(catalog)
+	catalogByID := orbitmarket.CatalogByID(catalog)
 	idSet := map[string]bool{}
 	for id := range catalogByID {
 		idSet[id] = true
@@ -128,20 +128,20 @@ func cmdPluginsList(args []string) {
 	sort.Strings(ids)
 
 	type row struct {
-		ID               string                      `json:"id"`
-		Installed        bool                        `json:"installed"`
-		Enabled          bool                        `json:"enabled"`
-		EffectiveEnabled bool                        `json:"effective_enabled"`
-		EffectiveReason  string                      `json:"effective_reason,omitempty"`
-		Channel          string                      `json:"channel,omitempty"`
-		CatalogSource    string                      `json:"catalog_source,omitempty"`
-		Verified         bool                        `json:"verified,omitempty"`
-		Kind             string                      `json:"kind,omitempty"`
-		Maturity         string                      `json:"maturity,omitempty"`
-		InstallType      string                      `json:"install_type,omitempty"`
-		Summary          string                      `json:"summary,omitempty"`
-		InstalledAt      string                      `json:"installed_at,omitempty"`
-		Record           *pluginmarket.InstallRecord `json:"record,omitempty"`
+		ID               string                     `json:"id"`
+		Installed        bool                       `json:"installed"`
+		Enabled          bool                       `json:"enabled"`
+		EffectiveEnabled bool                       `json:"effective_enabled"`
+		EffectiveReason  string                     `json:"effective_reason,omitempty"`
+		Channel          string                     `json:"channel,omitempty"`
+		CatalogSource    string                     `json:"catalog_source,omitempty"`
+		Verified         bool                       `json:"verified,omitempty"`
+		Kind             string                     `json:"kind,omitempty"`
+		Maturity         string                     `json:"maturity,omitempty"`
+		InstallType      string                     `json:"install_type,omitempty"`
+		Summary          string                     `json:"summary,omitempty"`
+		InstalledAt      string                     `json:"installed_at,omitempty"`
+		Record           *orbitmarket.InstallRecord `json:"record,omitempty"`
 	}
 
 	rows := make([]row, 0, len(ids))
@@ -163,7 +163,7 @@ func cmdPluginsList(args []string) {
 		}
 		if installed {
 			r.Enabled = record.Enabled
-			r.EffectiveEnabled, r.EffectiveReason = pluginmarket.ResolveEnableState(id, record, state.Policy)
+			r.EffectiveEnabled, r.EffectiveReason = orbitmarket.ResolveEnableState(id, record, state.Policy)
 			r.InstalledAt = record.InstalledAt
 			recordCopy := record
 			r.Record = &recordCopy
@@ -204,7 +204,7 @@ func cmdPluginsList(args []string) {
 	}
 
 	if len(rows) == 0 {
-		infof("no plugin entries found")
+		infof("no orbit entries found")
 		return
 	}
 	headers := []string{styleHeading("ID"), styleHeading("INSTALLED"), styleHeading("ENABLED"), styleHeading("EFFECTIVE"), styleHeading("CHANNEL"), styleHeading("TYPE"), styleHeading("MATURITY")}
@@ -226,29 +226,29 @@ func cmdPluginsList(args []string) {
 	}
 }
 
-func cmdPluginsInfo(args []string) {
+func cmdOrbitsInfo(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins info", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits info", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
-		printUsage("usage: si plugins info <id> [--json]")
+		printUsage("usage: si orbits info <id> [--json]")
 		return
 	}
 	id := strings.TrimSpace(fs.Arg(0))
-	paths, catalog, state, catalogDiagnostics, err := loadPluginRuntime()
+	paths, catalog, state, catalogDiagnostics, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
-	catalogEntry, inCatalog := pluginmarket.CatalogByID(catalog)[id]
+	catalogEntry, inCatalog := orbitmarket.CatalogByID(catalog)[id]
 	record, installed := state.Installs[id]
 	if !inCatalog && !installed {
-		fatal(fmt.Errorf("unknown plugin %q", id))
+		fatal(fmt.Errorf("unknown orbit %q", id))
 	}
 	effectiveEnabled := false
 	effectiveReason := "not installed"
 	if installed {
-		effectiveEnabled, effectiveReason = pluginmarket.ResolveEnableState(id, record, state.Policy)
+		effectiveEnabled, effectiveReason = orbitmarket.ResolveEnableState(id, record, state.Policy)
 	}
 	if *jsonOut {
 		payload := map[string]interface{}{
@@ -271,7 +271,7 @@ func cmdPluginsInfo(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%s %s\n", styleHeading("Plugin:"), id)
+	fmt.Printf("%s %s\n", styleHeading("Orbit:"), id)
 	fmt.Printf("  in_catalog=%s installed=%s\n", boolText(inCatalog), boolText(installed))
 	fmt.Printf("  effective_enabled=%s reason=%s\n", boolText(effectiveEnabled), effectiveReason)
 	if inCatalog {
@@ -294,44 +294,44 @@ func cmdPluginsInfo(args []string) {
 	}
 }
 
-func cmdPluginsInstall(args []string) {
+func cmdOrbitsInstall(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "disabled": true})
-	fs := flag.NewFlagSet("plugins install", flag.ExitOnError)
-	disabled := fs.Bool("disabled", false, "install plugin as disabled")
+	fs := flag.NewFlagSet("orbits install", flag.ExitOnError)
+	disabled := fs.Bool("disabled", false, "install orbit as disabled")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
-		printUsage("usage: si plugins install <id-or-path> [--disabled] [--json]")
+		printUsage("usage: si orbits install <id-or-path> [--disabled] [--json]")
 		return
 	}
 	target := strings.TrimSpace(fs.Arg(0))
-	paths, catalog, state, catalogDiagnostics, err := loadPluginRuntime()
+	paths, catalog, state, catalogDiagnostics, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
 	enabled := !*disabled
 	now := time.Now().UTC()
-	var record pluginmarket.InstallRecord
+	var record orbitmarket.InstallRecord
 	if _, statErr := os.Stat(target); statErr == nil {
-		record, err = pluginmarket.InstallFromSource(paths, target, enabled, now)
+		record, err = orbitmarket.InstallFromSource(paths, target, enabled, now)
 		if err != nil {
 			fatal(err)
 		}
 	} else {
-		entry, ok := pluginmarket.CatalogByID(catalog)[target]
+		entry, ok := orbitmarket.CatalogByID(catalog)[target]
 		if !ok {
-			fatal(fmt.Errorf("unknown plugin %q (not found as path or catalog id)", target))
+			fatal(fmt.Errorf("unknown orbit %q (not found as path or catalog id)", target))
 		}
-		record, err = pluginmarket.InstallFromCatalog(paths, entry, enabled, now)
+		record, err = orbitmarket.InstallFromCatalog(paths, entry, enabled, now)
 		if err != nil {
 			fatal(err)
 		}
 	}
 	if state.Installs == nil {
-		state.Installs = map[string]pluginmarket.InstallRecord{}
+		state.Installs = map[string]orbitmarket.InstallRecord{}
 	}
 	state.Installs[record.ID] = record
-	if err := pluginmarket.SaveState(paths, state); err != nil {
+	if err := orbitmarket.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -347,20 +347,20 @@ func cmdPluginsInstall(args []string) {
 		}
 		return
 	}
-	successf("plugin installed: %s (enabled=%s)", record.ID, boolText(record.Enabled))
+	successf("orbit installed: %s (enabled=%s)", record.ID, boolText(record.Enabled))
 }
 
-func cmdPluginsUpdate(args []string) {
+func cmdOrbitsUpdate(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "all": true})
-	fs := flag.NewFlagSet("plugins update", flag.ExitOnError)
-	updateAll := fs.Bool("all", false, "update all installed plugins")
+	fs := flag.NewFlagSet("orbits update", flag.ExitOnError)
+	updateAll := fs.Bool("all", false, "update all installed orbits")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 1 {
-		printUsage("usage: si plugins update <id>|--all [--json]")
+		printUsage("usage: si orbits update <id>|--all [--json]")
 		return
 	}
-	paths, catalog, state, catalogDiagnostics, err := loadPluginRuntime()
+	paths, catalog, state, catalogDiagnostics, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
@@ -372,7 +372,7 @@ func cmdPluginsUpdate(args []string) {
 		sort.Strings(targetIDs)
 	} else {
 		if fs.NArg() != 1 {
-			printUsage("usage: si plugins update <id>|--all [--json]")
+			printUsage("usage: si orbits update <id>|--all [--json]")
 			return
 		}
 		targetIDs = append(targetIDs, strings.TrimSpace(fs.Arg(0)))
@@ -392,10 +392,10 @@ func cmdPluginsUpdate(args []string) {
 			}
 			return
 		}
-		infof("no installed plugins to update")
+		infof("no installed orbits to update")
 		return
 	}
-	catalogByID := pluginmarket.CatalogByID(catalog)
+	catalogByID := orbitmarket.CatalogByID(catalog)
 	now := time.Now().UTC()
 	updated := make([]string, 0, len(targetIDs))
 	errs := make([]string, 0)
@@ -405,7 +405,7 @@ func cmdPluginsUpdate(args []string) {
 			errs = append(errs, fmt.Sprintf("%s: not installed", id))
 			continue
 		}
-		var next pluginmarket.InstallRecord
+		var next orbitmarket.InstallRecord
 		source := strings.TrimSpace(record.Source)
 		switch {
 		case strings.HasPrefix(source, "catalog:"):
@@ -414,11 +414,11 @@ func cmdPluginsUpdate(args []string) {
 				errs = append(errs, fmt.Sprintf("%s: catalog entry not found", id))
 				continue
 			}
-			next, err = pluginmarket.InstallFromCatalog(paths, entry, record.Enabled, now)
+			next, err = orbitmarket.InstallFromCatalog(paths, entry, record.Enabled, now)
 		case strings.HasPrefix(source, "path:"):
-			next, err = pluginmarket.InstallFromSource(paths, strings.TrimPrefix(source, "path:"), record.Enabled, now)
+			next, err = orbitmarket.InstallFromSource(paths, strings.TrimPrefix(source, "path:"), record.Enabled, now)
 		case strings.HasPrefix(source, "archive:"):
-			next, err = pluginmarket.InstallFromSource(paths, strings.TrimPrefix(source, "archive:"), record.Enabled, now)
+			next, err = orbitmarket.InstallFromSource(paths, strings.TrimPrefix(source, "archive:"), record.Enabled, now)
 		default:
 			err = fmt.Errorf("unsupported install source %q", source)
 		}
@@ -429,7 +429,7 @@ func cmdPluginsUpdate(args []string) {
 		state.Installs[id] = next
 		updated = append(updated, id)
 	}
-	if err := pluginmarket.SaveState(paths, state); err != nil {
+	if err := orbitmarket.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	ok := len(errs) == 0
@@ -448,41 +448,41 @@ func cmdPluginsUpdate(args []string) {
 		return
 	}
 	for _, id := range updated {
-		successf("plugin updated: %s", id)
+		successf("orbit updated: %s", id)
 	}
 	for _, item := range errs {
 		warnf("%s", item)
 	}
 	if !ok {
-		fatal(fmt.Errorf("plugins update completed with %d error(s)", len(errs)))
+		fatal(fmt.Errorf("orbits update completed with %d error(s)", len(errs)))
 	}
 }
 
-func cmdPluginsUninstall(args []string) {
+func cmdOrbitsUninstall(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "keep-files": true})
-	fs := flag.NewFlagSet("plugins uninstall", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits uninstall", flag.ExitOnError)
 	keepFiles := fs.Bool("keep-files", false, "keep installed files on disk")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
-		printUsage("usage: si plugins uninstall <id> [--keep-files] [--json]")
+		printUsage("usage: si orbits uninstall <id> [--keep-files] [--json]")
 		return
 	}
 	id := strings.TrimSpace(fs.Arg(0))
-	paths, _, state, _, err := loadPluginRuntime()
+	paths, _, state, _, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
 	record, ok := state.Installs[id]
 	if !ok {
-		fatal(fmt.Errorf("plugin %q is not installed", id))
+		fatal(fmt.Errorf("orbit %q is not installed", id))
 	}
 	delete(state.Installs, id)
-	if err := pluginmarket.SaveState(paths, state); err != nil {
+	if err := orbitmarket.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if !*keepFiles {
-		if err := pluginmarket.RemoveInstallDir(paths, record.InstallDir); err != nil {
+		if err := orbitmarket.RemoveInstallDir(paths, record.InstallDir); err != nil {
 			fatal(err)
 		}
 	}
@@ -499,34 +499,34 @@ func cmdPluginsUninstall(args []string) {
 		}
 		return
 	}
-	successf("plugin removed: %s", id)
+	successf("orbit removed: %s", id)
 }
 
-func cmdPluginsEnableDisable(args []string, enabled bool) {
+func cmdOrbitsEnableDisable(args []string, enabled bool) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	name := "disable"
 	if enabled {
 		name = "enable"
 	}
-	fs := flag.NewFlagSet("plugins "+name, flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits "+name, flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
-		printUsage(fmt.Sprintf("usage: si plugins %s <id> [--json]", name))
+		printUsage(fmt.Sprintf("usage: si orbits %s <id> [--json]", name))
 		return
 	}
 	id := strings.TrimSpace(fs.Arg(0))
-	paths, _, state, _, err := loadPluginRuntime()
+	paths, _, state, _, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
 	record, ok := state.Installs[id]
 	if !ok {
-		fatal(fmt.Errorf("plugin %q is not installed", id))
+		fatal(fmt.Errorf("orbit %q is not installed", id))
 	}
 	record.Enabled = enabled
 	state.Installs[id] = record
-	if err := pluginmarket.SaveState(paths, state); err != nil {
+	if err := orbitmarket.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -539,27 +539,27 @@ func cmdPluginsEnableDisable(args []string, enabled bool) {
 		return
 	}
 	if enabled {
-		successf("plugin enabled: %s", id)
+		successf("orbit enabled: %s", id)
 		return
 	}
-	successf("plugin disabled: %s", id)
+	successf("orbit disabled: %s", id)
 }
 
-func cmdPluginsDoctor(args []string) {
+func cmdOrbitsDoctor(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins doctor", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits doctor", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si plugins doctor [--json]")
+		printUsage("usage: si orbits doctor [--json]")
 		return
 	}
-	paths, catalog, state, catalogDiagnostics, err := loadPluginRuntime()
+	paths, catalog, state, catalogDiagnostics, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
-	diagnostics := append([]pluginmarket.Diagnostic{}, catalogDiagnostics...)
-	diagnostics = append(diagnostics, pluginmarket.Doctor(catalog, state, paths)...)
+	diagnostics := append([]orbitmarket.Diagnostic{}, catalogDiagnostics...)
+	diagnostics = append(diagnostics, orbitmarket.Doctor(catalog, state, paths)...)
 	counts := map[string]int{"info": 0, "warn": 0, "error": 0}
 	for _, diagnostic := range diagnostics {
 		level := strings.ToLower(strings.TrimSpace(diagnostic.Level))
@@ -583,7 +583,7 @@ func cmdPluginsDoctor(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%s info=%d warn=%d error=%d\n", styleHeading("plugins doctor:"), counts["info"], counts["warn"], counts["error"])
+	fmt.Printf("%s info=%d warn=%d error=%d\n", styleHeading("orbits doctor:"), counts["info"], counts["warn"], counts["error"])
 	for _, diagnostic := range diagnostics {
 		level := strings.ToLower(strings.TrimSpace(diagnostic.Level))
 		label := strings.ToUpper(level)
@@ -597,18 +597,18 @@ func cmdPluginsDoctor(args []string) {
 		fmt.Printf("%s %s\n", styleHeading(label+":"), diagnostic.Message)
 	}
 	if counts["error"] == 0 {
-		successf("plugins doctor passed")
+		successf("orbits doctor passed")
 		return
 	}
-	fatal(fmt.Errorf("plugins doctor found %d error(s)", counts["error"]))
+	fatal(fmt.Errorf("orbits doctor found %d error(s)", counts["error"]))
 }
 
-func cmdPluginsRegister(args []string) {
+func cmdOrbitsRegister(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "verified": true})
-	fs := flag.NewFlagSet("plugins register", flag.ExitOnError)
-	manifestPath := fs.String("manifest", "", "path to plugin manifest file or directory")
+	fs := flag.NewFlagSet("orbits register", flag.ExitOnError)
+	manifestPath := fs.String("manifest", "", "path to orbit manifest file or directory")
 	channel := fs.String("channel", "community", "catalog channel label")
-	verified := fs.Bool("verified", false, "mark plugin as verified in catalog metadata")
+	verified := fs.Bool("verified", false, "mark orbit as verified in catalog metadata")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	pathArg := strings.TrimSpace(*manifestPath)
@@ -616,18 +616,18 @@ func cmdPluginsRegister(args []string) {
 		pathArg = strings.TrimSpace(fs.Arg(0))
 	}
 	if pathArg == "" || fs.NArg() > 1 {
-		printUsage("usage: si plugins register [--manifest <path>|<path>] [--channel <label>] [--verified] [--json]")
+		printUsage("usage: si orbits register [--manifest <path>|<path>] [--channel <label>] [--verified] [--json]")
 		return
 	}
-	paths, err := pluginmarket.DefaultPaths()
+	paths, err := orbitmarket.DefaultPaths()
 	if err != nil {
 		fatal(err)
 	}
-	manifest, _, err := pluginmarket.ReadManifestFromPath(pathArg)
+	manifest, _, err := orbitmarket.ReadManifestFromPath(pathArg)
 	if err != nil {
 		fatal(err)
 	}
-	entry := pluginmarket.CatalogEntry{
+	entry := orbitmarket.CatalogEntry{
 		Manifest: manifest,
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
@@ -636,7 +636,7 @@ func cmdPluginsRegister(args []string) {
 	if entry.Channel == "" {
 		entry.Channel = "community"
 	}
-	if err := pluginmarket.UpsertUserCatalogEntry(paths, entry); err != nil {
+	if err := orbitmarket.UpsertUserCatalogEntry(paths, entry); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -653,23 +653,23 @@ func cmdPluginsRegister(args []string) {
 		}
 		return
 	}
-	successf("plugin registered in catalog: %s", manifest.ID)
+	successf("orbit registered in catalog: %s", manifest.ID)
 	fmt.Printf("  catalog_file=%s\n", paths.CatalogFile)
 }
 
-func cmdPluginsScaffold(args []string) {
+func cmdOrbitsScaffold(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "force": true})
-	fs := flag.NewFlagSet("plugins scaffold", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits scaffold", flag.ExitOnError)
 	dir := fs.String("dir", ".", "base directory for scaffold output")
 	force := fs.Bool("force", false, "overwrite existing manifest")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() != 1 {
-		printUsage("usage: si plugins scaffold <namespace/name> [--dir <path>] [--force] [--json]")
+		printUsage("usage: si orbits scaffold <namespace/name> [--dir <path>] [--force] [--json]")
 		return
 	}
 	id := strings.TrimSpace(fs.Arg(0))
-	manifest, err := pluginmarket.ScaffoldManifest(id)
+	manifest, err := orbitmarket.ScaffoldManifest(id)
 	if err != nil {
 		fatal(err)
 	}
@@ -679,14 +679,14 @@ func cmdPluginsScaffold(args []string) {
 	}
 	relDir := strings.ReplaceAll(manifest.ID, "/", string(filepath.Separator))
 	targetDir := filepath.Join(baseDir, relDir)
-	manifestPath := filepath.Join(targetDir, pluginmarket.ManifestFileName)
+	manifestPath := filepath.Join(targetDir, orbitmarket.ManifestFileName)
 	if _, err := os.Stat(manifestPath); err == nil && !*force {
 		fatal(fmt.Errorf("manifest already exists: %s (use --force to overwrite)", manifestPath))
 	}
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		fatal(err)
 	}
-	raw, err := pluginmarket.EncodeManifest(manifest)
+	raw, err := orbitmarket.EncodeManifest(manifest)
 	if err != nil {
 		fatal(err)
 	}
@@ -712,13 +712,13 @@ func cmdPluginsScaffold(args []string) {
 		}
 		return
 	}
-	successf("plugin scaffold created: %s", manifest.ID)
+	successf("orbit scaffold created: %s", manifest.ID)
 	fmt.Printf("  dir=%s\n", targetDir)
 	fmt.Printf("  manifest=%s\n", manifestPath)
 }
 
-func cmdPluginsPolicy(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si plugins policy <show|set>")
+func cmdOrbitsPolicy(args []string) {
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si orbits policy <show|set>")
 	if !routedOK {
 		return
 	}
@@ -727,25 +727,25 @@ func cmdPluginsPolicy(args []string) {
 	rest := args[1:]
 	switch sub {
 	case "show", "list", "status":
-		cmdPluginsPolicyShow(rest)
+		cmdOrbitsPolicyShow(rest)
 	case "set", "update":
-		cmdPluginsPolicySet(rest)
+		cmdOrbitsPolicySet(rest)
 	default:
-		printUnknown("plugins policy", sub)
-		printUsage("usage: si plugins policy <show|set>")
+		printUnknown("orbits policy", sub)
+		printUsage("usage: si orbits policy <show|set>")
 	}
 }
 
-func cmdPluginsPolicyShow(args []string) {
+func cmdOrbitsPolicyShow(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins policy show", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits policy show", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si plugins policy show [--json]")
+		printUsage("usage: si orbits policy show [--json]")
 		return
 	}
-	_, _, state, _, err := loadPluginRuntime()
+	_, _, state, _, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
@@ -760,28 +760,28 @@ func cmdPluginsPolicyShow(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%s enabled=%s\n", styleHeading("plugins policy:"), boolText(state.Policy.Enabled))
+	fmt.Printf("%s enabled=%s\n", styleHeading("orbits policy:"), boolText(state.Policy.Enabled))
 	fmt.Printf("  allow=%s\n", joinOrDash(state.Policy.Allow))
 	fmt.Printf("  deny=%s\n", joinOrDash(state.Policy.Deny))
 }
 
-func cmdPluginsPolicySet(args []string) {
+func cmdOrbitsPolicySet(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "clear-allow": true, "clear-deny": true})
-	fs := flag.NewFlagSet("plugins policy set", flag.ExitOnError)
-	enabled := fs.String("enabled", "", "set global plugin policy enabled state (true|false)")
+	fs := flag.NewFlagSet("orbits policy set", flag.ExitOnError)
+	enabled := fs.String("enabled", "", "set global orbit policy enabled state (true|false)")
 	clearAllow := fs.Bool("clear-allow", false, "clear allowlist before applying --allow entries")
 	clearDeny := fs.Bool("clear-deny", false, "clear denylist before applying --deny entries")
 	jsonOut := fs.Bool("json", false, "output json")
 	var allow multiFlag
 	var deny multiFlag
-	fs.Var(&allow, "allow", "allowlist plugin id (repeatable)")
-	fs.Var(&deny, "deny", "denylist plugin id (repeatable)")
+	fs.Var(&allow, "allow", "allowlist orbit id (repeatable)")
+	fs.Var(&deny, "deny", "denylist orbit id (repeatable)")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si plugins policy set [--enabled <true|false>] [--allow <id>]... [--deny <id>]... [--clear-allow] [--clear-deny] [--json]")
+		printUsage("usage: si orbits policy set [--enabled <true|false>] [--allow <id>]... [--deny <id>]... [--clear-allow] [--clear-deny] [--json]")
 		return
 	}
-	paths, _, state, _, err := loadPluginRuntime()
+	paths, _, state, _, err := loadOrbitRuntime()
 	if err != nil {
 		fatal(err)
 	}
@@ -808,20 +808,20 @@ func cmdPluginsPolicySet(args []string) {
 	if len(deny) > 0 {
 		policy.Deny = append(policy.Deny, []string(deny)...)
 	}
-	policy.Allow = normalizePluginIDList(policy.Allow)
-	policy.Deny = normalizePluginIDList(policy.Deny)
+	policy.Allow = normalizeOrbitIDList(policy.Allow)
+	policy.Deny = normalizeOrbitIDList(policy.Deny)
 	for _, id := range policy.Allow {
-		if err := pluginmarket.ValidatePolicySelector(id); err != nil {
+		if err := orbitmarket.ValidatePolicySelector(id); err != nil {
 			fatal(fmt.Errorf("invalid --allow id %q: %w", id, err))
 		}
 	}
 	for _, id := range policy.Deny {
-		if err := pluginmarket.ValidatePolicySelector(id); err != nil {
+		if err := orbitmarket.ValidatePolicySelector(id); err != nil {
 			fatal(fmt.Errorf("invalid --deny id %q: %w", id, err))
 		}
 	}
 	state.Policy = policy
-	if err := pluginmarket.SaveState(paths, state); err != nil {
+	if err := orbitmarket.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -836,15 +836,15 @@ func cmdPluginsPolicySet(args []string) {
 		}
 		return
 	}
-	successf("plugins policy updated")
+	successf("orbits policy updated")
 	fmt.Printf("  enabled=%s\n", boolText(state.Policy.Enabled))
 	fmt.Printf("  allow=%s\n", joinOrDash(state.Policy.Allow))
 	fmt.Printf("  deny=%s\n", joinOrDash(state.Policy.Deny))
 }
 
-func cmdPluginsCatalogBuild(args []string) {
+func cmdOrbitsCatalogBuild(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "verified": true})
-	fs := flag.NewFlagSet("plugins catalog build", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits catalog build", flag.ExitOnError)
 	source := fs.String("source", "", "manifest file or directory tree")
 	output := fs.String("output", "", "output catalog file path")
 	channel := fs.String("channel", "community", "catalog channel label")
@@ -855,10 +855,10 @@ func cmdPluginsCatalogBuild(args []string) {
 	fs.Var(&tags, "tag", "catalog tag to attach to each entry (repeatable)")
 	_ = fs.Parse(args)
 	if strings.TrimSpace(*source) == "" || fs.NArg() > 0 {
-		printUsage("usage: si plugins catalog build --source <path> [--output <path>] [--channel <label>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]")
+		printUsage("usage: si orbits catalog build --source <path> [--output <path>] [--channel <label>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]")
 		return
 	}
-	catalog, diagnostics, err := pluginmarket.BuildCatalogFromSource(strings.TrimSpace(*source), pluginmarket.BuildCatalogOptions{
+	catalog, diagnostics, err := orbitmarket.BuildCatalogFromSource(strings.TrimSpace(*source), orbitmarket.BuildCatalogOptions{
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
 		AddedAt:  strings.TrimSpace(*addedAt),
@@ -909,17 +909,17 @@ func cmdPluginsCatalogBuild(args []string) {
 	}
 }
 
-func cmdPluginsCatalogValidate(args []string) {
+func cmdOrbitsCatalogValidate(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins catalog validate", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits catalog validate", flag.ExitOnError)
 	source := fs.String("source", "", "manifest file or directory tree")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if strings.TrimSpace(*source) == "" || fs.NArg() > 0 {
-		printUsage("usage: si plugins catalog validate --source <path> [--json]")
+		printUsage("usage: si orbits catalog validate --source <path> [--json]")
 		return
 	}
-	catalog, diagnostics, err := pluginmarket.BuildCatalogFromSource(strings.TrimSpace(*source), pluginmarket.BuildCatalogOptions{})
+	catalog, diagnostics, err := orbitmarket.BuildCatalogFromSource(strings.TrimSpace(*source), orbitmarket.BuildCatalogOptions{})
 	if err != nil {
 		fatal(err)
 	}
@@ -947,7 +947,7 @@ func cmdPluginsCatalogValidate(args []string) {
 		}
 		return
 	}
-	fmt.Printf("%s entries=%d warn=%d error=%d\n", styleHeading("plugins catalog validate:"), len(catalog.Entries), counts["warn"], counts["error"])
+	fmt.Printf("%s entries=%d warn=%d error=%d\n", styleHeading("orbits catalog validate:"), len(catalog.Entries), counts["warn"], counts["error"])
 	for _, diagnostic := range diagnostics {
 		fmt.Printf("%s %s\n", styleHeading(strings.ToUpper(strings.TrimSpace(diagnostic.Level))+":"), diagnostic.Message)
 	}
@@ -964,7 +964,7 @@ func joinOrDash(values []string) string {
 	return strings.Join(values, ", ")
 }
 
-func normalizePluginIDList(values []string) []string {
+func normalizeOrbitIDList(values []string) []string {
 	seen := map[string]bool{}
 	out := make([]string, 0, len(values))
 	for _, value := range values {
