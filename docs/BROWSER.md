@@ -6,7 +6,7 @@
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Plugin Marketplace](./PLUGIN_MARKETPLACE)
+- [Orbit Marketplace](./ORBITS)
 
 ## Commands
 

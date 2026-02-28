@@ -25,26 +25,26 @@ For one-command local coverage of the standard test stack, run:
 ./tools/test-all.sh
 ```
 
-## Plugin runner matrix
-For plugin-system specific regression lanes (inspired by OpenClaw's segmented CI), use:
+## Orbit runner matrix
+For orbit-system specific regression lanes (inspired by OpenClaw's segmented CI), use:
 
 ```bash
-./tools/test-runners/plugins-unit.sh
-./tools/test-runners/plugins-policy.sh
-./tools/test-runners/plugins-catalog.sh
-./tools/test-runners/plugins-e2e.sh
+./tools/test-runners/orbits-unit.sh
+./tools/test-runners/orbits-policy.sh
+./tools/test-runners/orbits-catalog.sh
+./tools/test-runners/orbits-e2e.sh
 ```
 
-Run the full plugin runner stack:
+Run the full orbit runner stack:
 
 ```bash
-./tools/test-runners/plugins-all.sh
+./tools/test-runners/orbits-all.sh
 ```
 
 CI coverage for these lanes is defined in:
 
 ```bash
-.github/workflows/plugins-runners.yml
+.github/workflows/orbits-runners.yml
 ```
 
 ## Installer smoke tests

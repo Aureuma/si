@@ -1,11 +1,11 @@
 ---
 title: Integration Gateway Architecture
-description: Sharded SI/Sun integration registry model for large-scale plugin ecosystems.
+description: Sharded SI/Sun integration registry model for large-scale orbit ecosystems.
 ---
 
 # Integration Gateway Architecture
 
-This document defines the SI + Sun architecture for scaling plugin/integration catalogs toward very large ecosystems (10k+ integrations) without turning plugin resolution into a monolithic read path.
+This document defines the SI + Sun architecture for scaling orbit/integration catalogs toward very large ecosystems (10k+ integrations) without turning orbit resolution into a monolithic read path.
 
 ## Design Goals
 
@@ -22,7 +22,7 @@ This document defines the SI + Sun architecture for scaling plugin/integration c
 - Operationally, hidden/deprecated fields are safer than destructive contract changes.
 
 SI mapping:
-- Plugin manifests remain schema-versioned and backward-compatible.
+- Orbit manifests remain schema-versioned and backward-compatible.
 - Gateway index/shard payloads are explicit JSON contracts, allowing additive evolution.
 
 ### n8n
@@ -31,7 +31,7 @@ SI mapping:
 - Large ecosystems rely on metadata discovery + selective enablement, not global eager load.
 
 SI mapping:
-- `si plugins ...` install/policy workflows are distinct from gateway publish/pull transport.
+- `si orbits ...` install/policy workflows are distinct from gateway publish/pull transport.
 - Registry metadata is fetched first (index), then only relevant shards are loaded.
 
 ### TON (workchain + shardchain model)
@@ -48,21 +48,22 @@ SI mapping:
 
 ### SI (`tools/si`)
 
-- `pluginmarket` now includes sharded gateway types:
+- `orbitmarket` now includes sharded gateway types:
   - `GatewayIndex`
   - `GatewayShard`
   - deterministic `GatewayShardKey(...)`
   - `BuildGateway(...)`
   - `MaterializeGatewayCatalog(...)`
 - New command family:
-  - `si plugins gateway build`
-  - `si plugins gateway push`
-  - `si plugins gateway pull`
-  - `si plugins gateway status`
+  - `si orbits gateway build`
+  - `si orbits gateway push`
+  - `si orbits gateway pull`
+  - `si orbits gateway status`
 - New Sun-aware settings:
-  - `sun.plugin_gateway_registry`
-  - `sun.plugin_gateway_slots`
-  - `SI_SUN_PLUGIN_GATEWAY_*` env aliases (+ legacy `SI_SUN_*`)
+  - `sun.orbit_gateway_registry`
+  - `sun.orbit_gateway_slots`
+  - `SI_SUN_ORBIT_GATEWAY_REGISTRY`
+  - `SI_SUN_ORBIT_GATEWAY_SLOTS`
 
 ### Sun (`../sun`)
 
@@ -82,7 +83,7 @@ SI mapping:
 2. Partition catalog into `namespace--slot` shards.
 3. Publish index + shards to Sun.
 4. Pull index, select shards by filter, materialize a local catalog file.
-5. Existing `si plugins list/install/...` works on the pulled catalog with existing policy gates.
+5. Existing `si orbits list/install/...` works on the pulled catalog with existing policy gates.
 
 ## Scale Envelope
 
