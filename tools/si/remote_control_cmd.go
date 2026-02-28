@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const remoteControlUsageText = "usage: si remote-control [--repo <path>] [--bin <path>] [--build] [--json] -- <remote-control-args...>\n       si remote-control <remote-control-args...>\n       si rc <remote-control-args...>"
+const remoteControlUsageText = "usage: si remote-control [--repo <path>] [--bin <path>] [--build] [--json] -- <remote-control-args...>\n       si remote-control <remote-control-args...>\n       si remote-control safari-smoke [--repo <path>] [--runner-bin <path>] [--build] -- [runner-args...]\n       si rc <remote-control-args...>"
 const remoteControlConfigUsageText = "usage: si remote-control config <show|set> [args]"
 
 var runRemoteControlExternal = func(bin string, args []string) error {
@@ -22,9 +22,24 @@ var runRemoteControlExternal = func(bin string, args []string) error {
 	return cmd.Run()
 }
 
+var runRemoteControlSafariSmokeExternal = func(bin string, args []string, env []string) error {
+	cmd := exec.Command(bin, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = env
+	return cmd.Run()
+}
+
+var resolveRemoteControlVaultKeyValue = resolveVaultKeyValue
+
 func cmdRemoteControl(args []string) {
 	if len(args) == 0 {
 		printUsage(remoteControlUsageText)
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(args[0]), "safari-smoke") {
+		cmdRemoteControlSafariSmoke(args[1:])
 		return
 	}
 	if strings.EqualFold(strings.TrimSpace(args[0]), "config") {
@@ -140,6 +155,9 @@ func cmdRemoteControlConfigShow(args []string) {
 	} else {
 		fmt.Printf("  build=\n")
 	}
+	fmt.Printf("  safari.ssh.host_env_key=%s\n", strings.TrimSpace(settings.RemoteControl.Safari.SSH.HostEnvKey))
+	fmt.Printf("  safari.ssh.port_env_key=%s\n", strings.TrimSpace(settings.RemoteControl.Safari.SSH.PortEnvKey))
+	fmt.Printf("  safari.ssh.user_env_key=%s\n", strings.TrimSpace(settings.RemoteControl.Safari.SSH.UserEnvKey))
 }
 
 func cmdRemoteControlConfigSet(args []string) {
@@ -148,21 +166,39 @@ func cmdRemoteControlConfigSet(args []string) {
 	repo := fs.String("repo", "", "default remote-control repo path")
 	bin := fs.String("bin", "", "default remote-control binary path")
 	build := fs.String("build", "", "default build behavior (true|false)")
+	sshHostEnvKey := fs.String("ssh-host-env-key", "", "ssh host env key for safari smoke runner")
+	sshPortEnvKey := fs.String("ssh-port-env-key", "", "ssh port env key for safari smoke runner")
+	sshUserEnvKey := fs.String("ssh-user-env-key", "", "ssh user env key for safari smoke runner")
+	sshHost := fs.String("ssh-host", "", "ssh host literal or env reference (env:KEY or ${KEY})")
+	sshPort := fs.String("ssh-port", "", "ssh port literal or env reference (env:KEY or ${KEY})")
+	sshUser := fs.String("ssh-user", "", "ssh user literal or env reference (env:KEY or ${KEY})")
 	jsonOut := fs.Bool("json", false, "output json")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		fatal(errors.New("usage: si remote-control config set [--repo <path>] [--bin <path>] [--build true|false] [--json]"))
+		fatal(errors.New("usage: si remote-control config set [--repo <path>] [--bin <path>] [--build true|false] [--ssh-host-env-key <key>] [--ssh-port-env-key <key>] [--ssh-user-env-key <key>] [--ssh-host <value>] [--ssh-port <value>] [--ssh-user <value>] [--json]"))
 	}
 	settings := loadSettingsOrDefault()
 	updated, err := applyRemoteControlConfigSet(&settings, remoteControlConfigSetInput{
-		RepoProvided:  remoteControlFlagProvided(fs, "repo"),
-		Repo:          strings.TrimSpace(*repo),
-		BinProvided:   remoteControlFlagProvided(fs, "bin"),
-		Bin:           strings.TrimSpace(*bin),
-		BuildProvided: remoteControlFlagProvided(fs, "build"),
-		BuildRaw:      strings.TrimSpace(*build),
+		RepoProvided:          remoteControlFlagProvided(fs, "repo"),
+		Repo:                  strings.TrimSpace(*repo),
+		BinProvided:           remoteControlFlagProvided(fs, "bin"),
+		Bin:                   strings.TrimSpace(*bin),
+		BuildProvided:         remoteControlFlagProvided(fs, "build"),
+		BuildRaw:              strings.TrimSpace(*build),
+		SSHHostEnvKeyProvided: remoteControlFlagProvided(fs, "ssh-host-env-key"),
+		SSHHostEnvKey:         strings.TrimSpace(*sshHostEnvKey),
+		SSHPortEnvKeyProvided: remoteControlFlagProvided(fs, "ssh-port-env-key"),
+		SSHPortEnvKey:         strings.TrimSpace(*sshPortEnvKey),
+		SSHUserEnvKeyProvided: remoteControlFlagProvided(fs, "ssh-user-env-key"),
+		SSHUserEnvKey:         strings.TrimSpace(*sshUserEnvKey),
+		SSHHostProvided:       remoteControlFlagProvided(fs, "ssh-host"),
+		SSHHost:               strings.TrimSpace(*sshHost),
+		SSHPortProvided:       remoteControlFlagProvided(fs, "ssh-port"),
+		SSHPort:               strings.TrimSpace(*sshPort),
+		SSHUserProvided:       remoteControlFlagProvided(fs, "ssh-user"),
+		SSHUser:               strings.TrimSpace(*sshUser),
 	})
 	if err != nil {
 		fatal(err)
@@ -189,6 +225,24 @@ type remoteControlConfigSetInput struct {
 
 	BuildProvided bool
 	BuildRaw      string
+
+	SSHHostEnvKeyProvided bool
+	SSHHostEnvKey         string
+
+	SSHPortEnvKeyProvided bool
+	SSHPortEnvKey         string
+
+	SSHUserEnvKeyProvided bool
+	SSHUserEnvKey         string
+
+	SSHHostProvided bool
+	SSHHost         string
+
+	SSHPortProvided bool
+	SSHPort         string
+
+	SSHUserProvided bool
+	SSHUser         string
 }
 
 func applyRemoteControlConfigSet(settings *Settings, in remoteControlConfigSetInput) (bool, error) {
@@ -216,6 +270,30 @@ func applyRemoteControlConfigSet(settings *Settings, in remoteControlConfigSetIn
 			settings.RemoteControl.Build = boolPtr(parsed)
 			changed = true
 		}
+	}
+	if in.SSHHostEnvKeyProvided {
+		settings.RemoteControl.Safari.SSH.HostEnvKey = strings.TrimSpace(in.SSHHostEnvKey)
+		changed = true
+	}
+	if in.SSHPortEnvKeyProvided {
+		settings.RemoteControl.Safari.SSH.PortEnvKey = strings.TrimSpace(in.SSHPortEnvKey)
+		changed = true
+	}
+	if in.SSHUserEnvKeyProvided {
+		settings.RemoteControl.Safari.SSH.UserEnvKey = strings.TrimSpace(in.SSHUserEnvKey)
+		changed = true
+	}
+	if in.SSHHostProvided {
+		settings.RemoteControl.Safari.SSH.Host = strings.TrimSpace(in.SSHHost)
+		changed = true
+	}
+	if in.SSHPortProvided {
+		settings.RemoteControl.Safari.SSH.Port = strings.TrimSpace(in.SSHPort)
+		changed = true
+	}
+	if in.SSHUserProvided {
+		settings.RemoteControl.Safari.SSH.User = strings.TrimSpace(in.SSHUser)
+		changed = true
 	}
 	return changed, nil
 }
@@ -271,4 +349,138 @@ func buildRemoteControlBinary(repo, out string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func cmdRemoteControlSafariSmoke(args []string) {
+	fs := flag.NewFlagSet("remote-control safari-smoke", flag.ContinueOnError)
+	fs.SetOutput(ioDiscardWriter{})
+	repo := fs.String("repo", "", "remote-control repository path")
+	runnerBin := fs.String("runner-bin", "", "rc-safari-smoke binary path")
+	build := fs.Bool("build", false, "build rc-safari-smoke from repo before running")
+	jsonOut := fs.Bool("json", false, "print wrapper metadata as json on failure")
+	if err := fs.Parse(args); err != nil {
+		printUsage(remoteControlUsageText)
+		fatal(err)
+	}
+	buildFlagSet := remoteControlFlagProvided(fs, "build")
+	rest := fs.Args()
+
+	settings := loadSettingsOrDefault()
+	resolvedRepo := strings.TrimSpace(*repo)
+	if resolvedRepo == "" {
+		resolvedRepo = strings.TrimSpace(settings.RemoteControl.Repo)
+	}
+	if resolvedRepo == "" {
+		resolvedRepo = defaultRemoteControlRepoPath()
+	}
+
+	resolvedRunner := strings.TrimSpace(*runnerBin)
+	if resolvedRunner == "" {
+		resolvedRunner = detectRemoteControlSafariRunnerBinary(resolvedRepo)
+	}
+	buildRequested := *build
+	if !buildFlagSet && settings.RemoteControl.Build != nil {
+		buildRequested = *settings.RemoteControl.Build
+	}
+	if buildRequested {
+		if err := buildRemoteControlSafariRunnerBinary(resolvedRepo, resolvedRunner); err != nil {
+			if *jsonOut {
+				printJSONMap(map[string]any{"ok": false, "error": err.Error(), "repo": resolvedRepo, "runner_bin": resolvedRunner})
+			}
+			fatal(err)
+		}
+	}
+	if _, err := os.Stat(resolvedRunner); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fatal(fmt.Errorf("rc-safari-smoke binary not found at %s (use --build or --runner-bin)", resolvedRunner))
+		}
+		fatal(err)
+	}
+	env := append([]string{}, os.Environ()...)
+	env = applyRemoteControlSafariSmokeEnv(settings, env)
+	if err := runRemoteControlSafariSmokeExternal(resolvedRunner, rest, env); err != nil {
+		if *jsonOut {
+			printJSONMap(map[string]any{"ok": false, "error": err.Error(), "repo": resolvedRepo, "runner_bin": resolvedRunner, "args": rest})
+		}
+		fatal(err)
+	}
+}
+
+func detectRemoteControlSafariRunnerBinary(repo string) string {
+	if p, err := exec.LookPath("rc-safari-smoke"); err == nil {
+		return p
+	}
+	if strings.TrimSpace(repo) == "" {
+		return "rc-safari-smoke"
+	}
+	return filepath.Join(repo, "bin", "rc-safari-smoke")
+}
+
+func buildRemoteControlSafariRunnerBinary(repo, out string) error {
+	if strings.TrimSpace(repo) == "" {
+		return fmt.Errorf("--repo is required for --build")
+	}
+	if out == "rc-safari-smoke" {
+		out = filepath.Join(repo, "bin", "rc-safari-smoke")
+	}
+	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+		return err
+	}
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", out, "./cmd/rc-safari-smoke")
+	cmd.Dir = repo
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func applyRemoteControlSafariSmokeEnv(settings Settings, env []string) []string {
+	env = ensureRemoteControlEnvValue(settings, env, "SHAWN_MAC_HOST", settings.RemoteControl.Safari.SSH.Host, settings.RemoteControl.Safari.SSH.HostEnvKey)
+	env = ensureRemoteControlEnvValue(settings, env, "SHAWN_MAC_PORT", settings.RemoteControl.Safari.SSH.Port, settings.RemoteControl.Safari.SSH.PortEnvKey)
+	env = ensureRemoteControlEnvValue(settings, env, "SHAWN_MAC_USER", settings.RemoteControl.Safari.SSH.User, settings.RemoteControl.Safari.SSH.UserEnvKey)
+	return env
+}
+
+func ensureRemoteControlEnvValue(settings Settings, env []string, envName, rawValue, envKey string) []string {
+	if envHasValue(env, envName) {
+		return env
+	}
+	value := resolveRemoteControlConfigReference(settings, envKey, rawValue)
+	if strings.TrimSpace(value) == "" {
+		return env
+	}
+	return append(env, envName+"="+value)
+}
+
+func resolveRemoteControlConfigReference(settings Settings, envKey string, rawValue string) string {
+	if v := resolveRemoteControlKeyValue(settings, envKey); v != "" {
+		return v
+	}
+	raw := strings.TrimSpace(rawValue)
+	if raw == "" {
+		return ""
+	}
+	ref := raw
+	if strings.HasPrefix(raw, "env:") {
+		ref = strings.TrimSpace(strings.TrimPrefix(raw, "env:"))
+	} else if strings.HasPrefix(raw, "${") && strings.HasSuffix(raw, "}") {
+		ref = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(raw, "${"), "}"))
+	}
+	if v := resolveRemoteControlKeyValue(settings, ref); v != "" {
+		return v
+	}
+	return raw
+}
+
+func resolveRemoteControlKeyValue(settings Settings, key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	if value, ok := resolveRemoteControlVaultKeyValue(settings, key); ok {
+		return strings.TrimSpace(value)
+	}
+	return ""
 }

@@ -463,9 +463,23 @@ type SurfTunnelSettings struct {
 }
 
 type RemoteControlSettings struct {
-	Repo  string `toml:"repo,omitempty"`
-	Bin   string `toml:"bin,omitempty"`
-	Build *bool  `toml:"build,omitempty"`
+	Repo   string                          `toml:"repo,omitempty"`
+	Bin    string                          `toml:"bin,omitempty"`
+	Build  *bool                           `toml:"build,omitempty"`
+	Safari RemoteControlSafariSmokeSetting `toml:"safari,omitempty"`
+}
+
+type RemoteControlSafariSmokeSetting struct {
+	SSH RemoteControlSafariSSHSetting `toml:"ssh,omitempty"`
+}
+
+type RemoteControlSafariSSHSetting struct {
+	Host       string `toml:"host,omitempty"`
+	Port       string `toml:"port,omitempty"`
+	User       string `toml:"user,omitempty"`
+	HostEnvKey string `toml:"host_env_key,omitempty"`
+	PortEnvKey string `toml:"port_env_key,omitempty"`
+	UserEnvKey string `toml:"user_env_key,omitempty"`
 }
 
 type VivaSettings struct {
@@ -1133,6 +1147,23 @@ func applySettingsDefaults(settings *Settings) {
 	case "", "quick", "token":
 	default:
 		settings.Surf.Tunnel.Mode = ""
+	}
+	settings.RemoteControl.Repo = strings.TrimSpace(settings.RemoteControl.Repo)
+	settings.RemoteControl.Bin = strings.TrimSpace(settings.RemoteControl.Bin)
+	settings.RemoteControl.Safari.SSH.Host = strings.TrimSpace(settings.RemoteControl.Safari.SSH.Host)
+	settings.RemoteControl.Safari.SSH.Port = strings.TrimSpace(settings.RemoteControl.Safari.SSH.Port)
+	settings.RemoteControl.Safari.SSH.User = strings.TrimSpace(settings.RemoteControl.Safari.SSH.User)
+	settings.RemoteControl.Safari.SSH.HostEnvKey = strings.TrimSpace(settings.RemoteControl.Safari.SSH.HostEnvKey)
+	settings.RemoteControl.Safari.SSH.PortEnvKey = strings.TrimSpace(settings.RemoteControl.Safari.SSH.PortEnvKey)
+	settings.RemoteControl.Safari.SSH.UserEnvKey = strings.TrimSpace(settings.RemoteControl.Safari.SSH.UserEnvKey)
+	if settings.RemoteControl.Safari.SSH.HostEnvKey == "" {
+		settings.RemoteControl.Safari.SSH.HostEnvKey = "SHAWN_MAC_HOST"
+	}
+	if settings.RemoteControl.Safari.SSH.PortEnvKey == "" {
+		settings.RemoteControl.Safari.SSH.PortEnvKey = "SHAWN_MAC_PORT"
+	}
+	if settings.RemoteControl.Safari.SSH.UserEnvKey == "" {
+		settings.RemoteControl.Safari.SSH.UserEnvKey = "SHAWN_MAC_USER"
 	}
 	settings.Viva.Repo = strings.TrimSpace(settings.Viva.Repo)
 	settings.Viva.Bin = strings.TrimSpace(settings.Viva.Bin)
