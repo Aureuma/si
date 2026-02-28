@@ -135,6 +135,21 @@ func TestNormalizeVivaTunnelProfileDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizeVivaTunnelProfileKeepsExplicitContainerName(t *testing.T) {
+	profile := normalizeVivaTunnelProfile(VivaTunnelProfile{
+		Name:               "surf-chrome-profile",
+		ContainerName:      "viva-cloudflared-tunnel",
+		NetworkMode:        "viva-shared",
+		AdditionalNetworks: []string{"si", "viva-shared", "si", "supabase_default"},
+	})
+	if profile.ContainerName != "viva-cloudflared-tunnel" {
+		t.Fatalf("unexpected container name: %q", profile.ContainerName)
+	}
+	if len(profile.AdditionalNetworks) != 2 || profile.AdditionalNetworks[0] != "si" || profile.AdditionalNetworks[1] != "supabase_default" {
+		t.Fatalf("unexpected additional networks: %#v", profile.AdditionalNetworks)
+	}
+}
+
 func TestDefaultVivaRepoPathFindsSiblingRepo(t *testing.T) {
 	orig, err := os.Getwd()
 	if err != nil {
