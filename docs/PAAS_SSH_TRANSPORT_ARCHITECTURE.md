@@ -33,7 +33,7 @@ Strengths:
 
 Weaknesses:
 - Requires custom tasks for modern container-native patterns.
-- Parallelism is coarse and plugin-driven.
+- Parallelism is coarse and orbit-driven.
 
 Takeaway for SI:
 - Preserve deterministic release IDs and history, with explicit rollback targets.
