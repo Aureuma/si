@@ -1,4 +1,4 @@
-package pluginmarket
+package orbitmarket
 
 import (
 	"crypto/sha256"
@@ -69,7 +69,7 @@ func NormalizeGatewayRegistryName(raw string) (string, error) {
 	if normalized == "" {
 		return "", fmt.Errorf("gateway registry name required")
 	}
-	if !pluginIDSegmentPattern.MatchString(normalized) {
+	if !orbitIDSegmentPattern.MatchString(normalized) {
 		return "", fmt.Errorf("invalid gateway registry name %q", raw)
 	}
 	return normalized, nil
@@ -85,20 +85,20 @@ func NormalizeGatewaySlotsPerNamespace(slots int) (int, error) {
 	return slots, nil
 }
 
-func GatewayShardKey(pluginID string, slotsPerNamespace int) (key string, namespace string, slot int, err error) {
-	if err := ValidatePluginID(pluginID); err != nil {
+func GatewayShardKey(orbitID string, slotsPerNamespace int) (key string, namespace string, slot int, err error) {
+	if err := ValidateOrbitID(orbitID); err != nil {
 		return "", "", 0, err
 	}
-	namespace = NamespaceFromID(pluginID)
+	namespace = NamespaceFromID(orbitID)
 	if namespace == "" {
-		return "", "", 0, fmt.Errorf("plugin id %q has no namespace", pluginID)
+		return "", "", 0, fmt.Errorf("orbit id %q has no namespace", orbitID)
 	}
 	slotsPerNamespace, err = NormalizeGatewaySlotsPerNamespace(slotsPerNamespace)
 	if err != nil {
 		return "", "", 0, err
 	}
 	hasher := fnv.New32a()
-	_, _ = hasher.Write([]byte(pluginID))
+	_, _ = hasher.Write([]byte(orbitID))
 	slot = int(hasher.Sum32() % uint32(slotsPerNamespace))
 	key = fmt.Sprintf("%s--%02d", namespace, slot)
 	return key, namespace, slot, nil
@@ -299,7 +299,7 @@ func GatewayShardObjectName(registry string, shardKey string) (string, error) {
 		return "", fmt.Errorf("invalid shard key %q", shardKey)
 	}
 	namespace := strings.TrimSpace(segments[0])
-	if !pluginIDSegmentPattern.MatchString(namespace) {
+	if !orbitIDSegmentPattern.MatchString(namespace) {
 		return "", fmt.Errorf("invalid shard namespace %q", namespace)
 	}
 	slotValue := strings.TrimSpace(segments[1])

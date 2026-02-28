@@ -16,7 +16,7 @@
         "name": "OpenClaw Bluebubbles",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Bluebubbles.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's bluebubbles channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's bluebubbles channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/bluebubbles",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -26,7 +26,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/bluebubbles"
+            "si orbits install openclaw/bluebubbles"
           ],
           "capabilities": [
             "messaging",
@@ -51,7 +51,7 @@
         "name": "OpenClaw Copilot Proxy",
         "version": "0.1.0",
         "summary": "OpenClaw parity provider/auth integration for Copilot Proxy.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's copilot-proxy provider/auth integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's copilot-proxy provider/auth integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/copilot-proxy",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -61,7 +61,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/copilot-proxy"
+            "si orbits install openclaw/copilot-proxy"
           ],
           "capabilities": [
             "auth",
@@ -86,7 +86,7 @@
         "name": "OpenClaw Device Pair",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Device Pair.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's device-pair capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's device-pair capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/device-pair",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -96,7 +96,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/device-pair"
+            "si orbits install openclaw/device-pair"
           ],
           "capabilities": [
             "tooling",
@@ -121,7 +121,7 @@
         "name": "OpenClaw Diagnostics Otel",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Diagnostics Otel.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's diagnostics-otel capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's diagnostics-otel capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/diagnostics-otel",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -131,7 +131,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/diagnostics-otel"
+            "si orbits install openclaw/diagnostics-otel"
           ],
           "capabilities": [
             "tooling",
@@ -156,7 +156,7 @@
         "name": "OpenClaw Discord",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Discord.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's discord channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's discord channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/discord",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -166,7 +166,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/discord"
+            "si orbits install openclaw/discord"
           ],
           "capabilities": [
             "messaging",
@@ -191,7 +191,7 @@
         "name": "OpenClaw Feishu",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Feishu.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's feishu channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's feishu channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/feishu",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -201,7 +201,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/feishu"
+            "si orbits install openclaw/feishu"
           ],
           "capabilities": [
             "messaging",
@@ -226,7 +226,7 @@
         "name": "OpenClaw Google Antigravity Auth",
         "version": "0.1.0",
         "summary": "OpenClaw parity provider/auth integration for Google Antigravity Auth.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's google-antigravity-auth provider/auth integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's google-antigravity-auth provider/auth integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/google-antigravity-auth",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -236,7 +236,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/google-antigravity-auth"
+            "si orbits install openclaw/google-antigravity-auth"
           ],
           "capabilities": [
             "auth",
@@ -261,7 +261,7 @@
         "name": "OpenClaw Google Gemini Cli Auth",
         "version": "0.1.0",
         "summary": "OpenClaw parity provider/auth integration for Google Gemini Cli Auth.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's google-gemini-cli-auth provider/auth integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's google-gemini-cli-auth provider/auth integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/google-gemini-cli-auth",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -271,7 +271,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/google-gemini-cli-auth"
+            "si orbits install openclaw/google-gemini-cli-auth"
           ],
           "capabilities": [
             "auth",
@@ -296,7 +296,7 @@
         "name": "OpenClaw Googlechat",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Googlechat.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's googlechat channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's googlechat channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/googlechat",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -306,7 +306,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/googlechat"
+            "si orbits install openclaw/googlechat"
           ],
           "capabilities": [
             "messaging",
@@ -331,7 +331,7 @@
         "name": "OpenClaw Imessage",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Imessage.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's imessage channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's imessage channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/imessage",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -341,7 +341,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/imessage"
+            "si orbits install openclaw/imessage"
           ],
           "capabilities": [
             "messaging",
@@ -366,7 +366,7 @@
         "name": "OpenClaw Irc",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Irc.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's irc channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's irc channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/irc",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -376,7 +376,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/irc"
+            "si orbits install openclaw/irc"
           ],
           "capabilities": [
             "messaging",
@@ -401,7 +401,7 @@
         "name": "OpenClaw Line",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Line.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's line channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's line channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/line",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -411,7 +411,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/line"
+            "si orbits install openclaw/line"
           ],
           "capabilities": [
             "messaging",
@@ -436,7 +436,7 @@
         "name": "OpenClaw Llm Task",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Llm Task.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's llm-task capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's llm-task capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/llm-task",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -446,7 +446,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/llm-task"
+            "si orbits install openclaw/llm-task"
           ],
           "capabilities": [
             "tooling",
@@ -471,7 +471,7 @@
         "name": "OpenClaw Lobster",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Lobster.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's lobster capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's lobster capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/lobster",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -481,7 +481,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/lobster"
+            "si orbits install openclaw/lobster"
           ],
           "capabilities": [
             "tooling",
@@ -506,7 +506,7 @@
         "name": "OpenClaw Matrix",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Matrix.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's matrix channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's matrix channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/matrix",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -516,7 +516,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/matrix"
+            "si orbits install openclaw/matrix"
           ],
           "capabilities": [
             "messaging",
@@ -541,7 +541,7 @@
         "name": "OpenClaw Mattermost",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Mattermost.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's mattermost channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's mattermost channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/mattermost",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -551,7 +551,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/mattermost"
+            "si orbits install openclaw/mattermost"
           ],
           "capabilities": [
             "messaging",
@@ -576,7 +576,7 @@
         "name": "OpenClaw Memory Core",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Memory Core.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's memory-core capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's memory-core capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/memory-core",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -586,7 +586,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/memory-core"
+            "si orbits install openclaw/memory-core"
           ],
           "capabilities": [
             "tooling",
@@ -611,7 +611,7 @@
         "name": "OpenClaw Memory Lancedb",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Memory Lancedb.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's memory-lancedb capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's memory-lancedb capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/memory-lancedb",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -621,7 +621,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/memory-lancedb"
+            "si orbits install openclaw/memory-lancedb"
           ],
           "capabilities": [
             "tooling",
@@ -646,7 +646,7 @@
         "name": "OpenClaw Minimax Portal Auth",
         "version": "0.1.0",
         "summary": "OpenClaw parity provider/auth integration for Minimax Portal Auth.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's minimax-portal-auth provider/auth integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's minimax-portal-auth provider/auth integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/minimax-portal-auth",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -656,7 +656,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/minimax-portal-auth"
+            "si orbits install openclaw/minimax-portal-auth"
           ],
           "capabilities": [
             "auth",
@@ -681,7 +681,7 @@
         "name": "OpenClaw Msteams",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Msteams.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's msteams channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's msteams channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/msteams",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -691,7 +691,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/msteams"
+            "si orbits install openclaw/msteams"
           ],
           "capabilities": [
             "messaging",
@@ -716,7 +716,7 @@
         "name": "OpenClaw Nextcloud Talk",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Nextcloud Talk.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's nextcloud-talk channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's nextcloud-talk channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/nextcloud-talk",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -726,7 +726,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/nextcloud-talk"
+            "si orbits install openclaw/nextcloud-talk"
           ],
           "capabilities": [
             "messaging",
@@ -751,7 +751,7 @@
         "name": "OpenClaw Nostr",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Nostr.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's nostr channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's nostr channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/nostr",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -761,7 +761,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/nostr"
+            "si orbits install openclaw/nostr"
           ],
           "capabilities": [
             "messaging",
@@ -786,7 +786,7 @@
         "name": "OpenClaw Open Prose",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Open Prose.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's open-prose capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's open-prose capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/open-prose",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -796,7 +796,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/open-prose"
+            "si orbits install openclaw/open-prose"
           ],
           "capabilities": [
             "tooling",
@@ -821,7 +821,7 @@
         "name": "OpenClaw Phone Control",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Phone Control.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's phone-control capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's phone-control capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/phone-control",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -831,7 +831,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/phone-control"
+            "si orbits install openclaw/phone-control"
           ],
           "capabilities": [
             "tooling",
@@ -856,7 +856,7 @@
         "name": "OpenClaw Qwen Portal Auth",
         "version": "0.1.0",
         "summary": "OpenClaw parity provider/auth integration for Qwen Portal Auth.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's qwen-portal-auth provider/auth integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's qwen-portal-auth provider/auth integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/qwen-portal-auth",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -866,7 +866,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/qwen-portal-auth"
+            "si orbits install openclaw/qwen-portal-auth"
           ],
           "capabilities": [
             "auth",
@@ -891,7 +891,7 @@
         "name": "OpenClaw Signal",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Signal.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's signal channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's signal channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/signal",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -901,7 +901,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/signal"
+            "si orbits install openclaw/signal"
           ],
           "capabilities": [
             "messaging",
@@ -926,7 +926,7 @@
         "name": "OpenClaw Slack",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Slack.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's slack channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's slack channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/slack",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -936,7 +936,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/slack"
+            "si orbits install openclaw/slack"
           ],
           "capabilities": [
             "messaging",
@@ -961,7 +961,7 @@
         "name": "OpenClaw Talk Voice",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Talk Voice.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's talk-voice capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's talk-voice capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/talk-voice",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -971,7 +971,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/talk-voice"
+            "si orbits install openclaw/talk-voice"
           ],
           "capabilities": [
             "tooling",
@@ -996,7 +996,7 @@
         "name": "OpenClaw Telegram",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Telegram.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's telegram channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's telegram channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/telegram",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1006,7 +1006,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/telegram"
+            "si orbits install openclaw/telegram"
           ],
           "capabilities": [
             "messaging",
@@ -1031,7 +1031,7 @@
         "name": "OpenClaw Thread Ownership",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Thread Ownership.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's thread-ownership capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's thread-ownership capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/thread-ownership",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1041,7 +1041,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/thread-ownership"
+            "si orbits install openclaw/thread-ownership"
           ],
           "capabilities": [
             "tooling",
@@ -1066,7 +1066,7 @@
         "name": "OpenClaw Tlon",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Tlon.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's tlon channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's tlon channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/tlon",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1076,7 +1076,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/tlon"
+            "si orbits install openclaw/tlon"
           ],
           "capabilities": [
             "messaging",
@@ -1101,7 +1101,7 @@
         "name": "OpenClaw Twitch",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Twitch.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's twitch channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's twitch channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/twitch",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1111,7 +1111,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/twitch"
+            "si orbits install openclaw/twitch"
           ],
           "capabilities": [
             "messaging",
@@ -1136,7 +1136,7 @@
         "name": "OpenClaw Voice Call",
         "version": "0.1.0",
         "summary": "OpenClaw parity capability integration for Voice Call.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's voice-call capability integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's voice-call capability integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/voice-call",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1146,7 +1146,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/voice-call"
+            "si orbits install openclaw/voice-call"
           ],
           "capabilities": [
             "tooling",
@@ -1171,7 +1171,7 @@
         "name": "OpenClaw Whatsapp",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Whatsapp.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's whatsapp channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's whatsapp channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/whatsapp",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1181,7 +1181,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/whatsapp"
+            "si orbits install openclaw/whatsapp"
           ],
           "capabilities": [
             "messaging",
@@ -1206,7 +1206,7 @@
         "name": "OpenClaw Zalo",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Zalo.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's zalo channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's zalo channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/zalo",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1216,7 +1216,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/zalo"
+            "si orbits install openclaw/zalo"
           ],
           "capabilities": [
             "messaging",
@@ -1241,7 +1241,7 @@
         "name": "OpenClaw Zalouser",
         "version": "0.1.0",
         "summary": "OpenClaw parity channel integration for Zalouser.",
-        "description": "Provides SI plugin metadata parity for OpenClaw's zalouser channel integration.",
+        "description": "Provides SI orbit metadata parity for OpenClaw's zalouser channel integration.",
         "homepage": "https://github.com/openclaw/openclaw/tree/main/extensions/zalouser",
         "license": "AGPL-3.0",
         "maturity": "beta",
@@ -1251,7 +1251,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install openclaw/zalouser"
+            "si orbits install openclaw/zalouser"
           ],
           "capabilities": [
             "messaging",
@@ -1275,8 +1275,8 @@
         "namespace": "saas",
         "name": "Airtable Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Airtable.",
-        "description": "Curated SI plugin metadata for Airtable to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Airtable.",
+        "description": "Curated SI orbit metadata for Airtable to support startup/company operations.",
         "homepage": "https://www.airtable.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1286,7 +1286,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/airtable"
+            "si orbits install saas/airtable"
           ],
           "capabilities": [
             "saas",
@@ -1310,8 +1310,8 @@
         "namespace": "saas",
         "name": "Amplitude Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Amplitude.",
-        "description": "Curated SI plugin metadata for Amplitude to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Amplitude.",
+        "description": "Curated SI orbit metadata for Amplitude to support startup/company operations.",
         "homepage": "https://amplitude.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1321,7 +1321,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/amplitude"
+            "si orbits install saas/amplitude"
           ],
           "capabilities": [
             "saas",
@@ -1345,8 +1345,8 @@
         "namespace": "saas",
         "name": "Asana Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Asana.",
-        "description": "Curated SI plugin metadata for Asana to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Asana.",
+        "description": "Curated SI orbit metadata for Asana to support startup/company operations.",
         "homepage": "https://asana.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1356,7 +1356,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/asana"
+            "si orbits install saas/asana"
           ],
           "capabilities": [
             "saas",
@@ -1380,8 +1380,8 @@
         "namespace": "saas",
         "name": "Auth0 Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Auth0.",
-        "description": "Curated SI plugin metadata for Auth0 to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Auth0.",
+        "description": "Curated SI orbit metadata for Auth0 to support startup/company operations.",
         "homepage": "https://auth0.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1391,7 +1391,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/auth0"
+            "si orbits install saas/auth0"
           ],
           "capabilities": [
             "saas",
@@ -1415,8 +1415,8 @@
         "namespace": "saas",
         "name": "BigQuery Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for BigQuery.",
-        "description": "Curated SI plugin metadata for BigQuery to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for BigQuery.",
+        "description": "Curated SI orbit metadata for BigQuery to support startup/company operations.",
         "homepage": "https://cloud.google.com/bigquery",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1426,7 +1426,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/bigquery"
+            "si orbits install saas/bigquery"
           ],
           "capabilities": [
             "saas",
@@ -1450,8 +1450,8 @@
         "namespace": "saas",
         "name": "Braze Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Braze.",
-        "description": "Curated SI plugin metadata for Braze to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Braze.",
+        "description": "Curated SI orbit metadata for Braze to support startup/company operations.",
         "homepage": "https://www.braze.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1461,7 +1461,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/braze"
+            "si orbits install saas/braze"
           ],
           "capabilities": [
             "saas",
@@ -1485,8 +1485,8 @@
         "namespace": "saas",
         "name": "ClickUp Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for ClickUp.",
-        "description": "Curated SI plugin metadata for ClickUp to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for ClickUp.",
+        "description": "Curated SI orbit metadata for ClickUp to support startup/company operations.",
         "homepage": "https://clickup.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1496,7 +1496,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/clickup"
+            "si orbits install saas/clickup"
           ],
           "capabilities": [
             "saas",
@@ -1520,8 +1520,8 @@
         "namespace": "saas",
         "name": "Customer.io Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Customer.io.",
-        "description": "Curated SI plugin metadata for Customer.io to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Customer.io.",
+        "description": "Curated SI orbit metadata for Customer.io to support startup/company operations.",
         "homepage": "https://customer.io",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1531,7 +1531,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/customerio"
+            "si orbits install saas/customerio"
           ],
           "capabilities": [
             "saas",
@@ -1555,8 +1555,8 @@
         "namespace": "saas",
         "name": "Datadog Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Datadog.",
-        "description": "Curated SI plugin metadata for Datadog to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Datadog.",
+        "description": "Curated SI orbit metadata for Datadog to support startup/company operations.",
         "homepage": "https://www.datadoghq.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1566,7 +1566,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/datadog"
+            "si orbits install saas/datadog"
           ],
           "capabilities": [
             "saas",
@@ -1590,8 +1590,8 @@
         "namespace": "saas",
         "name": "Freshdesk Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Freshdesk.",
-        "description": "Curated SI plugin metadata for Freshdesk to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Freshdesk.",
+        "description": "Curated SI orbit metadata for Freshdesk to support startup/company operations.",
         "homepage": "https://www.freshworks.com/freshdesk",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1601,7 +1601,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/freshdesk"
+            "si orbits install saas/freshdesk"
           ],
           "capabilities": [
             "saas",
@@ -1625,8 +1625,8 @@
         "namespace": "saas",
         "name": "HubSpot Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for HubSpot.",
-        "description": "Curated SI plugin metadata for HubSpot to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for HubSpot.",
+        "description": "Curated SI orbit metadata for HubSpot to support startup/company operations.",
         "homepage": "https://www.hubspot.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1636,7 +1636,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/hubspot"
+            "si orbits install saas/hubspot"
           ],
           "capabilities": [
             "saas",
@@ -1660,8 +1660,8 @@
         "namespace": "saas",
         "name": "Intercom Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Intercom.",
-        "description": "Curated SI plugin metadata for Intercom to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Intercom.",
+        "description": "Curated SI orbit metadata for Intercom to support startup/company operations.",
         "homepage": "https://www.intercom.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1671,7 +1671,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/intercom"
+            "si orbits install saas/intercom"
           ],
           "capabilities": [
             "saas",
@@ -1695,8 +1695,8 @@
         "namespace": "saas",
         "name": "Jira Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Jira.",
-        "description": "Curated SI plugin metadata for Jira to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Jira.",
+        "description": "Curated SI orbit metadata for Jira to support startup/company operations.",
         "homepage": "https://www.atlassian.com/software/jira",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1706,7 +1706,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/jira"
+            "si orbits install saas/jira"
           ],
           "capabilities": [
             "saas",
@@ -1730,8 +1730,8 @@
         "namespace": "saas",
         "name": "Linear Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Linear.",
-        "description": "Curated SI plugin metadata for Linear to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Linear.",
+        "description": "Curated SI orbit metadata for Linear to support startup/company operations.",
         "homepage": "https://linear.app",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1741,7 +1741,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/linear"
+            "si orbits install saas/linear"
           ],
           "capabilities": [
             "saas",
@@ -1765,8 +1765,8 @@
         "namespace": "saas",
         "name": "Mailchimp Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Mailchimp.",
-        "description": "Curated SI plugin metadata for Mailchimp to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Mailchimp.",
+        "description": "Curated SI orbit metadata for Mailchimp to support startup/company operations.",
         "homepage": "https://mailchimp.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1776,7 +1776,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/mailchimp"
+            "si orbits install saas/mailchimp"
           ],
           "capabilities": [
             "saas",
@@ -1800,8 +1800,8 @@
         "namespace": "saas",
         "name": "Mixpanel Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Mixpanel.",
-        "description": "Curated SI plugin metadata for Mixpanel to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Mixpanel.",
+        "description": "Curated SI orbit metadata for Mixpanel to support startup/company operations.",
         "homepage": "https://mixpanel.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1811,7 +1811,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/mixpanel"
+            "si orbits install saas/mixpanel"
           ],
           "capabilities": [
             "saas",
@@ -1835,8 +1835,8 @@
         "namespace": "saas",
         "name": "Notion Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Notion.",
-        "description": "Curated SI plugin metadata for Notion to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Notion.",
+        "description": "Curated SI orbit metadata for Notion to support startup/company operations.",
         "homepage": "https://www.notion.so",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1846,7 +1846,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/notion"
+            "si orbits install saas/notion"
           ],
           "capabilities": [
             "saas",
@@ -1870,8 +1870,8 @@
         "namespace": "saas",
         "name": "Okta Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Okta.",
-        "description": "Curated SI plugin metadata for Okta to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Okta.",
+        "description": "Curated SI orbit metadata for Okta to support startup/company operations.",
         "homepage": "https://www.okta.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1881,7 +1881,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/okta"
+            "si orbits install saas/okta"
           ],
           "capabilities": [
             "saas",
@@ -1905,8 +1905,8 @@
         "namespace": "saas",
         "name": "Opsgenie Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Opsgenie.",
-        "description": "Curated SI plugin metadata for Opsgenie to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Opsgenie.",
+        "description": "Curated SI orbit metadata for Opsgenie to support startup/company operations.",
         "homepage": "https://www.atlassian.com/software/opsgenie",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1916,7 +1916,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/opsgenie"
+            "si orbits install saas/opsgenie"
           ],
           "capabilities": [
             "saas",
@@ -1940,8 +1940,8 @@
         "namespace": "saas",
         "name": "PagerDuty Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for PagerDuty.",
-        "description": "Curated SI plugin metadata for PagerDuty to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for PagerDuty.",
+        "description": "Curated SI orbit metadata for PagerDuty to support startup/company operations.",
         "homepage": "https://www.pagerduty.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1951,7 +1951,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/pagerduty"
+            "si orbits install saas/pagerduty"
           ],
           "capabilities": [
             "saas",
@@ -1975,8 +1975,8 @@
         "namespace": "saas",
         "name": "Pipedrive Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Pipedrive.",
-        "description": "Curated SI plugin metadata for Pipedrive to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Pipedrive.",
+        "description": "Curated SI orbit metadata for Pipedrive to support startup/company operations.",
         "homepage": "https://www.pipedrive.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -1986,7 +1986,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/pipedrive"
+            "si orbits install saas/pipedrive"
           ],
           "capabilities": [
             "saas",
@@ -2010,8 +2010,8 @@
         "namespace": "saas",
         "name": "PostHog Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for PostHog.",
-        "description": "Curated SI plugin metadata for PostHog to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for PostHog.",
+        "description": "Curated SI orbit metadata for PostHog to support startup/company operations.",
         "homepage": "https://posthog.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2021,7 +2021,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/posthog"
+            "si orbits install saas/posthog"
           ],
           "capabilities": [
             "saas",
@@ -2045,8 +2045,8 @@
         "namespace": "saas",
         "name": "Postmark Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Postmark.",
-        "description": "Curated SI plugin metadata for Postmark to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Postmark.",
+        "description": "Curated SI orbit metadata for Postmark to support startup/company operations.",
         "homepage": "https://postmarkapp.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2056,7 +2056,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/postmark"
+            "si orbits install saas/postmark"
           ],
           "capabilities": [
             "saas",
@@ -2080,8 +2080,8 @@
         "namespace": "saas",
         "name": "QuickBooks Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for QuickBooks.",
-        "description": "Curated SI plugin metadata for QuickBooks to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for QuickBooks.",
+        "description": "Curated SI orbit metadata for QuickBooks to support startup/company operations.",
         "homepage": "https://quickbooks.intuit.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2091,7 +2091,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/quickbooks"
+            "si orbits install saas/quickbooks"
           ],
           "capabilities": [
             "saas",
@@ -2115,8 +2115,8 @@
         "namespace": "saas",
         "name": "Salesforce Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Salesforce.",
-        "description": "Curated SI plugin metadata for Salesforce to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Salesforce.",
+        "description": "Curated SI orbit metadata for Salesforce to support startup/company operations.",
         "homepage": "https://www.salesforce.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2126,7 +2126,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/salesforce"
+            "si orbits install saas/salesforce"
           ],
           "capabilities": [
             "saas",
@@ -2150,8 +2150,8 @@
         "namespace": "saas",
         "name": "Segment Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Segment.",
-        "description": "Curated SI plugin metadata for Segment to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Segment.",
+        "description": "Curated SI orbit metadata for Segment to support startup/company operations.",
         "homepage": "https://segment.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2161,7 +2161,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/segment"
+            "si orbits install saas/segment"
           ],
           "capabilities": [
             "saas",
@@ -2185,8 +2185,8 @@
         "namespace": "saas",
         "name": "SendGrid Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for SendGrid.",
-        "description": "Curated SI plugin metadata for SendGrid to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for SendGrid.",
+        "description": "Curated SI orbit metadata for SendGrid to support startup/company operations.",
         "homepage": "https://sendgrid.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2196,7 +2196,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/sendgrid"
+            "si orbits install saas/sendgrid"
           ],
           "capabilities": [
             "saas",
@@ -2220,8 +2220,8 @@
         "namespace": "saas",
         "name": "Sentry Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Sentry.",
-        "description": "Curated SI plugin metadata for Sentry to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Sentry.",
+        "description": "Curated SI orbit metadata for Sentry to support startup/company operations.",
         "homepage": "https://sentry.io",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2231,7 +2231,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/sentry"
+            "si orbits install saas/sentry"
           ],
           "capabilities": [
             "saas",
@@ -2255,8 +2255,8 @@
         "namespace": "saas",
         "name": "Shopify Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Shopify.",
-        "description": "Curated SI plugin metadata for Shopify to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Shopify.",
+        "description": "Curated SI orbit metadata for Shopify to support startup/company operations.",
         "homepage": "https://www.shopify.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2266,7 +2266,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/shopify"
+            "si orbits install saas/shopify"
           ],
           "capabilities": [
             "saas",
@@ -2290,8 +2290,8 @@
         "namespace": "saas",
         "name": "Snowflake Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Snowflake.",
-        "description": "Curated SI plugin metadata for Snowflake to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Snowflake.",
+        "description": "Curated SI orbit metadata for Snowflake to support startup/company operations.",
         "homepage": "https://www.snowflake.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2301,7 +2301,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/snowflake"
+            "si orbits install saas/snowflake"
           ],
           "capabilities": [
             "saas",
@@ -2325,8 +2325,8 @@
         "namespace": "saas",
         "name": "Twilio Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Twilio.",
-        "description": "Curated SI plugin metadata for Twilio to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Twilio.",
+        "description": "Curated SI orbit metadata for Twilio to support startup/company operations.",
         "homepage": "https://www.twilio.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2336,7 +2336,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/twilio"
+            "si orbits install saas/twilio"
           ],
           "capabilities": [
             "saas",
@@ -2360,8 +2360,8 @@
         "namespace": "saas",
         "name": "Xero Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Xero.",
-        "description": "Curated SI plugin metadata for Xero to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Xero.",
+        "description": "Curated SI orbit metadata for Xero to support startup/company operations.",
         "homepage": "https://www.xero.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2371,7 +2371,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/xero"
+            "si orbits install saas/xero"
           ],
           "capabilities": [
             "saas",
@@ -2395,8 +2395,8 @@
         "namespace": "saas",
         "name": "Zendesk Integration",
         "version": "0.1.0",
-        "summary": "SaaS integration plugin metadata for Zendesk.",
-        "description": "Curated SI plugin metadata for Zendesk to support startup/company operations.",
+        "summary": "SaaS integration orbit metadata for Zendesk.",
+        "description": "Curated SI orbit metadata for Zendesk to support startup/company operations.",
         "homepage": "https://www.zendesk.com",
         "license": "Apache-2.0",
         "maturity": "beta",
@@ -2406,7 +2406,7 @@
         },
         "integration": {
           "commands": [
-            "si plugins install saas/zendesk"
+            "si orbits install saas/zendesk"
           ],
           "capabilities": [
             "saas",

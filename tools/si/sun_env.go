@@ -45,10 +45,10 @@ func envSunAllowInsecureHTTP() bool {
 	return isTruthyFlagValue(os.Getenv("SI_SUN_ALLOW_INSECURE_HTTP"))
 }
 
-func envSunPluginGatewayRegistry() string {
-	return strings.TrimSpace(os.Getenv("SI_SUN_PLUGIN_GATEWAY_REGISTRY"))
+func envSunOrbitGatewayRegistry() string {
+	return strings.TrimSpace(os.Getenv("SI_SUN_ORBIT_GATEWAY_REGISTRY"))
 }
 
-func envSunPluginGatewaySlots() string {
-	return strings.TrimSpace(os.Getenv("SI_SUN_PLUGIN_GATEWAY_SLOTS"))
+func envSunOrbitGatewaySlots() string {
+	return strings.TrimSpace(os.Getenv("SI_SUN_ORBIT_GATEWAY_SLOTS"))
 }

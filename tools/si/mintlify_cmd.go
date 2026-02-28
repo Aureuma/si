@@ -231,7 +231,7 @@ func writeMintlifyDocsConfig(pathValue, docsDir, siteName, siteURL string, force
 								path.Join(docsDir, "DYAD"),
 								path.Join(docsDir, "VAULT"),
 								path.Join(docsDir, "BROWSER"),
-								path.Join(docsDir, "PLUGIN_MARKETPLACE"),
+								path.Join(docsDir, "ORBITS"),
 							},
 						},
 					},

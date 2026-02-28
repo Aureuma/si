@@ -11,17 +11,17 @@ import (
 	"strings"
 	"time"
 
-	"si/tools/si/internal/pluginmarket"
+	"si/tools/si/internal/orbitmarket"
 )
 
 const (
-	pluginsGatewayUsageText   = "usage: si plugins gateway <build|push|pull|status>"
-	defaultPluginGatewayName  = "global"
+	orbitsGatewayUsageText    = "usage: si orbits gateway <build|push|pull|status>"
+	defaultOrbitGatewayName   = "global"
 	defaultGatewayCatalogName = "gateway-%s.json"
 )
 
-func cmdPluginsGateway(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, pluginsGatewayUsageText)
+func cmdOrbitsGateway(args []string) {
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, orbitsGatewayUsageText)
 	if !routedOK {
 		return
 	}
@@ -30,22 +30,22 @@ func cmdPluginsGateway(args []string) {
 	rest := args[1:]
 	switch sub {
 	case "build":
-		cmdPluginsGatewayBuild(rest)
+		cmdOrbitsGatewayBuild(rest)
 	case "push", "publish":
-		cmdPluginsGatewayPush(rest)
+		cmdOrbitsGatewayPush(rest)
 	case "pull", "sync":
-		cmdPluginsGatewayPull(rest)
+		cmdOrbitsGatewayPull(rest)
 	case "status":
-		cmdPluginsGatewayStatus(rest)
+		cmdOrbitsGatewayStatus(rest)
 	default:
-		printUnknown("plugins gateway", sub)
-		printUsage(pluginsGatewayUsageText)
+		printUnknown("orbits gateway", sub)
+		printUsage(orbitsGatewayUsageText)
 	}
 }
 
-func cmdPluginsGatewayBuild(args []string) {
+func cmdOrbitsGatewayBuild(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"verified": true, "json": true})
-	fs := flag.NewFlagSet("plugins gateway build", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits gateway build", flag.ExitOnError)
 	source := fs.String("source", "", "manifest source file or directory")
 	registry := fs.String("registry", "", "gateway registry name")
 	slots := fs.Int("slots", 0, "slots per namespace")
@@ -55,20 +55,20 @@ func cmdPluginsGatewayBuild(args []string) {
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if strings.TrimSpace(*source) == "" || fs.NArg() > 0 {
-		printUsage("usage: si plugins gateway build --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--output-dir <dir>] [--json]")
+		printUsage("usage: si orbits gateway build --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--output-dir <dir>] [--json]")
 		return
 	}
 	settings := loadSettingsOrDefault()
-	targetRegistry := pluginGatewayRegistryName(settings, *registry)
-	targetSlots := pluginGatewaySlots(settings, *slots)
-	catalog, diagnostics, err := pluginmarket.BuildCatalogFromSource(strings.TrimSpace(*source), pluginmarket.BuildCatalogOptions{
+	targetRegistry := orbitGatewayRegistryName(settings, *registry)
+	targetSlots := orbitGatewaySlots(settings, *slots)
+	catalog, diagnostics, err := orbitmarket.BuildCatalogFromSource(strings.TrimSpace(*source), orbitmarket.BuildCatalogOptions{
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
 	})
 	if err != nil {
 		fatal(err)
 	}
-	index, shards, err := pluginmarket.BuildGateway(catalog, pluginmarket.GatewayBuildOptions{
+	index, shards, err := orbitmarket.BuildGateway(catalog, orbitmarket.GatewayBuildOptions{
 		Registry:          targetRegistry,
 		SlotsPerNamespace: targetSlots,
 		GeneratedAt:       time.Now().UTC(),
@@ -107,9 +107,9 @@ func cmdPluginsGatewayBuild(args []string) {
 	}
 }
 
-func cmdPluginsGatewayPush(args []string) {
+func cmdOrbitsGatewayPush(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"verified": true, "json": true})
-	fs := flag.NewFlagSet("plugins gateway push", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits gateway push", flag.ExitOnError)
 	source := fs.String("source", "", "manifest source file or directory")
 	registry := fs.String("registry", "", "gateway registry name")
 	slots := fs.Int("slots", 0, "slots per namespace")
@@ -118,24 +118,24 @@ func cmdPluginsGatewayPush(args []string) {
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if strings.TrimSpace(*source) == "" || fs.NArg() > 0 {
-		printUsage("usage: si plugins gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]")
+		printUsage("usage: si orbits gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]")
 		return
 	}
 	settings := loadSettingsOrDefault()
-	targetRegistry := pluginGatewayRegistryName(settings, *registry)
-	targetSlots := pluginGatewaySlots(settings, *slots)
+	targetRegistry := orbitGatewayRegistryName(settings, *registry)
+	targetSlots := orbitGatewaySlots(settings, *slots)
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
 	}
-	catalog, diagnostics, err := pluginmarket.BuildCatalogFromSource(strings.TrimSpace(*source), pluginmarket.BuildCatalogOptions{
+	catalog, diagnostics, err := orbitmarket.BuildCatalogFromSource(strings.TrimSpace(*source), orbitmarket.BuildCatalogOptions{
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
 	})
 	if err != nil {
 		fatal(err)
 	}
-	index, shards, err := pluginmarket.BuildGateway(catalog, pluginmarket.GatewayBuildOptions{
+	index, shards, err := orbitmarket.BuildGateway(catalog, orbitmarket.GatewayBuildOptions{
 		Registry:          targetRegistry,
 		SlotsPerNamespace: targetSlots,
 		GeneratedAt:       time.Now().UTC(),
@@ -191,23 +191,23 @@ func cmdPluginsGatewayPush(args []string) {
 	}
 }
 
-func cmdPluginsGatewayPull(args []string) {
+func cmdOrbitsGatewayPull(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins gateway pull", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits gateway pull", flag.ExitOnError)
 	registry := fs.String("registry", "", "gateway registry name")
 	namespace := fs.String("namespace", "", "optional namespace filter")
 	capability := fs.String("capability", "", "optional capability filter")
-	prefix := fs.String("prefix", "", "optional plugin id prefix filter")
+	prefix := fs.String("prefix", "", "optional orbit id prefix filter")
 	limit := fs.Int("limit", 0, "optional max entries")
 	outPath := fs.String("out", "", "catalog output path")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si plugins gateway pull [--registry <name>] [--namespace <namespace>] [--capability <capability>] [--prefix <id-prefix>] [--limit <n>] [--out <file>] [--json]")
+		printUsage("usage: si orbits gateway pull [--registry <name>] [--namespace <namespace>] [--capability <capability>] [--prefix <id-prefix>] [--limit <n>] [--out <file>] [--json]")
 		return
 	}
 	settings := loadSettingsOrDefault()
-	targetRegistry := pluginGatewayRegistryName(settings, *registry)
+	targetRegistry := orbitGatewayRegistryName(settings, *registry)
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
@@ -218,32 +218,32 @@ func cmdPluginsGatewayPull(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	var index pluginmarket.GatewayIndex
+	var index orbitmarket.GatewayIndex
 	if err := json.Unmarshal(indexPayload, &index); err != nil {
 		fatal(fmt.Errorf("decode gateway index: %w", err))
 	}
 
-	filter := pluginmarket.GatewaySelectFilter{
+	filter := orbitmarket.GatewaySelectFilter{
 		Namespace:  strings.TrimSpace(*namespace),
 		Capability: strings.TrimSpace(*capability),
 		Prefix:     strings.TrimSpace(*prefix),
 		Limit:      *limit,
 	}
-	keys := pluginmarket.SelectGatewayShards(index, filter)
-	shards := map[string]pluginmarket.GatewayShard{}
+	keys := orbitmarket.SelectGatewayShards(index, filter)
+	shards := map[string]orbitmarket.GatewayShard{}
 	for _, key := range keys {
 		raw, err := client.getIntegrationRegistryShard(ctx, index.Registry, key)
 		if err != nil {
 			fatal(err)
 		}
-		var shard pluginmarket.GatewayShard
+		var shard orbitmarket.GatewayShard
 		if err := json.Unmarshal(raw, &shard); err != nil {
 			fatal(fmt.Errorf("decode gateway shard %s: %w", key, err))
 		}
 		shards[key] = shard
 	}
-	catalog := pluginmarket.MaterializeGatewayCatalog(index, shards, filter)
-	targetPath, err := pluginGatewayOutputPath(*outPath, index.Registry)
+	catalog := orbitmarket.MaterializeGatewayCatalog(index, shards, filter)
+	targetPath, err := orbitGatewayOutputPath(*outPath, index.Registry)
 	if err != nil {
 		fatal(err)
 	}
@@ -269,18 +269,18 @@ func cmdPluginsGatewayPull(args []string) {
 	infof("catalog written to %s", targetPath)
 }
 
-func cmdPluginsGatewayStatus(args []string) {
+func cmdOrbitsGatewayStatus(args []string) {
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
-	fs := flag.NewFlagSet("plugins gateway status", flag.ExitOnError)
+	fs := flag.NewFlagSet("orbits gateway status", flag.ExitOnError)
 	registry := fs.String("registry", "", "gateway registry name")
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 	if fs.NArg() > 0 {
-		printUsage("usage: si plugins gateway status [--registry <name>] [--json]")
+		printUsage("usage: si orbits gateway status [--registry <name>] [--json]")
 		return
 	}
 	settings := loadSettingsOrDefault()
-	targetRegistry := pluginGatewayRegistryName(settings, *registry)
+	targetRegistry := orbitGatewayRegistryName(settings, *registry)
 	client, err := sunClientFromSettings(settings)
 	if err != nil {
 		fatal(err)
@@ -289,7 +289,7 @@ func cmdPluginsGatewayStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	var index pluginmarket.GatewayIndex
+	var index orbitmarket.GatewayIndex
 	if err := json.Unmarshal(raw, &index); err != nil {
 		fatal(fmt.Errorf("decode gateway index: %w", err))
 	}
@@ -311,7 +311,7 @@ func cmdPluginsGatewayStatus(args []string) {
 	successf("gateway registry=%s entries=%d shards=%d namespaces=%d generated_at=%s", index.Registry, index.TotalEntries, len(index.Shards), len(index.Namespaces), index.GeneratedAt)
 }
 
-func writeGatewayBundle(dir string, index pluginmarket.GatewayIndex, shards map[string]pluginmarket.GatewayShard) error {
+func writeGatewayBundle(dir string, index orbitmarket.GatewayIndex, shards map[string]orbitmarket.GatewayShard) error {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {
 		return fmt.Errorf("output directory required")
@@ -348,7 +348,7 @@ func writeGatewayBundle(dir string, index pluginmarket.GatewayIndex, shards map[
 	return nil
 }
 
-func writeGatewayCatalog(path string, catalog pluginmarket.Catalog) error {
+func writeGatewayCatalog(path string, catalog orbitmarket.Catalog) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return fmt.Errorf("output path required")
@@ -363,7 +363,7 @@ func writeGatewayCatalog(path string, catalog pluginmarket.Catalog) error {
 	return os.WriteFile(path, raw, 0o644)
 }
 
-func pluginGatewayOutputPath(raw string, registry string) (string, error) {
+func orbitGatewayOutputPath(raw string, registry string) (string, error) {
 	if trimmed := strings.TrimSpace(raw); trimmed != "" {
 		resolved, err := filepath.Abs(expandTilde(trimmed))
 		if err != nil {
@@ -371,7 +371,7 @@ func pluginGatewayOutputPath(raw string, registry string) (string, error) {
 		}
 		return filepath.Clean(resolved), nil
 	}
-	paths, err := pluginmarket.DefaultPaths()
+	paths, err := orbitmarket.DefaultPaths()
 	if err != nil {
 		return "", err
 	}
@@ -382,30 +382,30 @@ func pluginGatewayOutputPath(raw string, registry string) (string, error) {
 	return filepath.Join(paths.CatalogDir, name), nil
 }
 
-func pluginGatewayRegistryName(settings Settings, explicit string) string {
+func orbitGatewayRegistryName(settings Settings, explicit string) string {
 	if trimmed := strings.TrimSpace(explicit); trimmed != "" {
 		return strings.ToLower(trimmed)
 	}
-	if env := envSunPluginGatewayRegistry(); env != "" {
+	if env := envSunOrbitGatewayRegistry(); env != "" {
 		return strings.ToLower(env)
 	}
-	if trimmed := strings.TrimSpace(settings.Sun.PluginGatewayRegistry); trimmed != "" {
+	if trimmed := strings.TrimSpace(settings.Sun.OrbitGatewayRegistry); trimmed != "" {
 		return strings.ToLower(trimmed)
 	}
-	return defaultPluginGatewayName
+	return defaultOrbitGatewayName
 }
 
-func pluginGatewaySlots(settings Settings, explicit int) int {
+func orbitGatewaySlots(settings Settings, explicit int) int {
 	if explicit > 0 {
 		return explicit
 	}
-	if env := strings.TrimSpace(envSunPluginGatewaySlots()); env != "" {
+	if env := strings.TrimSpace(envSunOrbitGatewaySlots()); env != "" {
 		if parsed, err := strconv.Atoi(env); err == nil && parsed > 0 {
 			return parsed
 		}
 	}
-	if settings.Sun.PluginGatewaySlots > 0 {
-		return settings.Sun.PluginGatewaySlots
+	if settings.Sun.OrbitGatewaySlots > 0 {
+		return settings.Sun.OrbitGatewaySlots
 	}
-	return pluginmarket.GatewayDefaultSlotsPerNamespace
+	return orbitmarket.GatewayDefaultSlotsPerNamespace
 }
