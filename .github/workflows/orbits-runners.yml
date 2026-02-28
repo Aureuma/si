@@ -1,4 +1,4 @@
-name: Plugin Runners
+name: Orbit Runners
 
 on:
   push:
@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: plugins-runners-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: orbits-runners-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  plugins-unit:
-    name: Plugins Unit (${{ matrix.os }})
+  orbits-unit:
+    name: Orbits Unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,11 +28,11 @@ jobs:
           go-version-file: tools/si/go.mod
           cache: true
 
-      - name: Run plugin unit runner
-        run: ./tools/test-runners/plugins-unit.sh
+      - name: Run orbit unit runner
+        run: ./tools/test-runners/orbits-unit.sh
 
-  plugins-policy:
-    name: Plugins Policy (ubuntu)
+  orbits-policy:
+    name: Orbits Policy (ubuntu)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,11 +44,11 @@ jobs:
           go-version-file: tools/si/go.mod
           cache: true
 
-      - name: Run plugin policy runner
-        run: ./tools/test-runners/plugins-policy.sh
+      - name: Run orbit policy runner
+        run: ./tools/test-runners/orbits-policy.sh
 
-  plugins-catalog:
-    name: Plugins Catalog (ubuntu)
+  orbits-catalog:
+    name: Orbits Catalog (ubuntu)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -60,11 +60,11 @@ jobs:
           go-version-file: tools/si/go.mod
           cache: true
 
-      - name: Run plugin catalog runner
-        run: ./tools/test-runners/plugins-catalog.sh
+      - name: Run orbit catalog runner
+        run: ./tools/test-runners/orbits-catalog.sh
 
-  plugins-e2e:
-    name: Plugins E2E (ubuntu)
+  orbits-e2e:
+    name: Orbits E2E (ubuntu)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -76,5 +76,5 @@ jobs:
           go-version-file: tools/si/go.mod
           cache: true
 
-      - name: Run full plugin runner stack
-        run: ./tools/test-runners/plugins-all.sh
+      - name: Run full orbit runner stack
+        run: ./tools/test-runners/orbits-all.sh
