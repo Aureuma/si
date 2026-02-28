@@ -185,7 +185,7 @@ func TestVaultNormalizeScopePreservesRepoEnvNamespace(t *testing.T) {
 		want string
 	}{
 		{raw: "Aureuma/Dev", want: "aureuma/dev"},
-		{raw: "releasemind//prod", want: "releasemind/prod"},
+		{raw: "sampleapp//prod", want: "sampleapp/prod"},
 		{raw: "shared/Prod@", want: "shared/prod"},
 		{raw: ".env.dev", want: "dev"},
 		{raw: "C:\\repo\\.env.prod", want: "prod"},

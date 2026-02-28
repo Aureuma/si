@@ -86,7 +86,7 @@ func TestCloudflareE2E_PagesDomainCreate(t *testing.T) {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/accounts/acct_123/pages/projects/cv-blog/domains" {
+		if r.URL.Path != "/accounts/acct_123/pages/projects/sample-blog/domains" {
 			http.NotFound(w, r)
 			return
 		}
@@ -100,7 +100,7 @@ func TestCloudflareE2E_PagesDomainCreate(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"result": map[string]any{
-				"name": "blog.convelt.com",
+				"name": "blog.example.com",
 			},
 		})
 	}))
@@ -109,7 +109,7 @@ func TestCloudflareE2E_PagesDomainCreate(t *testing.T) {
 	stdout, stderr, err := runSICommand(t, map[string]string{
 		"CLOUDFLARE_API_TOKEN":  "token-123",
 		"CLOUDFLARE_ACCOUNT_ID": "acct_123",
-	}, "cloudflare", "pages", "domain", "create", "--project", "cv-blog", "--domain", "blog.convelt.com", "--base-url", server.URL, "--account-id", "acct_123", "--json")
+	}, "cloudflare", "pages", "domain", "create", "--project", "sample-blog", "--domain", "blog.example.com", "--base-url", server.URL, "--account-id", "acct_123", "--json")
 	if err != nil {
 		t.Fatalf("command failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
 	}

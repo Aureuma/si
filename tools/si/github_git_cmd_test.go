@@ -189,29 +189,29 @@ func TestListGitRepos(t *testing.T) {
 }
 
 func TestBuildGitHubRemoteURLWithPAT(t *testing.T) {
-	urlWithPAT, err := buildGitHubRemoteURLWithPAT("https://github.com/Aureuma/sun.git", "github_pat_example123")
+	urlWithPAT, err := buildGitHubRemoteURLWithPAT("https://github.com/Aureuma/example.git", "github_pat_example123")
 	if err != nil {
 		t.Fatalf("buildGitHubRemoteURLWithPAT: %v", err)
 	}
-	want := "https://github_pat_example123@github.com/Aureuma/sun.git"
+	want := "https://github_pat_example123@github.com/Aureuma/example.git"
 	if urlWithPAT != want {
 		t.Fatalf("unexpected url with pat:\nwant: %s\ngot:  %s", want, urlWithPAT)
 	}
 }
 
 func TestBuildGitHubRemoteURLWithPATRejectsNonHTTPS(t *testing.T) {
-	if _, err := buildGitHubRemoteURLWithPAT("ssh://github.com/Aureuma/sun.git", "token"); err == nil {
+	if _, err := buildGitHubRemoteURLWithPAT("ssh://github.com/Aureuma/example.git", "token"); err == nil {
 		t.Fatalf("expected non-https url to fail")
 	}
 }
 
 func TestRedactGitRemotePATURL(t *testing.T) {
-	raw := "https://github_pat_1234567890abcdef@github.com/Aureuma/sun.git"
+	raw := "https://github_pat_1234567890abcdef@github.com/Aureuma/example.git"
 	redacted := redactGitRemotePATURL(raw)
 	if strings.Contains(redacted, "github_pat_1234567890abcdef") {
 		t.Fatalf("expected PAT to be redacted, got: %s", redacted)
 	}
-	if !strings.Contains(redacted, "https://gith...cdef@github.com/Aureuma/sun.git") {
+	if !strings.Contains(redacted, "https://gith...cdef@github.com/Aureuma/example.git") {
 		t.Fatalf("unexpected redacted url: %s", redacted)
 	}
 }

@@ -204,7 +204,7 @@ func TestResolveSIVaultTargetInfersEnvFromEnvFile(t *testing.T) {
 
 func TestResolveSIVaultTargetInfersRepoFromEnvFileParent(t *testing.T) {
 	workspace := t.TempDir()
-	safePath := filepath.Join(workspace, "safe", "lingospeak")
+	safePath := filepath.Join(workspace, "safe", "sampleapp")
 	if err := os.MkdirAll(safePath, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -223,8 +223,8 @@ func TestResolveSIVaultTargetInfersRepoFromEnvFileParent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveSIVaultTarget: %v", err)
 	}
-	if target.Repo != "lingospeak" {
-		t.Fatalf("target.Repo=%q want=lingospeak", target.Repo)
+	if target.Repo != "sampleapp" {
+		t.Fatalf("target.Repo=%q want=sampleapp", target.Repo)
 	}
 	if target.Env != "dev" {
 		t.Fatalf("target.Env=%q want=dev", target.Env)
@@ -233,7 +233,7 @@ func TestResolveSIVaultTargetInfersRepoFromEnvFileParent(t *testing.T) {
 
 func TestResolveSIVaultTargetRepoFlagOverridesEnvFileInference(t *testing.T) {
 	workspace := t.TempDir()
-	safePath := filepath.Join(workspace, "safe", "lingospeak")
+	safePath := filepath.Join(workspace, "safe", "sampleapp")
 	if err := os.MkdirAll(safePath, 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}

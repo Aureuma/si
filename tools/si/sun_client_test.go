@@ -50,14 +50,14 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 			return
 		}
 		switch {
-		case r.Method == http.MethodPut && r.URL.Path == "/v1/vault/private-keys/releasemind/dev":
+		case r.Method == http.MethodPut && r.URL.Path == "/v1/vault/private-keys/sampleapp/dev":
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 			vaultPrivateKeyDoc = map[string]any{
-				"repo":                "releasemind",
+				"repo":                "sampleapp",
 				"env":                 "dev",
 				"public_key":          formatAny(body["public_key"]),
 				"private_key":         formatAny(body["private_key"]),
@@ -67,7 +67,7 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"vault": vaultPrivateKeyDoc,
 			})
-		case r.Method == http.MethodGet && r.URL.Path == "/v1/vault/private-keys/releasemind/dev":
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/vault/private-keys/sampleapp/dev":
 			if vaultPrivateKeyDoc == nil {
 				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
 				return
@@ -278,7 +278,7 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	}
 
 	createdVault, err := client.putVaultPrivateKey(ctx, sunVaultPrivateKey{
-		Repo:              "releasemind",
+		Repo:              "sampleapp",
 		Env:               "dev",
 		PublicKey:         "02aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
 		PrivateKey:        "aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
@@ -287,10 +287,10 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("put vault private key: %v", err)
 	}
-	if createdVault.Repo != "releasemind" || createdVault.Env != "dev" {
+	if createdVault.Repo != "sampleapp" || createdVault.Env != "dev" {
 		t.Fatalf("unexpected created vault payload: %+v", createdVault)
 	}
-	gotVault, err := client.getVaultPrivateKey(ctx, "releasemind", "dev")
+	gotVault, err := client.getVaultPrivateKey(ctx, "sampleapp", "dev")
 	if err != nil {
 		t.Fatalf("get vault private key: %v", err)
 	}

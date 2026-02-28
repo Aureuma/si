@@ -59,8 +59,8 @@ func TestImportLegacyTunnelProfile(t *testing.T) {
 	raw := `version = 1
 
 [tunnel]
-name = "rm-dev-browser"
-container_name = "viva-cloudflared-rm-dev-browser"
+name = "dev-browser"
+container_name = "viva-cloudflared-dev-browser"
 tunnel_id_env_key = "VIVA_CLOUDFLARE_TUNNEL_ID"
 credentials_env_key = "CLOUDFLARE_TUNNEL_CREDENTIALS_JSON"
 metrics_addr = "127.0.0.1:20241"
@@ -79,7 +79,7 @@ repo = "viva"
 env = "dev"
 
 [[routes]]
-hostname = "ls-dev.lingospeak.ai"
+hostname = "dev.example.app"
 service = "http://127.0.0.1:3000"
 `
 	if err := os.WriteFile(cfgPath, []byte(raw), 0o600); err != nil {
@@ -90,7 +90,7 @@ service = "http://127.0.0.1:3000"
 	if err != nil {
 		t.Fatalf("importLegacyTunnelProfile: %v", err)
 	}
-	if profile.ContainerName != "viva-cloudflared-rm-dev-browser" {
+	if profile.ContainerName != "viva-cloudflared-dev-browser" {
 		t.Fatalf("unexpected container: %q", profile.ContainerName)
 	}
 	if profile.VaultEnvFile != filepath.Join(dir, ".env.dev") {
