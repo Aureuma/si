@@ -27,7 +27,7 @@ si <command> <subcommand> --help
 | Provider telemetry | `si providers` |
 | Platform operations | `si paas` |
 | Surf browser runtime | `si surf` |
-| Plugin ecosystem | `si plugins` |
+| Orbit ecosystem | `si orbits` |
 | Build and quality | `si build`, `si analyze` (`si lint`), `si docker` |
 | Docs workflow | `si mintlify` |
 | Profiles and skills | `si persona`, `si skill` |

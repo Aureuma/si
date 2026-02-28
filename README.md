@@ -24,7 +24,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 - Codex containers: profile-scoped container lifecycle (`spawn`, `status`, `run`, `report`, `clone`, `remove`, `warmup`).
 - Vault: encrypted dotenv workflows with trust/recipient checks and secure command injection.
 - Provider bridges: Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, Social, WorkOS, AWS, GCP, OpenAI, OCI.
-- Plugin marketplace: namespaced integration catalog + install/enable/doctor lifecycle (`si plugins ...`).
+- Orbit marketplace: namespaced integration catalog + install/enable/doctor lifecycle (`si orbits ...`).
 - Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
 - PaaS operations: app/target/deploy/rollback/logs/events/alerts/secrets + backup workflows.
 - Sustainable automation agents: PR guardian and website sentry (`tools/agents/*`).
@@ -133,7 +133,7 @@ Mintlify docs tooling:
 - `si dyad ...` / codex lifecycle commands: agent runtime operations.
 - `si vault ...`: secure secret workflows.
 - `si providers ...`: provider characteristics + health surfaces.
-- `si plugins ...`: plugin marketplace and integration onboarding.
+- `si orbits ...`: orbit marketplace and integration onboarding.
 - `si browser ...`: Playwright MCP browser runtime.
 - `si paas ...`: Docker-native deployment and operations control-plane.
 - `si mintlify ...`: docs site bootstrap/validation/dev wrappers.

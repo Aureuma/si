@@ -322,8 +322,8 @@ Defaults for `si sun` cloud sync.
 - `sun.token` (string): Sun bearer token
 - `sun.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
 - `sun.auto_sync` (bool): enable automatic codex profile sync hooks
-- `sun.plugin_gateway_registry` (string): default remote integration registry for `si plugins gateway ...` (default: `global`)
-- `sun.plugin_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
+- `sun.orbit_gateway_registry` (string): default remote integration registry for `si orbits gateway ...` (default: `global`)
+- `sun.orbit_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
 - `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
 - `sun.taskboard_agent` (string): optional default agent id used by `si sun taskboard` and dyad autopilot claims
 - `sun.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
@@ -336,8 +336,8 @@ Environment overrides:
 - `SI_SUN_LOGIN_URL`
 - `SI_SUN_LOGIN_OPEN_CMD`
 - `SI_SUN_ALLOW_INSECURE_HTTP`
-- `SI_SUN_PLUGIN_GATEWAY_REGISTRY`
-- `SI_SUN_PLUGIN_GATEWAY_SLOTS`
+- `SI_SUN_ORBIT_GATEWAY_REGISTRY`
+- `SI_SUN_ORBIT_GATEWAY_SLOTS`
 - `SI_SUN_TASKBOARD`
 - `SI_SUN_TASKBOARD_AGENT`
 - `SI_SUN_TASKBOARD_LEASE_SECONDS`
@@ -581,8 +581,8 @@ base_url = "http://127.0.0.1:8080"
 account = "acme"
 timeout_seconds = 15
 auto_sync = true
-plugin_gateway_registry = "global"
-plugin_gateway_slots = 16
+orbit_gateway_registry = "global"
+orbit_gateway_slots = 16
 taskboard = "default"
 taskboard_agent = "dyad:main-laptop"
 taskboard_lease_seconds = 1800
