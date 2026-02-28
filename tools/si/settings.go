@@ -19,28 +19,29 @@ import (
 )
 
 type Settings struct {
-	SchemaVersion int                `toml:"schema_version"`
-	Paths         SettingsPaths      `toml:"paths"`
-	Codex         CodexSettings      `toml:"codex"`
-	Vault         VaultSettings      `toml:"vault,omitempty"`
-	Paas          PaasSettings       `toml:"paas,omitempty"`
-	Stripe        StripeSettings     `toml:"stripe,omitempty"`
-	Github        GitHubSettings     `toml:"github,omitempty"`
-	Cloudflare    CloudflareSettings `toml:"cloudflare,omitempty"`
-	Google        GoogleSettings     `toml:"google,omitempty"`
-	Apple         AppleSettings      `toml:"apple,omitempty"`
-	Social        SocialSettings     `toml:"social,omitempty"`
-	WorkOS        WorkOSSettings     `toml:"workos,omitempty"`
-	AWS           AWSSettings        `toml:"aws,omitempty"`
-	GCP           GCPSettings        `toml:"gcp,omitempty"`
-	OpenAI        OpenAISettings     `toml:"openai,omitempty"`
-	Surf          SurfSettings       `toml:"surf,omitempty"`
-	Viva          VivaSettings       `toml:"viva,omitempty"`
-	Sun           SunSettings        `toml:"sun,omitempty"`
-	OCI           OCISettings        `toml:"oci,omitempty"`
-	Dyad          DyadSettings       `toml:"dyad"`
-	Shell         ShellSettings      `toml:"shell"`
-	Metadata      SettingsMetadata   `toml:"metadata,omitempty"`
+	SchemaVersion int                   `toml:"schema_version"`
+	Paths         SettingsPaths         `toml:"paths"`
+	Codex         CodexSettings         `toml:"codex"`
+	Vault         VaultSettings         `toml:"vault,omitempty"`
+	Paas          PaasSettings          `toml:"paas,omitempty"`
+	Stripe        StripeSettings        `toml:"stripe,omitempty"`
+	Github        GitHubSettings        `toml:"github,omitempty"`
+	Cloudflare    CloudflareSettings    `toml:"cloudflare,omitempty"`
+	Google        GoogleSettings        `toml:"google,omitempty"`
+	Apple         AppleSettings         `toml:"apple,omitempty"`
+	Social        SocialSettings        `toml:"social,omitempty"`
+	WorkOS        WorkOSSettings        `toml:"workos,omitempty"`
+	AWS           AWSSettings           `toml:"aws,omitempty"`
+	GCP           GCPSettings           `toml:"gcp,omitempty"`
+	OpenAI        OpenAISettings        `toml:"openai,omitempty"`
+	Surf          SurfSettings          `toml:"surf,omitempty"`
+	RemoteControl RemoteControlSettings `toml:"remote_control,omitempty"`
+	Viva          VivaSettings          `toml:"viva,omitempty"`
+	Sun           SunSettings           `toml:"sun,omitempty"`
+	OCI           OCISettings           `toml:"oci,omitempty"`
+	Dyad          DyadSettings          `toml:"dyad"`
+	Shell         ShellSettings         `toml:"shell"`
+	Metadata      SettingsMetadata      `toml:"metadata,omitempty"`
 }
 
 type SettingsMetadata struct {
@@ -461,6 +462,12 @@ type SurfTunnelSettings struct {
 	VaultKey string `toml:"vault_key,omitempty"`
 }
 
+type RemoteControlSettings struct {
+	Repo  string `toml:"repo,omitempty"`
+	Bin   string `toml:"bin,omitempty"`
+	Build *bool  `toml:"build,omitempty"`
+}
+
 type VivaSettings struct {
 	Repo   string             `toml:"repo,omitempty"`
 	Bin    string             `toml:"bin,omitempty"`
@@ -607,25 +614,26 @@ func mergeSunSettings(settings *Settings) {
 }
 
 const (
-	settingsModuleCore       = "core"
-	settingsModuleCodex      = "codex"
-	settingsModuleDyad       = "dyad"
-	settingsModuleVault      = "vault"
-	settingsModulePaas       = "paas"
-	settingsModuleStripe     = "stripe"
-	settingsModuleGitHub     = "github"
-	settingsModuleCloudflare = "cloudflare"
-	settingsModuleGoogle     = "google"
-	settingsModuleApple      = "apple"
-	settingsModuleSocial     = "social"
-	settingsModuleWorkOS     = "workos"
-	settingsModuleAWS        = "aws"
-	settingsModuleGCP        = "gcp"
-	settingsModuleOpenAI     = "openai"
-	settingsModuleSurf       = "surf"
-	settingsModuleViva       = "viva"
-	settingsModuleSun        = "sun"
-	settingsModuleOCI        = "oci"
+	settingsModuleCore          = "core"
+	settingsModuleCodex         = "codex"
+	settingsModuleDyad          = "dyad"
+	settingsModuleVault         = "vault"
+	settingsModulePaas          = "paas"
+	settingsModuleStripe        = "stripe"
+	settingsModuleGitHub        = "github"
+	settingsModuleCloudflare    = "cloudflare"
+	settingsModuleGoogle        = "google"
+	settingsModuleApple         = "apple"
+	settingsModuleSocial        = "social"
+	settingsModuleWorkOS        = "workos"
+	settingsModuleAWS           = "aws"
+	settingsModuleGCP           = "gcp"
+	settingsModuleOpenAI        = "openai"
+	settingsModuleSurf          = "surf"
+	settingsModuleRemoteControl = "remote-control"
+	settingsModuleViva          = "viva"
+	settingsModuleSun           = "sun"
+	settingsModuleOCI           = "oci"
 )
 
 func settingsModuleNames() []string {
@@ -646,6 +654,7 @@ func settingsModuleNames() []string {
 		settingsModuleGCP,
 		settingsModuleOpenAI,
 		settingsModuleSurf,
+		settingsModuleRemoteControl,
 		settingsModuleViva,
 		settingsModuleSun,
 		settingsModuleOCI,
@@ -680,6 +689,10 @@ func settingsModulePath(module string) (string, error) {
 		// surf runtime already owns ~/.si/surf/settings.toml; keep SI wrapper
 		// settings in a dedicated sibling file to avoid schema conflicts.
 		return filepath.Join(root, "surf", "si.settings.toml"), nil
+	case settingsModuleRemoteControl:
+		// remote-control runtime owns ~/.si/remote-control/settings.toml; keep SI wrapper
+		// settings in a dedicated sibling file to avoid schema conflicts.
+		return filepath.Join(root, "remote-control", "si.settings.toml"), nil
 	case "":
 		return "", fmt.Errorf("settings module required")
 	default:
@@ -727,7 +740,7 @@ func hasSIStateInHome(home string) bool {
 			continue
 		}
 		moduleFile := "settings.toml"
-		if module == settingsModuleSurf {
+		if module == settingsModuleSurf || module == settingsModuleRemoteControl {
 			moduleFile = "si.settings.toml"
 		}
 		candidates = append(candidates, filepath.Join(home, ".si", module, moduleFile))
@@ -1471,6 +1484,14 @@ func decodeSettingsModule(module string, data []byte, settings *Settings) error 
 			return err
 		}
 		settings.Surf = payload.Surf
+	case settingsModuleRemoteControl:
+		var payload struct {
+			RemoteControl RemoteControlSettings `toml:"remote_control,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.RemoteControl = payload.RemoteControl
 	case settingsModuleViva:
 		var payload struct {
 			Viva VivaSettings `toml:"viva,omitempty"`
@@ -1605,6 +1626,12 @@ func encodeSettingsModule(module string, settings Settings) ([]byte, error) {
 			Surf          SurfSettings     `toml:"surf,omitempty"`
 			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
 		}{settings.SchemaVersion, settings.Surf, settings.Metadata})
+	case settingsModuleRemoteControl:
+		return toml.Marshal(struct {
+			SchemaVersion int                   `toml:"schema_version"`
+			RemoteControl RemoteControlSettings `toml:"remote_control,omitempty"`
+			Metadata      SettingsMetadata      `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.RemoteControl, settings.Metadata})
 	case settingsModuleViva:
 		return toml.Marshal(struct {
 			SchemaVersion int              `toml:"schema_version"`
