@@ -1,4 +1,4 @@
-package orbital
+package orbitals
 
 import (
 	"crypto/sha256"

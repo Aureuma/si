@@ -29,7 +29,7 @@ This page is the canonical map of SI integration families.
 | Publish bridge | `si publish ...` | [Publish](./PUBLISH) |
 | Provider meta-health | `si providers ...` | [Providers](./PROVIDERS) |
 | Surf browser runtime | `si surf ...` | [Browser Runtime](./BROWSER) |
-| Orbital | `si orbits ...` | [Orbital](./ORBITAL) |
+| Orbitals | `si orbits ...` | [Orbitals](./ORBITALS) |
 
 ## Integration capability matrix
 
@@ -51,7 +51,7 @@ This page is the canonical map of SI integration families.
 | Publish | N/A (depends on target) | target-specific | Curated publishing flows | N/A | pre-publish checks |
 | Providers | N/A | N/A | Aggregated telemetry | N/A | `si providers health` |
 | Surf runtime | runtime status | runtime profile dir | browser actions through MCP | N/A | `si surf status` |
-| Orbital | policy + install diagnostics | N/A | catalog/install records | N/A | `si orbits doctor` |
+| Orbitals | policy + install diagnostics | N/A | catalog/install records | N/A | `si orbits doctor` |
 
 ## Integration visuals
 
@@ -69,7 +69,7 @@ This page is the canonical map of SI integration families.
 | Publish | ![Publish](/docs/images/integrations/publish.svg) |
 | Providers | ![Providers](/docs/images/integrations/providers.svg) |
 | Surf runtime | ![Browser](/docs/images/integrations/browser.svg) |
-| Orbital | ![Orbital](/docs/images/integrations/orbits.svg) |
+| Orbitals | ![Orbitals](/docs/images/integrations/orbits.svg) |
 
 ## Operator checklist before production writes
 
@@ -84,5 +84,5 @@ This page is the canonical map of SI integration families.
 - [CLI Reference](./CLI_REFERENCE)
 - [Settings](./SETTINGS)
 - [Vault](./VAULT)
-- [Orbital](./ORBITAL)
+- [Orbitals](./ORBITALS)
 - [Documentation Style Guide](./DOCS_STYLE_GUIDE)
