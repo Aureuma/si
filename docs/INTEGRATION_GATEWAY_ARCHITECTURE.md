@@ -48,7 +48,7 @@ SI mapping:
 
 ### SI (`tools/si`)
 
-- `orbital` now includes sharded gateway types:
+- `orbitals` now includes sharded gateway types:
   - `GatewayIndex`
   - `GatewayShard`
   - deterministic `GatewayShardKey(...)`

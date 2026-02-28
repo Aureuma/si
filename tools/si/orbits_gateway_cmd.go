@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"si/tools/si/internal/orbital"
+	"si/tools/si/internal/orbitals"
 )
 
 const (
@@ -61,14 +61,14 @@ func cmdOrbitsGatewayBuild(args []string) {
 	settings := loadSettingsOrDefault()
 	targetRegistry := orbitGatewayRegistryName(settings, *registry)
 	targetSlots := orbitGatewaySlots(settings, *slots)
-	catalog, diagnostics, err := orbital.BuildCatalogFromSource(strings.TrimSpace(*source), orbital.BuildCatalogOptions{
+	catalog, diagnostics, err := orbitals.BuildCatalogFromSource(strings.TrimSpace(*source), orbitals.BuildCatalogOptions{
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
 	})
 	if err != nil {
 		fatal(err)
 	}
-	index, shards, err := orbital.BuildGateway(catalog, orbital.GatewayBuildOptions{
+	index, shards, err := orbitals.BuildGateway(catalog, orbitals.GatewayBuildOptions{
 		Registry:          targetRegistry,
 		SlotsPerNamespace: targetSlots,
 		GeneratedAt:       time.Now().UTC(),
@@ -128,14 +128,14 @@ func cmdOrbitsGatewayPush(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	catalog, diagnostics, err := orbital.BuildCatalogFromSource(strings.TrimSpace(*source), orbital.BuildCatalogOptions{
+	catalog, diagnostics, err := orbitals.BuildCatalogFromSource(strings.TrimSpace(*source), orbitals.BuildCatalogOptions{
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
 	})
 	if err != nil {
 		fatal(err)
 	}
-	index, shards, err := orbital.BuildGateway(catalog, orbital.GatewayBuildOptions{
+	index, shards, err := orbitals.BuildGateway(catalog, orbitals.GatewayBuildOptions{
 		Registry:          targetRegistry,
 		SlotsPerNamespace: targetSlots,
 		GeneratedAt:       time.Now().UTC(),
@@ -218,31 +218,31 @@ func cmdOrbitsGatewayPull(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	var index orbital.GatewayIndex
+	var index orbitals.GatewayIndex
 	if err := json.Unmarshal(indexPayload, &index); err != nil {
 		fatal(fmt.Errorf("decode gateway index: %w", err))
 	}
 
-	filter := orbital.GatewaySelectFilter{
+	filter := orbitals.GatewaySelectFilter{
 		Namespace:  strings.TrimSpace(*namespace),
 		Capability: strings.TrimSpace(*capability),
 		Prefix:     strings.TrimSpace(*prefix),
 		Limit:      *limit,
 	}
-	keys := orbital.SelectGatewayShards(index, filter)
-	shards := map[string]orbital.GatewayShard{}
+	keys := orbitals.SelectGatewayShards(index, filter)
+	shards := map[string]orbitals.GatewayShard{}
 	for _, key := range keys {
 		raw, err := client.getIntegrationRegistryShard(ctx, index.Registry, key)
 		if err != nil {
 			fatal(err)
 		}
-		var shard orbital.GatewayShard
+		var shard orbitals.GatewayShard
 		if err := json.Unmarshal(raw, &shard); err != nil {
 			fatal(fmt.Errorf("decode gateway shard %s: %w", key, err))
 		}
 		shards[key] = shard
 	}
-	catalog := orbital.MaterializeGatewayCatalog(index, shards, filter)
+	catalog := orbitals.MaterializeGatewayCatalog(index, shards, filter)
 	targetPath, err := orbitGatewayOutputPath(*outPath, index.Registry)
 	if err != nil {
 		fatal(err)
@@ -289,7 +289,7 @@ func cmdOrbitsGatewayStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	var index orbital.GatewayIndex
+	var index orbitals.GatewayIndex
 	if err := json.Unmarshal(raw, &index); err != nil {
 		fatal(fmt.Errorf("decode gateway index: %w", err))
 	}
@@ -311,7 +311,7 @@ func cmdOrbitsGatewayStatus(args []string) {
 	successf("gateway registry=%s entries=%d shards=%d namespaces=%d generated_at=%s", index.Registry, index.TotalEntries, len(index.Shards), len(index.Namespaces), index.GeneratedAt)
 }
 
-func writeGatewayBundle(dir string, index orbital.GatewayIndex, shards map[string]orbital.GatewayShard) error {
+func writeGatewayBundle(dir string, index orbitals.GatewayIndex, shards map[string]orbitals.GatewayShard) error {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {
 		return fmt.Errorf("output directory required")
@@ -348,7 +348,7 @@ func writeGatewayBundle(dir string, index orbital.GatewayIndex, shards map[strin
 	return nil
 }
 
-func writeGatewayCatalog(path string, catalog orbital.Catalog) error {
+func writeGatewayCatalog(path string, catalog orbitals.Catalog) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return fmt.Errorf("output path required")
@@ -371,7 +371,7 @@ func orbitGatewayOutputPath(raw string, registry string) (string, error) {
 		}
 		return filepath.Clean(resolved), nil
 	}
-	paths, err := orbital.DefaultPaths()
+	paths, err := orbitals.DefaultPaths()
 	if err != nil {
 		return "", err
 	}
@@ -407,5 +407,5 @@ func orbitGatewaySlots(settings Settings, explicit int) int {
 	if settings.Sun.OrbitGatewaySlots > 0 {
 		return settings.Sun.OrbitGatewaySlots
 	}
-	return orbital.GatewayDefaultSlotsPerNamespace
+	return orbitals.GatewayDefaultSlotsPerNamespace
 }

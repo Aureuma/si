@@ -7,7 +7,7 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'USAGE'
 Usage: ./tools/test-runners/orbits-unit.sh
 
-Runs fast Orbital unit tests.
+Runs fast Orbitals unit tests.
 USAGE
   exit 0
 fi
@@ -15,4 +15,4 @@ fi
 ensure_repo_root
 ensure_go
 
-run_go_test -count=1 ./tools/si/internal/orbital -run 'Test(Validate|Resolve|Parse|LoadCatalog|MergeCatalogs|InstallFromSourceRejectsUnsupportedFile|DiscoverManifestPathsFromTree|BuildCatalogFromSource|BuildCatalogFromSourceSkipsDuplicateIDs)'
+run_go_test -count=1 ./tools/si/internal/orbitals -run 'Test(Validate|Resolve|Parse|LoadCatalog|MergeCatalogs|InstallFromSourceRejectsUnsupportedFile|DiscoverManifestPathsFromTree|BuildCatalogFromSource|BuildCatalogFromSourceSkipsDuplicateIDs)'
