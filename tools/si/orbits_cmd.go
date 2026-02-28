@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"si/tools/si/internal/orbital"
+	"si/tools/si/internal/orbitals"
 )
 
 const orbitsUsageText = "usage: si orbits <list|catalog|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy|gateway>"
@@ -83,18 +83,18 @@ func cmdOrbitsCatalog(args []string) {
 	}
 }
 
-func loadOrbitRuntime() (orbital.Paths, orbital.Catalog, orbital.State, []orbital.Diagnostic, error) {
-	paths, err := orbital.DefaultPaths()
+func loadOrbitRuntime() (orbitals.Paths, orbitals.Catalog, orbitals.State, []orbitals.Diagnostic, error) {
+	paths, err := orbitals.DefaultPaths()
 	if err != nil {
-		return orbital.Paths{}, orbital.Catalog{}, orbital.State{}, nil, err
+		return orbitals.Paths{}, orbitals.Catalog{}, orbitals.State{}, nil, err
 	}
-	catalog, catalogDiagnostics, err := orbital.LoadCatalog(paths)
+	catalog, catalogDiagnostics, err := orbitals.LoadCatalog(paths)
 	if err != nil {
-		return orbital.Paths{}, orbital.Catalog{}, orbital.State{}, nil, err
+		return orbitals.Paths{}, orbitals.Catalog{}, orbitals.State{}, nil, err
 	}
-	state, err := orbital.LoadState(paths)
+	state, err := orbitals.LoadState(paths)
 	if err != nil {
-		return orbital.Paths{}, orbital.Catalog{}, orbital.State{}, nil, err
+		return orbitals.Paths{}, orbitals.Catalog{}, orbitals.State{}, nil, err
 	}
 	return paths, catalog, state, catalogDiagnostics, nil
 }
@@ -113,7 +113,7 @@ func cmdOrbitsList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	catalogByID := orbital.CatalogByID(catalog)
+	catalogByID := orbitals.CatalogByID(catalog)
 	idSet := map[string]bool{}
 	for id := range catalogByID {
 		idSet[id] = true
@@ -128,20 +128,20 @@ func cmdOrbitsList(args []string) {
 	sort.Strings(ids)
 
 	type row struct {
-		ID               string                 `json:"id"`
-		Installed        bool                   `json:"installed"`
-		Enabled          bool                   `json:"enabled"`
-		EffectiveEnabled bool                   `json:"effective_enabled"`
-		EffectiveReason  string                 `json:"effective_reason,omitempty"`
-		Channel          string                 `json:"channel,omitempty"`
-		CatalogSource    string                 `json:"catalog_source,omitempty"`
-		Verified         bool                   `json:"verified,omitempty"`
-		Kind             string                 `json:"kind,omitempty"`
-		Maturity         string                 `json:"maturity,omitempty"`
-		InstallType      string                 `json:"install_type,omitempty"`
-		Summary          string                 `json:"summary,omitempty"`
-		InstalledAt      string                 `json:"installed_at,omitempty"`
-		Record           *orbital.InstallRecord `json:"record,omitempty"`
+		ID               string                  `json:"id"`
+		Installed        bool                    `json:"installed"`
+		Enabled          bool                    `json:"enabled"`
+		EffectiveEnabled bool                    `json:"effective_enabled"`
+		EffectiveReason  string                  `json:"effective_reason,omitempty"`
+		Channel          string                  `json:"channel,omitempty"`
+		CatalogSource    string                  `json:"catalog_source,omitempty"`
+		Verified         bool                    `json:"verified,omitempty"`
+		Kind             string                  `json:"kind,omitempty"`
+		Maturity         string                  `json:"maturity,omitempty"`
+		InstallType      string                  `json:"install_type,omitempty"`
+		Summary          string                  `json:"summary,omitempty"`
+		InstalledAt      string                  `json:"installed_at,omitempty"`
+		Record           *orbitals.InstallRecord `json:"record,omitempty"`
 	}
 
 	rows := make([]row, 0, len(ids))
@@ -163,7 +163,7 @@ func cmdOrbitsList(args []string) {
 		}
 		if installed {
 			r.Enabled = record.Enabled
-			r.EffectiveEnabled, r.EffectiveReason = orbital.ResolveEnableState(id, record, state.Policy)
+			r.EffectiveEnabled, r.EffectiveReason = orbitals.ResolveEnableState(id, record, state.Policy)
 			r.InstalledAt = record.InstalledAt
 			recordCopy := record
 			r.Record = &recordCopy
@@ -240,7 +240,7 @@ func cmdOrbitsInfo(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	catalogEntry, inCatalog := orbital.CatalogByID(catalog)[id]
+	catalogEntry, inCatalog := orbitals.CatalogByID(catalog)[id]
 	record, installed := state.Installs[id]
 	if !inCatalog && !installed {
 		fatal(fmt.Errorf("unknown orbit %q", id))
@@ -248,7 +248,7 @@ func cmdOrbitsInfo(args []string) {
 	effectiveEnabled := false
 	effectiveReason := "not installed"
 	if installed {
-		effectiveEnabled, effectiveReason = orbital.ResolveEnableState(id, record, state.Policy)
+		effectiveEnabled, effectiveReason = orbitals.ResolveEnableState(id, record, state.Policy)
 	}
 	if *jsonOut {
 		payload := map[string]interface{}{
@@ -311,27 +311,27 @@ func cmdOrbitsInstall(args []string) {
 	}
 	enabled := !*disabled
 	now := time.Now().UTC()
-	var record orbital.InstallRecord
+	var record orbitals.InstallRecord
 	if _, statErr := os.Stat(target); statErr == nil {
-		record, err = orbital.InstallFromSource(paths, target, enabled, now)
+		record, err = orbitals.InstallFromSource(paths, target, enabled, now)
 		if err != nil {
 			fatal(err)
 		}
 	} else {
-		entry, ok := orbital.CatalogByID(catalog)[target]
+		entry, ok := orbitals.CatalogByID(catalog)[target]
 		if !ok {
 			fatal(fmt.Errorf("unknown orbit %q (not found as path or catalog id)", target))
 		}
-		record, err = orbital.InstallFromCatalog(paths, entry, enabled, now)
+		record, err = orbitals.InstallFromCatalog(paths, entry, enabled, now)
 		if err != nil {
 			fatal(err)
 		}
 	}
 	if state.Installs == nil {
-		state.Installs = map[string]orbital.InstallRecord{}
+		state.Installs = map[string]orbitals.InstallRecord{}
 	}
 	state.Installs[record.ID] = record
-	if err := orbital.SaveState(paths, state); err != nil {
+	if err := orbitals.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -395,7 +395,7 @@ func cmdOrbitsUpdate(args []string) {
 		infof("no installed orbits to update")
 		return
 	}
-	catalogByID := orbital.CatalogByID(catalog)
+	catalogByID := orbitals.CatalogByID(catalog)
 	now := time.Now().UTC()
 	updated := make([]string, 0, len(targetIDs))
 	errs := make([]string, 0)
@@ -405,7 +405,7 @@ func cmdOrbitsUpdate(args []string) {
 			errs = append(errs, fmt.Sprintf("%s: not installed", id))
 			continue
 		}
-		var next orbital.InstallRecord
+		var next orbitals.InstallRecord
 		source := strings.TrimSpace(record.Source)
 		switch {
 		case strings.HasPrefix(source, "catalog:"):
@@ -414,11 +414,11 @@ func cmdOrbitsUpdate(args []string) {
 				errs = append(errs, fmt.Sprintf("%s: catalog entry not found", id))
 				continue
 			}
-			next, err = orbital.InstallFromCatalog(paths, entry, record.Enabled, now)
+			next, err = orbitals.InstallFromCatalog(paths, entry, record.Enabled, now)
 		case strings.HasPrefix(source, "path:"):
-			next, err = orbital.InstallFromSource(paths, strings.TrimPrefix(source, "path:"), record.Enabled, now)
+			next, err = orbitals.InstallFromSource(paths, strings.TrimPrefix(source, "path:"), record.Enabled, now)
 		case strings.HasPrefix(source, "archive:"):
-			next, err = orbital.InstallFromSource(paths, strings.TrimPrefix(source, "archive:"), record.Enabled, now)
+			next, err = orbitals.InstallFromSource(paths, strings.TrimPrefix(source, "archive:"), record.Enabled, now)
 		default:
 			err = fmt.Errorf("unsupported install source %q", source)
 		}
@@ -429,7 +429,7 @@ func cmdOrbitsUpdate(args []string) {
 		state.Installs[id] = next
 		updated = append(updated, id)
 	}
-	if err := orbital.SaveState(paths, state); err != nil {
+	if err := orbitals.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	ok := len(errs) == 0
@@ -478,11 +478,11 @@ func cmdOrbitsUninstall(args []string) {
 		fatal(fmt.Errorf("orbit %q is not installed", id))
 	}
 	delete(state.Installs, id)
-	if err := orbital.SaveState(paths, state); err != nil {
+	if err := orbitals.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if !*keepFiles {
-		if err := orbital.RemoveInstallDir(paths, record.InstallDir); err != nil {
+		if err := orbitals.RemoveInstallDir(paths, record.InstallDir); err != nil {
 			fatal(err)
 		}
 	}
@@ -526,7 +526,7 @@ func cmdOrbitsEnableDisable(args []string, enabled bool) {
 	}
 	record.Enabled = enabled
 	state.Installs[id] = record
-	if err := orbital.SaveState(paths, state); err != nil {
+	if err := orbitals.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -558,8 +558,8 @@ func cmdOrbitsDoctor(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	diagnostics := append([]orbital.Diagnostic{}, catalogDiagnostics...)
-	diagnostics = append(diagnostics, orbital.Doctor(catalog, state, paths)...)
+	diagnostics := append([]orbitals.Diagnostic{}, catalogDiagnostics...)
+	diagnostics = append(diagnostics, orbitals.Doctor(catalog, state, paths)...)
 	counts := map[string]int{"info": 0, "warn": 0, "error": 0}
 	for _, diagnostic := range diagnostics {
 		level := strings.ToLower(strings.TrimSpace(diagnostic.Level))
@@ -619,15 +619,15 @@ func cmdOrbitsRegister(args []string) {
 		printUsage("usage: si orbits register [--manifest <path>|<path>] [--channel <label>] [--verified] [--json]")
 		return
 	}
-	paths, err := orbital.DefaultPaths()
+	paths, err := orbitals.DefaultPaths()
 	if err != nil {
 		fatal(err)
 	}
-	manifest, _, err := orbital.ReadManifestFromPath(pathArg)
+	manifest, _, err := orbitals.ReadManifestFromPath(pathArg)
 	if err != nil {
 		fatal(err)
 	}
-	entry := orbital.CatalogEntry{
+	entry := orbitals.CatalogEntry{
 		Manifest: manifest,
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
@@ -636,7 +636,7 @@ func cmdOrbitsRegister(args []string) {
 	if entry.Channel == "" {
 		entry.Channel = "community"
 	}
-	if err := orbital.UpsertUserCatalogEntry(paths, entry); err != nil {
+	if err := orbitals.UpsertUserCatalogEntry(paths, entry); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -669,7 +669,7 @@ func cmdOrbitsScaffold(args []string) {
 		return
 	}
 	id := strings.TrimSpace(fs.Arg(0))
-	manifest, err := orbital.ScaffoldManifest(id)
+	manifest, err := orbitals.ScaffoldManifest(id)
 	if err != nil {
 		fatal(err)
 	}
@@ -679,14 +679,14 @@ func cmdOrbitsScaffold(args []string) {
 	}
 	relDir := strings.ReplaceAll(manifest.ID, "/", string(filepath.Separator))
 	targetDir := filepath.Join(baseDir, relDir)
-	manifestPath := filepath.Join(targetDir, orbital.ManifestFileName)
+	manifestPath := filepath.Join(targetDir, orbitals.ManifestFileName)
 	if _, err := os.Stat(manifestPath); err == nil && !*force {
 		fatal(fmt.Errorf("manifest already exists: %s (use --force to overwrite)", manifestPath))
 	}
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		fatal(err)
 	}
-	raw, err := orbital.EncodeManifest(manifest)
+	raw, err := orbitals.EncodeManifest(manifest)
 	if err != nil {
 		fatal(err)
 	}
@@ -811,17 +811,17 @@ func cmdOrbitsPolicySet(args []string) {
 	policy.Allow = normalizeOrbitIDList(policy.Allow)
 	policy.Deny = normalizeOrbitIDList(policy.Deny)
 	for _, id := range policy.Allow {
-		if err := orbital.ValidatePolicySelector(id); err != nil {
+		if err := orbitals.ValidatePolicySelector(id); err != nil {
 			fatal(fmt.Errorf("invalid --allow id %q: %w", id, err))
 		}
 	}
 	for _, id := range policy.Deny {
-		if err := orbital.ValidatePolicySelector(id); err != nil {
+		if err := orbitals.ValidatePolicySelector(id); err != nil {
 			fatal(fmt.Errorf("invalid --deny id %q: %w", id, err))
 		}
 	}
 	state.Policy = policy
-	if err := orbital.SaveState(paths, state); err != nil {
+	if err := orbitals.SaveState(paths, state); err != nil {
 		fatal(err)
 	}
 	if *jsonOut {
@@ -858,7 +858,7 @@ func cmdOrbitsCatalogBuild(args []string) {
 		printUsage("usage: si orbits catalog build --source <path> [--output <path>] [--channel <label>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]")
 		return
 	}
-	catalog, diagnostics, err := orbital.BuildCatalogFromSource(strings.TrimSpace(*source), orbital.BuildCatalogOptions{
+	catalog, diagnostics, err := orbitals.BuildCatalogFromSource(strings.TrimSpace(*source), orbitals.BuildCatalogOptions{
 		Channel:  strings.TrimSpace(*channel),
 		Verified: *verified,
 		AddedAt:  strings.TrimSpace(*addedAt),
@@ -919,7 +919,7 @@ func cmdOrbitsCatalogValidate(args []string) {
 		printUsage("usage: si orbits catalog validate --source <path> [--json]")
 		return
 	}
-	catalog, diagnostics, err := orbital.BuildCatalogFromSource(strings.TrimSpace(*source), orbital.BuildCatalogOptions{})
+	catalog, diagnostics, err := orbitals.BuildCatalogFromSource(strings.TrimSpace(*source), orbitals.BuildCatalogOptions{})
 	if err != nil {
 		fatal(err)
 	}

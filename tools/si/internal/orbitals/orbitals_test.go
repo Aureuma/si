@@ -1,4 +1,4 @@
-package orbital
+package orbitals
 
 import (
 	"archive/zip"
