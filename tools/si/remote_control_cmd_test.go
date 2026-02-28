@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -40,5 +42,26 @@ func TestSettingsModulePathRemoteControl(t *testing.T) {
 	}
 	if !strings.HasSuffix(path, "/remote-control/si.settings.toml") {
 		t.Fatalf("expected remote-control settings suffix, got %q", path)
+	}
+}
+
+func TestDefaultRemoteControlRepoPathFromHome(t *testing.T) {
+	origWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	defer func() { _ = os.Chdir(origWD) }()
+
+	home := t.TempDir()
+	repo := filepath.Join(home, "Development", "remote-control")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatalf("mkdir repo: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir: %v", err)
+	}
+	t.Setenv("HOME", home)
+	if got := defaultRemoteControlRepoPath(); got != repo {
+		t.Fatalf("defaultRemoteControlRepoPath()=%q want %q", got, repo)
 	}
 }
