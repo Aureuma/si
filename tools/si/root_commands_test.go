@@ -32,6 +32,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"paas",
 		"sun",
 		"viva",
+		"remote-control", "rc",
 		"persona",
 		"skill",
 		"plugins", "plugin", "marketplace",
