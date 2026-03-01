@@ -1063,21 +1063,37 @@ func selectCodexContainerFromList(action string) (string, bool) {
 		})
 	}
 
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		headers := []string{
+			styleHeading("CONTAINER"),
+			styleHeading("STATE"),
+			styleHeading("IMAGE"),
+		}
+		rows := make([][]string, 0, len(items))
+		for _, item := range items {
+			rows = append(rows, []string{item.Name, styleStatus(item.State), item.Image})
+		}
+		printAlignedTable(headers, rows, 2)
+		fmt.Println(styleDim("re-run with: si " + action + " <name>"))
+		return "", false
+	}
+
 	headers := []string{
+		styleHeading("#"),
 		styleHeading("CONTAINER"),
 		styleHeading("STATE"),
 		styleHeading("IMAGE"),
 	}
 	rows := make([][]string, 0, len(items))
-	for _, item := range items {
-		rows = append(rows, []string{item.Name, styleStatus(item.State), item.Image})
+	for idx, item := range items {
+		rows = append(rows, []string{
+			strconv.Itoa(idx + 1),
+			item.Name,
+			styleStatus(item.State),
+			item.Image,
+		})
 	}
 	printAlignedTable(headers, rows, 2)
-
-	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
-		fmt.Println(styleDim("re-run with: si " + action + " <name>"))
-		return "", false
-	}
 
 	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select container [1-%d] or name (Enter/Esc to cancel):", len(items))))
 	line, err := promptLine(os.Stdin)
@@ -1762,9 +1778,23 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 		return codexProfile{}, false
 	}
 	defaultKey = strings.TrimSpace(defaultKey)
+	showStatus := strings.EqualFold(strings.TrimSpace(action), "spawn")
+	if showStatus {
+		statuses := collectProfileStatuses(items)
+		for i := range items {
+			if res, ok := statuses[items[i].ID]; ok {
+				applyProfileStatusResult(&items[i], res)
+			}
+		}
+	}
 
 	fmt.Println(styleHeading("Available codex profiles:"))
-	printCodexProfilesTable(items, false, true)
+	printCodexProfilesTable(items, showStatus, true, true)
+	if showStatus {
+		for _, msg := range profileStatusWarnings(items) {
+			fmt.Printf("%s %s\n", styleWarn("warning:"), msg)
+		}
+	}
 
 	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Println(styleDim("re-run with: si " + action + " <profile>"))
