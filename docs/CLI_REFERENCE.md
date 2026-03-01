@@ -23,7 +23,7 @@ si <command> <subcommand> --help
 | --- | --- |
 | Runtime and orchestration | `si dyad`, codex lifecycle (`si spawn`, `si run`, `si status`, `si report`) |
 | Secrets and context | `si vault` (`si creds`) |
-| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si sun` |
+| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si sun`, `si releasemind` (`si release`) |
 | Provider telemetry | `si providers` |
 | Platform operations | `si paas` |
 | Surf browser runtime | `si surf` |
