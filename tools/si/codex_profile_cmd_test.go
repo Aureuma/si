@@ -233,3 +233,60 @@ func TestFormatLimitCompactExamples(t *testing.T) {
 		t.Fatalf("unexpected weekly compact format (7d): %q", got)
 	}
 }
+
+func TestPrintCodexProfilesTableIncludesIndexWhenRequested(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = false
+	defer func() { ansiEnabled = prev }()
+
+	items := []codexProfileSummary{
+		{
+			ID:                "america",
+			Name:              "🗽 America",
+			Email:             "user@example.com",
+			AuthCached:        true,
+			FiveHourLeftPct:   100,
+			FiveHourRemaining: 5 * 60,
+			WeeklyLeftPct:     100,
+			WeeklyRemaining:   7 * 24 * 60,
+		},
+	}
+	out := captureOutputForTest(t, func() {
+		printCodexProfilesTable(items, true, true, true)
+	})
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected header and row, got %q", out)
+	}
+	if !strings.Contains(lines[0], "#") || !strings.Contains(lines[0], "5H") || !strings.Contains(lines[0], "WEEKLY") {
+		t.Fatalf("expected index and status columns in header, got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "1") || !strings.Contains(lines[1], "america") {
+		t.Fatalf("expected numbered profile row, got %q", lines[1])
+	}
+}
+
+func TestPrintCodexProfilesTableOmitsIndexWhenNotRequested(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = false
+	defer func() { ansiEnabled = prev }()
+
+	items := []codexProfileSummary{
+		{
+			ID:         "berylla",
+			Name:       "🌲 Berylla",
+			Email:      "dev@example.com",
+			AuthCached: true,
+		},
+	}
+	out := captureOutputForTest(t, func() {
+		printCodexProfilesTable(items, false, true, false)
+	})
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected header and row, got %q", out)
+	}
+	if strings.Contains(lines[0], "#") {
+		t.Fatalf("did not expect index column in header, got %q", lines[0])
+	}
+}
