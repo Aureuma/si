@@ -1,12 +1,15 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -537,7 +540,7 @@ func cmdGooglePlayAssetUpload(args []string) {
 }
 
 func cmdGooglePlayRelease(args []string) {
-	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play release <upload|status|promote|set-status>")
+	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google play release <upload|status|promote|set-status|plan>")
 	if !routedOK {
 		return
 	}
@@ -553,9 +556,11 @@ func cmdGooglePlayRelease(args []string) {
 		cmdGooglePlayReleasePromote(rest)
 	case "set-status", "halt", "resume":
 		cmdGooglePlayReleaseSetStatus(sub, rest)
+	case "plan", "prepare", "generate":
+		cmdGooglePlayReleasePlan(rest)
 	default:
 		printUnknown("google play release", sub)
-		printUsage("usage: si google play release <upload|status|promote|set-status>")
+		printUsage("usage: si google play release <upload|status|promote|set-status|plan>")
 	}
 }
 
@@ -907,6 +912,91 @@ func cmdGooglePlayReleaseSetStatus(mode string, args []string) {
 	}
 	printGooglePlayResponse(trackResp, false, false)
 	printGooglePlayResponse(commitResp, false, false)
+}
+
+func cmdGooglePlayReleasePlan(args []string) {
+	fs := flag.NewFlagSet("google play release plan", flag.ExitOnError)
+	repoPath := fs.String("repo-path", ".", "local repository path to inspect")
+	plannerRepo := fs.String("planner-repo", "", "path to releasemind repository")
+	writePath := fs.String("write", "", "optional output file path")
+	pretty := fs.Bool("pretty", true, "pretty print JSON output")
+	_ = fs.Parse(args)
+	if fs.NArg() > 0 {
+		printUsage("usage: si google play release plan [--repo-path <path>] [--planner-repo <path>] [--write <file>] [--pretty=true|false]")
+		return
+	}
+
+	resolvedRepoPath, err := filepath.Abs(strings.TrimSpace(*repoPath))
+	if err != nil {
+		fatal(err)
+	}
+	if _, err := os.Stat(resolvedRepoPath); err != nil {
+		fatal(err)
+	}
+
+	resolvedPlannerRepo, err := resolveGooglePlayPlannerRepo(strings.TrimSpace(*plannerRepo))
+	if err != nil {
+		fatal(err)
+	}
+	engineDir := filepath.Join(resolvedPlannerRepo, "engine", "playrelease")
+	if _, err := os.Stat(filepath.Join(engineDir, "go.mod")); err != nil {
+		fatal(fmt.Errorf("planner not found at %s", engineDir))
+	}
+
+	cmdArgs := []string{"run", "./cmd/rm-playrelease", "--repo-path", resolvedRepoPath}
+	if !*pretty {
+		cmdArgs = append(cmdArgs, "--pretty=false")
+	}
+	if strings.TrimSpace(*writePath) != "" {
+		resolvedWritePath, err := filepath.Abs(strings.TrimSpace(*writePath))
+		if err != nil {
+			fatal(err)
+		}
+		cmdArgs = append(cmdArgs, "--write", resolvedWritePath)
+	}
+
+	cmd := exec.Command("go", cmdArgs...) // #nosec G204 -- command and args are controlled by fixed command and validated inputs.
+	cmd.Dir = engineDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg == "" {
+			msg = err.Error()
+		}
+		fatal(fmt.Errorf("planner failed: %s", msg))
+	}
+	if stderr.Len() > 0 {
+		warnf("%s", strings.TrimSpace(stderr.String()))
+	}
+	if _, err := fmt.Fprint(os.Stdout, stdout.String()); err != nil {
+		fatal(err)
+	}
+}
+
+func resolveGooglePlayPlannerRepo(explicit string) (string, error) {
+	if explicit != "" {
+		return filepath.Abs(explicit)
+	}
+	if fromEnv := strings.TrimSpace(os.Getenv("SI_RELEASEMIND_REPO")); fromEnv != "" {
+		return filepath.Abs(fromEnv)
+	}
+	candidates := []string{
+		"../releasemind",
+		"/home/shawn/Development/releasemind",
+	}
+	for _, candidate := range candidates {
+		resolved, err := filepath.Abs(candidate)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(resolved, "engine", "playrelease", "go.mod")); err == nil {
+			return resolved, nil
+		}
+	}
+	return "", fmt.Errorf("unable to locate releasemind planner repo; pass --planner-repo or set SI_RELEASEMIND_REPO")
 }
 
 func cmdGooglePlayRaw(args []string) {
