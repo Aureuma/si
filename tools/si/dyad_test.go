@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types"
@@ -93,6 +94,49 @@ func TestParseMenuSelection(t *testing.T) {
 	}
 	if _, err := parseMenuSelection("nope", options); err == nil {
 		t.Fatalf("expected invalid name error")
+	}
+}
+
+func TestPrintDyadRowsIncludesIndexWhenRequested(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = false
+	defer func() { ansiEnabled = prev }()
+
+	rows := []dyadRow{
+		{Dyad: "alpha", Role: "generic", Actor: "running", Critic: "exited"},
+	}
+	out := captureOutputForTest(t, func() {
+		printDyadRows(rows, true)
+	})
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected header and row, got %q", out)
+	}
+	if !strings.Contains(lines[0], "#") {
+		t.Fatalf("expected index column in header, got %q", lines[0])
+	}
+	if !strings.Contains(lines[1], "1") || !strings.Contains(lines[1], "alpha") {
+		t.Fatalf("expected numbered dyad row, got %q", lines[1])
+	}
+}
+
+func TestPrintDyadRowsOmitsIndexWhenNotRequested(t *testing.T) {
+	prev := ansiEnabled
+	ansiEnabled = false
+	defer func() { ansiEnabled = prev }()
+
+	rows := []dyadRow{
+		{Dyad: "beta", Role: "generic", Actor: "running", Critic: "running"},
+	}
+	out := captureOutputForTest(t, func() {
+		printDyadRows(rows, false)
+	})
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected header and row, got %q", out)
+	}
+	if strings.Contains(lines[0], "#") {
+		t.Fatalf("did not expect index column in header, got %q", lines[0])
 	}
 }
 
