@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+
+## [v0.51.0] - 2026-03-01
 ### Added
 - Added Sun-backed per-key vault KV sync (`vault_kv.<scope>/<KEY>`) with revision-history support via `si vault history`.
 - Added `cloud_kv` reporting in `si vault status` and KV metadata in `si vault sync status`.
