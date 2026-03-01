@@ -270,21 +270,28 @@ func buildDyadRows(containers []types.Container) []dyadRow {
 	return out
 }
 
-func printDyadRows(rows []dyadRow) {
+func printDyadRows(rows []dyadRow, includeIndex bool) {
 	headers := []string{
 		styleHeading("DYAD"),
 		styleHeading("ROLE"),
 		styleHeading("ACTOR"),
 		styleHeading("CRITIC"),
 	}
+	if includeIndex {
+		headers = append([]string{styleHeading("#")}, headers...)
+	}
 	tableRows := make([][]string, 0, len(rows))
-	for _, row := range rows {
-		tableRows = append(tableRows, []string{
+	for idx, row := range rows {
+		values := []string{
 			row.Dyad,
 			row.Role,
 			styleStatus(row.Actor),
 			styleStatus(row.Critic),
-		})
+		}
+		if includeIndex {
+			values = append([]string{strconv.Itoa(idx + 1)}, values...)
+		}
+		tableRows = append(tableRows, values)
 	}
 	printAlignedTable(headers, tableRows, 2)
 }
@@ -306,13 +313,13 @@ func selectDyadName(action string) (string, bool) {
 	}
 
 	if !isInteractiveTerminal() {
-		printDyadRows(rows)
+		printDyadRows(rows, false)
 		fmt.Println(styleDim("re-run with: si dyad " + action + " <name>"))
 		return "", false
 	}
 
 	fmt.Println(styleHeading("Available dyads:"))
-	printDyadRows(rows)
+	printDyadRows(rows, true)
 	options := make([]string, 0, len(rows))
 	for _, row := range rows {
 		options = append(options, row.Dyad)
@@ -343,6 +350,10 @@ func selectDyadMember(action string, defaultMember string) (string, bool) {
 	}
 	options := []string{"actor", "critic"}
 	defaultMember = strings.ToLower(strings.TrimSpace(defaultMember))
+	fmt.Println(styleHeading("Available members:"))
+	for idx, option := range options {
+		fmt.Printf("  %2d) %s\n", idx+1, option)
+	}
 	prompt := fmt.Sprintf("Select %s member [1-%d] (default %s, Esc to cancel):", action, len(options), defaultMember)
 	fmt.Printf("%s ", styleDim(prompt))
 	line, err := promptLine(os.Stdin)
@@ -375,6 +386,10 @@ func selectDyadRole(defaultRole string) (string, bool) {
 	}
 	if !isInteractiveTerminal() {
 		return defaultRole, true
+	}
+	fmt.Println(styleHeading("Available dyad roles:"))
+	for idx, option := range options {
+		fmt.Printf("  %2d) %s\n", idx+1, option)
 	}
 	fmt.Printf("%s ", styleDim(fmt.Sprintf("Select dyad role [1-%d] (default %s, Esc to cancel):", len(options), defaultRole)))
 	line, err := promptLine(os.Stdin)

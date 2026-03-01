@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -40,7 +41,7 @@ func listCodexProfiles(jsonOut bool, withStatus bool) {
 		return
 	}
 
-	printCodexProfilesTable(items, withStatus, false)
+	printCodexProfilesTable(items, withStatus, false, false)
 	if withStatus {
 		for _, msg := range profileStatusWarnings(items) {
 			fmt.Printf("%s %s\n", styleWarn("warning:"), msg)
@@ -123,41 +124,49 @@ func applyProfileStatusResult(item *codexProfileSummary, res profileStatusResult
 	item.WeeklyRemaining = res.Status.WeeklyRemaining
 }
 
-func printCodexProfilesTable(items []codexProfileSummary, withStatus bool, includeProfile bool) {
+func printCodexProfilesTable(items []codexProfileSummary, withStatus bool, includeProfile bool, includeIndex bool) {
 	if len(items) == 0 {
 		return
 	}
 	rows := make([][]string, 0, len(items))
-	for _, item := range items {
+	for idx, item := range items {
 		name := profileNameForTable(item.Name)
 		auth := profileAuthLabel(item)
 		email := profileEmailForTable(item.Email)
+		row := []string{}
+		if includeIndex {
+			row = append(row, strconv.Itoa(idx+1))
+		}
 		if withStatus {
 			if includeProfile {
-				rows = append(rows, []string{
+				row = append(row, []string{
 					item.ID,
 					name,
 					email,
 					auth,
 					profileFiveHourDisplay(item),
 					profileWeeklyDisplay(item),
-				})
+				}...)
+				rows = append(rows, row)
 				continue
 			}
-			rows = append(rows, []string{
+			row = append(row, []string{
 				name,
 				email,
 				auth,
 				profileFiveHourDisplay(item),
 				profileWeeklyDisplay(item),
-			})
+			}...)
+			rows = append(rows, row)
 			continue
 		}
 		if includeProfile {
-			rows = append(rows, []string{item.ID, name, email, auth})
+			row = append(row, []string{item.ID, name, email, auth}...)
+			rows = append(rows, row)
 			continue
 		}
-		rows = append(rows, []string{name, email, auth})
+		row = append(row, []string{name, email, auth}...)
+		rows = append(rows, row)
 	}
 
 	headers := []string{styleHeading("NAME"), styleHeading("EMAIL"), styleHeading("AUTH")}
@@ -171,6 +180,9 @@ func printCodexProfilesTable(items []codexProfileSummary, withStatus bool, inclu
 	}
 	if withStatus {
 		headers = append(headers, styleHeading("5H"), styleHeading("WEEKLY"))
+	}
+	if includeIndex {
+		headers = append([]string{styleHeading("#")}, headers...)
 	}
 	printAlignedTable(headers, rows, 2)
 }

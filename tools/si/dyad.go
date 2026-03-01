@@ -666,7 +666,7 @@ func cmdDyadList(args []string) {
 		infof("no dyads found")
 		return
 	}
-	printDyadRows(rows)
+	printDyadRows(rows, false)
 }
 
 func cmdDyadRemove(args []string) {
