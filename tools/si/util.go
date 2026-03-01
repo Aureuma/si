@@ -28,6 +28,7 @@ Features:
   - Cloudflare bridge: account/env context, common edge operations, reporting, and raw API access.
   - Google Places bridge: account/env context, autocomplete/search/details/photos, local reports, and raw API access.
   - Google Play bridge: service-account auth/context, custom app create, listing/details/assets automation, release track orchestration, and raw API access.
+  - ReleaseMind bridge: mobile release metadata planning and GitHub app install diagnostics for repository cutovers.
   - Apple App Store bridge: JWT auth/context, bundle/app onboarding, listing localization automation, and raw App Store Connect API access.
   - Google YouTube bridge: auth/context flows, channel/video/playlist/live/caption operations, uploads, and usage reporting.
   - Social bridge: unified platform flows for Facebook, Instagram, X, LinkedIn, and Reddit (auth/context/resources/raw/report).
@@ -61,6 +62,7 @@ Core:
   si github <auth|context|doctor|git|repo|project|branch|pr|issue|workflow|release|secret|raw|graphql>
   si cloudflare <auth|context|doctor|status|smoke|zone|dns|email|tls|ssl|origin|cert|cache|waf|ruleset|firewall|ratelimit|workers|pages|r2|d1|kv|queue|access|token|tokens|tunnel|tunnels|lb|analytics|logs|report|raw|api>
   si google <places|play|youtube|youtube-data>
+  si releasemind|release <play|github>
   si apple <appstore>
   si social <facebook|instagram|x|linkedin|reddit>
   si workos <auth|context|doctor|organization|user|membership|invitation|directory|raw>
