@@ -15,6 +15,7 @@ Related:
 - App details updates (contact email/phone/website, default language).
 - Listing asset management (screenshots, icon, feature graphic, TV banner).
 - Release upload + track orchestration (AAB/APK upload, promote, halt/resume).
+- Release metadata planning (release name, notes, track/status defaults) via ReleaseMind Go core.
 - End-to-end metadata apply flow from a repository folder.
 
 ## What still requires manual console setup
@@ -54,6 +55,7 @@ Supported credential sources (highest priority first):
 ./si google play release upload --account core --package com.example.app --aab ./app-release.aab --track internal
 ./si google play release promote --account core --package com.example.app --from internal --to production --status completed
 ./si google play release set-status --account core --package com.example.app --track production --status halted
+./si google play release plan --repo-path /path/to/mobile-repo --planner-repo /path/to/releasemind --write /tmp/play-plan.json
 
 # raw fallback
 ./si google play raw --account core --method GET \
@@ -89,6 +91,6 @@ Supported `imageType` values:
 - `si google play listing get|list|update`
 - `si google play details get|update`
 - `si google play asset list|upload|clear`
-- `si google play release upload|status|promote|set-status`
+- `si google play release upload|status|promote|set-status|plan`
 - `si google play raw`
 - `si google play apply`
