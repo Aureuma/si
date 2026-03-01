@@ -28,6 +28,9 @@ var (
 	loadGoogleRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdGoogle(args) }
 	}
+	loadReleasemindRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdReleasemind(args) }
+	}
 	loadAppleRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdApple(args) }
 	}
@@ -129,6 +132,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadGithubRootHandler), "github")
 	register(newLazyRootHandler(loadCloudflareRootHandler), "cloudflare", "cf")
 	register(newLazyRootHandler(loadGoogleRootHandler), "google")
+	register(newLazyRootHandler(loadReleasemindRootHandler), "releasemind", "release")
 	register(newLazyRootHandler(loadAppleRootHandler), "apple")
 	register(newLazyRootHandler(loadSocialRootHandler), "social")
 	register(newLazyRootHandler(loadWorkOSRootHandler), "workos")
