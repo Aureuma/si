@@ -59,20 +59,22 @@ func seedGitIdentity(ctx context.Context, client *shared.Client, containerID, us
 	if identity.Name == "" && identity.Email == "" {
 		return
 	}
-	opts := shared.ExecOptions{User: strings.TrimSpace(user)}
-	if strings.TrimSpace(home) != "" {
-		opts.Env = []string{"HOME=" + strings.TrimSpace(home)}
+	user = strings.TrimSpace(user)
+	home = strings.TrimSpace(home)
+	opts := shared.ExecOptions{User: user}
+	if home != "" {
+		opts.Env = []string{"HOME=" + home}
 	}
 	if !containerHasGit(ctx, client, containerID, opts) {
 		warnf("git identity seed skipped: git not available for %s", opts.User)
 		return
 	}
-	if strings.TrimSpace(home) != "" && !waitForWritableHome(ctx, client, containerID, opts) {
-		warnf("git identity seed skipped: home not writable for %s (%s)", opts.User, strings.TrimSpace(home))
-		return
-	}
-	if strings.TrimSpace(home) != "" && !ensureGitConfigWritable(ctx, client, containerID, opts, strings.TrimSpace(user), strings.TrimSpace(home)) {
-		warnf("git identity seed skipped: gitconfig not writable for %s (%s)", opts.User, strings.TrimSpace(home))
+	if home != "" && !waitForGitIdentityWritable(ctx, client, containerID, opts, user, home) {
+		if homeWritable(ctx, client, containerID, opts) {
+			warnf("git identity seed skipped: gitconfig not writable for %s (%s)", opts.User, home)
+		} else {
+			warnf("git identity seed skipped: home not writable for %s (%s)", opts.User, home)
+		}
 		return
 	}
 	if identity.Name != "" {
@@ -87,11 +89,33 @@ func seedGitIdentity(ctx context.Context, client *shared.Client, containerID, us
 	}
 }
 
+func homeWritable(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions) bool {
+	if err := client.Exec(ctx, containerID, []string{"sh", "-lc", "test -d \"$HOME\" && test -w \"$HOME\""}, opts, nil, nil, nil); err != nil {
+		return false
+	}
+	return true
+}
+
 func waitForWritableHome(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions) bool {
 	const attempts = 10
 	const delay = 200 * time.Millisecond
 	for i := 0; i < attempts; i++ {
-		if err := client.Exec(ctx, containerID, []string{"sh", "-lc", "test -d \"$HOME\" && test -w \"$HOME\""}, opts, nil, nil, nil); err == nil {
+		if homeWritable(ctx, client, containerID, opts) {
+			return true
+		}
+		time.Sleep(delay)
+	}
+	return false
+}
+
+func waitForGitIdentityWritable(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions, user, home string) bool {
+	const attempts = 12
+	const delay = 250 * time.Millisecond
+	for i := 0; i < attempts; i++ {
+		if gitConfigWritable(ctx, client, containerID, opts) {
+			return true
+		}
+		if ensureGitConfigWritable(ctx, client, containerID, opts, user, home) {
 			return true
 		}
 		time.Sleep(delay)
