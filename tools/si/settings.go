@@ -555,17 +555,17 @@ type VivaNodeProtocols struct {
 }
 
 type VivaNodeBootstrapSettings struct {
-	SourceRoot       string   `toml:"source_root,omitempty"`
-	WorkspaceDir     string   `toml:"workspace_dir,omitempty"`
-	Repos            []string `toml:"repos,omitempty"`
-	ShellProfile     string   `toml:"shell_profile,omitempty"`
-	EnvFile          string   `toml:"env_file,omitempty"`
-	GitHubTokenKey   string   `toml:"github_token_key,omitempty"`
-	SunBaseURLKey    string   `toml:"sun_base_url_key,omitempty"`
-	SunTokenKey      string   `toml:"sun_token_key,omitempty"`
-	BuildSI          *bool    `toml:"build_si,omitempty"`
-	PullLatest       *bool    `toml:"pull_latest,omitempty"`
-	InstallOrbitals  []string `toml:"install_orbitals,omitempty"`
+	SourceRoot      string   `toml:"source_root,omitempty"`
+	WorkspaceDir    string   `toml:"workspace_dir,omitempty"`
+	Repos           []string `toml:"repos,omitempty"`
+	ShellProfile    string   `toml:"shell_profile,omitempty"`
+	EnvFile         string   `toml:"env_file,omitempty"`
+	GitHubTokenKey  string   `toml:"github_token_key,omitempty"`
+	SunBaseURLKey   string   `toml:"sun_base_url_key,omitempty"`
+	SunTokenKey     string   `toml:"sun_token_key,omitempty"`
+	BuildSI         *bool    `toml:"build_si,omitempty"`
+	PullLatest      *bool    `toml:"pull_latest,omitempty"`
+	InstallOrbitals []string `toml:"install_orbitals,omitempty"`
 }
 
 type SunSettings struct {
