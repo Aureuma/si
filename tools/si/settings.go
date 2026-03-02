@@ -487,6 +487,7 @@ type VivaSettings struct {
 	Bin    string             `toml:"bin,omitempty"`
 	Build  *bool              `toml:"build,omitempty"`
 	Tunnel VivaTunnelSettings `toml:"tunnel,omitempty"`
+	Node   VivaNodeSettings   `toml:"node,omitempty"`
 }
 
 type VivaTunnelSettings struct {
@@ -515,6 +516,41 @@ type VivaTunnelProfile struct {
 type VivaTunnelRoute struct {
 	Hostname string `toml:"hostname,omitempty"`
 	Service  string `toml:"service,omitempty"`
+}
+
+type VivaNodeSettings struct {
+	DefaultNode string                     `toml:"default_node,omitempty"`
+	Entries     map[string]VivaNodeProfile `toml:"entries,omitempty"`
+}
+
+type VivaNodeProfile struct {
+	Name                       string            `toml:"name,omitempty"`
+	Description                string            `toml:"description,omitempty"`
+	Host                       string            `toml:"host,omitempty"`
+	Port                       string            `toml:"port,omitempty"`
+	User                       string            `toml:"user,omitempty"`
+	HostEnvKey                 string            `toml:"host_env_key,omitempty"`
+	PortEnvKey                 string            `toml:"port_env_key,omitempty"`
+	UserEnvKey                 string            `toml:"user_env_key,omitempty"`
+	IdentityFile               string            `toml:"identity_file,omitempty"`
+	IdentityFileEnvKey         string            `toml:"identity_file_env_key,omitempty"`
+	KnownHostsFile             string            `toml:"known_hosts_file,omitempty"`
+	StrictHostKeyChecking      string            `toml:"strict_host_key_checking,omitempty"`
+	ConnectTimeoutSeconds      int               `toml:"connect_timeout_seconds,omitempty"`
+	ServerAliveIntervalSeconds int               `toml:"server_alive_interval_seconds,omitempty"`
+	ServerAliveCountMax        int               `toml:"server_alive_count_max,omitempty"`
+	Compression                *bool             `toml:"compression,omitempty"`
+	Multiplex                  *bool             `toml:"multiplex,omitempty"`
+	ControlPersist             string            `toml:"control_persist,omitempty"`
+	ControlPath                string            `toml:"control_path,omitempty"`
+	MoshPort                   string            `toml:"mosh_port,omitempty"`
+	Protocols                  VivaNodeProtocols `toml:"protocols,omitempty"`
+}
+
+type VivaNodeProtocols struct {
+	SSH   *bool `toml:"ssh,omitempty"`
+	Mosh  *bool `toml:"mosh,omitempty"`
+	Rsync *bool `toml:"rsync,omitempty"`
 }
 
 type SunSettings struct {
@@ -1190,6 +1226,28 @@ func applySettingsDefaults(settings *Settings) {
 			}
 		}
 	}
+	settings.Viva.Node.DefaultNode = strings.ToLower(strings.TrimSpace(settings.Viva.Node.DefaultNode))
+	if len(settings.Viva.Node.Entries) > 0 {
+		norm := make(map[string]VivaNodeProfile, len(settings.Viva.Node.Entries))
+		for key, profile := range settings.Viva.Node.Entries {
+			nodeKey := strings.ToLower(strings.TrimSpace(key))
+			if nodeKey == "" {
+				continue
+			}
+			norm[nodeKey] = normalizeVivaNodeProfile(profile)
+		}
+		settings.Viva.Node.Entries = norm
+		if settings.Viva.Node.DefaultNode == "" {
+			if _, ok := norm["default"]; ok {
+				settings.Viva.Node.DefaultNode = "default"
+			}
+		}
+		if settings.Viva.Node.DefaultNode != "" {
+			if _, ok := settings.Viva.Node.Entries[settings.Viva.Node.DefaultNode]; !ok {
+				settings.Viva.Node.DefaultNode = ""
+			}
+		}
+	}
 	mergeSunSettings(settings)
 	settings.Sun.BaseURL = strings.TrimSpace(settings.Sun.BaseURL)
 	if settings.Sun.BaseURL == "" {
@@ -1780,6 +1838,66 @@ func normalizeVivaTunnelProfile(profile VivaTunnelProfile) VivaTunnelProfile {
 			routes = append(routes, route)
 		}
 		profile.Routes = routes
+	}
+	return profile
+}
+
+func normalizeVivaNodeProfile(profile VivaNodeProfile) VivaNodeProfile {
+	profile.Name = strings.TrimSpace(profile.Name)
+	profile.Description = strings.TrimSpace(profile.Description)
+	profile.Host = strings.TrimSpace(profile.Host)
+	profile.Port = strings.TrimSpace(profile.Port)
+	if profile.Port == "" {
+		profile.Port = "22"
+	}
+	profile.User = strings.TrimSpace(profile.User)
+	profile.HostEnvKey = strings.TrimSpace(profile.HostEnvKey)
+	profile.PortEnvKey = strings.TrimSpace(profile.PortEnvKey)
+	profile.UserEnvKey = strings.TrimSpace(profile.UserEnvKey)
+	profile.IdentityFile = strings.TrimSpace(profile.IdentityFile)
+	profile.IdentityFileEnvKey = strings.TrimSpace(profile.IdentityFileEnvKey)
+	profile.KnownHostsFile = strings.TrimSpace(profile.KnownHostsFile)
+	profile.StrictHostKeyChecking = strings.ToLower(strings.TrimSpace(profile.StrictHostKeyChecking))
+	switch profile.StrictHostKeyChecking {
+	case "", "yes", "accept-new", "no":
+	default:
+		profile.StrictHostKeyChecking = "yes"
+	}
+	if profile.StrictHostKeyChecking == "" {
+		profile.StrictHostKeyChecking = "yes"
+	}
+	if profile.ConnectTimeoutSeconds <= 0 {
+		profile.ConnectTimeoutSeconds = 10
+	}
+	if profile.ServerAliveIntervalSeconds <= 0 {
+		profile.ServerAliveIntervalSeconds = 30
+	}
+	if profile.ServerAliveCountMax <= 0 {
+		profile.ServerAliveCountMax = 5
+	}
+	if profile.Compression == nil {
+		profile.Compression = boolPtr(true)
+	}
+	if profile.Multiplex == nil {
+		profile.Multiplex = boolPtr(true)
+	}
+	profile.ControlPersist = strings.TrimSpace(profile.ControlPersist)
+	if profile.ControlPersist == "" {
+		profile.ControlPersist = "5m"
+	}
+	profile.ControlPath = strings.TrimSpace(profile.ControlPath)
+	if profile.ControlPath == "" {
+		profile.ControlPath = "~/.ssh/cm-si-viva-%C"
+	}
+	profile.MoshPort = strings.TrimSpace(profile.MoshPort)
+	if profile.Protocols.SSH == nil {
+		profile.Protocols.SSH = boolPtr(true)
+	}
+	if profile.Protocols.Mosh == nil {
+		profile.Protocols.Mosh = boolPtr(true)
+	}
+	if profile.Protocols.Rsync == nil {
+		profile.Protocols.Rsync = boolPtr(true)
 	}
 	return profile
 }
