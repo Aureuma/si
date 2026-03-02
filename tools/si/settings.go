@@ -521,6 +521,7 @@ type VivaTunnelRoute struct {
 type VivaNodeSettings struct {
 	DefaultNode string                     `toml:"default_node,omitempty"`
 	Entries     map[string]VivaNodeProfile `toml:"entries,omitempty"`
+	Bootstrap   VivaNodeBootstrapSettings  `toml:"bootstrap,omitempty"`
 }
 
 type VivaNodeProfile struct {
@@ -551,6 +552,20 @@ type VivaNodeProtocols struct {
 	SSH   *bool `toml:"ssh,omitempty"`
 	Mosh  *bool `toml:"mosh,omitempty"`
 	Rsync *bool `toml:"rsync,omitempty"`
+}
+
+type VivaNodeBootstrapSettings struct {
+	SourceRoot       string   `toml:"source_root,omitempty"`
+	WorkspaceDir     string   `toml:"workspace_dir,omitempty"`
+	Repos            []string `toml:"repos,omitempty"`
+	ShellProfile     string   `toml:"shell_profile,omitempty"`
+	EnvFile          string   `toml:"env_file,omitempty"`
+	GitHubTokenKey   string   `toml:"github_token_key,omitempty"`
+	SunBaseURLKey    string   `toml:"sun_base_url_key,omitempty"`
+	SunTokenKey      string   `toml:"sun_token_key,omitempty"`
+	BuildSI          *bool    `toml:"build_si,omitempty"`
+	PullLatest       *bool    `toml:"pull_latest,omitempty"`
+	InstallOrbitals  []string `toml:"install_orbitals,omitempty"`
 }
 
 type SunSettings struct {
@@ -1227,6 +1242,7 @@ func applySettingsDefaults(settings *Settings) {
 		}
 	}
 	settings.Viva.Node.DefaultNode = strings.ToLower(strings.TrimSpace(settings.Viva.Node.DefaultNode))
+	settings.Viva.Node.Bootstrap = normalizeVivaNodeBootstrapSettings(settings.Viva.Node.Bootstrap)
 	if len(settings.Viva.Node.Entries) > 0 {
 		norm := make(map[string]VivaNodeProfile, len(settings.Viva.Node.Entries))
 		for key, profile := range settings.Viva.Node.Entries {
@@ -1900,6 +1916,89 @@ func normalizeVivaNodeProfile(profile VivaNodeProfile) VivaNodeProfile {
 		profile.Protocols.Rsync = boolPtr(true)
 	}
 	return profile
+}
+
+func normalizeVivaNodeBootstrapSettings(cfg VivaNodeBootstrapSettings) VivaNodeBootstrapSettings {
+	cfg.SourceRoot = strings.TrimSpace(cfg.SourceRoot)
+	if cfg.SourceRoot == "" {
+		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+			cfg.SourceRoot = filepath.Join(home, "Development")
+		}
+	}
+	cfg.WorkspaceDir = strings.TrimSpace(cfg.WorkspaceDir)
+	if cfg.WorkspaceDir == "" {
+		cfg.WorkspaceDir = "~/Development"
+	}
+	cfg.Repos = normalizeVivaNodeBootstrapRepos(cfg.Repos)
+	if len(cfg.Repos) == 0 {
+		cfg.Repos = defaultVivaNodeBootstrapRepos()
+	}
+	cfg.ShellProfile = strings.TrimSpace(cfg.ShellProfile)
+	if cfg.ShellProfile == "" {
+		cfg.ShellProfile = "~/.bashrc"
+	}
+	cfg.EnvFile = strings.TrimSpace(cfg.EnvFile)
+	if cfg.EnvFile == "" {
+		cfg.EnvFile = "~/.si/node-bootstrap.env"
+	}
+	cfg.GitHubTokenKey = strings.TrimSpace(cfg.GitHubTokenKey)
+	if cfg.GitHubTokenKey == "" {
+		cfg.GitHubTokenKey = "GH_PAT_AUREUMA"
+	}
+	cfg.SunBaseURLKey = strings.TrimSpace(cfg.SunBaseURLKey)
+	if cfg.SunBaseURLKey == "" {
+		cfg.SunBaseURLKey = "SI_SUN_BASE_URL"
+	}
+	cfg.SunTokenKey = strings.TrimSpace(cfg.SunTokenKey)
+	if cfg.SunTokenKey == "" {
+		cfg.SunTokenKey = "SI_SUN_TOKEN"
+	}
+	if cfg.BuildSI == nil {
+		cfg.BuildSI = boolPtr(true)
+	}
+	if cfg.PullLatest == nil {
+		cfg.PullLatest = boolPtr(true)
+	}
+	cfg.InstallOrbitals = normalizeVivaNodeBootstrapRepos(cfg.InstallOrbitals)
+	return cfg
+}
+
+func normalizeVivaNodeBootstrapRepos(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(items))
+	for _, raw := range items {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+func defaultVivaNodeBootstrapRepos() []string {
+	return []string{
+		"si",
+		"safe",
+		"viva",
+		"sun",
+		"remote-control",
+		"surf",
+		"releasemind",
+		"lingospeak",
+		"aureuma",
+		"svelta",
+		"convelt",
+		"core",
+		"homebrew-si",
+	}
 }
 
 func boolPtr(val bool) *bool {
