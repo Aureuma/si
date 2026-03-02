@@ -564,3 +564,67 @@ service = "http://127.0.0.1:3000"
 		t.Fatalf("unexpected routes: %#v", profile.Routes)
 	}
 }
+
+func TestLoadSettingsParsesVivaNodes(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+
+	vivaPath, err := settingsModulePath(settingsModuleViva)
+	if err != nil {
+		t.Fatalf("settingsModulePath(viva): %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(vivaPath), 0o700); err != nil {
+		t.Fatalf("mkdir viva settings dir: %v", err)
+	}
+	content := `
+schema_version = 1
+
+[viva.node]
+default_node = "prod"
+
+[viva.node.entries.prod]
+host_env_key = "PROD_SSH_HOST"
+user_env_key = "PROD_SSH_USER"
+port_env_key = "PROD_SSH_PORT"
+strict_host_key_checking = "accept-new"
+control_path = "~/.ssh/cm-%C"
+
+[viva.node.entries.prod.protocols]
+ssh = true
+mosh = false
+rsync = true
+`
+	if err := os.WriteFile(vivaPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write viva settings: %v", err)
+	}
+
+	settings, err := loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	if settings.Viva.Node.DefaultNode != "prod" {
+		t.Fatalf("unexpected default node: %q", settings.Viva.Node.DefaultNode)
+	}
+	entry, ok := settings.Viva.Node.Entries["prod"]
+	if !ok {
+		t.Fatalf("expected prod node")
+	}
+	if entry.Port != "22" {
+		t.Fatalf("expected normalized default port=22, got %q", entry.Port)
+	}
+	if entry.StrictHostKeyChecking != "accept-new" {
+		t.Fatalf("unexpected strict_host_key_checking: %q", entry.StrictHostKeyChecking)
+	}
+	if entry.ControlPath != "~/.ssh/cm-%C" {
+		t.Fatalf("unexpected control_path: %q", entry.ControlPath)
+	}
+	if entry.Protocols.SSH == nil || !*entry.Protocols.SSH {
+		t.Fatalf("expected ssh protocol enabled")
+	}
+	if entry.Protocols.Mosh == nil || *entry.Protocols.Mosh {
+		t.Fatalf("expected mosh protocol disabled")
+	}
+	if entry.Protocols.Rsync == nil || !*entry.Protocols.Rsync {
+		t.Fatalf("expected rsync protocol enabled")
+	}
+}
