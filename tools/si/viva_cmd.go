@@ -13,7 +13,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-const vivaUsageText = "usage: si viva [--repo <path>] [--bin <path>] [--build] [--json] -- <viva-args...>\n       si viva <viva-args...>"
+const vivaUsageText = "usage: si viva [--repo <path>] [--bin <path>] [--build] [--json] -- <viva-args...>\n       si viva <viva-args...>\n       si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync> [args]"
 const vivaConfigUsageText = "usage: si viva config <show|set|tunnel> [args]"
 const vivaConfigTunnelUsageText = "usage: si viva config tunnel <show|set-default|import|delete> [args]"
 
@@ -32,6 +32,10 @@ func cmdViva(args []string) {
 	}
 	if strings.EqualFold(strings.TrimSpace(args[0]), "config") {
 		cmdVivaConfig(args[1:])
+		return
+	}
+	if strings.EqualFold(strings.TrimSpace(args[0]), "node") {
+		cmdVivaNode(args[1:])
 		return
 	}
 	if len(args) == 1 {
