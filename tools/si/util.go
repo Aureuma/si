@@ -78,6 +78,7 @@ Core:
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
+  si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync> [args]
   si surf [--repo <path>] [--bin <path>] [--build] -- <surf-args...>
   si remote-control|rc [--repo <path>] [--bin <path>] [--build] -- <remote-control-args...>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
