@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 )
 
-const vivaNodeUsageText = "usage: si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync> [args]"
+const vivaNodeUsageText = "usage: si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync|bootstrap> [args]"
 
 var runVivaNodeSSHExternal = func(bin string, args []string) error {
 	cmd := exec.Command(bin, args...)
@@ -37,7 +38,20 @@ var runVivaNodeRsyncExternal = func(bin string, args []string) error {
 	return cmd.Run()
 }
 
+var runVivaNodeSSHExternalWithInput = func(bin string, args []string, input string) error {
+	cmd := exec.Command(bin, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if input == "" {
+		cmd.Stdin = os.Stdin
+	} else {
+		cmd.Stdin = strings.NewReader(input)
+	}
+	return cmd.Run()
+}
+
 var resolveVivaNodeVaultKeyValue = resolveVaultKeyValue
+var resolveVivaNodeGitRemoteOriginURL = gitRemoteOriginURL
 
 func cmdVivaNode(args []string) {
 	if len(args) == 0 {
@@ -65,6 +79,8 @@ func cmdVivaNode(args []string) {
 		cmdVivaNodeMosh(rest)
 	case "rsync", "sync":
 		cmdVivaNodeRsync(rest)
+	case "bootstrap", "provision":
+		cmdVivaNodeBootstrap(rest)
 	default:
 		fatal(fmt.Errorf("unknown viva node command: %s", sub))
 	}
@@ -598,6 +614,465 @@ func cmdVivaNodeRsync(args []string) {
 	if err := runVivaNodeRsyncExternal(strings.TrimSpace(*rsyncBin), argsOut); err != nil {
 		fatal(err)
 	}
+}
+
+type vivaNodeBootstrapRepo struct {
+	Name      string `json:"name"`
+	LocalPath string `json:"local_path"`
+	RemoteURL string `json:"remote_url"`
+}
+
+type vivaNodeBootstrapSecrets struct {
+	GitHubToken string `json:"-"`
+	SunBaseURL  string `json:"-"`
+	SunToken    string `json:"-"`
+}
+
+type vivaNodeBootstrapRuntime struct {
+	SourceRoot      string
+	WorkspaceDir    string
+	ShellProfile    string
+	EnvFile         string
+	Repos           []vivaNodeBootstrapRepo
+	BuildSI         bool
+	PullLatest      bool
+	InstallOrbitals []string
+	Secrets         vivaNodeBootstrapSecrets
+}
+
+type vivaNodeBootstrapResult struct {
+	Node            string                  `json:"node"`
+	Host            string                  `json:"host"`
+	User            string                  `json:"user"`
+	Port            string                  `json:"port"`
+	Status          string                  `json:"status"`
+	Message         string                  `json:"message,omitempty"`
+	WorkspaceDir    string                  `json:"workspace_dir,omitempty"`
+	Repos           []vivaNodeBootstrapRepo `json:"repos,omitempty"`
+	InstallOrbitals []string                `json:"install_orbitals,omitempty"`
+	SSHArgs         []string                `json:"ssh_args,omitempty"`
+}
+
+func cmdVivaNodeBootstrap(args []string) {
+	fs := flag.NewFlagSet("viva node bootstrap", flag.ContinueOnError)
+	fs.SetOutput(ioDiscardWriter{})
+	node := fs.String("node", "", "node name")
+	all := fs.Bool("all", false, "run on all configured nodes")
+	sourceRoot := fs.String("source-root", "", "local source root containing repositories")
+	workspaceDir := fs.String("workspace-dir", "", "remote workspace directory")
+	reposRaw := fs.String("repos", "", "comma-separated repository names")
+	shellProfile := fs.String("shell-profile", "", "remote shell profile path")
+	envFile := fs.String("env-file", "", "remote env file path")
+	githubTokenKey := fs.String("github-token-key", "", "vault/env key for GitHub token")
+	sunBaseURLKey := fs.String("sun-base-url-key", "", "vault/env key for Sun base URL")
+	sunTokenKey := fs.String("sun-token-key", "", "vault/env key for Sun token")
+	buildSIRaw := fs.String("build-si", "", "build si on remote node (true|false)")
+	pullLatestRaw := fs.String("pull-latest", "", "pull latest commits for existing repos (true|false)")
+	installOrbitalsRaw := fs.String("install-orbitals", "", "comma-separated orbit names to install after bootstrap")
+	sshBin := fs.String("ssh-bin", "ssh", "ssh binary")
+	dryRun := fs.Bool("dry-run", false, "print plan without executing remote bootstrap")
+	jsonOut := fs.Bool("json", false, "output json")
+	if err := fs.Parse(args); err != nil {
+		fatal(err)
+	}
+	if fs.NArg() > 0 {
+		fatal(errors.New("usage: si viva node bootstrap [--node <name>|--all] [--source-root <path>] [--workspace-dir <path>] [--repos <a,b>] [--dry-run] [--json]"))
+	}
+	if *all && strings.TrimSpace(*node) != "" {
+		fatal(errors.New("--all cannot be combined with --node"))
+	}
+	settings := loadSettingsOrDefault()
+	targets, err := resolveVivaNodeBootstrapTargets(settings, strings.TrimSpace(*node), *all)
+	if err != nil {
+		fatal(err)
+	}
+
+	cfg := settings.Viva.Node.Bootstrap
+	githubTokenKeyProvided := vivaFlagProvided(fs, "github-token-key")
+	sunBaseURLKeyProvided := vivaFlagProvided(fs, "sun-base-url-key")
+	sunTokenKeyProvided := vivaFlagProvided(fs, "sun-token-key")
+	if vivaFlagProvided(fs, "source-root") {
+		cfg.SourceRoot = strings.TrimSpace(*sourceRoot)
+	}
+	if vivaFlagProvided(fs, "workspace-dir") {
+		cfg.WorkspaceDir = strings.TrimSpace(*workspaceDir)
+	}
+	if vivaFlagProvided(fs, "repos") {
+		cfg.Repos = normalizeVivaNodeBootstrapRepos(vivaNodeSplitCSV(*reposRaw))
+	}
+	if vivaFlagProvided(fs, "shell-profile") {
+		cfg.ShellProfile = strings.TrimSpace(*shellProfile)
+	}
+	if vivaFlagProvided(fs, "env-file") {
+		cfg.EnvFile = strings.TrimSpace(*envFile)
+	}
+	if githubTokenKeyProvided {
+		cfg.GitHubTokenKey = strings.TrimSpace(*githubTokenKey)
+	}
+	if sunBaseURLKeyProvided {
+		cfg.SunBaseURLKey = strings.TrimSpace(*sunBaseURLKey)
+	}
+	if sunTokenKeyProvided {
+		cfg.SunTokenKey = strings.TrimSpace(*sunTokenKey)
+	}
+	if vivaFlagProvided(fs, "build-si") {
+		parsed, parseErr := strconv.ParseBool(strings.TrimSpace(*buildSIRaw))
+		if parseErr != nil {
+			fatal(fmt.Errorf("invalid --build-si value %q (expected true|false)", *buildSIRaw))
+		}
+		cfg.BuildSI = boolPtr(parsed)
+	}
+	if vivaFlagProvided(fs, "pull-latest") {
+		parsed, parseErr := strconv.ParseBool(strings.TrimSpace(*pullLatestRaw))
+		if parseErr != nil {
+			fatal(fmt.Errorf("invalid --pull-latest value %q (expected true|false)", *pullLatestRaw))
+		}
+		cfg.PullLatest = boolPtr(parsed)
+	}
+	if vivaFlagProvided(fs, "install-orbitals") {
+		cfg.InstallOrbitals = normalizeVivaNodeBootstrapRepos(vivaNodeSplitCSV(*installOrbitalsRaw))
+	}
+	cfg = normalizeVivaNodeBootstrapSettings(cfg)
+	if githubTokenKeyProvided {
+		cfg.GitHubTokenKey = strings.TrimSpace(*githubTokenKey)
+	}
+	if sunBaseURLKeyProvided {
+		cfg.SunBaseURLKey = strings.TrimSpace(*sunBaseURLKey)
+	}
+	if sunTokenKeyProvided {
+		cfg.SunTokenKey = strings.TrimSpace(*sunTokenKey)
+	}
+
+	runtime, err := resolveVivaNodeBootstrapRuntime(settings, cfg, !*dryRun)
+	if err != nil {
+		fatal(err)
+	}
+
+	results := make([]vivaNodeBootstrapResult, 0, len(targets))
+	failed := []string{}
+	for _, target := range targets {
+		conn, connErr := resolveVivaNodeConnection(settings, target.Key, target.Entry, vivaNodeConnectionOverrides{})
+		if connErr != nil {
+			results = append(results, vivaNodeBootstrapResult{
+				Node:    target.Key,
+				Status:  "error",
+				Message: connErr.Error(),
+			})
+			failed = append(failed, fmt.Sprintf("%s: %v", target.Key, connErr))
+			continue
+		}
+		if !conn.SSHEnabled {
+			err := fmt.Errorf("node %q has ssh protocol disabled", target.Key)
+			results = append(results, vivaNodeBootstrapResult{
+				Node:    target.Key,
+				Host:    conn.Host,
+				User:    conn.User,
+				Port:    conn.Port,
+				Status:  "error",
+				Message: err.Error(),
+			})
+			failed = append(failed, err.Error())
+			continue
+		}
+		sshArgs := buildVivaNodeSSHArgs(conn, []string{"bash", "-se"})
+		result := vivaNodeBootstrapResult{
+			Node:            target.Key,
+			Host:            conn.Host,
+			User:            conn.User,
+			Port:            conn.Port,
+			Status:          "ok",
+			WorkspaceDir:    runtime.WorkspaceDir,
+			Repos:           runtime.Repos,
+			InstallOrbitals: runtime.InstallOrbitals,
+			SSHArgs:         append([]string{}, sshArgs...),
+		}
+		if *dryRun {
+			result.Message = "dry-run"
+			results = append(results, result)
+			continue
+		}
+		script := buildVivaNodeBootstrapScript(runtime)
+		if runErr := runVivaNodeSSHExternalWithInput(strings.TrimSpace(*sshBin), sshArgs, script); runErr != nil {
+			result.Status = "error"
+			result.Message = runErr.Error()
+			failed = append(failed, fmt.Sprintf("%s: %v", target.Key, runErr))
+		}
+		results = append(results, result)
+	}
+	if *jsonOut {
+		ok := len(failed) == 0
+		printJSONMap(map[string]any{"ok": ok, "dry_run": *dryRun, "results": results})
+		if !ok {
+			fatal(errors.New(strings.Join(failed, "; ")))
+		}
+		return
+	}
+	headers := []string{styleHeading("NODE"), styleHeading("HOST"), styleHeading("STATUS"), styleHeading("WORKSPACE"), styleHeading("REPOS"), styleHeading("MESSAGE")}
+	rows := make([][]string, 0, len(results))
+	for _, row := range results {
+		rows = append(rows, []string{
+			row.Node,
+			row.Host,
+			row.Status,
+			row.WorkspaceDir,
+			strconv.Itoa(len(row.Repos)),
+			row.Message,
+		})
+	}
+	printAlignedTable(headers, rows, 2)
+	if len(failed) > 0 {
+		fatal(errors.New(strings.Join(failed, "; ")))
+	}
+}
+
+type vivaNodeBootstrapTarget struct {
+	Key   string
+	Entry VivaNodeProfile
+}
+
+func resolveVivaNodeBootstrapTargets(settings Settings, requested string, all bool) ([]vivaNodeBootstrapTarget, error) {
+	if all {
+		keys := vivaNodeSortedKeys(settings.Viva.Node.Entries)
+		if len(keys) == 0 {
+			return nil, errors.New("no viva nodes configured (use: si viva node set --node <name> --host <host> --user <user>)")
+		}
+		targets := make([]vivaNodeBootstrapTarget, 0, len(keys))
+		for _, key := range keys {
+			targets = append(targets, vivaNodeBootstrapTarget{Key: key, Entry: settings.Viva.Node.Entries[key]})
+		}
+		return targets, nil
+	}
+	key, entry, err := resolveVivaNodeSelection(settings, requested, "bootstrap")
+	if err != nil {
+		return nil, err
+	}
+	return []vivaNodeBootstrapTarget{{Key: key, Entry: entry}}, nil
+}
+
+func resolveVivaNodeBootstrapRuntime(settings Settings, cfg VivaNodeBootstrapSettings, requireSecrets bool) (vivaNodeBootstrapRuntime, error) {
+	sourceRoot := strings.TrimSpace(cfg.SourceRoot)
+	if sourceRoot == "" {
+		return vivaNodeBootstrapRuntime{}, errors.New("viva.node.bootstrap.source_root is required")
+	}
+	sourceRoot = filepath.Clean(expandTilde(sourceRoot))
+	if !filepath.IsAbs(sourceRoot) {
+		abs, err := filepath.Abs(sourceRoot)
+		if err != nil {
+			return vivaNodeBootstrapRuntime{}, fmt.Errorf("resolve source root: %w", err)
+		}
+		sourceRoot = abs
+	}
+	if stat, err := os.Stat(sourceRoot); err != nil || !stat.IsDir() {
+		return vivaNodeBootstrapRuntime{}, fmt.Errorf("source root not found: %s", sourceRoot)
+	}
+	repos, err := resolveVivaNodeBootstrapRepos(sourceRoot, cfg.Repos)
+	if err != nil {
+		return vivaNodeBootstrapRuntime{}, err
+	}
+	secrets, err := resolveVivaNodeBootstrapSecrets(settings, cfg, requireSecrets)
+	if err != nil {
+		return vivaNodeBootstrapRuntime{}, err
+	}
+	return vivaNodeBootstrapRuntime{
+		SourceRoot:      sourceRoot,
+		WorkspaceDir:    strings.TrimSpace(cfg.WorkspaceDir),
+		ShellProfile:    strings.TrimSpace(cfg.ShellProfile),
+		EnvFile:         strings.TrimSpace(cfg.EnvFile),
+		Repos:           repos,
+		BuildSI:         cfg.BuildSI != nil && *cfg.BuildSI,
+		PullLatest:      cfg.PullLatest != nil && *cfg.PullLatest,
+		InstallOrbitals: append([]string{}, cfg.InstallOrbitals...),
+		Secrets:         secrets,
+	}, nil
+}
+
+func resolveVivaNodeBootstrapSecrets(settings Settings, cfg VivaNodeBootstrapSettings, required bool) (vivaNodeBootstrapSecrets, error) {
+	read := func(key string) (string, error) {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			return "", nil
+		}
+		value := strings.TrimSpace(resolveVivaNodeKeyValue(settings, key))
+		if value == "" && required {
+			return "", fmt.Errorf("secret key %q was not found in env or vault", key)
+		}
+		return value, nil
+	}
+	githubToken, err := read(cfg.GitHubTokenKey)
+	if err != nil {
+		return vivaNodeBootstrapSecrets{}, err
+	}
+	sunBaseURL, err := read(cfg.SunBaseURLKey)
+	if err != nil {
+		return vivaNodeBootstrapSecrets{}, err
+	}
+	sunToken, err := read(cfg.SunTokenKey)
+	if err != nil {
+		return vivaNodeBootstrapSecrets{}, err
+	}
+	return vivaNodeBootstrapSecrets{
+		GitHubToken: githubToken,
+		SunBaseURL:  sunBaseURL,
+		SunToken:    sunToken,
+	}, nil
+}
+
+func resolveVivaNodeBootstrapRepos(sourceRoot string, names []string) ([]vivaNodeBootstrapRepo, error) {
+	if len(names) == 0 {
+		return nil, errors.New("no bootstrap repositories configured")
+	}
+	repos := make([]vivaNodeBootstrapRepo, 0, len(names))
+	for _, name := range names {
+		repoName := strings.TrimSpace(name)
+		if repoName == "" {
+			continue
+		}
+		if !vivaNodeSafeIdentifier(repoName) {
+			return nil, fmt.Errorf("invalid bootstrap repository name %q", repoName)
+		}
+		localPath := filepath.Join(sourceRoot, repoName)
+		stat, err := os.Stat(localPath)
+		if err != nil || !stat.IsDir() {
+			return nil, fmt.Errorf("bootstrap repository %q not found at %s", repoName, localPath)
+		}
+		remoteURL, err := resolveVivaNodeGitRemoteOriginURL(localPath)
+		if err != nil {
+			return nil, fmt.Errorf("resolve origin for %s: %w", repoName, err)
+		}
+		repos = append(repos, vivaNodeBootstrapRepo{
+			Name:      repoName,
+			LocalPath: localPath,
+			RemoteURL: remoteURL,
+		})
+	}
+	return repos, nil
+}
+
+func gitRemoteOriginURL(repoPath string) (string, error) {
+	out, err := exec.Command("git", "-C", repoPath, "remote", "get-url", "origin").Output()
+	if err != nil {
+		return "", err
+	}
+	remote := strings.TrimSpace(string(out))
+	if remote == "" {
+		return "", errors.New("origin remote is empty")
+	}
+	return remote, nil
+}
+
+func buildVivaNodeBootstrapScript(runtime vivaNodeBootstrapRuntime) string {
+	lines := []string{
+		"set -euo pipefail",
+		"umask 077",
+		"if ! command -v git >/dev/null 2>&1; then echo \"error: git is required\" >&2; exit 1; fi",
+		"WORKSPACE_DIR=" + vivaShellQuote(runtime.WorkspaceDir),
+		"SHELL_PROFILE=" + vivaShellQuote(runtime.ShellProfile),
+		"ENV_FILE=" + vivaShellQuote(runtime.EnvFile),
+		"mkdir -p \"$WORKSPACE_DIR\"",
+		"touch \"$SHELL_PROFILE\"",
+		"mkdir -p \"$(dirname \"$ENV_FILE\")\"",
+		"touch \"$ENV_FILE\"",
+		"chmod 600 \"$ENV_FILE\"",
+	}
+	envLines := []string{}
+	if strings.TrimSpace(runtime.Secrets.GitHubToken) != "" {
+		envLines = append(envLines, "export GH_PAT_AUREUMA="+vivaShellQuote(runtime.Secrets.GitHubToken))
+	}
+	if strings.TrimSpace(runtime.Secrets.SunBaseURL) != "" {
+		envLines = append(envLines, "export SI_SUN_BASE_URL="+vivaShellQuote(runtime.Secrets.SunBaseURL))
+	}
+	if strings.TrimSpace(runtime.Secrets.SunToken) != "" {
+		envLines = append(envLines, "export SI_SUN_TOKEN="+vivaShellQuote(runtime.Secrets.SunToken))
+	}
+	lines = append(lines, "cat > \"$ENV_FILE\" <<'SIEOF'")
+	lines = append(lines, envLines...)
+	lines = append(lines, "SIEOF")
+	sourceLine := "[ -f " + vivaShellQuote(runtime.EnvFile) + " ] && source " + vivaShellQuote(runtime.EnvFile)
+	lines = append(lines,
+		"if ! grep -Fq "+vivaShellQuote(sourceLine)+" \"$SHELL_PROFILE\"; then",
+		"  printf '\\n# added by si viva node bootstrap\\n"+sourceLine+"\\n' >> \"$SHELL_PROFILE\"",
+		"fi",
+	)
+	for _, repo := range runtime.Repos {
+		repoDirExpr := "\"$WORKSPACE_DIR/" + repo.Name + "\""
+		lines = append(lines,
+			"if [ -d "+repoDirExpr+"/.git ]; then",
+		)
+		if runtime.PullLatest {
+			lines = append(lines,
+				"  git -C "+repoDirExpr+" fetch --all --prune",
+				"  if ! git -C "+repoDirExpr+" pull --ff-only; then",
+				"    echo \"warning: pull failed for "+repo.Name+"; keeping local branch\" >&2",
+				"  fi",
+			)
+		} else {
+			lines = append(lines, "  echo \"skip pull for "+repo.Name+"\"")
+		}
+		lines = append(lines,
+			"else",
+			"  git clone "+vivaShellQuote(repo.RemoteURL)+" "+repoDirExpr,
+			"fi",
+		)
+	}
+	if runtime.BuildSI {
+		siPath := "\"$WORKSPACE_DIR/si\""
+		lines = append(lines,
+			"if ! command -v go >/dev/null 2>&1; then echo \"error: go is required for build-si\" >&2; exit 1; fi",
+			"if [ -d "+siPath+" ]; then",
+			"  mkdir -p \"$WORKSPACE_DIR/si/bin\"",
+			"  (cd \"$WORKSPACE_DIR/si\" && go build -o bin/si ./tools/si)",
+			"fi",
+		)
+	}
+	if len(runtime.InstallOrbitals) > 0 {
+		lines = append(lines,
+			"SI_BIN=\"$WORKSPACE_DIR/si/bin/si\"",
+			"if [ ! -x \"$SI_BIN\" ]; then SI_BIN=\"$(command -v si || true)\"; fi",
+			"if [ -z \"$SI_BIN\" ]; then",
+			"  echo \"error: si binary not found for orbital installation\" >&2",
+			"  exit 1",
+			"fi",
+		)
+		for _, orbit := range runtime.InstallOrbitals {
+			lines = append(lines, "$SI_BIN orbits install "+vivaShellQuote(orbit))
+		}
+	}
+	lines = append(lines, "echo \"si viva node bootstrap completed\"")
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func vivaNodeSplitCSV(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		item := strings.TrimSpace(part)
+		if item == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func vivaNodeSafeIdentifier(value string) bool {
+	if strings.TrimSpace(value) == "" {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '-', r == '_', r == '.':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 type vivaNodeConnectionOverrides struct {

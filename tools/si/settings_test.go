@@ -628,3 +628,59 @@ rsync = true
 		t.Fatalf("expected rsync protocol enabled")
 	}
 }
+
+func TestLoadSettingsParsesVivaNodeBootstrap(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+
+	vivaPath, err := settingsModulePath(settingsModuleViva)
+	if err != nil {
+		t.Fatalf("settingsModulePath(viva): %v", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(vivaPath), 0o700); err != nil {
+		t.Fatalf("mkdir viva settings dir: %v", err)
+	}
+	content := `
+schema_version = 1
+
+[viva.node.bootstrap]
+source_root = "/work/src"
+workspace_dir = "~/Work"
+repos = ["si", "safe", "si"]
+shell_profile = "~/.zshrc"
+env_file = "~/.si/bootstrap.env"
+github_token_key = "GH_PAT_AUREUMA"
+sun_base_url_key = "SI_SUN_BASE_URL"
+sun_token_key = "SI_SUN_TOKEN"
+build_si = false
+pull_latest = false
+install_orbitals = ["remote-control", "surf"]
+`
+	if err := os.WriteFile(vivaPath, []byte(content), 0o600); err != nil {
+		t.Fatalf("write viva settings: %v", err)
+	}
+
+	settings, err := loadSettings()
+	if err != nil {
+		t.Fatalf("loadSettings: %v", err)
+	}
+	bootstrap := settings.Viva.Node.Bootstrap
+	if bootstrap.SourceRoot != "/work/src" {
+		t.Fatalf("unexpected source_root: %q", bootstrap.SourceRoot)
+	}
+	if bootstrap.WorkspaceDir != "~/Work" {
+		t.Fatalf("unexpected workspace_dir: %q", bootstrap.WorkspaceDir)
+	}
+	if len(bootstrap.Repos) != 2 || bootstrap.Repos[0] != "si" || bootstrap.Repos[1] != "safe" {
+		t.Fatalf("unexpected repos: %#v", bootstrap.Repos)
+	}
+	if bootstrap.BuildSI == nil || *bootstrap.BuildSI {
+		t.Fatalf("expected build_si=false")
+	}
+	if bootstrap.PullLatest == nil || *bootstrap.PullLatest {
+		t.Fatalf("expected pull_latest=false")
+	}
+	if len(bootstrap.InstallOrbitals) != 2 {
+		t.Fatalf("unexpected install_orbitals: %#v", bootstrap.InstallOrbitals)
+	}
+}
