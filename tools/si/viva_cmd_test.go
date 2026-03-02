@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -191,5 +192,24 @@ func TestDefaultVivaRepoPathEmptyWhenMissing(t *testing.T) {
 	got := defaultVivaRepoPath()
 	if got != "" {
 		t.Fatalf("defaultVivaRepoPath()=%q want empty", got)
+	}
+}
+
+func TestCmdVivaRoutesNodeSubcommand(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+
+	orig := runVivaExternal
+	runVivaExternal = func(_ string, _ []string) error {
+		t.Fatalf("runVivaExternal should not be called for viva node subcommands")
+		return nil
+	}
+	defer func() { runVivaExternal = orig }()
+
+	out := captureOutputForTest(t, func() {
+		cmdViva([]string{"node", "list"})
+	})
+	if !strings.Contains(out, "no viva nodes configured") {
+		t.Fatalf("unexpected output: %q", out)
 	}
 }
