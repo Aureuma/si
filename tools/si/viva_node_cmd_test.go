@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -182,5 +184,211 @@ func TestResolveVivaNodeSelectionUsesDefault(t *testing.T) {
 	}
 	if key != "prod" {
 		t.Fatalf("expected default node prod, got %q", key)
+	}
+}
+
+func TestResolveVivaNodeBootstrapRepos(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "si"), 0o755); err != nil {
+		t.Fatalf("mkdir si repo: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "safe"), 0o755); err != nil {
+		t.Fatalf("mkdir safe repo: %v", err)
+	}
+	origRemote := resolveVivaNodeGitRemoteOriginURL
+	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
+	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {
+		return "git@github.com:aureuma/" + filepath.Base(path) + ".git", nil
+	}
+	repos, err := resolveVivaNodeBootstrapRepos(root, []string{"si", "safe"})
+	if err != nil {
+		t.Fatalf("resolveVivaNodeBootstrapRepos: %v", err)
+	}
+	if len(repos) != 2 {
+		t.Fatalf("expected 2 repos, got %d", len(repos))
+	}
+	if repos[0].Name != "si" || repos[1].Name != "safe" {
+		t.Fatalf("unexpected repo list: %#v", repos)
+	}
+	if repos[0].RemoteURL == "" || repos[1].RemoteURL == "" {
+		t.Fatalf("expected remote urls in repos: %#v", repos)
+	}
+}
+
+func TestResolveVivaNodeBootstrapRuntime(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "si"), 0o755); err != nil {
+		t.Fatalf("mkdir si repo: %v", err)
+	}
+	origRemote := resolveVivaNodeGitRemoteOriginURL
+	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
+	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {
+		return "git@github.com:aureuma/" + filepath.Base(path) + ".git", nil
+	}
+	t.Setenv("GH_PAT_AUREUMA", "ghp_test_123")
+	t.Setenv("SI_SUN_BASE_URL", "https://sun.example.com")
+	t.Setenv("SI_SUN_TOKEN", "sun_test_123")
+	runtime, err := resolveVivaNodeBootstrapRuntime(defaultSettings(), normalizeVivaNodeBootstrapSettings(VivaNodeBootstrapSettings{
+		SourceRoot: root,
+		Repos:      []string{"si"},
+	}), true)
+	if err != nil {
+		t.Fatalf("resolveVivaNodeBootstrapRuntime: %v", err)
+	}
+	if runtime.SourceRoot != root {
+		t.Fatalf("unexpected source root: %q", runtime.SourceRoot)
+	}
+	if len(runtime.Repos) != 1 || runtime.Repos[0].Name != "si" {
+		t.Fatalf("unexpected repos: %#v", runtime.Repos)
+	}
+	if runtime.Secrets.GitHubToken == "" || runtime.Secrets.SunBaseURL == "" || runtime.Secrets.SunToken == "" {
+		t.Fatalf("expected secrets to resolve, got: %#v", runtime.Secrets)
+	}
+}
+
+func TestResolveVivaNodeBootstrapRuntimeAllowsMissingSecretsInDryRun(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "si"), 0o755); err != nil {
+		t.Fatalf("mkdir si repo: %v", err)
+	}
+	origRemote := resolveVivaNodeGitRemoteOriginURL
+	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
+	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {
+		return "git@github.com:aureuma/" + filepath.Base(path) + ".git", nil
+	}
+	runtime, err := resolveVivaNodeBootstrapRuntime(defaultSettings(), normalizeVivaNodeBootstrapSettings(VivaNodeBootstrapSettings{
+		SourceRoot: root,
+		Repos:      []string{"si"},
+	}), false)
+	if err != nil {
+		t.Fatalf("resolveVivaNodeBootstrapRuntime dry-run: %v", err)
+	}
+	if runtime.Secrets.GitHubToken != "" || runtime.Secrets.SunBaseURL != "" || runtime.Secrets.SunToken != "" {
+		t.Fatalf("expected empty secrets in dry-run mode, got: %#v", runtime.Secrets)
+	}
+}
+
+func TestBuildVivaNodeBootstrapScript(t *testing.T) {
+	script := buildVivaNodeBootstrapScript(vivaNodeBootstrapRuntime{
+		WorkspaceDir:    "~/Development",
+		ShellProfile:    "~/.bashrc",
+		EnvFile:         "~/.si/node-bootstrap.env",
+		BuildSI:         true,
+		PullLatest:      true,
+		InstallOrbitals: []string{"remote-control"},
+		Repos: []vivaNodeBootstrapRepo{
+			{Name: "si", RemoteURL: "git@github.com:aureuma/si.git"},
+		},
+		Secrets: vivaNodeBootstrapSecrets{
+			GitHubToken: "ghp_test",
+			SunBaseURL:  "https://sun.example.com",
+			SunToken:    "sun_test",
+		},
+	})
+	checks := []string{
+		"set -euo pipefail",
+		"git clone git@github.com:aureuma/si.git \"$WORKSPACE_DIR/si\"",
+		"go build -o bin/si ./tools/si",
+		"$SI_BIN orbits install remote-control",
+		"export SI_SUN_BASE_URL=https://sun.example.com",
+	}
+	for _, needle := range checks {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("expected script to include %q, got:\n%s", needle, script)
+		}
+	}
+}
+
+func TestCmdVivaNodeBootstrapDryRunJSON(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+	sourceRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(sourceRoot, "si"), 0o755); err != nil {
+		t.Fatalf("mkdir si repo: %v", err)
+	}
+	settings := defaultSettings()
+	settings.Viva.Node.DefaultNode = "dev"
+	settings.Viva.Node.Entries = map[string]VivaNodeProfile{
+		"dev": {Host: "host.example.com", User: "deploy", Port: "7129"},
+	}
+	settings.Viva.Node.Bootstrap = normalizeVivaNodeBootstrapSettings(VivaNodeBootstrapSettings{
+		SourceRoot: sourceRoot,
+		Repos:      []string{"si"},
+	})
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("saveSettings: %v", err)
+	}
+	t.Setenv("GH_PAT_AUREUMA", "ghp_test_123")
+	t.Setenv("SI_SUN_BASE_URL", "https://sun.example.com")
+	t.Setenv("SI_SUN_TOKEN", "sun_test_123")
+	origRemote := resolveVivaNodeGitRemoteOriginURL
+	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
+	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {
+		return "git@github.com:aureuma/" + filepath.Base(path) + ".git", nil
+	}
+	origSSH := runVivaNodeSSHExternalWithInput
+	defer func() { runVivaNodeSSHExternalWithInput = origSSH }()
+	runVivaNodeSSHExternalWithInput = func(_ string, _ []string, _ string) error {
+		t.Fatalf("ssh should not run in dry-run mode")
+		return nil
+	}
+	out := captureOutputForTest(t, func() {
+		cmdVivaNode([]string{"bootstrap", "--node", "dev", "--dry-run", "--json"})
+	})
+	if !strings.Contains(out, "\"ok\": true") || !strings.Contains(out, "\"dry_run\": true") {
+		t.Fatalf("unexpected json output: %q", out)
+	}
+}
+
+func TestCmdVivaNodeBootstrapExecutesSSH(t *testing.T) {
+	tmp := t.TempDir()
+	t.Setenv("SI_SETTINGS_HOME", tmp)
+	sourceRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(sourceRoot, "si"), 0o755); err != nil {
+		t.Fatalf("mkdir si repo: %v", err)
+	}
+	settings := defaultSettings()
+	settings.Viva.Node.DefaultNode = "dev"
+	settings.Viva.Node.Entries = map[string]VivaNodeProfile{
+		"dev": {Host: "host.example.com", User: "deploy", Port: "7129"},
+	}
+	settings.Viva.Node.Bootstrap = normalizeVivaNodeBootstrapSettings(VivaNodeBootstrapSettings{
+		SourceRoot: sourceRoot,
+		Repos:      []string{"si"},
+	})
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("saveSettings: %v", err)
+	}
+	t.Setenv("GH_PAT_AUREUMA", "ghp_test_123")
+	t.Setenv("SI_SUN_BASE_URL", "https://sun.example.com")
+	t.Setenv("SI_SUN_TOKEN", "sun_test_123")
+	origRemote := resolveVivaNodeGitRemoteOriginURL
+	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
+	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {
+		return "git@github.com:aureuma/" + filepath.Base(path) + ".git", nil
+	}
+	origSSH := runVivaNodeSSHExternalWithInput
+	defer func() { runVivaNodeSSHExternalWithInput = origSSH }()
+	called := false
+	receivedArgs := []string(nil)
+	receivedScript := ""
+	runVivaNodeSSHExternalWithInput = func(_ string, args []string, input string) error {
+		called = true
+		receivedArgs = append([]string{}, args...)
+		receivedScript = input
+		return nil
+	}
+	_ = captureOutputForTest(t, func() {
+		cmdVivaNode([]string{"bootstrap", "--node", "dev", "--json"})
+	})
+	if !called {
+		t.Fatalf("expected ssh bootstrap runner to be called")
+	}
+	joined := strings.Join(receivedArgs, " ")
+	if !strings.Contains(joined, "deploy@host.example.com") || !strings.Contains(joined, "bash -se") {
+		t.Fatalf("unexpected ssh args: %q", joined)
+	}
+	if !strings.Contains(receivedScript, "go build -o bin/si ./tools/si") {
+		t.Fatalf("expected script to build si, got:\n%s", receivedScript)
 	}
 }
