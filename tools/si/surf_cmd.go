@@ -93,6 +93,7 @@ func cmdSurf(args []string) {
 	env := append([]string{}, os.Environ()...)
 	env = applySurfSettingsEnv(settings, env)
 	env = hydrateSurfEnvFromVault(settings, env)
+	env = ensureEnvValue(env, "SI_SURF_WRAPPED", "1")
 	if err := runSurfExternal(resolvedBin, rest, env); err != nil {
 		if *jsonOut {
 			printJSONMap(map[string]any{"ok": false, "error": err.Error(), "repo": resolvedRepo, "bin": resolvedBin, "args": rest})
