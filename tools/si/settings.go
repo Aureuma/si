@@ -701,6 +701,7 @@ const (
 	settingsModuleAWS           = "aws"
 	settingsModuleGCP           = "gcp"
 	settingsModuleOpenAI        = "openai"
+	settingsModuleFort          = "fort"
 	settingsModuleSurf          = "surf"
 	settingsModuleRemoteControl = "remote-control"
 	settingsModuleViva          = "viva"
@@ -725,6 +726,7 @@ func settingsModuleNames() []string {
 		settingsModuleAWS,
 		settingsModuleGCP,
 		settingsModuleOpenAI,
+		settingsModuleFort,
 		settingsModuleSurf,
 		settingsModuleRemoteControl,
 		settingsModuleViva,
@@ -1588,6 +1590,14 @@ func decodeSettingsModule(module string, data []byte, settings *Settings) error 
 			return err
 		}
 		settings.OpenAI = payload.OpenAI
+	case settingsModuleFort:
+		var payload struct {
+			Fort FortSettings `toml:"fort,omitempty"`
+		}
+		if err := toml.Unmarshal(data, &payload); err != nil {
+			return err
+		}
+		settings.Fort = payload.Fort
 	case settingsModuleSurf:
 		var payload struct {
 			Surf SurfSettings `toml:"surf,omitempty"`
@@ -1732,6 +1742,12 @@ func encodeSettingsModule(module string, settings Settings) ([]byte, error) {
 			OpenAI        OpenAISettings   `toml:"openai,omitempty"`
 			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
 		}{settings.SchemaVersion, settings.OpenAI, settings.Metadata})
+	case settingsModuleFort:
+		return toml.Marshal(struct {
+			SchemaVersion int              `toml:"schema_version"`
+			Fort          FortSettings     `toml:"fort,omitempty"`
+			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
+		}{settings.SchemaVersion, settings.Fort, settings.Metadata})
 	case settingsModuleSurf:
 		return toml.Marshal(struct {
 			SchemaVersion int              `toml:"schema_version"`

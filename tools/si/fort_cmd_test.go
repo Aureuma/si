@@ -96,3 +96,37 @@ func TestDefaultFortRepoPathEmptyWhenMissing(t *testing.T) {
 		t.Fatalf("defaultFortRepoPath()=%q want empty", got)
 	}
 }
+
+func TestFortConfigPersistsAcrossSaveLoad(t *testing.T) {
+	t.Setenv("SI_SETTINGS_HOME", t.TempDir())
+
+	settings := loadSettingsOrDefault()
+	changed, err := applyFortConfigSet(&settings, fortConfigSetInput{
+		RepoProvided:  true,
+		Repo:          "/tmp/fort",
+		BinProvided:   true,
+		Bin:           "/tmp/fort/bin/fort",
+		BuildProvided: true,
+		BuildRaw:      "true",
+	})
+	if err != nil {
+		t.Fatalf("applyFortConfigSet: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected changed=true")
+	}
+	if err := saveSettings(settings); err != nil {
+		t.Fatalf("saveSettings: %v", err)
+	}
+
+	loaded := loadSettingsOrDefault()
+	if loaded.Fort.Repo != "/tmp/fort" {
+		t.Fatalf("unexpected loaded fort repo: %q", loaded.Fort.Repo)
+	}
+	if loaded.Fort.Bin != "/tmp/fort/bin/fort" {
+		t.Fatalf("unexpected loaded fort bin: %q", loaded.Fort.Bin)
+	}
+	if loaded.Fort.Build == nil || !*loaded.Fort.Build {
+		t.Fatalf("expected loaded fort.build=true")
+	}
+}
