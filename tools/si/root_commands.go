@@ -94,6 +94,9 @@ var (
 	loadVivaRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdViva(args) }
 	}
+	loadFortRootHandler = func() rootCommandHandler {
+		return func(_ string, args []string) { cmdFort(args) }
+	}
 	loadRemoteControlRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdRemoteControl(args) }
 	}
@@ -154,6 +157,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
 	register(newLazyRootHandler(loadOrbitsRootHandler), "orbits")
 	register(newLazyRootHandler(loadVivaRootHandler), "viva")
+	register(newLazyRootHandler(loadFortRootHandler), "fort")
 	register(newLazyRootHandler(loadRemoteControlRootHandler), "remote-control", "rc")
 	register(func(_ string, _ []string) { usage() }, "help", "-h", "--help")
 

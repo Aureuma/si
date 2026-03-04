@@ -34,6 +34,7 @@ type Settings struct {
 	AWS           AWSSettings           `toml:"aws,omitempty"`
 	GCP           GCPSettings           `toml:"gcp,omitempty"`
 	OpenAI        OpenAISettings        `toml:"openai,omitempty"`
+	Fort          FortSettings          `toml:"fort,omitempty"`
 	Surf          SurfSettings          `toml:"surf,omitempty"`
 	RemoteControl RemoteControlSettings `toml:"remote_control,omitempty"`
 	Viva          VivaSettings          `toml:"viva,omitempty"`
@@ -445,6 +446,12 @@ type OpenAIAccountEntry struct {
 	OrganizationIDEnv string `toml:"organization_id_env,omitempty"`
 	ProjectID         string `toml:"project_id,omitempty"`
 	ProjectIDEnv      string `toml:"project_id_env,omitempty"`
+}
+
+type FortSettings struct {
+	Repo  string `toml:"repo,omitempty"`
+	Bin   string `toml:"bin,omitempty"`
+	Build *bool  `toml:"build,omitempty"`
 }
 
 type SurfSettings struct {
