@@ -35,6 +35,7 @@ const (
 	codexTmuxCmdShaOpt     = "@si_codex_cmd_sha"
 	codexTmuxHostCwdOpt    = "@si_codex_host_cwd"
 	codexBrowserMCPName    = "si_browser"
+	codexContainerUser     = "si"
 )
 
 var (
@@ -923,6 +924,7 @@ exec bash --rcfile "$rc" -i`, rc)}
 	} else {
 		baseArgs = append(baseArgs, "-i")
 	}
+	baseArgs = append(baseArgs, "--user", codexContainerUser)
 	baseArgs = append(baseArgs, "-e", "SI_TERM_TITLE="+name)
 	if profileID != "" {
 		baseArgs = append(baseArgs, "-e", "SI_CODEX_PROFILE_ID="+profileID)
@@ -1417,7 +1419,7 @@ func buildCodexTmuxCommand(containerName string, hostCwd string) string {
 		"codex --dangerously-bypass-approvals-and-sandbox; status=$?; " +
 		"printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; " +
 		"exec bash -il"
-	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
+	base := fmt.Sprintf("docker exec -it --user %s %s bash -lc %s", shellSingleQuote(codexContainerUser), shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
 
@@ -1442,7 +1444,7 @@ func buildCodexTmuxResumeCommand(containerName string, hostCwd string, sessionID
 		"codex resume " + shellSingleQuote(sessionID) + " --dangerously-bypass-approvals-and-sandbox || codex --dangerously-bypass-approvals-and-sandbox; status=$?; " +
 		"printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; " +
 		"exec bash -il"
-	base := fmt.Sprintf("docker exec -it %s bash -lc %s", shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
+	base := fmt.Sprintf("docker exec -it --user %s %s bash -lc %s", shellSingleQuote(codexContainerUser), shellSingleQuote(strings.TrimSpace(containerName)), shellSingleQuote(inner))
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
 
@@ -1892,6 +1894,7 @@ func cmdCodexClone(args []string) {
 	}
 
 	execArgs := []string{"exec"}
+	execArgs = append(execArgs, "--user", codexContainerUser)
 	execArgs = append(execArgs, "-e", "SI_REPO="+repo)
 	if strings.TrimSpace(*ghPat) != "" {
 		execArgs = append(execArgs, "-e", "SI_GH_PAT="+strings.TrimSpace(*ghPat))

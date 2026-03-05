@@ -179,7 +179,7 @@ func codexStatusBoolFlags() map[string]bool {
 
 func buildTmuxCodexCommand(containerID string) string {
 	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; codex --dangerously-bypass-approvals-and-sandbox"
-	base := fmt.Sprintf("docker exec -it %s bash -lc %q", containerID, inner)
+	base := fmt.Sprintf("docker exec -it --user %s %s bash -lc %q", shellSingleQuote(codexContainerUser), containerID, inner)
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
 }
 
@@ -361,7 +361,7 @@ func fetchCodexAppServerStatus(ctx context.Context, client *shared.Client, conta
 	var stderr bytes.Buffer
 	env := []string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex", "TERM=xterm-256color"}
 	cmd := []string{"codex", "app-server"}
-	err := client.Exec(ctx, containerID, cmd, shared.ExecOptions{Env: env}, bytes.NewReader(input), &stdout, &stderr)
+	err := client.Exec(ctx, containerID, cmd, shared.ExecOptions{Env: env, User: codexContainerUser}, bytes.NewReader(input), &stdout, &stderr)
 	raw := strings.TrimSpace(stdout.String())
 	if stderr.Len() > 0 {
 		raw = strings.TrimSpace(raw + "\n" + strings.TrimSpace(stderr.String()))

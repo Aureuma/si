@@ -81,6 +81,9 @@ func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected tmux command to use codex bypass flag, got: %s", cmd)
 	}
+	if !strings.Contains(cmd, "--user "+shellSingleQuote(codexContainerUser)) {
+		t.Fatalf("expected tmux command to run as %s, got: %s", codexContainerUser, cmd)
+	}
 	if !strings.Contains(cmd, "exec bash -il") {
 		t.Fatalf("expected tmux command to keep pane alive with interactive shell, got: %s", cmd)
 	}
@@ -170,6 +173,9 @@ func TestBuildTmuxCodexCommandUsesBypassFlag(t *testing.T) {
 	cmd := buildTmuxCodexCommand("abc123")
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected report/status tmux command to use codex bypass flag, got: %s", cmd)
+	}
+	if !strings.Contains(cmd, "--user "+shellSingleQuote(codexContainerUser)) {
+		t.Fatalf("expected report/status command to run as %s, got: %s", codexContainerUser, cmd)
 	}
 }
 
