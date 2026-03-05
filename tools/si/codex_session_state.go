@@ -145,7 +145,7 @@ func captureLatestCodexSessionRecord(ctx context.Context, client *shared.Client,
 		return codexSessionRecord{}, fmt.Errorf("container id required")
 	}
 	var stdout bytes.Buffer
-	if err := client.Exec(ctx, containerID, []string{"bash", "-lc", codexLatestSessionMetaLineScript}, shared.ExecOptions{}, nil, &stdout, io.Discard); err != nil {
+	if err := client.Exec(ctx, containerID, []string{"bash", "-lc", codexLatestSessionMetaLineScript}, shared.ExecOptions{User: codexContainerUser}, nil, &stdout, io.Discard); err != nil {
 		return codexSessionRecord{}, err
 	}
 	line := strings.TrimSpace(stdout.String())

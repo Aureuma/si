@@ -176,7 +176,7 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 	}
 
 	cmd := buildCodexExecCommand(opts, prompt)
-	raw, err := execInContainerRaw(ctx, client, id, cmd, shared.ExecOptions{TTY: true, WorkDir: opts.Workdir})
+	raw, err := execInContainerRaw(ctx, client, id, cmd, shared.ExecOptions{TTY: true, WorkDir: opts.Workdir, User: codexContainerUser})
 	if !opts.Quiet {
 		if opts.OutputOnly {
 			out := extractCodexExecOutput(raw)

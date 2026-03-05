@@ -111,6 +111,9 @@ func TestBuildCodexTmuxResumeCommand(t *testing.T) {
 	if !strings.Contains(cmd, "codex resume") || !strings.Contains(cmd, "sess_abc123") || !strings.Contains(cmd, "--dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected resume invocation in tmux command, got: %s", cmd)
 	}
+	if !strings.Contains(cmd, "--user "+shellSingleQuote(codexContainerUser)) {
+		t.Fatalf("expected resume command to run as %s, got: %s", codexContainerUser, cmd)
+	}
 	if !strings.Contains(cmd, "tmux session unavailable; attempting codex resume") {
 		t.Fatalf("expected announcement in tmux command, got: %s", cmd)
 	}
