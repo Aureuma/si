@@ -88,6 +88,9 @@ func cmdFort(args []string) {
 		}
 		fatal(err)
 	}
+	if err := prepareFortRuntimeAuth(rest); err != nil {
+		warnf("fort auth auto-refresh skipped: %v", err)
+	}
 
 	if err := runFortExternal(resolvedBin, rest); err != nil {
 		if *jsonOut {
