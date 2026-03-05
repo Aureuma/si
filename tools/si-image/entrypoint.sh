@@ -158,6 +158,9 @@ if [[ -n "${SI_REPO:-}" ]]; then
       fi
     fi
   fi
+  if [[ -d "$TARGET_DIR/.git" ]]; then
+    chown -R si:si "$TARGET_DIR" 2>/dev/null || true
+  fi
 fi
 
 if [[ "$(id -u)" -eq 0 ]]; then
