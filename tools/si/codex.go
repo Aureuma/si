@@ -317,6 +317,15 @@ func cmdCodexSpawn(args []string) {
 	}
 	defer client.Close()
 	ctx := context.Background()
+	var fortBootstrap *codexFortBootstrap
+	if profile != nil {
+		boot, err := ensureCodexProfileFortSession(ctx, client, *profile, strings.TrimSpace(*flags.networkName))
+		if err != nil {
+			warnf("fort profile auth bootstrap skipped for %s: %v", profile.ID, err)
+		} else {
+			fortBootstrap = &boot
+		}
+	}
 
 	if profile != nil {
 		profileContainers, err := codexContainersByProfile(ctx, client, profile.ID)
@@ -445,6 +454,9 @@ func cmdCodexSpawn(args []string) {
 	if profile != nil {
 		env = append(env, "SI_CODEX_PROFILE_ID="+profile.ID)
 		env = append(env, "SI_CODEX_PROFILE_NAME="+profile.Name)
+	}
+	if fortBootstrap != nil {
+		env = append(env, fortBootstrap.env()...)
 	}
 	env = append(env, (*flags.envs)...)
 
@@ -1617,6 +1629,27 @@ func codexContainerWorkspaceSource(info *types.ContainerJSON) string {
 	return ""
 }
 
+func codexContainerPreferredNetwork(info *types.ContainerJSON) string {
+	if info == nil || info.NetworkSettings == nil || len(info.NetworkSettings.Networks) == 0 {
+		return ""
+	}
+	if _, ok := info.NetworkSettings.Networks[shared.DefaultNetwork]; ok {
+		return shared.DefaultNetwork
+	}
+	keys := make([]string, 0, len(info.NetworkSettings.Networks))
+	for name := range info.NetworkSettings.Networks {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			keys = append(keys, name)
+		}
+	}
+	sort.Strings(keys)
+	if len(keys) == 0 {
+		return ""
+	}
+	return keys[0]
+}
+
 func envValue(env []string, key string) string {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -2034,6 +2067,28 @@ func cmdCodexStart(args []string) {
 	containerName := codexContainerName(name)
 	if err := execDockerCLI("start", containerName); err != nil {
 		fatal(err)
+	}
+	client, err := shared.NewClient()
+	if err != nil {
+		warnf("fort profile auth bootstrap skipped: %v", err)
+		return
+	}
+	defer client.Close()
+	ctx := context.Background()
+	_, info, err := client.ContainerByName(ctx, containerName)
+	if err != nil || info == nil || info.Config == nil {
+		return
+	}
+	profileKey := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
+	if profileKey == "" {
+		return
+	}
+	profile, ok := codexProfileByKey(profileKey)
+	if !ok {
+		return
+	}
+	if _, err := ensureCodexProfileFortSession(ctx, client, profile, codexContainerPreferredNetwork(info)); err != nil {
+		warnf("fort profile auth bootstrap skipped for %s: %v", profile.ID, err)
 	}
 }
 

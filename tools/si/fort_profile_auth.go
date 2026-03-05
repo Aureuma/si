@@ -1,0 +1,763 @@
+package main
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	shared "si/agents/shared/docker"
+
+	"github.com/docker/docker/api/types"
+)
+
+const (
+	fortDefaultHostURL              = "http://127.0.0.1:8088"
+	fortDefaultPort                 = 8088
+	fortProfileStateDirName         = "fort"
+	fortProfileSessionStateFileName = "session.json"
+	fortProfileAccessTokenFileName  = "access.token"
+	fortProfileRefreshTokenFileName = "refresh.token"
+)
+
+type fortRequestAuth struct {
+	BearerToken  string
+	BootstrapKey string
+}
+
+type fortSessionOpenResult struct {
+	SessionID        string
+	AccessToken      string
+	RefreshToken     string
+	AccessExpiresAt  string
+	RefreshExpiresAt string
+}
+
+type fortSessionRefreshResult struct {
+	AccessToken     string
+	RefreshToken    string
+	AccessExpiresAt string
+}
+
+type fortProfileSessionState struct {
+	ProfileID        string `json:"profile_id"`
+	AgentID          string `json:"agent_id"`
+	SessionID        string `json:"session_id,omitempty"`
+	Host             string `json:"host,omitempty"`
+	ContainerHost    string `json:"container_host,omitempty"`
+	AccessTokenPath  string `json:"access_token_path,omitempty"`
+	RefreshTokenPath string `json:"refresh_token_path,omitempty"`
+	AccessExpiresAt  string `json:"access_expires_at,omitempty"`
+	RefreshExpiresAt string `json:"refresh_expires_at,omitempty"`
+	UpdatedAt        string `json:"updated_at,omitempty"`
+}
+
+type codexFortBootstrap struct {
+	ProfileID                 string
+	AgentID                   string
+	SessionID                 string
+	HostURL                   string
+	ContainerHostURL          string
+	AccessTokenHostPath       string
+	RefreshTokenHostPath      string
+	AccessTokenContainerPath  string
+	RefreshTokenContainerPath string
+}
+
+func (b codexFortBootstrap) env() []string {
+	env := []string{}
+	if strings.TrimSpace(b.ContainerHostURL) != "" {
+		env = append(env, "FORT_HOST="+strings.TrimSpace(b.ContainerHostURL))
+	}
+	if strings.TrimSpace(b.AccessTokenContainerPath) != "" {
+		env = append(env, "FORT_TOKEN_PATH="+strings.TrimSpace(b.AccessTokenContainerPath))
+	}
+	if strings.TrimSpace(b.RefreshTokenContainerPath) != "" {
+		env = append(env, "FORT_REFRESH_TOKEN_PATH="+strings.TrimSpace(b.RefreshTokenContainerPath))
+	}
+	if strings.TrimSpace(b.AgentID) != "" {
+		env = append(env, "FORT_AGENT_ID="+strings.TrimSpace(b.AgentID))
+	}
+	if strings.TrimSpace(b.ProfileID) != "" {
+		env = append(env, "FORT_PROFILE_ID="+strings.TrimSpace(b.ProfileID))
+	}
+	return env
+}
+
+type fortBootstrapConfig struct {
+	HostURL          string
+	ContainerHostURL string
+	BearerToken      string
+	BootstrapKey     string
+}
+
+type fortDockerHint struct {
+	Name             string
+	HostURL          string
+	ContainerHostURL string
+	BootstrapKey     string
+}
+
+func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, profile codexProfile, preferredNetwork string) (codexFortBootstrap, error) {
+	profileID := strings.TrimSpace(profile.ID)
+	if profileID == "" {
+		return codexFortBootstrap{}, fmt.Errorf("profile id required")
+	}
+	if !isValidSlug(profileID) {
+		return codexFortBootstrap{}, fmt.Errorf("invalid profile id %q", profileID)
+	}
+
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	cfg, err := resolveFortBootstrapConfig(ctx, client, preferredNetwork)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	agentID := fortAgentIDForProfile(profileID)
+	if err := fortEnsureAgent(ctx, cfg, agentID); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	session, err := fortOpenSession(ctx, cfg, agentID)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	if err := writeSecretFile(paths.AccessTokenHostPath, session.AccessToken); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	if err := writeSecretFile(paths.RefreshTokenHostPath, session.RefreshToken); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	state := fortProfileSessionState{
+		ProfileID:        profileID,
+		AgentID:          agentID,
+		SessionID:        session.SessionID,
+		Host:             cfg.HostURL,
+		ContainerHost:    cfg.ContainerHostURL,
+		AccessTokenPath:  paths.AccessTokenHostPath,
+		RefreshTokenPath: paths.RefreshTokenHostPath,
+		AccessExpiresAt:  strings.TrimSpace(session.AccessExpiresAt),
+		RefreshExpiresAt: strings.TrimSpace(session.RefreshExpiresAt),
+		UpdatedAt:        time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	return codexFortBootstrap{
+		ProfileID:                 profileID,
+		AgentID:                   agentID,
+		SessionID:                 session.SessionID,
+		HostURL:                   cfg.HostURL,
+		ContainerHostURL:          cfg.ContainerHostURL,
+		AccessTokenHostPath:       paths.AccessTokenHostPath,
+		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
+		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
+		RefreshTokenContainerPath: paths.RefreshTokenContainerPath,
+	}, nil
+}
+
+type fortProfilePaths struct {
+	ProfileRootHostPath       string
+	FortRootHostPath          string
+	AccessTokenHostPath       string
+	RefreshTokenHostPath      string
+	SessionStateHostPath      string
+	AccessTokenContainerPath  string
+	RefreshTokenContainerPath string
+}
+
+func fortProfileStatePaths(profile codexProfile) (fortProfilePaths, error) {
+	profileDir, err := ensureCodexProfileDir(profile)
+	if err != nil {
+		return fortProfilePaths{}, err
+	}
+	fortDir := filepath.Join(profileDir, fortProfileStateDirName)
+	if err := os.MkdirAll(fortDir, 0o700); err != nil {
+		return fortProfilePaths{}, err
+	}
+	accessHost := filepath.Join(fortDir, fortProfileAccessTokenFileName)
+	refreshHost := filepath.Join(fortDir, fortProfileRefreshTokenFileName)
+	sessionHost := filepath.Join(fortDir, fortProfileSessionStateFileName)
+	accessContainer, err := fortContainerPathFromHost(accessHost)
+	if err != nil {
+		return fortProfilePaths{}, err
+	}
+	refreshContainer, err := fortContainerPathFromHost(refreshHost)
+	if err != nil {
+		return fortProfilePaths{}, err
+	}
+	return fortProfilePaths{
+		ProfileRootHostPath:       profileDir,
+		FortRootHostPath:          fortDir,
+		AccessTokenHostPath:       accessHost,
+		RefreshTokenHostPath:      refreshHost,
+		SessionStateHostPath:      sessionHost,
+		AccessTokenContainerPath:  accessContainer,
+		RefreshTokenContainerPath: refreshContainer,
+	}, nil
+}
+
+func fortContainerPathFromHost(hostPath string) (string, error) {
+	hostPath = filepath.Clean(strings.TrimSpace(hostPath))
+	if hostPath == "" {
+		return "", fmt.Errorf("host path required")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		if err == nil {
+			err = fmt.Errorf("home dir not available")
+		}
+		return "", err
+	}
+	hostSiRoot := filepath.Join(home, ".si")
+	rel, err := filepath.Rel(hostSiRoot, hostPath)
+	if err != nil {
+		return "", err
+	}
+	rel = filepath.Clean(strings.TrimSpace(rel))
+	if rel == "." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || rel == ".." {
+		return "", fmt.Errorf("host path %s is outside %s", hostPath, hostSiRoot)
+	}
+	return filepath.ToSlash(filepath.Join("/home/si/.si", rel)), nil
+}
+
+func saveFortProfileSessionState(path string, state fortProfileSessionState) error {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return fmt.Errorf("session path required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	return os.WriteFile(path, raw, 0o600)
+}
+
+func loadFortProfileSessionState(path string) (fortProfileSessionState, error) {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return fortProfileSessionState{}, fmt.Errorf("session path required")
+	}
+	// #nosec G304 -- path is derived from local ~/.si profile state.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fortProfileSessionState{}, err
+	}
+	var state fortProfileSessionState
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return fortProfileSessionState{}, err
+	}
+	state.ProfileID = strings.TrimSpace(state.ProfileID)
+	state.AgentID = strings.TrimSpace(state.AgentID)
+	state.SessionID = strings.TrimSpace(state.SessionID)
+	state.Host = strings.TrimSpace(state.Host)
+	state.ContainerHost = strings.TrimSpace(state.ContainerHost)
+	state.AccessTokenPath = strings.TrimSpace(state.AccessTokenPath)
+	state.RefreshTokenPath = strings.TrimSpace(state.RefreshTokenPath)
+	state.AccessExpiresAt = strings.TrimSpace(state.AccessExpiresAt)
+	state.RefreshExpiresAt = strings.TrimSpace(state.RefreshExpiresAt)
+	state.UpdatedAt = strings.TrimSpace(state.UpdatedAt)
+	return state, nil
+}
+
+func writeSecretFile(path string, value string) error {
+	path = filepath.Clean(strings.TrimSpace(path))
+	value = strings.TrimSpace(value)
+	if path == "" {
+		return fmt.Errorf("secret path required")
+	}
+	if value == "" {
+		return fmt.Errorf("secret value required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "fort-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(value); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func readSecretFile(path string) string {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return ""
+	}
+	// #nosec G304 -- path is derived from local ~/.si profile state.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+func fortAgentIDForProfile(profileID string) string {
+	profileID = strings.ToLower(strings.TrimSpace(profileID))
+	if profileID == "" {
+		return "si-codex-profile"
+	}
+	var b strings.Builder
+	for _, r := range profileID {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			continue
+		}
+		if r == '-' || r == '_' || r == '.' {
+			b.WriteRune('-')
+			continue
+		}
+	}
+	slug := strings.Trim(strings.ReplaceAll(b.String(), "--", "-"), "-")
+	if slug == "" {
+		slug = "profile"
+	}
+	return "si-codex-" + slug
+}
+
+func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, preferredNetwork string) (fortBootstrapConfig, error) {
+	cfg := fortBootstrapConfig{
+		HostURL:          strings.TrimSpace(os.Getenv("FORT_HOST")),
+		ContainerHostURL: strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")),
+		BearerToken:      strings.TrimSpace(os.Getenv("FORT_TOKEN")),
+		BootstrapKey:     strings.TrimSpace(os.Getenv("FORT_BOOTSTRAP_KEY")),
+	}
+	hint, hintOK := detectFortDockerHint(ctx, client, preferredNetwork)
+	if strings.TrimSpace(cfg.HostURL) == "" && hintOK && strings.TrimSpace(hint.HostURL) != "" {
+		cfg.HostURL = hint.HostURL
+	}
+	if strings.TrimSpace(cfg.HostURL) == "" {
+		cfg.HostURL = fortDefaultHostURL
+	}
+	if strings.TrimSpace(cfg.ContainerHostURL) == "" {
+		if hintOK && strings.TrimSpace(hint.ContainerHostURL) != "" {
+			cfg.ContainerHostURL = strings.TrimSpace(hint.ContainerHostURL)
+		} else {
+			cfg.ContainerHostURL = fortHostURLForContainer(cfg.HostURL)
+		}
+	}
+	if strings.TrimSpace(cfg.BearerToken) == "" && strings.TrimSpace(cfg.BootstrapKey) == "" && hintOK {
+		cfg.BootstrapKey = strings.TrimSpace(hint.BootstrapKey)
+	}
+	if strings.TrimSpace(cfg.HostURL) == "" {
+		return fortBootstrapConfig{}, fmt.Errorf("fort host is required (set FORT_HOST or run a fort container)")
+	}
+	if strings.TrimSpace(cfg.BearerToken) == "" && strings.TrimSpace(cfg.BootstrapKey) == "" {
+		return fortBootstrapConfig{}, fmt.Errorf("fort admin auth is required (set FORT_BOOTSTRAP_KEY or FORT_TOKEN)")
+	}
+	return cfg, nil
+}
+
+func detectFortDockerHint(ctx context.Context, client *shared.Client, preferredNetwork string) (fortDockerHint, bool) {
+	if client == nil {
+		return fortDockerHint{}, false
+	}
+	containers, err := client.ListContainers(ctx, true, nil)
+	if err != nil || len(containers) == 0 {
+		return fortDockerHint{}, false
+	}
+	type candidate struct {
+		hint  fortDockerHint
+		score int
+	}
+	candidates := []candidate{}
+	for _, item := range containers {
+		if strings.TrimSpace(item.State) != "running" {
+			continue
+		}
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
+			continue
+		}
+		_, info, err := client.ContainerByName(ctx, id)
+		if err != nil || info == nil || info.Config == nil || info.NetworkSettings == nil {
+			continue
+		}
+		score := 0
+		containerName := strings.TrimPrefix(strings.TrimSpace(info.Name), "/")
+		image := strings.ToLower(strings.TrimSpace(info.Config.Image))
+		if strings.Contains(strings.ToLower(containerName), "fort") {
+			score += 3
+		}
+		if strings.Contains(image, "fort") {
+			score += 2
+		}
+		if envValue(info.Config.Env, "FORT_ADDR") != "" {
+			score += 2
+		}
+		if envValue(info.Config.Env, "FORT_BOOTSTRAP_KEY") != "" {
+			score += 1
+		}
+		if score == 0 {
+			continue
+		}
+		port := fortPortFromContainerEnv(info.Config.Env)
+		networkName, ip := fortContainerNetworkIP(info, preferredNetwork)
+		if ip == "" {
+			continue
+		}
+		hostURL := fmt.Sprintf("http://%s:%d", ip, port)
+		containerURL := ""
+		if containerName != "" {
+			containerURL = fmt.Sprintf("http://%s:%d", containerName, port)
+		}
+		if preferredNetwork != "" && networkName == preferredNetwork {
+			score += 2
+		}
+		candidates = append(candidates, candidate{
+			hint: fortDockerHint{
+				Name:             containerName,
+				HostURL:          hostURL,
+				ContainerHostURL: containerURL,
+				BootstrapKey:     strings.TrimSpace(envValue(info.Config.Env, "FORT_BOOTSTRAP_KEY")),
+			},
+			score: score,
+		})
+	}
+	if len(candidates) == 0 {
+		return fortDockerHint{}, false
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score == candidates[j].score {
+			return candidates[i].hint.Name < candidates[j].hint.Name
+		}
+		return candidates[i].score > candidates[j].score
+	})
+	return candidates[0].hint, true
+}
+
+func fortContainerNetworkIP(info *types.ContainerJSON, preferredNetwork string) (string, string) {
+	if info == nil || info.NetworkSettings == nil || len(info.NetworkSettings.Networks) == 0 {
+		return "", ""
+	}
+	preferredNetwork = strings.TrimSpace(preferredNetwork)
+	if preferredNetwork != "" {
+		if item, ok := info.NetworkSettings.Networks[preferredNetwork]; ok {
+			ip := strings.TrimSpace(item.IPAddress)
+			if ip != "" {
+				return preferredNetwork, ip
+			}
+		}
+	}
+	keys := make([]string, 0, len(info.NetworkSettings.Networks))
+	for name := range info.NetworkSettings.Networks {
+		keys = append(keys, name)
+	}
+	sort.Strings(keys)
+	for _, name := range keys {
+		item := info.NetworkSettings.Networks[name]
+		ip := strings.TrimSpace(item.IPAddress)
+		if ip != "" {
+			return name, ip
+		}
+	}
+	return "", ""
+}
+
+func fortPortFromContainerEnv(env []string) int {
+	raw := strings.TrimSpace(envValue(env, "FORT_ADDR"))
+	if raw == "" {
+		return fortDefaultPort
+	}
+	raw = strings.TrimPrefix(raw, "http://")
+	raw = strings.TrimPrefix(raw, "https://")
+	idx := strings.LastIndex(raw, ":")
+	if idx < 0 || idx+1 >= len(raw) {
+		return fortDefaultPort
+	}
+	portRaw := strings.TrimSpace(raw[idx+1:])
+	port, err := strconv.Atoi(portRaw)
+	if err != nil || port <= 0 {
+		return fortDefaultPort
+	}
+	return port
+}
+
+func fortHostURLForContainer(hostURL string) string {
+	hostURL = strings.TrimSpace(hostURL)
+	if hostURL == "" {
+		return fortDefaultHostURL
+	}
+	u, err := url.Parse(hostURL)
+	if err != nil || strings.TrimSpace(u.Host) == "" {
+		return hostURL
+	}
+	host := strings.TrimSpace(u.Hostname())
+	if host == "" {
+		return hostURL
+	}
+	if host == "127.0.0.1" || host == "localhost" || host == "0.0.0.0" || host == "::1" {
+		port := u.Port()
+		if port == "" {
+			port = strconv.Itoa(fortDefaultPort)
+		}
+		u.Host = "host.docker.internal:" + port
+		return strings.TrimSpace(u.String())
+	}
+	return hostURL
+}
+
+func fortEnsureAgent(ctx context.Context, cfg fortBootstrapConfig, agentID string) error {
+	if strings.TrimSpace(agentID) == "" {
+		return fmt.Errorf("fort agent id is required")
+	}
+	auth := fortRequestAuth{
+		BearerToken:  strings.TrimSpace(cfg.BearerToken),
+		BootstrapKey: strings.TrimSpace(cfg.BootstrapKey),
+	}
+	createBody := map[string]any{
+		"id":     agentID,
+		"type":   "workload",
+		"status": "active",
+	}
+	status, body, err := fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodPost, "/v1/agents", createBody, auth)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusCreated && status != http.StatusConflict {
+		return fmt.Errorf("fort agent create failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
+	}
+	status, body, err = fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodPost, "/v1/agents/"+url.PathEscape(agentID)+"/enable", map[string]any{}, auth)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("fort agent enable failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
+	}
+	return nil
+}
+
+func fortOpenSession(ctx context.Context, cfg fortBootstrapConfig, agentID string) (fortSessionOpenResult, error) {
+	auth := fortRequestAuth{
+		BearerToken:  strings.TrimSpace(cfg.BearerToken),
+		BootstrapKey: strings.TrimSpace(cfg.BootstrapKey),
+	}
+	reqBody := map[string]any{
+		"agent_id":    strings.TrimSpace(agentID),
+		"aud":         "fort-api",
+		"access_ttl":  envOr("SI_FORT_ACCESS_TTL", "15m"),
+		"refresh_ttl": envOr("SI_FORT_REFRESH_TTL", "168h"),
+	}
+	status, body, err := fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodPost, "/v1/auth/session/open", reqBody, auth)
+	if err != nil {
+		return fortSessionOpenResult{}, err
+	}
+	if status != http.StatusOK {
+		return fortSessionOpenResult{}, fmt.Errorf("fort auth session open failed (status=%d): %s", status, fortAPIError(body))
+	}
+	result := fortSessionOpenResult{
+		SessionID:        strings.TrimSpace(fmt.Sprint(body["session_id"])),
+		AccessToken:      strings.TrimSpace(fmt.Sprint(body["access_token"])),
+		RefreshToken:     strings.TrimSpace(fmt.Sprint(body["refresh_token"])),
+		AccessExpiresAt:  strings.TrimSpace(fmt.Sprint(body["access_expires_at"])),
+		RefreshExpiresAt: strings.TrimSpace(fmt.Sprint(body["refresh_expires_at"])),
+	}
+	if result.SessionID == "" || result.AccessToken == "" || result.RefreshToken == "" {
+		return fortSessionOpenResult{}, fmt.Errorf("fort auth session open returned incomplete payload")
+	}
+	return result, nil
+}
+
+func fortRefreshSession(ctx context.Context, hostURL string, refreshToken string) (fortSessionRefreshResult, error) {
+	reqBody := map[string]any{"refresh_token": strings.TrimSpace(refreshToken)}
+	status, body, err := fortAPIRequest(ctx, strings.TrimSpace(hostURL), http.MethodPost, "/v1/auth/session/refresh", reqBody, fortRequestAuth{})
+	if err != nil {
+		return fortSessionRefreshResult{}, err
+	}
+	if status != http.StatusOK {
+		return fortSessionRefreshResult{}, fmt.Errorf("fort auth session refresh failed (status=%d): %s", status, fortAPIError(body))
+	}
+	result := fortSessionRefreshResult{
+		AccessToken:     strings.TrimSpace(fmt.Sprint(body["access_token"])),
+		RefreshToken:    strings.TrimSpace(fmt.Sprint(body["refresh_token"])),
+		AccessExpiresAt: strings.TrimSpace(fmt.Sprint(body["access_expires_at"])),
+	}
+	if result.AccessToken == "" || result.RefreshToken == "" {
+		return fortSessionRefreshResult{}, fmt.Errorf("fort auth session refresh returned incomplete payload")
+	}
+	return result, nil
+}
+
+func fortAPIRequest(ctx context.Context, hostURL string, method string, apiPath string, body any, auth fortRequestAuth) (int, map[string]any, error) {
+	hostURL = strings.TrimRight(strings.TrimSpace(hostURL), "/")
+	if hostURL == "" {
+		return 0, nil, fmt.Errorf("fort host is required")
+	}
+	apiPath = strings.TrimSpace(apiPath)
+	if apiPath == "" {
+		apiPath = "/"
+	}
+	if !strings.HasPrefix(apiPath, "/") {
+		apiPath = "/" + apiPath
+	}
+	var reader io.Reader
+	if body != nil {
+		payload, err := json.Marshal(body)
+		if err != nil {
+			return 0, nil, err
+		}
+		reader = bytes.NewReader(payload)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, hostURL+apiPath, reader)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(auth.BearerToken); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	if key := strings.TrimSpace(auth.BootstrapKey); key != "" {
+		req.Header.Set("X-Fort-Bootstrap-Key", key)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, nil, err
+	}
+	defer resp.Body.Close()
+	bodyMap := map[string]any{}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&bodyMap)
+	return resp.StatusCode, bodyMap, nil
+}
+
+func fortAPIError(body map[string]any) string {
+	if body == nil {
+		return "unknown error"
+	}
+	if msg := strings.TrimSpace(fmt.Sprint(body["error"])); msg != "" && msg != "<nil>" {
+		return msg
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return "unknown error"
+	}
+	return string(payload)
+}
+
+func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState) {
+	profileID := strings.TrimSpace(os.Getenv("SI_CODEX_PROFILE_ID"))
+	if !isValidSlug(profileID) {
+		profileID = ""
+	}
+	home, _ := os.UserHomeDir()
+	home = strings.TrimSpace(home)
+	defaultTokenPath := strings.TrimSpace(os.Getenv("FORT_TOKEN_PATH"))
+	defaultRefreshPath := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN_PATH"))
+	sessionPath := ""
+	state := fortProfileSessionState{}
+	if profileID != "" && home != "" {
+		base := filepath.Join(home, ".si", "codex", "profiles", profileID, fortProfileStateDirName)
+		if defaultTokenPath == "" {
+			defaultTokenPath = filepath.Join(base, fortProfileAccessTokenFileName)
+		}
+		if defaultRefreshPath == "" {
+			defaultRefreshPath = filepath.Join(base, fortProfileRefreshTokenFileName)
+		}
+		sessionPath = filepath.Join(base, fortProfileSessionStateFileName)
+		if loaded, err := loadFortProfileSessionState(sessionPath); err == nil {
+			state = loaded
+		}
+	}
+	return defaultTokenPath, defaultRefreshPath, sessionPath, state
+}
+
+func prepareFortRuntimeAuth(rest []string) error {
+	tokenPath, refreshPath, sessionPath, state := fortSessionPathsFromEnv()
+	if tokenPath != "" {
+		_ = os.Setenv("FORT_TOKEN_PATH", tokenPath)
+	}
+	if refreshPath != "" {
+		_ = os.Setenv("FORT_REFRESH_TOKEN_PATH", refreshPath)
+	}
+	if strings.TrimSpace(os.Getenv("FORT_HOST")) == "" {
+		host := strings.TrimSpace(state.ContainerHost)
+		if host == "" {
+			host = strings.TrimSpace(state.Host)
+		}
+		if host != "" {
+			_ = os.Setenv("FORT_HOST", host)
+		}
+	}
+	accessToken := strings.TrimSpace(os.Getenv("FORT_TOKEN"))
+	if accessToken == "" {
+		accessToken = readSecretFile(tokenPath)
+		if accessToken != "" {
+			_ = os.Setenv("FORT_TOKEN", accessToken)
+		}
+	}
+	refreshToken := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN"))
+	if refreshToken == "" {
+		refreshToken = readSecretFile(refreshPath)
+		if refreshToken != "" {
+			_ = os.Setenv("FORT_REFRESH_TOKEN", refreshToken)
+		}
+	}
+	if fortShouldSkipAutoRefresh(rest) {
+		return nil
+	}
+	host := strings.TrimSpace(os.Getenv("FORT_HOST"))
+	if host == "" || refreshToken == "" {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	refreshed, err := fortRefreshSession(ctx, host, refreshToken)
+	if err != nil {
+		// Keep existing token path/env behavior intact and continue.
+		return nil
+	}
+	_ = os.Setenv("FORT_TOKEN", refreshed.AccessToken)
+	_ = os.Setenv("FORT_REFRESH_TOKEN", refreshed.RefreshToken)
+	if tokenPath != "" {
+		_ = writeSecretFile(tokenPath, refreshed.AccessToken)
+	}
+	if refreshPath != "" {
+		_ = writeSecretFile(refreshPath, refreshed.RefreshToken)
+	}
+	if sessionPath != "" {
+		state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
+		state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+		if state.Host == "" {
+			state.Host = strings.TrimSpace(os.Getenv("FORT_HOST"))
+		}
+		_ = saveFortProfileSessionState(sessionPath, state)
+	}
+	return nil
+}
+
+func fortShouldSkipAutoRefresh(rest []string) bool {
+	if len(rest) < 2 {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(rest[0]), "auth") &&
+		strings.EqualFold(strings.TrimSpace(rest[1]), "session")
+}
