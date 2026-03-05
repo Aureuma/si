@@ -2080,12 +2080,16 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 	} else {
 		copied := false
 		for _, target := range codexContainerConfigTargets() {
-			_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(target.Path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+			opts := shared.ExecOptions{}
+			if strings.HasPrefix(target.Path, "/home/si/") {
+				opts.User = codexContainerUser
+			}
+			_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(target.Path)}, opts, nil, io.Discard, io.Discard)
 			if err := client.CopyFileToContainer(ctx, containerID, target.Path, data, 0o600); err != nil {
 				continue
 			}
 			copied = true
-			_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+			_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, opts, nil, io.Discard, io.Discard)
 		}
 		if !copied {
 			warnf("codex config copy failed for container %s", strings.TrimSpace(containerID))
@@ -2103,7 +2107,7 @@ func ensureBrowserMCPForContainer(ctx context.Context, client *shared.Client, co
 	_ = client.Exec(ctx, containerID, rootCmd, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 
 	siCmd := []string{"bash", "-lc", fmt.Sprintf("if command -v codex >/dev/null 2>&1; then CODEX_HOME=/home/si/.codex codex mcp add %s --url %s >/dev/null 2>&1 || true; fi", quoteSingle(codexBrowserMCPName), quoteSingle(url))}
-	_ = client.Exec(ctx, containerID, siCmd, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	_ = client.Exec(ctx, containerID, siCmd, shared.ExecOptions{User: codexContainerUser}, nil, io.Discard, io.Discard)
 }
 
 func codexBrowserMCPURL() string {
@@ -2169,7 +2173,11 @@ func seedCodexAuth(ctx context.Context, client *shared.Client, containerID strin
 	}
 	copied := false
 	for _, destPath := range codexContainerAuthPaths() {
-		_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+		opts := shared.ExecOptions{}
+		if strings.HasPrefix(destPath, "/home/si/") {
+			opts.User = codexContainerUser
+		}
+		_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, opts, nil, io.Discard, io.Discard)
 		if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
 			warnf("codex auth copy failed (%s): %v", destPath, err)
 			continue
@@ -2179,7 +2187,7 @@ func seedCodexAuth(ctx context.Context, client *shared.Client, containerID strin
 		if strings.HasPrefix(destPath, "/root/") {
 			owner = "root:root"
 		}
-		_ = client.Exec(ctx, containerID, []string{"chown", owner, destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+		_ = client.Exec(ctx, containerID, []string{"chown", owner, destPath}, opts, nil, io.Discard, io.Discard)
 	}
 	if !copied {
 		return
