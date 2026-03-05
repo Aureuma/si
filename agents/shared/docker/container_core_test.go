@@ -22,8 +22,8 @@ func TestBuildContainerCoreMountsIncludesWorkspaceMirrorAndHostSi(t *testing.T) 
 		ContainerHome:          "/home/si",
 		IncludeHostSi:          true,
 	})
-	if len(mounts) != 3 {
-		t.Fatalf("expected 3 mounts, got %d: %+v", len(mounts), mounts)
+	if len(mounts) != 4 {
+		t.Fatalf("expected 4 mounts, got %d: %+v", len(mounts), mounts)
 	}
 	if mounts[0].Source != workspace || mounts[0].Target != "/workspace" {
 		t.Fatalf("unexpected primary workspace mount: %+v", mounts[0])
@@ -32,7 +32,10 @@ func TestBuildContainerCoreMountsIncludesWorkspaceMirrorAndHostSi(t *testing.T) 
 		t.Fatalf("unexpected mirror workspace mount: %+v", mounts[1])
 	}
 	if mounts[2].Source != filepath.Join(home, ".si") || mounts[2].Target != "/home/si/.si" {
-		t.Fatalf("unexpected host .si mount: %+v", mounts[2])
+		t.Fatalf("unexpected container home host .si mount: %+v", mounts[2])
+	}
+	if mounts[3].Source != filepath.Join(home, ".si") || mounts[3].Target != "/root/.si" {
+		t.Fatalf("unexpected root host .si mount: %+v", mounts[3])
 	}
 }
 
@@ -127,22 +130,25 @@ func TestBuildContainerCoreMountsIncludesHostDockerAndGoToolingMounts(t *testing
 		ContainerHome:          "/home/si",
 		IncludeHostSi:          true,
 	})
-	if len(mounts) != 4 {
-		t.Fatalf("expected 4 mounts, got %d: %+v", len(mounts), mounts)
+	if len(mounts) != 5 {
+		t.Fatalf("expected 5 mounts, got %d: %+v", len(mounts), mounts)
 	}
 	if mounts[0].Source != workspace || mounts[0].Target != "/workspace" {
 		t.Fatalf("unexpected workspace mount: %+v", mounts[0])
 	}
 	if mounts[1].Source != filepath.Join(home, ".si") || mounts[1].Target != "/home/si/.si" {
-		t.Fatalf("unexpected host .si mount: %+v", mounts[1])
+		t.Fatalf("unexpected container home host .si mount: %+v", mounts[1])
 	}
-	if mounts[2].Source != filepath.Join(home, ".docker") || mounts[2].Target != "/home/si/.docker" {
-		t.Fatalf("unexpected host .docker mount: %+v", mounts[2])
+	if mounts[2].Source != filepath.Join(home, ".si") || mounts[2].Target != "/root/.si" {
+		t.Fatalf("unexpected root host .si mount: %+v", mounts[2])
 	}
-	if mounts[3].Source != filepath.Join(home, ".local", "share", "si", "go") || mounts[3].Target != "/home/si/.local/share/si/go" {
-		t.Fatalf("unexpected host go toolchain mount: %+v", mounts[3])
+	if mounts[3].Source != filepath.Join(home, ".docker") || mounts[3].Target != "/home/si/.docker" {
+		t.Fatalf("unexpected host .docker mount: %+v", mounts[3])
 	}
-	if !mounts[3].ReadOnly {
+	if mounts[4].Source != filepath.Join(home, ".local", "share", "si", "go") || mounts[4].Target != "/home/si/.local/share/si/go" {
+		t.Fatalf("unexpected host go toolchain mount: %+v", mounts[4])
+	}
+	if !mounts[4].ReadOnly {
 		t.Fatalf("expected host go toolchain mount to be read-only")
 	}
 }

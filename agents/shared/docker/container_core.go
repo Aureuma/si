@@ -54,6 +54,11 @@ func BuildContainerCoreMounts(plan ContainerCoreMountPlan) []mount.Mount {
 		for _, m := range HostSiCodexProfileMounts(plan.ContainerHome) {
 			appendUniqueMount(&mounts, m)
 		}
+		if home := filepath.ToSlash(strings.TrimSpace(plan.ContainerHome)); home != "" && home != "/root" {
+			for _, m := range HostSiCodexProfileMounts("/root") {
+				appendUniqueMount(&mounts, m)
+			}
+		}
 	}
 	if m, ok := HostDockerConfigMount(plan.ContainerHome); ok {
 		appendUniqueMount(&mounts, m)
