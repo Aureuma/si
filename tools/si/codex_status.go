@@ -63,6 +63,10 @@ type statusOptions struct {
 }
 
 func cmdCodexStatus(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si status [name|profile] [--json] [--raw] [--profile <profile>] [--profiles] [--no-status]")
+		return
+	}
 	nameArg, filtered := splitNameAndFlags(args, codexStatusBoolFlags())
 	fs := flag.NewFlagSet("status", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")

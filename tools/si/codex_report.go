@@ -46,6 +46,10 @@ type promptSegment struct {
 const tmuxReportPrefix = "si-codex-report-"
 
 func cmdCodexReport(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si report <name> --prompt '...'")
+		return
+	}
 	fs := flag.NewFlagSet("report", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output JSON")
 	rawOut := fs.Bool("raw", false, "include raw segment output")
