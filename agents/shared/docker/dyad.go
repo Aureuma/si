@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -264,6 +263,11 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		LabelDyad: opts.Dyad,
 		LabelRole: opts.Role,
 	}
+	if identity, ok := ResolveHostIdentity(); ok {
+		for key, value := range identity.Labels() {
+			labels[key] = value
+		}
+	}
 
 	actorLabels := cloneLabels(labels)
 	actorLabels[LabelMember] = "actor"
@@ -435,21 +439,8 @@ func buildDyadEnv(opts DyadOptions, member, effort string) []string {
 	} {
 		env = appendHostEnvIfSet(env, key)
 	}
-	uid := os.Getuid()
-	gid := os.Getgid()
-	if raw := strings.TrimSpace(os.Getenv("SI_HOST_UID")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			uid = parsed
-		}
-	}
-	if raw := strings.TrimSpace(os.Getenv("SI_HOST_GID")); raw != "" {
-		if parsed, err := strconv.Atoi(raw); err == nil {
-			gid = parsed
-		}
-	}
-	if uid > 0 && gid > 0 {
-		env = append(env, fmt.Sprintf("SI_HOST_UID=%d", uid))
-		env = append(env, fmt.Sprintf("SI_HOST_GID=%d", gid))
+	if identity, ok := ResolveHostIdentity(); ok {
+		env = append(env, identity.EnvVars()...)
 	}
 	if member == "critic" {
 		env = appendOptionalBoolEnv(env, "DYAD_LOOP_ENABLED", opts.LoopEnabled)

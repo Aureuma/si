@@ -104,6 +104,11 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		"si.mode":     "exec",
 		"si.exec":     "one-off",
 	}
+	if identity, ok := shared.ResolveHostIdentity(); ok {
+		for key, value := range identity.Labels() {
+			labels[key] = value
+		}
+	}
 
 	mounts := []mount.Mount{}
 	if strings.TrimSpace(opts.CodexVolume) != "" {
@@ -137,6 +142,7 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		Labels:     labels,
 		WorkingDir: opts.Workdir,
 		Cmd:        []string{"bash", "-lc", "sleep infinity"},
+		User:       "root",
 	}
 	hostCfg := &container.HostConfig{
 		AutoRemove: !opts.KeepContainer,

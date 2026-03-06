@@ -363,6 +363,7 @@ func cmdCodexSpawn(args []string) {
 				// runtime env is present. If not, recreate.
 				workspaceOrVaultMismatch := info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile)
 				fortAuthMismatch := info != nil && fortBootstrap != nil && !codexContainerFortAuthMatches(info, *fortBootstrap)
+				ownershipMismatch := info != nil && !codexContainerOwnershipMatches(info)
 				if workspaceOrVaultMismatch {
 					warnf("codex container %s workspace/vault mounts differ from %s; recreating", choice.Name, desiredWorkspaceHost)
 					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
@@ -371,6 +372,12 @@ func cmdCodexSpawn(args []string) {
 					// Fall through to create a new container below.
 				} else if fortAuthMismatch {
 					warnf("codex container %s Fort auth env is stale or missing; recreating", choice.Name)
+					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
+						fatal(err)
+					}
+					// Fall through to create a new container below.
+				} else if ownershipMismatch {
+					warnf("codex container %s host ownership policy is stale or missing; recreating", choice.Name)
 					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
 						fatal(err)
 					}
@@ -405,8 +412,15 @@ func cmdCodexSpawn(args []string) {
 			}
 		}
 		// Ensure workspace mounts reflect the current host directory. If not, recreate.
-		if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile) {
+		workspaceMismatch := info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile)
+		ownershipMismatch := info != nil && !codexContainerOwnershipMatches(info)
+		if workspaceMismatch {
 			warnf("codex container %s workspace/vault mounts differ from %s; recreating", containerName, desiredWorkspaceHost)
+			if err := client.RemoveContainer(ctx, existingID, true); err != nil {
+				fatal(err)
+			}
+		} else if ownershipMismatch {
+			warnf("codex container %s host ownership policy is stale or missing; recreating", containerName)
 			if err := client.RemoveContainer(ctx, existingID, true); err != nil {
 				fatal(err)
 			}
@@ -444,6 +458,11 @@ func cmdCodexSpawn(args []string) {
 	labels := map[string]string{
 		codexLabelKey: codexLabelValue,
 		"si.name":     name,
+	}
+	if identity, ok := shared.ResolveHostIdentity(); ok {
+		for key, value := range identity.Labels() {
+			labels[key] = value
+		}
 	}
 	if profile != nil {
 		labels[codexProfileLabelKey] = profile.ID
@@ -491,6 +510,7 @@ func cmdCodexSpawn(args []string) {
 		ExposedPorts: exposed,
 		WorkingDir:   *flags.workdir,
 		Cmd:          cmd,
+		User:         "root",
 	}
 	mounts := []mount.Mount{
 		{Type: mount.TypeVolume, Source: codexVol, Target: "/home/si/.codex"},
@@ -852,18 +872,29 @@ func cmdCodexExec(args []string) {
 		}
 
 		if strings.TrimSpace(containerID) != "" {
-			if containerInfo != nil &&
+			missingRequiredMounts := containerInfo != nil &&
 				(!shared.HasHostSiMount(containerInfo, "/home/si") ||
 					!shared.HasHostDockerConfigMount(containerInfo, "/home/si") ||
 					!shared.HasHostSSHDirMount(containerInfo, "/home/si") ||
 					!shared.HasHostSSHDirMount(containerInfo, "/root") ||
 					!shared.HasHostSiGoToolchainMount(containerInfo, "/home/si") ||
-					!shared.HasHostVaultEnvFileMount(containerInfo, requiredVaultFile)) {
+					!shared.HasHostVaultEnvFileMount(containerInfo, requiredVaultFile))
+			ownershipMismatch := containerInfo != nil && !codexContainerOwnershipMatches(containerInfo)
+			if containerInfo != nil && (missingRequiredMounts || ownershipMismatch) {
 				slug := codexContainerSlug(containerName)
 				if strings.TrimSpace(slug) == "" {
-					fatal(fmt.Errorf("codex container %s is missing required host mounts (si/docker/ssh/go/vault); run `si respawn %s`", containerName, containerName))
+					fatal(fmt.Errorf("codex container %s drifted from required runtime policy; run `si respawn %s`", containerName, containerName))
 				}
-				if err := reconcileCodexRunMountDrift(tmuxMode, containerName, slug, func() error {
+				reason := "required host mounts (si/docker/ssh/go/vault) are missing"
+				forceRecreate := false
+				if ownershipMismatch && missingRequiredMounts {
+					reason = "required host mounts are missing and host ownership policy mismatches current host UID/GID"
+					forceRecreate = true
+				} else if ownershipMismatch {
+					reason = "host ownership policy mismatches current host UID/GID"
+					forceRecreate = true
+				}
+				if err := reconcileCodexRunContainerDrift(tmuxMode, forceRecreate, containerName, slug, reason, func() error {
 					spawnArgs := []string{slug}
 					if workspace := codexContainerWorkspaceSource(containerInfo); workspace != "" {
 						spawnArgs = append(spawnArgs, "--workspace", workspace)
@@ -889,8 +920,9 @@ func cmdCodexExec(args []string) {
 						!shared.HasHostSSHDirMount(info, "/home/si") ||
 						!shared.HasHostSSHDirMount(info, "/root") ||
 						!shared.HasHostSiGoToolchainMount(info, "/home/si") ||
-						!shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
-						return fmt.Errorf("codex container %s recreation missing required host mounts (si/docker/ssh/go/vault); run `si respawn %s`", containerName, codexContainerSlug(containerName))
+						!shared.HasHostVaultEnvFileMount(info, requiredVaultFile) ||
+						!codexContainerOwnershipMatches(info) {
+						return fmt.Errorf("codex container %s recreation failed runtime policy validation; run `si respawn %s`", containerName, codexContainerSlug(containerName))
 					}
 					containerID = id
 					containerInfo = info
@@ -1393,21 +1425,28 @@ func codexTmuxShouldResetSession(paneDead bool, cmdChanged bool, hostCwdChanged 
 	return false
 }
 
-func codexRunShouldRecreateContainerForMissingVaultMounts(tmuxMode bool) bool {
+func codexRunShouldRecreateContainerForDrift(tmuxMode bool, forceRecreate bool) bool {
+	if forceRecreate {
+		return true
+	}
 	// In tmux mode, preserving the existing container keeps the live Codex pane
-	// and conversation state intact across reconnects.
+	// and conversation state intact across reconnects for non-critical drift.
 	return !tmuxMode
 }
 
-func reconcileCodexRunMountDrift(tmuxMode bool, containerName string, slug string, recreate func() error) error {
-	if codexRunShouldRecreateContainerForMissingVaultMounts(tmuxMode) {
-		warnf("codex container %s is missing required host mounts (si/docker/ssh/go/vault); recreating for full host-tooling support", containerName)
+func reconcileCodexRunContainerDrift(tmuxMode bool, forceRecreate bool, containerName string, slug string, reason string, recreate func() error) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "runtime policy drift"
+	}
+	if codexRunShouldRecreateContainerForDrift(tmuxMode, forceRecreate) {
+		warnf("codex container %s drift detected (%s); recreating for policy compliance", containerName, reason)
 		if recreate == nil {
 			return errors.New("recreate callback required")
 		}
 		return recreate()
 	}
-	warnf("codex container %s is missing required host mounts (si/docker/ssh/go/vault); preserving running container and tmux session (run `si respawn %s` to reconcile mounts)", containerName, slug)
+	warnf("codex container %s drift detected (%s); preserving running container and tmux session (run `si respawn %s` to reconcile)", containerName, reason, slug)
 	return nil
 }
 
@@ -1628,6 +1667,15 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 	return true
 }
 
+func codexContainerOwnershipMatches(info *types.ContainerJSON) bool {
+	identity, ok := shared.ResolveHostIdentity()
+	if !ok {
+		// If we cannot resolve a non-root host uid/gid policy, do not force drift.
+		return true
+	}
+	return shared.ContainerMatchesHostIdentity(info, identity)
+}
+
 func codexContainerFortAuthMatches(info *types.ContainerJSON, boot codexFortBootstrap) bool {
 	if info == nil || info.Config == nil {
 		return false
@@ -1792,11 +1840,17 @@ func cmdCodexLogin(args []string) {
 		codexProfileLabelKey: profile.ID,
 		"si.mode":            "login",
 	}
+	if identity, ok := shared.ResolveHostIdentity(); ok {
+		for key, value := range identity.Labels() {
+			labels[key] = value
+		}
+	}
 	cfg := &container.Config{
 		Image:  image,
 		Env:    filterEnv(append([]string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex"}, hostUserEnv()...)),
 		Labels: labels,
 		Cmd:    []string{"bash", "-lc", "sleep infinity"},
+		User:   "root",
 	}
 	hostCfg := &container.HostConfig{}
 	netCfg := &network.NetworkingConfig{}
@@ -1820,6 +1874,7 @@ func cmdCodexLogin(args []string) {
 	} else {
 		execArgs = append(execArgs, "-i")
 	}
+	execArgs = append(execArgs, "--user", codexContainerUser)
 	execArgs = append(execArgs,
 		"-e", "HOME=/home/si",
 		"-e", "CODEX_HOME=/home/si/.codex",
@@ -2196,6 +2251,7 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 	if cleanSlate {
 		return
 	}
+	ensureCodexContainerSiHomeOwnership(ctx, client, containerID)
 	home, err := os.UserHomeDir()
 	if err != nil || strings.TrimSpace(home) == "" {
 		return
@@ -2210,16 +2266,15 @@ func seedCodexConfig(ctx context.Context, client *shared.Client, containerID str
 	} else {
 		copied := false
 		for _, target := range codexContainerConfigTargets() {
-			opts := shared.ExecOptions{}
-			if strings.HasPrefix(target.Path, "/home/si/") {
-				opts.User = codexContainerUser
-			}
+			opts := codexContainerPathExecOptions(target.Path)
 			_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(target.Path)}, opts, nil, io.Discard, io.Discard)
+			_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, filepath.Dir(target.Path)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 			if err := client.CopyFileToContainer(ctx, containerID, target.Path, data, 0o600); err != nil {
 				continue
 			}
 			copied = true
-			_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, opts, nil, io.Discard, io.Discard)
+			// CopyToContainer writes files as root; ownership must be corrected as root.
+			_ = client.Exec(ctx, containerID, []string{"chown", target.Owner, target.Path}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 		}
 		if !copied {
 			warnf("codex config copy failed for container %s", strings.TrimSpace(containerID))
@@ -2280,6 +2335,23 @@ func codexContainerConfigTargets() []codexConfigTarget {
 	}
 }
 
+func codexContainerPathExecOptions(path string) shared.ExecOptions {
+	opts := shared.ExecOptions{}
+	if strings.HasPrefix(strings.TrimSpace(path), "/home/si/") {
+		opts.User = codexContainerUser
+	}
+	return opts
+}
+
+func ensureCodexContainerSiHomeOwnership(ctx context.Context, client *shared.Client, containerID string) {
+	if client == nil || strings.TrimSpace(containerID) == "" {
+		return
+	}
+	// Repair legacy root-owned codex home artifacts so codex can read/write as user "si".
+	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", "/home/si/.codex"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	_ = client.Exec(ctx, containerID, []string{"chown", "-R", "si:si", "/home/si/.codex"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+}
+
 func seedCodexAuth(ctx context.Context, client *shared.Client, containerID string, cleanSlate bool, profile codexProfile) {
 	if cleanSlate {
 		return
@@ -2303,21 +2375,20 @@ func seedCodexAuth(ctx context.Context, client *shared.Client, containerID strin
 	}
 	copied := false
 	for _, destPath := range codexContainerAuthPaths() {
-		opts := shared.ExecOptions{}
-		if strings.HasPrefix(destPath, "/home/si/") {
-			opts.User = codexContainerUser
-		}
+		opts := codexContainerPathExecOptions(destPath)
 		_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", filepath.Dir(destPath)}, opts, nil, io.Discard, io.Discard)
+		owner := "si:si"
+		if strings.HasPrefix(destPath, "/root/") {
+			owner = "root:root"
+		}
+		_ = client.Exec(ctx, containerID, []string{"chown", owner, filepath.Dir(destPath)}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 		if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
 			warnf("codex auth copy failed (%s): %v", destPath, err)
 			continue
 		}
 		copied = true
-		owner := "si:si"
-		if strings.HasPrefix(destPath, "/root/") {
-			owner = "root:root"
-		}
-		_ = client.Exec(ctx, containerID, []string{"chown", owner, destPath}, opts, nil, io.Discard, io.Discard)
+		// CopyToContainer writes files as root; ownership must be corrected as root.
+		_ = client.Exec(ctx, containerID, []string{"chown", owner, destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 	}
 	if !copied {
 		return
