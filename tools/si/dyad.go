@@ -333,13 +333,15 @@ func cmdDyadSpawn(args []string) {
 	if err != nil {
 		fatal(err)
 	}
+	ensureDyadContainerSiHomeOwnership(ctx, client, actorID)
+	ensureDyadContainerSiHomeOwnership(ctx, client, criticID)
 	if profile != nil {
 		seedDyadProfileAuth(ctx, client, actorID, *profile)
 		seedDyadProfileAuth(ctx, client, criticID, *profile)
 	}
 	if identity, ok := hostGitIdentity(); ok {
-		seedGitIdentity(ctx, client, actorID, "root", "/root", identity)
-		seedGitIdentity(ctx, client, criticID, "root", "/root", identity)
+		seedGitIdentity(ctx, client, actorID, "si", "/home/si", identity)
+		seedGitIdentity(ctx, client, criticID, "si", "/home/si", identity)
 	}
 	if autopilotClaim != nil {
 		successf("autopilot claimed %s from taskboard %s", autopilotClaim.Task.ID, autopilotClaim.BoardName)
@@ -976,17 +978,20 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 	if id == "" {
 		return fmt.Errorf("container not found: %s", containerName)
 	}
-	if !shared.HasHostSiMount(info, "/root") {
+	if !shared.HasHostSiMount(info, "/home/si") {
 		return fmt.Errorf("dyad container %s is missing host ~/.si mount required for full `si vault` support; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
-	if !shared.HasHostSSHDirMount(info, "/root") {
+	if !shared.HasHostSSHDirMount(info, "/home/si") {
 		return fmt.Errorf("dyad container %s is missing host ~/.ssh mount required for git+ssh workflows; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
 	requiredVaultFile := vaultContainerEnvFileMountPath(loadSettingsOrDefault())
 	if strings.TrimSpace(requiredVaultFile) != "" && !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
 		return fmt.Errorf("dyad container %s is missing the host vault env file mount required for `si vault`; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
-	opts := shared.ExecOptions{TTY: tty}
+	opts := shared.ExecOptions{
+		TTY:  tty,
+		User: "si",
+	}
 	return client.Exec(context.Background(), id, cmd, opts, os.Stdin, os.Stdout, os.Stderr)
 }
 
@@ -1278,12 +1283,22 @@ func seedDyadProfileAuth(ctx context.Context, client *shared.Client, containerID
 		}
 		return
 	}
-	const destPath = "/root/.codex/auth.json"
-	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", "/root/.codex"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	const destPath = "/home/si/.codex/auth.json"
+	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", "/home/si/.codex"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 	if err := client.CopyFileToContainer(ctx, containerID, destPath, data, 0o600); err != nil {
 		warnf("dyad auth copy failed: %v", err)
 		return
 	}
+	_ = client.Exec(ctx, containerID, []string{"chown", "si:si", destPath}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+}
+
+func ensureDyadContainerSiHomeOwnership(ctx context.Context, client *shared.Client, containerID string) {
+	if client == nil || strings.TrimSpace(containerID) == "" {
+		return
+	}
+	// Keep codex home writable for host-mapped "si" users in migrated dyad containers.
+	_ = client.Exec(ctx, containerID, []string{"mkdir", "-p", "/home/si/.codex", "/home/si/.codex/skills"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
+	_ = client.Exec(ctx, containerID, []string{"chown", "-R", "si:si", "/home/si/.codex"}, shared.ExecOptions{}, nil, io.Discard, io.Discard)
 }
 
 func max(a, b int) int {

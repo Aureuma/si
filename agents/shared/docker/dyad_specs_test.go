@@ -3,6 +3,7 @@ package docker
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/docker/docker/api/types/mount"
@@ -36,22 +37,22 @@ func TestBuildDyadSpecsIncludesHostSiMounts(t *testing.T) {
 		t.Fatalf("build specs: %v", err)
 	}
 
-	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".si"), "/root/.si") {
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".si"), "/home/si/.si") {
 		t.Fatalf("actor spec missing host ~/.si mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".si"), "/root/.si") {
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".si"), "/home/si/.si") {
 		t.Fatalf("critic spec missing host ~/.si mount: %+v", critic.HostConfig.Mounts)
 	}
-	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".ssh"), "/root/.ssh") {
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".ssh"), "/home/si/.ssh") {
 		t.Fatalf("actor spec missing host ~/.ssh mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".ssh"), "/root/.ssh") {
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".ssh"), "/home/si/.ssh") {
 		t.Fatalf("critic spec missing host ~/.ssh mount: %+v", critic.HostConfig.Mounts)
 	}
-	if !mountExists(actor.HostConfig.Mounts, DefaultCodexSkillsVolume, "/root/.codex/skills") {
+	if !mountExists(actor.HostConfig.Mounts, DefaultCodexSkillsVolume, "/home/si/.codex/skills") {
 		t.Fatalf("actor spec missing shared skills volume mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, DefaultCodexSkillsVolume, "/root/.codex/skills") {
+	if !mountExists(critic.HostConfig.Mounts, DefaultCodexSkillsVolume, "/home/si/.codex/skills") {
 		t.Fatalf("critic spec missing shared skills volume mount: %+v", critic.HostConfig.Mounts)
 	}
 }
@@ -82,10 +83,10 @@ func TestBuildDyadSpecsRespectsCustomSkillsVolume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build specs: %v", err)
 	}
-	if !mountExists(actor.HostConfig.Mounts, customSkills, "/root/.codex/skills") {
+	if !mountExists(actor.HostConfig.Mounts, customSkills, "/home/si/.codex/skills") {
 		t.Fatalf("actor spec missing custom shared skills volume mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, customSkills, "/root/.codex/skills") {
+	if !mountExists(critic.HostConfig.Mounts, customSkills, "/home/si/.codex/skills") {
 		t.Fatalf("critic spec missing custom shared skills volume mount: %+v", critic.HostConfig.Mounts)
 	}
 }
@@ -162,10 +163,10 @@ func TestBuildDyadSpecsIncludesDevelopmentMount(t *testing.T) {
 	}
 
 	developmentHost := filepath.Join(home, "Development")
-	if !mountExists(actor.HostConfig.Mounts, developmentHost, "/root/Development") {
+	if !mountExists(actor.HostConfig.Mounts, developmentHost, "/home/si/Development") {
 		t.Fatalf("actor spec missing host ~/Development mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, developmentHost, "/root/Development") {
+	if !mountExists(critic.HostConfig.Mounts, developmentHost, "/home/si/Development") {
 		t.Fatalf("critic spec missing host ~/Development mount: %+v", critic.HostConfig.Mounts)
 	}
 }
@@ -200,16 +201,16 @@ func TestBuildDyadSpecsIncludesHostDockerAndGoToolingMounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build specs: %v", err)
 	}
-	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".docker"), "/root/.docker") {
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".docker"), "/home/si/.docker") {
 		t.Fatalf("actor spec missing host ~/.docker mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".docker"), "/root/.docker") {
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".docker"), "/home/si/.docker") {
 		t.Fatalf("critic spec missing host ~/.docker mount: %+v", critic.HostConfig.Mounts)
 	}
-	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".local", "share", "si", "go"), "/root/.local/share/si/go") {
+	if !mountExists(actor.HostConfig.Mounts, filepath.Join(home, ".local", "share", "si", "go"), "/home/si/.local/share/si/go") {
 		t.Fatalf("actor spec missing host go tooling mount: %+v", actor.HostConfig.Mounts)
 	}
-	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".local", "share", "si", "go"), "/root/.local/share/si/go") {
+	if !mountExists(critic.HostConfig.Mounts, filepath.Join(home, ".local", "share", "si", "go"), "/home/si/.local/share/si/go") {
 		t.Fatalf("critic spec missing host go tooling mount: %+v", critic.HostConfig.Mounts)
 	}
 }
@@ -255,4 +256,52 @@ func TestBuildDyadSpecsIncludesHostIdentityLabels(t *testing.T) {
 	if got := critic.Config.Labels[HostGIDLabelKey]; got != "2002" {
 		t.Fatalf("critic missing host gid label: %q", got)
 	}
+}
+
+func TestBuildDyadSpecsUsesSiEntrypointAndHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "entrypoint-home",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+
+	if len(actor.Config.Entrypoint) == 0 || actor.Config.Entrypoint[len(actor.Config.Entrypoint)-1] != "/usr/local/bin/si-entrypoint" {
+		t.Fatalf("actor entrypoint should use si-entrypoint: %v", actor.Config.Entrypoint)
+	}
+	if len(critic.Config.Entrypoint) == 0 || critic.Config.Entrypoint[len(critic.Config.Entrypoint)-1] != "/usr/local/bin/si-entrypoint" {
+		t.Fatalf("critic entrypoint should use si-entrypoint: %v", critic.Config.Entrypoint)
+	}
+	if !containsEnvItem(actor.Config.Env, "HOME=/home/si") || !containsEnvItem(actor.Config.Env, "CODEX_HOME=/home/si/.codex") {
+		t.Fatalf("actor env missing si home settings: %v", actor.Config.Env)
+	}
+	if !containsEnvItem(critic.Config.Env, "HOME=/home/si") || !containsEnvItem(critic.Config.Env, "CODEX_HOME=/home/si/.codex") {
+		t.Fatalf("critic env missing si home settings: %v", critic.Config.Env)
+	}
+}
+
+func containsEnvItem(env []string, want string) bool {
+	for _, item := range env {
+		if strings.TrimSpace(item) == want {
+			return true
+		}
+	}
+	return false
 }

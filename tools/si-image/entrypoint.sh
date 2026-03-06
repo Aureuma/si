@@ -47,6 +47,14 @@ sync_codex_skills() {
   fi
 }
 
+ensure_codex_home_permissions() {
+  mkdir -p "/home/si/.codex" "/home/si/.codex/skills"
+  # Keep codex home writable by the runtime user even when the codex volume
+  # was previously populated by root-owned artifacts.
+  chown -R si:si "/home/si/.codex" 2>/dev/null || true
+  chown -R si:si "/home/si/.codex/skills" 2>/dev/null || true
+}
+
 apply_host_ids() {
   local uid gid current_uid current_gid group_name user_name
   uid="${SI_HOST_UID:-}"
@@ -123,6 +131,7 @@ configure_git_safe_directories() {
 if [[ "$(id -u)" -eq 0 ]]; then
   apply_host_ids
   sync_codex_skills
+  ensure_codex_home_permissions
   # Avoid recursive chown on mount trees to prevent host bind/volume metadata changes.
   if ! is_mountpoint "/home/si"; then
     chown si:si /home/si 2>/dev/null || true

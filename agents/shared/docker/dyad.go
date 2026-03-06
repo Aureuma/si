@@ -24,6 +24,7 @@ const (
 	LabelDyad                = "si.dyad"
 	LabelMember              = "si.member"
 	LabelRole                = "si.role"
+	dyadContainerHome        = "/home/si"
 )
 
 const DyadAppLabel = "si-dyad"
@@ -163,16 +164,16 @@ func (c *Client) EnsureDyad(ctx context.Context, opts DyadOptions) (string, stri
 	// Backward compatibility: recreate older dyads that were created before host
 	// ~/.si, ~/.ssh, and vault env file mounts were added, so full `si`/`si vault`
 	// and SSH Git workflows work inside both members.
-	if !HasHostSiMount(actorInfo, "/root") ||
-		!HasHostSiMount(criticInfo, "/root") ||
-		!HasHostDockerConfigMount(actorInfo, "/root") ||
-		!HasHostDockerConfigMount(criticInfo, "/root") ||
-		!HasHostSSHDirMount(actorInfo, "/root") ||
-		!HasHostSSHDirMount(criticInfo, "/root") ||
-		!HasHostSiGoToolchainMount(actorInfo, "/root") ||
-		!HasHostSiGoToolchainMount(criticInfo, "/root") ||
-		!HasDevelopmentMount(actorInfo, opts.WorkspaceHost, "/root") ||
-		!HasDevelopmentMount(criticInfo, opts.WorkspaceHost, "/root") ||
+	if !HasHostSiMount(actorInfo, dyadContainerHome) ||
+		!HasHostSiMount(criticInfo, dyadContainerHome) ||
+		!HasHostDockerConfigMount(actorInfo, dyadContainerHome) ||
+		!HasHostDockerConfigMount(criticInfo, dyadContainerHome) ||
+		!HasHostSSHDirMount(actorInfo, dyadContainerHome) ||
+		!HasHostSSHDirMount(criticInfo, dyadContainerHome) ||
+		!HasHostSiGoToolchainMount(actorInfo, dyadContainerHome) ||
+		!HasHostSiGoToolchainMount(criticInfo, dyadContainerHome) ||
+		!HasDevelopmentMount(actorInfo, opts.WorkspaceHost, dyadContainerHome) ||
+		!HasDevelopmentMount(criticInfo, opts.WorkspaceHost, dyadContainerHome) ||
 		!HasHostVaultEnvFileMount(actorInfo, opts.VaultEnvFile) ||
 		!HasHostVaultEnvFileMount(criticInfo, opts.VaultEnvFile) {
 		if actorID != "" {
@@ -284,8 +285,8 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 	criticEnv := buildDyadEnv(opts, "critic", opts.CodexEffortCritic)
 
 	actorEnv = append(actorEnv,
-		"HOME=/root",
-		"CODEX_HOME=/root/.codex",
+		"HOME="+dyadContainerHome,
+		"CODEX_HOME="+dyadContainerHome+"/.codex",
 	)
 
 	actorEnv = appendOptionalEnv(actorEnv, "CODEX_MODEL_LOW", opts.CodexModelLow)
@@ -312,24 +313,24 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 		WorkingDir:   "/workspace",
 		Env:          actorEnv,
 		Labels:       actorLabels,
-		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/si-codex-init"},
-		Cmd:          []string{"--exec", "tail", "-f", "/dev/null"},
+		Entrypoint:   []string{"tini", "-s", "--", "/usr/local/bin/si-entrypoint"},
+		Cmd:          []string{"/usr/local/bin/si-codex-init", "--exec", "tail", "-f", "/dev/null"},
 		ExposedPorts: actorExposed,
 		User:         "root",
 	}
 	actorMirrorTarget := ""
-	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost, "/root"); ok && target != "/workspace" {
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost, dyadContainerHome); ok && target != "/workspace" {
 		actorMirrorTarget = target
 	}
 	actorMounts := []mount.Mount{
-		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
-		{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: "/root/.codex/skills"},
+		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: dyadContainerHome + "/.codex"},
+		{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: dyadContainerHome + "/.codex/skills"},
 	}
 	actorMounts = append(actorMounts, BuildContainerCoreMounts(ContainerCoreMountPlan{
 		WorkspaceHost:          opts.WorkspaceHost,
 		WorkspacePrimaryTarget: "/workspace",
 		WorkspaceMirrorTarget:  actorMirrorTarget,
-		ContainerHome:          "/root",
+		ContainerHome:          dyadContainerHome,
 		IncludeHostSi:          true,
 		HostVaultEnvFile:       opts.VaultEnvFile,
 	})...)
@@ -344,32 +345,32 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 
 	criticEnv = append(criticEnv,
 		"ACTOR_CONTAINER="+DyadContainerName(opts.Dyad, "actor"),
-		"HOME=/root",
-		"CODEX_HOME=/root/.codex",
+		"HOME="+dyadContainerHome,
+		"CODEX_HOME="+dyadContainerHome+"/.codex",
 	)
 
 	criticConfig := &container.Config{
 		Image:      opts.CriticImage,
 		Env:        criticEnv,
 		Labels:     criticLabels,
-		Entrypoint: []string{"tini", "-s", "--"},
+		Entrypoint: []string{"tini", "-s", "--", "/usr/local/bin/si-entrypoint"},
 		Cmd:        []string{"critic"},
 		User:       "root",
 	}
 	criticMirrorTarget := ""
-	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost, "/root"); ok && target != "/workspace" {
+	if target, ok := InferWorkspaceTarget(opts.WorkspaceHost, dyadContainerHome); ok && target != "/workspace" {
 		criticMirrorTarget = target
 	}
 	criticMounts := []mount.Mount{
-		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: "/root/.codex"},
-		{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: "/root/.codex/skills"},
+		{Type: mount.TypeVolume, Source: opts.CodexVolume, Target: dyadContainerHome + "/.codex"},
+		{Type: mount.TypeVolume, Source: opts.SkillsVolume, Target: dyadContainerHome + "/.codex/skills"},
 		{Type: mount.TypeBind, Source: opts.ConfigsHost, Target: "/configs", ReadOnly: true},
 	}
 	criticMounts = append(criticMounts, BuildContainerCoreMounts(ContainerCoreMountPlan{
 		WorkspaceHost:          opts.WorkspaceHost,
 		WorkspacePrimaryTarget: "/workspace",
 		WorkspaceMirrorTarget:  criticMirrorTarget,
-		ContainerHome:          "/root",
+		ContainerHome:          dyadContainerHome,
 		IncludeHostSi:          true,
 		HostVaultEnvFile:       opts.VaultEnvFile,
 	})...)
