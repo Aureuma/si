@@ -281,15 +281,21 @@ func saveFortProfileSessionState(path string, state fortProfileSessionState) err
 	if path == "" {
 		return fmt.Errorf("session path required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
+	fortNormalizeFileOwnership(dir, 0o700)
 	raw, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
 	raw = append(raw, '\n')
-	return os.WriteFile(path, raw, 0o600)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		return err
+	}
+	fortNormalizeFileOwnership(path, 0o600)
+	return nil
 }
 
 func loadFortProfileSessionState(path string) (fortProfileSessionState, error) {
@@ -328,10 +334,12 @@ func writeSecretFile(path string, value string) error {
 	if value == "" {
 		return fmt.Errorf("secret value required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "fort-*")
+	fortNormalizeFileOwnership(dir, 0o700)
+	tmp, err := os.CreateTemp(dir, "fort-*")
 	if err != nil {
 		return err
 	}
@@ -350,7 +358,54 @@ func writeSecretFile(path string, value string) error {
 	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return err
+	}
+	fortNormalizeFileOwnership(path, 0o600)
+	return nil
+}
+
+func fortNormalizeFileOwnership(path string, mode os.FileMode) {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return
+	}
+	_ = os.Chmod(path, mode)
+	uid, gid, ok := fortDesiredFileOwnership()
+	if !ok {
+		return
+	}
+	if os.Geteuid() != 0 && (uid != os.Getuid() || gid != os.Getgid()) {
+		return
+	}
+	_ = os.Chown(path, uid, gid)
+}
+
+func fortDesiredFileOwnership() (int, int, bool) {
+	uid := os.Getuid()
+	gid := os.Getgid()
+	if parsed, ok := parsePositiveInt(strings.TrimSpace(os.Getenv(shared.HostUIDEnvKey))); ok {
+		uid = parsed
+	}
+	if parsed, ok := parsePositiveInt(strings.TrimSpace(os.Getenv(shared.HostGIDEnvKey))); ok {
+		gid = parsed
+	}
+	if uid <= 0 || gid <= 0 {
+		return 0, 0, false
+	}
+	return uid, gid, true
+}
+
+func parsePositiveInt(raw string) (int, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, false
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func readSecretFile(path string) string {
