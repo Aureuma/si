@@ -482,7 +482,7 @@ func TestPaasAgentRunOnceOfflineFakeCodexDeterministicSmoke(t *testing.T) {
 	if err := os.MkdirAll(eventsDir, 0o700); err != nil {
 		t.Fatalf("mkdir events dir: %v", err)
 	}
-	deployEvent := []byte("{\"timestamp\":\"2026-02-17T17:00:00Z\",\"source\":\"deploy\",\"command\":\"deploy apply\",\"status\":\"failed\",\"target\":\"edge-a\",\"message\":\"deploy failed smoke\"}\n")
+	deployEvent := []byte(fmt.Sprintf("{\"timestamp\":\"%s\",\"source\":\"deploy\",\"command\":\"deploy apply\",\"status\":\"failed\",\"target\":\"edge-a\",\"message\":\"deploy failed smoke\"}\n", time.Now().UTC().Format(time.RFC3339)))
 	if err := os.WriteFile(filepath.Join(eventsDir, "deployments.jsonl"), deployEvent, 0o600); err != nil {
 		t.Fatalf("write deployments event: %v", err)
 	}
