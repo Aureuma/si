@@ -322,6 +322,11 @@ func cmdCodexSpawn(args []string) {
 		boot, err := ensureCodexProfileFortSession(ctx, client, *profile, strings.TrimSpace(*flags.networkName))
 		if err != nil {
 			warnf("fort profile auth bootstrap skipped for %s: %v", profile.ID, err)
+			if cachedBoot, cachedErr := loadCodexFortBootstrapFromProfileState(*profile); cachedErr == nil {
+				fortBootstrap = &cachedBoot
+			} else {
+				warnf("fort cached session unavailable for %s: %v", profile.ID, cachedErr)
+			}
 		} else {
 			fortBootstrap = &boot
 		}
@@ -354,9 +359,18 @@ func cmdCodexSpawn(args []string) {
 						fatal(err)
 					}
 				}
-				// Ensure workspace mounts reflect the current host directory. If not, recreate.
-				if info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile) {
+				// Ensure workspace mounts reflect the current host directory and Fort auth
+				// runtime env is present. If not, recreate.
+				workspaceOrVaultMismatch := info != nil && !codexContainerWorkspaceMatches(info, desiredWorkspaceHost, workspaceTargetMirror, requiredVaultFile)
+				fortAuthMismatch := info != nil && fortBootstrap != nil && !codexContainerFortAuthMatches(info, *fortBootstrap)
+				if workspaceOrVaultMismatch {
 					warnf("codex container %s workspace/vault mounts differ from %s; recreating", choice.Name, desiredWorkspaceHost)
+					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
+						fatal(err)
+					}
+					// Fall through to create a new container below.
+				} else if fortAuthMismatch {
+					warnf("codex container %s Fort auth env is stale or missing; recreating", choice.Name)
 					if err := client.RemoveContainer(ctx, existingID, true); err != nil {
 						fatal(err)
 					}
@@ -1604,6 +1618,29 @@ func codexContainerWorkspaceMatches(info *types.ContainerJSON, desiredHost, mirr
 		return false
 	}
 	if envValue(info.Config.Env, "SI_WORKSPACE_HOST") != desiredHost {
+		return false
+	}
+	return true
+}
+
+func codexContainerFortAuthMatches(info *types.ContainerJSON, boot codexFortBootstrap) bool {
+	if info == nil || info.Config == nil {
+		return false
+	}
+	env := info.Config.Env
+	if expected := strings.TrimSpace(boot.ContainerHostURL); expected != "" && envValue(env, "FORT_HOST") != expected {
+		return false
+	}
+	if expected := strings.TrimSpace(boot.AccessTokenContainerPath); expected != "" && envValue(env, "FORT_TOKEN_PATH") != expected {
+		return false
+	}
+	if expected := strings.TrimSpace(boot.RefreshTokenContainerPath); expected != "" && envValue(env, "FORT_REFRESH_TOKEN_PATH") != expected {
+		return false
+	}
+	if expected := strings.TrimSpace(boot.AgentID); expected != "" && envValue(env, "FORT_AGENT_ID") != expected {
+		return false
+	}
+	if expected := strings.TrimSpace(boot.ProfileID); expected != "" && envValue(env, "FORT_PROFILE_ID") != expected {
 		return false
 	}
 	return true
