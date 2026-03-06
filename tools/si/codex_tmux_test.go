@@ -203,18 +203,21 @@ func TestCodexTmuxShouldResetSession(t *testing.T) {
 	}
 }
 
-func TestCodexRunShouldRecreateContainerForMissingVaultMounts(t *testing.T) {
-	if codexRunShouldRecreateContainerForMissingVaultMounts(true) {
-		t.Fatalf("expected tmux mode to preserve container for session continuity")
+func TestCodexRunShouldRecreateContainerForDrift(t *testing.T) {
+	if codexRunShouldRecreateContainerForDrift(true, false) {
+		t.Fatalf("expected tmux mode to preserve container for non-critical drift")
 	}
-	if !codexRunShouldRecreateContainerForMissingVaultMounts(false) {
-		t.Fatalf("expected non-tmux mode to reconcile container mounts")
+	if !codexRunShouldRecreateContainerForDrift(false, false) {
+		t.Fatalf("expected non-tmux mode to reconcile container drift")
+	}
+	if !codexRunShouldRecreateContainerForDrift(true, true) {
+		t.Fatalf("expected forced drift reconciliation in tmux mode")
 	}
 }
 
-func TestReconcileCodexRunMountDriftTmuxPreservesSession(t *testing.T) {
+func TestReconcileCodexRunContainerDriftTmuxPreservesSession(t *testing.T) {
 	called := false
-	err := reconcileCodexRunMountDrift(true, "si-codex-cadma", "cadma", func() error {
+	err := reconcileCodexRunContainerDrift(true, false, "si-codex-cadma", "cadma", "missing mounts", func() error {
 		called = true
 		return nil
 	})
@@ -226,9 +229,9 @@ func TestReconcileCodexRunMountDriftTmuxPreservesSession(t *testing.T) {
 	}
 }
 
-func TestReconcileCodexRunMountDriftNonTmuxRecreates(t *testing.T) {
+func TestReconcileCodexRunContainerDriftNonTmuxRecreates(t *testing.T) {
 	called := false
-	err := reconcileCodexRunMountDrift(false, "si-codex-cadma", "cadma", func() error {
+	err := reconcileCodexRunContainerDrift(false, false, "si-codex-cadma", "cadma", "missing mounts", func() error {
 		called = true
 		return nil
 	})
@@ -240,13 +243,27 @@ func TestReconcileCodexRunMountDriftNonTmuxRecreates(t *testing.T) {
 	}
 }
 
-func TestReconcileCodexRunMountDriftPropagatesRecreateError(t *testing.T) {
+func TestReconcileCodexRunContainerDriftPropagatesRecreateError(t *testing.T) {
 	expected := errors.New("boom")
-	err := reconcileCodexRunMountDrift(false, "si-codex-cadma", "cadma", func() error {
+	err := reconcileCodexRunContainerDrift(false, false, "si-codex-cadma", "cadma", "missing mounts", func() error {
 		return expected
 	})
 	if !errors.Is(err, expected) {
 		t.Fatalf("expected recreate error propagation, got %v", err)
+	}
+}
+
+func TestReconcileCodexRunContainerDriftForceRecreatesInTmux(t *testing.T) {
+	called := false
+	err := reconcileCodexRunContainerDrift(true, true, "si-codex-cadma", "cadma", "ownership mismatch", func() error {
+		called = true
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !called {
+		t.Fatalf("expected forced reconciliation to recreate container in tmux mode")
 	}
 }
 
@@ -389,6 +406,59 @@ func TestCodexContainerConfigTargets(t *testing.T) {
 	}
 	if targets[1].Path != "/root/.codex/config.toml" || targets[1].Owner != "root:root" {
 		t.Fatalf("unexpected second target: %+v", targets[1])
+	}
+}
+
+func TestCodexContainerPathExecOptions(t *testing.T) {
+	if got := codexContainerPathExecOptions("/home/si/.codex/config.toml").User; got != codexContainerUser {
+		t.Fatalf("expected si user for /home/si path, got %q", got)
+	}
+	if got := codexContainerPathExecOptions("/root/.codex/config.toml").User; got != "" {
+		t.Fatalf("expected root exec options for /root path, got user %q", got)
+	}
+}
+
+func TestCodexContainerOwnershipMatches(t *testing.T) {
+	t.Setenv("SI_HOST_UID", "1001")
+	t.Setenv("SI_HOST_GID", "1001")
+
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			Env: []string{
+				"SI_HOST_UID=1001",
+				"SI_HOST_GID=1001",
+			},
+			Labels: map[string]string{
+				"si.host_uid": "1001",
+				"si.host_gid": "1001",
+			},
+		},
+	}
+	if !codexContainerOwnershipMatches(info) {
+		t.Fatalf("expected ownership policy to match")
+	}
+
+	info.Config.Env[0] = "SI_HOST_UID=2001"
+	if codexContainerOwnershipMatches(info) {
+		t.Fatalf("expected ownership mismatch when uid env diverges")
+	}
+}
+
+func TestCodexContainerOwnershipMatchesRequiresLabels(t *testing.T) {
+	t.Setenv("SI_HOST_UID", "1002")
+	t.Setenv("SI_HOST_GID", "1002")
+
+	info := &types.ContainerJSON{
+		Config: &container.Config{
+			Env: []string{
+				"SI_HOST_UID=1002",
+				"SI_HOST_GID=1002",
+			},
+			Labels: map[string]string{},
+		},
+	}
+	if codexContainerOwnershipMatches(info) {
+		t.Fatalf("expected ownership mismatch when host identity labels are missing")
 	}
 }
 
