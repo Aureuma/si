@@ -7,8 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
+
+	shared "si/agents/shared/docker"
 
 	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
@@ -47,6 +48,7 @@ Features:
   - Surf browser runtime bridge for Playwright headed sessions.
   - Remote control bridge for sharing local terminal sessions in a browser.
   - Orbitals and integration registry (catalog/install/enable/doctor/scaffold).
+  - Fort secrets broker wrapper for hosted fort service operations.
   - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
 
 Usage:
@@ -78,7 +80,8 @@ Core:
   si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
-  si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync> [args]
+  si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync|bootstrap> [args]
+  si fort [--repo <path>] [--bin <path>] [--build] -- <fort-args...>
   si surf [--repo <path>] [--bin <path>] [--build] -- <surf-args...>
   si remote-control|rc [--repo <path>] [--bin <path>] [--build] -- <remote-control-args...>
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
@@ -645,13 +648,8 @@ func isEscCancelInput(value string) bool {
 
 func hostUserEnv() []string {
 	env := []string{}
-	uid := os.Getuid()
-	gid := os.Getgid()
-	if uid > 0 && gid > 0 {
-		env = append(env,
-			"SI_HOST_UID="+strconv.Itoa(uid),
-			"SI_HOST_GID="+strconv.Itoa(gid),
-		)
+	if identity, ok := shared.ResolveHostIdentity(); ok {
+		env = append(env, identity.EnvVars()...)
 	}
 	sock := filepath.Clean(strings.TrimSpace(os.Getenv("SSH_AUTH_SOCK")))
 	if sock != "" && strings.HasPrefix(sock, "/") {
