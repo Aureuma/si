@@ -615,6 +615,7 @@ func cmdCodexRespawn(args []string) {
 		}
 		nameArg = selectedName
 	}
+	filtered, profileKey = normalizeRespawnSpawnProfileArgs(filtered, nameArg, profileKey, resolveCodexProfileID)
 	name := nameArg
 	removeTargets := map[string]struct{}{
 		name: {},
@@ -650,6 +651,42 @@ func cmdCodexRespawn(args []string) {
 	}
 	spawnArgs := append(stripFlag(filtered, "volumes"), name)
 	cmdCodexSpawn(spawnArgs)
+}
+
+func resolveCodexProfileID(key string) (string, bool) {
+	profile, err := requireCodexProfile(strings.TrimSpace(key))
+	if err != nil {
+		return "", false
+	}
+	return strings.TrimSpace(profile.ID), true
+}
+
+func normalizeRespawnSpawnProfileArgs(
+	filtered []string,
+	containerName string,
+	profileKey string,
+	resolveProfileID func(string) (string, bool),
+) ([]string, string) {
+	name := strings.TrimSpace(containerName)
+	profile := strings.TrimSpace(profileKey)
+	out := append([]string(nil), filtered...)
+	hasProfileFlag := flagProvided(out, "profile")
+	if profile == "" && name != "" && resolveProfileID != nil {
+		if resolved, ok := resolveProfileID(name); ok && strings.TrimSpace(resolved) != "" {
+			profile = strings.TrimSpace(resolved)
+		}
+	}
+	if profile != "" {
+		if !hasProfileFlag {
+			out = append(out, "--profile", profile)
+		}
+		return out, profile
+	}
+	if !hasProfileFlag {
+		// Prevent spawn from silently injecting the default profile and renaming the container.
+		out = append(out, "--profile=")
+	}
+	return out, ""
 }
 
 func cmdCodexList(args []string) {
