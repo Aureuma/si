@@ -24,6 +24,10 @@ type codexSwapResult struct {
 }
 
 func cmdCodexSwap(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si swap [profile] [--force]")
+		return
+	}
 	fs := flag.NewFlagSet("swap", flag.ExitOnError)
 	force := fs.Bool("force", false, "swap without prompting (required for non-interactive use)")
 	_ = fs.Parse(args)

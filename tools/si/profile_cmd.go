@@ -10,6 +10,10 @@ import (
 )
 
 func cmdPersona(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si persona <name>")
+		return
+	}
 	fs := flag.NewFlagSet("persona", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
@@ -49,6 +53,10 @@ func cmdPersona(args []string) {
 }
 
 func cmdSkill(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si skill <role>")
+		return
+	}
 	fs := flag.NewFlagSet("skill", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		fatal(err)

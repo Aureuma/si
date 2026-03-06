@@ -698,6 +698,11 @@ func cmdCodexList(args []string) {
 }
 
 func cmdCodexExec(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si run [name] [--no-tmux] [command]")
+		fmt.Println(styleDim("   one-off: si run --prompt \"...\" [--output-only] [--no-mcp]"))
+		return
+	}
 	if flagProvided(args, "autopoietic") {
 		fatal(fmt.Errorf("--autopoietic has been removed; dyads now provide the paired actor/critic workflow (use `si dyad ...`). You can still use `si run <name> --tmux` to attach to a codex container"))
 	}
@@ -1702,7 +1707,24 @@ func envValue(env []string, key string) string {
 	return ""
 }
 
+func isHelpArg(arg string) bool {
+	switch strings.ToLower(strings.TrimSpace(arg)) {
+	case "help", "-h", "--help":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSingleHelpArg(args []string) bool {
+	return len(args) == 1 && isHelpArg(args[0])
+}
+
 func cmdCodexLogin(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si login [profile] [--device-auth] [--open-url] [--open-url-cmd <command>] [--safari-profile <name>]")
+		return
+	}
 	headless := isLikelyHeadlessMachine()
 	fs := flag.NewFlagSet("login", flag.ExitOnError)
 	deviceAuth := fs.Bool("device-auth", true, "use device auth flow")
@@ -1909,6 +1931,10 @@ func selectCodexProfile(action string, defaultKey string) (codexProfile, bool) {
 }
 
 func cmdCodexLogs(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si logs <name> [--tail N]")
+		return
+	}
 	if len(args) < 1 {
 		printUsage("usage: si logs <name> [--tail N]")
 		return
@@ -1922,6 +1948,10 @@ func cmdCodexLogs(args []string) {
 }
 
 func cmdCodexTail(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si tail <name> [--tail N]")
+		return
+	}
 	if len(args) < 1 {
 		printUsage("usage: si tail <name> [--tail N]")
 		return
@@ -2084,6 +2114,10 @@ func cmdCodexRemove(args []string) {
 }
 
 func cmdCodexStop(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si stop <name>")
+		return
+	}
 	if len(args) < 1 {
 		printUsage("usage: si stop <name>")
 		return
@@ -2096,6 +2130,10 @@ func cmdCodexStop(args []string) {
 }
 
 func cmdCodexStart(args []string) {
+	if isSingleHelpArg(args) {
+		printUsage("usage: si start <name>")
+		return
+	}
 	if len(args) < 1 {
 		printUsage("usage: si start <name>")
 		return
