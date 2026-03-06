@@ -241,3 +241,29 @@ func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
 		t.Fatalf("unexpected access token container path: %q", boot.AccessTokenContainerPath)
 	}
 }
+
+func TestFortDesiredFileOwnershipFromEnv(t *testing.T) {
+	t.Setenv("SI_HOST_UID", "2222")
+	t.Setenv("SI_HOST_GID", "3333")
+
+	uid, gid, ok := fortDesiredFileOwnership()
+	if !ok {
+		t.Fatalf("expected ownership to be resolved")
+	}
+	if uid != 2222 || gid != 3333 {
+		t.Fatalf("unexpected ownership uid=%d gid=%d", uid, gid)
+	}
+}
+
+func TestFortDesiredFileOwnershipDefaultsToProcessIdentity(t *testing.T) {
+	t.Setenv("SI_HOST_UID", "")
+	t.Setenv("SI_HOST_GID", "")
+
+	uid, gid, ok := fortDesiredFileOwnership()
+	if !ok {
+		t.Fatalf("expected ownership to be resolved")
+	}
+	if uid != os.Getuid() || gid != os.Getgid() {
+		t.Fatalf("unexpected ownership uid=%d gid=%d want uid=%d gid=%d", uid, gid, os.Getuid(), os.Getgid())
+	}
+}
