@@ -90,6 +90,10 @@ func cmdImage(args []string) {
 		return
 	}
 	args = routedArgs
+	if isSingleHelpArg(args) {
+		printUsage(imageUsageText)
+		return
+	}
 	provider := normalizeImageProvider(args[0])
 	rest := args[1:]
 	switch provider {
