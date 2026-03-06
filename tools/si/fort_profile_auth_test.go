@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -106,5 +108,136 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	}
 	if got := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN")); got != "refresh-1" {
 		t.Fatalf("expected refresh token to be unchanged, got %q", got)
+	}
+}
+
+func TestFortEnsureAgentReadPolicySetsDefaultWhenEmpty(t *testing.T) {
+	var putBindings []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
+			http.NotFound(w, r)
+			return
+		}
+		if got := strings.TrimSpace(r.Header.Get("X-Fort-Bootstrap-Key")); got != "bootstrap-test" {
+			t.Fatalf("missing bootstrap key header: %q", got)
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"bindings":[]}`))
+		case http.MethodPut:
+			var req struct {
+				Bindings []map[string]any `json:"bindings"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode policy put body: %v", err)
+			}
+			putBindings = req.Bindings
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	defer srv.Close()
+
+	err := fortEnsureAgentReadPolicy(context.Background(), fortBootstrapConfig{
+		HostURL:      srv.URL,
+		BootstrapKey: "bootstrap-test",
+	}, "si-codex-alpha")
+	if err != nil {
+		t.Fatalf("fortEnsureAgentReadPolicy: %v", err)
+	}
+	if len(putBindings) != 1 {
+		t.Fatalf("expected one policy binding, got %d", len(putBindings))
+	}
+	binding := putBindings[0]
+	if got := strings.TrimSpace(binding["repo"].(string)); got != "*" {
+		t.Fatalf("unexpected binding repo: %q", got)
+	}
+	if got := strings.TrimSpace(binding["env"].(string)); got != "*" {
+		t.Fatalf("unexpected binding env: %q", got)
+	}
+	rawOps, ok := binding["ops"].([]any)
+	if !ok {
+		t.Fatalf("expected ops array, got %#v", binding["ops"])
+	}
+	ops := make([]string, 0, len(rawOps))
+	for _, item := range rawOps {
+		ops = append(ops, strings.TrimSpace(item.(string)))
+	}
+	if !slices.Equal(ops, fortDefaultReadOps) {
+		t.Fatalf("unexpected default ops: %#v", ops)
+	}
+}
+
+func TestFortEnsureAgentReadPolicySkipsWhenPresent(t *testing.T) {
+	putCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"bindings":[{"repo":"safe","env":"dev","ops":["get"]}]}`))
+		case http.MethodPut:
+			putCalled = true
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	defer srv.Close()
+
+	err := fortEnsureAgentReadPolicy(context.Background(), fortBootstrapConfig{
+		HostURL:      srv.URL,
+		BootstrapKey: "bootstrap-test",
+	}, "si-codex-alpha")
+	if err != nil {
+		t.Fatalf("fortEnsureAgentReadPolicy: %v", err)
+	}
+	if putCalled {
+		t.Fatalf("expected policy put to be skipped when bindings already exist")
+	}
+}
+
+func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "alpha"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+	if err := os.WriteFile(paths.AccessTokenHostPath, []byte("access"), 0o600); err != nil {
+		t.Fatalf("write access token: %v", err)
+	}
+	if err := os.WriteFile(paths.RefreshTokenHostPath, []byte("refresh"), 0o600); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	state := fortProfileSessionState{
+		ProfileID:     "alpha",
+		AgentID:       "si-codex-alpha",
+		SessionID:     "sess-1",
+		Host:          "http://172.19.0.9:8088",
+		ContainerHost: "http://viva-fort-app-blue:8088",
+	}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+	boot, err := loadCodexFortBootstrapFromProfileState(profile)
+	if err != nil {
+		t.Fatalf("loadCodexFortBootstrapFromProfileState: %v", err)
+	}
+	if boot.ProfileID != "alpha" {
+		t.Fatalf("unexpected profile id: %q", boot.ProfileID)
+	}
+	if boot.AgentID != "si-codex-alpha" {
+		t.Fatalf("unexpected agent id: %q", boot.AgentID)
+	}
+	if boot.ContainerHostURL != "http://viva-fort-app-blue:8088" {
+		t.Fatalf("unexpected container host url: %q", boot.ContainerHostURL)
+	}
+	if boot.AccessTokenContainerPath != "/home/si/.si/codex/profiles/alpha/fort/access.token" {
+		t.Fatalf("unexpected access token container path: %q", boot.AccessTokenContainerPath)
 	}
 }

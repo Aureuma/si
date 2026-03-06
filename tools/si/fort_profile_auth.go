@@ -29,6 +29,8 @@ const (
 	fortProfileRefreshTokenFileName = "refresh.token"
 )
 
+var fortDefaultReadOps = []string{"get", "list", "batch-get", "run"}
+
 type fortRequestAuth struct {
 	BearerToken  string
 	BootstrapKey string
@@ -128,6 +130,9 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err := fortEnsureAgent(ctx, cfg, agentID); err != nil {
 		return codexFortBootstrap{}, err
 	}
+	if err := fortEnsureAgentReadPolicy(ctx, cfg, agentID); err != nil {
+		return codexFortBootstrap{}, err
+	}
 	session, err := fortOpenSession(ctx, cfg, agentID)
 	if err != nil {
 		return codexFortBootstrap{}, err
@@ -159,6 +164,46 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 		SessionID:                 session.SessionID,
 		HostURL:                   cfg.HostURL,
 		ContainerHostURL:          cfg.ContainerHostURL,
+		AccessTokenHostPath:       paths.AccessTokenHostPath,
+		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
+		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
+		RefreshTokenContainerPath: paths.RefreshTokenContainerPath,
+	}, nil
+}
+
+func loadCodexFortBootstrapFromProfileState(profile codexProfile) (codexFortBootstrap, error) {
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	profileID := strings.TrimSpace(profile.ID)
+	if profileID == "" {
+		profileID = strings.TrimSpace(state.ProfileID)
+	}
+	if profileID == "" {
+		return codexFortBootstrap{}, fmt.Errorf("profile id required")
+	}
+	agentID := strings.TrimSpace(state.AgentID)
+	if agentID == "" {
+		agentID = fortAgentIDForProfile(profileID)
+	}
+	containerHostURL := strings.TrimSpace(state.ContainerHost)
+	if containerHostURL == "" {
+		containerHostURL = fortHostURLForContainer(strings.TrimSpace(state.Host))
+	}
+	if containerHostURL == "" {
+		return codexFortBootstrap{}, fmt.Errorf("fort container host is missing in session state")
+	}
+	return codexFortBootstrap{
+		ProfileID:                 profileID,
+		AgentID:                   agentID,
+		SessionID:                 strings.TrimSpace(state.SessionID),
+		HostURL:                   strings.TrimSpace(state.Host),
+		ContainerHostURL:          containerHostURL,
 		AccessTokenHostPath:       paths.AccessTokenHostPath,
 		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
 		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
@@ -554,6 +599,92 @@ func fortEnsureAgent(ctx context.Context, cfg fortBootstrapConfig, agentID strin
 		return fmt.Errorf("fort agent enable failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
 	}
 	return nil
+}
+
+type fortPolicyBinding struct {
+	Repo string   `json:"repo"`
+	Env  string   `json:"env"`
+	Ops  []string `json:"ops"`
+}
+
+func fortEnsureAgentReadPolicy(ctx context.Context, cfg fortBootstrapConfig, agentID string) error {
+	agentID = strings.TrimSpace(agentID)
+	if agentID == "" {
+		return fmt.Errorf("fort agent id is required")
+	}
+	auth := fortRequestAuth{
+		BearerToken:  strings.TrimSpace(cfg.BearerToken),
+		BootstrapKey: strings.TrimSpace(cfg.BootstrapKey),
+	}
+	path := "/v1/agents/" + url.PathEscape(agentID) + "/policy"
+	status, body, err := fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodGet, path, nil, auth)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("fort agent policy get failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
+	}
+	bindings := fortPolicyBindingsFromBody(body)
+	if len(bindings) > 0 {
+		return nil
+	}
+	payload := map[string]any{
+		"bindings": []map[string]any{
+			{
+				"repo": "*",
+				"env":  "*",
+				"ops":  append([]string(nil), fortDefaultReadOps...),
+			},
+		},
+	}
+	status, body, err = fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodPut, path, payload, auth)
+	if err != nil {
+		return err
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("fort agent policy set failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
+	}
+	return nil
+}
+
+func fortPolicyBindingsFromBody(body map[string]any) []fortPolicyBinding {
+	if body == nil {
+		return nil
+	}
+	raw, ok := body["bindings"]
+	if !ok || raw == nil {
+		return nil
+	}
+	items, ok := raw.([]any)
+	if !ok || len(items) == 0 {
+		return nil
+	}
+	out := make([]fortPolicyBinding, 0, len(items))
+	for _, item := range items {
+		entry, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		repo := strings.TrimSpace(fmt.Sprint(entry["repo"]))
+		env := strings.TrimSpace(fmt.Sprint(entry["env"]))
+		opsAny, _ := entry["ops"].([]any)
+		ops := make([]string, 0, len(opsAny))
+		for _, opItem := range opsAny {
+			op := strings.TrimSpace(fmt.Sprint(opItem))
+			if op != "" {
+				ops = append(ops, op)
+			}
+		}
+		if repo == "" || env == "" || len(ops) == 0 {
+			continue
+		}
+		out = append(out, fortPolicyBinding{
+			Repo: repo,
+			Env:  env,
+			Ops:  ops,
+		})
+	}
+	return out
 }
 
 func fortOpenSession(ctx context.Context, cfg fortBootstrapConfig, agentID string) (fortSessionOpenResult, error) {
