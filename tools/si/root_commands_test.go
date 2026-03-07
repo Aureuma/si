@@ -38,6 +38,7 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"persona",
 		"skill",
 		"orbits",
+		"test",
 		"help", "-h", "--help",
 	}
 	for _, cmd := range expected {
