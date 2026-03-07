@@ -78,6 +78,21 @@ For containerized smoke coverage (root + non-root installer paths), run:
 Use `SI_INSTALL_SMOKE_SKIP_NONROOT=1 ./tools/test-install-si-docker.sh` to skip
 the non-root leg during local iteration.
 
+## Fort spawn/respawn security matrix
+Run the live Fort integration matrix against real `si spawn` containers:
+
+```bash
+./tools/test-fort-spawn-matrix.sh
+```
+
+This matrix validates:
+- profile-scoped Fort agent auth bootstrap in `si spawn`
+- in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` env leakage
+- strict token file modes/ownership (`0600` files, `0700` fort state dir)
+- policy allow/deny behavior across multiple profiles and repo/env bindings
+- `si respawn --volumes` auth continuity
+- ciphertext-at-rest plus manual ECIES decrypt parity with `fort get`
+
 ## CI notes
 GitHub Actions workflows use docs-only change detection to skip heavy test jobs
 when only docs/markdown files are modified.
