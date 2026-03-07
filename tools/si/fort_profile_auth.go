@@ -859,7 +859,7 @@ func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState)
 	return defaultTokenPath, defaultRefreshPath, sessionPath, state
 }
 
-func prepareFortRuntimeAuth(rest []string) error {
+func prepareFortRuntimeAuth(rest []string) (string, error) {
 	tokenPath, refreshPath, sessionPath, state := fortSessionPathsFromEnv()
 	if tokenPath != "" {
 		_ = os.Setenv("FORT_TOKEN_PATH", tokenPath)
@@ -879,35 +879,25 @@ func prepareFortRuntimeAuth(rest []string) error {
 	accessToken := strings.TrimSpace(os.Getenv("FORT_TOKEN"))
 	if accessToken == "" {
 		accessToken = readSecretFile(tokenPath)
-		if accessToken != "" {
-			_ = os.Setenv("FORT_TOKEN", accessToken)
-		}
 	}
-	refreshToken := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN"))
-	if refreshToken == "" {
-		refreshToken = readSecretFile(refreshPath)
-		if refreshToken != "" {
-			_ = os.Setenv("FORT_REFRESH_TOKEN", refreshToken)
-		}
-	}
+	refreshToken := readSecretFile(refreshPath)
 	if fortShouldSkipAutoRefresh(rest) {
-		return nil
+		return accessToken, nil
 	}
 	host := strings.TrimSpace(os.Getenv("FORT_HOST"))
 	if host == "" || refreshToken == "" {
-		return nil
+		return accessToken, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	refreshed, err := fortRefreshSession(ctx, host, refreshToken)
 	if err != nil {
-		// Keep existing token path/env behavior intact and continue.
-		return nil
+		// Keep existing token-file behavior intact and continue.
+		return accessToken, nil
 	}
-	_ = os.Setenv("FORT_TOKEN", refreshed.AccessToken)
-	_ = os.Setenv("FORT_REFRESH_TOKEN", refreshed.RefreshToken)
+	accessToken = strings.TrimSpace(refreshed.AccessToken)
 	if tokenPath != "" {
-		_ = writeSecretFile(tokenPath, refreshed.AccessToken)
+		_ = writeSecretFile(tokenPath, accessToken)
 	}
 	if refreshPath != "" {
 		_ = writeSecretFile(refreshPath, refreshed.RefreshToken)
@@ -920,7 +910,7 @@ func prepareFortRuntimeAuth(rest []string) error {
 		}
 		_ = saveFortProfileSessionState(sessionPath, state)
 	}
-	return nil
+	return accessToken, nil
 }
 
 func fortShouldSkipAutoRefresh(rest []string) bool {

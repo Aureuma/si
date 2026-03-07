@@ -16,10 +16,49 @@ const fortConfigUsageText = "usage: si fort config <show|set> [args]"
 
 var runFortExternal = func(bin string, args []string) error {
 	cmd := exec.Command(bin, args...)
+	cmd.Env = fortSanitizedEnv(os.Environ())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	return cmd.Run()
+}
+
+func fortSanitizedEnv(env []string) []string {
+	if len(env) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "FORT_TOKEN=") || strings.HasPrefix(entry, "FORT_REFRESH_TOKEN=") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+func fortArgsContainToken(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		part := strings.TrimSpace(args[i])
+		if part == "--token" {
+			return true
+		}
+		if strings.HasPrefix(part, "--token=") {
+			return true
+		}
+	}
+	return false
+}
+
+func fortArgsWithToken(args []string, token string) []string {
+	token = strings.TrimSpace(token)
+	if token == "" || fortArgsContainToken(args) {
+		return args
+	}
+	out := make([]string, 0, len(args)+2)
+	out = append(out, "--token", token)
+	out = append(out, args...)
+	return out
 }
 
 func cmdFort(args []string) {
@@ -88,9 +127,11 @@ func cmdFort(args []string) {
 		}
 		fatal(err)
 	}
-	if err := prepareFortRuntimeAuth(rest); err != nil {
+	accessToken, err := prepareFortRuntimeAuth(rest)
+	if err != nil {
 		warnf("fort auth auto-refresh skipped: %v", err)
 	}
+	rest = fortArgsWithToken(rest, accessToken)
 
 	if err := runFortExternal(resolvedBin, rest); err != nil {
 		if *jsonOut {
