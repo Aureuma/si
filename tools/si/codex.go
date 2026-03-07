@@ -321,15 +321,9 @@ func cmdCodexSpawn(args []string) {
 	if profile != nil {
 		boot, err := ensureCodexProfileFortSession(ctx, client, *profile, strings.TrimSpace(*flags.networkName))
 		if err != nil {
-			warnf("fort profile auth bootstrap skipped for %s: %v", profile.ID, err)
-			if cachedBoot, cachedErr := loadCodexFortBootstrapFromProfileState(*profile); cachedErr == nil {
-				fortBootstrap = &cachedBoot
-			} else {
-				warnf("fort cached session unavailable for %s: %v", profile.ID, cachedErr)
-			}
-		} else {
-			fortBootstrap = &boot
+			fatal(fmt.Errorf("fort profile auth bootstrap failed for %s: %w", profile.ID, err))
 		}
+		fortBootstrap = &boot
 	}
 
 	if profile != nil {

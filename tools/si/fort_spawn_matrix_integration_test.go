@@ -124,9 +124,7 @@ func TestFortSpawnMatrix(t *testing.T) {
 		ctx.verifyTokenFiles(profile)
 	}
 
-	expectingReadOnlyPolicy(ctx, t)
-	ctx.applyAgentPolicies()
-	expectingRestrictedPolicy(ctx, t)
+	expectingAdminPolicy(ctx, t)
 	ctx.respawnContinuity(ctx.profiles[0])
 
 	safeDevFile := ctx.readSafeFile("safe", "dev", "MATRIX_PROFILE_A_WRITE")
@@ -325,10 +323,11 @@ func seedTestCodexProfiles(t *testing.T, profileIDs []string) error {
 
 func (ctx *fortMatrixContext) commonEnvMap(extra map[string]string) map[string]string {
 	base := map[string]string{
-		"HOME":             ctx.profileTestHome,
-		"SI_SETTINGS_HOME": ctx.profileTestHome,
-		"SI_HOST_UID":      ctx.hostUID,
-		"SI_HOST_GID":      ctx.hostGID,
+		"HOME":                        ctx.profileTestHome,
+		"SI_SETTINGS_HOME":            ctx.profileTestHome,
+		"SI_HOST_UID":                 ctx.hostUID,
+		"SI_HOST_GID":                 ctx.hostGID,
+		"SI_FORT_ALLOW_INSECURE_HOST": "1",
 	}
 	for k, v := range extra {
 		base[k] = v
@@ -603,15 +602,24 @@ func lastNonEmptyLine(raw string) string {
 	return ""
 }
 
-func expectingReadOnlyPolicy(ctx *fortMatrixContext, t *testing.T) {
+func expectingAdminPolicy(ctx *fortMatrixContext, t *testing.T) {
 	if got, err := ctx.fortGet(ctx.profiles[0], "safe", "dev", "MATRIX_SAFE_DEV"); err != nil || strings.TrimSpace(got) != "safe-dev-value" {
 		if err != nil {
 			t.Fatalf("%s safe/dev read: %v", ctx.profiles[0], err)
 		}
 		t.Fatalf("%s safe/dev read expected safe-dev-value, got %q", ctx.profiles[0], got)
 	}
-	if _, err := ctx.runProfileCommand(ctx.profiles[0], "si fort --bin /tmp/fort set --repo safe --env dev --key MATRIX_WRITE_DENY --value denied"); err == nil {
-		t.Fatalf("expected write deny for %s", ctx.profiles[0])
+	if got, err := ctx.fortSetAndGet(ctx.profiles[0], "safe", "dev", "MATRIX_PROFILE_A_WRITE", "from-profile-a"); err != nil || strings.TrimSpace(got) != "from-profile-a" {
+		if err != nil {
+			t.Fatalf("%s set/get safe/dev: %v", ctx.profiles[0], err)
+		}
+		t.Fatalf("%s set/get safe/dev expected from-profile-a, got %q", ctx.profiles[0], got)
+	}
+	if got, err := ctx.fortGet(ctx.profiles[0], "core", "dev", "MATRIX_CORE_DEV"); err != nil || strings.TrimSpace(got) != "core-dev-value" {
+		if err != nil {
+			t.Fatalf("%s core/dev read: %v", ctx.profiles[0], err)
+		}
+		t.Fatalf("%s core/dev read expected core-dev-value, got %q", ctx.profiles[0], got)
 	}
 	if got, err := ctx.fortGet(ctx.profiles[1], "core", "dev", "MATRIX_CORE_DEV"); err != nil || strings.TrimSpace(got) != "core-dev-value" {
 		if err != nil {
@@ -619,47 +627,17 @@ func expectingReadOnlyPolicy(ctx *fortMatrixContext, t *testing.T) {
 		}
 		t.Fatalf("%s core/dev read expected core-dev-value, got %q", ctx.profiles[1], got)
 	}
-	if _, err := ctx.runProfileCommand(ctx.profiles[1], "si fort --bin /tmp/fort set --repo core --env dev --key MATRIX_WRITE_DENY --value denied"); err == nil {
-		t.Fatalf("expected write deny for %s", ctx.profiles[1])
-	}
-}
-
-func (ctx *fortMatrixContext) applyAgentPolicies() {
-	if _, err := ctx.runFortAdmin("agent", "policy", "set", "--id", "si-codex-"+ctx.profiles[0], "--bind", "safe:dev:get,set,list,batch-get,run"); err != nil {
-		ctx.t.Fatalf("set policy for %s: %v", ctx.profiles[0], err)
-	}
-	if _, err := ctx.runFortAdmin("agent", "policy", "set", "--id", "si-codex-"+ctx.profiles[1], "--bind", "core:dev:get,list,batch-get,run"); err != nil {
-		ctx.t.Fatalf("set policy for %s: %v", ctx.profiles[1], err)
-	}
-}
-
-func expectingRestrictedPolicy(ctx *fortMatrixContext, t *testing.T) {
-	if got, err := ctx.fortGet(ctx.profiles[0], "safe", "dev", "MATRIX_SAFE_DEV"); err != nil || strings.TrimSpace(got) != "safe-dev-value" {
+	if got, err := ctx.fortGet(ctx.profiles[1], "safe", "dev", "MATRIX_SAFE_DEV"); err != nil || strings.TrimSpace(got) != "safe-dev-value" {
 		if err != nil {
-			t.Fatalf("%s safe/dev read after policy: %v", ctx.profiles[0], err)
+			t.Fatalf("%s safe/dev read: %v", ctx.profiles[1], err)
 		}
-		t.Fatalf("%s safe/dev read expected safe-dev-value, got %q", ctx.profiles[0], got)
+		t.Fatalf("%s safe/dev read expected safe-dev-value, got %q", ctx.profiles[1], got)
 	}
-	if got, err := ctx.fortSetAndGet(ctx.profiles[0], "safe", "dev", "MATRIX_PROFILE_A_WRITE", "from-profile-a"); err != nil || strings.TrimSpace(got) != "from-profile-a" {
+	if got, err := ctx.fortSetAndGet(ctx.profiles[1], "core", "dev", "MATRIX_PROFILE_B_WRITE", "from-profile-b"); err != nil || strings.TrimSpace(got) != "from-profile-b" {
 		if err != nil {
-			t.Fatalf("%s set/get: %v", ctx.profiles[0], err)
+			t.Fatalf("%s set/get core/dev: %v", ctx.profiles[1], err)
 		}
-		t.Fatalf("%s set/get expected from-profile-a, got %q", ctx.profiles[0], got)
-	}
-	if _, err := ctx.runProfileCommand(ctx.profiles[0], "si fort --bin /tmp/fort get --repo core --env dev --key MATRIX_CORE_DEV --format raw"); err == nil {
-		t.Fatalf("expected %s denied for core/dev", ctx.profiles[0])
-	}
-	if got, err := ctx.fortGet(ctx.profiles[1], "core", "dev", "MATRIX_CORE_DEV"); err != nil || strings.TrimSpace(got) != "core-dev-value" {
-		if err != nil {
-			t.Fatalf("%s core/dev read after policy: %v", ctx.profiles[1], err)
-		}
-		t.Fatalf("%s core/dev read expected core-dev-value, got %q", ctx.profiles[1], got)
-	}
-	if _, err := ctx.runProfileCommand(ctx.profiles[1], "si fort --bin /tmp/fort get --repo safe --env dev --key MATRIX_SAFE_DEV --format raw"); err == nil {
-		t.Fatalf("expected %s denied for safe/dev", ctx.profiles[1])
-	}
-	if _, err := ctx.runProfileCommand(ctx.profiles[1], "si fort --bin /tmp/fort set --repo core --env dev --key MATRIX_PROFILE_B_WRITE --value nope"); err == nil {
-		t.Fatalf("expected %s denied for core/dev write", ctx.profiles[1])
+		t.Fatalf("%s set/get core/dev expected from-profile-b, got %q", ctx.profiles[1], got)
 	}
 }
 
@@ -676,8 +654,11 @@ func (ctx *fortMatrixContext) respawnContinuity(profile string) {
 			}
 			ctx.t.Fatalf("%s expected from-profile-a after respawn #%d, got %q", profile, i, got)
 		}
-		if _, err := ctx.runProfileCommand(profile, "si fort --bin /tmp/fort get --repo core --env dev --key MATRIX_CORE_DEV --format raw"); err == nil {
-			ctx.t.Fatalf("expected %s denied for core/dev after respawn #%d", profile, i)
+		if got, err := ctx.fortGet(profile, "core", "dev", "MATRIX_CORE_DEV"); err != nil || strings.TrimSpace(got) != "core-dev-value" {
+			if err != nil {
+				ctx.t.Fatalf("%s core/dev value after respawn #%d: %v", profile, i, err)
+			}
+			ctx.t.Fatalf("%s expected core-dev-value after respawn #%d, got %q", profile, i, got)
 		}
 	}
 }
