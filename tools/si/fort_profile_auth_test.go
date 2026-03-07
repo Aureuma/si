@@ -23,6 +23,55 @@ func TestFortHostURLForContainer(t *testing.T) {
 	}
 }
 
+func TestResolveFortBootstrapConfigDefaultsToHostedFort(t *testing.T) {
+	t.Setenv("FORT_HOST", "")
+	t.Setenv("SI_FORT_HOST", "")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "")
+	t.Setenv("FORT_TOKEN", "admin-token")
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "")
+	t.Setenv("SI_FORT_DISCOVER_DOCKER", "")
+
+	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
+	if err != nil {
+		t.Fatalf("resolveFortBootstrapConfig: %v", err)
+	}
+	if cfg.HostURL != "https://fort.aureuma.com" {
+		t.Fatalf("unexpected host url: %q", cfg.HostURL)
+	}
+	if cfg.ContainerHostURL != "https://fort.aureuma.com" {
+		t.Fatalf("unexpected container host url: %q", cfg.ContainerHostURL)
+	}
+}
+
+func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T) {
+	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "")
+	t.Setenv("FORT_TOKEN", "admin-token")
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "")
+
+	if _, err := resolveFortBootstrapConfig(context.Background(), nil, ""); err == nil {
+		t.Fatalf("expected insecure host to be rejected")
+	}
+}
+
+func TestResolveFortBootstrapConfigAllowsInsecureWhenExplicitlyEnabled(t *testing.T) {
+	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "http://host.docker.internal:8088")
+	t.Setenv("FORT_TOKEN", "admin-token")
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+
+	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
+	if err != nil {
+		t.Fatalf("resolveFortBootstrapConfig: %v", err)
+	}
+	if cfg.HostURL != "http://127.0.0.1:8088" {
+		t.Fatalf("unexpected host: %q", cfg.HostURL)
+	}
+	if cfg.ContainerHostURL != "http://host.docker.internal:8088" {
+		t.Fatalf("unexpected container host: %q", cfg.ContainerHostURL)
+	}
+}
+
 func TestFortAgentIDForProfile(t *testing.T) {
 	got := fortAgentIDForProfile("CADMA_01!")
 	if got != "si-codex-cadma-01" {
@@ -111,7 +160,7 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	}
 }
 
-func TestFortEnsureAgentReadPolicySetsDefaultWhenEmpty(t *testing.T) {
+func TestFortEnsureAgentAdminPolicySetsAdminWhenEmpty(t *testing.T) {
 	var putBindings []map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
@@ -139,12 +188,12 @@ func TestFortEnsureAgentReadPolicySetsDefaultWhenEmpty(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := fortEnsureAgentReadPolicy(context.Background(), fortBootstrapConfig{
+	err := fortEnsureAgentAdminPolicy(context.Background(), fortBootstrapConfig{
 		HostURL:     srv.URL,
 		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
 	if err != nil {
-		t.Fatalf("fortEnsureAgentReadPolicy: %v", err)
+		t.Fatalf("fortEnsureAgentAdminPolicy: %v", err)
 	}
 	if len(putBindings) != 1 {
 		t.Fatalf("expected one policy binding, got %d", len(putBindings))
@@ -164,12 +213,12 @@ func TestFortEnsureAgentReadPolicySetsDefaultWhenEmpty(t *testing.T) {
 	for _, item := range rawOps {
 		ops = append(ops, strings.TrimSpace(item.(string)))
 	}
-	if !slices.Equal(ops, fortDefaultReadOps) {
+	if !slices.Equal(ops, fortDefaultAdminOps) {
 		t.Fatalf("unexpected default ops: %#v", ops)
 	}
 }
 
-func TestFortEnsureAgentReadPolicySkipsWhenPresent(t *testing.T) {
+func TestFortEnsureAgentAdminPolicyOverwritesNonAdminBindings(t *testing.T) {
 	putCalled := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
@@ -188,15 +237,46 @@ func TestFortEnsureAgentReadPolicySkipsWhenPresent(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := fortEnsureAgentReadPolicy(context.Background(), fortBootstrapConfig{
+	err := fortEnsureAgentAdminPolicy(context.Background(), fortBootstrapConfig{
 		HostURL:     srv.URL,
 		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
 	if err != nil {
-		t.Fatalf("fortEnsureAgentReadPolicy: %v", err)
+		t.Fatalf("fortEnsureAgentAdminPolicy: %v", err)
+	}
+	if !putCalled {
+		t.Fatalf("expected policy put when bindings are not admin")
+	}
+}
+
+func TestFortEnsureAgentAdminPolicySkipsWhenAdminPresent(t *testing.T) {
+	putCalled := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
+			http.NotFound(w, r)
+			return
+		}
+		switch r.Method {
+		case http.MethodGet:
+			_, _ = w.Write([]byte(`{"bindings":[{"repo":"*","env":"*","ops":["*"]}]}`))
+		case http.MethodPut:
+			putCalled = true
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	defer srv.Close()
+
+	err := fortEnsureAgentAdminPolicy(context.Background(), fortBootstrapConfig{
+		HostURL:     srv.URL,
+		BearerToken: "admin-test-token",
+	}, "si-codex-alpha")
+	if err != nil {
+		t.Fatalf("fortEnsureAgentAdminPolicy: %v", err)
 	}
 	if putCalled {
-		t.Fatalf("expected policy put to be skipped when bindings already exist")
+		t.Fatalf("expected policy put to be skipped when admin wildcard is present")
 	}
 }
 
@@ -219,7 +299,7 @@ func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
 		AgentID:       "si-codex-alpha",
 		SessionID:     "sess-1",
 		Host:          "http://172.19.0.9:8088",
-		ContainerHost: "http://viva-fort-app-blue:8088",
+		ContainerHost: "https://fort.aureuma.com",
 	}
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		t.Fatalf("saveFortProfileSessionState: %v", err)
@@ -234,7 +314,7 @@ func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
 	if boot.AgentID != "si-codex-alpha" {
 		t.Fatalf("unexpected agent id: %q", boot.AgentID)
 	}
-	if boot.ContainerHostURL != "http://viva-fort-app-blue:8088" {
+	if boot.ContainerHostURL != "https://fort.aureuma.com" {
 		t.Fatalf("unexpected container host url: %q", boot.ContainerHostURL)
 	}
 	if boot.AccessTokenContainerPath != "/home/si/.si/codex/profiles/alpha/fort/access.token" {

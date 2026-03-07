@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	fortDefaultHostURL              = "http://127.0.0.1:8088"
+	fortDefaultHostURL              = "https://fort.aureuma.com"
 	fortDefaultPort                 = 8088
 	fortProfileStateDirName         = "fort"
 	fortProfileSessionStateFileName = "session.json"
@@ -29,7 +29,7 @@ const (
 	fortProfileRefreshTokenFileName = "refresh.token"
 )
 
-var fortDefaultReadOps = []string{"get", "list", "batch-get", "run"}
+var fortDefaultAdminOps = []string{"*"}
 
 type fortRequestAuth struct {
 	BearerToken string
@@ -127,7 +127,7 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err := fortEnsureAgent(ctx, cfg, agentID); err != nil {
 		return codexFortBootstrap{}, err
 	}
-	if err := fortEnsureAgentReadPolicy(ctx, cfg, agentID); err != nil {
+	if err := fortEnsureAgentAdminPolicy(ctx, cfg, agentID); err != nil {
 		return codexFortBootstrap{}, err
 	}
 	session, err := fortOpenSession(ctx, cfg, agentID)
@@ -442,32 +442,91 @@ func fortAgentIDForProfile(profileID string) string {
 }
 
 func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, preferredNetwork string) (fortBootstrapConfig, error) {
+	discoverDocker := fortEnvBool("SI_FORT_DISCOVER_DOCKER")
 	cfg := fortBootstrapConfig{
 		HostURL:          strings.TrimSpace(os.Getenv("FORT_HOST")),
 		ContainerHostURL: strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")),
 		BearerToken:      strings.TrimSpace(os.Getenv("FORT_TOKEN")),
 	}
-	hint, hintOK := detectFortDockerHint(ctx, client, preferredNetwork)
-	if strings.TrimSpace(cfg.HostURL) == "" && hintOK && strings.TrimSpace(hint.HostURL) != "" {
-		cfg.HostURL = hint.HostURL
+	if strings.TrimSpace(cfg.HostURL) == "" {
+		cfg.HostURL = strings.TrimSpace(os.Getenv("SI_FORT_HOST"))
+	}
+	var hint fortDockerHint
+	hintOK := false
+	if discoverDocker {
+		hint, hintOK = detectFortDockerHint(ctx, client, preferredNetwork)
+		if strings.TrimSpace(cfg.HostURL) == "" && hintOK && strings.TrimSpace(hint.HostURL) != "" {
+			cfg.HostURL = hint.HostURL
+		}
+	}
+	cfg.HostURL = strings.TrimSpace(cfg.HostURL)
+	if strings.TrimSpace(cfg.ContainerHostURL) == "" {
+		if discoverDocker && hintOK && strings.TrimSpace(hint.ContainerHostURL) != "" {
+			cfg.ContainerHostURL = strings.TrimSpace(hint.ContainerHostURL)
+		} else {
+			cfg.ContainerHostURL = strings.TrimSpace(cfg.HostURL)
+		}
 	}
 	if strings.TrimSpace(cfg.HostURL) == "" {
 		cfg.HostURL = fortDefaultHostURL
 	}
 	if strings.TrimSpace(cfg.ContainerHostURL) == "" {
-		if hintOK && strings.TrimSpace(hint.ContainerHostURL) != "" {
-			cfg.ContainerHostURL = strings.TrimSpace(hint.ContainerHostURL)
-		} else {
-			cfg.ContainerHostURL = fortHostURLForContainer(cfg.HostURL)
-		}
+		cfg.ContainerHostURL = strings.TrimSpace(cfg.HostURL)
 	}
-	if strings.TrimSpace(cfg.HostURL) == "" {
-		return fortBootstrapConfig{}, fmt.Errorf("fort host is required (set FORT_HOST or run a fort container)")
+	if err := fortValidateHostedURL(cfg.HostURL); err != nil {
+		return fortBootstrapConfig{}, fmt.Errorf("invalid fort host %q: %w", cfg.HostURL, err)
+	}
+	if err := fortValidateHostedURL(cfg.ContainerHostURL); err != nil {
+		return fortBootstrapConfig{}, fmt.Errorf("invalid fort container host %q: %w", cfg.ContainerHostURL, err)
 	}
 	if strings.TrimSpace(cfg.BearerToken) == "" {
 		return fortBootstrapConfig{}, fmt.Errorf("fort admin auth is required (set FORT_TOKEN)")
 	}
 	return cfg, nil
+}
+
+func fortEnvBool(key string) bool {
+	raw := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	switch raw {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func fortInsecureHostAllowed() bool {
+	return fortEnvBool("SI_FORT_ALLOW_INSECURE_HOST")
+}
+
+func fortValidateHostedURL(raw string) error {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fmt.Errorf("host is required")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(parsed.Hostname()) == "" {
+		return fmt.Errorf("missing host")
+	}
+	scheme := strings.ToLower(strings.TrimSpace(parsed.Scheme))
+	if scheme == "" {
+		return fmt.Errorf("missing URL scheme")
+	}
+	if fortInsecureHostAllowed() {
+		return nil
+	}
+	if scheme != "https" {
+		return fmt.Errorf("scheme must be https (set SI_FORT_ALLOW_INSECURE_HOST=1 only for local tests)")
+	}
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	switch host {
+	case "localhost", "127.0.0.1", "0.0.0.0", "::1":
+		return fmt.Errorf("loopback hosts are not allowed in hosted mode")
+	}
+	return nil
 }
 
 func detectFortDockerHint(ctx context.Context, client *shared.Client, preferredNetwork string) (fortDockerHint, bool) {
@@ -650,7 +709,7 @@ type fortPolicyBinding struct {
 	Ops  []string `json:"ops"`
 }
 
-func fortEnsureAgentReadPolicy(ctx context.Context, cfg fortBootstrapConfig, agentID string) error {
+func fortEnsureAgentAdminPolicy(ctx context.Context, cfg fortBootstrapConfig, agentID string) error {
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
 		return fmt.Errorf("fort agent id is required")
@@ -667,7 +726,7 @@ func fortEnsureAgentReadPolicy(ctx context.Context, cfg fortBootstrapConfig, age
 		return fmt.Errorf("fort agent policy get failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
 	}
 	bindings := fortPolicyBindingsFromBody(body)
-	if len(bindings) > 0 {
+	if fortPolicyBindingsIncludeAdmin(bindings) {
 		return nil
 	}
 	payload := map[string]any{
@@ -675,7 +734,7 @@ func fortEnsureAgentReadPolicy(ctx context.Context, cfg fortBootstrapConfig, age
 			{
 				"repo": "*",
 				"env":  "*",
-				"ops":  append([]string(nil), fortDefaultReadOps...),
+				"ops":  append([]string(nil), fortDefaultAdminOps...),
 			},
 		},
 	}
@@ -687,6 +746,20 @@ func fortEnsureAgentReadPolicy(ctx context.Context, cfg fortBootstrapConfig, age
 		return fmt.Errorf("fort agent policy set failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
 	}
 	return nil
+}
+
+func fortPolicyBindingsIncludeAdmin(bindings []fortPolicyBinding) bool {
+	for _, binding := range bindings {
+		if strings.TrimSpace(binding.Repo) != "*" || strings.TrimSpace(binding.Env) != "*" {
+			continue
+		}
+		for _, op := range binding.Ops {
+			if strings.TrimSpace(op) == "*" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func fortPolicyBindingsFromBody(body map[string]any) []fortPolicyBinding {
@@ -872,8 +945,15 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 		if host == "" {
 			host = strings.TrimSpace(state.Host)
 		}
-		if host != "" {
-			_ = os.Setenv("FORT_HOST", host)
+		if host == "" {
+			host = fortDefaultHostURL
+		}
+		if strings.TrimSpace(host) != "" {
+			if err := fortValidateHostedURL(host); err == nil {
+				_ = os.Setenv("FORT_HOST", host)
+			} else {
+				_ = os.Setenv("FORT_HOST", fortDefaultHostURL)
+			}
 		}
 	}
 	accessToken := strings.TrimSpace(os.Getenv("FORT_TOKEN"))

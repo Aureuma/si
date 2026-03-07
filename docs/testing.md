@@ -102,11 +102,18 @@ Run the live Fort integration matrix against real `si spawn` containers:
 
 This matrix validates:
 - profile-scoped Fort agent auth bootstrap in `si spawn`
+- hosted Fort endpoint flow (`https://fort.aureuma.com`) as the default runtime target
 - in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
 - policy allow/deny behavior across multiple profiles and repo/env bindings
 - `si respawn --volumes` auth continuity
 - ciphertext-at-rest plus manual ECIES decrypt parity with `fort get`
+
+For local-only integration harnesses that use HTTP Fort endpoints, set:
+
+```bash
+SI_FORT_ALLOW_INSECURE_HOST=1
+```
 
 ## CI notes
 GitHub Actions workflows use docs-only change detection to skip heavy test jobs
