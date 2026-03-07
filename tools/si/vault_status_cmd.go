@@ -77,8 +77,7 @@ func cmdVaultStatus(args []string) {
 			"repo":             target.Repo,
 			"env":              target.Env,
 			"env_file":         target.EnvFile,
-			"sun_base_url":     settings.Sun.BaseURL,
-			"sun_account":      settings.Sun.Account,
+			"keyring_file":     siVaultKeyringPath(),
 			"key_name_public":  vault.SIVaultPublicKeyName,
 			"key_name_private": vault.SIVaultPrivateKeyName,
 			"file_keys":        keyCount,
@@ -111,10 +110,11 @@ func cmdVaultStatus(args []string) {
 
 	fmt.Printf("repo/env:       %s/%s\n", target.Repo, target.Env)
 	fmt.Printf("file:           %s\n", filepath.Clean(target.EnvFile))
+	fmt.Printf("keyring_file:   %s\n", filepath.Clean(siVaultKeyringPath()))
 	if keyErr != nil {
-		fmt.Printf("sun_keys:       error (%v)\n", keyErr)
+		fmt.Printf("vault_keys:     error (%v)\n", keyErr)
 	} else {
-		fmt.Printf("sun_keys:       ok\n")
+		fmt.Printf("vault_keys:     ok\n")
 		fmt.Printf("public_key:     %s\n", material.PublicKey)
 		fmt.Printf("backup_keys:    %d\n", len(material.BackupPrivateKeys))
 	}

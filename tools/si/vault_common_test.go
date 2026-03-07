@@ -91,7 +91,7 @@ func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve default backend: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "default" {
+	if got.Mode != vaultSyncBackendFort || got.Source != "default" {
 		t.Fatalf("unexpected default resolution: %+v", got)
 	}
 
@@ -101,7 +101,7 @@ func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve backend with sun.auto_sync fallback removed: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "default" {
+	if got.Mode != vaultSyncBackendFort || got.Source != "default" {
 		t.Fatalf("unexpected resolution when backend unset: %+v", got)
 	}
 }
@@ -115,7 +115,7 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve settings backend: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
+	if got.Mode != vaultSyncBackendFort || got.Source != "settings" {
 		t.Fatalf("unexpected settings resolution: %+v", got)
 	}
 
@@ -124,8 +124,8 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve settings backend sun alias: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
-		t.Fatalf("unexpected settings sun-alias resolution: %+v", got)
+	if got.Mode != vaultSyncBackendFort || got.Source != "settings" {
+		t.Fatalf("unexpected settings alias resolution: %+v", got)
 	}
 
 	settings.Vault.SyncBackend = "dual"
@@ -133,7 +133,7 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve settings backend dual alias: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "settings" {
+	if got.Mode != vaultSyncBackendFort || got.Source != "settings" {
 		t.Fatalf("unexpected settings dual-alias resolution: %+v", got)
 	}
 
@@ -142,7 +142,7 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve env backend: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "env" {
+	if got.Mode != vaultSyncBackendFort || got.Source != "env" {
 		t.Fatalf("unexpected env resolution: %+v", got)
 	}
 
@@ -151,8 +151,8 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve env backend sun alias: %v", err)
 	}
-	if got.Mode != vaultSyncBackendSun || got.Source != "env" {
-		t.Fatalf("unexpected env sun-alias resolution: %+v", got)
+	if got.Mode != vaultSyncBackendFort || got.Source != "env" {
+		t.Fatalf("unexpected env alias resolution: %+v", got)
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "invalid")
