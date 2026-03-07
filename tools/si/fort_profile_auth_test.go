@@ -35,7 +35,6 @@ func TestPrepareFortRuntimeAuthRefresh(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
 	t.Setenv("FORT_TOKEN", "")
-	t.Setenv("FORT_REFRESH_TOKEN", "")
 	t.Setenv("FORT_TOKEN_PATH", "")
 	t.Setenv("FORT_REFRESH_TOKEN_PATH", "")
 
@@ -69,14 +68,15 @@ func TestPrepareFortRuntimeAuthRefresh(t *testing.T) {
 	defer srv.Close()
 	t.Setenv("FORT_HOST", srv.URL)
 
-	if err := prepareFortRuntimeAuth([]string{"get"}); err != nil {
+	accessToken, err := prepareFortRuntimeAuth([]string{"get"})
+	if err != nil {
 		t.Fatalf("prepareFortRuntimeAuth: %v", err)
 	}
 	if refreshCalls != 1 {
 		t.Fatalf("expected one refresh call, got %d", refreshCalls)
 	}
-	if got := strings.TrimSpace(os.Getenv("FORT_TOKEN")); got != "access-2" {
-		t.Fatalf("unexpected FORT_TOKEN: %q", got)
+	if accessToken != "access-2" {
+		t.Fatalf("unexpected access token: %q", accessToken)
 	}
 	tokenPath := filepath.Join(profileFortDir, fortProfileAccessTokenFileName)
 	tokenBytes, err := os.ReadFile(tokenPath)
@@ -100,14 +100,14 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
 	t.Setenv("FORT_TOKEN", "")
-	t.Setenv("FORT_REFRESH_TOKEN", "refresh-1")
 	t.Setenv("FORT_HOST", "http://127.0.0.1:1")
 
-	if err := prepareFortRuntimeAuth([]string{"auth", "session", "close"}); err != nil {
+	accessToken, err := prepareFortRuntimeAuth([]string{"auth", "session", "close"})
+	if err != nil {
 		t.Fatalf("prepareFortRuntimeAuth: %v", err)
 	}
-	if got := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN")); got != "refresh-1" {
-		t.Fatalf("expected refresh token to be unchanged, got %q", got)
+	if accessToken != "" {
+		t.Fatalf("expected empty access token when no token file is present, got %q", accessToken)
 	}
 }
 
