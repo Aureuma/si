@@ -13,6 +13,7 @@ import (
 
 func cmdVaultSet(args []string) {
 	settings := loadVaultSettingsOrFail()
+	args = stripeFlagsFirst(args, map[string]bool{"stdin": true, "encrypt": true, "plain": true})
 	fs := flag.NewFlagSet("vault set", flag.ExitOnError)
 	envFile := fs.String("env-file", defaultSIVaultDotenvFile, "dotenv file path")
 	fileAlias := fs.String("file", "", "alias for --env-file")
