@@ -8,6 +8,8 @@ Running `go test ./...` from the repo root will fail because the root directory 
 Use the repo test runner from the root:
 
 ```bash
+si test workspace
+# compatibility alias:
 ./tools/test.sh
 ```
 
@@ -22,6 +24,8 @@ Use `SI_GO_TEST_TIMEOUT=20m ./tools/test.sh` to adjust the go-test timeout when 
 For one-command local coverage of the standard test stack, run:
 
 ```bash
+si test all
+# compatibility alias:
 ./tools/test-all.sh
 ```
 
@@ -29,6 +33,11 @@ For one-command local coverage of the standard test stack, run:
 For orbit-system specific regression lanes (inspired by OpenClaw's segmented CI), use:
 
 ```bash
+si test orbits unit
+si test orbits policy
+si test orbits catalog
+si test orbits e2e
+# compatibility aliases:
 ./tools/test-runners/orbits-unit.sh
 ./tools/test-runners/orbits-policy.sh
 ./tools/test-runners/orbits-catalog.sh
@@ -38,6 +47,8 @@ For orbit-system specific regression lanes (inspired by OpenClaw's segmented CI)
 Run the full orbit runner stack:
 
 ```bash
+si test orbits all
+# compatibility alias:
 ./tools/test-runners/orbits-all.sh
 ```
 
@@ -60,12 +71,16 @@ Use `./tools/test-install-si.sh --help` for a quick usage reminder.
 Run the dedicated strict vault suite:
 
 ```bash
+si test vault
+# compatibility alias:
 ./tools/test-vault.sh
 ```
 
 Quick mode (skip subprocess e2e vault tests):
 
 ```bash
+si test vault --quick
+# compatibility alias:
 ./tools/test-vault.sh --quick
 ```
 

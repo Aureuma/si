@@ -84,6 +84,7 @@ Core:
   si fort [--repo <path>] [--bin <path>] [--build] -- <fort-args...>
   si surf [--repo <path>] [--bin <path>] [--build] -- <surf-args...>
   si remote-control|rc [--repo <path>] [--bin <path>] [--build] -- <remote-control-args...>
+  si test <workspace|vault|orbits|all> [args...]
   si analyze|lint [--module <path>] [--skip-vet] [--skip-lint] [--fix] [--no-fail]
   si docker <args...>
 
