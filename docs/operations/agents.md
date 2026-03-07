@@ -7,12 +7,11 @@ This repository includes two sustainable automation agents:
 
 ## Layout
 
-- `tools/agents/config.sh`: shared runtime defaults and policy thresholds.
-- `tools/agents/lib.sh`: logging, lock control, retries, and run finalization.
 - `tools/agents/pr-guardian.sh`: PR triage + autofix flow.
 - `tools/agents/website-sentry.sh`: health + remediation flow.
 - `tools/agents/doctor.sh`: preflight/syntax validation for the agent system.
 - `tools/agents/status.sh`: latest-run summary for all agents.
+- `tools/si/cmd/agentruntime`: shared runtime helpers (logging, lock control, retries, run finalization).
 
 ## Reliability Patterns
 
@@ -25,7 +24,7 @@ This repository includes two sustainable automation agents:
 
 3. Retry policy for transient failures
 - Health checks use bounded retries with exponential backoff.
-- Retry behavior is centralized in `lib.sh` and configured in `config.sh`.
+- Retry behavior is centralized in the Go runtime under `tools/si/cmd/agentruntime`.
 
 4. Workflow concurrency guardrails
 - GitHub workflows define explicit `concurrency` groups.

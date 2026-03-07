@@ -7,12 +7,13 @@ SI includes two sustainable automation agents for long-running operational loops
 
 ## Layout
 
-- `tools/agents/config.sh`: runtime defaults and policy thresholds.
-- `tools/agents/lib.sh`: logging, locks, retries, summary/finalization helpers.
 - `tools/agents/pr-guardian.sh`: PR risk triage and bounded autofix.
 - `tools/agents/website-sentry.sh`: health checks and remediation loop.
 - `tools/agents/doctor.sh`: preflight and syntax validation.
 - `tools/agents/status.sh`: latest-run summaries.
+- `tools/si/cmd/agentruntime`: shared Go runtime helpers (logging, locks, summaries).
+- `tools/si/cmd/pr-guardian`: Go implementation for PR triage and bounded autofix.
+- `tools/si/cmd/website-sentry`: Go implementation for health checks and remediation loop.
 
 ## Reliability Patterns
 
