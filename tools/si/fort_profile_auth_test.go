@@ -118,8 +118,8 @@ func TestFortEnsureAgentReadPolicySetsDefaultWhenEmpty(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		if got := strings.TrimSpace(r.Header.Get("X-Fort-Bootstrap-Key")); got != "bootstrap-test" {
-			t.Fatalf("missing bootstrap key header: %q", got)
+		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer admin-test-token" {
+			t.Fatalf("missing bearer token header: %q", got)
 		}
 		switch r.Method {
 		case http.MethodGet:
@@ -140,8 +140,8 @@ func TestFortEnsureAgentReadPolicySetsDefaultWhenEmpty(t *testing.T) {
 	defer srv.Close()
 
 	err := fortEnsureAgentReadPolicy(context.Background(), fortBootstrapConfig{
-		HostURL:      srv.URL,
-		BootstrapKey: "bootstrap-test",
+		HostURL:     srv.URL,
+		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
 	if err != nil {
 		t.Fatalf("fortEnsureAgentReadPolicy: %v", err)
@@ -189,8 +189,8 @@ func TestFortEnsureAgentReadPolicySkipsWhenPresent(t *testing.T) {
 	defer srv.Close()
 
 	err := fortEnsureAgentReadPolicy(context.Background(), fortBootstrapConfig{
-		HostURL:      srv.URL,
-		BootstrapKey: "bootstrap-test",
+		HostURL:     srv.URL,
+		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
 	if err != nil {
 		t.Fatalf("fortEnsureAgentReadPolicy: %v", err)

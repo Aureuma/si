@@ -135,19 +135,18 @@ type DyadLoopSettings struct {
 }
 
 type VaultSettings struct {
-	// File is the default logical Sun scope for `si vault` commands when --scope/--file is not provided.
+	// File is the default vault scope/file for `si vault` commands when --scope/--file is not provided.
 	File       string `toml:"file,omitempty"`
 	TrustStore string `toml:"trust_store,omitempty"`
 	AuditLog   string `toml:"audit_log,omitempty"`
 	// SyncBackend selects how vault state sync is handled.
-	// Supported values: sun
-	// - sun: Sun backup required on mutating vault operations
+	// Supported values: fort (legacy aliases normalize to fort)
 	SyncBackend string `toml:"sync_backend,omitempty"`
 
-	// KeyBackend is deprecated in Sun remote mode and kept only for compatibility.
+	// KeyBackend is kept for age-identity compatibility.
 	KeyBackend string `toml:"key_backend,omitempty"`
 
-	// KeyFile is deprecated in Sun remote mode and kept only for compatibility.
+	// KeyFile is used when key_backend=file.
 	KeyFile string `toml:"key_file,omitempty"`
 }
 

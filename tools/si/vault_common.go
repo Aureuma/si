@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	vaultSyncBackendSun = "sun"
-	defaultVaultScope   = "default"
+	vaultSyncBackendSun  = "sun"
+	vaultSyncBackendFort = "fort"
+	defaultVaultScope    = "default"
 	// "vault_kv." prefix (9) + scope must remain <= Sun object key max (128).
 	maxVaultScopeLen = 119
 )
@@ -55,31 +56,16 @@ func vaultKeyConfigFromSettings(settings Settings) vault.KeyConfig {
 }
 
 func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source string) ([]string, error) {
-	backend, err := resolveVaultSyncBackend(settings)
-	if err != nil {
-		return nil, err
-	}
-	if backend.Mode == vaultSyncBackendSun {
-		identity, err := vaultEnsureStrictSunIdentity(settings, source)
-		if err != nil {
-			return nil, err
-		}
-		if identity == nil {
-			return nil, fmt.Errorf("sun vault identity sync failed (%s): missing identity", source)
-		}
-		return []string{strings.TrimSpace(identity.Recipient().String())}, nil
-	}
+	_ = settings
+	_ = source
 	return vault.ParseRecipientsFromDotenv(doc), nil
 }
 
 func normalizeVaultSyncBackend(raw string) string {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "sun", "cloud", "dual", "both":
-		// Backward-compatible aliases all resolve to strict Sun mode.
-		return vaultSyncBackendSun
-	case "git", "local":
-		// Legacy git/local modes now map to Sun-only mode.
-		return vaultSyncBackendSun
+	case "fort", "sun", "cloud", "dual", "both", "git", "local":
+		// Legacy modes now normalize to the Fort-backed flow.
+		return vaultSyncBackendFort
 	default:
 		return ""
 	}
@@ -89,18 +75,18 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 	if envRaw := strings.TrimSpace(os.Getenv("SI_VAULT_SYNC_BACKEND")); envRaw != "" {
 		mode := normalizeVaultSyncBackend(envRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected sun)", envRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid SI_VAULT_SYNC_BACKEND %q (expected fort)", envRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "env"}, nil
 	}
 	if cfgRaw := strings.TrimSpace(settings.Vault.SyncBackend); cfgRaw != "" {
 		mode := normalizeVaultSyncBackend(cfgRaw)
 		if mode == "" {
-			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected sun)", cfgRaw)
+			return vaultSyncBackendResolution{}, fmt.Errorf("invalid vault.sync_backend %q (expected fort)", cfgRaw)
 		}
 		return vaultSyncBackendResolution{Mode: mode, Source: "settings"}, nil
 	}
-	return vaultSyncBackendResolution{Mode: vaultSyncBackendSun, Source: "default"}, nil
+	return vaultSyncBackendResolution{Mode: vaultSyncBackendFort, Source: "default"}, nil
 }
 
 func vaultTrustStorePath(settings Settings) string {
@@ -126,7 +112,7 @@ func vaultAuditLogPath(settings Settings) string {
 }
 
 func vaultDefaultEnvFile(settings Settings) string {
-	// SI_VAULT_SCOPE is the preferred override in Sun remote mode.
+	// SI_VAULT_SCOPE is the preferred override in scoped vault mode.
 	if scope := strings.TrimSpace(os.Getenv("SI_VAULT_SCOPE")); scope != "" {
 		return vaultNormalizeScope(scope)
 	}
