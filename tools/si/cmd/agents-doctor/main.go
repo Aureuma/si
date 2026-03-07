@@ -42,10 +42,9 @@ func main() {
 	fmt.Println()
 	fmt.Println("== Syntax checks ==")
 	files := []string{
-		"tools/agents/config.sh",
-		"tools/agents/lib.sh",
 		"tools/agents/pr-guardian.sh",
 		"tools/agents/website-sentry.sh",
+		"tools/agents/doctor.sh",
 		"tools/agents/status.sh",
 	}
 	for _, file := range files {
