@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -58,56 +60,58 @@ func TestCloudflareResolvePath(t *testing.T) {
 }
 
 func TestResolveCloudflareCredentialsFromVaultEncrypted(t *testing.T) {
-	server, store := newSunTestServer(t, "acme", "token-cloudflare-vault")
-	defer server.Close()
-
-	identity, err := vault.GenerateIdentity()
-	if err != nil {
-		t.Fatalf("GenerateIdentity: %v", err)
+	workspace := t.TempDir()
+	envDir := filepath.Join(workspace, "safe")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatalf("mkdir env dir: %v", err)
 	}
-	accountCipher, err := vault.EncryptStringV1("acc_vault_1", []string{identity.Recipient().String()})
+	envFile := filepath.Join(envDir, ".env.dev")
+	keyringPath := filepath.Join(workspace, "si-vault-keyring.json")
+	t.Setenv("SI_VAULT_ENV_FILE", envFile)
+	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
+
+	publicKey, privateKey, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
+	}
+	accountCipher, err := vault.EncryptSIVaultValue("acc_vault_1", publicKey)
 	if err != nil {
 		t.Fatalf("Encrypt account id: %v", err)
 	}
-	tokenCipher, err := vault.EncryptStringV1("tok_vault_1", []string{identity.Recipient().String()})
+	tokenCipher, err := vault.EncryptSIVaultValue("tok_vault_1", publicKey)
 	if err != nil {
 		t.Fatalf("Encrypt token: %v", err)
 	}
 
+	body := strings.Join([]string{
+		"VIVA_CLOUDFLARE_ACCOUNT_ID=" + accountCipher,
+		"VIVA_CLOUDFLARE_R2_USER_API_TOKEN=" + tokenCipher,
+		"",
+	}, "\n")
+	if err := os.WriteFile(envFile, []byte(body), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = "token-cloudflare-vault"
-	settings.Sun.Account = "acme"
-	settings.Vault.File = "default"
-
-	target, err := vaultResolveTarget(settings, "", true)
+	settings.Vault.File = envFile
+	target, err := resolveSIVaultTarget("", "", envFile)
 	if err != nil {
-		t.Fatalf("vaultResolveTarget: %v", err)
+		t.Fatalf("resolveSIVaultTarget: %v", err)
 	}
-	kind := vaultSunKVKind(target)
-	store.mu.Lock()
-	identityKey := store.key(sunVaultIdentityKind, "default")
-	store.payloads[identityKey] = []byte(strings.TrimSpace(identity.String()) + "\n")
-	store.revs[identityKey] = 1
-	store.metadata[identityKey] = map[string]any{}
-	store.created[identityKey] = "2026-01-01T00:00:00Z"
-	store.updated[identityKey] = "2026-01-02T00:00:00Z"
-	for _, kv := range []struct {
-		key   string
-		value string
-	}{
-		{key: "VIVA_CLOUDFLARE_ACCOUNT_ID", value: accountCipher},
-		{key: "VIVA_CLOUDFLARE_R2_USER_API_TOKEN", value: tokenCipher},
-	} {
-		objectKey := store.key(kind, kv.key)
-		store.payloads[objectKey] = []byte(strings.TrimSpace(kv.value) + "\n")
-		store.revs[objectKey] = 1
-		store.metadata[objectKey] = map[string]any{"deleted": false}
-		store.created[objectKey] = "2026-01-01T00:00:00Z"
-		store.updated[objectKey] = "2026-01-02T00:00:00Z"
+	keyring := siVaultKeyring{
+		Entries: map[string]sunVaultPrivateKey{
+			siVaultKeyringEntryKey(target.Repo, target.Env): {
+				Repo:       target.Repo,
+				Env:        target.Env,
+				PublicKey:  publicKey,
+				PrivateKey: privateKey,
+			},
+		},
 	}
-	store.mu.Unlock()
+	if err := saveSIVaultKeyring(keyring); err != nil {
+		t.Fatalf("saveSIVaultKeyring: %v", err)
+	}
 
 	account := CloudflareAccountEntry{
 		AccountIDEnv: "VIVA_CLOUDFLARE_ACCOUNT_ID",

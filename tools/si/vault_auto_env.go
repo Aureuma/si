@@ -4,6 +4,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"si/tools/si/internal/vault"
 )
 
 const siVaultAutoEnvKey = "SI_VAULT_AUTO_ENV"
@@ -72,7 +74,21 @@ func hydrateProcessEnvFromSunVault(settings Settings, source string) (int, error
 		return 0, err
 	}
 	if !supported || len(rawValues) == 0 {
-		return 0, nil
+		doc, readErr := vault.ReadDotenvFile(target.File)
+		if readErr != nil {
+			return 0, nil
+		}
+		entries, entriesErr := vault.Entries(doc)
+		if entriesErr != nil {
+			return 0, nil
+		}
+		rawValues = map[string]string{}
+		for _, entry := range entries {
+			rawValues[entry.Key] = entry.ValueRaw
+		}
+		if len(rawValues) == 0 {
+			return 0, nil
+		}
 	}
 
 	keys := make([]string, 0, len(rawValues))

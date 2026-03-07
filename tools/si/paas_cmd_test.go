@@ -57,35 +57,19 @@ type paasDoctorPayload struct {
 
 func setupPaasMockSunVault(t *testing.T, vaultFile string, token string) {
 	t.Helper()
+	_ = token
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_SETTINGS_HOME", home)
 	t.Setenv("SI_SUN_BASE_URL", "")
 	t.Setenv("SI_SUN_TOKEN", "")
 
-	server, store := newSunTestServer(t, "acme", token)
-	t.Cleanup(server.Close)
-
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = token
-	settings.Sun.Account = "acme"
+	settings.Vault.File = strings.TrimSpace(vaultFile)
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
-	target, err := vaultResolveTarget(settings, vaultFile, false)
-	if err != nil {
-		t.Fatalf("resolve target: %v", err)
-	}
-	store.mu.Lock()
-	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
-	store.payloads[objectKey] = []byte("prod\n")
-	store.revs[objectKey] = 1
-	store.metadata[objectKey] = map[string]any{"deleted": false}
-	store.created[objectKey] = "2026-01-01T00:00:00Z"
-	store.updated[objectKey] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
 }
 
 func TestPaasNoArgsShowsUsageInNonInteractiveMode(t *testing.T) {
@@ -1185,35 +1169,49 @@ func TestEnforcePaasPlaintextSecretGuardrailDoesNotLeakValue(t *testing.T) {
 }
 
 func TestRunPaasVaultDeployGuardrailTrusted(t *testing.T) {
+	root := t.TempDir()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_SETTINGS_HOME", home)
 	t.Setenv("SI_SUN_BASE_URL", "")
 	t.Setenv("SI_SUN_TOKEN", "")
-	server, store := newSunTestServer(t, "acme", "token-paas-vault-guardrail")
-	defer server.Close()
+	vaultFile := filepath.Join(root, ".env")
+	trustStore := filepath.Join(root, "trust.json")
+	t.Setenv("SI_VAULT_FILE", vaultFile)
+	t.Setenv("SI_VAULT_TRUST_STORE", trustStore)
+
+	vaultBody := fmt.Sprintf("%s%s\nAPP_ENV=prod\n", vault.VaultRecipientPrefix, "age1examplerecipient000000000000000000000000000000000000000000000000")
+	if err := os.WriteFile(vaultFile, []byte(vaultBody), 0o600); err != nil {
+		t.Fatalf("write vault file: %v", err)
+	}
 
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = "token-paas-vault-guardrail"
-	settings.Sun.Account = "acme"
-	settings.Vault.File = "paas-guardrail"
+	settings.Vault.File = vaultFile
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
-	target, err := vaultResolveTarget(settings, "", true)
+	target, err := vaultResolveTarget(settings, vaultFile, true)
 	if err != nil {
 		t.Fatalf("resolve target: %v", err)
 	}
-	store.mu.Lock()
-	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
-	store.payloads[objectKey] = []byte("prod\n")
-	store.revs[objectKey] = 1
-	store.metadata[objectKey] = map[string]any{"deleted": false}
-	store.created[objectKey] = "2026-01-01T00:00:00Z"
-	store.updated[objectKey] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
+	doc, err := vault.ReadDotenvFile(vaultFile)
+	if err != nil {
+		t.Fatalf("read vault file: %v", err)
+	}
+	fp, err := vaultTrustFingerprint(doc)
+	if err != nil {
+		t.Fatalf("vaultTrustFingerprint: %v", err)
+	}
+	trusted := &vault.TrustStore{SchemaVersion: 3}
+	trusted.Upsert(vault.TrustEntry{
+		RepoRoot:    target.RepoRoot,
+		File:        target.File,
+		Fingerprint: fp,
+	})
+	if err := trusted.Save(trustStore); err != nil {
+		t.Fatalf("save trust store: %v", err)
+	}
 
 	result, err := runPaasVaultDeployGuardrail("", false)
 	if err != nil {
@@ -1245,17 +1243,20 @@ func TestRunPaasVaultDeployGuardrailAllowUntrusted(t *testing.T) {
 
 	_, err := runPaasVaultDeployGuardrail("", false)
 	if err == nil {
-		t.Fatalf("expected sun auth error without configured token")
+		t.Fatalf("expected trust error without allow-untrusted")
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "sun token is required") {
-		t.Fatalf("expected sun token error, got: %v", err)
+	if !strings.Contains(strings.ToLower(err.Error()), "vault trust not established") {
+		t.Fatalf("expected trust error, got: %v", err)
 	}
-	_, err = runPaasVaultDeployGuardrail("", true)
-	if err == nil {
-		t.Fatalf("expected sun auth error even with allow-untrusted override")
+	result, err := runPaasVaultDeployGuardrail("", true)
+	if err != nil {
+		t.Fatalf("expected allow-untrusted to proceed, got: %v", err)
 	}
-	if !strings.Contains(strings.ToLower(err.Error()), "sun token is required") {
-		t.Fatalf("expected sun token error with override, got: %v", err)
+	if result.Trusted {
+		t.Fatalf("expected untrusted result when bypassing trust checks, got %#v", result)
+	}
+	if strings.TrimSpace(result.TrustWarning) == "" {
+		t.Fatalf("expected non-empty trust warning when bypassing trust")
 	}
 }
 
@@ -1296,7 +1297,7 @@ func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
-	target, err := vaultResolveTarget(settings, vaultFile, false)
+	target, err := vaultResolveTarget(settings, vaultFile, true)
 	if err != nil {
 		t.Fatalf("resolve target: %v", err)
 	}
@@ -1413,7 +1414,7 @@ func TestPaasDeployReconcileDetectsDriftAndOrphans(t *testing.T) {
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
-	target, err := vaultResolveTarget(settings, vaultFile, false)
+	target, err := vaultResolveTarget(settings, vaultFile, true)
 	if err != nil {
 		t.Fatalf("resolve target: %v", err)
 	}
