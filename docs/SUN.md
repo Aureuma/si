@@ -12,6 +12,11 @@ Primary uses:
 - sync codex profiles (`si sun profile ...`)
 - manage tokens, audit, taskboard, and machine control
 
+Secret boundary:
+- `si sun` is not the SI Vault/Fort secret data plane.
+- SI secret policy/auth API flows are handled by Fort.
+- SI Vault encryption/decryption and key material remain in SI Vault + `safe`.
+
 ## Auth
 
 ```bash

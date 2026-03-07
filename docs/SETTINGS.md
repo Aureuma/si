@@ -311,9 +311,9 @@ Defaults for `si vault`.
 - `vault.file` (string): default scope/file used when `--scope`/`--file` is not provided (default: `default`)
 - `vault.trust_store` (string): optional trust store path for recipient fingerprint checks
 - `vault.audit_log` (string): optional local JSONL audit sink (empty by default)
-- `vault.key_backend` (string): key backend for age identity compatibility (`keyring`/`file`)
+- `vault.key_backend` (string): key backend for SI Vault identity material (`keyring`/`file`)
 - `vault.key_file` (string): key file path when `vault.key_backend=\"file\"`
-- `vault.sync_backend` (string): backend mode. Legacy values (`sun`, `cloud`, `dual`, `both`, `git`, `local`) normalize to `fort`.
+- `vault.sync_backend` (string): Fort-only mode. Legacy values (`sun`, `cloud`, `dual`, `both`, `git`, `local`) are accepted as compatibility aliases and normalize to `fort`.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.
@@ -343,7 +343,7 @@ Environment overrides:
 - `SI_SUN_TASKBOARD_LEASE_SECONDS`
 - `SI_SUN_MACHINE_ID`
 - `SI_SUN_OPERATOR_ID`
-- `SI_VAULT_SYNC_BACKEND`
+- `SI_VAULT_SYNC_BACKEND` (Fort-only; legacy values normalize to `fort`)
 
 ### `[viva]`
 Defaults for `si viva` wrapper and Viva tunnel profile config.
@@ -572,9 +572,9 @@ reddit_username = "acme_bot"
 file = "default"
 trust_store = ""
 audit_log = ""
-key_backend = "keyring" # compatibility only in Sun mode
-key_file = ""           # compatibility only in Sun mode
-sync_backend = "sun"
+key_backend = "keyring"
+key_file = ""
+sync_backend = "fort"
 
 [sun]
 base_url = "http://127.0.0.1:8080"

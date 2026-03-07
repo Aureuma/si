@@ -7,7 +7,12 @@ Design goals:
 - encrypted values committed to `safe`
 - deterministic key names:
   - `SI_VAULT_PUBLIC_KEY` (stored in `.env` file)
-  - `SI_VAULT_PRIVATE_KEY` (resolved from local keyring/env)
+  - `SI_VAULT_PRIVATE_KEY` (resolved from local keyring; env override is compatibility-only)
+
+Architecture boundary:
+- SI Vault cryptography is local and file/keyring based.
+- Fort is the only API wrapper for policy/auth over SI Vault operations.
+- Sun is not part of SI Vault secret read/write flows.
 
 ## Core Model
 
@@ -17,6 +22,7 @@ Design goals:
 - Key material is scoped by `repo/env` and stored in local keyring file:
   - default: `~/.si/vault/si-vault-keyring.json`
   - override: `SI_VAULT_KEYRING_FILE`
+- Prefer keyring/file material over env-injected private keys.
 
 ## Quickstart
 

@@ -22,7 +22,7 @@ si <command> <subcommand> --help
 | `si dyad` | Manage actor/critic pairs | `spawn`, `list`, `status`, `peek`, `exec`, `logs`, `start`, `stop`, `restart`, `remove`, `cleanup` | [Dyad](./DYAD) |
 | codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
-| `si sun` | Cloud sync and machine orchestration for profiles, taskboards, and remote SI control | `auth`, `profile`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
+| `si sun` | Cloud sync and machine orchestration for profiles, taskboards, and remote SI control (not SI Vault/Fort secret path) | `auth`, `profile`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build/push/pull/status)` | [Orbitals](./ORBITALS) |
 

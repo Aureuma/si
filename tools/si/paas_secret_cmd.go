@@ -188,7 +188,18 @@ func cmdPaasSecretList(args []string) {
 		fatal(err)
 	}
 	if !used {
-		fatal(fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`"))
+		doc, readErr := vault.ReadDotenvFile(targetPath.File)
+		if readErr != nil {
+			fatal(readErr)
+		}
+		entries, entriesErr := vault.Entries(doc)
+		if entriesErr != nil {
+			fatal(entriesErr)
+		}
+		values = map[string]string{}
+		for _, entry := range entries {
+			values[entry.Key] = entry.ValueRaw
+		}
 	}
 	matches := make([]string, 0)
 	for key := range values {
