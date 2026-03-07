@@ -8,6 +8,7 @@ RUN apt-get update \
     curl \
     findutils \
     gawk \
+    golang-go \
     git \
     gzip \
     sed \
