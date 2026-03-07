@@ -1,30 +1,24 @@
-# `si vault` (dotenvx-style, Sun key-backed)
+# `si vault` (dotenvx-style, Fort/Vault aligned)
 
-`si vault` now encrypts local `.env` files and keeps decryption keys in Sun by `repo/env`.
+`si vault` encrypts local `.env` files and manages per `repo/env` key material via local keyring state.
 
 Design goals:
 - dotenv-first workflow
-- no private key files on disk
+- encrypted values committed to `safe`
 - deterministic key names:
   - `SI_VAULT_PUBLIC_KEY` (stored in `.env` file)
-  - `SI_VAULT_PRIVATE_KEY` (fetched from Sun API only)
+  - `SI_VAULT_PRIVATE_KEY` (resolved from local keyring/env)
 
 ## Core Model
 
 - Secrets live in local `.env` files (encrypted values).
-- `SI_VAULT_PUBLIC_KEY` is always inserted at the beginning of the file.
+- `SI_VAULT_PUBLIC_KEY` is inserted at file top when missing.
 - Encrypted values use prefix `encrypted:si-vault:`.
-- Sun stores key material per `repo/env`:
-  - `repo` inferred from current git repo directory name (or `--repo`)
-  - `env` defaults to `dev` (or `--env`)
+- Key material is scoped by `repo/env` and stored in local keyring file:
+  - default: `~/.si/vault/si-vault-keyring.json`
+  - override: `SI_VAULT_KEYRING_FILE`
 
 ## Quickstart
-
-Authenticate to Sun:
-
-```bash
-si sun auth login --url <sun-url> --token <token> --account <slug>
-```
 
 Generate or load keypair for current repo/env:
 
@@ -66,7 +60,7 @@ si vault run --env-file .env --env dev -- go run ./cmd/server
 
 - `si vault encrypt` does not re-encrypt already-encrypted values by default.
 - Use `--reencrypt` to rotate ciphertext.
-- `--reencrypt` decrypts first, then encrypts plaintext again (prevents double-encryption corruption).
+- `--reencrypt` decrypts first, then encrypts plaintext again.
 
 ## Pre-commit Guard
 

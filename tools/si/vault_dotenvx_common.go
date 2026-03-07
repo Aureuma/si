@@ -1,9 +1,9 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
@@ -12,7 +12,6 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 
 	ecies "github.com/ecies/go/v2"
 
@@ -184,41 +183,34 @@ func normalizeVaultRepoEnvSlug(raw string) string {
 }
 
 func ensureSIVaultKeyMaterial(settings Settings, target siVaultTarget) (sunVaultPrivateKey, error) {
-	// Best-effort legacy compatibility: hydrate the old age identity into the
-	// process environment so legacy encrypted:si:v1/v2 values can still decrypt.
-	_, _ = vaultEnsureStrictSunIdentity(settings, "si_vault_legacy_compat")
-
-	client, err := sunClientFromSettings(settings)
+	_ = settings
+	keyring, err := loadSIVaultKeyring()
 	if err != nil {
 		return sunVaultPrivateKey{}, err
 	}
-	timeout := time.Duration(settings.Sun.TimeoutSeconds) * time.Second
-	if timeout <= 0 {
-		timeout = 20 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	current, err := client.getVaultPrivateKey(ctx, target.Repo, target.Env)
-	if err == nil {
-		return normalizeSunVaultMaterial(current, target)
-	}
-	if !isSunNotFoundError(err) {
-		return sunVaultPrivateKey{}, err
+	key := siVaultKeyringEntryKey(target.Repo, target.Env)
+	if existing, ok := keyring.Entries[key]; ok {
+		return normalizeSunVaultMaterial(existing, target)
 	}
 	publicKey, privateKey, genErr := vault.GenerateSIVaultKeyPair()
 	if genErr != nil {
 		return sunVaultPrivateKey{}, genErr
 	}
-	created, putErr := client.putVaultPrivateKey(ctx, sunVaultPrivateKey{
+	material := sunVaultPrivateKey{
 		Repo:       target.Repo,
 		Env:        target.Env,
 		PublicKey:  publicKey,
 		PrivateKey: privateKey,
-	}, nil)
-	if putErr != nil {
-		return sunVaultPrivateKey{}, putErr
 	}
-	return normalizeSunVaultMaterial(created, target)
+	normalized, err := normalizeSunVaultMaterial(material, target)
+	if err != nil {
+		return sunVaultPrivateKey{}, err
+	}
+	keyring.Entries[key] = normalized
+	if err := saveSIVaultKeyring(keyring); err != nil {
+		return sunVaultPrivateKey{}, err
+	}
+	return normalized, nil
 }
 
 func normalizeSunVaultMaterial(in sunVaultPrivateKey, target siVaultTarget) (sunVaultPrivateKey, error) {
@@ -227,12 +219,12 @@ func normalizeSunVaultMaterial(in sunVaultPrivateKey, target siVaultTarget) (sun
 	in.PublicKey = strings.TrimSpace(strings.ToLower(in.PublicKey))
 	in.PrivateKey = strings.TrimSpace(strings.ToLower(in.PrivateKey))
 	if in.PrivateKey == "" {
-		return sunVaultPrivateKey{}, fmt.Errorf("sun vault key material missing private key for %s/%s", target.Repo, target.Env)
+		return sunVaultPrivateKey{}, fmt.Errorf("si vault key material missing private key for %s/%s", target.Repo, target.Env)
 	}
 	if in.PublicKey == "" {
 		privateKey, err := ecies.NewPrivateKeyFromHex(in.PrivateKey)
 		if err != nil {
-			return sunVaultPrivateKey{}, fmt.Errorf("sun vault private key is invalid: %w", err)
+			return sunVaultPrivateKey{}, fmt.Errorf("si vault private key is invalid: %w", err)
 		}
 		in.PublicKey = strings.TrimSpace(privateKey.PublicKey.Hex(true))
 	}
@@ -251,6 +243,67 @@ func normalizeSunVaultMaterial(in sunVaultPrivateKey, target siVaultTarget) (sun
 	}
 	in.BackupPrivateKeys = normalizedBackups
 	return in, nil
+}
+
+type siVaultKeyring struct {
+	Entries map[string]sunVaultPrivateKey `json:"entries"`
+}
+
+func siVaultKeyringPath() string {
+	if explicit := strings.TrimSpace(os.Getenv("SI_VAULT_KEYRING_FILE")); explicit != "" {
+		return filepath.Clean(explicit)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, ".si", "vault", "si-vault-keyring.json")
+}
+
+func siVaultKeyringEntryKey(repo string, env string) string {
+	return normalizeVaultRepoEnvSlug(repo) + "/" + normalizeVaultRepoEnvSlug(env)
+}
+
+func loadSIVaultKeyring() (siVaultKeyring, error) {
+	path := siVaultKeyringPath()
+	if path == "" {
+		return siVaultKeyring{Entries: map[string]sunVaultPrivateKey{}}, nil
+	}
+	// #nosec G304 -- path is from local trusted config/env.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return siVaultKeyring{Entries: map[string]sunVaultPrivateKey{}}, nil
+		}
+		return siVaultKeyring{}, err
+	}
+	var parsed siVaultKeyring
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return siVaultKeyring{}, err
+	}
+	if parsed.Entries == nil {
+		parsed.Entries = map[string]sunVaultPrivateKey{}
+	}
+	return parsed, nil
+}
+
+func saveSIVaultKeyring(keyring siVaultKeyring) error {
+	path := siVaultKeyringPath()
+	if path == "" {
+		return fmt.Errorf("si vault keyring path is not configured")
+	}
+	if keyring.Entries == nil {
+		keyring.Entries = map[string]sunVaultPrivateKey{}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(keyring, "", "  ")
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	return os.WriteFile(path, raw, 0o600)
 }
 
 func siVaultPrivateKeyCandidates(material sunVaultPrivateKey) []string {
@@ -391,7 +444,7 @@ func siVaultPublicKeyCandidates(material sunVaultPrivateKey) []string {
 	return out
 }
 
-func ensureSIVaultDecryptMaterialCompatibility(doc vault.DotenvFile, material sunVaultPrivateKey, target siVaultTarget, settings Settings) error {
+func ensureSIVaultDecryptMaterialCompatibility(doc vault.DotenvFile, material sunVaultPrivateKey, target siVaultTarget, _ Settings) error {
 	entries, err := vault.Entries(doc)
 	if err != nil {
 		return err
@@ -427,14 +480,12 @@ func ensureSIVaultDecryptMaterialCompatibility(doc vault.DotenvFile, material su
 		active = candidates[0]
 	}
 	return fmt.Errorf(
-		"vault key drift detected for %s/%s (%s): dotenv %s=%s does not match active Sun key material (base_url=%s account=%s active_public_key=%s); verify SI_SETTINGS_HOME and Sun auth context, then rerun `si sun auth status` and `si vault keypair --repo %s --env %s`",
+		"vault key drift detected for %s/%s (%s): dotenv %s=%s does not match active SI vault key material (active_public_key=%s); verify SI_VAULT_KEYRING_FILE and rerun `si vault keypair --repo %s --env %s`",
 		target.Repo,
 		target.Env,
 		target.EnvFile,
 		vault.SIVaultPublicKeyName,
 		expected,
-		strings.TrimSpace(settings.Sun.BaseURL),
-		strings.TrimSpace(settings.Sun.Account),
 		active,
 		target.Repo,
 		target.Env,

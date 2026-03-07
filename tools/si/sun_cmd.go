@@ -150,8 +150,8 @@ func cmdSunAuthLogin(args []string) {
 	persisted.Sun.Account = who.AccountSlug
 	persisted.Sun.TimeoutSeconds = *timeoutSeconds
 	persisted.Sun.AutoSync = *autoSync
-	// Sun-authenticated machines should default to Sun-backed vault sync.
-	persisted.Vault.SyncBackend = vaultSyncBackendSun
+	// Sun-authenticated machines should still use Fort-backed vault sync.
+	persisted.Vault.SyncBackend = vaultSyncBackendFort
 	if err := saveSettings(persisted); err != nil {
 		fatal(err)
 	}

@@ -10,7 +10,6 @@ description: Use `si sun` to authenticate and operate Sun-backed SI workflows.
 Primary uses:
 - authenticate SI (`si sun auth ...`)
 - sync codex profiles (`si sun profile ...`)
-- provide vault private keys to `si vault` by `repo/env`
 - manage tokens, audit, taskboard, and machine control
 
 ## Auth
@@ -34,33 +33,6 @@ si sun profile list
 si sun profile push --profile <id>
 si sun profile pull --profile <id>
 ```
-
-## Vault Key Backend
-
-Sun stores only vault key material (`repo/env` scoped).
-Encrypted secrets remain in local `.env` files.
-
-Use `si vault` directly:
-
-```bash
-si vault keypair --repo <repo> --env dev
-si vault encrypt --env-file .env --repo <repo> --env dev
-si vault decrypt --env-file .env --repo <repo> --env dev --stdout
-si vault run --env-file .env --repo <repo> --env dev -- ./cmd
-si vault docker exec --env-file .env --repo <repo> --env dev --container <id> -- ./cmd
-```
-
-Status/debug:
-
-```bash
-si vault status --env-file .env --repo <repo> --env dev
-```
-
-Notes:
-- private key name is always `SI_VAULT_PRIVATE_KEY`.
-- public key name is always `SI_VAULT_PUBLIC_KEY` (stored in `.env` file).
-- `si vault decrypt --inplace` writes plaintext and creates an encrypted restore backup.
-- `si vault restore` restores the prior encrypted file snapshot.
 
 ## Tokens and Audit
 

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"si/tools/si/internal/vault"
 )
@@ -40,16 +38,6 @@ func cmdVaultKeygen(args []string) {
 		fatal(err)
 	}
 	if *rotate {
-		client, clientErr := sunClientFromSettings(settings)
-		if clientErr != nil {
-			fatal(clientErr)
-		}
-		timeout := time.Duration(settings.Sun.TimeoutSeconds) * time.Second
-		if timeout <= 0 {
-			timeout = 20 * time.Second
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 		publicKey, privateKey, genErr := vault.GenerateSIVaultKeyPair()
 		if genErr != nil {
 			fatal(genErr)
@@ -59,20 +47,29 @@ func cmdVaultKeygen(args []string) {
 			backups = append(backups, strings.TrimSpace(material.PrivateKey))
 		}
 		sort.Strings(backups)
-		rotated, putErr := client.putVaultPrivateKey(ctx, sunVaultPrivateKey{
+		rotated := sunVaultPrivateKey{
 			Repo:              target.Repo,
 			Env:               target.Env,
 			PublicKey:         publicKey,
 			PrivateKey:        privateKey,
 			BackupPrivateKeys: backups,
-		}, nil)
-		if putErr != nil {
-			fatal(putErr)
 		}
-		material, err = normalizeSunVaultMaterial(rotated, target)
-		if err != nil {
-			fatal(err)
+		normalized, normErr := normalizeSunVaultMaterial(rotated, target)
+		if normErr != nil {
+			fatal(normErr)
 		}
+		keyring, keyErr := loadSIVaultKeyring()
+		if keyErr != nil {
+			fatal(keyErr)
+		}
+		if keyring.Entries == nil {
+			keyring.Entries = map[string]sunVaultPrivateKey{}
+		}
+		keyring.Entries[siVaultKeyringEntryKey(target.Repo, target.Env)] = normalized
+		if saveErr := saveSIVaultKeyring(keyring); saveErr != nil {
+			fatal(saveErr)
+		}
+		material = normalized
 	}
 	if *jsonOut {
 		printJSON(map[string]interface{}{
@@ -84,9 +81,7 @@ func cmdVaultKeygen(args []string) {
 			"public_key":         material.PublicKey,
 			"backup_key_count":   len(material.BackupPrivateKeys),
 			"updated_at":         material.UpdatedAt,
-			"sun_account":        settings.Sun.Account,
-			"sun_base_url":       settings.Sun.BaseURL,
-			"private_key_source": "sun",
+			"private_key_source": "local_keyring",
 		})
 		return
 	}
@@ -97,5 +92,5 @@ func cmdVaultKeygen(args []string) {
 	fmt.Printf("private_key_name: %s\n", vault.SIVaultPrivateKeyName)
 	fmt.Printf("public_key:       %s\n", material.PublicKey)
 	fmt.Printf("backup_keys:      %d\n", len(material.BackupPrivateKeys))
-	fmt.Printf("private_key:      sun\n")
+	fmt.Printf("private_key:      local_keyring\n")
 }

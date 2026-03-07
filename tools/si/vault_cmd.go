@@ -10,7 +10,7 @@ const vaultUsageText = "usage: si vault <keypair|keygen|status|check|hooks|encry
 const vaultDockerUsageText = "usage: si vault docker <exec>"
 
 var vaultActions = []subcommandAction{
-	{Name: "keypair", Description: "ensure Sun-backed keypair for repo/env and print public key"},
+	{Name: "keypair", Description: "ensure SI Vault keypair for repo/env and print public key"},
 	{Name: "keygen", Description: "alias for keypair"},
 	{Name: "status", Description: "show vault repo/env, file, and key readiness"},
 	{Name: "check", Description: "check .env files for plaintext values (hook-safe)"},

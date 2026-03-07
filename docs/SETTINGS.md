@@ -307,13 +307,13 @@ Local OAuth token cache for `si google youtube auth login` is stored at:
 - `~/.si/google/youtube/oauth_tokens.json`
 
 ### `[vault]`
-Defaults for `si vault` (Sun remote vault).
-- `vault.file` (string): default **scope** used when `--scope`/`--file` is not provided (default: `default`)
-- `vault.trust_store` (string): deprecated in Sun mode (`trust: n/a (sun-managed)`)
+Defaults for `si vault`.
+- `vault.file` (string): default scope/file used when `--scope`/`--file` is not provided (default: `default`)
+- `vault.trust_store` (string): optional trust store path for recipient fingerprint checks
 - `vault.audit_log` (string): optional local JSONL audit sink (empty by default)
-- `vault.key_backend` (string): deprecated compatibility field in Sun mode
-- `vault.key_file` (string): deprecated compatibility field in Sun mode
-- `vault.sync_backend` (string): backend mode. `sun` is the effective/only mode. Legacy aliases (`git`, `local`, `dual`, `both`, `cloud`) normalize to `sun`.
+- `vault.key_backend` (string): key backend for age identity compatibility (`keyring`/`file`)
+- `vault.key_file` (string): key file path when `vault.key_backend=\"file\"`
+- `vault.sync_backend` (string): backend mode. Legacy values (`sun`, `cloud`, `dual`, `both`, `git`, `local`) normalize to `fort`.
 
 ### `[sun]`
 Defaults for `si sun` cloud sync.

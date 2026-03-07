@@ -32,8 +32,7 @@ const (
 var fortDefaultReadOps = []string{"get", "list", "batch-get", "run"}
 
 type fortRequestAuth struct {
-	BearerToken  string
-	BootstrapKey string
+	BearerToken string
 }
 
 type fortSessionOpenResult struct {
@@ -99,14 +98,12 @@ type fortBootstrapConfig struct {
 	HostURL          string
 	ContainerHostURL string
 	BearerToken      string
-	BootstrapKey     string
 }
 
 type fortDockerHint struct {
 	Name             string
 	HostURL          string
 	ContainerHostURL string
-	BootstrapKey     string
 }
 
 func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, profile codexProfile, preferredNetwork string) (codexFortBootstrap, error) {
@@ -449,7 +446,6 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 		HostURL:          strings.TrimSpace(os.Getenv("FORT_HOST")),
 		ContainerHostURL: strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")),
 		BearerToken:      strings.TrimSpace(os.Getenv("FORT_TOKEN")),
-		BootstrapKey:     strings.TrimSpace(os.Getenv("FORT_BOOTSTRAP_KEY")),
 	}
 	hint, hintOK := detectFortDockerHint(ctx, client, preferredNetwork)
 	if strings.TrimSpace(cfg.HostURL) == "" && hintOK && strings.TrimSpace(hint.HostURL) != "" {
@@ -465,14 +461,11 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 			cfg.ContainerHostURL = fortHostURLForContainer(cfg.HostURL)
 		}
 	}
-	if strings.TrimSpace(cfg.BearerToken) == "" && strings.TrimSpace(cfg.BootstrapKey) == "" && hintOK {
-		cfg.BootstrapKey = strings.TrimSpace(hint.BootstrapKey)
-	}
 	if strings.TrimSpace(cfg.HostURL) == "" {
 		return fortBootstrapConfig{}, fmt.Errorf("fort host is required (set FORT_HOST or run a fort container)")
 	}
-	if strings.TrimSpace(cfg.BearerToken) == "" && strings.TrimSpace(cfg.BootstrapKey) == "" {
-		return fortBootstrapConfig{}, fmt.Errorf("fort admin auth is required (set FORT_BOOTSTRAP_KEY or FORT_TOKEN)")
+	if strings.TrimSpace(cfg.BearerToken) == "" {
+		return fortBootstrapConfig{}, fmt.Errorf("fort admin auth is required (set FORT_TOKEN)")
 	}
 	return cfg, nil
 }
@@ -514,9 +507,6 @@ func detectFortDockerHint(ctx context.Context, client *shared.Client, preferredN
 		if envValue(info.Config.Env, "FORT_ADDR") != "" {
 			score += 2
 		}
-		if envValue(info.Config.Env, "FORT_BOOTSTRAP_KEY") != "" {
-			score += 1
-		}
 		if score == 0 {
 			continue
 		}
@@ -538,7 +528,6 @@ func detectFortDockerHint(ctx context.Context, client *shared.Client, preferredN
 				Name:             containerName,
 				HostURL:          hostURL,
 				ContainerHostURL: containerURL,
-				BootstrapKey:     strings.TrimSpace(envValue(info.Config.Env, "FORT_BOOTSTRAP_KEY")),
 			},
 			score: score,
 		})
@@ -631,8 +620,7 @@ func fortEnsureAgent(ctx context.Context, cfg fortBootstrapConfig, agentID strin
 		return fmt.Errorf("fort agent id is required")
 	}
 	auth := fortRequestAuth{
-		BearerToken:  strings.TrimSpace(cfg.BearerToken),
-		BootstrapKey: strings.TrimSpace(cfg.BootstrapKey),
+		BearerToken: strings.TrimSpace(cfg.BearerToken),
 	}
 	createBody := map[string]any{
 		"id":     agentID,
@@ -668,8 +656,7 @@ func fortEnsureAgentReadPolicy(ctx context.Context, cfg fortBootstrapConfig, age
 		return fmt.Errorf("fort agent id is required")
 	}
 	auth := fortRequestAuth{
-		BearerToken:  strings.TrimSpace(cfg.BearerToken),
-		BootstrapKey: strings.TrimSpace(cfg.BootstrapKey),
+		BearerToken: strings.TrimSpace(cfg.BearerToken),
 	}
 	path := "/v1/agents/" + url.PathEscape(agentID) + "/policy"
 	status, body, err := fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodGet, path, nil, auth)
@@ -744,8 +731,7 @@ func fortPolicyBindingsFromBody(body map[string]any) []fortPolicyBinding {
 
 func fortOpenSession(ctx context.Context, cfg fortBootstrapConfig, agentID string) (fortSessionOpenResult, error) {
 	auth := fortRequestAuth{
-		BearerToken:  strings.TrimSpace(cfg.BearerToken),
-		BootstrapKey: strings.TrimSpace(cfg.BootstrapKey),
+		BearerToken: strings.TrimSpace(cfg.BearerToken),
 	}
 	reqBody := map[string]any{
 		"agent_id":    strings.TrimSpace(agentID),
@@ -820,9 +806,6 @@ func fortAPIRequest(ctx context.Context, hostURL string, method string, apiPath 
 	req.Header.Set("Content-Type", "application/json")
 	if token := strings.TrimSpace(auth.BearerToken); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	if key := strings.TrimSpace(auth.BootstrapKey); key != "" {
-		req.Header.Set("X-Fort-Bootstrap-Key", key)
 	}
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)

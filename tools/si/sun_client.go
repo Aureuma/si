@@ -350,48 +350,6 @@ func (c *sunClient) listRevisions(ctx context.Context, kind string, name string,
 	return parsed.Items, nil
 }
 
-func (c *sunClient) getVaultPrivateKey(ctx context.Context, repo string, env string) (sunVaultPrivateKey, error) {
-	var out sunVaultPrivateKey
-	path := "/v1/vault/private-keys/" + url.PathEscape(strings.TrimSpace(repo)) + "/" + url.PathEscape(strings.TrimSpace(env))
-	body, err := c.doJSON(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return out, err
-	}
-	var parsed struct {
-		Vault sunVaultPrivateKey `json:"vault"`
-	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return out, fmt.Errorf("parse vault private key response: %w", err)
-	}
-	return parsed.Vault, nil
-}
-
-func (c *sunClient) putVaultPrivateKey(ctx context.Context, vault sunVaultPrivateKey, expectedRevision *int64) (sunVaultPrivateKey, error) {
-	var out sunVaultPrivateKey
-	request := map[string]interface{}{
-		"public_key":  strings.TrimSpace(vault.PublicKey),
-		"private_key": strings.TrimSpace(vault.PrivateKey),
-	}
-	if len(vault.BackupPrivateKeys) > 0 {
-		request["backup_private_keys"] = vault.BackupPrivateKeys
-	}
-	if expectedRevision != nil {
-		request["expected_revision"] = *expectedRevision
-	}
-	path := "/v1/vault/private-keys/" + url.PathEscape(strings.TrimSpace(vault.Repo)) + "/" + url.PathEscape(strings.TrimSpace(vault.Env))
-	body, err := c.doJSON(ctx, http.MethodPut, path, request)
-	if err != nil {
-		return out, err
-	}
-	var parsed struct {
-		Vault sunVaultPrivateKey `json:"vault"`
-	}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		return out, fmt.Errorf("parse vault private key put response: %w", err)
-	}
-	return parsed.Vault, nil
-}
-
 func (c *sunClient) listTokens(ctx context.Context, includeRevoked bool, limit int) ([]sunTokenRecord, error) {
 	params := url.Values{}
 	params.Set("include_revoked", boolString(includeRevoked))
