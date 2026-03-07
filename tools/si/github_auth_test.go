@@ -1,7 +1,8 @@
 package main
 
 import (
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"si/tools/si/internal/vault"
@@ -116,44 +117,48 @@ func TestResolveGitHubAuthMode_OAuthFromEnv(t *testing.T) {
 }
 
 func TestResolveGitHubOAuthAccessTokenFromVaultEncrypted(t *testing.T) {
-	server, store := newSunTestServer(t, "acme", "token-github-vault")
-	defer server.Close()
-
-	identity, err := vault.GenerateIdentity()
-	if err != nil {
-		t.Fatalf("GenerateIdentity: %v", err)
+	workspace := t.TempDir()
+	envDir := filepath.Join(workspace, "safe")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatalf("mkdir env dir: %v", err)
 	}
-	cipher, err := vault.EncryptStringV1("token-from-vault", []string{identity.Recipient().String()})
+	envFile := filepath.Join(envDir, ".env.dev")
+	keyringPath := filepath.Join(workspace, "si-vault-keyring.json")
+	t.Setenv("SI_VAULT_ENV_FILE", envFile)
+	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
+
+	publicKey, privateKey, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {
-		t.Fatalf("EncryptStringV1: %v", err)
+		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
+	}
+	cipher, err := vault.EncryptSIVaultValue("token-from-vault", publicKey)
+	if err != nil {
+		t.Fatalf("EncryptSIVaultValue: %v", err)
+	}
+	if err := os.WriteFile(envFile, []byte("GH_PAT_AUREUMA_VANGUARDA="+cipher+"\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
 	}
 
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = "token-github-vault"
-	settings.Sun.Account = "acme"
-	settings.Vault.File = "default"
-
-	target, err := vaultResolveTarget(settings, "", true)
+	settings.Vault.File = envFile
+	target, err := resolveSIVaultTarget("", "", envFile)
 	if err != nil {
-		t.Fatalf("vaultResolveTarget: %v", err)
+		t.Fatalf("resolveSIVaultTarget: %v", err)
 	}
-	kind := vaultSunKVKind(target)
-	store.mu.Lock()
-	identityKey := store.key(sunVaultIdentityKind, "default")
-	store.payloads[identityKey] = []byte(strings.TrimSpace(identity.String()) + "\n")
-	store.revs[identityKey] = 1
-	store.metadata[identityKey] = map[string]any{}
-	store.created[identityKey] = "2026-01-01T00:00:00Z"
-	store.updated[identityKey] = "2026-01-02T00:00:00Z"
-	valueKey := store.key(kind, "GH_PAT_AUREUMA_VANGUARDA")
-	store.payloads[valueKey] = []byte(strings.TrimSpace(cipher) + "\n")
-	store.revs[valueKey] = 1
-	store.metadata[valueKey] = map[string]any{"deleted": false}
-	store.created[valueKey] = "2026-01-01T00:00:00Z"
-	store.updated[valueKey] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
+	keyring := siVaultKeyring{
+		Entries: map[string]sunVaultPrivateKey{
+			siVaultKeyringEntryKey(target.Repo, target.Env): {
+				Repo:       target.Repo,
+				Env:        target.Env,
+				PublicKey:  publicKey,
+				PrivateKey: privateKey,
+			},
+		},
+	}
+	if err := saveSIVaultKeyring(keyring); err != nil {
+		t.Fatalf("saveSIVaultKeyring: %v", err)
+	}
 
 	token, source := resolveGitHubOAuthAccessTokenFromVault(settings, GitHubAccountEntry{OAuthTokenEnv: "GH_PAT_AUREUMA_VANGUARDA"})
 	if token != "token-from-vault" {

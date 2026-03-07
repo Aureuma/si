@@ -112,15 +112,37 @@ func vaultAuditLogPath(settings Settings) string {
 }
 
 func vaultDefaultEnvFile(settings Settings) string {
+	backend, _ := resolveVaultSyncBackend(settings)
 	// SI_VAULT_SCOPE is the preferred override in scoped vault mode.
 	if scope := strings.TrimSpace(os.Getenv("SI_VAULT_SCOPE")); scope != "" {
-		return vaultNormalizeScope(scope)
+		if backend.Mode == vaultSyncBackendSun {
+			return vaultNormalizeScope(scope)
+		}
+		return scope
 	}
 	// Keep SI_VAULT_FILE for backward compatibility with existing automation.
-	if scope := strings.TrimSpace(os.Getenv("SI_VAULT_FILE")); scope != "" {
-		return vaultNormalizeScope(scope)
+	if file := strings.TrimSpace(os.Getenv("SI_VAULT_FILE")); file != "" {
+		if backend.Mode == vaultSyncBackendSun {
+			return vaultNormalizeScope(file)
+		}
+		return file
 	}
-	return vaultNormalizeScope(strings.TrimSpace(settings.Vault.File))
+
+	configured := strings.TrimSpace(settings.Vault.File)
+	if backend.Mode == vaultSyncBackendSun {
+		return vaultNormalizeScope(configured)
+	}
+	if configured == "" {
+		return defaultSIVaultDotenvFile
+	}
+	// Legacy scope values are not valid fort/local env-file paths.
+	if !vaultLooksLikeLegacyPath(configured) &&
+		!strings.Contains(configured, "/") &&
+		!strings.Contains(configured, "\\") &&
+		!strings.HasPrefix(strings.ToLower(configured), ".env") {
+		return defaultSIVaultDotenvFile
+	}
+	return configured
 }
 
 func vaultNormalizeScope(raw string) string {

@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	"strings"
+	"path/filepath"
 	"testing"
 
 	"si/tools/si/internal/vault"
@@ -42,46 +42,49 @@ func TestShouldAutoHydrateVaultEnvForRootCommand(t *testing.T) {
 }
 
 func TestHydrateProcessEnvFromSunVaultSetsMissingValues(t *testing.T) {
-	server, store := newSunTestServer(t, "acme", "token-vault-auto-env")
-	defer server.Close()
-
-	identity, err := vault.GenerateIdentity()
-	if err != nil {
-		t.Fatalf("GenerateIdentity: %v", err)
+	workspace := t.TempDir()
+	envDir := filepath.Join(workspace, "sampleapp")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatalf("mkdir env dir: %v", err)
 	}
-	cipher, err := vault.EncryptStringV1("vault-secret-value", []string{identity.Recipient().String()})
+	envFile := filepath.Join(envDir, ".env.dev")
+	keyringPath := filepath.Join(workspace, "si-vault-keyring.json")
+	t.Setenv("SI_VAULT_ENV_FILE", envFile)
+	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
+
+	publicKey, privateKey, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {
-		t.Fatalf("EncryptStringV1: %v", err)
+		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
+	}
+	cipher, err := vault.EncryptSIVaultValue("vault-secret-value", publicKey)
+	if err != nil {
+		t.Fatalf("EncryptSIVaultValue: %v", err)
 	}
 
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = "token-vault-auto-env"
-	settings.Sun.Account = "acme"
-	settings.Vault.File = "auto-env-scope"
-
-	target, err := vaultResolveTarget(settings, "", true)
+	settings.Vault.File = envFile
+	target, err := resolveSIVaultTarget("", "", envFile)
 	if err != nil {
-		t.Fatalf("vaultResolveTarget: %v", err)
+		t.Fatalf("resolveSIVaultTarget: %v", err)
 	}
-	kind := vaultSunKVKind(target)
-	store.mu.Lock()
-	identityKey := store.key(sunVaultIdentityKind, "default")
-	store.payloads[identityKey] = []byte(strings.TrimSpace(identity.String()) + "\n")
-	store.revs[identityKey] = 1
-	store.metadata[identityKey] = map[string]any{}
-	store.created[identityKey] = "2026-01-01T00:00:00Z"
-	store.updated[identityKey] = "2026-01-02T00:00:00Z"
-
 	secretKey := "OPENAI_API_KEY"
-	secretObject := store.key(kind, secretKey)
-	store.payloads[secretObject] = []byte(strings.TrimSpace(cipher) + "\n")
-	store.revs[secretObject] = 1
-	store.metadata[secretObject] = map[string]any{"deleted": false}
-	store.created[secretObject] = "2026-01-01T00:00:00Z"
-	store.updated[secretObject] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
+	if err := os.WriteFile(envFile, []byte(secretKey+"="+cipher+"\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	keyring := siVaultKeyring{
+		Entries: map[string]sunVaultPrivateKey{
+			siVaultKeyringEntryKey(target.Repo, target.Env): {
+				Repo:       target.Repo,
+				Env:        target.Env,
+				PublicKey:  publicKey,
+				PrivateKey: privateKey,
+			},
+		},
+	}
+	if err := saveSIVaultKeyring(keyring); err != nil {
+		t.Fatalf("saveSIVaultKeyring: %v", err)
+	}
 
 	_ = os.Unsetenv(secretKey)
 	t.Cleanup(func() { _ = os.Unsetenv(secretKey) })
@@ -99,46 +102,49 @@ func TestHydrateProcessEnvFromSunVaultSetsMissingValues(t *testing.T) {
 }
 
 func TestHydrateProcessEnvFromSunVaultDoesNotOverrideExisting(t *testing.T) {
-	server, store := newSunTestServer(t, "acme", "token-vault-auto-env-no-override")
-	defer server.Close()
-
-	identity, err := vault.GenerateIdentity()
-	if err != nil {
-		t.Fatalf("GenerateIdentity: %v", err)
+	workspace := t.TempDir()
+	envDir := filepath.Join(workspace, "sampleapp")
+	if err := os.MkdirAll(envDir, 0o755); err != nil {
+		t.Fatalf("mkdir env dir: %v", err)
 	}
-	cipher, err := vault.EncryptStringV1("vault-overwrite-value", []string{identity.Recipient().String()})
+	envFile := filepath.Join(envDir, ".env.dev")
+	keyringPath := filepath.Join(workspace, "si-vault-keyring.json")
+	t.Setenv("SI_VAULT_ENV_FILE", envFile)
+	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
+
+	publicKey, privateKey, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {
-		t.Fatalf("EncryptStringV1: %v", err)
+		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
+	}
+	cipher, err := vault.EncryptSIVaultValue("vault-overwrite-value", publicKey)
+	if err != nil {
+		t.Fatalf("EncryptSIVaultValue: %v", err)
 	}
 
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = server.URL
-	settings.Sun.Token = "token-vault-auto-env-no-override"
-	settings.Sun.Account = "acme"
-	settings.Vault.File = "auto-env-scope-no-override"
-
-	target, err := vaultResolveTarget(settings, "", true)
+	settings.Vault.File = envFile
+	target, err := resolveSIVaultTarget("", "", envFile)
 	if err != nil {
-		t.Fatalf("vaultResolveTarget: %v", err)
+		t.Fatalf("resolveSIVaultTarget: %v", err)
 	}
-	kind := vaultSunKVKind(target)
-	store.mu.Lock()
-	identityKey := store.key(sunVaultIdentityKind, "default")
-	store.payloads[identityKey] = []byte(strings.TrimSpace(identity.String()) + "\n")
-	store.revs[identityKey] = 1
-	store.metadata[identityKey] = map[string]any{}
-	store.created[identityKey] = "2026-01-01T00:00:00Z"
-	store.updated[identityKey] = "2026-01-02T00:00:00Z"
-
 	secretKey := "GITHUB_TOKEN"
-	secretObject := store.key(kind, secretKey)
-	store.payloads[secretObject] = []byte(strings.TrimSpace(cipher) + "\n")
-	store.revs[secretObject] = 1
-	store.metadata[secretObject] = map[string]any{"deleted": false}
-	store.created[secretObject] = "2026-01-01T00:00:00Z"
-	store.updated[secretObject] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
+	if err := os.WriteFile(envFile, []byte(secretKey+"="+cipher+"\n"), 0o600); err != nil {
+		t.Fatalf("write env file: %v", err)
+	}
+	keyring := siVaultKeyring{
+		Entries: map[string]sunVaultPrivateKey{
+			siVaultKeyringEntryKey(target.Repo, target.Env): {
+				Repo:       target.Repo,
+				Env:        target.Env,
+				PublicKey:  publicKey,
+				PrivateKey: privateKey,
+			},
+		},
+	}
+	if err := saveSIVaultKeyring(keyring); err != nil {
+		t.Fatalf("saveSIVaultKeyring: %v", err)
+	}
 
 	t.Setenv(secretKey, "already-set")
 	setCount, err := hydrateProcessEnvFromSunVault(settings, "test_auto_env_no_override")

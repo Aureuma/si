@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"si/tools/si/internal/vault"
 )
 
 var paasEnvAssignmentPattern = regexp.MustCompile(`^\s*(?:-\s*)?([A-Za-z_][A-Za-z0-9_]*)\s*[:=]\s*(.+?)\s*$`)
@@ -138,24 +140,36 @@ func enforcePaasPlaintextSecretGuardrail(composeFile string, allowPlaintextSecre
 }
 
 func runPaasVaultDeployGuardrail(vaultFile string, allowUntrustedVault bool) (paasVaultGuardrailResult, error) {
-	_ = allowUntrustedVault
 	settings := loadSettingsOrDefault()
 	target, err := vaultResolveTarget(settings, resolvePaasContextVaultFile(strings.TrimSpace(vaultFile)), false)
 	if err != nil {
 		return paasVaultGuardrailResult{}, err
 	}
-	values, used, sunErr := vaultSunKVLoadRawValues(settings, target)
-	if sunErr != nil {
-		return paasVaultGuardrailResult{}, sunErr
+	doc, err := vault.ReadDotenvFile(target.File)
+	if err != nil {
+		return paasVaultGuardrailResult{}, err
 	}
-	if !used {
-		return paasVaultGuardrailResult{}, fmt.Errorf("sun vault unavailable: run `si sun auth login --url <url> --token <token> --account <slug>`")
+	recipients := vault.ParseRecipientsFromDotenv(doc)
+	if len(recipients) == 0 {
+		return paasVaultGuardrailResult{}, fmt.Errorf("vault header is missing recipients in %s", filepath.Clean(target.File))
 	}
+
+	trusted := false
+	warning := ""
+	if _, trustErr := vaultRequireTrusted(settings, target, doc); trustErr != nil {
+		if !allowUntrustedVault {
+			return paasVaultGuardrailResult{}, trustErr
+		}
+		warning = strings.TrimSpace(trustErr.Error())
+	} else {
+		trusted = true
+	}
+
 	return paasVaultGuardrailResult{
 		File:           strings.TrimSpace(target.File),
-		RecipientCount: 1,
-		Trusted:        true,
-		TrustWarning:   fmt.Sprintf("sun-kv keys=%d", len(values)),
+		RecipientCount: len(recipients),
+		Trusted:        trusted,
+		TrustWarning:   warning,
 	}, nil
 }
 
