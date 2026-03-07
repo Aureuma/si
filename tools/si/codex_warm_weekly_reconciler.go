@@ -917,6 +917,7 @@ func ensureWarmWeeklyBinaryVolume(executablePath string, image string) error {
 	}
 	cfg := &container.Config{
 		Image: image,
+		Env:   filterEnv(appendContainerProfileEnv(nil, nil)),
 		Cmd:   []string{"bash", "-lc", "sleep 60"},
 		Labels: map[string]string{
 			"si.component": "warmup",

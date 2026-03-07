@@ -32,6 +32,8 @@ const DyadAppLabel = "si-dyad"
 type DyadOptions struct {
 	Dyad              string
 	Role              string
+	ProfileID         string
+	ProfileName       string
 	ActorImage        string
 	CriticImage       string
 	CodexModel        string
@@ -283,6 +285,18 @@ func BuildDyadSpecs(opts DyadOptions) (ContainerSpec, ContainerSpec, error) {
 
 	actorEnv := buildDyadEnv(opts, "actor", opts.CodexEffortActor)
 	criticEnv := buildDyadEnv(opts, "critic", opts.CodexEffortCritic)
+	profileID := strings.TrimSpace(opts.ProfileID)
+	profileName := strings.TrimSpace(opts.ProfileName)
+	if profileID == "" {
+		profileID = strings.TrimSpace(os.Getenv("SI_CODEX_PROFILE_ID"))
+	}
+	if profileName == "" {
+		profileName = strings.TrimSpace(os.Getenv("SI_CODEX_PROFILE_NAME"))
+	}
+	actorEnv = appendOptionalEnv(actorEnv, "SI_CODEX_PROFILE_ID", profileID)
+	actorEnv = appendOptionalEnv(actorEnv, "SI_CODEX_PROFILE_NAME", profileName)
+	criticEnv = appendOptionalEnv(criticEnv, "SI_CODEX_PROFILE_ID", profileID)
+	criticEnv = appendOptionalEnv(criticEnv, "SI_CODEX_PROFILE_NAME", profileName)
 
 	actorEnv = append(actorEnv,
 		"HOME="+dyadContainerHome,

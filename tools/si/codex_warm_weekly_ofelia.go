@@ -127,6 +127,7 @@ func ensureOfeliaWarmContainer(ctx context.Context, opts ofeliaWarmOptions) erro
 		Image:      image,
 		Entrypoint: entrypoint,
 		Cmd:        cmd,
+		Env:        filterEnv(appendContainerProfileEnv(nil, nil)),
 		Labels: map[string]string{
 			"si.component": "ofelia",
 			"si.name":      name,

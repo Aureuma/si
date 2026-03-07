@@ -297,6 +297,75 @@ func TestBuildDyadSpecsUsesSiEntrypointAndHome(t *testing.T) {
 	}
 }
 
+func TestBuildDyadSpecsIncludesProfileEnv(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "profile-env",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		Network:       DefaultNetwork,
+		ProfileID:     "america",
+		ProfileName:   "America",
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+	if !containsEnvItem(actor.Config.Env, "SI_CODEX_PROFILE_ID=america") || !containsEnvItem(actor.Config.Env, "SI_CODEX_PROFILE_NAME=America") {
+		t.Fatalf("actor env missing profile settings: %v", actor.Config.Env)
+	}
+	if !containsEnvItem(critic.Config.Env, "SI_CODEX_PROFILE_ID=america") || !containsEnvItem(critic.Config.Env, "SI_CODEX_PROFILE_NAME=America") {
+		t.Fatalf("critic env missing profile settings: %v", critic.Config.Env)
+	}
+}
+
+func TestBuildDyadSpecsProfileEnvFallsBackToHost(t *testing.T) {
+	t.Setenv("SI_CODEX_PROFILE_ID", "host-profile")
+	t.Setenv("SI_CODEX_PROFILE_NAME", "Host Profile")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".si"), 0o700); err != nil {
+		t.Fatalf("mkdir .si: %v", err)
+	}
+	workspace := t.TempDir()
+	configs := filepath.Join(workspace, "configs")
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+
+	actor, critic, err := BuildDyadSpecs(DyadOptions{
+		Dyad:          "profile-env-host",
+		Role:          "generic",
+		ActorImage:    "aureuma/si:local",
+		CriticImage:   "aureuma/si:local",
+		WorkspaceHost: workspace,
+		ConfigsHost:   configs,
+		Network:       DefaultNetwork,
+	})
+	if err != nil {
+		t.Fatalf("build specs: %v", err)
+	}
+	if !containsEnvItem(actor.Config.Env, "SI_CODEX_PROFILE_ID=host-profile") || !containsEnvItem(actor.Config.Env, "SI_CODEX_PROFILE_NAME=Host Profile") {
+		t.Fatalf("actor env missing host fallback profile settings: %v", actor.Config.Env)
+	}
+	if !containsEnvItem(critic.Config.Env, "SI_CODEX_PROFILE_ID=host-profile") || !containsEnvItem(critic.Config.Env, "SI_CODEX_PROFILE_NAME=Host Profile") {
+		t.Fatalf("critic env missing host fallback profile settings: %v", critic.Config.Env)
+	}
+}
+
 func containsEnvItem(env []string, want string) bool {
 	for _, item := range env {
 		if strings.TrimSpace(item) == want {

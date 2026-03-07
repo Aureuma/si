@@ -62,14 +62,7 @@ func runCodexExecOneOff(opts codexExecOneOffOptions) error {
 		"CODEX_HOME=/home/si/.codex",
 	}
 	env = append(env, hostUserEnv()...)
-	if opts.Profile != nil {
-		if strings.TrimSpace(opts.Profile.ID) != "" {
-			env = append(env, "SI_CODEX_PROFILE_ID="+opts.Profile.ID)
-		}
-		if strings.TrimSpace(opts.Profile.Name) != "" {
-			env = append(env, "SI_CODEX_PROFILE_NAME="+opts.Profile.Name)
-		}
-	}
+	env = appendContainerProfileEnv(env, opts.Profile)
 	if strings.TrimSpace(opts.Model) != "" {
 		env = append(env, "CODEX_MODEL="+strings.TrimSpace(opts.Model))
 	}

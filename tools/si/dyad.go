@@ -308,6 +308,8 @@ func cmdDyadSpawn(args []string) {
 		ForwardPorts:      *forwardPorts,
 		Network:           shared.DefaultNetwork,
 		DockerSocket:      *dockerSocket,
+		ProfileID:         strings.TrimSpace(os.Getenv("SI_CODEX_PROFILE_ID")),
+		ProfileName:       strings.TrimSpace(os.Getenv("SI_CODEX_PROFILE_NAME")),
 		LoopEnabled:       dyadLoopEnabledSetting(settings),
 		LoopGoal:          dyadLoopStringSetting("DYAD_LOOP_GOAL", settings.Dyad.Loop.Goal),
 		LoopSeedPrompt:    dyadLoopStringSetting("DYAD_LOOP_SEED_CRITIC_PROMPT", settings.Dyad.Loop.SeedCriticPrompt),
@@ -321,6 +323,10 @@ func cmdDyadSpawn(args []string) {
 		LoopAllowMCP:      dyadLoopAllowMCPSetting(settings),
 		LoopTmuxCapture:   dyadLoopStringSetting("DYAD_LOOP_TMUX_CAPTURE", settings.Dyad.Loop.TmuxCapture),
 		LoopPausePoll:     dyadLoopIntSetting("DYAD_LOOP_PAUSE_POLL_SECONDS", settings.Dyad.Loop.PausePollSeconds),
+	}
+	if profile != nil {
+		opts.ProfileID = profile.ID
+		opts.ProfileName = profile.Name
 	}
 	if seedPrompt != "" {
 		opts.LoopSeedPrompt = seedPrompt

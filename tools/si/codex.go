@@ -476,6 +476,7 @@ func cmdCodexSpawn(args []string) {
 		"SI_WORKSPACE_HOST=" + strings.TrimSpace(*flags.workspaceHost),
 	}
 	env = append(env, hostUserEnv()...)
+	env = appendContainerProfileEnv(env, profile)
 	if strings.TrimSpace(*flags.repo) != "" {
 		env = append(env, "SI_REPO="+strings.TrimSpace(*flags.repo))
 	}
@@ -483,10 +484,6 @@ func cmdCodexSpawn(args []string) {
 		env = append(env, "SI_GH_PAT="+strings.TrimSpace(*flags.ghPat))
 		env = append(env, "GH_TOKEN="+strings.TrimSpace(*flags.ghPat))
 		env = append(env, "GITHUB_TOKEN="+strings.TrimSpace(*flags.ghPat))
-	}
-	if profile != nil {
-		env = append(env, "SI_CODEX_PROFILE_ID="+profile.ID)
-		env = append(env, "SI_CODEX_PROFILE_NAME="+profile.Name)
 	}
 	if fortBootstrap != nil {
 		env = append(env, fortBootstrap.env()...)
@@ -1883,8 +1880,11 @@ func cmdCodexLogin(args []string) {
 		}
 	}
 	cfg := &container.Config{
-		Image:  image,
-		Env:    filterEnv(append([]string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex"}, hostUserEnv()...)),
+		Image: image,
+		Env: filterEnv(appendContainerProfileEnv(
+			append([]string{"HOME=/home/si", "CODEX_HOME=/home/si/.codex"}, hostUserEnv()...),
+			profile,
+		)),
 		Labels: labels,
 		Cmd:    []string{"bash", "-lc", "sleep infinity"},
 		User:   "root",
@@ -2524,6 +2524,7 @@ func readCodexAuthFromVolume(ctx context.Context, client *shared.Client, volumeN
 	tmpName := fmt.Sprintf("si-codex-authsync-%d", time.Now().UnixNano())
 	cfg := &container.Config{
 		Image: image,
+		Env:   filterEnv(appendContainerProfileEnv(nil, nil)),
 		Cmd:   []string{"bash", "-lc", "sleep infinity"},
 	}
 	hostCfg := &container.HostConfig{
