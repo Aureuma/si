@@ -29,6 +29,7 @@ COPY agents/shared /src/agents/shared
 COPY tools/si ./
 RUN go mod download
 RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/si .
+RUN CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o /out/si-entrypoint ./cmd/si-entrypoint
 
 FROM node:22-bookworm
 
@@ -85,15 +86,13 @@ RUN --mount=type=secret,id=si_host_codex_config,required=false \
          && chmod 0600 /home/si/.codex/config.toml /root/.codex/config.toml; \
        fi
 
-COPY tools/si-image/entrypoint.sh /usr/local/bin/si-entrypoint
-RUN chmod +x /usr/local/bin/si-entrypoint
-
 COPY tools/codex-skills /opt/si/codex-skills
 
 COPY --from=codex-stdout-parser-build /out/codex-stdout-parser /usr/local/bin/codex-stdout-parser
 COPY --from=codex-init-build /out/si-codex-init /usr/local/bin/si-codex-init
 COPY --from=critic-build /out/critic /usr/local/bin/critic
 COPY --from=si-build /out/si /usr/local/bin/si
+COPY --from=si-build /out/si-entrypoint /usr/local/bin/si-entrypoint
 COPY --from=si-build /usr/local/go /usr/local/go
 RUN ln -sf /usr/local/go/bin/go /usr/local/bin/go \
     && ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
