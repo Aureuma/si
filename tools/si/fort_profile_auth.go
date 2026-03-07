@@ -23,6 +23,7 @@ import (
 const (
 	fortDefaultHostURL              = "https://fort.aureuma.com"
 	fortDefaultPort                 = 8088
+	fortDefaultTokenFileRelative    = ".si/fort/bootstrap/admin.token"
 	fortProfileStateDirName         = "fort"
 	fortProfileSessionStateFileName = "session.json"
 	fortProfileAccessTokenFileName  = "access.token"
@@ -443,10 +444,14 @@ func fortAgentIDForProfile(profileID string) string {
 
 func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, preferredNetwork string) (fortBootstrapConfig, error) {
 	discoverDocker := fortEnvBool("SI_FORT_DISCOVER_DOCKER")
+	bearerToken, bearerErr := fortResolveBootstrapBearerToken()
+	if bearerErr != nil {
+		return fortBootstrapConfig{}, bearerErr
+	}
 	cfg := fortBootstrapConfig{
 		HostURL:          strings.TrimSpace(os.Getenv("FORT_HOST")),
 		ContainerHostURL: strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")),
-		BearerToken:      strings.TrimSpace(os.Getenv("FORT_TOKEN")),
+		BearerToken:      bearerToken,
 	}
 	if strings.TrimSpace(cfg.HostURL) == "" {
 		cfg.HostURL = strings.TrimSpace(os.Getenv("SI_FORT_HOST"))
@@ -479,10 +484,65 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 	if err := fortValidateHostedURL(cfg.ContainerHostURL); err != nil {
 		return fortBootstrapConfig{}, fmt.Errorf("invalid fort container host %q: %w", cfg.ContainerHostURL, err)
 	}
-	if strings.TrimSpace(cfg.BearerToken) == "" {
-		return fortBootstrapConfig{}, fmt.Errorf("fort admin auth is required (set FORT_TOKEN)")
-	}
 	return cfg, nil
+}
+
+func fortResolveBootstrapBearerToken() (string, error) {
+	if token := strings.TrimSpace(os.Getenv("FORT_TOKEN")); token != "" {
+		return token, nil
+	}
+	tokenFile := strings.TrimSpace(os.Getenv("FORT_TOKEN_FILE"))
+	if tokenFile == "" {
+		tokenFile = fortDefaultTokenFilePath()
+	}
+	if tokenFile == "" {
+		return "", fmt.Errorf("fort admin auth is required (set FORT_TOKEN or FORT_TOKEN_FILE)")
+	}
+	token, err := readStrictSecretFile(tokenFile)
+	if err != nil {
+		return "", fmt.Errorf("fort admin auth is required (token file %s): %w", tokenFile, err)
+	}
+	return token, nil
+}
+
+func fortDefaultTokenFilePath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, filepath.FromSlash(fortDefaultTokenFileRelative))
+}
+
+func readStrictSecretFile(path string) (string, error) {
+	path = filepath.Clean(strings.TrimSpace(path))
+	if path == "" {
+		return "", fmt.Errorf("path is required")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("not a regular file")
+	}
+	perm := info.Mode().Perm()
+	if perm&0o077 != 0 {
+		return "", fmt.Errorf("insecure permissions %03o (require 0600 or stricter)", perm)
+	}
+	// #nosec G304 -- path comes from local trusted config/env.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	token := strings.TrimSpace(string(raw))
+	if token == "" {
+		return "", fmt.Errorf("empty token")
+	}
+	return token, nil
 }
 
 func fortEnvBool(key string) bool {
