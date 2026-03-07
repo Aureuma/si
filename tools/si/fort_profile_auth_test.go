@@ -43,6 +43,42 @@ func TestResolveFortBootstrapConfigDefaultsToHostedFort(t *testing.T) {
 	}
 }
 
+func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
+	tmp := t.TempDir()
+	tokenFile := filepath.Join(tmp, "admin.token")
+	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	t.Setenv("FORT_TOKEN", "")
+	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_HOST", "https://fort.aureuma.com")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.aureuma.com")
+
+	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
+	if err != nil {
+		t.Fatalf("resolveFortBootstrapConfig: %v", err)
+	}
+	if cfg.BearerToken != "file-token" {
+		t.Fatalf("unexpected bearer token: %q", cfg.BearerToken)
+	}
+}
+
+func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T) {
+	tmp := t.TempDir()
+	tokenFile := filepath.Join(tmp, "admin.token")
+	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o644); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	t.Setenv("FORT_TOKEN", "")
+	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_HOST", "https://fort.aureuma.com")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.aureuma.com")
+
+	if _, err := resolveFortBootstrapConfig(context.Background(), nil, ""); err == nil {
+		t.Fatalf("expected weak token file permissions to be rejected")
+	}
+}
+
 func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T) {
 	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "")
