@@ -11,6 +11,15 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+### Changed
+- Changed SI Vault backend resolution to strict Fort-only mode (`vault.sync_backend` / `SI_VAULT_SYNC_BACKEND` accept only `fort`).
+- Changed vault credential hydration and secret-read helpers to resolve from SI Vault dotenv files instead of legacy Sun KV compatibility paths.
+
+### Removed
+- Removed legacy SI vault Sun-compatibility code paths (`vault_sun_backend.go`, `vault_sun_kv.go`) from the vault secret path.
+
+### Fixed
+- Updated vault-focused tests and docs to align with Fort-only SI Vault architecture and reject legacy backend aliases.
 
 ## [v0.51.0] - 2026-03-01
 ### Added
@@ -29,7 +38,7 @@ All notable changes to this project will be documented in this file.
 - Added the `si viva` wrapper command and migrated browser runtime integration to `surf bridge`.
 
 ### Changed
-- Modernized vault crypto behavior to dotenvx-style file encryption backed by Sun keys for portability.
+- Modernized vault crypto behavior to SI Vault native file encryption backed by Sun keys for portability.
 - Enforced Sun-only remote scope behavior in vault cloud workflows to keep remote data consistent.
 
 ### Fixed

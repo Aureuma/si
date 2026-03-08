@@ -31,7 +31,8 @@ si aws context use --account core --region us-east-1
 si aws doctor --account core --region us-east-1 --public --json
 ```
 
-Use `si vault run -- <cmd>` when injecting sensitive env values in automation.
+For host/admin automation, use `si vault run -- <cmd>` when injecting sensitive env values.
+For SI runtime containers, use `si fort ...` for secret access.
 
 ## Core operations
 
