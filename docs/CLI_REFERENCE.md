@@ -100,7 +100,8 @@ si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-prefl
 
 ## Safety guidance
 
-- Use `si vault run -- <command>` when secrets are required.
+- On host/admin flows, use `si vault run -- <command>` when secrets are required.
+- In SI runtime containers, use `si fort ...` for secret access.
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.
 - Keep docs and `docs.json` navigation in sync.
