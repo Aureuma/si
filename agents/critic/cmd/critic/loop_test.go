@@ -317,6 +317,31 @@ func TestReadLoopControl(t *testing.T) {
 	}
 }
 
+func TestLoadLoopConfigDefaultStateDirUsesHomeSi(t *testing.T) {
+	t.Setenv("DYAD_NAME", "demo")
+	t.Setenv("DYAD_MEMBER", "critic")
+	t.Setenv("DYAD_STATE_DIR", "")
+	t.Setenv("HOME", "/tmp/dyad-home")
+
+	cfg := loadLoopConfig()
+	want := filepath.Join("/tmp/dyad-home", ".si", "dyad", "demo")
+	if cfg.StateDir != want {
+		t.Fatalf("stateDir=%q want %q", cfg.StateDir, want)
+	}
+}
+
+func TestLoadLoopConfigStateDirOverrideWins(t *testing.T) {
+	t.Setenv("DYAD_NAME", "demo")
+	t.Setenv("DYAD_MEMBER", "critic")
+	t.Setenv("DYAD_STATE_DIR", "/var/lib/custom-dyad")
+	t.Setenv("HOME", "/tmp/dyad-home")
+
+	cfg := loadLoopConfig()
+	if cfg.StateDir != "/var/lib/custom-dyad" {
+		t.Fatalf("stateDir=%q want %q", cfg.StateDir, "/var/lib/custom-dyad")
+	}
+}
+
 func TestRecoverableTurnErrors(t *testing.T) {
 	cases := []string{
 		"timeout waiting for codex report",
