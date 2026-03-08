@@ -41,7 +41,7 @@ func TestShouldAutoHydrateVaultEnvForRootCommand(t *testing.T) {
 	}
 }
 
-func TestHydrateProcessEnvFromSunVaultSetsMissingValues(t *testing.T) {
+func TestHydrateProcessEnvFromVaultSetsMissingValues(t *testing.T) {
 	workspace := t.TempDir()
 	envDir := filepath.Join(workspace, "sampleapp")
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
@@ -73,7 +73,7 @@ func TestHydrateProcessEnvFromSunVaultSetsMissingValues(t *testing.T) {
 		t.Fatalf("write env file: %v", err)
 	}
 	keyring := siVaultKeyring{
-		Entries: map[string]sunVaultPrivateKey{
+		Entries: map[string]siVaultKeyMaterial{
 			siVaultKeyringEntryKey(target.Repo, target.Env): {
 				Repo:       target.Repo,
 				Env:        target.Env,
@@ -89,9 +89,9 @@ func TestHydrateProcessEnvFromSunVaultSetsMissingValues(t *testing.T) {
 	_ = os.Unsetenv(secretKey)
 	t.Cleanup(func() { _ = os.Unsetenv(secretKey) })
 
-	setCount, err := hydrateProcessEnvFromSunVault(settings, "test_auto_env")
+	setCount, err := hydrateProcessEnvFromVault(settings, "test_auto_env")
 	if err != nil {
-		t.Fatalf("hydrateProcessEnvFromSunVault: %v", err)
+		t.Fatalf("hydrateProcessEnvFromVault: %v", err)
 	}
 	if setCount != 1 {
 		t.Fatalf("setCount=%d want=1", setCount)
@@ -101,7 +101,7 @@ func TestHydrateProcessEnvFromSunVaultSetsMissingValues(t *testing.T) {
 	}
 }
 
-func TestHydrateProcessEnvFromSunVaultDoesNotOverrideExisting(t *testing.T) {
+func TestHydrateProcessEnvFromVaultDoesNotOverrideExisting(t *testing.T) {
 	workspace := t.TempDir()
 	envDir := filepath.Join(workspace, "sampleapp")
 	if err := os.MkdirAll(envDir, 0o755); err != nil {
@@ -133,7 +133,7 @@ func TestHydrateProcessEnvFromSunVaultDoesNotOverrideExisting(t *testing.T) {
 		t.Fatalf("write env file: %v", err)
 	}
 	keyring := siVaultKeyring{
-		Entries: map[string]sunVaultPrivateKey{
+		Entries: map[string]siVaultKeyMaterial{
 			siVaultKeyringEntryKey(target.Repo, target.Env): {
 				Repo:       target.Repo,
 				Env:        target.Env,
@@ -147,9 +147,9 @@ func TestHydrateProcessEnvFromSunVaultDoesNotOverrideExisting(t *testing.T) {
 	}
 
 	t.Setenv(secretKey, "already-set")
-	setCount, err := hydrateProcessEnvFromSunVault(settings, "test_auto_env_no_override")
+	setCount, err := hydrateProcessEnvFromVault(settings, "test_auto_env_no_override")
 	if err != nil {
-		t.Fatalf("hydrateProcessEnvFromSunVault: %v", err)
+		t.Fatalf("hydrateProcessEnvFromVault: %v", err)
 	}
 	if setCount != 0 {
 		t.Fatalf("setCount=%d want=0", setCount)

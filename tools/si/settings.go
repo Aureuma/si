@@ -945,7 +945,7 @@ func applySettingsDefaults(settings *Settings) {
 		}
 	}
 	if settings.Vault.File == "" {
-		settings.Vault.File = defaultVaultScope
+		settings.Vault.File = defaultSIVaultDotenvFile
 	}
 	if settings.Vault.TrustStore == "" {
 		settings.Vault.TrustStore = ""

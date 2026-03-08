@@ -109,7 +109,7 @@ func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	settings := Settings{}
 	applySettingsDefaults(&settings)
-	settings.Vault.SyncBackend = "sun"
+	settings.Vault.SyncBackend = "fort"
 
 	got, err := resolveVaultSyncBackend(settings)
 	if err != nil {
@@ -119,25 +119,7 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 		t.Fatalf("unexpected settings resolution: %+v", got)
 	}
 
-	settings.Vault.SyncBackend = "sun"
-	got, err = resolveVaultSyncBackend(settings)
-	if err != nil {
-		t.Fatalf("resolve settings backend sun alias: %v", err)
-	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "settings" {
-		t.Fatalf("unexpected settings alias resolution: %+v", got)
-	}
-
-	settings.Vault.SyncBackend = "dual"
-	got, err = resolveVaultSyncBackend(settings)
-	if err != nil {
-		t.Fatalf("resolve settings backend dual alias: %v", err)
-	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "settings" {
-		t.Fatalf("unexpected settings dual-alias resolution: %+v", got)
-	}
-
-	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")
+	t.Setenv("SI_VAULT_SYNC_BACKEND", "fort")
 	got, err = resolveVaultSyncBackend(settings)
 	if err != nil {
 		t.Fatalf("resolve env backend: %v", err)
@@ -147,12 +129,13 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "sun")
-	got, err = resolveVaultSyncBackend(settings)
-	if err != nil {
-		t.Fatalf("resolve env backend sun alias: %v", err)
+	if _, err := resolveVaultSyncBackend(settings); err == nil {
+		t.Fatalf("expected legacy env backend alias to fail")
 	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "env" {
-		t.Fatalf("unexpected env alias resolution: %+v", got)
+
+	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")
+	if _, err := resolveVaultSyncBackend(settings); err == nil {
+		t.Fatalf("expected legacy env backend alias to fail")
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "invalid")
@@ -164,59 +147,5 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	settings.Vault.SyncBackend = "invalid"
 	if _, err := resolveVaultSyncBackend(settings); err == nil {
 		t.Fatalf("expected invalid settings backend to fail")
-	}
-}
-
-func TestVaultNormalizeScopeRespectsSunObjectKeyLimit(t *testing.T) {
-	raw := strings.Repeat("a", 300)
-	scope := vaultNormalizeScope(raw)
-	if len(scope) > maxVaultScopeLen {
-		t.Fatalf("scope length=%d exceeds max=%d", len(scope), maxVaultScopeLen)
-	}
-	kind := "vault_kv." + scope
-	if len(kind) > 128 {
-		t.Fatalf("vault kind length=%d exceeds server key limit", len(kind))
-	}
-}
-
-func TestVaultNormalizeScopePreservesRepoEnvNamespace(t *testing.T) {
-	tests := []struct {
-		raw  string
-		want string
-	}{
-		{raw: "Aureuma/Dev", want: "aureuma/dev"},
-		{raw: "sampleapp//prod", want: "sampleapp/prod"},
-		{raw: "shared/Prod@", want: "shared/prod"},
-		{raw: ".env.dev", want: "dev"},
-		{raw: "C:\\repo\\.env.prod", want: "prod"},
-	}
-	for _, tc := range tests {
-		if got := vaultNormalizeScope(tc.raw); got != tc.want {
-			t.Fatalf("vaultNormalizeScope(%q) = %q; want %q", tc.raw, got, tc.want)
-		}
-	}
-}
-
-func TestVaultSunKVKindForScopeCompatibilityAndNamespacedEncoding(t *testing.T) {
-	legacyScope := "legacy-scope"
-	if got := vaultSunKVKindForScope(legacyScope); got != "vault_kv."+legacyScope {
-		t.Fatalf("legacy scope kind mismatch: got %q", got)
-	}
-
-	kind := vaultSunKVKindForScope("aureuma/dev")
-	if strings.Contains(kind, "/") {
-		t.Fatalf("kind must not contain slash: %q", kind)
-	}
-	if !strings.HasPrefix(kind, "vault_kv.aureuma.dev.") {
-		t.Fatalf("unexpected namespaced kind format: %q", kind)
-	}
-	if len(kind) > 128 {
-		t.Fatalf("kind length=%d exceeds max 128", len(kind))
-	}
-
-	k1 := vaultSunKVKindForScope("aureuma/dev")
-	k2 := vaultSunKVKindForScope("aureuma/prod")
-	if k1 == k2 {
-		t.Fatalf("different namespaced scopes must map to different kinds")
 	}
 }

@@ -11,11 +11,7 @@ import (
 )
 
 const (
-	vaultSyncBackendSun  = "sun"
 	vaultSyncBackendFort = "fort"
-	defaultVaultScope    = "default"
-	// "vault_kv." prefix (9) + scope must remain <= Sun object key max (128).
-	maxVaultScopeLen = 119
 )
 
 var windowsDrivePrefixPattern = regexp.MustCompile(`^[a-zA-Z]:[\\/]`)
@@ -62,13 +58,10 @@ func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source str
 }
 
 func normalizeVaultSyncBackend(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "fort", "sun", "cloud", "dual", "both", "git", "local":
-		// Legacy modes now normalize to the Fort-backed flow.
+	if strings.EqualFold(strings.TrimSpace(raw), vaultSyncBackendFort) {
 		return vaultSyncBackendFort
-	default:
-		return ""
 	}
+	return ""
 }
 
 func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, error) {
@@ -90,9 +83,6 @@ func resolveVaultSyncBackend(settings Settings) (vaultSyncBackendResolution, err
 }
 
 func vaultTrustStorePath(settings Settings) string {
-	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
-		return ""
-	}
 	path := strings.TrimSpace(os.Getenv("SI_VAULT_TRUST_STORE"))
 	if path == "" {
 		path = settings.Vault.TrustStore
@@ -101,9 +91,6 @@ func vaultTrustStorePath(settings Settings) string {
 }
 
 func vaultAuditLogPath(settings Settings) string {
-	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
-		return ""
-	}
 	path := strings.TrimSpace(os.Getenv("SI_VAULT_AUDIT_LOG"))
 	if path == "" {
 		path = settings.Vault.AuditLog
@@ -112,26 +99,15 @@ func vaultAuditLogPath(settings Settings) string {
 }
 
 func vaultDefaultEnvFile(settings Settings) string {
-	backend, _ := resolveVaultSyncBackend(settings)
-	// SI_VAULT_SCOPE is the preferred override in scoped vault mode.
 	if scope := strings.TrimSpace(os.Getenv("SI_VAULT_SCOPE")); scope != "" {
-		if backend.Mode == vaultSyncBackendSun {
-			return vaultNormalizeScope(scope)
-		}
 		return scope
 	}
 	// Keep SI_VAULT_FILE for backward compatibility with existing automation.
 	if file := strings.TrimSpace(os.Getenv("SI_VAULT_FILE")); file != "" {
-		if backend.Mode == vaultSyncBackendSun {
-			return vaultNormalizeScope(file)
-		}
 		return file
 	}
 
 	configured := strings.TrimSpace(settings.Vault.File)
-	if backend.Mode == vaultSyncBackendSun {
-		return vaultNormalizeScope(configured)
-	}
 	if configured == "" {
 		return defaultSIVaultDotenvFile
 	}
@@ -143,60 +119,6 @@ func vaultDefaultEnvFile(settings Settings) string {
 		return defaultSIVaultDotenvFile
 	}
 	return configured
-}
-
-func vaultNormalizeScope(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return defaultVaultScope
-	}
-	normalized := strings.ReplaceAll(raw, "\\", "/")
-	normalizedLower := strings.ToLower(normalized)
-	if vaultLooksLikeLegacyPath(normalizedLower) {
-		base := strings.TrimSpace(strings.ToLower(filepath.Base(normalizedLower)))
-		switch base {
-		case "", ".", "..", ".env", "default.env":
-			return defaultVaultScope
-		}
-		if strings.HasPrefix(base, ".env.") {
-			normalized = strings.TrimPrefix(base, ".env.")
-		} else if strings.HasSuffix(base, ".env") {
-			normalized = strings.TrimSuffix(base, ".env")
-		} else {
-			normalized = strings.TrimPrefix(base, ".")
-		}
-		normalized = strings.ToLower(normalized)
-	} else {
-		normalized = normalizedLower
-	}
-	parts := splitVaultScopeParts(normalized)
-	if len(parts) == 0 {
-		return defaultVaultScope
-	}
-	cleanParts := make([]string, 0, len(parts))
-	for _, part := range parts {
-		clean := vaultNormalizeScopePart(part)
-		if clean == "" {
-			continue
-		}
-		cleanParts = append(cleanParts, clean)
-	}
-	if len(cleanParts) == 0 {
-		return defaultVaultScope
-	}
-	scope := strings.Join(cleanParts, "/")
-	scope = strings.Trim(strings.ReplaceAll(scope, "//", "/"), "-_/.:")
-	if scope == "" {
-		return defaultVaultScope
-	}
-	if len(scope) > maxVaultScopeLen {
-		scope = strings.Trim(scope[:maxVaultScopeLen], "-_/.:")
-		scope = strings.Trim(strings.ReplaceAll(scope, "//", "/"), "-_/.:")
-		if scope == "" {
-			return defaultVaultScope
-		}
-	}
-	return scope
 }
 
 func vaultLooksLikeLegacyPath(normalizedLower string) bool {
@@ -217,84 +139,10 @@ func vaultLooksLikeLegacyPath(normalizedLower string) bool {
 	return false
 }
 
-func splitVaultScopeParts(scope string) []string {
-	scope = strings.TrimSpace(strings.ReplaceAll(scope, "\\", "/"))
-	if scope == "" {
-		return nil
-	}
-	raw := strings.Split(scope, "/")
-	parts := make([]string, 0, len(raw))
-	for _, part := range raw {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		parts = append(parts, part)
-	}
-	if len(parts) == 0 {
-		return []string{scope}
-	}
-	return parts
-}
-
-func vaultNormalizeScopePart(part string) string {
-	part = strings.TrimSpace(strings.ToLower(part))
-	if part == "" {
-		return ""
-	}
-	var b strings.Builder
-	lastDash := false
-	for _, ch := range part {
-		switch {
-		case ch >= 'a' && ch <= 'z':
-			b.WriteRune(ch)
-			lastDash = false
-		case ch >= '0' && ch <= '9':
-			b.WriteRune(ch)
-			lastDash = false
-		case ch == '-', ch == '_', ch == '.', ch == ':':
-			b.WriteRune(ch)
-			lastDash = false
-		default:
-			if !lastDash {
-				b.WriteByte('-')
-				lastDash = true
-			}
-		}
-	}
-	return strings.Trim(b.String(), "-_.:")
-}
-
-func vaultResolveSunTarget(fileFlag string) (vault.Target, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return vault.Target{}, err
-	}
-	scope := vaultNormalizeScope(fileFlag)
-	repoRoot, _ := vault.GitRoot(cwd)
-	return vault.Target{
-		CWD:            cwd,
-		RepoRoot:       repoRoot,
-		File:           scope,
-		FileIsExplicit: strings.TrimSpace(fileFlag) != "",
-	}, nil
-}
-
 func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile bool) (vault.Target, error) {
-	backend, err := resolveVaultSyncBackend(settings)
-	if err != nil {
-		return vault.Target{}, err
-	}
 	fileValue := strings.TrimSpace(fileFlag)
 	if fileValue == "" {
 		fileValue = vaultDefaultEnvFile(settings)
-	}
-	if backend.Mode == vaultSyncBackendSun {
-		target, err := vaultResolveSunTarget(fileValue)
-		if err != nil {
-			return vault.Target{}, err
-		}
-		return target, nil
 	}
 	target, err := vault.ResolveTarget(vault.ResolveOptions{
 		CWD:              "",
@@ -321,9 +169,6 @@ func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target,
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
 // into containers. Returns empty when unresolved or missing.
 func vaultContainerEnvFileMountPath(settings Settings) string {
-	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
-		return ""
-	}
 	target, err := vaultResolveTarget(settings, "", true)
 	if err != nil {
 		return ""
@@ -348,9 +193,6 @@ func vaultTrustFingerprint(doc vault.DotenvFile) (string, error) {
 }
 
 func vaultRequireTrusted(settings Settings, target vault.Target, doc vault.DotenvFile) (string, error) {
-	if backend, err := resolveVaultSyncBackend(settings); err == nil && backend.Mode == vaultSyncBackendSun {
-		return "sun-managed", nil
-	}
 	fp, err := vaultTrustFingerprint(doc)
 	if err != nil {
 		return "", err

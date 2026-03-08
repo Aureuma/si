@@ -183,23 +183,9 @@ func cmdPaasSecretList(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	values, used, err := vaultSunKVLoadRawValues(settings, targetPath)
+	values, err := loadVaultRawValuesFromTargetFile(targetPath.File)
 	if err != nil {
 		fatal(err)
-	}
-	if !used {
-		doc, readErr := vault.ReadDotenvFile(targetPath.File)
-		if readErr != nil {
-			fatal(readErr)
-		}
-		entries, entriesErr := vault.Entries(doc)
-		if entriesErr != nil {
-			fatal(entriesErr)
-		}
-		values = map[string]string{}
-		for _, entry := range entries {
-			values[entry.Key] = entry.ValueRaw
-		}
 	}
 	matches := make([]string, 0)
 	for key := range values {

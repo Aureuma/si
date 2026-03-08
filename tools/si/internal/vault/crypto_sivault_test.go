@@ -31,7 +31,7 @@ func TestSIVaultEmptyPlaintextRoundTrip(t *testing.T) {
 
 func TestDecryptSIVaultValueAcceptsEmptyLegacyPlaceholders(t *testing.T) {
 	cases := []string{
-		dotenvxEncryptedPrefix,
+		legacyEncryptedPrefix,
 		SIVaultEncryptedPrefix,
 		"  " + SIVaultEncryptedPrefix + "  ",
 	}
