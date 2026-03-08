@@ -84,6 +84,20 @@ Per-profile entry keyed by profile ID (for example `america`). These entries are
 - `auth_path` (string): path to auth.json
 - `auth_updated` (string): RFC3339 timestamp of auth.json
 
+### `[fort]`
+Defaults for the `si fort` wrapper (hosted Fort API access).
+- `fort.repo` (string): source repo path used when `si fort --build` is enabled
+- `fort.bin` (string): fort binary path used by wrapper execution
+- `fort.build` (bool): default build-before-run behavior for wrapper calls
+- `fort.host` (string): hosted Fort endpoint URL (must be HTTPS for production runtime)
+- `fort.container_host` (string): Fort endpoint URL intended for runtime containers (defaults to `fort.host` when unset)
+
+CLI and runtime behavior:
+- `si fort config show` reads these values.
+- `si fort config set ...` writes these values to settings.
+- Wrapper bootstrap/admin auth resolves from `FORT_TOKEN` or `FORT_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`).
+- Runtime container token state resolves from `FORT_TOKEN_PATH` and `FORT_REFRESH_TOKEN_PATH`.
+
 ### `[dyad]`
 Defaults for dyad spawns.
 - `dyad.actor_image` (string): default `aureuma/si:local`
