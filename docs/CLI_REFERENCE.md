@@ -22,7 +22,7 @@ si <command> <subcommand> --help
 | Domain | Commands |
 | --- | --- |
 | Runtime and orchestration | `si dyad`, codex lifecycle (`si spawn`, `si run`, `si status`, `si report`) |
-| Secrets and context | `si vault` (`si creds`) |
+| Secrets and context | `si vault` (`si creds`), `si fort` |
 | Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si sun` (non-vault secret path), `si releasemind` (`si release`) |
 | Provider telemetry | `si providers` |
 | Platform operations | `si paas` |
@@ -77,6 +77,13 @@ si cloudflare doctor --json
 si gcp doctor --json
 ```
 
+### Fort runtime secret check
+
+```bash
+si fort doctor
+si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
+```
+
 ### PaaS readiness
 
 ```bash
@@ -102,6 +109,8 @@ si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-prefl
 
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
 - In SI runtime containers, use `si fort ...` for secret access.
+- `si fort` wrapper bootstrap/admin auth resolves from `FORT_TOKEN` or `FORT_TOKEN_FILE`; runtime sessions use `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`.
+- If a flag belongs to the native `fort` CLI, pass it after `--` (example: `si fort -- --host https://fort.aureuma.ai doctor`).
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.
 - Keep docs and `docs.json` navigation in sync.

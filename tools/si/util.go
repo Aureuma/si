@@ -81,7 +81,8 @@ Core:
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
   si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync|bootstrap> [args]
-  si fort [--repo <path>] [--bin <path>] [--build] -- <fort-args...>
+  si fort [--repo <path>] [--bin <path>] [--build] [--json] -- <fort-args...>
+  si fort config <show|set> [args]
   si surf [--repo <path>] [--bin <path>] [--build] -- <surf-args...>
   si remote-control|rc [--repo <path>] [--bin <path>] [--build] -- <remote-control-args...>
   si test <workspace|vault|orbits|all> [args...]
@@ -343,6 +344,19 @@ vault:
 
   Alias:
     si creds ...
+
+fort:
+  si fort [--repo <path>] [--bin <path>] [--build] [--json] -- <fort-args...>
+  si fort [--repo <path>] [--bin <path>] [--build] [--json] <fort-subcommand> [fort-args...]
+  si fort config show [--json]
+  si fort config set [--repo <path>] [--bin <path>] [--host <url>] [--container-host <url>] [--build true|false] [--json]
+
+  Wrapper auth behavior:
+    - Host bootstrap admin auth: FORT_TOKEN or FORT_TOKEN_FILE (default ~/.si/fort/bootstrap/admin.token).
+    - Runtime session files: FORT_TOKEN_PATH + FORT_REFRESH_TOKEN_PATH.
+    - Wrapper auto-refreshes runtime auth when possible and injects --token into fort.
+    - FORT_TOKEN and FORT_REFRESH_TOKEN are stripped from child env before exec.
+    - For fort-native global flags, pass them after -- (example: si fort -- --host https://fort.aureuma.ai doctor).
 
 paas:
   Running si paas with no subcommand opens an interactive command picker.

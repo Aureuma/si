@@ -104,7 +104,8 @@ This matrix validates:
 - profile-scoped Fort agent auth bootstrap in `si spawn`
 - hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
 - host-side bootstrap admin token resolved from `FORT_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`)
-- in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` env leakage
+- runtime token-path flow in containers via `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`
+- in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
 - policy allow/deny behavior across multiple profiles and repo/env bindings
 - `si respawn --volumes` auth continuity
@@ -126,6 +127,21 @@ Bootstrap token file requirements:
 chmod 600 ~/.si/fort/bootstrap/admin.token
 chmod 700 ~/.si/fort/bootstrap
 ```
+
+Runtime session token file requirements (container flow):
+
+```bash
+# injected per profile/session by si spawn + si respawn --volumes
+$FORT_TOKEN_PATH
+$FORT_REFRESH_TOKEN_PATH
+
+# both must remain regular 0600 files
+stat -c "%a %n" "$FORT_TOKEN_PATH" "$FORT_REFRESH_TOKEN_PATH"
+```
+
+Wrapper reminder:
+- `si fort` is a wrapper around `fort`.
+- If a flag belongs to `fort` itself, pass it after `--` (for example: `si fort -- --host https://fort.aureuma.ai doctor`).
 
 ## CI notes
 GitHub Actions workflows use docs-only change detection to skip heavy test jobs
