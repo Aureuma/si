@@ -1,4 +1,4 @@
-# `si vault` (dotenvx-style, Fort/Vault aligned)
+# `si vault` (SI Vault native format, Fort/Vault aligned)
 
 `si vault` encrypts local `.env` files and manages per `repo/env` key material via local keyring state.
 
@@ -14,14 +14,26 @@ Architecture boundary:
 - Fort is the only API wrapper for policy/auth over SI Vault operations.
 - Sun is not part of SI Vault secret read/write flows.
 
+## Fort Boundary (No Overlap Contract)
+
+- SI Vault owns cryptography and `.env` ciphertext format only.
+- Fort owns remote API authn/authz and policy enforcement only.
+- SI Vault does not implement remote policy/auth decisions.
+- Fort does not implement independent secret persistence or crypto key generation.
+- Runtime agents should consume secrets through Fort; SI Vault CLI remains the local maintenance/admin tool.
+- Inside SI runtime containers, local `si vault` secret commands are blocked by default and must use `si fort`.
+
 ## Core Model
 
 - Secrets live in local `.env` files (encrypted values).
 - `SI_VAULT_PUBLIC_KEY` is inserted at file top when missing.
 - Encrypted values use prefix `encrypted:si-vault:`.
+- Legacy `encrypted:` payloads are accepted for backward compatibility.
 - Key material is scoped by `repo/env` and stored in local keyring file:
   - default: `~/.si/vault/si-vault-keyring.json`
   - override: `SI_VAULT_KEYRING_FILE`
+- This SI Vault keyring is a local JSON state file, not the OS keychain/secret-service store.
+- A single canonical keypair is enforced across all keyring scopes to prevent key sprawl.
 - Prefer keyring/file material over env-injected private keys.
 
 ## Quickstart
@@ -61,6 +73,10 @@ Run commands with decrypted env at runtime:
 ```bash
 si vault run --env-file .env --env dev -- go run ./cmd/server
 ```
+
+For SI runtime containers:
+- Use `si fort ...` for secret access.
+- Direct local `si vault` secret commands are blocked in-container.
 
 ## Encryption Behavior
 

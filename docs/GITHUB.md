@@ -56,6 +56,10 @@ Use GitHub App tokens through `si vault` as a Git credential helper, then normal
 si vault run -- si github git setup --root ~/Development --account core --owner Aureuma
 ```
 
+Note:
+- `si vault run` usage here is host/admin-side.
+- In SI runtime containers, use `si fort ...` for secret access paths.
+
 Optional custom vault scope for helper auth:
 
 ```bash
