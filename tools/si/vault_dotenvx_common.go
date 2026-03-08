@@ -188,22 +188,55 @@ func ensureSIVaultKeyMaterial(settings Settings, target siVaultTarget) (sunVault
 	if err != nil {
 		return sunVaultPrivateKey{}, err
 	}
+	canonical, hasCanonical, err := canonicalSIVaultKeyMaterial(keyring)
+	if err != nil {
+		return sunVaultPrivateKey{}, err
+	}
 	key := siVaultKeyringEntryKey(target.Repo, target.Env)
 	if existing, ok := keyring.Entries[key]; ok {
-		return normalizeSunVaultMaterial(existing, target)
+		normalized, err := normalizeSunVaultMaterial(existing, target)
+		if err != nil {
+			return sunVaultPrivateKey{}, err
+		}
+		if hasCanonical {
+			if err := validateSIVaultMaterialMatchesCanonical(normalized, canonical, key); err != nil {
+				return sunVaultPrivateKey{}, err
+			}
+		}
+		return normalized, nil
 	}
-	publicKey, privateKey, genErr := vault.GenerateSIVaultKeyPair()
-	if genErr != nil {
-		return sunVaultPrivateKey{}, genErr
+
+	if !hasCanonical {
+		bootstrapMaterial, ok, bootstrapErr := bootstrapSIVaultMaterialFromEnv(target)
+		if bootstrapErr != nil {
+			return sunVaultPrivateKey{}, bootstrapErr
+		}
+		if !ok {
+			return sunVaultPrivateKey{}, fmt.Errorf(
+				"si vault key material missing for %s/%s: canonical keypair is not initialized (set %s/%s or seed keyring explicitly)",
+				target.Repo,
+				target.Env,
+				vault.SIVaultPublicKeyName,
+				vault.SIVaultPrivateKeyName,
+			)
+		}
+		keyring.Entries[key] = bootstrapMaterial
+		if err := saveSIVaultKeyring(keyring); err != nil {
+			return sunVaultPrivateKey{}, err
+		}
+		return bootstrapMaterial, nil
 	}
-	material := sunVaultPrivateKey{
-		Repo:       target.Repo,
-		Env:        target.Env,
-		PublicKey:  publicKey,
-		PrivateKey: privateKey,
-	}
-	normalized, err := normalizeSunVaultMaterial(material, target)
+
+	seeded := canonical
+	seeded.Repo = target.Repo
+	seeded.Env = target.Env
+	seeded.BackupPrivateKeys = nil
+	seeded.UpdatedAt = ""
+	normalized, err := normalizeSunVaultMaterial(seeded, target)
 	if err != nil {
+		return sunVaultPrivateKey{}, err
+	}
+	if err := validateSIVaultMaterialMatchesCanonical(normalized, canonical, key); err != nil {
 		return sunVaultPrivateKey{}, err
 	}
 	keyring.Entries[key] = normalized
@@ -211,6 +244,104 @@ func ensureSIVaultKeyMaterial(settings Settings, target siVaultTarget) (sunVault
 		return sunVaultPrivateKey{}, err
 	}
 	return normalized, nil
+}
+
+func canonicalSIVaultKeyMaterial(keyring siVaultKeyring) (sunVaultPrivateKey, bool, error) {
+	if len(keyring.Entries) == 0 {
+		return sunVaultPrivateKey{}, false, nil
+	}
+	scopes := make([]string, 0, len(keyring.Entries))
+	for scope := range keyring.Entries {
+		scopes = append(scopes, scope)
+	}
+	sort.Strings(scopes)
+
+	var canonical sunVaultPrivateKey
+	hasCanonical := false
+	canonicalScope := ""
+	for _, scope := range scopes {
+		entry := keyring.Entries[scope]
+		scopeRepo, scopeEnv := splitSIVaultKeyringEntryScope(scope)
+		target := siVaultTarget{
+			Repo: firstNonEmpty(strings.TrimSpace(entry.Repo), scopeRepo),
+			Env:  firstNonEmpty(strings.TrimSpace(entry.Env), scopeEnv),
+		}
+		normalized, err := normalizeSunVaultMaterial(entry, target)
+		if err != nil {
+			return sunVaultPrivateKey{}, false, fmt.Errorf("invalid si vault key material for %s: %w", scope, err)
+		}
+		if len(normalized.BackupPrivateKeys) > 0 {
+			return sunVaultPrivateKey{}, false, fmt.Errorf("si vault key sprawl detected for %s: backup_private_keys are not allowed", scope)
+		}
+		if !hasCanonical {
+			canonical = normalized
+			hasCanonical = true
+			canonicalScope = scope
+			continue
+		}
+		if err := validateSIVaultMaterialMatchesCanonical(normalized, canonical, scope); err != nil {
+			return sunVaultPrivateKey{}, false, fmt.Errorf("%w (canonical_scope=%s)", err, canonicalScope)
+		}
+	}
+	return canonical, hasCanonical, nil
+}
+
+func validateSIVaultMaterialMatchesCanonical(candidate sunVaultPrivateKey, canonical sunVaultPrivateKey, scope string) error {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = "<unknown>"
+	}
+	if len(candidate.BackupPrivateKeys) > 0 {
+		return fmt.Errorf("si vault key sprawl detected for %s: backup_private_keys are not allowed", scope)
+	}
+	candidatePub := strings.TrimSpace(strings.ToLower(candidate.PublicKey))
+	candidatePriv := strings.TrimSpace(strings.ToLower(candidate.PrivateKey))
+	canonicalPub := strings.TrimSpace(strings.ToLower(canonical.PublicKey))
+	canonicalPriv := strings.TrimSpace(strings.ToLower(canonical.PrivateKey))
+	if candidatePub == "" || candidatePriv == "" {
+		return fmt.Errorf("si vault key material for %s is incomplete", scope)
+	}
+	if candidatePub != canonicalPub || candidatePriv != canonicalPriv {
+		return fmt.Errorf("si vault key sprawl detected for %s: keypair diverges from canonical", scope)
+	}
+	return nil
+}
+
+func splitSIVaultKeyringEntryScope(scope string) (string, string) {
+	scope = strings.TrimSpace(strings.ToLower(scope))
+	if scope == "" {
+		return "", ""
+	}
+	parts := strings.SplitN(scope, "/", 2)
+	if len(parts) != 2 {
+		return normalizeVaultRepoEnvSlug(parts[0]), ""
+	}
+	return normalizeVaultRepoEnvSlug(parts[0]), normalizeVaultRepoEnvSlug(parts[1])
+}
+
+func bootstrapSIVaultMaterialFromEnv(target siVaultTarget) (sunVaultPrivateKey, bool, error) {
+	publicKey := strings.TrimSpace(strings.ToLower(os.Getenv(vault.SIVaultPublicKeyName)))
+	privateKey := strings.TrimSpace(strings.ToLower(os.Getenv(vault.SIVaultPrivateKeyName)))
+	if publicKey == "" && privateKey == "" {
+		return sunVaultPrivateKey{}, false, nil
+	}
+	if publicKey == "" || privateKey == "" {
+		return sunVaultPrivateKey{}, false, fmt.Errorf(
+			"si vault bootstrap requires both %s and %s",
+			vault.SIVaultPublicKeyName,
+			vault.SIVaultPrivateKeyName,
+		)
+	}
+	normalized, err := normalizeSunVaultMaterial(sunVaultPrivateKey{
+		Repo:       target.Repo,
+		Env:        target.Env,
+		PublicKey:  publicKey,
+		PrivateKey: privateKey,
+	}, target)
+	if err != nil {
+		return sunVaultPrivateKey{}, false, err
+	}
+	return normalized, true, nil
 }
 
 func normalizeSunVaultMaterial(in sunVaultPrivateKey, target siVaultTarget) (sunVaultPrivateKey, error) {
