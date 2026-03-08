@@ -16,11 +16,11 @@ func TestVaultStatusFailsFastOnSettingsParseError(t *testing.T) {
 	if err := os.WriteFile(envFile, []byte("TEST_KEY=test\n"), 0o600); err != nil {
 		t.Fatalf("write env file: %v", err)
 	}
-	sunDir := filepath.Join(home, ".si", "sun")
-	if err := os.MkdirAll(sunDir, 0o700); err != nil {
-		t.Fatalf("mkdir sun settings dir: %v", err)
+	fortDir := filepath.Join(home, ".si", "fort")
+	if err := os.MkdirAll(fortDir, 0o700); err != nil {
+		t.Fatalf("mkdir fort settings dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(sunDir, "settings.toml"), []byte("[sun\nbase_url='https://sun.example'\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(fortDir, "settings.toml"), []byte("[fort\nhost='https://fort.example'\n"), 0o600); err != nil {
 		t.Fatalf("write malformed settings: %v", err)
 	}
 
@@ -35,7 +35,7 @@ func TestVaultStatusFailsFastOnSettingsParseError(t *testing.T) {
 	if !strings.Contains(combined, "vault settings load failed") {
 		t.Fatalf("expected strict vault settings error, got\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
-	if !strings.Contains(combined, "parse settings module sun") {
+	if !strings.Contains(combined, "parse settings module fort") {
 		t.Fatalf("expected parse module context in error, got\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
 }

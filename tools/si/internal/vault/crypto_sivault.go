@@ -15,7 +15,7 @@ const (
 	SIVaultPrivateKeyName = "SI_VAULT_PRIVATE_KEY"
 
 	SIVaultEncryptedPrefix = "encrypted:si-vault:"
-	dotenvxEncryptedPrefix = "encrypted:"
+	legacyEncryptedPrefix  = "encrypted:"
 )
 
 func GenerateSIVaultKeyPair() (publicKeyHex string, privateKeyHex string, err error) {
@@ -31,7 +31,7 @@ func IsSIVaultEncryptedValue(raw string) bool {
 	if trimmed == "" {
 		return false
 	}
-	return strings.HasPrefix(trimmed, SIVaultEncryptedPrefix) || strings.HasPrefix(trimmed, dotenvxEncryptedPrefix)
+	return strings.HasPrefix(trimmed, SIVaultEncryptedPrefix) || strings.HasPrefix(trimmed, legacyEncryptedPrefix)
 }
 
 func EncryptSIVaultValue(plain string, publicKeyHex string) (string, error) {
@@ -67,8 +67,8 @@ func DecryptSIVaultValue(ciphertext string, privateKeyHexes []string) (string, e
 	switch {
 	case strings.HasPrefix(ciphertext, SIVaultEncryptedPrefix):
 		encoded = strings.TrimPrefix(ciphertext, SIVaultEncryptedPrefix)
-	case strings.HasPrefix(ciphertext, dotenvxEncryptedPrefix):
-		encoded = strings.TrimPrefix(ciphertext, dotenvxEncryptedPrefix)
+	case strings.HasPrefix(ciphertext, legacyEncryptedPrefix):
+		encoded = strings.TrimPrefix(ciphertext, legacyEncryptedPrefix)
 	default:
 		return "", fmt.Errorf("value is not encrypted")
 	}

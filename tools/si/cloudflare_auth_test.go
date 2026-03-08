@@ -100,7 +100,7 @@ func TestResolveCloudflareCredentialsFromVaultEncrypted(t *testing.T) {
 		t.Fatalf("resolveSIVaultTarget: %v", err)
 	}
 	keyring := siVaultKeyring{
-		Entries: map[string]sunVaultPrivateKey{
+		Entries: map[string]siVaultKeyMaterial{
 			siVaultKeyringEntryKey(target.Repo, target.Env): {
 				Repo:       target.Repo,
 				Env:        target.Env,

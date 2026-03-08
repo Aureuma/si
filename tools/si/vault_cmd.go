@@ -43,6 +43,9 @@ func cmdVault(args []string) {
 	args = resolved
 	cmd := strings.ToLower(strings.TrimSpace(args[0]))
 	rest := args[1:]
+	if err := vaultGuardContainerLocalAccess(cmd); err != nil {
+		fatal(err)
+	}
 	switch cmd {
 	case "help", "-h", "--help":
 		printUsage(vaultUsageText)
