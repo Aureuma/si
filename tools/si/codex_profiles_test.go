@@ -43,7 +43,7 @@ func TestIsValidCodexAuthFileRejectsMissingAccessAndRefresh(t *testing.T) {
 func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
 	prevSunFn := syncProfileAuthFromSunStatusFn
@@ -80,7 +80,7 @@ func TestCodexProfileAuthStatusRecoversViaContainerSync(t *testing.T) {
 func TestCodexProfileAuthStatusRecoversViaSunSync(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 
 	prevContainerFn := syncProfileAuthFromContainerStatusFn
 	prevSunFn := syncProfileAuthFromSunStatusFn
@@ -127,7 +127,7 @@ func TestCodexProfileAuthStatusRecoversViaSunSync(t *testing.T) {
 func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	profile := codexProfile{ID: "einsteina", Name: "Einsteina", Email: "einsteina@example.com"}
+	profile := codexProfile{ID: "profile-delta", Name: "Profile Delta", Email: "profile-delta@example.com"}
 
 	prevFn := syncProfileAuthFromContainerStatusFn
 	prevSunFn := syncProfileAuthFromSunStatusFn
@@ -157,7 +157,7 @@ func TestCodexProfileAuthStatusAttemptsSyncOnlyOncePerProfile(t *testing.T) {
 func TestCodexProfileAuthStatusSkipsRecoveryWhenProfileIsBlocked(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 	if err := addCodexLogoutBlockedProfiles(home, []string{profile.ID}); err != nil {
 		t.Fatalf("seed blocked profiles: %v", err)
 	}

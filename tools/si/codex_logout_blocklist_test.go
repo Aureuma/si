@@ -8,7 +8,7 @@ import (
 
 func TestCodexLogoutBlockedProfilesAddRemove(t *testing.T) {
 	home := t.TempDir()
-	if err := addCodexLogoutBlockedProfiles(home, []string{"Cadma", "cadma", "Einsteina"}); err != nil {
+	if err := addCodexLogoutBlockedProfiles(home, []string{"PROFILE-GAMMA", "profile-gamma", "PROFILE-DELTA"}); err != nil {
 		t.Fatalf("add blocked profiles: %v", err)
 	}
 
@@ -19,14 +19,14 @@ func TestCodexLogoutBlockedProfilesAddRemove(t *testing.T) {
 	if len(blocked) != 2 {
 		t.Fatalf("expected deduped blocked profiles, got %#v", blocked)
 	}
-	if _, ok := blocked["cadma"]; !ok {
-		t.Fatalf("expected cadma in blocked profiles, got %#v", blocked)
+	if _, ok := blocked["profile-gamma"]; !ok {
+		t.Fatalf("expected profile-gamma in blocked profiles, got %#v", blocked)
 	}
-	if _, ok := blocked["einsteina"]; !ok {
-		t.Fatalf("expected einsteina in blocked profiles, got %#v", blocked)
+	if _, ok := blocked["profile-delta"]; !ok {
+		t.Fatalf("expected profile-delta in blocked profiles, got %#v", blocked)
 	}
 
-	if err := removeCodexLogoutBlockedProfiles(home, []string{"cadma", "einsteina"}); err != nil {
+	if err := removeCodexLogoutBlockedProfiles(home, []string{"profile-gamma", "profile-delta"}); err != nil {
 		t.Fatalf("remove blocked profiles: %v", err)
 	}
 
@@ -42,28 +42,28 @@ func TestCodexLogoutBlockedProfilesAddRemove(t *testing.T) {
 func TestDiscoverCachedCodexProfileIDs(t *testing.T) {
 	home := t.TempDir()
 	root := filepath.Join(home, ".si", "codex", "profiles")
-	if err := os.MkdirAll(filepath.Join(root, "cadma"), 0o700); err != nil {
-		t.Fatalf("mkdir cadma: %v", err)
+	if err := os.MkdirAll(filepath.Join(root, "profile-gamma"), 0o700); err != nil {
+		t.Fatalf("mkdir profile-gamma: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(root, "einsteina"), 0o700); err != nil {
-		t.Fatalf("mkdir einsteina: %v", err)
+	if err := os.MkdirAll(filepath.Join(root, "profile-delta"), 0o700); err != nil {
+		t.Fatalf("mkdir profile-delta: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "README.txt"), []byte("x"), 0o600); err != nil {
 		t.Fatalf("write helper file: %v", err)
 	}
 
 	ids := discoverCachedCodexProfileIDs(home)
-	if len(ids) != 2 || ids[0] != "cadma" || ids[1] != "einsteina" {
+	if len(ids) != 2 || ids[0] != "profile-delta" || ids[1] != "profile-gamma" {
 		t.Fatalf("unexpected discovered ids: %#v", ids)
 	}
 }
 
 func TestAddCodexLogoutBlockedProfilesMergesExistingEntries(t *testing.T) {
 	home := t.TempDir()
-	if err := addCodexLogoutBlockedProfiles(home, []string{"cadma"}); err != nil {
+	if err := addCodexLogoutBlockedProfiles(home, []string{"profile-gamma"}); err != nil {
 		t.Fatalf("seed blocked profiles: %v", err)
 	}
-	if err := addCodexLogoutBlockedProfiles(home, []string{"einsteina"}); err != nil {
+	if err := addCodexLogoutBlockedProfiles(home, []string{"profile-delta"}); err != nil {
 		t.Fatalf("merge blocked profiles: %v", err)
 	}
 
@@ -74,10 +74,10 @@ func TestAddCodexLogoutBlockedProfilesMergesExistingEntries(t *testing.T) {
 	if len(blocked) != 2 {
 		t.Fatalf("expected merged blocked profiles, got %#v", blocked)
 	}
-	if _, ok := blocked["cadma"]; !ok {
-		t.Fatalf("expected cadma in blocked profiles, got %#v", blocked)
+	if _, ok := blocked["profile-gamma"]; !ok {
+		t.Fatalf("expected profile-gamma in blocked profiles, got %#v", blocked)
 	}
-	if _, ok := blocked["einsteina"]; !ok {
-		t.Fatalf("expected einsteina in blocked profiles, got %#v", blocked)
+	if _, ok := blocked["profile-delta"]; !ok {
+		t.Fatalf("expected profile-delta in blocked profiles, got %#v", blocked)
 	}
 }
