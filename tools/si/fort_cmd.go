@@ -113,6 +113,15 @@ func cmdFort(args []string) {
 	if !buildFlagSet && settings.Fort.Build != nil {
 		buildRequested = *settings.Fort.Build
 	}
+	if strings.TrimSpace(os.Getenv("FORT_HOST")) == "" && strings.TrimSpace(settings.Fort.Host) != "" {
+		_ = os.Setenv("FORT_HOST", strings.TrimSpace(settings.Fort.Host))
+	}
+	if strings.TrimSpace(os.Getenv("SI_FORT_HOST")) == "" && strings.TrimSpace(settings.Fort.Host) != "" {
+		_ = os.Setenv("SI_FORT_HOST", strings.TrimSpace(settings.Fort.Host))
+	}
+	if strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")) == "" && strings.TrimSpace(settings.Fort.ContainerHost) != "" {
+		_ = os.Setenv("SI_FORT_CONTAINER_HOST", strings.TrimSpace(settings.Fort.ContainerHost))
+	}
 	if buildRequested {
 		if err := buildFortBinary(resolvedRepo, resolvedBin); err != nil {
 			if *jsonOut {
@@ -223,6 +232,8 @@ func cmdFortConfigShow(args []string) {
 	fmt.Printf("si fort config\n")
 	fmt.Printf("  repo=%s\n", strings.TrimSpace(settings.Fort.Repo))
 	fmt.Printf("  bin=%s\n", strings.TrimSpace(settings.Fort.Bin))
+	fmt.Printf("  host=%s\n", strings.TrimSpace(settings.Fort.Host))
+	fmt.Printf("  container_host=%s\n", strings.TrimSpace(settings.Fort.ContainerHost))
 	if settings.Fort.Build != nil {
 		fmt.Printf("  build=%t\n", *settings.Fort.Build)
 	} else {
@@ -235,28 +246,34 @@ func cmdFortConfigSet(args []string) {
 	fs.SetOutput(ioDiscardWriter{})
 	repo := fs.String("repo", "", "default fort repo path")
 	bin := fs.String("bin", "", "default fort binary path")
+	host := fs.String("host", "", "default fort API host URL")
+	containerHost := fs.String("container-host", "", "default fort API host URL used inside containers")
 	build := fs.String("build", "", "default build behavior (true|false)")
 	jsonOut := fs.Bool("json", false, "output json")
 	if err := fs.Parse(args); err != nil {
 		fatal(err)
 	}
 	if fs.NArg() > 0 {
-		fatal(errors.New("usage: si fort config set [--repo <path>] [--bin <path>] [--build true|false] [--json]"))
+		fatal(errors.New("usage: si fort config set [--repo <path>] [--bin <path>] [--host <url>] [--container-host <url>] [--build true|false] [--json]"))
 	}
 	settings := loadSettingsOrDefault()
 	updated, err := applyFortConfigSet(&settings, fortConfigSetInput{
-		RepoProvided:  fortFlagProvided(fs, "repo"),
-		Repo:          strings.TrimSpace(*repo),
-		BinProvided:   fortFlagProvided(fs, "bin"),
-		Bin:           strings.TrimSpace(*bin),
-		BuildProvided: fortFlagProvided(fs, "build"),
-		BuildRaw:      strings.TrimSpace(*build),
+		RepoProvided:          fortFlagProvided(fs, "repo"),
+		Repo:                  strings.TrimSpace(*repo),
+		BinProvided:           fortFlagProvided(fs, "bin"),
+		Bin:                   strings.TrimSpace(*bin),
+		HostProvided:          fortFlagProvided(fs, "host"),
+		Host:                  strings.TrimSpace(*host),
+		ContainerHostProvided: fortFlagProvided(fs, "container-host"),
+		ContainerHost:         strings.TrimSpace(*containerHost),
+		BuildProvided:         fortFlagProvided(fs, "build"),
+		BuildRaw:              strings.TrimSpace(*build),
 	})
 	if err != nil {
 		fatal(err)
 	}
 	if !updated {
-		fatal(errors.New("no settings provided; use one or more --repo/--bin/--build flags"))
+		fatal(errors.New("no settings provided; use one or more --repo/--bin/--host/--container-host/--build flags"))
 	}
 	if err := saveSettings(settings); err != nil {
 		fatal(err)
@@ -275,6 +292,12 @@ type fortConfigSetInput struct {
 	BinProvided bool
 	Bin         string
 
+	HostProvided bool
+	Host         string
+
+	ContainerHostProvided bool
+	ContainerHost         string
+
 	BuildProvided bool
 	BuildRaw      string
 }
@@ -290,6 +313,14 @@ func applyFortConfigSet(settings *Settings, in fortConfigSetInput) (bool, error)
 	}
 	if in.BinProvided {
 		settings.Fort.Bin = strings.TrimSpace(in.Bin)
+		changed = true
+	}
+	if in.HostProvided {
+		settings.Fort.Host = strings.TrimSpace(in.Host)
+		changed = true
+	}
+	if in.ContainerHostProvided {
+		settings.Fort.ContainerHost = strings.TrimSpace(in.ContainerHost)
 		changed = true
 	}
 	if in.BuildProvided {

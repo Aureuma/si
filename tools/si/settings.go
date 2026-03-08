@@ -448,9 +448,11 @@ type OpenAIAccountEntry struct {
 }
 
 type FortSettings struct {
-	Repo  string `toml:"repo,omitempty"`
-	Bin   string `toml:"bin,omitempty"`
-	Build *bool  `toml:"build,omitempty"`
+	Repo          string `toml:"repo,omitempty"`
+	Bin           string `toml:"bin,omitempty"`
+	Host          string `toml:"host,omitempty"`
+	ContainerHost string `toml:"container_host,omitempty"`
+	Build         *bool  `toml:"build,omitempty"`
 }
 
 type SurfSettings struct {
@@ -1195,6 +1197,10 @@ func applySettingsDefaults(settings *Settings) {
 		openAISpec := providers.Resolve(providers.OpenAI)
 		settings.OpenAI.APIBaseURL = firstNonEmpty(openAISpec.BaseURL, "https://api.openai.com")
 	}
+	settings.Fort.Repo = strings.TrimSpace(settings.Fort.Repo)
+	settings.Fort.Bin = strings.TrimSpace(settings.Fort.Bin)
+	settings.Fort.Host = strings.TrimSpace(settings.Fort.Host)
+	settings.Fort.ContainerHost = strings.TrimSpace(settings.Fort.ContainerHost)
 	settings.Surf.Repo = strings.TrimSpace(settings.Surf.Repo)
 	settings.Surf.Bin = strings.TrimSpace(settings.Surf.Bin)
 	settings.Surf.SettingsFile = strings.TrimSpace(settings.Surf.SettingsFile)
