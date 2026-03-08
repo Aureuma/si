@@ -9,12 +9,16 @@ import (
 func TestApplyFortConfigSet(t *testing.T) {
 	settings := defaultSettings()
 	changed, err := applyFortConfigSet(&settings, fortConfigSetInput{
-		RepoProvided:  true,
-		Repo:          "/tmp/fort",
-		BinProvided:   true,
-		Bin:           "/tmp/fort/bin/fort",
-		BuildProvided: true,
-		BuildRaw:      "true",
+		RepoProvided:          true,
+		Repo:                  "/tmp/fort",
+		BinProvided:           true,
+		Bin:                   "/tmp/fort/bin/fort",
+		HostProvided:          true,
+		Host:                  "https://fort.example.test",
+		ContainerHostProvided: true,
+		ContainerHost:         "https://fort.internal.example.test",
+		BuildProvided:         true,
+		BuildRaw:              "true",
 	})
 	if err != nil {
 		t.Fatalf("applyFortConfigSet: %v", err)
@@ -24,6 +28,12 @@ func TestApplyFortConfigSet(t *testing.T) {
 	}
 	if settings.Fort.Repo != "/tmp/fort" || settings.Fort.Bin != "/tmp/fort/bin/fort" {
 		t.Fatalf("unexpected fort repo/bin: %#v", settings.Fort)
+	}
+	if settings.Fort.Host != "https://fort.example.test" {
+		t.Fatalf("unexpected fort host: %#v", settings.Fort)
+	}
+	if settings.Fort.ContainerHost != "https://fort.internal.example.test" {
+		t.Fatalf("unexpected fort container host: %#v", settings.Fort)
 	}
 	if settings.Fort.Build == nil || !*settings.Fort.Build {
 		t.Fatalf("expected fort.build=true")
@@ -102,12 +112,16 @@ func TestFortConfigPersistsAcrossSaveLoad(t *testing.T) {
 
 	settings := loadSettingsOrDefault()
 	changed, err := applyFortConfigSet(&settings, fortConfigSetInput{
-		RepoProvided:  true,
-		Repo:          "/tmp/fort",
-		BinProvided:   true,
-		Bin:           "/tmp/fort/bin/fort",
-		BuildProvided: true,
-		BuildRaw:      "true",
+		RepoProvided:          true,
+		Repo:                  "/tmp/fort",
+		BinProvided:           true,
+		Bin:                   "/tmp/fort/bin/fort",
+		HostProvided:          true,
+		Host:                  "https://fort.example.test",
+		ContainerHostProvided: true,
+		ContainerHost:         "https://fort.internal.example.test",
+		BuildProvided:         true,
+		BuildRaw:              "true",
 	})
 	if err != nil {
 		t.Fatalf("applyFortConfigSet: %v", err)
@@ -125,6 +139,12 @@ func TestFortConfigPersistsAcrossSaveLoad(t *testing.T) {
 	}
 	if loaded.Fort.Bin != "/tmp/fort/bin/fort" {
 		t.Fatalf("unexpected loaded fort bin: %q", loaded.Fort.Bin)
+	}
+	if loaded.Fort.Host != "https://fort.example.test" {
+		t.Fatalf("unexpected loaded fort host: %q", loaded.Fort.Host)
+	}
+	if loaded.Fort.ContainerHost != "https://fort.internal.example.test" {
+		t.Fatalf("unexpected loaded fort container host: %q", loaded.Fort.ContainerHost)
 	}
 	if loaded.Fort.Build == nil || !*loaded.Fort.Build {
 		t.Fatalf("expected loaded fort.build=true")
