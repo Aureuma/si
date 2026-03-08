@@ -1,0 +1,54 @@
+name: fort-vault-ci
+
+on:
+  push:
+    paths:
+      - "tools/si/fort*.go"
+      - "tools/si/fort_*"
+      - "tools/si/vault*.go"
+      - "tools/si/vault_*"
+      - "tools/si/internal/vault/**"
+      - "tools/si/settings.go"
+      - "tools/si/fort_spawn_matrix_integration_test.go"
+      - ".github/workflows/fort-vault-ci.yml"
+  pull_request:
+    paths:
+      - "tools/si/fort*.go"
+      - "tools/si/fort_*"
+      - "tools/si/vault*.go"
+      - "tools/si/vault_*"
+      - "tools/si/internal/vault/**"
+      - "tools/si/settings.go"
+      - "tools/si/fort_spawn_matrix_integration_test.go"
+      - ".github/workflows/fort-vault-ci.yml"
+
+jobs:
+  fort-vault:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout SI
+        uses: actions/checkout@v4
+
+      - name: Checkout Fort
+        uses: actions/checkout@v4
+        with:
+          repository: Aureuma/fort
+          path: fort
+          fetch-depth: 1
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+
+      - name: Unit tests (Fort/Vault surface)
+        run: |
+          go test ./tools/si -run 'Test(Fort|ResolveFort|PrepareFortRuntimeAuth|EnsureSIVault|ResolveSIVaultTarget|EncryptDotenvDoc|AnalyzeDotenvDecryptability|EnsureSIVaultPublicKeyHeader)' -count=1
+
+      - name: SI↔Fort spawn matrix integration
+        env:
+          SI_REPO: ${{ github.workspace }}
+          FORT_REPO: ${{ github.workspace }}/fort
+        run: |
+          go test -tags integration ./tools/si -run TestFortSpawnMatrix -count=1

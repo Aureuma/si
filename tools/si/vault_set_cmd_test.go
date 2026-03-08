@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"si/tools/si/internal/vault"
 )
 
 func TestVaultSetAcceptsTrailingFlagsAfterKeyValue(t *testing.T) {
@@ -13,9 +15,15 @@ func TestVaultSetAcceptsTrailingFlagsAfterKeyValue(t *testing.T) {
 
 	stateHome := t.TempDir()
 	envFile := filepath.Join(t.TempDir(), ".env")
+	publicKey, privateKey, err := vault.GenerateSIVaultKeyPair()
+	if err != nil {
+		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
+	}
 	env := map[string]string{
-		"HOME":             stateHome,
-		"SI_SETTINGS_HOME": stateHome,
+		"HOME":                      stateHome,
+		"SI_SETTINGS_HOME":          stateHome,
+		vault.SIVaultPublicKeyName:  publicKey,
+		vault.SIVaultPrivateKeyName: privateKey,
 	}
 
 	scope := "trailing-set"

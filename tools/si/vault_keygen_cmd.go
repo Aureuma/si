@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"sort"
 	"strings"
 
 	"si/tools/si/internal/vault"
@@ -38,38 +37,7 @@ func cmdVaultKeygen(args []string) {
 		fatal(err)
 	}
 	if *rotate {
-		publicKey, privateKey, genErr := vault.GenerateSIVaultKeyPair()
-		if genErr != nil {
-			fatal(genErr)
-		}
-		backups := append([]string{}, material.BackupPrivateKeys...)
-		if strings.TrimSpace(material.PrivateKey) != "" {
-			backups = append(backups, strings.TrimSpace(material.PrivateKey))
-		}
-		sort.Strings(backups)
-		rotated := sunVaultPrivateKey{
-			Repo:              target.Repo,
-			Env:               target.Env,
-			PublicKey:         publicKey,
-			PrivateKey:        privateKey,
-			BackupPrivateKeys: backups,
-		}
-		normalized, normErr := normalizeSunVaultMaterial(rotated, target)
-		if normErr != nil {
-			fatal(normErr)
-		}
-		keyring, keyErr := loadSIVaultKeyring()
-		if keyErr != nil {
-			fatal(keyErr)
-		}
-		if keyring.Entries == nil {
-			keyring.Entries = map[string]sunVaultPrivateKey{}
-		}
-		keyring.Entries[siVaultKeyringEntryKey(target.Repo, target.Env)] = normalized
-		if saveErr := saveSIVaultKeyring(keyring); saveErr != nil {
-			fatal(saveErr)
-		}
-		material = normalized
+		fatal(fmt.Errorf("si vault keypair --rotate is disabled in single-key mode to prevent key sprawl"))
 	}
 	if *jsonOut {
 		printJSON(map[string]interface{}{
