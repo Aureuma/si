@@ -128,7 +128,7 @@ func TestRefreshProfileAuthTokensUpdatesFile(t *testing.T) {
 	defer tokenSrv.Close()
 	t.Setenv("SI_CODEX_TOKEN_URL", tokenSrv.URL)
 
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 	authPath := filepath.Join(home, ".si", "codex", "profiles", profile.ID, "auth.json")
 	if err := os.MkdirAll(filepath.Dir(authPath), 0o700); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
@@ -180,7 +180,7 @@ func TestLoadProfileAuthTokensAllowsRefreshOnly(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 	authPath := filepath.Join(home, ".si", "codex", "profiles", profile.ID, "auth.json")
 	if err := os.MkdirAll(filepath.Dir(authPath), 0o700); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
@@ -212,7 +212,7 @@ func TestRefreshProfileAuthTokensReusedFallsBackToLatestFromDisk(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 	authPath := filepath.Join(home, ".si", "codex", "profiles", profile.ID, "auth.json")
 	if err := os.MkdirAll(filepath.Dir(authPath), 0o700); err != nil {
 		t.Fatalf("mkdir failed: %v", err)
@@ -332,8 +332,8 @@ func TestUsageWindowRemainingUsesResetAtCountdown(t *testing.T) {
 }
 
 func TestProfileCodexAuthVolumeFallback(t *testing.T) {
-	profile := codexProfile{ID: "cadma"}
-	if got := profileCodexAuthVolume(profile, nil, nil, context.Background()); got != "si-codex-cadma" {
+	profile := codexProfile{ID: "profile-gamma"}
+	if got := profileCodexAuthVolume(profile, nil, nil, context.Background()); got != "si-codex-profile-gamma" {
 		t.Fatalf("unexpected fallback volume name %q", got)
 	}
 }

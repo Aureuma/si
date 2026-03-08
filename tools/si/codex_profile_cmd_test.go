@@ -8,24 +8,24 @@ import (
 )
 
 func TestSplitProfileNameAndFlags(t *testing.T) {
-	name, filtered := splitProfileNameAndFlags([]string{"cadma", "--no-status", "--json"})
-	if name != "cadma" {
+	name, filtered := splitProfileNameAndFlags([]string{"profile-gamma", "--no-status", "--json"})
+	if name != "profile-gamma" {
 		t.Fatalf("unexpected name %q", name)
 	}
 	if len(filtered) != 2 || filtered[0] != "--no-status" || filtered[1] != "--json" {
 		t.Fatalf("unexpected filtered flags: %v", filtered)
 	}
 
-	name, filtered = splitProfileNameAndFlags([]string{"--json", "--no-status", "cadma"})
-	if name != "cadma" {
+	name, filtered = splitProfileNameAndFlags([]string{"--json", "--no-status", "profile-gamma"})
+	if name != "profile-gamma" {
 		t.Fatalf("unexpected name %q", name)
 	}
 	if len(filtered) != 2 || filtered[0] != "--json" || filtered[1] != "--no-status" {
 		t.Fatalf("unexpected filtered flags: %v", filtered)
 	}
 
-	name, filtered = splitProfileNameAndFlags([]string{"cadma", "extra"})
-	if name != "cadma" {
+	name, filtered = splitProfileNameAndFlags([]string{"profile-gamma", "extra"})
+	if name != "profile-gamma" {
 		t.Fatalf("unexpected name %q", name)
 	}
 	if len(filtered) != 1 || filtered[0] != "extra" {
@@ -35,7 +35,7 @@ func TestSplitProfileNameAndFlags(t *testing.T) {
 
 func TestApplyProfileStatusResultAuthFailureKeepsAuthAndSetsError(t *testing.T) {
 	item := codexProfileSummary{
-		ID:                "cadma",
+		ID:                "profile-gamma",
 		AuthCached:        true,
 		AuthUpdated:       "2026-02-07T18:00:00Z",
 		FiveHourLeftPct:   99,
@@ -44,7 +44,7 @@ func TestApplyProfileStatusResultAuthFailureKeepsAuthAndSetsError(t *testing.T) 
 		WeeklyRemaining:   10000,
 	}
 	res := profileStatusResult{
-		ID: "cadma",
+		ID: "profile-gamma",
 		Err: &usageAPIError{
 			StatusCode: http.StatusUnauthorized,
 			Code:       "token_expired",
@@ -64,8 +64,8 @@ func TestApplyProfileStatusResultAuthFailureKeepsAuthAndSetsError(t *testing.T) 
 }
 
 func TestApplyProfileStatusResultNonExpiredErrorSetsStatusError(t *testing.T) {
-	item := codexProfileSummary{ID: "cadma"}
-	res := profileStatusResult{ID: "cadma", Err: errors.New("boom")}
+	item := codexProfileSummary{ID: "profile-gamma"}
+	res := profileStatusResult{ID: "profile-gamma", Err: errors.New("boom")}
 	applyProfileStatusResult(&item, res)
 	if item.StatusError != "boom" {
 		t.Fatalf("unexpected status error %q", item.StatusError)
@@ -74,14 +74,14 @@ func TestApplyProfileStatusResultNonExpiredErrorSetsStatusError(t *testing.T) {
 
 func TestApplyProfileStatusResultSuccess(t *testing.T) {
 	item := codexProfileSummary{
-		ID:                "cadma",
+		ID:                "profile-gamma",
 		FiveHourLeftPct:   -1,
 		FiveHourRemaining: -1,
 		WeeklyLeftPct:     -1,
 		WeeklyRemaining:   -1,
 	}
 	res := profileStatusResult{
-		ID: "cadma",
+		ID: "profile-gamma",
 		Status: codexStatus{
 			FiveHourLeftPct:   42.5,
 			FiveHourReset:     "2026-02-08T00:00:00Z",
@@ -146,27 +146,27 @@ func TestProfileLimitDisplayForLoggedInAuthError(t *testing.T) {
 
 func TestProfileStatusWarningsSkipsAuthErrors(t *testing.T) {
 	items := []codexProfileSummary{
-		{ID: "america", AuthCached: false, StatusError: "auth cache missing"},
-		{ID: "cadma", AuthCached: true, StatusError: "token expired"},
-		{ID: "berylla", AuthCached: true, StatusError: "upstream temporary failure"},
+		{ID: "profile-alpha", AuthCached: false, StatusError: "auth cache missing"},
+		{ID: "profile-gamma", AuthCached: true, StatusError: "token expired"},
+		{ID: "profile-beta", AuthCached: true, StatusError: "upstream temporary failure"},
 	}
 	warnings := profileStatusWarnings(items)
 	if len(warnings) != 1 {
 		t.Fatalf("expected one non-auth warning, got %d (%v)", len(warnings), warnings)
 	}
-	if !strings.Contains(warnings[0], "profile berylla status error:") {
+	if !strings.Contains(warnings[0], "profile profile-beta status error:") {
 		t.Fatalf("unexpected warning content: %q", warnings[0])
 	}
 }
 
 func TestSummarizeProfileStatusError(t *testing.T) {
-	if got := summarizeProfileStatusError("america", "auth cache not found at /tmp/auth.json; run `si login`"); got != "auth cache missing; run `si login america`" {
+	if got := summarizeProfileStatusError("profile-alpha", "auth cache not found at /tmp/auth.json; run `si login`"); got != "auth cache missing; run `si login profile-alpha`" {
 		t.Fatalf("unexpected auth-cache summary: %q", got)
 	}
-	if got := summarizeProfileStatusError("cadma", "usage token expired; refresh failed (usage api status 401 (refresh_token_reused): reused)"); got != "token refresh failed (refresh token reused); run `si login cadma`" {
+	if got := summarizeProfileStatusError("profile-gamma", "usage token expired; refresh failed (usage api status 401 (refresh_token_reused): reused)"); got != "token refresh failed (refresh token reused); run `si login profile-gamma`" {
 		t.Fatalf("unexpected refresh summary: %q", got)
 	}
-	if got := summarizeProfileStatusError("cadma", "usage api status 401 (token_expired): Provided authentication token is expired."); got != "token expired; run `si login cadma`" {
+	if got := summarizeProfileStatusError("profile-gamma", "usage api status 401 (token_expired): Provided authentication token is expired."); got != "token expired; run `si login profile-gamma`" {
 		t.Fatalf("unexpected token-expired summary: %q", got)
 	}
 }
@@ -177,8 +177,8 @@ func TestProfileNameForTable(t *testing.T) {
 		in   string
 		want string
 	}{
-		{name: "emoji_prefixed_name", in: "🌲 Berylla", want: "🌲 Berylla"},
-		{name: "ascii_name_unchanged", in: "Berylla", want: "Berylla"},
+		{name: "emoji_prefixed_name", in: "🌲 Profile Beta", want: "🌲 Profile Beta"},
+		{name: "ascii_name_unchanged", in: "Profile Beta", want: "Profile Beta"},
 		{name: "single_token_emoji_unchanged", in: "❇️", want: "❇️"},
 		{name: "leading_spaces_trimmed", in: "   🧲 Gadolina  ", want: "🧲 Gadolina"},
 	}
@@ -241,8 +241,8 @@ func TestPrintCodexProfilesTableIncludesIndexWhenRequested(t *testing.T) {
 
 	items := []codexProfileSummary{
 		{
-			ID:                "america",
-			Name:              "🗽 America",
+			ID:                "profile-alpha",
+			Name:              "🗽 Profile Alpha",
 			Email:             "user@example.com",
 			AuthCached:        true,
 			FiveHourLeftPct:   100,
@@ -261,7 +261,7 @@ func TestPrintCodexProfilesTableIncludesIndexWhenRequested(t *testing.T) {
 	if !strings.Contains(lines[0], "#") || !strings.Contains(lines[0], "5H") || !strings.Contains(lines[0], "WEEKLY") {
 		t.Fatalf("expected index and status columns in header, got %q", lines[0])
 	}
-	if !strings.Contains(lines[1], "1") || !strings.Contains(lines[1], "america") {
+	if !strings.Contains(lines[1], "1") || !strings.Contains(lines[1], "profile-alpha") {
 		t.Fatalf("expected numbered profile row, got %q", lines[1])
 	}
 }
@@ -273,8 +273,8 @@ func TestPrintCodexProfilesTableOmitsIndexWhenNotRequested(t *testing.T) {
 
 	items := []codexProfileSummary{
 		{
-			ID:         "berylla",
-			Name:       "🌲 Berylla",
+			ID:         "profile-beta",
+			Name:       "🌲 Profile Beta",
 			Email:      "dev@example.com",
 			AuthCached: true,
 		},

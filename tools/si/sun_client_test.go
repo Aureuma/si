@@ -101,7 +101,7 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"items": []map[string]any{{
 					"kind":            sunCodexProfileBundleKind,
-					"name":            "cadma",
+					"name":            "profile-gamma",
 					"latest_revision": 3,
 					"checksum":        "abc",
 					"content_type":    "application/json",
@@ -170,7 +170,7 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 					"id":         1,
 					"action":     "put_object",
 					"kind":       sunCodexProfileBundleKind,
-					"name":       "cadma",
+					"name":       "profile-gamma",
 					"created_at": "2026-02-22T00:00:00Z",
 				}},
 			})
@@ -201,11 +201,11 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list objects: %v", err)
 	}
-	if len(items) != 1 || items[0].Name != "cadma" {
+	if len(items) != 1 || items[0].Name != "profile-gamma" {
 		t.Fatalf("unexpected list result: %+v", items)
 	}
 
-	put, err := client.putObject(ctx, sunCodexProfileBundleKind, "cadma", []byte(`{"x":1}`), "application/json", nil, nil)
+	put, err := client.putObject(ctx, sunCodexProfileBundleKind, "profile-gamma", []byte(`{"x":1}`), "application/json", nil, nil)
 	if err != nil {
 		t.Fatalf("put object: %v", err)
 	}
@@ -213,14 +213,14 @@ func TestSunClientRoundTripMethods(t *testing.T) {
 		t.Fatalf("unexpected revision: %d", put.Result.Revision.Revision)
 	}
 
-	gotPayload, err := client.getPayload(ctx, sunCodexProfileBundleKind, "cadma")
+	gotPayload, err := client.getPayload(ctx, sunCodexProfileBundleKind, "profile-gamma")
 	if err != nil {
 		t.Fatalf("get payload: %v", err)
 	}
 	if base64.StdEncoding.EncodeToString(gotPayload) != base64.StdEncoding.EncodeToString(payloadBytes) {
 		t.Fatalf("unexpected payload: %s", string(gotPayload))
 	}
-	revs, err := client.listRevisions(ctx, sunCodexProfileBundleKind, "cadma", 10)
+	revs, err := client.listRevisions(ctx, sunCodexProfileBundleKind, "profile-gamma", 10)
 	if err != nil {
 		t.Fatalf("list revisions: %v", err)
 	}

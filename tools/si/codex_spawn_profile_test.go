@@ -8,14 +8,14 @@ func TestCodexDefaultProfileKey(t *testing.T) {
 		t.Fatalf("expected empty key, got %q", got)
 	}
 
-	settings.Codex.Profile = "cadma"
-	settings.Codex.Profiles.Active = "berylla"
-	if got := codexDefaultProfileKey(settings); got != "cadma" {
+	settings.Codex.Profile = "profile-gamma"
+	settings.Codex.Profiles.Active = "profile-beta"
+	if got := codexDefaultProfileKey(settings); got != "profile-gamma" {
 		t.Fatalf("expected codex.profile to win, got %q", got)
 	}
 
 	settings.Codex.Profile = ""
-	if got := codexDefaultProfileKey(settings); got != "berylla" {
+	if got := codexDefaultProfileKey(settings); got != "profile-beta" {
 		t.Fatalf("expected active profile fallback, got %q", got)
 	}
 }

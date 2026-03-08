@@ -18,7 +18,7 @@ func TestCodexSwapWritesAuthAndPreservesConfig(t *testing.T) {
 	defer func() { syncProfileAuthFromSunStatusFn = prevSunFn }()
 
 	// Source auth cache for the selected profile.
-	srcAuth := filepath.Join(home, ".si", "codex", "profiles", "cadma", "auth.json")
+	srcAuth := filepath.Join(home, ".si", "codex", "profiles", "profile-gamma", "auth.json")
 	if err := os.MkdirAll(filepath.Dir(srcAuth), 0o700); err != nil {
 		t.Fatalf("mkdir auth dir: %v", err)
 	}
@@ -49,12 +49,12 @@ func TestCodexSwapWritesAuthAndPreservesConfig(t *testing.T) {
 
 	res, err := codexSwap(codexSwapOptions{
 		Home:    home,
-		Profile: codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"},
+		Profile: codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"},
 	})
 	if err != nil {
 		t.Fatalf("swap: %v", err)
 	}
-	if res.ProfileID != "cadma" {
+	if res.ProfileID != "profile-gamma" {
 		t.Fatalf("unexpected profile id %q", res.ProfileID)
 	}
 
@@ -88,7 +88,7 @@ func TestCodexSwapCreatesDotCodexWhenMissing(t *testing.T) {
 	}
 	defer func() { syncProfileAuthFromSunStatusFn = prevSunFn }()
 
-	srcAuth := filepath.Join(home, ".si", "codex", "profiles", "america", "auth.json")
+	srcAuth := filepath.Join(home, ".si", "codex", "profiles", "profile-alpha", "auth.json")
 	if err := os.MkdirAll(filepath.Dir(srcAuth), 0o700); err != nil {
 		t.Fatalf("mkdir auth dir: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestCodexSwapCreatesDotCodexWhenMissing(t *testing.T) {
 
 	if _, err := codexSwap(codexSwapOptions{
 		Home:    home,
-		Profile: codexProfile{ID: "america"},
+		Profile: codexProfile{ID: "profile-alpha"},
 	}); err != nil {
 		t.Fatalf("swap: %v", err)
 	}
@@ -126,19 +126,19 @@ func TestCodexSwapErrorsWhenAuthMissing(t *testing.T) {
 
 	_, err := codexSwap(codexSwapOptions{
 		Home:    home,
-		Profile: codexProfile{ID: "cadma"},
+		Profile: codexProfile{ID: "profile-gamma"},
 	})
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if !strings.Contains(err.Error(), "run `si login cadma`") {
+	if !strings.Contains(err.Error(), "run `si login profile-gamma`") {
 		t.Fatalf("expected login hint, got: %v", err)
 	}
 }
 
 func TestCodexSwapRecoversAuthFromSunWhenLocalMissing(t *testing.T) {
 	home := t.TempDir()
-	profile := codexProfile{ID: "cadma", Name: "Cadma", Email: "cadma@example.com"}
+	profile := codexProfile{ID: "profile-gamma", Name: "Profile Gamma", Email: "profile-gamma@example.com"}
 
 	prevSunFn := syncProfileAuthFromSunStatusFn
 	syncProfileAuthFromSunStatusFn = func(_ context.Context, p codexProfile) (bool, error) {

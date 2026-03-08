@@ -29,11 +29,11 @@ func TestSplitNameAndFlagsParsesBoolWithSeparateValue(t *testing.T) {
 	name, filtered := splitNameAndFlags([]string{
 		"--detach", "false",
 		"--docker-socket", "true",
-		"cadma",
+		"profile-gamma",
 		"--repo", "acme/repo",
 	}, codexSpawnBoolFlags())
 
-	if name != "cadma" {
+	if name != "profile-gamma" {
 		t.Fatalf("unexpected container name %q", name)
 	}
 
@@ -54,11 +54,11 @@ func TestSplitNameAndFlagsParsesBoolWithSeparateValue(t *testing.T) {
 
 func TestSplitNameAndFlagsIgnoresBoolWithoutLiteralValue(t *testing.T) {
 	name, filtered := splitNameAndFlags([]string{
-		"einsteina",
+		"profile-delta",
 		"--detach",
 		"--repo", "acme/repo",
 	}, codexSpawnBoolFlags())
-	if name != "einsteina" {
+	if name != "profile-delta" {
 		t.Fatalf("unexpected container name %q", name)
 	}
 	want := []string{"--detach", "--repo", "acme/repo"}
