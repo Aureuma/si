@@ -11,8 +11,30 @@ import (
 	"strings"
 )
 
-const fortUsageText = "usage: si fort [--repo <path>] [--bin <path>] [--build] [--json] -- <fort-args...>\n       si fort <fort-args...>"
-const fortConfigUsageText = "usage: si fort config <show|set> [args]"
+const fortUsageText = `usage: si fort [--repo <path>] [--bin <path>] [--build] [--json] -- <fort-args...>
+       si fort [--repo <path>] [--bin <path>] [--build] [--json] <fort-subcommand> [fort-args...]
+       si fort config <show|set> [args]
+
+wrapper flags:
+  --repo <path>  Fort repository path (build source)
+  --bin <path>   Fort binary path
+  --build        Build fort from repo before running
+  --json         Print wrapper metadata as JSON on wrapper failure
+
+token/auth model:
+  - Host bootstrap admin auth resolves from FORT_TOKEN or FORT_TOKEN_FILE.
+  - Runtime container auth uses file paths FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH.
+  - This wrapper auto-refreshes runtime sessions when possible, then injects --token to fort.
+  - FORT_TOKEN and FORT_REFRESH_TOKEN are sanitized from child process environment.
+
+examples:
+  si fort doctor
+  si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
+  si fort -- --host https://fort.aureuma.ai doctor
+  si fort config set --host https://fort.aureuma.ai --container-host https://fort.aureuma.ai`
+const fortConfigUsageText = `usage: si fort config <show|set> [args]
+       si fort config show [--json]
+       si fort config set [--repo <path>] [--bin <path>] [--host <url>] [--container-host <url>] [--build true|false] [--json]`
 
 var runFortExternal = func(bin string, args []string) error {
 	cmd := exec.Command(bin, args...)
@@ -66,16 +88,14 @@ func cmdFort(args []string) {
 		printUsage(fortUsageText)
 		return
 	}
+	head := strings.TrimSpace(strings.ToLower(args[0]))
+	if head == "help" || head == "-h" || head == "--help" {
+		printUsage(fortUsageText)
+		return
+	}
 	if strings.EqualFold(strings.TrimSpace(args[0]), "config") {
 		cmdFortConfig(args[1:])
 		return
-	}
-	if len(args) == 1 {
-		head := strings.TrimSpace(strings.ToLower(args[0]))
-		if head == "help" || head == "-h" || head == "--help" {
-			printUsage(fortUsageText)
-			return
-		}
 	}
 	fs := flag.NewFlagSet("fort", flag.ContinueOnError)
 	fs.SetOutput(ioDiscardWriter{})
@@ -85,6 +105,9 @@ func cmdFort(args []string) {
 	jsonOut := fs.Bool("json", false, "print wrapper metadata as json on failure")
 	if err := fs.Parse(args); err != nil {
 		printUsage(fortUsageText)
+		if strings.Contains(err.Error(), "flag provided but not defined") {
+			fatal(fmt.Errorf("%w (if the flag belongs to fort, pass it after --, for example: si fort -- --token <token> auth whoami)", err))
+		}
 		fatal(err)
 	}
 	buildFlagSet := fortFlagProvided(fs, "build")

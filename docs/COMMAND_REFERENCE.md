@@ -22,6 +22,7 @@ si <command> <subcommand> --help
 | `si dyad` | Manage actor/critic pairs | `spawn`, `list`, `status`, `peek`, `exec`, `logs`, `start`, `stop`, `restart`, `remove`, `cleanup` | [Dyad](./DYAD) |
 | codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
+| `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
 | `si sun` | Cloud sync and machine orchestration for profiles, taskboards, and remote SI control (not SI Vault/Fort secret path) | `auth`, `profile`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
 | `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build/push/pull/status)` | [Orbitals](./ORBITALS) |
@@ -106,5 +107,7 @@ si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-prefl
 
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
 - For SI runtime containers, use `si fort ...` for secret access.
+- `si fort` bootstrap/admin auth uses `FORT_TOKEN` or `FORT_TOKEN_FILE`; runtime auth uses `FORT_TOKEN_PATH` and `FORT_REFRESH_TOKEN_PATH`.
+- Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.
 - Run `si mintlify validate` for docs changes and `si analyze` for Go changes.
