@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	fortDefaultHostURL              = "https://fort.aureuma.ai"
 	fortDefaultPort                 = 8088
 	fortDefaultTokenFileRelative    = ".si/fort/bootstrap/admin.token"
 	fortProfileStateDirName         = "fort"
@@ -448,6 +447,7 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 	if bearerErr != nil {
 		return fortBootstrapConfig{}, bearerErr
 	}
+	settings := loadSettingsOrDefault()
 	cfg := fortBootstrapConfig{
 		HostURL:          strings.TrimSpace(os.Getenv("FORT_HOST")),
 		ContainerHostURL: strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")),
@@ -455,6 +455,12 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 	}
 	if strings.TrimSpace(cfg.HostURL) == "" {
 		cfg.HostURL = strings.TrimSpace(os.Getenv("SI_FORT_HOST"))
+	}
+	if strings.TrimSpace(cfg.HostURL) == "" {
+		cfg.HostURL = strings.TrimSpace(settings.Fort.Host)
+	}
+	if strings.TrimSpace(cfg.ContainerHostURL) == "" {
+		cfg.ContainerHostURL = strings.TrimSpace(settings.Fort.ContainerHost)
 	}
 	var hint fortDockerHint
 	hintOK := false
@@ -473,13 +479,13 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 		}
 	}
 	if strings.TrimSpace(cfg.HostURL) == "" {
-		cfg.HostURL = fortDefaultHostURL
-	}
-	if strings.TrimSpace(cfg.ContainerHostURL) == "" {
-		cfg.ContainerHostURL = strings.TrimSpace(cfg.HostURL)
+		return fortBootstrapConfig{}, fmt.Errorf("fort host is required (set ~/.si/fort/settings.toml [fort].host or FORT_HOST)")
 	}
 	if err := fortValidateHostedURL(cfg.HostURL); err != nil {
 		return fortBootstrapConfig{}, fmt.Errorf("invalid fort host %q: %w", cfg.HostURL, err)
+	}
+	if strings.TrimSpace(cfg.ContainerHostURL) == "" {
+		cfg.ContainerHostURL = strings.TrimSpace(cfg.HostURL)
 	}
 	if err := fortValidateHostedURL(cfg.ContainerHostURL); err != nil {
 		return fortBootstrapConfig{}, fmt.Errorf("invalid fort container host %q: %w", cfg.ContainerHostURL, err)
@@ -713,7 +719,11 @@ func fortPortFromContainerEnv(env []string) int {
 func fortHostURLForContainer(hostURL string) string {
 	hostURL = strings.TrimSpace(hostURL)
 	if hostURL == "" {
-		return fortDefaultHostURL
+		settings := loadSettingsOrDefault()
+		if strings.TrimSpace(settings.Fort.ContainerHost) != "" {
+			return strings.TrimSpace(settings.Fort.ContainerHost)
+		}
+		return strings.TrimSpace(settings.Fort.Host)
 	}
 	u, err := url.Parse(hostURL)
 	if err != nil || strings.TrimSpace(u.Host) == "" {
@@ -994,6 +1004,7 @@ func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState)
 
 func prepareFortRuntimeAuth(rest []string) (string, error) {
 	tokenPath, refreshPath, sessionPath, state := fortSessionPathsFromEnv()
+	settings := loadSettingsOrDefault()
 	if tokenPath != "" {
 		_ = os.Setenv("FORT_TOKEN_PATH", tokenPath)
 	}
@@ -1006,13 +1017,14 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 			host = strings.TrimSpace(state.Host)
 		}
 		if host == "" {
-			host = fortDefaultHostURL
+			host = strings.TrimSpace(settings.Fort.ContainerHost)
+		}
+		if host == "" {
+			host = strings.TrimSpace(settings.Fort.Host)
 		}
 		if strings.TrimSpace(host) != "" {
 			if err := fortValidateHostedURL(host); err == nil {
 				_ = os.Setenv("FORT_HOST", host)
-			} else {
-				_ = os.Setenv("FORT_HOST", fortDefaultHostURL)
 			}
 		}
 	}
