@@ -1532,7 +1532,7 @@ func loadLoopConfig() loopConfig {
 	enabled := envBool("DYAD_LOOP_ENABLED", defaultEnabled)
 	stateDir := strings.TrimSpace(os.Getenv("DYAD_STATE_DIR"))
 	if stateDir == "" {
-		stateDir = filepath.Join("/workspace", ".si", "dyad", dyad)
+		stateDir = defaultDyadStateDir(dyad)
 	}
 	goal := strings.TrimSpace(os.Getenv("DYAD_LOOP_GOAL"))
 	if goal == "" {
@@ -1562,6 +1562,18 @@ func loadLoopConfig() loopConfig {
 		CodexStartCmd: strings.TrimSpace(os.Getenv("DYAD_CODEX_START_CMD")),
 		PausePoll:     envDurationSeconds("DYAD_LOOP_PAUSE_POLL_SECONDS", 5),
 	}
+}
+
+func defaultDyadStateDir(dyad string) string {
+	dyad = strings.TrimSpace(dyad)
+	if dyad == "" {
+		dyad = "unknown"
+	}
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if home == "" {
+		home = "/root"
+	}
+	return filepath.Join(home, ".si", "dyad", dyad)
 }
 
 func envBool(key string, def bool) bool {

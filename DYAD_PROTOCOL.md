@@ -49,7 +49,7 @@ Notes:
 
 ## Loop Controls (Recovery)
 
-The critic loop watches control files under `/workspace/.si/dyad/<dyad>/`:
+The critic loop watches control files under `~/.si/dyad/<dyad>/`:
 
 - `control.pause`: pause the loop (polls periodically).
 - `control.stop`: stop the loop (persists across restarts).

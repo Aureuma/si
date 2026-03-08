@@ -5,7 +5,7 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 - starts (or recovers) an interactive Codex session for the critic and the actor inside `tmux`
 - sends prompts via `tmux send-keys`
 - waits for a delimited work report between `<<WORK_REPORT_BEGIN>>` and `<<WORK_REPORT_END>>` (and has a tolerant fallback for Codex-native output)
-- persists artifacts under `.si/dyad/<dyad>/reports/` in the workspace
+- persists artifacts under `~/.si/dyad/<dyad>/reports/` (host-backed SI state)
 
 Dyads can also pull tasks from a shared Sun taskboard (`si sun taskboard ...`) when spawned with autopilot.
 
@@ -21,10 +21,10 @@ Dyads can also pull tasks from a shared Sun taskboard (`si sun taskboard ...`) w
 
 ## Loop Control Files
 
-Dyad loops are controlled via files under `.si/dyad/<dyad>/`:
+Dyad loops are controlled via files under `~/.si/dyad/<dyad>/`:
 
-- `.si/dyad/<dyad>/control.pause`: pause the loop (polls every `DYAD_LOOP_PAUSE_POLL_SECONDS`, default 5s)
-- `.si/dyad/<dyad>/control.stop`: stop the loop cleanly
+- `~/.si/dyad/<dyad>/control.pause`: pause the loop (polls every `DYAD_LOOP_PAUSE_POLL_SECONDS`, default 5s)
+- `~/.si/dyad/<dyad>/control.stop`: stop the loop cleanly
 
 If the last persisted critic report contains `Continue Loop: no`, the dyad loop will also remain stopped across restarts/recreates.
 
