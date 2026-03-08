@@ -38,18 +38,25 @@ import (
 	ecies "github.com/ecies/go/v2"
 )
 
-func writeEntry(entries map[string]any, repo string, env string) error {
-	key, err := ecies.GenerateKey()
-	if err != nil {
-		return err
+func writeEntry(entries map[string]any, repo string, env string, publicKey string, privateKey string) error {
+	if publicKey == "" || privateKey == "" {
+		return fmt.Errorf("public/private key are required")
 	}
 	entries[repo+"/"+env] = map[string]any{
 		"repo":        repo,
 		"env":         env,
-		"public_key":  key.PublicKey.Hex(true),
-		"private_key": key.Hex(),
+		"public_key":  publicKey,
+		"private_key": privateKey,
 	}
 	return nil
+}
+
+func generateCanonicalKeypair() (string, string, error) {
+	key, err := ecies.GenerateKey()
+	if err != nil {
+		return "", "", err
+	}
+	return key.PublicKey.Hex(true), key.Hex(), nil
 }
 
 func main() {
@@ -77,13 +84,17 @@ func main() {
 	}
 
 	entries := map[string]any{}
-	if err := writeEntry(entries, "safe", "dev"); err != nil {
+	publicKey, privateKey, err := generateCanonicalKeypair()
+	if err != nil {
 		panic(err)
 	}
-	if err := writeEntry(entries, "safe", "prod"); err != nil {
+	if err := writeEntry(entries, "safe", "dev", publicKey, privateKey); err != nil {
 		panic(err)
 	}
-	if err := writeEntry(entries, "core", "dev"); err != nil {
+	if err := writeEntry(entries, "safe", "prod", publicKey, privateKey); err != nil {
+		panic(err)
+	}
+	if err := writeEntry(entries, "core", "dev", publicKey, privateKey); err != nil {
 		panic(err)
 	}
 	doc := map[string]any{"entries": entries}
@@ -193,11 +204,11 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 
 	profileA := strings.TrimSpace(os.Getenv("SI_E2E_PROFILE_A"))
 	if profileA == "" {
-		profileA = "ferma"
+		profileA = "matrix-a-" + randomSuffix()
 	}
 	profileB := strings.TrimSpace(os.Getenv("SI_E2E_PROFILE_B"))
 	if profileB == "" {
-		profileB = "berylla"
+		profileB = "matrix-b-" + randomSuffix()
 	}
 	fortImageTag := strings.TrimSpace(os.Getenv("SI_E2E_FORT_IMAGE_TAG"))
 	if fortImageTag == "" {
@@ -241,12 +252,8 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 	ctx.fortContainerURL = "http://" + ctx.fortContainer + ":8088"
 	ctx.fortHostURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	ctx.fortHost = ctx.fortHostURL
-	if err := os.Setenv("SI_SETTINGS_HOME", ctx.profileTestHome); err != nil {
-		t.Fatalf("set SI_SETTINGS_HOME: %v", err)
-	}
-	if err := os.Setenv("HOME", ctx.profileTestHome); err != nil {
-		t.Fatalf("set HOME: %v", err)
-	}
+	t.Setenv("SI_SETTINGS_HOME", ctx.profileTestHome)
+	t.Setenv("HOME", ctx.profileTestHome)
 	if err := seedTestCodexProfiles(t, ctx.profiles); err != nil {
 		t.Fatalf("seed test codex profiles: %v", err)
 	}
@@ -309,11 +316,24 @@ func createTempSeedWorkspace(t *testing.T, fortRepo string) (string, error) {
 
 func seedTestCodexProfiles(t *testing.T, profileIDs []string) error {
 	t.Helper()
+	if len(profileIDs) == 0 {
+		return fmt.Errorf("at least one profile id is required")
+	}
 	baseSettings := defaultSettings()
 	baseSettings.Codex.Profiles.Entries = map[string]CodexProfileEntry{}
 	for _, id := range profileIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return fmt.Errorf("profile id must not be empty")
+		}
+		name := id
+		if len(id) > 1 {
+			name = strings.ToUpper(id[:1]) + id[1:]
+		} else {
+			name = strings.ToUpper(id)
+		}
 		baseSettings.Codex.Profiles.Entries[id] = CodexProfileEntry{
-			Name:  strings.TrimSpace(strings.ToUpper(id[:1])) + strings.TrimSpace(id[1:]),
+			Name:  name,
 			Email: id + "@example.com",
 		}
 	}

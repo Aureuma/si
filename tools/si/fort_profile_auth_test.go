@@ -118,8 +118,8 @@ func TestResolveFortBootstrapConfigAllowsInsecureWhenExplicitlyEnabled(t *testin
 }
 
 func TestFortAgentIDForProfile(t *testing.T) {
-	got := fortAgentIDForProfile("CADMA_01!")
-	if got != "si-codex-cadma-01" {
+	got := fortAgentIDForProfile("PROFILE_01!")
+	if got != "si-codex-profile-01" {
 		t.Fatalf("unexpected agent id: %q", got)
 	}
 }
