@@ -29,7 +29,7 @@ func TestReconcileWarmWeeklyProfile_WarmsFreshZeroUsageWindow(t *testing.T) {
 
 	now := time.Date(2026, 2, 10, 1, 0, 0, 0, time.UTC)
 	entry := &warmWeeklyProfileState{}
-	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "america"}, entry, warmWeeklyReconcileOptions{
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "profile-alpha"}, entry, warmWeeklyReconcileOptions{
 		ForceBootstrap: false,
 		MaxAttempts:    1,
 		Prompt:         weeklyWarmPrompt,
@@ -85,7 +85,7 @@ func TestReconcileWarmWeeklyProfile_ReadyAfterWindowAlreadyWarmed(t *testing.T) 
 		LastWarmedReset: reset.UTC().Format(time.RFC3339),
 		LastResult:      "warmed",
 	}
-	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "america"}, entry, warmWeeklyReconcileOptions{
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "profile-alpha"}, entry, warmWeeklyReconcileOptions{
 		ForceBootstrap: false,
 		MaxAttempts:    1,
 		Prompt:         weeklyWarmPrompt,
@@ -123,7 +123,7 @@ func TestReconcileWarmWeeklyProfile_FailsWhenResetAppearsButUsageStillFull(t *te
 
 	now := time.Date(2026, 2, 10, 1, 0, 0, 0, time.UTC)
 	entry := &warmWeeklyProfileState{}
-	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "america"}, entry, warmWeeklyReconcileOptions{
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "profile-alpha"}, entry, warmWeeklyReconcileOptions{
 		ForceBootstrap: false,
 		MaxAttempts:    1,
 		Prompt:         weeklyWarmPrompt,
@@ -161,7 +161,7 @@ func TestReconcileWarmWeeklyProfile_VerifyPollRetriesTransientErrors(t *testing.
 
 	now := time.Date(2026, 2, 10, 1, 0, 0, 0, time.UTC)
 	entry := &warmWeeklyProfileState{}
-	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "america"}, entry, warmWeeklyReconcileOptions{
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "profile-alpha"}, entry, warmWeeklyReconcileOptions{
 		ForceBootstrap: false,
 		MaxAttempts:    1,
 		Prompt:         weeklyWarmPrompt,
@@ -199,7 +199,7 @@ func TestReconcileWarmWeeklyProfile_WarmsWhenWindowAdvances(t *testing.T) {
 		LastWeeklyReset: "2026-02-13T14:33:56Z",
 		LastResult:      "ready",
 	}
-	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "einsteina"}, entry, warmWeeklyReconcileOptions{
+	out := reconcileWarmWeeklyProfile(now, codexProfile{ID: "profile-delta"}, entry, warmWeeklyReconcileOptions{
 		ForceBootstrap: false,
 		MaxAttempts:    1,
 		Prompt:         weeklyWarmPrompt,

@@ -16,8 +16,8 @@ import (
 )
 
 func TestCodexTmuxSessionName(t *testing.T) {
-	got := codexTmuxSessionName("si-codex-einsteina")
-	if got != "si-codex-pane-einsteina" {
+	got := codexTmuxSessionName("si-codex-profile-delta")
+	if got != "si-codex-pane-profile-delta" {
 		t.Fatalf("unexpected tmux session name %q", got)
 	}
 }
@@ -34,14 +34,14 @@ func TestValidateRunTmuxArgs(t *testing.T) {
 func TestConsumeRunContainerModeFlags(t *testing.T) {
 	tmux := false
 	noTmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "--tmux", "bash"}, &tmux, &noTmux)
+	args := consumeRunContainerModeFlags([]string{"profile-beta", "--tmux", "bash"}, &tmux, &noTmux)
 	if !tmux {
 		t.Fatalf("expected tmux to be enabled")
 	}
 	if noTmux {
 		t.Fatalf("expected no-tmux to remain false")
 	}
-	if len(args) != 2 || args[0] != "berylla" || args[1] != "bash" {
+	if len(args) != 2 || args[0] != "profile-beta" || args[1] != "bash" {
 		t.Fatalf("unexpected args after consume: %v", args)
 	}
 }
@@ -49,14 +49,14 @@ func TestConsumeRunContainerModeFlags(t *testing.T) {
 func TestConsumeRunContainerModeFlagsStopsAtCommand(t *testing.T) {
 	tmux := false
 	noTmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "printf", "%s\n", "--tmux"}, &tmux, &noTmux)
+	args := consumeRunContainerModeFlags([]string{"profile-beta", "printf", "%s\n", "--tmux"}, &tmux, &noTmux)
 	if tmux {
 		t.Fatalf("expected tmux flag to remain false once command args begin")
 	}
 	if noTmux {
 		t.Fatalf("expected no-tmux flag to remain false once command args begin")
 	}
-	if len(args) != 4 || args[0] != "berylla" || args[1] != "printf" || args[3] != "--tmux" {
+	if len(args) != 4 || args[0] != "profile-beta" || args[1] != "printf" || args[3] != "--tmux" {
 		t.Fatalf("unexpected args after consume: %v", args)
 	}
 }
@@ -64,20 +64,20 @@ func TestConsumeRunContainerModeFlagsStopsAtCommand(t *testing.T) {
 func TestConsumeRunContainerModeFlagsNoTmux(t *testing.T) {
 	tmux := false
 	noTmux := false
-	args := consumeRunContainerModeFlags([]string{"berylla", "--no-tmux", "bash"}, &tmux, &noTmux)
+	args := consumeRunContainerModeFlags([]string{"profile-beta", "--no-tmux", "bash"}, &tmux, &noTmux)
 	if tmux {
 		t.Fatalf("expected tmux to remain false")
 	}
 	if !noTmux {
 		t.Fatalf("expected no-tmux to be enabled")
 	}
-	if len(args) != 2 || args[0] != "berylla" || args[1] != "bash" {
+	if len(args) != 2 || args[0] != "profile-beta" || args[1] != "bash" {
 		t.Fatalf("unexpected args after consume: %v", args)
 	}
 }
 
 func TestBuildCodexTmuxCommandUsesBypassFlag(t *testing.T) {
-	cmd := buildCodexTmuxCommand("si-codex-berylla", "/home/ubuntu/Development/si")
+	cmd := buildCodexTmuxCommand("si-codex-profile-beta", "/home/ubuntu/Development/si")
 	if !strings.Contains(cmd, "codex --dangerously-bypass-approvals-and-sandbox") {
 		t.Fatalf("expected tmux command to use codex bypass flag, got: %s", cmd)
 	}
@@ -217,7 +217,7 @@ func TestCodexRunShouldRecreateContainerForDrift(t *testing.T) {
 
 func TestReconcileCodexRunContainerDriftTmuxPreservesSession(t *testing.T) {
 	called := false
-	err := reconcileCodexRunContainerDrift(true, false, "si-codex-cadma", "cadma", "missing mounts", func() error {
+	err := reconcileCodexRunContainerDrift(true, false, "si-codex-profile-gamma", "profile-gamma", "missing mounts", func() error {
 		called = true
 		return nil
 	})
@@ -231,7 +231,7 @@ func TestReconcileCodexRunContainerDriftTmuxPreservesSession(t *testing.T) {
 
 func TestReconcileCodexRunContainerDriftNonTmuxRecreates(t *testing.T) {
 	called := false
-	err := reconcileCodexRunContainerDrift(false, false, "si-codex-cadma", "cadma", "missing mounts", func() error {
+	err := reconcileCodexRunContainerDrift(false, false, "si-codex-profile-gamma", "profile-gamma", "missing mounts", func() error {
 		called = true
 		return nil
 	})
@@ -245,7 +245,7 @@ func TestReconcileCodexRunContainerDriftNonTmuxRecreates(t *testing.T) {
 
 func TestReconcileCodexRunContainerDriftPropagatesRecreateError(t *testing.T) {
 	expected := errors.New("boom")
-	err := reconcileCodexRunContainerDrift(false, false, "si-codex-cadma", "cadma", "missing mounts", func() error {
+	err := reconcileCodexRunContainerDrift(false, false, "si-codex-profile-gamma", "profile-gamma", "missing mounts", func() error {
 		return expected
 	})
 	if !errors.Is(err, expected) {
@@ -255,7 +255,7 @@ func TestReconcileCodexRunContainerDriftPropagatesRecreateError(t *testing.T) {
 
 func TestReconcileCodexRunContainerDriftForceRecreatesInTmux(t *testing.T) {
 	called := false
-	err := reconcileCodexRunContainerDrift(true, true, "si-codex-cadma", "cadma", "ownership mismatch", func() error {
+	err := reconcileCodexRunContainerDrift(true, true, "si-codex-profile-gamma", "profile-gamma", "ownership mismatch", func() error {
 		called = true
 		return nil
 	})
@@ -386,12 +386,12 @@ func TestCodexAuthVolumeFromContainerInfo(t *testing.T) {
 		Mounts: []types.MountPoint{
 			{
 				Type:        "volume",
-				Name:        "si-codex-america",
+				Name:        "si-codex-profile-alpha",
 				Destination: "/home/si/.codex",
 			},
 		},
 	}
-	if got := codexAuthVolumeFromContainerInfo(info); got != "si-codex-america" {
+	if got := codexAuthVolumeFromContainerInfo(info); got != "si-codex-profile-alpha" {
 		t.Fatalf("unexpected auth volume %q", got)
 	}
 }

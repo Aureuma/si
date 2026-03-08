@@ -165,18 +165,18 @@ func TestSelectChromeProfileDir(t *testing.T) {
 }
 
 func TestSafariProfileNameCandidatesStripsLeadingEmoji(t *testing.T) {
-	profile := codexProfile{ID: "america", Name: "🗽 America"}
+	profile := codexProfile{ID: "profile-alpha", Name: "🗽 Profile Alpha"}
 	got := safariProfileNameCandidates(profile, "")
 	if len(got) < 3 {
 		t.Fatalf("expected at least 3 candidates, got %v", got)
 	}
-	if got[0] != "🗽 America" {
+	if got[0] != "🗽 Profile Alpha" {
 		t.Fatalf("expected first candidate to keep original name, got %q", got[0])
 	}
-	if got[1] != "America" {
+	if got[1] != "Profile Alpha" {
 		t.Fatalf("expected second candidate to strip emoji, got %q", got[1])
 	}
-	if got[2] != "america" {
+	if got[2] != "profile-alpha" {
 		t.Fatalf("expected fallback profile id candidate, got %q", got[2])
 	}
 }

@@ -378,10 +378,10 @@ func TestValidateDyadSpawnOptionValue(t *testing.T) {
 }
 
 func TestDyadProfileArg(t *testing.T) {
-	if value, ok := dyadProfileArg([]string{"--profile", "berylla"}); !ok || value != "berylla" {
+	if value, ok := dyadProfileArg([]string{"--profile", "profile-beta"}); !ok || value != "profile-beta" {
 		t.Fatalf("expected --profile value, got ok=%v value=%q", ok, value)
 	}
-	if value, ok := dyadProfileArg([]string{"--profile=einsteina"}); !ok || value != "einsteina" {
+	if value, ok := dyadProfileArg([]string{"--profile=profile-delta"}); !ok || value != "profile-delta" {
 		t.Fatalf("expected --profile= value, got ok=%v value=%q", ok, value)
 	}
 	if _, ok := dyadProfileArg([]string{"--role", "generic"}); ok {
@@ -401,7 +401,7 @@ func TestDyadSkipAuthArg(t *testing.T) {
 		{name: "separate true", args: []string{"--skip-auth", "true"}, want: true},
 		{name: "separate false", args: []string{"--skip-auth", "false"}, want: false},
 		{name: "invalid literal", args: []string{"--skip-auth=maybe"}, want: false},
-		{name: "missing", args: []string{"--profile", "berylla"}, want: false},
+		{name: "missing", args: []string{"--profile", "profile-beta"}, want: false},
 	}
 	for _, tc := range cases {
 		got := dyadSkipAuthArg(tc.args)

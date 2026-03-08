@@ -5,19 +5,19 @@ import "testing"
 func TestNormalizeRespawnSpawnProfileArgs_InfersProfileFromContainerName(t *testing.T) {
 	filtered, profile := normalizeRespawnSpawnProfileArgs(
 		[]string{"--detach=false"},
-		"america",
+		"profile-alpha",
 		"",
 		func(name string) (string, bool) {
-			if name == "america" {
-				return "america", true
+			if name == "profile-alpha" {
+				return "profile-alpha", true
 			}
 			return "", false
 		},
 	)
-	if profile != "america" {
+	if profile != "profile-alpha" {
 		t.Fatalf("unexpected profile %q", profile)
 	}
-	want := []string{"--detach=false", "--profile", "america"}
+	want := []string{"--detach=false", "--profile", "profile-alpha"}
 	if len(filtered) != len(want) {
 		t.Fatalf("unexpected filtered len=%d want=%d (%v)", len(filtered), len(want), filtered)
 	}
@@ -51,15 +51,15 @@ func TestNormalizeRespawnSpawnProfileArgs_DisablesDefaultProfileWhenNoProfileRes
 
 func TestNormalizeRespawnSpawnProfileArgs_PreservesExplicitProfileFlag(t *testing.T) {
 	filtered, profile := normalizeRespawnSpawnProfileArgs(
-		[]string{"--profile", "cadma"},
-		"cadma",
-		"cadma",
+		[]string{"--profile", "profile-gamma"},
+		"profile-gamma",
+		"profile-gamma",
 		func(string) (string, bool) { return "", false },
 	)
-	if profile != "cadma" {
+	if profile != "profile-gamma" {
 		t.Fatalf("unexpected profile %q", profile)
 	}
-	want := []string{"--profile", "cadma"}
+	want := []string{"--profile", "profile-gamma"}
 	if len(filtered) != len(want) {
 		t.Fatalf("unexpected filtered len=%d want=%d (%v)", len(filtered), len(want), filtered)
 	}

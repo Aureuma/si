@@ -102,7 +102,7 @@ func TestCodexLogoutAllBlocksConfiguredAndCachedProfiles(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
 		t.Fatalf("mkdir .codex: %v", err)
 	}
-	cachedProfile := filepath.Join(home, ".si", "codex", "profiles", "berylla")
+	cachedProfile := filepath.Join(home, ".si", "codex", "profiles", "profile-beta")
 	if err := os.MkdirAll(cachedProfile, 0o700); err != nil {
 		t.Fatalf("mkdir cached profile: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestCodexLogoutAllBlocksConfiguredAndCachedProfiles(t *testing.T) {
 	res, err := codexLogout(codexLogoutOptions{
 		Home:       home,
 		All:        true,
-		ProfileIDs: []string{"Einsteina"},
+		ProfileIDs: []string{"profile-delta"},
 	})
 	if err != nil {
 		t.Fatalf("logout all: %v", err)
@@ -129,10 +129,10 @@ func TestCodexLogoutAllBlocksConfiguredAndCachedProfiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load blocked profiles: %v", err)
 	}
-	if _, ok := blocked["einsteina"]; !ok {
-		t.Fatalf("expected einsteina to be blocklisted, got %#v", blocked)
+	if _, ok := blocked["profile-delta"]; !ok {
+		t.Fatalf("expected profile-delta to be blocklisted, got %#v", blocked)
 	}
-	if _, ok := blocked["berylla"]; !ok {
-		t.Fatalf("expected berylla to be blocklisted, got %#v", blocked)
+	if _, ok := blocked["profile-beta"]; !ok {
+		t.Fatalf("expected profile-beta to be blocklisted, got %#v", blocked)
 	}
 }
