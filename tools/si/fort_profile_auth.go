@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	fortDefaultHostURL              = "https://fort.aureuma.com"
+	fortDefaultHostURL              = "https://fort.aureuma.ai"
 	fortDefaultPort                 = 8088
 	fortDefaultTokenFileRelative    = ".si/fort/bootstrap/admin.token"
 	fortProfileStateDirName         = "fort"

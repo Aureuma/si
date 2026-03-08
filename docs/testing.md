@@ -102,7 +102,7 @@ Run the live Fort integration matrix against real `si spawn` containers:
 
 This matrix validates:
 - profile-scoped Fort agent auth bootstrap in `si spawn`
-- hosted Fort endpoint flow (`https://fort.aureuma.com`) as the default runtime target
+- hosted Fort endpoint flow (`https://fort.aureuma.ai`) as the default runtime target
 - host-side bootstrap admin token resolved from `FORT_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`)
 - in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
