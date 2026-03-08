@@ -10,7 +10,7 @@ import (
 	"si/tools/si/internal/vault"
 )
 
-func writeTestSIVaultKeyring(t *testing.T, path string, entries map[string]sunVaultPrivateKey) {
+func writeTestSIVaultKeyring(t *testing.T, path string, entries map[string]siVaultKeyMaterial) {
 	t.Helper()
 	doc := siVaultKeyring{Entries: entries}
 	raw, err := json.MarshalIndent(doc, "", "  ")
@@ -34,7 +34,7 @@ func readTestSIVaultKeyring(t *testing.T, path string) siVaultKeyring {
 		t.Fatalf("parse keyring: %v", err)
 	}
 	if doc.Entries == nil {
-		doc.Entries = map[string]sunVaultPrivateKey{}
+		doc.Entries = map[string]siVaultKeyMaterial{}
 	}
 	return doc
 }
@@ -303,7 +303,7 @@ func TestEnsureSIVaultKeyMaterialSeedsMissingEntryFromCanonical(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
 	}
-	writeTestSIVaultKeyring(t, keyringPath, map[string]sunVaultPrivateKey{
+	writeTestSIVaultKeyring(t, keyringPath, map[string]siVaultKeyMaterial{
 		"safe/dev": {Repo: "safe", Env: "dev", PublicKey: pub, PrivateKey: priv},
 	})
 
@@ -338,7 +338,7 @@ func TestEnsureSIVaultKeyMaterialRejectsSprawl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateSIVaultKeyPair B: %v", err)
 	}
-	writeTestSIVaultKeyring(t, keyringPath, map[string]sunVaultPrivateKey{
+	writeTestSIVaultKeyring(t, keyringPath, map[string]siVaultKeyMaterial{
 		"safe/dev":  {Repo: "safe", Env: "dev", PublicKey: pubA, PrivateKey: privA},
 		"safe/prod": {Repo: "safe", Env: "prod", PublicKey: pubB, PrivateKey: privB},
 	})
@@ -394,14 +394,12 @@ func TestEnsureSIVaultDecryptMaterialCompatibilityDetectsDrift(t *testing.T) {
 		"SECRET_TOKEN=encrypted:si-vault:Zm9v",
 		"",
 	}, "\n")))
-	material := sunVaultPrivateKey{
+	material := siVaultKeyMaterial{
 		PublicKey:  "",
 		PrivateKey: privActive,
 	}
 	settings := defaultSettings()
 	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = "https://sun.example"
-	settings.Sun.Account = "acme"
 	target := siVaultTarget{Repo: "viva", Env: "dev", EnvFile: "/tmp/.env.dev"}
 
 	err = ensureSIVaultDecryptMaterialCompatibility(doc, material, target, settings)
@@ -431,7 +429,7 @@ func TestEnsureSIVaultDecryptMaterialCompatibilityAllowsBackupKeyMatch(t *testin
 		"SECRET_TOKEN=encrypted:si-vault:Zm9v",
 		"",
 	}, "\n")))
-	material := sunVaultPrivateKey{
+	material := siVaultKeyMaterial{
 		PrivateKey:        privActive,
 		BackupPrivateKeys: []string{privExpected},
 	}

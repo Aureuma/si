@@ -1278,7 +1278,7 @@ func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
 	t.Setenv("SI_SETTINGS_HOME", home)
 	t.Setenv("SI_SUN_BASE_URL", "")
 	t.Setenv("SI_SUN_TOKEN", "")
-	server, store := newSunTestServer(t, "acme", "token-paas-prune")
+	server, _ := newSunTestServer(t, "acme", "token-paas-prune")
 	defer server.Close()
 
 	stateRoot := t.TempDir()
@@ -1297,19 +1297,6 @@ func TestPaasDeployPruneRemovesOldReleasesAndOldEvents(t *testing.T) {
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
-	target, err := vaultResolveTarget(settings, vaultFile, true)
-	if err != nil {
-		t.Fatalf("resolve target: %v", err)
-	}
-	store.mu.Lock()
-	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
-	store.payloads[objectKey] = []byte("prod\n")
-	store.revs[objectKey] = 1
-	store.metadata[objectKey] = map[string]any{"deleted": false}
-	store.created[objectKey] = "2026-01-01T00:00:00Z"
-	store.updated[objectKey] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
-
 	composeBody := strings.Join([]string{
 		"services:",
 		"  api:",
@@ -1393,7 +1380,7 @@ func TestPaasDeployReconcileDetectsDriftAndOrphans(t *testing.T) {
 	t.Setenv("SI_SETTINGS_HOME", home)
 	t.Setenv("SI_SUN_BASE_URL", "")
 	t.Setenv("SI_SUN_TOKEN", "")
-	server, store := newSunTestServer(t, "acme", "token-paas-reconcile")
+	server, _ := newSunTestServer(t, "acme", "token-paas-reconcile")
 	defer server.Close()
 
 	stateRoot := t.TempDir()
@@ -1414,19 +1401,6 @@ func TestPaasDeployReconcileDetectsDriftAndOrphans(t *testing.T) {
 	if err := saveSettings(settings); err != nil {
 		t.Fatalf("save settings: %v", err)
 	}
-	target, err := vaultResolveTarget(settings, vaultFile, true)
-	if err != nil {
-		t.Fatalf("resolve target: %v", err)
-	}
-	store.mu.Lock()
-	objectKey := store.key(vaultSunKVKind(target), "APP_ENV")
-	store.payloads[objectKey] = []byte("prod\n")
-	store.revs[objectKey] = 1
-	store.metadata[objectKey] = map[string]any{"deleted": false}
-	store.created[objectKey] = "2026-01-01T00:00:00Z"
-	store.updated[objectKey] = "2026-01-02T00:00:00Z"
-	store.mu.Unlock()
-
 	composeBody := strings.Join([]string{
 		"services:",
 		"  api:",

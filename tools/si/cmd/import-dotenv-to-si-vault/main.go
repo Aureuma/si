@@ -15,7 +15,7 @@ import (
 	"strings"
 )
 
-const usageText = `Import plaintext .env files into si vault (no dotenvx).
+const usageText = `Import plaintext .env files into si vault (native SI format).
 
 Defaults:
   --src .

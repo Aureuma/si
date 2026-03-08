@@ -193,11 +193,12 @@ func resolveVaultKeyValue(settings Settings, key string) (string, bool) {
 	if key == "" {
 		return "", false
 	}
-	vaultTarget, targetErr := vaultResolveTarget(settings, "", true)
-	if targetErr == nil {
-		raw, found, supported, err := vaultSunKVGetRawValue(settings, vaultTarget, key)
-		if err == nil && supported && found {
-			return resolveVaultRawValue(settings, vaultTarget.File, raw)
+	if vaultTarget, targetErr := vaultResolveTarget(settings, "", true); targetErr == nil {
+		values, err := loadVaultRawValuesFromTargetFile(vaultTarget.File)
+		if err == nil {
+			if raw, found := values[key]; found {
+				return resolveVaultRawValue(settings, vaultTarget.File, raw)
+			}
 		}
 	}
 
@@ -225,11 +226,6 @@ func resolveVaultRawValue(settings Settings, envFile string, raw string) (string
 		return value, strings.TrimSpace(value) != ""
 	}
 	if vault.IsEncryptedValueV1(value) {
-		// Legacy age-encrypted values only require SI_VAULT_IDENTITY.
-		// Force-refresh identity from Sun to avoid stale process env identities.
-		if _, err := vaultEnsureStrictSunIdentity(settings, "vault_key_read_legacy"); err != nil {
-			return "", false
-		}
 		plain, decErr := vault.DecryptSIVaultValue(value, nil)
 		if decErr != nil {
 			return "", false

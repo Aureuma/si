@@ -49,7 +49,7 @@ Features:
   - Remote control bridge for sharing local terminal sessions in a browser.
   - Orbitals and integration registry (catalog/install/enable/doctor/scaffold).
   - Fort secrets broker wrapper for hosted fort service operations.
-  - Containers ship /usr/local/bin/si, so you can run "si vault ..." inside dyad/codex containers (or inject secrets from host with "si vault docker exec").
+  - Containers ship /usr/local/bin/si; runtime secret access is Fort-only ("si fort ..."). Local "si vault ..." is host/admin only.
 
 Usage:
   si <command> [args...]

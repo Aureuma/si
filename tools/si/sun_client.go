@@ -118,7 +118,7 @@ type sunIntegrationShardResponse struct {
 	Payload  json.RawMessage `json:"payload"`
 }
 
-type sunVaultPrivateKey struct {
+type siVaultKeyMaterial struct {
 	Repo              string   `json:"repo"`
 	Env               string   `json:"env"`
 	PublicKey         string   `json:"public_key"`
@@ -168,6 +168,13 @@ func validateSunBearerToken(token string) error {
 		}
 	}
 	return nil
+}
+
+func isSunNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "status 404")
 }
 
 func sunAllowsInsecureHTTP(u *url.URL) bool {
