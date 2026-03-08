@@ -35,10 +35,10 @@ func TestResolveFortBootstrapConfigDefaultsToHostedFort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveFortBootstrapConfig: %v", err)
 	}
-	if cfg.HostURL != "https://fort.aureuma.com" {
+	if cfg.HostURL != "https://fort.aureuma.ai" {
 		t.Fatalf("unexpected host url: %q", cfg.HostURL)
 	}
-	if cfg.ContainerHostURL != "https://fort.aureuma.com" {
+	if cfg.ContainerHostURL != "https://fort.aureuma.ai" {
 		t.Fatalf("unexpected container host url: %q", cfg.ContainerHostURL)
 	}
 }
@@ -51,8 +51,8 @@ func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 	}
 	t.Setenv("FORT_TOKEN", "")
 	t.Setenv("FORT_TOKEN_FILE", tokenFile)
-	t.Setenv("FORT_HOST", "https://fort.aureuma.com")
-	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.aureuma.com")
+	t.Setenv("FORT_HOST", "https://fort.aureuma.ai")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.aureuma.ai")
 
 	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
 	if err != nil {
@@ -71,8 +71,8 @@ func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T)
 	}
 	t.Setenv("FORT_TOKEN", "")
 	t.Setenv("FORT_TOKEN_FILE", tokenFile)
-	t.Setenv("FORT_HOST", "https://fort.aureuma.com")
-	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.aureuma.com")
+	t.Setenv("FORT_HOST", "https://fort.aureuma.ai")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.aureuma.ai")
 
 	if _, err := resolveFortBootstrapConfig(context.Background(), nil, ""); err == nil {
 		t.Fatalf("expected weak token file permissions to be rejected")
@@ -335,7 +335,7 @@ func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
 		AgentID:       "si-codex-alpha",
 		SessionID:     "sess-1",
 		Host:          "http://172.19.0.9:8088",
-		ContainerHost: "https://fort.aureuma.com",
+		ContainerHost: "https://fort.aureuma.ai",
 	}
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		t.Fatalf("saveFortProfileSessionState: %v", err)
@@ -350,7 +350,7 @@ func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
 	if boot.AgentID != "si-codex-alpha" {
 		t.Fatalf("unexpected agent id: %q", boot.AgentID)
 	}
-	if boot.ContainerHostURL != "https://fort.aureuma.com" {
+	if boot.ContainerHostURL != "https://fort.aureuma.ai" {
 		t.Fatalf("unexpected container host url: %q", boot.ContainerHostURL)
 	}
 	if boot.AccessTokenContainerPath != "/home/si/.si/codex/profiles/alpha/fort/access.token" {
