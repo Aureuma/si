@@ -158,6 +158,89 @@ func TestFortResolveBootstrapBearerTokenRefreshesExpiredToken(t *testing.T) {
 	}
 }
 
+func TestResolveBootstrapConfigAndEnsureAgentWithExpiredBootstrapToken(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	refreshFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir bootstrap dir: %v", err)
+	}
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(-5*time.Minute))), 0o600); err != nil {
+		t.Fatalf("write expired token: %v", err)
+	}
+	if err := os.WriteFile(refreshFile, []byte("refresh-token-old"), 0o600); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", refreshFile)
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+
+	refreshCalls := 0
+	createCalls := 0
+	enableCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/auth/session/refresh":
+			refreshCalls++
+			var req map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("decode refresh request: %v", err)
+			}
+			if got := strings.TrimSpace(fmt.Sprint(req["refresh_token"])); got != "refresh-token-old" {
+				t.Fatalf("unexpected refresh token request: %q", got)
+			}
+			_, _ = w.Write([]byte(`{"access_token":"fresh-admin-token","refresh_token":"refresh-token-new","access_expires_at":"2030-01-01T00:00:00Z"}`))
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents":
+			createCalls++
+			if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer fresh-admin-token" {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/si-codex-ferma/enable":
+			enableCalls++
+			if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer fresh-admin-token" {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		default:
+			http.NotFound(w, r)
+			return
+		}
+	}))
+	defer srv.Close()
+
+	t.Setenv("FORT_HOST", srv.URL)
+	t.Setenv("SI_FORT_CONTAINER_HOST", srv.URL)
+
+	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
+	if err != nil {
+		t.Fatalf("resolveFortBootstrapConfig: %v", err)
+	}
+	if cfg.BearerToken != "fresh-admin-token" {
+		t.Fatalf("unexpected bootstrap bearer token: %q", cfg.BearerToken)
+	}
+	if err := fortEnsureAgent(context.Background(), cfg, "si-codex-ferma"); err != nil {
+		t.Fatalf("fortEnsureAgent: %v", err)
+	}
+	if refreshCalls != 1 || createCalls != 1 || enableCalls != 1 {
+		t.Fatalf("unexpected call counts refresh=%d create=%d enable=%d", refreshCalls, createCalls, enableCalls)
+	}
+	if got := strings.TrimSpace(readFileOrEmpty(t, tokenFile)); got != "fresh-admin-token" {
+		t.Fatalf("unexpected token file content: %q", got)
+	}
+	if got := strings.TrimSpace(readFileOrEmpty(t, refreshFile)); got != "refresh-token-new" {
+		t.Fatalf("unexpected refresh file content: %q", got)
+	}
+}
+
 func TestFortTokenNeedsRefreshWithFutureExp(t *testing.T) {
 	token := makeTestJWT(time.Now().Add(10 * time.Minute))
 	needs, reason := fortTokenNeedsRefresh(token)
@@ -170,6 +253,15 @@ func makeTestJWT(expiry time.Time) string {
 	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
 	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, expiry.UTC().Unix())))
 	return header + "." + payload + ".x"
+}
+
+func readFileOrEmpty(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read file %s: %v", path, err)
+	}
+	return string(raw)
 }
 
 func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T) {
