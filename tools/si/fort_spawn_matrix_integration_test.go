@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -430,16 +431,38 @@ func (ctx *fortMatrixContext) startFortServer() {
 	); err != nil {
 		t.Fatalf("start fort container: %v", err)
 	}
-	if !waitUntil(time.Now().Add(90*time.Second), 250*time.Millisecond, func() bool {
-		_, err := ctx.fortDoctor()
-		return err == nil
+	if !waitUntil(time.Now().Add(180*time.Second), 250*time.Millisecond, func() bool {
+		return ctx.fortHTTPReady()
 	}) {
-		t.Fatalf("fort did not become ready")
+		logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
+		t.Fatalf("fort did not become ready (logs=%q)", logs)
+	}
+	if out, err := ctx.fortDoctor(); err != nil {
+		logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
+		t.Fatalf("fort doctor failed after readiness: %v (doctor=%q logs=%q)", err, out, logs)
 	}
 }
 
 func (ctx *fortMatrixContext) fortDoctor() (string, error) {
 	return ctx.runFortAdmin("doctor")
+}
+
+func (ctx *fortMatrixContext) fortHTTPReady() bool {
+	base := strings.TrimRight(strings.TrimSpace(ctx.fortHostURL), "/")
+	if base == "" {
+		return false
+	}
+	for _, path := range []string{"/v1/health", "/v1/ready"} {
+		resp, err := http.Get(base + path)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+	}
+	return true
 }
 
 func (ctx *fortMatrixContext) seedBaseVaultValues() {
