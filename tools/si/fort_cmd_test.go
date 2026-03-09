@@ -59,6 +59,31 @@ func TestFortSanitizedEnvRemovesTokenEntries(t *testing.T) {
 	}
 }
 
+func TestEnvWithOverrideAddsWhenMissing(t *testing.T) {
+	out := envWithOverride([]string{"PATH=/usr/bin"}, "GOWORK", "off")
+	joined := strings.Join(out, "\n")
+	if !strings.Contains(joined, "PATH=/usr/bin") {
+		t.Fatalf("expected PATH to be preserved: %q", joined)
+	}
+	if !strings.Contains(joined, "GOWORK=off") {
+		t.Fatalf("expected GOWORK override to be added: %q", joined)
+	}
+}
+
+func TestEnvWithOverrideReplacesExistingAndDeduplicates(t *testing.T) {
+	out := envWithOverride([]string{"GOWORK=/tmp/work", "PATH=/usr/bin", "GOWORK=/another"}, "GOWORK", "off")
+	joined := strings.Join(out, "\n")
+	if strings.Contains(joined, "GOWORK=/tmp/work") || strings.Contains(joined, "GOWORK=/another") {
+		t.Fatalf("expected existing GOWORK values to be replaced: %q", joined)
+	}
+	if strings.Count(joined, "GOWORK=off") != 1 {
+		t.Fatalf("expected exactly one GOWORK override, got: %q", joined)
+	}
+	if !strings.Contains(joined, "PATH=/usr/bin") {
+		t.Fatalf("expected PATH to be preserved: %q", joined)
+	}
+}
+
 func TestApplyFortConfigSet(t *testing.T) {
 	settings := defaultSettings()
 	changed, err := applyFortConfigSet(&settings, fortConfigSetInput{
