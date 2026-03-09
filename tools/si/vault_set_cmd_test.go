@@ -25,6 +25,8 @@ func TestVaultSetAcceptsTrailingFlagsAfterKeyValue(t *testing.T) {
 		"HOME":                  stateHome,
 		"SI_SETTINGS_HOME":      stateHome,
 		"SI_VAULT_KEYRING_FILE": keyringPath,
+		"SI_CODEX_PROFILE_ID":   "",
+		"CODEX_HOME":            "",
 	}
 
 	scope := "trailing-set"
