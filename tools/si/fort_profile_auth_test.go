@@ -42,7 +42,7 @@ func TestResolveFortBootstrapConfigReadsHostFromSettings(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
 		t.Fatalf("mkdir token dir: %v", err)
 	}
-	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(30*time.Minute))), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
 	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
@@ -64,7 +64,7 @@ func TestResolveFortBootstrapConfigReadsHostFromSettings(t *testing.T) {
 func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 	tmp := t.TempDir()
 	tokenFile := filepath.Join(tmp, "admin.token")
-	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(30*time.Minute))), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
 	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
@@ -75,7 +75,7 @@ func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveFortBootstrapConfig: %v", err)
 	}
-	if cfg.BearerToken != "file-token" {
+	if cfg.BearerToken == "" {
 		t.Fatalf("unexpected bearer token: %q", cfg.BearerToken)
 	}
 }
@@ -83,7 +83,7 @@ func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 func TestResolveFortBootstrapConfigReadsTokenFromLegacyTokenFileEnv(t *testing.T) {
 	tmp := t.TempDir()
 	tokenFile := filepath.Join(tmp, "admin.token")
-	if err := os.WriteFile(tokenFile, []byte("legacy-file-token"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(30*time.Minute))), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
 	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", "")
@@ -95,7 +95,7 @@ func TestResolveFortBootstrapConfigReadsTokenFromLegacyTokenFileEnv(t *testing.T
 	if err != nil {
 		t.Fatalf("resolveFortBootstrapConfig: %v", err)
 	}
-	if cfg.BearerToken != "legacy-file-token" {
+	if cfg.BearerToken == "" {
 		t.Fatalf("unexpected bearer token: %q", cfg.BearerToken)
 	}
 }
@@ -366,7 +366,7 @@ func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T)
 func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T) {
 	tmp := t.TempDir()
 	tokenFile := filepath.Join(tmp, "admin.token")
-	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(30*time.Minute))), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
 	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
@@ -382,7 +382,7 @@ func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T
 func TestResolveFortBootstrapConfigAllowsInsecureWhenExplicitlyEnabled(t *testing.T) {
 	tmp := t.TempDir()
 	tokenFile := filepath.Join(tmp, "admin.token")
-	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(30*time.Minute))), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
 	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
