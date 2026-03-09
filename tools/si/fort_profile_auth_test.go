@@ -158,6 +158,90 @@ func TestFortResolveBootstrapBearerTokenRefreshesExpiredToken(t *testing.T) {
 	}
 }
 
+func TestFortResolveBootstrapBearerTokenFailsWhenExpiredAndRefreshUnauthorized(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	refreshFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir bootstrap dir: %v", err)
+	}
+	expiredToken := makeTestJWT(time.Now().Add(-3 * time.Minute))
+	if err := os.WriteFile(tokenFile, []byte(expiredToken), 0o600); err != nil {
+		t.Fatalf("write expired token: %v", err)
+	}
+	if err := os.WriteFile(refreshFile, []byte("refresh-token-1"), 0o600); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", refreshFile)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/session/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+	}))
+	defer srv.Close()
+
+	got, err := fortResolveBootstrapBearerToken(context.Background(), srv.URL)
+	if err == nil {
+		t.Fatalf("expected refresh failure when bootstrap token is expired")
+	}
+	if got != "" {
+		t.Fatalf("expected no token result on refresh failure, got %q", got)
+	}
+	if !strings.Contains(err.Error(), "expired/near expiry") {
+		t.Fatalf("expected expiry-related error, got %v", err)
+	}
+	tokenBytes, readErr := os.ReadFile(tokenFile)
+	if readErr != nil {
+		t.Fatalf("read token file: %v", readErr)
+	}
+	if strings.TrimSpace(string(tokenBytes)) != strings.TrimSpace(expiredToken) {
+		t.Fatalf("expected token file to remain unchanged after failed refresh")
+	}
+}
+
+func TestFortResolveBootstrapBearerTokenKeepsValidTokenWhenRefreshUnauthorized(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	refreshFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir bootstrap dir: %v", err)
+	}
+	validToken := makeTestJWT(time.Now().Add(30 * time.Minute))
+	if err := os.WriteFile(tokenFile, []byte(validToken), 0o600); err != nil {
+		t.Fatalf("write valid token: %v", err)
+	}
+	if err := os.WriteFile(refreshFile, []byte("refresh-token-1"), 0o600); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", refreshFile)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/session/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+	}))
+	defer srv.Close()
+
+	got, err := fortResolveBootstrapBearerToken(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("expected valid bootstrap token to be kept on refresh failure, got %v", err)
+	}
+	if strings.TrimSpace(got) != strings.TrimSpace(validToken) {
+		t.Fatalf("expected existing valid token, got %q", got)
+	}
+}
+
 func TestResolveBootstrapConfigAndEnsureAgentWithExpiredBootstrapToken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

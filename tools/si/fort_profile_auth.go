@@ -508,9 +508,11 @@ func fortResolveBootstrapBearerToken(ctx context.Context, hostURL string) (strin
 	}
 	token, tokenErr := readStrictSecretFile(tokenFile)
 	tokenFresh := false
+	tokenNeedsRefresh := false
+	refreshReason := ""
 	if tokenErr == nil {
-		needsRefresh, refreshReason := fortTokenNeedsRefresh(token)
-		if !needsRefresh {
+		tokenNeedsRefresh, refreshReason = fortTokenNeedsRefresh(token)
+		if !tokenNeedsRefresh {
 			tokenFresh = true
 		} else if refreshReason != "" {
 			warnf("fort bootstrap token refresh required: %s", refreshReason)
@@ -540,11 +542,17 @@ func fortResolveBootstrapBearerToken(ctx context.Context, hostURL string) (strin
 				}
 				return strings.TrimSpace(refreshed.AccessToken), nil
 			}
+			if tokenNeedsRefresh {
+				return "", fmt.Errorf("fort bootstrap token refresh failed; token in %s is expired/near expiry: %w", tokenFile, err)
+			}
 			if tokenErr == nil && strings.TrimSpace(token) != "" {
 				warnf("fort bootstrap token refresh failed; using existing token from %s: %v", tokenFile, err)
 				return token, nil
 			}
 			return "", fmt.Errorf("fort admin auth refresh failed (refresh file %s): %w", refreshFile, err)
+		}
+		if tokenNeedsRefresh {
+			return "", fmt.Errorf("fort bootstrap token is expired/near expiry and refresh token file %s is unavailable: %w", refreshFile, refreshErr)
 		}
 		if tokenErr == nil && strings.TrimSpace(token) != "" {
 			warnf("fort bootstrap refresh token unavailable at %s; using existing token", refreshFile)
@@ -558,6 +566,9 @@ func fortResolveBootstrapBearerToken(ctx context.Context, hostURL string) (strin
 	}
 	if strings.TrimSpace(token) == "" {
 		return "", fmt.Errorf("fort admin auth is required (token file %s is empty)", tokenFile)
+	}
+	if tokenNeedsRefresh {
+		return "", fmt.Errorf("fort bootstrap token in %s is expired/near expiry and could not be refreshed", tokenFile)
 	}
 	return token, nil
 }
