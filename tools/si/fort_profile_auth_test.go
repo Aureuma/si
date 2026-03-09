@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestFortHostURLForContainer(t *testing.T) {
@@ -95,6 +98,78 @@ func TestResolveFortBootstrapConfigReadsTokenFromLegacyTokenFileEnv(t *testing.T
 	if cfg.BearerToken != "legacy-file-token" {
 		t.Fatalf("unexpected bearer token: %q", cfg.BearerToken)
 	}
+}
+
+func TestFortResolveBootstrapBearerTokenRefreshesExpiredToken(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	refreshFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir bootstrap dir: %v", err)
+	}
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(-2*time.Minute))), 0o600); err != nil {
+		t.Fatalf("write expired token: %v", err)
+	}
+	if err := os.WriteFile(refreshFile, []byte("refresh-token-1"), 0o600); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", refreshFile)
+
+	var gotRefresh string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/session/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode refresh request: %v", err)
+		}
+		gotRefresh = strings.TrimSpace(fmt.Sprint(req["refresh_token"]))
+		_, _ = w.Write([]byte(`{"access_token":"new-access-token","refresh_token":"refresh-token-2","access_expires_at":"2030-01-01T00:00:00Z"}`))
+	}))
+	defer srv.Close()
+
+	got, err := fortResolveBootstrapBearerToken(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("fortResolveBootstrapBearerToken: %v", err)
+	}
+	if got != "new-access-token" {
+		t.Fatalf("unexpected access token: %q", got)
+	}
+	if gotRefresh != "refresh-token-1" {
+		t.Fatalf("unexpected refresh token used: %q", gotRefresh)
+	}
+	tokenBytes, err := os.ReadFile(tokenFile)
+	if err != nil {
+		t.Fatalf("read token file: %v", err)
+	}
+	if strings.TrimSpace(string(tokenBytes)) != "new-access-token" {
+		t.Fatalf("unexpected token file value: %q", string(tokenBytes))
+	}
+	refreshBytes, err := os.ReadFile(refreshFile)
+	if err != nil {
+		t.Fatalf("read refresh file: %v", err)
+	}
+	if strings.TrimSpace(string(refreshBytes)) != "refresh-token-2" {
+		t.Fatalf("unexpected refresh file value: %q", string(refreshBytes))
+	}
+}
+
+func TestFortTokenNeedsRefreshWithFutureExp(t *testing.T) {
+	token := makeTestJWT(time.Now().Add(10 * time.Minute))
+	needs, reason := fortTokenNeedsRefresh(token)
+	if needs {
+		t.Fatalf("expected non-expiring token to be accepted, reason=%q", reason)
+	}
+}
+
+func makeTestJWT(expiry time.Time) string {
+	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, expiry.UTC().Unix())))
+	return header + "." + payload + ".x"
 }
 
 func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T) {
