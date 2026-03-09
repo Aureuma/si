@@ -107,7 +107,7 @@ si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-prefl
 
 - For host/admin automation, prefer `si vault run -- <cmd>` when a command needs secrets.
 - For SI runtime containers, use `si fort ...` for secret access.
-- `si fort` bootstrap/admin auth uses `FORT_TOKEN` or `FORT_TOKEN_FILE`; runtime auth uses `FORT_TOKEN_PATH` and `FORT_REFRESH_TOKEN_PATH`.
+- `si fort` bootstrap/admin auth uses `FORT_TOKEN_FILE`; runtime auth uses `FORT_TOKEN_PATH` and `FORT_REFRESH_TOKEN_PATH`.
 - Pass native `fort` flags after `--` when invoking through wrapper.
 - Run integration-specific `doctor` commands before write operations.
 - Run `si mintlify validate` for docs changes and `si analyze` for Go changes.
