@@ -402,11 +402,8 @@ func (ctx *fortMatrixContext) runFortAdmin(args ...string) (string, error) {
 	if err := os.WriteFile(tokenPath, []byte(ctx.adminToken), 0o600); err != nil {
 		return "", err
 	}
-	env := map[string]string{
-		"FORT_HOST":       ctx.fortHost,
-		"FORT_TOKEN_PATH": tokenPath,
-	}
-	out, stderr, err := runCommandWithOutput(ctx.t, ctx.fortRepo, env, append([]string{ctx.fortBinary}, args...)...)
+	cmdArgs := append([]string{ctx.fortBinary, "--host", ctx.fortHost, "--token-file", tokenPath}, args...)
+	out, stderr, err := runCommandWithOutput(ctx.t, ctx.fortRepo, nil, cmdArgs...)
 	if err != nil {
 		return out, fmt.Errorf("%w (stdout=%q stderr=%q)", err, out, stderr)
 	}
