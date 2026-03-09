@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"fort/internal/auth"
@@ -81,6 +82,25 @@ func main() {
 	token, _, err := mgr.Issue(admin, 24*time.Hour, "fort-api")
 	if err != nil {
 		panic(err)
+	}
+	profileIDs := []string{}
+	if raw := strings.TrimSpace(os.Getenv("PROFILE_IDS")); raw != "" {
+		for _, part := range strings.Split(raw, ",") {
+			id := strings.TrimSpace(part)
+			if id != "" {
+				profileIDs = append(profileIDs, id)
+			}
+		}
+	}
+	for _, profileID := range profileIDs {
+		agentID := "si-codex-" + profileID
+		workload, err := st.CreateAgent(agentID, model.AgentTypeWorkload, model.AgentStatusActive, now)
+		if err != nil {
+			panic(err)
+		}
+		if _, err := st.SetPolicy(workload.ID, []model.Binding{{Repo: "*", Env: "*", Ops: []model.Operation{model.OpAny}}}, now); err != nil {
+			panic(err)
+		}
 	}
 
 	entries := map[string]any{}
@@ -361,10 +381,12 @@ func (ctx *fortMatrixContext) seedFortState() {
 		"STATE_PATH":       ctx.stateFile,
 		"KEYRING_PATH":     ctx.keyringFile,
 		"SIGNING_KEY_PATH": ctx.jwtSigningKey,
+		"GOWORK":           "off",
+		"PROFILE_IDS":      strings.Join(ctx.profiles, ","),
 	}
-	out, _, err := runCommandWithOutput(t, ctx.fortRepo, env, "go", "run", ctx.seedFile)
+	out, stderr, err := runCommandWithOutput(t, ctx.fortRepo, env, "go", "run", ctx.seedFile)
 	if err != nil {
-		t.Fatalf("seed fort state: %v", err)
+		t.Fatalf("seed fort state: %v (stdout=%q stderr=%q)", err, out, stderr)
 	}
 	ctx.adminToken = strings.TrimSpace(out)
 	if ctx.adminToken == "" {
@@ -436,9 +458,9 @@ func (ctx *fortMatrixContext) seedBaseVaultValues() {
 }
 
 func (ctx *fortMatrixContext) runProfileCommand(profile, shellCmd string) (string, error) {
-	out, _, err := runCommandWithOutput(ctx.t, ctx.siRepo, ctx.commonEnvMap(nil), ctx.siBinary, "run", profile, "--no-tmux", "bash", "-lc", shellCmd)
+	out, stderr, err := runCommandWithOutput(ctx.t, ctx.siRepo, ctx.commonEnvMap(nil), ctx.siBinary, "run", profile, "--no-tmux", "bash", "-lc", shellCmd)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("%w (stdout=%q stderr=%q)", err, out, stderr)
 	}
 	return out, nil
 }
@@ -496,8 +518,11 @@ func (ctx *fortMatrixContext) copyFortIntoContainer(profile string) {
 	if err := runCommandIgnore("docker", "cp", ctx.fortBinary, container+":/tmp/fort"); err != nil {
 		ctx.t.Fatalf("docker cp to %s: %v", container, err)
 	}
-	if _, _, err := runCommandWithOutput(ctx.t, "", nil, "docker", "exec", container, "sh", "-lc", "chown si:si /tmp/fort && chmod 0755 /tmp/fort"); err != nil {
-		ctx.t.Fatalf("container %s fort binary chmod/chown: %v", container, err)
+	if err := runCommandIgnore("docker", "cp", ctx.siBinary, container+":/tmp/si"); err != nil {
+		ctx.t.Fatalf("docker cp si binary to %s: %v", container, err)
+	}
+	if _, _, err := runCommandWithOutput(ctx.t, "", nil, "docker", "exec", container, "sh", "-lc", "chown si:si /tmp/fort /tmp/si && chmod 0755 /tmp/fort /tmp/si"); err != nil {
+		ctx.t.Fatalf("container %s fort/si binary chmod/chown: %v", container, err)
 	}
 }
 
@@ -611,7 +636,7 @@ func (ctx *fortMatrixContext) verifyTokenFiles(profile string) {
 }
 
 func (ctx *fortMatrixContext) fortGet(profile, repo, env, key string) (string, error) {
-	command := fmt.Sprintf("si fort --bin /tmp/fort get --repo %s --env %s --key %s --format raw", repo, env, key)
+	command := fmt.Sprintf("/tmp/si fort --bin /tmp/fort get --repo %s --env %s --key %s --format raw", repo, env, key)
 	raw, err := ctx.runProfileCommand(profile, command)
 	if err != nil {
 		return "", err
@@ -620,7 +645,7 @@ func (ctx *fortMatrixContext) fortGet(profile, repo, env, key string) (string, e
 }
 
 func (ctx *fortMatrixContext) fortSetAndGet(profile, repo, env, key, value string) (string, error) {
-	command := fmt.Sprintf("si fort --bin /tmp/fort set --repo %s --env %s --key %s --value %s && si fort --bin /tmp/fort get --repo %s --env %s --key %s --format raw", repo, env, key, value, repo, env, key)
+	command := fmt.Sprintf("/tmp/si fort --bin /tmp/fort set --repo %s --env %s --key %s --value %s && /tmp/si fort --bin /tmp/fort get --repo %s --env %s --key %s --format raw", repo, env, key, value, repo, env, key)
 	raw, err := ctx.runProfileCommand(profile, command)
 	if err != nil {
 		return "", err
