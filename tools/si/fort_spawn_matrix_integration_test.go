@@ -406,9 +406,9 @@ func (ctx *fortMatrixContext) runFortAdmin(args ...string) (string, error) {
 		"FORT_HOST":       ctx.fortHost,
 		"FORT_TOKEN_PATH": tokenPath,
 	}
-	out, _, err := runCommandWithOutput(ctx.t, ctx.fortRepo, env, append([]string{ctx.fortBinary}, args...)...)
+	out, stderr, err := runCommandWithOutput(ctx.t, ctx.fortRepo, env, append([]string{ctx.fortBinary}, args...)...)
 	if err != nil {
-		return out, err
+		return out, fmt.Errorf("%w (stdout=%q stderr=%q)", err, out, stderr)
 	}
 	return out, nil
 }
