@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -441,15 +442,10 @@ func fortAgentIDForProfile(profileID string) string {
 
 func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, preferredNetwork string) (fortBootstrapConfig, error) {
 	discoverDocker := fortEnvBool("SI_FORT_DISCOVER_DOCKER")
-	bearerToken, bearerErr := fortResolveBootstrapBearerToken()
-	if bearerErr != nil {
-		return fortBootstrapConfig{}, bearerErr
-	}
 	settings := loadSettingsOrDefault()
 	cfg := fortBootstrapConfig{
 		HostURL:          strings.TrimSpace(os.Getenv("FORT_HOST")),
 		ContainerHostURL: strings.TrimSpace(os.Getenv("SI_FORT_CONTAINER_HOST")),
-		BearerToken:      bearerToken,
 	}
 	if strings.TrimSpace(cfg.HostURL) == "" {
 		cfg.HostURL = strings.TrimSpace(os.Getenv("SI_FORT_HOST"))
@@ -488,10 +484,15 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 	if err := fortValidateHostedURL(cfg.ContainerHostURL); err != nil {
 		return fortBootstrapConfig{}, fmt.Errorf("invalid fort container host %q: %w", cfg.ContainerHostURL, err)
 	}
+	bearerToken, bearerErr := fortResolveBootstrapBearerToken(ctx, strings.TrimSpace(cfg.HostURL))
+	if bearerErr != nil {
+		return fortBootstrapConfig{}, bearerErr
+	}
+	cfg.BearerToken = bearerToken
 	return cfg, nil
 }
 
-func fortResolveBootstrapBearerToken() (string, error) {
+func fortResolveBootstrapBearerToken(ctx context.Context, hostURL string) (string, error) {
 	tokenFile := strings.TrimSpace(os.Getenv("FORT_BOOTSTRAP_TOKEN_FILE"))
 	if tokenFile == "" {
 		tokenFile = strings.TrimSpace(os.Getenv("FORT_TOKEN_FILE"))
@@ -505,9 +506,58 @@ func fortResolveBootstrapBearerToken() (string, error) {
 	if tokenFile == "" {
 		return "", fmt.Errorf("fort admin auth is required (set FORT_BOOTSTRAP_TOKEN_FILE)")
 	}
-	token, err := readStrictSecretFile(tokenFile)
-	if err != nil {
-		return "", fmt.Errorf("fort admin auth is required (token file %s): %w", tokenFile, err)
+	token, tokenErr := readStrictSecretFile(tokenFile)
+	tokenFresh := false
+	if tokenErr == nil {
+		needsRefresh, refreshReason := fortTokenNeedsRefresh(token)
+		if !needsRefresh {
+			tokenFresh = true
+		} else if refreshReason != "" {
+			warnf("fort bootstrap token refresh required: %s", refreshReason)
+		}
+	}
+	if tokenFresh {
+		return token, nil
+	}
+
+	refreshFile := fortResolveBootstrapRefreshTokenFile()
+	if strings.TrimSpace(refreshFile) != "" && strings.TrimSpace(hostURL) != "" {
+		refreshToken, refreshErr := readStrictSecretFile(refreshFile)
+		if refreshErr == nil {
+			ctxRefresh := ctx
+			if ctxRefresh == nil {
+				var cancel context.CancelFunc
+				ctxRefresh, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+			}
+			refreshed, err := fortRefreshSession(ctxRefresh, hostURL, refreshToken)
+			if err == nil {
+				if writeErr := writeSecretFile(tokenFile, refreshed.AccessToken); writeErr != nil {
+					return "", fmt.Errorf("write bootstrap token file %s: %w", tokenFile, writeErr)
+				}
+				if writeErr := writeSecretFile(refreshFile, refreshed.RefreshToken); writeErr != nil {
+					return "", fmt.Errorf("write bootstrap refresh token file %s: %w", refreshFile, writeErr)
+				}
+				return strings.TrimSpace(refreshed.AccessToken), nil
+			}
+			if tokenErr == nil && strings.TrimSpace(token) != "" {
+				warnf("fort bootstrap token refresh failed; using existing token from %s: %v", tokenFile, err)
+				return token, nil
+			}
+			return "", fmt.Errorf("fort admin auth refresh failed (refresh file %s): %w", refreshFile, err)
+		}
+		if tokenErr == nil && strings.TrimSpace(token) != "" {
+			warnf("fort bootstrap refresh token unavailable at %s; using existing token", refreshFile)
+			return token, nil
+		}
+		return "", fmt.Errorf("fort admin auth refresh token required (file %s): %w", refreshFile, refreshErr)
+	}
+
+	if tokenErr != nil {
+		return "", fmt.Errorf("fort admin auth is required (token file %s): %w", tokenFile, tokenErr)
+	}
+	if strings.TrimSpace(token) == "" {
+		return "", fmt.Errorf("fort admin auth is required (token file %s is empty)", tokenFile)
 	}
 	return token, nil
 }
@@ -522,6 +572,50 @@ func fortDefaultTokenFilePath() string {
 		return ""
 	}
 	return filepath.Join(home, filepath.FromSlash(fortDefaultTokenFileRelative))
+}
+
+func fortResolveBootstrapRefreshTokenFile() string {
+	if explicit := strings.TrimSpace(os.Getenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE")); explicit != "" {
+		return explicit
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return ""
+	}
+	return filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
+}
+
+func fortTokenNeedsRefresh(token string) (bool, string) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return true, "token is empty"
+	}
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return true, "token is not a JWT"
+	}
+	payloadRaw, err := base64.RawURLEncoding.DecodeString(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return true, "token payload decode failed"
+	}
+	var claims struct {
+		Exp int64 `json:"exp"`
+	}
+	if err := json.Unmarshal(payloadRaw, &claims); err != nil {
+		return true, "token payload parse failed"
+	}
+	if claims.Exp <= 0 {
+		return true, "token exp claim missing"
+	}
+	expiry := time.Unix(claims.Exp, 0).UTC()
+	if time.Now().UTC().After(expiry.Add(-90 * time.Second)) {
+		return true, fmt.Sprintf("token expired or near expiry (exp=%s)", expiry.Format(time.RFC3339))
+	}
+	return false, ""
 }
 
 func readStrictSecretFile(path string) (string, error) {
