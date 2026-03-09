@@ -30,12 +30,27 @@ jobs:
       - name: Checkout SI
         uses: actions/checkout@v4
 
+      - name: Require Fort checkout token
+        env:
+          FORT_REPO_TOKEN: ${{ secrets.GH_PAT_AUREUMA }}
+        run: |
+          if [ -z "${FORT_REPO_TOKEN}" ]; then
+            echo "::error::Missing GH_PAT_AUREUMA secret; fort-vault-ci requires read access to Aureuma/fort."
+            exit 1
+          fi
+
+      - name: Preflight Fort repo access
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT_AUREUMA }}
+        run: gh api repos/Aureuma/fort >/dev/null
+
       - name: Checkout Fort
         uses: actions/checkout@v4
         with:
           repository: Aureuma/fort
           path: fort
           fetch-depth: 1
+          token: ${{ secrets.GH_PAT_AUREUMA }}
 
       - name: Setup Go
         uses: actions/setup-go@v5
