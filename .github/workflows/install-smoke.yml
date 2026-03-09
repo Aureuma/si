@@ -75,6 +75,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/si/go.mod
+          cache: true
+
       - name: Run host installer smoke tests
         run: ./tools/test-install-si.sh
 
