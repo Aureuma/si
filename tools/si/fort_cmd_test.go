@@ -6,6 +6,24 @@ import (
 	"testing"
 )
 
+func TestFortArgsContainCredentialFlags(t *testing.T) {
+	tests := []struct {
+		args []string
+		want bool
+	}{
+		{args: []string{"doctor"}, want: false},
+		{args: []string{"--token", "abc", "doctor"}, want: true},
+		{args: []string{"--token=abc", "doctor"}, want: true},
+		{args: []string{"--token-file", "/tmp/tok", "doctor"}, want: true},
+		{args: []string{"--token-file=/tmp/tok", "doctor"}, want: true},
+	}
+	for _, tc := range tests {
+		if got := fortArgsContainCredentialFlags(tc.args); got != tc.want {
+			t.Fatalf("fortArgsContainCredentialFlags(%v)=%v want=%v", tc.args, got, tc.want)
+		}
+	}
+}
+
 func TestApplyFortConfigSet(t *testing.T) {
 	settings := defaultSettings()
 	changed, err := applyFortConfigSet(&settings, fortConfigSetInput{

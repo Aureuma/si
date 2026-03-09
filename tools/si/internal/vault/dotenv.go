@@ -40,7 +40,7 @@ func WriteDotenvFileAtomic(path string, contents []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	mode := os.FileMode(0o644)
+	mode := os.FileMode(0o600)
 	if info, err := os.Stat(writePath); err == nil {
 		mode = info.Mode() & os.ModePerm
 	}

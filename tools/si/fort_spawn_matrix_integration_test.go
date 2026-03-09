@@ -373,9 +373,16 @@ func (ctx *fortMatrixContext) seedFortState() {
 }
 
 func (ctx *fortMatrixContext) runFortAdmin(args ...string) (string, error) {
+	tokenPath := filepath.Join(ctx.profileTestHome, ".si", "fort", "bootstrap", "admin.token")
+	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(tokenPath, []byte(ctx.adminToken), 0o600); err != nil {
+		return "", err
+	}
 	env := map[string]string{
-		"FORT_HOST":  ctx.fortHost,
-		"FORT_TOKEN": ctx.adminToken,
+		"FORT_HOST":       ctx.fortHost,
+		"FORT_TOKEN_PATH": tokenPath,
 	}
 	out, _, err := runCommandWithOutput(ctx.t, ctx.fortRepo, env, append([]string{ctx.fortBinary}, args...)...)
 	if err != nil {
@@ -437,9 +444,16 @@ func (ctx *fortMatrixContext) runProfileCommand(profile, shellCmd string) (strin
 }
 
 func (ctx *fortMatrixContext) spawnProfile(profile string) {
+	tokenPath := filepath.Join(ctx.profileTestHome, ".si", "fort", "bootstrap", "admin.token")
+	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
+		ctx.t.Fatalf("mkdir bootstrap token dir: %v", err)
+	}
+	if err := os.WriteFile(tokenPath, []byte(ctx.adminToken), 0o600); err != nil {
+		ctx.t.Fatalf("write bootstrap token: %v", err)
+	}
 	env := ctx.commonEnvMap(map[string]string{
 		"FORT_HOST":              ctx.fortHost,
-		"FORT_TOKEN":             ctx.adminToken,
+		"FORT_TOKEN_FILE":        tokenPath,
 		"SI_FORT_CONTAINER_HOST": ctx.fortContainerURL,
 	})
 	out, stderr, err := runCommandWithOutput(ctx.t, ctx.siRepo, env, ctx.siBinary, "spawn", profile, "--profile", profile, "--network", ctx.network, "--workspace", ctx.siRepo, "--detach")
@@ -449,9 +463,16 @@ func (ctx *fortMatrixContext) spawnProfile(profile string) {
 }
 
 func (ctx *fortMatrixContext) respawnProfile(profile string) {
+	tokenPath := filepath.Join(ctx.profileTestHome, ".si", "fort", "bootstrap", "admin.token")
+	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
+		ctx.t.Fatalf("mkdir bootstrap token dir: %v", err)
+	}
+	if err := os.WriteFile(tokenPath, []byte(ctx.adminToken), 0o600); err != nil {
+		ctx.t.Fatalf("write bootstrap token: %v", err)
+	}
 	env := ctx.commonEnvMap(map[string]string{
 		"FORT_HOST":              ctx.fortHost,
-		"FORT_TOKEN":             ctx.adminToken,
+		"FORT_TOKEN_FILE":        tokenPath,
 		"SI_FORT_CONTAINER_HOST": ctx.fortContainerURL,
 	})
 	out, stderr, err := runCommandWithOutput(ctx.t, ctx.siRepo, env, ctx.siBinary, "respawn", profile, "--profile", profile, "--network", ctx.network, "--workspace", ctx.siRepo, "--volumes")

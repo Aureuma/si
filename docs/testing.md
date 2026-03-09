@@ -120,7 +120,7 @@ SI_FORT_ALLOW_INSECURE_HOST=1
 Bootstrap token file requirements:
 
 ```bash
-# default path used by SI when FORT_TOKEN is not set
+# default bootstrap admin token path used by SI
 ~/.si/fort/bootstrap/admin.token
 
 # file must be regular file with strict permissions
