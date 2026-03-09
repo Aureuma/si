@@ -678,7 +678,7 @@ func (ctx *fortMatrixContext) verifyTokenFiles(profile string) {
 }
 
 func (ctx *fortMatrixContext) fortGet(profile, repo, env, key string) (string, error) {
-	command := fmt.Sprintf("/tmp/si fort --bin /tmp/fort get --repo %s --env %s --key %s --format raw", repo, env, key)
+	command := fmt.Sprintf("%s get --repo %s --env %s --key %s --format raw", ctx.containerFortCommandPrefix(), repo, env, key)
 	raw, err := ctx.runProfileCommand(profile, command)
 	if err != nil {
 		return "", err
@@ -687,12 +687,19 @@ func (ctx *fortMatrixContext) fortGet(profile, repo, env, key string) (string, e
 }
 
 func (ctx *fortMatrixContext) fortSetAndGet(profile, repo, env, key, value string) (string, error) {
-	command := fmt.Sprintf("/tmp/si fort --bin /tmp/fort set --repo %s --env %s --key %s --value %s && /tmp/si fort --bin /tmp/fort get --repo %s --env %s --key %s --format raw", repo, env, key, value, repo, env, key)
+	command := fmt.Sprintf("%s set --repo %s --env %s --key %s --value %s && %s get --repo %s --env %s --key %s --format raw", ctx.containerFortCommandPrefix(), repo, env, key, value, ctx.containerFortCommandPrefix(), repo, env, key)
 	raw, err := ctx.runProfileCommand(profile, command)
 	if err != nil {
 		return "", err
 	}
 	return lastNonEmptyLine(raw), nil
+}
+
+func (ctx *fortMatrixContext) containerFortCommandPrefix() string {
+	if ctx.fortSupportsTokenFileFlag() {
+		return `/tmp/fort --host "$FORT_HOST" --token-file "$FORT_TOKEN_PATH"`
+	}
+	return `/tmp/fort --host "$FORT_HOST" --token "$(cat "$FORT_TOKEN_PATH")"`
 }
 
 func lastNonEmptyLine(raw string) string {
