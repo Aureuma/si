@@ -352,7 +352,7 @@ fort:
   si fort config set [--repo <path>] [--bin <path>] [--host <url>] [--container-host <url>] [--build true|false] [--json]
 
 	  Wrapper auth behavior:
-	    - Host bootstrap admin auth: FORT_TOKEN_FILE (default ~/.si/fort/bootstrap/admin.token).
+	    - Host bootstrap admin auth: FORT_BOOTSTRAP_TOKEN_FILE (default ~/.si/fort/bootstrap/admin.token).
 	    - Runtime session files: FORT_TOKEN_PATH + FORT_REFRESH_TOKEN_PATH.
 	    - Wrapper auto-refreshes runtime auth when possible using token-file flow.
 	    - FORT_TOKEN and FORT_REFRESH_TOKEN are stripped from child env before exec.

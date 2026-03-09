@@ -492,12 +492,18 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 }
 
 func fortResolveBootstrapBearerToken() (string, error) {
-	tokenFile := strings.TrimSpace(os.Getenv("FORT_TOKEN_FILE"))
+	tokenFile := strings.TrimSpace(os.Getenv("FORT_BOOTSTRAP_TOKEN_FILE"))
+	if tokenFile == "" {
+		tokenFile = strings.TrimSpace(os.Getenv("FORT_TOKEN_FILE"))
+		if tokenFile != "" {
+			warnf("FORT_TOKEN_FILE is deprecated; use FORT_BOOTSTRAP_TOKEN_FILE")
+		}
+	}
 	if tokenFile == "" {
 		tokenFile = fortDefaultTokenFilePath()
 	}
 	if tokenFile == "" {
-		return "", fmt.Errorf("fort admin auth is required (set FORT_TOKEN_FILE)")
+		return "", fmt.Errorf("fort admin auth is required (set FORT_BOOTSTRAP_TOKEN_FILE)")
 	}
 	token, err := readStrictSecretFile(tokenFile)
 	if err != nil {

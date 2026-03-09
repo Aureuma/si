@@ -103,7 +103,7 @@ Run the live Fort integration matrix against real `si spawn` containers:
 This matrix validates:
 - profile-scoped Fort agent auth bootstrap in `si spawn`
 - hosted Fort endpoint flow (configured via `~/.si/fort/settings.toml` `[fort].host`) as the default runtime target
-- host-side bootstrap admin token resolved from `FORT_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`)
+- host-side bootstrap admin token resolved from `FORT_BOOTSTRAP_TOKEN_FILE` (default `~/.si/fort/bootstrap/admin.token`)
 - runtime token-path flow in containers via `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`
 - in-container access through `si run` with no `FORT_TOKEN`/`FORT_REFRESH_TOKEN` secret env leakage
 - strict token file modes/ownership (`0600` files, `0700` fort state dir)
