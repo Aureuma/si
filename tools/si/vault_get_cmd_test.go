@@ -30,6 +30,8 @@ func TestVaultGetAcceptsTrailingFlagsAfterKey(t *testing.T) {
 		"HOME":                  stateHome,
 		"SI_SETTINGS_HOME":      stateHome,
 		"SI_VAULT_KEYRING_FILE": keyringPath,
+		"SI_CODEX_PROFILE_ID":   "",
+		"CODEX_HOME":            "",
 	}
 	scope := "trailing-get"
 	stdout, stderr, err := runSICommand(t, env, "vault", "get", "TRAILING_GET_KEY", "--env-file", envFile, "--scope", scope, "--reveal")
