@@ -62,6 +62,29 @@ func fortSanitizedEnv(env []string) []string {
 	return out
 }
 
+func envWithOverride(env []string, key string, value string) []string {
+	if strings.TrimSpace(key) == "" {
+		return append([]string{}, env...)
+	}
+	prefix := key + "="
+	out := make([]string, 0, len(env)+1)
+	replaced := false
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			if !replaced {
+				out = append(out, prefix+value)
+				replaced = true
+			}
+			continue
+		}
+		out = append(out, entry)
+	}
+	if !replaced {
+		out = append(out, prefix+value)
+	}
+	return out
+}
+
 func fortRejectDeprecatedTokenValueEnv() error {
 	if strings.TrimSpace(os.Getenv("FORT_TOKEN")) != "" {
 		return errors.New("FORT_TOKEN is deprecated and disallowed; use file-based auth (FORT_TOKEN_PATH or FORT_BOOTSTRAP_TOKEN_FILE)")
@@ -211,6 +234,7 @@ func buildFortBinary(repo, out string) error {
 	}
 	cmd := exec.Command("go", "build", "-o", out, "./cmd/fort")
 	cmd.Dir = repo
+	cmd.Env = envWithOverride(os.Environ(), "GOWORK", "off")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
