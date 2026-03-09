@@ -403,8 +403,15 @@ func (ctx *fortMatrixContext) runFortAdmin(args ...string) (string, error) {
 	if err := os.WriteFile(tokenPath, []byte(ctx.adminToken), 0o600); err != nil {
 		return "", err
 	}
-	cmdArgs := append([]string{ctx.fortBinary, "--host", ctx.fortHost, "--token-file", tokenPath}, args...)
-	out, stderr, err := runCommandWithOutput(ctx.t, ctx.fortRepo, nil, cmdArgs...)
+	env := map[string]string{}
+	cmdArgs := []string{ctx.fortBinary, "--host", ctx.fortHost}
+	if ctx.fortSupportsTokenFileFlag() {
+		cmdArgs = append(cmdArgs, "--token-file", tokenPath)
+	} else {
+		cmdArgs = append(cmdArgs, "--token", ctx.adminToken)
+	}
+	cmdArgs = append(cmdArgs, args...)
+	out, stderr, err := runCommandWithOutput(ctx.t, ctx.fortRepo, env, cmdArgs...)
 	if err != nil {
 		return out, fmt.Errorf("%w (stdout=%q stderr=%q)", err, out, stderr)
 	}
@@ -463,6 +470,21 @@ func (ctx *fortMatrixContext) fortHTTPReady() bool {
 		}
 	}
 	return true
+}
+
+func (ctx *fortMatrixContext) fortSupportsTokenFileFlag() bool {
+	if ctx.fortTokenFileFlagProbed {
+		return ctx.fortTokenFileFlagOK
+	}
+	ctx.fortTokenFileFlagProbed = true
+	stdout, stderr, err := runCommandWithOutput(ctx.t, ctx.fortRepo, nil, ctx.fortBinary, "-h")
+	combined := strings.TrimSpace(stdout + "\n" + stderr)
+	if err != nil && combined == "" {
+		ctx.fortTokenFileFlagOK = false
+		return false
+	}
+	ctx.fortTokenFileFlagOK = strings.Contains(combined, "--token-file")
+	return ctx.fortTokenFileFlagOK
 }
 
 func (ctx *fortMatrixContext) seedBaseVaultValues() {
@@ -825,37 +847,39 @@ func decryptFortCiphertext(envFileContents, keyringPath, repo, env, key string) 
 }
 
 type fortMatrixContext struct {
-	t                *testing.T
-	siRepo           string
-	fortRepo         string
-	siBinary         string
-	fortBinary       string
-	profiles         []string
-	network          string
-	fortHost         string
-	fortHostURL      string
-	fortContainerURL string
-	fortContainer    string
-	fortImageTag     string
-	fortPort         int
-	stateDir         string
-	safeRoot         string
-	keyringFile      string
-	stateFile        string
-	jwtSigningKey    string
-	seedFile         string
-	seedWorkspace    string
-	binDir           string
-	tmpRoot          string
-	profileTestHome  string
-	adminToken       string
-	uid              int
-	gid              int
-	hostUID          string
-	hostGID          string
-	cleanupFns       []func()
-	imageBuilt       bool
-	networkCreated   bool
+	t                       *testing.T
+	siRepo                  string
+	fortRepo                string
+	siBinary                string
+	fortBinary              string
+	profiles                []string
+	network                 string
+	fortHost                string
+	fortHostURL             string
+	fortContainerURL        string
+	fortContainer           string
+	fortImageTag            string
+	fortPort                int
+	stateDir                string
+	safeRoot                string
+	keyringFile             string
+	stateFile               string
+	jwtSigningKey           string
+	seedFile                string
+	seedWorkspace           string
+	binDir                  string
+	tmpRoot                 string
+	profileTestHome         string
+	adminToken              string
+	uid                     int
+	gid                     int
+	hostUID                 string
+	hostGID                 string
+	cleanupFns              []func()
+	imageBuilt              bool
+	networkCreated          bool
+	fortTokenFileFlagProbed bool
+	fortTokenFileFlagOK     bool
 }
 
 func isExistingDir(path string) bool {
