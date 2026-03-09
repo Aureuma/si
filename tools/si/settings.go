@@ -800,38 +800,6 @@ func settingsHomeDir() (string, error) {
 	return home, nil
 }
 
-func hasSIStateInHome(home string) bool {
-	home = strings.TrimSpace(home)
-	if home == "" {
-		return false
-	}
-	candidates := []string{
-		filepath.Join(home, ".si", "settings.toml"),
-		filepath.Join(home, ".si", "vault", "keys", "age.key"),
-		filepath.Join(home, ".si", "vault", "trust.json"),
-	}
-	for _, module := range settingsModuleNames() {
-		if module == settingsModuleCore {
-			continue
-		}
-		moduleFile := "settings.toml"
-		if module == settingsModuleSurf || module == settingsModuleRemoteControl {
-			moduleFile = "si.settings.toml"
-		}
-		candidates = append(candidates, filepath.Join(home, ".si", module, moduleFile))
-	}
-	for _, path := range candidates {
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
-		}
-		if !info.IsDir() {
-			return true
-		}
-	}
-	return false
-}
-
 func homeDirByUID(uid int) (string, error) {
 	entry, err := user.LookupId(strconv.Itoa(uid))
 	if err != nil {

@@ -11,19 +11,18 @@ import (
 )
 
 type Runtime struct {
-	AgentName         string
-	LogRoot           string
-	LockRoot          string
-	RetentionDays     int
-	RunID             string
-	RunDir            string
-	LogFile           string
-	LogJSONFile       string
-	SummaryFile       string
-	MetaFile          string
-	LockDir           string
-	GithubOutputPath  string
-	statusBeforeWrite bool
+	AgentName        string
+	LogRoot          string
+	LockRoot         string
+	RetentionDays    int
+	RunID            string
+	RunDir           string
+	LogFile          string
+	LogJSONFile      string
+	SummaryFile      string
+	MetaFile         string
+	LockDir          string
+	GithubOutputPath string
 }
 
 func New(agentName string) (*Runtime, error) {

@@ -53,12 +53,6 @@ func (s *sunObjectStore) get(kind string, name string) ([]byte, bool) {
 	return out, true
 }
 
-func (s *sunObjectStore) putCount() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.putCalls
-}
-
 func cloneAnyMap(in map[string]any) map[string]any {
 	if len(in) == 0 {
 		return nil
