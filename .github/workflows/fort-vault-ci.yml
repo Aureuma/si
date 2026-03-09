@@ -62,6 +62,9 @@ jobs:
         run: |
           go test ./tools/si -run 'Test(Fort|ResolveFort|PrepareFortRuntimeAuth|EnsureSIVault|ResolveSIVaultTarget|EncryptDotenvDoc|AnalyzeDotenvDecryptability|EnsureSIVaultPublicKeyHeader)' -count=1
 
+      - name: Build SI local image for spawn integration
+        run: docker build -t aureuma/si:local -f tools/si-image/Dockerfile .
+
       - name: SI↔Fort spawn matrix integration
         env:
           SI_REPO: ${{ github.workspace }}
