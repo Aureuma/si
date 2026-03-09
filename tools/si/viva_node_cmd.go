@@ -414,7 +414,7 @@ func cmdVivaNodeDoctor(args []string) {
 		fatal(errors.New("usage: si viva node doctor [--node <name>] [--json]"))
 	}
 	settings := loadSettingsOrDefault()
-	keys := []string{}
+	var keys []string
 	if strings.TrimSpace(*node) != "" {
 		keys = []string{strings.ToLower(strings.TrimSpace(*node))}
 	} else {

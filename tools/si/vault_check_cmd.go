@@ -29,7 +29,7 @@ func cmdVaultCheck(args []string) {
 		return
 	}
 
-	paths := []string{}
+	var paths []string
 	var err error
 	switch {
 	case *staged:
