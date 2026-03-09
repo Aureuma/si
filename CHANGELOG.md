@@ -11,15 +11,29 @@ All notable changes to this project will be documented in this file.
 - Note: Entries before v0.39.1 reference the legacy `si codex ...` namespace.
 
 ## [Unreleased]
+
+## [v0.52.0] - 2026-03-09
+### Added
+- Added `fort-vault-ci` workflow preflight checks for required Fort cross-repo credentials and repository access before integration execution.
+- Added CI build of `aureuma/si:local` before SI↔Fort spawn-matrix integration tests to satisfy container image runtime dependencies.
+
 ### Changed
 - Changed SI Vault backend resolution to strict Fort-only mode (`vault.sync_backend` / `SI_VAULT_SYNC_BACKEND` accept only `fort`).
 - Changed vault credential hydration and secret-read helpers to resolve from SI Vault dotenv files instead of legacy Sun KV compatibility paths.
+- Changed SI↔Fort spawn-matrix integration harness to be Fort-CLI-version-compatible across auth flag models (`--token-file` and legacy `--token`).
+- Changed Fort matrix integration readiness checks to probe `/v1/health` + `/v1/ready` directly and surface container logs on startup failures.
 
 ### Removed
 - Removed legacy SI vault Sun-compatibility code paths (`vault_sun_backend.go`, `vault_sun_kv.go`) from the vault secret path.
 
 ### Fixed
 - Updated vault-focused tests and docs to align with Fort-only SI Vault architecture and reject legacy backend aliases.
+- Fixed Fort bootstrap-agent setup during `si spawn`/`si respawn` to auto-refresh expired bootstrap admin tokens instead of failing with 401.
+- Fixed host installer smoke CI failures on macOS by explicitly setting up Go before running installer smoke scripts.
+- Fixed Fort builds invoked from SI to run with `GOWORK=off`, preventing workspace contamination from parent `go.work` state.
+
+### Security
+- Hardened Fort CI checkout/auth flow to require explicit secret-backed cross-repo access (`GH_PAT_AUREUMA`) with fail-fast validation.
 
 ## [v0.51.0] - 2026-03-01
 ### Added
