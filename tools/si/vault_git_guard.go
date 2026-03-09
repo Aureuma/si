@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -14,47 +13,6 @@ type vaultGitIndexFlags struct {
 	Tracked         bool
 	AssumeUnchanged bool
 	SkipWorktree    bool
-}
-
-func vaultWriteDotenvFileAtomic(path string, contents []byte) error {
-	if shouldEnforceVaultGitIndexGuard() {
-		if err := vaultRefuseHiddenGitIndexEdits(path); err != nil {
-			return err
-		}
-	}
-	return vault.WriteDotenvFileAtomic(path, contents)
-}
-
-func shouldEnforceVaultGitIndexGuard() bool {
-	settings := loadVaultSettingsOrFail()
-	return shouldEnforceVaultRepoScope(settings)
-}
-
-func vaultRefuseHiddenGitIndexEdits(path string) error {
-	repoRoot, relPath, flags, err := vaultGitIndexFlagsForPath(path)
-	if err != nil {
-		return err
-	}
-	if !flags.Tracked || (!flags.SkipWorktree && !flags.AssumeUnchanged) {
-		return nil
-	}
-
-	modes := make([]string, 0, 2)
-	fixes := make([]string, 0, 2)
-	if flags.SkipWorktree {
-		modes = append(modes, "skip-worktree")
-		fixes = append(fixes, fmt.Sprintf("git -C %s update-index --no-skip-worktree -- %s", shellSingleQuote(repoRoot), shellSingleQuote(relPath)))
-	}
-	if flags.AssumeUnchanged {
-		modes = append(modes, "assume-unchanged")
-		fixes = append(fixes, fmt.Sprintf("git -C %s update-index --no-assume-unchanged -- %s", shellSingleQuote(repoRoot), shellSingleQuote(relPath)))
-	}
-	return fmt.Errorf(
-		"refusing to write %s: git index flag(s) hide file updates (%s); clear flag(s) first:\n  %s",
-		filepath.Clean(path),
-		strings.Join(modes, ", "),
-		strings.Join(fixes, "\n  "),
-	)
 }
 
 func vaultGitIndexFlagsForPath(path string) (string, string, vaultGitIndexFlags, error) {

@@ -27,37 +27,6 @@ type vaultSyncBackendResolution struct {
 	Source string
 }
 
-func vaultRefuseNonInteractiveOSKeyring(keyCfg vault.KeyConfig) error {
-	// In non-interactive environments (CI/VPS), OS keychains can block on prompts.
-	// Prefer file backend for deterministic behavior.
-	if isInteractiveTerminal() {
-		return nil
-	}
-	if vault.NormalizeKeyBackend(keyCfg.Backend) == "keyring" {
-		return fmt.Errorf("non-interactive: refusing to access OS keychain/keyring (use vault.key_backend=\"file\")")
-	}
-	return nil
-}
-
-func vaultKeyConfigFromSettings(settings Settings) vault.KeyConfig {
-	backend := strings.TrimSpace(os.Getenv("SI_VAULT_KEY_BACKEND"))
-	if backend == "" {
-		backend = settings.Vault.KeyBackend
-	}
-	backend = vault.NormalizeKeyBackend(backend)
-	keyFile := strings.TrimSpace(os.Getenv("SI_VAULT_KEY_FILE"))
-	if keyFile == "" {
-		keyFile = settings.Vault.KeyFile
-	}
-	return vault.KeyConfig{Backend: backend, KeyFile: keyFile}
-}
-
-func vaultRecipientsForWrite(settings Settings, doc vault.DotenvFile, source string) ([]string, error) {
-	_ = settings
-	_ = source
-	return vault.ParseRecipientsFromDotenv(doc), nil
-}
-
 func normalizeVaultSyncBackend(raw string) string {
 	if strings.EqualFold(strings.TrimSpace(raw), vaultSyncBackendFort) {
 		return vaultSyncBackendFort
@@ -87,14 +56,6 @@ func vaultTrustStorePath(settings Settings) string {
 	path := strings.TrimSpace(os.Getenv("SI_VAULT_TRUST_STORE"))
 	if path == "" {
 		path = settings.Vault.TrustStore
-	}
-	return path
-}
-
-func vaultAuditLogPath(settings Settings) string {
-	path := strings.TrimSpace(os.Getenv("SI_VAULT_AUDIT_LOG"))
-	if path == "" {
-		path = settings.Vault.AuditLog
 	}
 	return path
 }
@@ -163,10 +124,6 @@ func vaultResolveTarget(settings Settings, fileFlag string, allowMissingFile boo
 	return target, nil
 }
 
-func vaultResolveTargetStatus(settings Settings, fileFlag string) (vault.Target, error) {
-	return vaultResolveTarget(settings, fileFlag, true)
-}
-
 // vaultContainerEnvFileMountPath resolves the host vault env file path to bind
 // into containers. Returns empty when unresolved or missing.
 func vaultContainerEnvFileMountPath(settings Settings) string {
@@ -211,32 +168,6 @@ func vaultRequireTrusted(settings Settings, target vault.Target, doc vault.Doten
 		return "", fmt.Errorf("vault trust fingerprint changed for %s: run `si vault trust status --file %s` and `si vault trust accept --file %s`", filepath.Clean(target.File), shellSingleQuote(filepath.Clean(target.File)), shellSingleQuote(filepath.Clean(target.File)))
 	}
 	return fp, nil
-}
-
-func vaultAuditSink(settings Settings) vault.AuditSink {
-	return vault.NewJSONLAudit(vaultAuditLogPath(settings))
-}
-
-func vaultAuditEvent(settings Settings, target vault.Target, typ string, fields map[string]any) {
-	sink := vaultAuditSink(settings)
-	if sink == nil {
-		return
-	}
-	event := map[string]any{
-		"type":     strings.TrimSpace(typ),
-		"user":     strings.TrimSpace(os.Getenv("USER")),
-		"uid":      os.Getuid(),
-		"gid":      os.Getgid(),
-		"repoRoot": strings.TrimSpace(target.RepoRoot),
-		"file":     strings.TrimSpace(target.File),
-	}
-	for k, v := range fields {
-		if strings.TrimSpace(k) == "" {
-			continue
-		}
-		event[k] = v
-	}
-	sink.Log(event)
 }
 
 func warnIfDeprecatedSIVaultIdentityEnvSet() {

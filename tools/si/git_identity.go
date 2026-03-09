@@ -96,18 +96,6 @@ func homeWritable(ctx context.Context, client *shared.Client, containerID string
 	return true
 }
 
-func waitForWritableHome(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions) bool {
-	const attempts = 10
-	const delay = 200 * time.Millisecond
-	for i := 0; i < attempts; i++ {
-		if homeWritable(ctx, client, containerID, opts) {
-			return true
-		}
-		time.Sleep(delay)
-	}
-	return false
-}
-
 func waitForGitIdentityWritable(ctx context.Context, client *shared.Client, containerID string, opts shared.ExecOptions, user, home string) bool {
 	const attempts = 12
 	const delay = 250 * time.Millisecond
