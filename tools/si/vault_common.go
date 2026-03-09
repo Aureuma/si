@@ -14,6 +14,12 @@ const (
 	vaultSyncBackendFort = "fort"
 )
 
+var deprecatedSIVaultIdentityEnvVars = []string{
+	"SI_VAULT_IDENTITY",
+	"SI_VAULT_PRIVATE_KEY",
+	"SI_VAULT_IDENTITY_FILE",
+}
+
 var windowsDrivePrefixPattern = regexp.MustCompile(`^[a-zA-Z]:[\\/]`)
 
 type vaultSyncBackendResolution struct {
@@ -23,17 +29,12 @@ type vaultSyncBackendResolution struct {
 
 func vaultRefuseNonInteractiveOSKeyring(keyCfg vault.KeyConfig) error {
 	// In non-interactive environments (CI/VPS), OS keychains can block on prompts.
-	// Prefer SI_VAULT_IDENTITY(_FILE) or file backend for deterministic behavior.
+	// Prefer file backend for deterministic behavior.
 	if isInteractiveTerminal() {
 		return nil
 	}
-	if strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY")) != "" ||
-		strings.TrimSpace(os.Getenv("SI_VAULT_PRIVATE_KEY")) != "" ||
-		strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY_FILE")) != "" {
-		return nil
-	}
 	if vault.NormalizeKeyBackend(keyCfg.Backend) == "keyring" {
-		return fmt.Errorf("non-interactive: refusing to access OS keychain/keyring (set SI_VAULT_IDENTITY/SI_VAULT_IDENTITY_FILE or use vault.key_backend=\"file\")")
+		return fmt.Errorf("non-interactive: refusing to access OS keychain/keyring (use vault.key_backend=\"file\")")
 	}
 	return nil
 }
@@ -236,6 +237,15 @@ func vaultAuditEvent(settings Settings, target vault.Target, typ string, fields 
 		event[k] = v
 	}
 	sink.Log(event)
+}
+
+func warnIfDeprecatedSIVaultIdentityEnvSet() {
+	for _, key := range deprecatedSIVaultIdentityEnvVars {
+		if strings.TrimSpace(os.Getenv(key)) == "" {
+			continue
+		}
+		warnf("%s is deprecated and ignored; configure vault identity via settings (vault.key_backend/vault.key_file)", key)
+	}
 }
 
 func vaultValidateImplicitTargetRepoScope(target vault.Target) error {

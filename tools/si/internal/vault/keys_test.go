@@ -62,3 +62,29 @@ func TestLoadIdentityFromFileOverrideRequiresTruthyValue(t *testing.T) {
 		t.Fatalf("expected truthy override to allow load: %v", err)
 	}
 }
+
+func TestLoadIdentityIgnoresLegacyIdentityEnvVars(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "age.key")
+	id, err := GenerateIdentity()
+	if err != nil {
+		t.Fatalf("GenerateIdentity: %v", err)
+	}
+	if err := saveIdentityToFile(path, id.String()); err != nil {
+		t.Fatalf("saveIdentityToFile: %v", err)
+	}
+	t.Setenv("SI_VAULT_IDENTITY", "not-a-valid-age-key")
+	t.Setenv("SI_VAULT_PRIVATE_KEY", "not-a-valid-age-key")
+	t.Setenv("SI_VAULT_IDENTITY_FILE", filepath.Join(dir, "missing.key"))
+
+	info, err := LoadIdentity(KeyConfig{Backend: "file", KeyFile: path})
+	if err != nil {
+		t.Fatalf("LoadIdentity(file): %v", err)
+	}
+	if info == nil || info.Identity == nil {
+		t.Fatalf("expected identity info from file backend")
+	}
+	if info.Source != "file" {
+		t.Fatalf("identity source=%q want file", info.Source)
+	}
+}

@@ -42,7 +42,7 @@ func TestResolveFortBootstrapConfigReadsHostFromSettings(t *testing.T) {
 	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "")
 	t.Setenv("SI_FORT_DISCOVER_DOCKER", "")
 
@@ -64,7 +64,7 @@ func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "https://fort.example.test")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.example.test")
 
@@ -77,13 +77,33 @@ func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 	}
 }
 
+func TestResolveFortBootstrapConfigReadsTokenFromLegacyTokenFileEnv(t *testing.T) {
+	tmp := t.TempDir()
+	tokenFile := filepath.Join(tmp, "admin.token")
+	if err := os.WriteFile(tokenFile, []byte("legacy-file-token"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", "")
+	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_HOST", "https://fort.example.test")
+	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.example.test")
+
+	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
+	if err != nil {
+		t.Fatalf("resolveFortBootstrapConfig: %v", err)
+	}
+	if cfg.BearerToken != "legacy-file-token" {
+		t.Fatalf("unexpected bearer token: %q", cfg.BearerToken)
+	}
+}
+
 func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T) {
 	tmp := t.TempDir()
 	tokenFile := filepath.Join(tmp, "admin.token")
 	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o644); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "https://fort.example.test")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.example.test")
 
@@ -98,7 +118,7 @@ func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T
 	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "")
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "")
@@ -114,7 +134,7 @@ func TestResolveFortBootstrapConfigAllowsInsecureWhenExplicitlyEnabled(t *testin
 	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "http://host.docker.internal:8088")
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")

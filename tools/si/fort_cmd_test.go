@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -21,6 +22,40 @@ func TestFortArgsContainCredentialFlags(t *testing.T) {
 		if got := fortArgsContainCredentialFlags(tc.args); got != tc.want {
 			t.Fatalf("fortArgsContainCredentialFlags(%v)=%v want=%v", tc.args, got, tc.want)
 		}
+	}
+}
+
+func TestFortRejectDeprecatedTokenValueEnv(t *testing.T) {
+	t.Setenv("FORT_TOKEN", "legacy-token")
+	if err := fortRejectDeprecatedTokenValueEnv(); err == nil {
+		t.Fatalf("expected FORT_TOKEN to be rejected")
+	}
+
+	t.Setenv("FORT_TOKEN", "")
+	t.Setenv("FORT_REFRESH_TOKEN", "legacy-refresh-token")
+	if err := fortRejectDeprecatedTokenValueEnv(); err == nil {
+		t.Fatalf("expected FORT_REFRESH_TOKEN to be rejected")
+	}
+}
+
+func TestFortSanitizedEnvRemovesTokenEntries(t *testing.T) {
+	out := fortSanitizedEnv([]string{
+		"PATH=/usr/bin",
+		"FORT_TOKEN=legacy",
+		"FORT_REFRESH_TOKEN=legacy-refresh",
+		"FORT_BOOTSTRAP_TOKEN_FILE=/tmp/bootstrap.token",
+		"FORT_TOKEN_FILE=/tmp/legacy-admin.token",
+		"FORT_TOKEN_PATH=/tmp/access.token",
+	})
+	joined := strings.Join(out, "\n")
+	if strings.Contains(joined, "FORT_TOKEN=") || strings.Contains(joined, "FORT_REFRESH_TOKEN=") {
+		t.Fatalf("token values leaked in sanitized env: %q", joined)
+	}
+	if strings.Contains(joined, "FORT_BOOTSTRAP_TOKEN_FILE=") || strings.Contains(joined, "FORT_TOKEN_FILE=") {
+		t.Fatalf("token file vars leaked in sanitized env: %q", joined)
+	}
+	if !strings.Contains(joined, "PATH=/usr/bin") || !strings.Contains(joined, "FORT_TOKEN_PATH=/tmp/access.token") {
+		t.Fatalf("unexpected sanitized env output: %q", joined)
 	}
 }
 

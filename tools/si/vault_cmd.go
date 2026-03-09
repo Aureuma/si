@@ -32,6 +32,7 @@ var vaultDockerActions = []subcommandAction{
 }
 
 func cmdVault(args []string) {
+	warnIfDeprecatedSIVaultIdentityEnvSet()
 	resolved, showUsage, ok := resolveSubcommandDispatchArgs(args, isInteractiveTerminal(), selectVaultAction)
 	if showUsage {
 		printUsage(vaultUsageText)

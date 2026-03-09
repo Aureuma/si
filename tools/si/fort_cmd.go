@@ -22,10 +22,10 @@ wrapper flags:
   --json         Print wrapper metadata as JSON on wrapper failure
 
 token/auth model:
-  - Host bootstrap admin auth resolves from FORT_TOKEN_FILE.
+  - Host bootstrap admin auth resolves from FORT_BOOTSTRAP_TOKEN_FILE.
   - Runtime container auth uses file paths FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH.
   - This wrapper auto-refreshes runtime sessions when possible and uses token-file flow.
-  - FORT_TOKEN and FORT_REFRESH_TOKEN are sanitized from child process environment.
+  - FORT_TOKEN and FORT_REFRESH_TOKEN are deprecated/disallowed and sanitized from child process environment.
 
 examples:
   si fort doctor
@@ -54,9 +54,22 @@ func fortSanitizedEnv(env []string) []string {
 		if strings.HasPrefix(entry, "FORT_TOKEN=") || strings.HasPrefix(entry, "FORT_REFRESH_TOKEN=") {
 			continue
 		}
+		if strings.HasPrefix(entry, "FORT_BOOTSTRAP_TOKEN_FILE=") || strings.HasPrefix(entry, "FORT_TOKEN_FILE=") {
+			continue
+		}
 		out = append(out, entry)
 	}
 	return out
+}
+
+func fortRejectDeprecatedTokenValueEnv() error {
+	if strings.TrimSpace(os.Getenv("FORT_TOKEN")) != "" {
+		return errors.New("FORT_TOKEN is deprecated and disallowed; use file-based auth (FORT_TOKEN_PATH or FORT_BOOTSTRAP_TOKEN_FILE)")
+	}
+	if strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN")) != "" {
+		return errors.New("FORT_REFRESH_TOKEN is deprecated and disallowed; use file-based auth (FORT_REFRESH_TOKEN_PATH)")
+	}
+	return nil
 }
 
 func fortArgsContainCredentialFlags(args []string) bool {
@@ -86,6 +99,9 @@ func cmdFort(args []string) {
 		cmdFortConfig(args[1:])
 		return
 	}
+	if err := fortRejectDeprecatedTokenValueEnv(); err != nil {
+		fatal(err)
+	}
 	fs := flag.NewFlagSet("fort", flag.ContinueOnError)
 	fs.SetOutput(ioDiscardWriter{})
 	repo := fs.String("repo", "", "fort repository path")
@@ -106,7 +122,7 @@ func cmdFort(args []string) {
 		return
 	}
 	if fortArgsContainCredentialFlags(rest) {
-		fatal(errors.New("credential flags are not accepted in `si fort`; use file-based auth paths (FORT_TOKEN_FILE/FORT_TOKEN_PATH)"))
+		fatal(errors.New("credential flags are not accepted in `si fort`; use file-based auth paths (FORT_BOOTSTRAP_TOKEN_FILE/FORT_TOKEN_PATH)"))
 	}
 	settings := loadSettingsOrDefault()
 

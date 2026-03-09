@@ -34,7 +34,7 @@ func DecryptEnv(doc DotenvFile, identity *age.X25519Identity) (DecryptResult, er
 		}
 		if IsEncryptedValueV1(val) {
 			if identity == nil {
-				return DecryptResult{}, fmt.Errorf("decrypt requires a vault identity (set SI_VAULT_IDENTITY or configure vault.key_backend)")
+				return DecryptResult{}, fmt.Errorf("decrypt requires a vault identity (configure vault.key_backend/vault.key_file)")
 			}
 			plain, err := DecryptStringV1(val, identity)
 			if err != nil {
@@ -97,7 +97,7 @@ func EncryptDotenvValuesWithRecipients(doc *DotenvFile, recipients []string, ide
 				continue
 			}
 			if identity == nil {
-				return EncryptResult{}, fmt.Errorf("reencrypt requires a vault identity (set SI_VAULT_IDENTITY or configure vault.key_backend)")
+				return EncryptResult{}, fmt.Errorf("reencrypt requires a vault identity (configure vault.key_backend/vault.key_file)")
 			}
 			plain, err := DecryptStringV1(val, identity)
 			if err != nil {
@@ -193,7 +193,7 @@ func DecryptDotenvKeys(doc *DotenvFile, identity *age.X25519Identity, keys []str
 			continue
 		}
 		if identity == nil {
-			return DecryptDotenvResult{}, fmt.Errorf("decrypt requires a vault identity (set SI_VAULT_IDENTITY or configure vault.key_backend)")
+			return DecryptDotenvResult{}, fmt.Errorf("decrypt requires a vault identity (configure vault.key_backend/vault.key_file)")
 		}
 		plain, err := DecryptStringV1(val, identity)
 		if err != nil {

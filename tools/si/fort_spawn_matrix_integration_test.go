@@ -452,9 +452,9 @@ func (ctx *fortMatrixContext) spawnProfile(profile string) {
 		ctx.t.Fatalf("write bootstrap token: %v", err)
 	}
 	env := ctx.commonEnvMap(map[string]string{
-		"FORT_HOST":              ctx.fortHost,
-		"FORT_TOKEN_FILE":        tokenPath,
-		"SI_FORT_CONTAINER_HOST": ctx.fortContainerURL,
+		"FORT_HOST":                 ctx.fortHost,
+		"FORT_BOOTSTRAP_TOKEN_FILE": tokenPath,
+		"SI_FORT_CONTAINER_HOST":    ctx.fortContainerURL,
 	})
 	out, stderr, err := runCommandWithOutput(ctx.t, ctx.siRepo, env, ctx.siBinary, "spawn", profile, "--profile", profile, "--network", ctx.network, "--workspace", ctx.siRepo, "--detach")
 	if err != nil {
@@ -471,9 +471,9 @@ func (ctx *fortMatrixContext) respawnProfile(profile string) {
 		ctx.t.Fatalf("write bootstrap token: %v", err)
 	}
 	env := ctx.commonEnvMap(map[string]string{
-		"FORT_HOST":              ctx.fortHost,
-		"FORT_TOKEN_FILE":        tokenPath,
-		"SI_FORT_CONTAINER_HOST": ctx.fortContainerURL,
+		"FORT_HOST":                 ctx.fortHost,
+		"FORT_BOOTSTRAP_TOKEN_FILE": tokenPath,
+		"SI_FORT_CONTAINER_HOST":    ctx.fortContainerURL,
 	})
 	out, stderr, err := runCommandWithOutput(ctx.t, ctx.siRepo, env, ctx.siBinary, "respawn", profile, "--profile", profile, "--network", ctx.network, "--workspace", ctx.siRepo, "--volumes")
 	if err != nil {

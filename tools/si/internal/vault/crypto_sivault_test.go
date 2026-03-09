@@ -2,7 +2,7 @@ package vault
 
 import (
 	"encoding/base64"
-	"os"
+	"strings"
 	"testing"
 
 	ecies "github.com/ecies/go/v2"
@@ -72,7 +72,7 @@ func TestDecryptSIVaultValueAcceptsLegacyEciesEmptyCiphertext(t *testing.T) {
 	}
 }
 
-func TestDecryptSIVaultValueDecryptsLegacyAgeCiphertextViaEnvIdentity(t *testing.T) {
+func TestDecryptSIVaultValueLegacyAgeCiphertextIsRejected(t *testing.T) {
 	identity, err := GenerateIdentity()
 	if err != nil {
 		t.Fatalf("GenerateIdentity: %v", err)
@@ -81,17 +81,16 @@ func TestDecryptSIVaultValueDecryptsLegacyAgeCiphertextViaEnvIdentity(t *testing
 	if err != nil {
 		t.Fatalf("EncryptStringV1: %v", err)
 	}
-	t.Setenv("SI_VAULT_IDENTITY", identity.String())
-	plain, err := DecryptSIVaultValue(cipher, nil)
-	if err != nil {
-		t.Fatalf("DecryptSIVaultValue(legacy age): %v", err)
+	_, err = DecryptSIVaultValue(cipher, nil)
+	if err == nil {
+		t.Fatalf("expected legacy age ciphertext rejection")
 	}
-	if plain != "legacy-secret" {
-		t.Fatalf("plain=%q want legacy-secret", plain)
+	if !strings.Contains(strings.ToLower(err.Error()), "no longer supported") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestDecryptSIVaultValueLegacyAgeWithoutIdentityFails(t *testing.T) {
+func TestDecryptSIVaultValueLegacyAgeWithoutIdentityStillRejected(t *testing.T) {
 	identity, err := GenerateIdentity()
 	if err != nil {
 		t.Fatalf("GenerateIdentity: %v", err)
@@ -100,8 +99,11 @@ func TestDecryptSIVaultValueLegacyAgeWithoutIdentityFails(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncryptStringV1: %v", err)
 	}
-	_ = os.Unsetenv("SI_VAULT_IDENTITY")
-	if _, err := DecryptSIVaultValue(cipher, nil); err == nil {
-		t.Fatalf("expected missing identity error")
+	_, err = DecryptSIVaultValue(cipher, nil)
+	if err == nil {
+		t.Fatalf("expected legacy age ciphertext rejection")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "no longer supported") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

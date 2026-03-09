@@ -7,7 +7,7 @@ Design goals:
 - encrypted values committed to `safe`
 - deterministic key names:
   - `SI_VAULT_PUBLIC_KEY` (stored in `.env` file)
-  - `SI_VAULT_PRIVATE_KEY` (resolved from local keyring; env override is compatibility-only)
+  - private key material resolved from local SI vault keyring only (no env key material overrides)
 
 Architecture boundary:
 - SI Vault cryptography is local and file/keyring based.
@@ -27,14 +27,15 @@ Architecture boundary:
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
 - Host bootstrap/admin auth for `si spawn` agent provisioning resolves from:
-  - `FORT_TOKEN_FILE` (default: `~/.si/fort/bootstrap/admin.token`)
+  - `FORT_BOOTSTRAP_TOKEN_FILE` (default: `~/.si/fort/bootstrap/admin.token`)
 - Runtime container sessions use:
   - `FORT_TOKEN_PATH` (short-lived access token file)
   - `FORT_REFRESH_TOKEN_PATH` (rotating refresh token file)
 - Wrapper behavior:
   - auto-refreshes runtime token sessions when refresh file and hosted endpoint are available
   - uses token-file auth flow (no bearer token argv injection)
-  - strips `FORT_TOKEN` and `FORT_REFRESH_TOKEN` from child environment before exec if present
+  - rejects deprecated token-value env vars (`FORT_TOKEN`, `FORT_REFRESH_TOKEN`)
+  - strips legacy token env entries from child process env if present
 - For flags that belong to native `fort` global options, pass through after `--`:
   - `si fort -- --host https://fort.aureuma.ai doctor`
 
@@ -49,7 +50,7 @@ Architecture boundary:
   - override: `SI_VAULT_KEYRING_FILE`
 - This SI Vault keyring is a local JSON state file, not the OS keychain/secret-service store.
 - A single canonical keypair is enforced across all keyring scopes to prevent key sprawl.
-- Prefer keyring/file material over env-injected private keys.
+- Legacy identity/private-key env variables are ignored with warnings.
 
 ## Quickstart
 

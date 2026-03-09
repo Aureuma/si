@@ -20,7 +20,7 @@ const usageText = `Import plaintext .env files into si vault (native SI format).
 Defaults:
   --src .
   --section default
-  --identity-file $SI_VAULT_IDENTITY_FILE or ~/.si/vault/keys/age.key
+  --identity-file ~/.si/vault/keys/age.key
 
 Examples:
   tools/vault/import-dotenv-to-si-vault.sh --src .
@@ -69,7 +69,7 @@ func run(args []string, stdout, stderr *os.File) int {
 	}
 	if _, err := os.Stat(cfg.IdentityFile); err != nil {
 		_, _ = fmt.Fprintf(stderr, "vault identity file not found: %s\n", cfg.IdentityFile)
-		_, _ = fmt.Fprintln(stderr, "hint: export SI_VAULT_IDENTITY_FILE=... or pass --identity-file")
+		_, _ = fmt.Fprintln(stderr, "hint: pass --identity-file")
 		return 1
 	}
 
@@ -117,9 +117,6 @@ func run(args []string, stdout, stderr *os.File) int {
 func parseArgs(args []string) (config, bool, error) {
 	home, _ := os.UserHomeDir()
 	defaultIdentity := filepath.Join(home, ".si", "vault", "keys", "age.key")
-	if envIdentity := strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY_FILE")); envIdentity != "" {
-		defaultIdentity = envIdentity
-	}
 
 	fs := flag.NewFlagSet("import-dotenv-to-si-vault", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -236,7 +233,10 @@ func setVaultValue(identityFile, targetEnv, section, key, value string) error {
 	cmd.Stdout = ioDiscard{}
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	cmd.Env = append(os.Environ(), "SI_VAULT_IDENTITY_FILE="+identityFile)
+	cmd.Env = append(os.Environ(),
+		"SI_VAULT_KEY_BACKEND=file",
+		"SI_VAULT_KEY_FILE="+identityFile,
+	)
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
