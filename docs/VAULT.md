@@ -27,15 +27,14 @@ Architecture boundary:
 
 - `si fort` wraps the native `fort` binary and keeps runtime auth file-based.
 - Host bootstrap/admin auth for `si spawn` agent provisioning resolves from:
-  - `FORT_TOKEN` (explicit override), or
   - `FORT_TOKEN_FILE` (default: `~/.si/fort/bootstrap/admin.token`)
 - Runtime container sessions use:
   - `FORT_TOKEN_PATH` (short-lived access token file)
   - `FORT_REFRESH_TOKEN_PATH` (rotating refresh token file)
 - Wrapper behavior:
   - auto-refreshes runtime token sessions when refresh file and hosted endpoint are available
-  - injects `--token` into `fort` process args only when needed
-  - strips `FORT_TOKEN` and `FORT_REFRESH_TOKEN` from child environment before exec
+  - uses token-file auth flow (no bearer token argv injection)
+  - strips `FORT_TOKEN` and `FORT_REFRESH_TOKEN` from child environment before exec if present
 - For flags that belong to native `fort` global options, pass through after `--`:
   - `si fort -- --host https://fort.aureuma.ai doctor`
 

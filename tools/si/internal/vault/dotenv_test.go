@@ -272,6 +272,13 @@ func TestWriteDotenvFileAtomicCreatesMissingDirectories(t *testing.T) {
 	if string(got) != "A=1\n" {
 		t.Fatalf("got %q", string(got))
 	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if mode := info.Mode() & os.ModePerm; mode != 0o600 {
+		t.Fatalf("mode=%#o want %#o", mode, os.FileMode(0o600))
+	}
 }
 
 func TestWriteDotenvFileAtomicRejectsSymlinkTarget(t *testing.T) {

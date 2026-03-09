@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 )
@@ -36,7 +35,14 @@ func TestResolveFortBootstrapConfigReadsHostFromSettings(t *testing.T) {
 	t.Setenv("FORT_HOST", "")
 	t.Setenv("SI_FORT_HOST", "")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "")
-	t.Setenv("FORT_TOKEN", "admin-token")
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir token dir: %v", err)
+	}
+	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	t.Setenv("FORT_TOKEN_FILE", tokenFile)
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "")
 	t.Setenv("SI_FORT_DISCOVER_DOCKER", "")
 
@@ -58,7 +64,6 @@ func TestResolveFortBootstrapConfigReadsTokenFromFile(t *testing.T) {
 	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o600); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN", "")
 	t.Setenv("FORT_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "https://fort.example.test")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.example.test")
@@ -78,7 +83,6 @@ func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T)
 	if err := os.WriteFile(tokenFile, []byte("file-token"), 0o644); err != nil {
 		t.Fatalf("write token file: %v", err)
 	}
-	t.Setenv("FORT_TOKEN", "")
 	t.Setenv("FORT_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "https://fort.example.test")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "https://fort.example.test")
@@ -89,9 +93,14 @@ func TestResolveFortBootstrapConfigRejectsWeakTokenFilePermissions(t *testing.T)
 }
 
 func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T) {
+	tmp := t.TempDir()
+	tokenFile := filepath.Join(tmp, "admin.token")
+	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	t.Setenv("FORT_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "")
-	t.Setenv("FORT_TOKEN", "admin-token")
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "")
 
 	if _, err := resolveFortBootstrapConfig(context.Background(), nil, ""); err == nil {
@@ -100,9 +109,14 @@ func TestResolveFortBootstrapConfigRejectsInsecureFortHostByDefault(t *testing.T
 }
 
 func TestResolveFortBootstrapConfigAllowsInsecureWhenExplicitlyEnabled(t *testing.T) {
+	tmp := t.TempDir()
+	tokenFile := filepath.Join(tmp, "admin.token")
+	if err := os.WriteFile(tokenFile, []byte("admin-token"), 0o600); err != nil {
+		t.Fatalf("write token file: %v", err)
+	}
+	t.Setenv("FORT_TOKEN_FILE", tokenFile)
 	t.Setenv("FORT_HOST", "http://127.0.0.1:8088")
 	t.Setenv("SI_FORT_CONTAINER_HOST", "http://host.docker.internal:8088")
-	t.Setenv("FORT_TOKEN", "admin-token")
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
 
 	cfg, err := resolveFortBootstrapConfig(context.Background(), nil, "")
@@ -128,7 +142,6 @@ func TestPrepareFortRuntimeAuthRefresh(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
-	t.Setenv("FORT_TOKEN", "")
 	t.Setenv("FORT_TOKEN_PATH", "")
 	t.Setenv("FORT_REFRESH_TOKEN_PATH", "")
 
@@ -193,7 +206,6 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
-	t.Setenv("FORT_TOKEN", "")
 	t.Setenv("FORT_HOST", "http://127.0.0.1:1")
 
 	accessToken, err := prepareFortRuntimeAuth([]string{"auth", "session", "close"})
@@ -205,8 +217,7 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	}
 }
 
-func TestFortEnsureAgentAdminPolicySetsAdminWhenEmpty(t *testing.T) {
-	var putBindings []map[string]any
+func TestFortRequireAgentPolicyBindingsRejectsEmpty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
 			http.NotFound(w, r)
@@ -218,53 +229,22 @@ func TestFortEnsureAgentAdminPolicySetsAdminWhenEmpty(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			_, _ = w.Write([]byte(`{"bindings":[]}`))
-		case http.MethodPut:
-			var req struct {
-				Bindings []map[string]any `json:"bindings"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				t.Fatalf("decode policy put body: %v", err)
-			}
-			putBindings = req.Bindings
-			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
 	defer srv.Close()
 
-	err := fortEnsureAgentAdminPolicy(context.Background(), fortBootstrapConfig{
+	err := fortRequireAgentPolicyBindings(context.Background(), fortBootstrapConfig{
 		HostURL:     srv.URL,
 		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
-	if err != nil {
-		t.Fatalf("fortEnsureAgentAdminPolicy: %v", err)
-	}
-	if len(putBindings) != 1 {
-		t.Fatalf("expected one policy binding, got %d", len(putBindings))
-	}
-	binding := putBindings[0]
-	if got := strings.TrimSpace(binding["repo"].(string)); got != "*" {
-		t.Fatalf("unexpected binding repo: %q", got)
-	}
-	if got := strings.TrimSpace(binding["env"].(string)); got != "*" {
-		t.Fatalf("unexpected binding env: %q", got)
-	}
-	rawOps, ok := binding["ops"].([]any)
-	if !ok {
-		t.Fatalf("expected ops array, got %#v", binding["ops"])
-	}
-	ops := make([]string, 0, len(rawOps))
-	for _, item := range rawOps {
-		ops = append(ops, strings.TrimSpace(item.(string)))
-	}
-	if !slices.Equal(ops, fortDefaultAdminOps) {
-		t.Fatalf("unexpected default ops: %#v", ops)
+	if err == nil {
+		t.Fatalf("expected missing policy bindings error")
 	}
 }
 
-func TestFortEnsureAgentAdminPolicyOverwritesNonAdminBindings(t *testing.T) {
-	putCalled := false
+func TestFortRequireAgentPolicyBindingsAcceptsNonAdminPolicy(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
 			http.NotFound(w, r)
@@ -273,29 +253,22 @@ func TestFortEnsureAgentAdminPolicyOverwritesNonAdminBindings(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			_, _ = w.Write([]byte(`{"bindings":[{"repo":"safe","env":"dev","ops":["get"]}]}`))
-		case http.MethodPut:
-			putCalled = true
-			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
 	defer srv.Close()
 
-	err := fortEnsureAgentAdminPolicy(context.Background(), fortBootstrapConfig{
+	err := fortRequireAgentPolicyBindings(context.Background(), fortBootstrapConfig{
 		HostURL:     srv.URL,
 		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
 	if err != nil {
-		t.Fatalf("fortEnsureAgentAdminPolicy: %v", err)
-	}
-	if !putCalled {
-		t.Fatalf("expected policy put when bindings are not admin")
+		t.Fatalf("fortRequireAgentPolicyBindings: %v", err)
 	}
 }
 
-func TestFortEnsureAgentAdminPolicySkipsWhenAdminPresent(t *testing.T) {
-	putCalled := false
+func TestFortRequireAgentPolicyBindingsAcceptsAdminPolicy(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
 			http.NotFound(w, r)
@@ -304,24 +277,18 @@ func TestFortEnsureAgentAdminPolicySkipsWhenAdminPresent(t *testing.T) {
 		switch r.Method {
 		case http.MethodGet:
 			_, _ = w.Write([]byte(`{"bindings":[{"repo":"*","env":"*","ops":["*"]}]}`))
-		case http.MethodPut:
-			putCalled = true
-			_, _ = w.Write([]byte(`{"ok":true}`))
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
 	defer srv.Close()
 
-	err := fortEnsureAgentAdminPolicy(context.Background(), fortBootstrapConfig{
+	err := fortRequireAgentPolicyBindings(context.Background(), fortBootstrapConfig{
 		HostURL:     srv.URL,
 		BearerToken: "admin-test-token",
 	}, "si-codex-alpha")
 	if err != nil {
-		t.Fatalf("fortEnsureAgentAdminPolicy: %v", err)
-	}
-	if putCalled {
-		t.Fatalf("expected policy put to be skipped when admin wildcard is present")
+		t.Fatalf("fortRequireAgentPolicyBindings: %v", err)
 	}
 }
 

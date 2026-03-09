@@ -29,8 +29,6 @@ const (
 	fortProfileRefreshTokenFileName = "refresh.token"
 )
 
-var fortDefaultAdminOps = []string{"*"}
-
 type fortRequestAuth struct {
 	BearerToken string
 }
@@ -127,7 +125,7 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err := fortEnsureAgent(ctx, cfg, agentID); err != nil {
 		return codexFortBootstrap{}, err
 	}
-	if err := fortEnsureAgentAdminPolicy(ctx, cfg, agentID); err != nil {
+	if err := fortRequireAgentPolicyBindings(ctx, cfg, agentID); err != nil {
 		return codexFortBootstrap{}, err
 	}
 	session, err := fortOpenSession(ctx, cfg, agentID)
@@ -494,15 +492,12 @@ func resolveFortBootstrapConfig(ctx context.Context, client *shared.Client, pref
 }
 
 func fortResolveBootstrapBearerToken() (string, error) {
-	if token := strings.TrimSpace(os.Getenv("FORT_TOKEN")); token != "" {
-		return token, nil
-	}
 	tokenFile := strings.TrimSpace(os.Getenv("FORT_TOKEN_FILE"))
 	if tokenFile == "" {
 		tokenFile = fortDefaultTokenFilePath()
 	}
 	if tokenFile == "" {
-		return "", fmt.Errorf("fort admin auth is required (set FORT_TOKEN or FORT_TOKEN_FILE)")
+		return "", fmt.Errorf("fort admin auth is required (set FORT_TOKEN_FILE)")
 	}
 	token, err := readStrictSecretFile(tokenFile)
 	if err != nil {
@@ -779,7 +774,7 @@ type fortPolicyBinding struct {
 	Ops  []string `json:"ops"`
 }
 
-func fortEnsureAgentAdminPolicy(ctx context.Context, cfg fortBootstrapConfig, agentID string) error {
+func fortRequireAgentPolicyBindings(ctx context.Context, cfg fortBootstrapConfig, agentID string) error {
 	agentID = strings.TrimSpace(agentID)
 	if agentID == "" {
 		return fmt.Errorf("fort agent id is required")
@@ -796,35 +791,19 @@ func fortEnsureAgentAdminPolicy(ctx context.Context, cfg fortBootstrapConfig, ag
 		return fmt.Errorf("fort agent policy get failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
 	}
 	bindings := fortPolicyBindingsFromBody(body)
-	if fortPolicyBindingsIncludeAdmin(bindings) {
-		return nil
-	}
-	payload := map[string]any{
-		"bindings": []map[string]any{
-			{
-				"repo": "*",
-				"env":  "*",
-				"ops":  append([]string(nil), fortDefaultAdminOps...),
-			},
-		},
-	}
-	status, body, err = fortAPIRequest(ctx, strings.TrimSpace(cfg.HostURL), http.MethodPut, path, payload, auth)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusOK {
-		return fmt.Errorf("fort agent policy set failed (host=%s status=%d): %s", strings.TrimSpace(cfg.HostURL), status, fortAPIError(body))
+	if !fortPolicyBindingsUsable(bindings) {
+		return fmt.Errorf("fort agent %s has no usable policy bindings; policy must be provisioned explicitly", agentID)
 	}
 	return nil
 }
 
-func fortPolicyBindingsIncludeAdmin(bindings []fortPolicyBinding) bool {
+func fortPolicyBindingsUsable(bindings []fortPolicyBinding) bool {
 	for _, binding := range bindings {
-		if strings.TrimSpace(binding.Repo) != "*" || strings.TrimSpace(binding.Env) != "*" {
+		if strings.TrimSpace(binding.Repo) == "" || strings.TrimSpace(binding.Env) == "" {
 			continue
 		}
 		for _, op := range binding.Ops {
-			if strings.TrimSpace(op) == "*" {
+			if strings.TrimSpace(op) != "" {
 				return true
 			}
 		}
@@ -1028,10 +1007,7 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 			}
 		}
 	}
-	accessToken := strings.TrimSpace(os.Getenv("FORT_TOKEN"))
-	if accessToken == "" {
-		accessToken = readSecretFile(tokenPath)
-	}
+	accessToken := readSecretFile(tokenPath)
 	refreshToken := readSecretFile(refreshPath)
 	if fortShouldSkipAutoRefresh(rest) {
 		return accessToken, nil

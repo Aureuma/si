@@ -400,6 +400,12 @@ func loadSIVaultKeyring() (siVaultKeyring, error) {
 	if path == "" {
 		return siVaultKeyring{Entries: map[string]siVaultKeyMaterial{}}, nil
 	}
+	if err := ensureStrictVaultSecretFile(path); err != nil {
+		if os.IsNotExist(err) {
+			return siVaultKeyring{Entries: map[string]siVaultKeyMaterial{}}, nil
+		}
+		return siVaultKeyring{}, err
+	}
 	// #nosec G304 -- path is from local trusted config/env.
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -416,6 +422,20 @@ func loadSIVaultKeyring() (siVaultKeyring, error) {
 		parsed.Entries = map[string]siVaultKeyMaterial{}
 	}
 	return parsed, nil
+}
+
+func ensureStrictVaultSecretFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("secret file path must be a regular file")
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("secret file permissions must be 0600 or stricter")
+	}
+	return nil
 }
 
 func saveSIVaultKeyring(keyring siVaultKeyring) error {

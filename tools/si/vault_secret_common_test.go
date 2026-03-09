@@ -39,6 +39,26 @@ func readTestSIVaultKeyring(t *testing.T, path string) siVaultKeyring {
 	return doc
 }
 
+func TestLoadSIVaultKeyringRejectsBroadPermissions(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "si-vault-keyring.json")
+	writeTestSIVaultKeyring(t, path, map[string]siVaultKeyMaterial{
+		"safe/dev": {
+			Repo:       "safe",
+			Env:        "dev",
+			PublicKey:  strings.Repeat("a", 66),
+			PrivateKey: strings.Repeat("b", 64),
+		},
+	})
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("chmod keyring: %v", err)
+	}
+	t.Setenv("SI_VAULT_KEYRING_FILE", path)
+	if _, err := loadSIVaultKeyring(); err == nil || !strings.Contains(err.Error(), "0600") {
+		t.Fatalf("expected strict permission error, got %v", err)
+	}
+}
+
 func TestEncryptDotenvDocSkipsEncryptedWithoutReencrypt(t *testing.T) {
 	publicKey, privateKey, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {

@@ -22,9 +22,9 @@ wrapper flags:
   --json         Print wrapper metadata as JSON on wrapper failure
 
 token/auth model:
-  - Host bootstrap admin auth resolves from FORT_TOKEN or FORT_TOKEN_FILE.
+  - Host bootstrap admin auth resolves from FORT_TOKEN_FILE.
   - Runtime container auth uses file paths FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH.
-  - This wrapper auto-refreshes runtime sessions when possible, then injects --token to fort.
+  - This wrapper auto-refreshes runtime sessions when possible and uses token-file flow.
   - FORT_TOKEN and FORT_REFRESH_TOKEN are sanitized from child process environment.
 
 examples:
@@ -59,28 +59,17 @@ func fortSanitizedEnv(env []string) []string {
 	return out
 }
 
-func fortArgsContainToken(args []string) bool {
+func fortArgsContainCredentialFlags(args []string) bool {
 	for i := 0; i < len(args); i++ {
 		part := strings.TrimSpace(args[i])
-		if part == "--token" {
+		if part == "--token" || strings.HasPrefix(part, "--token=") {
 			return true
 		}
-		if strings.HasPrefix(part, "--token=") {
+		if part == "--token-file" || strings.HasPrefix(part, "--token-file=") {
 			return true
 		}
 	}
 	return false
-}
-
-func fortArgsWithToken(args []string, token string) []string {
-	token = strings.TrimSpace(token)
-	if token == "" || fortArgsContainToken(args) {
-		return args
-	}
-	out := make([]string, 0, len(args)+2)
-	out = append(out, "--token", token)
-	out = append(out, args...)
-	return out
 }
 
 func cmdFort(args []string) {
@@ -106,7 +95,7 @@ func cmdFort(args []string) {
 	if err := fs.Parse(args); err != nil {
 		printUsage(fortUsageText)
 		if strings.Contains(err.Error(), "flag provided but not defined") {
-			fatal(fmt.Errorf("%w (if the flag belongs to fort, pass it after --, for example: si fort -- --token <token> auth whoami)", err))
+			fatal(fmt.Errorf("%w (if the flag belongs to fort, pass it after --)", err))
 		}
 		fatal(err)
 	}
@@ -115,6 +104,9 @@ func cmdFort(args []string) {
 	if len(rest) == 0 {
 		printUsage(fortUsageText)
 		return
+	}
+	if fortArgsContainCredentialFlags(rest) {
+		fatal(errors.New("credential flags are not accepted in `si fort`; use file-based auth paths (FORT_TOKEN_FILE/FORT_TOKEN_PATH)"))
 	}
 	settings := loadSettingsOrDefault()
 
@@ -159,15 +151,13 @@ func cmdFort(args []string) {
 		}
 		fatal(err)
 	}
-	accessToken, err := prepareFortRuntimeAuth(rest)
-	if err != nil {
+	if _, err := prepareFortRuntimeAuth(rest); err != nil {
 		warnf("fort auth auto-refresh skipped: %v", err)
 	}
-	rest = fortArgsWithToken(rest, accessToken)
 
 	if err := runFortExternal(resolvedBin, rest); err != nil {
 		if *jsonOut {
-			printJSONMap(map[string]any{"ok": false, "error": err.Error(), "repo": resolvedRepo, "bin": resolvedBin, "args": rest})
+			printJSONMap(map[string]any{"ok": false, "error": err.Error(), "repo": resolvedRepo, "bin": resolvedBin})
 		}
 		fatal(err)
 	}
