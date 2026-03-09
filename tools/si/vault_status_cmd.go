@@ -74,16 +74,15 @@ func cmdVaultStatus(args []string) {
 
 	if *jsonOut {
 		payload := map[string]interface{}{
-			"repo":             target.Repo,
-			"env":              target.Env,
-			"env_file":         target.EnvFile,
-			"keyring_file":     siVaultKeyringPath(),
-			"key_name_public":  vault.SIVaultPublicKeyName,
-			"key_name_private": vault.SIVaultPrivateKeyName,
-			"file_keys":        keyCount,
-			"encrypted_keys":   encryptedCount,
-			"plaintext_keys":   plaintextCount,
-			"plaintext_list":   plaintextKeys,
+			"repo":            target.Repo,
+			"env":             target.Env,
+			"env_file":        target.EnvFile,
+			"keyring_file":    siVaultKeyringPath(),
+			"key_name_public": vault.SIVaultPublicKeyName,
+			"file_keys":       keyCount,
+			"encrypted_keys":  encryptedCount,
+			"plaintext_keys":  plaintextCount,
+			"plaintext_list":  plaintextKeys,
 		}
 		if keyErr == nil {
 			payload["public_key"] = material.PublicKey

@@ -45,7 +45,6 @@ func cmdVaultKeygen(args []string) {
 			"env":                target.Env,
 			"env_file":           target.EnvFile,
 			"public_key_name":    vault.SIVaultPublicKeyName,
-			"private_key_name":   vault.SIVaultPrivateKeyName,
 			"public_key":         material.PublicKey,
 			"backup_key_count":   len(material.BackupPrivateKeys),
 			"updated_at":         material.UpdatedAt,
@@ -57,7 +56,6 @@ func cmdVaultKeygen(args []string) {
 	fmt.Printf("env:              %s\n", target.Env)
 	fmt.Printf("env_file:         %s\n", target.EnvFile)
 	fmt.Printf("public_key_name:  %s\n", vault.SIVaultPublicKeyName)
-	fmt.Printf("private_key_name: %s\n", vault.SIVaultPrivateKeyName)
 	fmt.Printf("public_key:       %s\n", material.PublicKey)
 	fmt.Printf("backup_keys:      %d\n", len(material.BackupPrivateKeys))
 	fmt.Printf("private_key:      local_keyring\n")

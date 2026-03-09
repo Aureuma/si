@@ -207,24 +207,12 @@ func ensureSIVaultKeyMaterial(settings Settings, target siVaultTarget) (siVaultK
 	}
 
 	if !hasCanonical {
-		bootstrapMaterial, ok, bootstrapErr := bootstrapSIVaultMaterialFromEnv(target)
-		if bootstrapErr != nil {
-			return siVaultKeyMaterial{}, bootstrapErr
-		}
-		if !ok {
-			return siVaultKeyMaterial{}, fmt.Errorf(
-				"si vault key material missing for %s/%s: canonical keypair is not initialized (set %s/%s or seed keyring explicitly)",
-				target.Repo,
-				target.Env,
-				vault.SIVaultPublicKeyName,
-				vault.SIVaultPrivateKeyName,
-			)
-		}
-		keyring.Entries[key] = bootstrapMaterial
-		if err := saveSIVaultKeyring(keyring); err != nil {
-			return siVaultKeyMaterial{}, err
-		}
-		return bootstrapMaterial, nil
+		return siVaultKeyMaterial{}, fmt.Errorf(
+			"si vault key material missing for %s/%s: canonical keypair is not initialized in keyring (%s)",
+			target.Repo,
+			target.Env,
+			filepath.Clean(siVaultKeyringPath()),
+		)
 	}
 
 	seeded := canonical
@@ -317,31 +305,6 @@ func splitSIVaultKeyringEntryScope(scope string) (string, string) {
 		return normalizeVaultRepoEnvSlug(parts[0]), ""
 	}
 	return normalizeVaultRepoEnvSlug(parts[0]), normalizeVaultRepoEnvSlug(parts[1])
-}
-
-func bootstrapSIVaultMaterialFromEnv(target siVaultTarget) (siVaultKeyMaterial, bool, error) {
-	publicKey := strings.TrimSpace(strings.ToLower(os.Getenv(vault.SIVaultPublicKeyName)))
-	privateKey := strings.TrimSpace(strings.ToLower(os.Getenv(vault.SIVaultPrivateKeyName)))
-	if publicKey == "" && privateKey == "" {
-		return siVaultKeyMaterial{}, false, nil
-	}
-	if publicKey == "" || privateKey == "" {
-		return siVaultKeyMaterial{}, false, fmt.Errorf(
-			"si vault bootstrap requires both %s and %s",
-			vault.SIVaultPublicKeyName,
-			vault.SIVaultPrivateKeyName,
-		)
-	}
-	normalized, err := normalizeSIVaultMaterial(siVaultKeyMaterial{
-		Repo:       target.Repo,
-		Env:        target.Env,
-		PublicKey:  publicKey,
-		PrivateKey: privateKey,
-	}, target)
-	if err != nil {
-		return siVaultKeyMaterial{}, false, err
-	}
-	return normalized, true, nil
 }
 
 func normalizeSIVaultMaterial(in siVaultKeyMaterial, target siVaultTarget) (siVaultKeyMaterial, error) {
@@ -470,12 +433,6 @@ func siVaultPrivateKeyCandidates(material siVaultKeyMaterial) []string {
 		}
 		seen[raw] = struct{}{}
 		out = append(out, raw)
-	}
-	envRaw := strings.TrimSpace(os.Getenv(vault.SIVaultPrivateKeyName))
-	if envRaw != "" {
-		for _, part := range strings.Split(envRaw, ",") {
-			appendKey(part)
-		}
 	}
 	appendKey(material.PrivateKey)
 	for _, backup := range material.BackupPrivateKeys {

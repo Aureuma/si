@@ -301,8 +301,6 @@ func TestResolveSIVaultTargetRepoFlagOverridesEnvFileInference(t *testing.T) {
 func TestEnsureSIVaultKeyMaterialRejectsMissingCanonical(t *testing.T) {
 	keyringPath := filepath.Join(t.TempDir(), "si-vault-keyring.json")
 	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
-	t.Setenv(vault.SIVaultPublicKeyName, "")
-	t.Setenv(vault.SIVaultPrivateKeyName, "")
 
 	_, err := ensureSIVaultKeyMaterial(defaultSettings(), siVaultTarget{Repo: "safe", Env: "dev"})
 	if err == nil {
@@ -316,8 +314,6 @@ func TestEnsureSIVaultKeyMaterialRejectsMissingCanonical(t *testing.T) {
 func TestEnsureSIVaultKeyMaterialSeedsMissingEntryFromCanonical(t *testing.T) {
 	keyringPath := filepath.Join(t.TempDir(), "si-vault-keyring.json")
 	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
-	t.Setenv(vault.SIVaultPublicKeyName, "")
-	t.Setenv(vault.SIVaultPrivateKeyName, "")
 
 	pub, priv, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {
@@ -347,8 +343,6 @@ func TestEnsureSIVaultKeyMaterialSeedsMissingEntryFromCanonical(t *testing.T) {
 func TestEnsureSIVaultKeyMaterialRejectsSprawl(t *testing.T) {
 	keyringPath := filepath.Join(t.TempDir(), "si-vault-keyring.json")
 	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
-	t.Setenv(vault.SIVaultPublicKeyName, "")
-	t.Setenv(vault.SIVaultPrivateKeyName, "")
 
 	pubA, privA, err := vault.GenerateSIVaultKeyPair()
 	if err != nil {
@@ -372,7 +366,7 @@ func TestEnsureSIVaultKeyMaterialRejectsSprawl(t *testing.T) {
 	}
 }
 
-func TestEnsureSIVaultKeyMaterialBootstrapsFromEnv(t *testing.T) {
+func TestEnsureSIVaultKeyMaterialRejectsEnvBootstrapWithoutKeyring(t *testing.T) {
 	keyringPath := filepath.Join(t.TempDir(), "si-vault-keyring.json")
 	t.Setenv("SI_VAULT_KEYRING_FILE", keyringPath)
 
@@ -381,22 +375,14 @@ func TestEnsureSIVaultKeyMaterialBootstrapsFromEnv(t *testing.T) {
 		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
 	}
 	t.Setenv(vault.SIVaultPublicKeyName, pub)
-	t.Setenv(vault.SIVaultPrivateKeyName, priv)
+	t.Setenv("SI_VAULT_PRIVATE_KEY", priv)
 
-	material, err := ensureSIVaultKeyMaterial(defaultSettings(), siVaultTarget{Repo: "safe", Env: "dev"})
-	if err != nil {
-		t.Fatalf("ensureSIVaultKeyMaterial: %v", err)
+	_, err = ensureSIVaultKeyMaterial(defaultSettings(), siVaultTarget{Repo: "safe", Env: "dev"})
+	if err == nil {
+		t.Fatalf("expected canonical keyring bootstrap error")
 	}
-	if strings.TrimSpace(material.PublicKey) != strings.TrimSpace(pub) || strings.TrimSpace(material.PrivateKey) != strings.TrimSpace(priv) {
-		t.Fatalf("expected bootstrap material from env")
-	}
-	doc := readTestSIVaultKeyring(t, keyringPath)
-	entry, ok := doc.Entries["safe/dev"]
-	if !ok {
-		t.Fatalf("expected safe/dev entry in keyring")
-	}
-	if strings.TrimSpace(entry.PublicKey) != strings.TrimSpace(pub) || strings.TrimSpace(entry.PrivateKey) != strings.TrimSpace(priv) {
-		t.Fatalf("expected keyring safe/dev to match env bootstrap material")
+	if !strings.Contains(strings.ToLower(err.Error()), "canonical keypair is not initialized in keyring") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

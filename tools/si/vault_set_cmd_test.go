@@ -19,11 +19,12 @@ func TestVaultSetAcceptsTrailingFlagsAfterKeyValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateSIVaultKeyPair: %v", err)
 	}
+	keyringPath := filepath.Join(stateHome, ".si", "vault", "si-vault-keyring.json")
+	writeVaultTestKeyring(t, keyringPath, publicKey, privateKey)
 	env := map[string]string{
-		"HOME":                      stateHome,
-		"SI_SETTINGS_HOME":          stateHome,
-		vault.SIVaultPublicKeyName:  publicKey,
-		vault.SIVaultPrivateKeyName: privateKey,
+		"HOME":                  stateHome,
+		"SI_SETTINGS_HOME":      stateHome,
+		"SI_VAULT_KEYRING_FILE": keyringPath,
 	}
 
 	scope := "trailing-set"

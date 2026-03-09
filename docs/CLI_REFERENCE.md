@@ -109,7 +109,7 @@ si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-prefl
 
 - On host/admin flows, use `si vault run -- <command>` when secrets are required.
 - In SI runtime containers, use `si fort ...` for secret access.
-- `si fort` wrapper bootstrap/admin auth resolves from `FORT_TOKEN_FILE`; runtime sessions use `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`.
+- `si fort` wrapper bootstrap/admin auth resolves from `FORT_BOOTSTRAP_TOKEN_FILE`; runtime sessions use `FORT_TOKEN_PATH` + `FORT_REFRESH_TOKEN_PATH`.
 - If a flag belongs to the native `fort` CLI, pass it after `--` (example: `si fort -- --host https://fort.aureuma.ai doctor`).
 - Prefer `--json` for automation and auditability.
 - Run `doctor` commands before mutating production systems.

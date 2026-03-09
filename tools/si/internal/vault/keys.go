@@ -28,7 +28,7 @@ var (
 
 type IdentityInfo struct {
 	Identity *age.X25519Identity
-	Source   string // env, env_file, keyring, file
+	Source   string // keyring, file
 	Path     string // for *_file sources
 }
 
@@ -48,33 +48,6 @@ func NormalizeKeyBackend(backend string) string {
 }
 
 func LoadIdentity(cfg KeyConfig) (*IdentityInfo, error) {
-	// CI/ephemeral override: environment variable identity.
-	if raw := strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY")); raw != "" {
-		id, err := age.ParseX25519Identity(raw)
-		if err != nil {
-			return nil, fmt.Errorf("%w: SI_VAULT_IDENTITY invalid: %w", ErrIdentityInvalid, err)
-		}
-		return &IdentityInfo{Identity: id, Source: "env"}, nil
-	}
-	if raw := strings.TrimSpace(os.Getenv("SI_VAULT_PRIVATE_KEY")); raw != "" {
-		id, err := age.ParseX25519Identity(raw)
-		if err != nil {
-			return nil, fmt.Errorf("%w: SI_VAULT_PRIVATE_KEY invalid: %w", ErrIdentityInvalid, err)
-		}
-		return &IdentityInfo{Identity: id, Source: "env"}, nil
-	}
-	if path := strings.TrimSpace(os.Getenv("SI_VAULT_IDENTITY_FILE")); path != "" {
-		path, err := ExpandHome(path)
-		if err != nil {
-			return nil, err
-		}
-		id, err := loadIdentityFromFile(path)
-		if err != nil {
-			return nil, err
-		}
-		return &IdentityInfo{Identity: id, Source: "env_file", Path: path}, nil
-	}
-
 	backend := NormalizeKeyBackend(cfg.Backend)
 	if backend == "" {
 		backend = "keyring"
