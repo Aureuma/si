@@ -25,8 +25,10 @@ func TestVaultStatusFailsFastOnSettingsParseError(t *testing.T) {
 	}
 
 	stdout, stderr, err := runSICommand(t, map[string]string{
-		"HOME":             home,
-		"SI_SETTINGS_HOME": home,
+		"HOME":                home,
+		"SI_SETTINGS_HOME":    home,
+		"SI_CODEX_PROFILE_ID": "",
+		"CODEX_HOME":          "",
 	}, "vault", "status", "--env-file", envFile, "--json")
 	if err == nil {
 		t.Fatalf("expected vault status to fail with malformed settings\nstdout=%s\nstderr=%s", stdout, stderr)

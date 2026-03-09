@@ -478,6 +478,9 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
 	t.Setenv("FORT_HOST", "http://127.0.0.1:1")
+	// Avoid inheriting runtime container token paths from the parent process.
+	t.Setenv("FORT_TOKEN_PATH", "")
+	t.Setenv("FORT_REFRESH_TOKEN_PATH", "")
 
 	accessToken, err := prepareFortRuntimeAuth([]string{"auth", "session", "close"})
 	if err != nil {
