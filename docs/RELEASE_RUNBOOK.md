@@ -10,6 +10,7 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 - Optional distribution secrets (for full npm + Homebrew automation):
   - `NPM_TOKEN`
   - `HOMEBREW_TAP_PUSH_TOKEN`
+  - `GH_PAT_AUREUMA` can act as fallback for the Homebrew tap update when it has push access to `Aureuma/homebrew-si`
 
 ## 1. Decide Version
 
@@ -93,4 +94,4 @@ Workflow `.github/workflows/cli-release-assets.yml` now performs a final
 distribution verification job that checks:
 - required GitHub release assets are present
 - npm package visibility/version (when `NPM_TOKEN` is configured)
-- Homebrew tap version sync (when `HOMEBREW_TAP_PUSH_TOKEN` is configured)
+- Homebrew tap version sync (when `HOMEBREW_TAP_PUSH_TOKEN` or fallback `GH_PAT_AUREUMA` is configured)
