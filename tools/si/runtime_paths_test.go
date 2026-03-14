@@ -7,8 +7,16 @@ import (
 	"testing"
 )
 
-func TestResolveWorkspaceDirectoryFallsBackFromStaleSettingsToCWD(t *testing.T) {
-	cwd := t.TempDir()
+func TestResolveWorkspaceDirectoryFallsBackFromStaleSettingsToWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "si")
+	cwd := filepath.Join(repo, "tools", "si")
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatalf("mkdir cwd: %v", err)
+	}
 	settings := defaultSettings()
 	settings.Codex.Workspace = filepath.Join(t.TempDir(), "missing")
 
@@ -23,11 +31,36 @@ func TestResolveWorkspaceDirectoryFallsBackFromStaleSettingsToCWD(t *testing.T) 
 	if err != nil {
 		t.Fatalf("resolveWorkspaceDirectory returned error: %v", err)
 	}
-	if resolved.Path != cwd {
-		t.Fatalf("expected cwd fallback %q, got %q", cwd, resolved.Path)
+	if resolved.Path != root {
+		t.Fatalf("expected workspace-root fallback %q, got %q", root, resolved.Path)
 	}
 	if !resolved.StaleSettings {
 		t.Fatalf("expected stale settings flag to be set")
+	}
+	if resolved.Source != resolvedPathSourceCwd {
+		t.Fatalf("expected cwd source, got %q", resolved.Source)
+	}
+}
+
+func TestResolveWorkspaceDirectoryFallsBackToCWDOutsideRepoWorkspace(t *testing.T) {
+	cwd := t.TempDir()
+
+	resolved, err := resolveWorkspaceDirectory(
+		workspaceScopeCodex,
+		false,
+		"",
+		"",
+		nil,
+		cwd,
+	)
+	if err != nil {
+		t.Fatalf("resolveWorkspaceDirectory returned error: %v", err)
+	}
+	if resolved.Path != cwd {
+		t.Fatalf("expected cwd fallback %q, got %q", cwd, resolved.Path)
+	}
+	if resolved.StaleSettings {
+		t.Fatalf("expected stale settings flag to be unset")
 	}
 	if resolved.Source != resolvedPathSourceCwd {
 		t.Fatalf("expected cwd source, got %q", resolved.Source)
