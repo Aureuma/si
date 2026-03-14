@@ -325,6 +325,108 @@ func TestResolveBootstrapConfigAndEnsureAgentWithExpiredBootstrapToken(t *testin
 	}
 }
 
+func TestEnsureCodexProfileFortSessionFallsBackToExistingProfileRefresh(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	refreshFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir bootstrap dir: %v", err)
+	}
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(-5*time.Minute))), 0o600); err != nil {
+		t.Fatalf("write expired bootstrap token: %v", err)
+	}
+	if err := os.WriteFile(refreshFile, []byte("bootstrap-refresh-1"), 0o600); err != nil {
+		t.Fatalf("write bootstrap refresh token: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", refreshFile)
+
+	profile := codexProfile{ID: "berylla"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+	if err := writeSecretFile(paths.AccessTokenHostPath, "old-profile-access"); err != nil {
+		t.Fatalf("write profile access token: %v", err)
+	}
+	if err := writeSecretFile(paths.RefreshTokenHostPath, "profile-refresh-1"); err != nil {
+		t.Fatalf("write profile refresh token: %v", err)
+	}
+
+	refreshCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/session/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		var req map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode refresh request: %v", err)
+		}
+		refreshCalls++
+		switch got := strings.TrimSpace(fmt.Sprint(req["refresh_token"])); got {
+		case "bootstrap-refresh-1":
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+		case "profile-refresh-1":
+			_, _ = w.Write([]byte(`{"access_token":"profile-access-2","refresh_token":"profile-refresh-2","access_expires_at":"2030-01-01T00:00:00Z"}`))
+		default:
+			t.Fatalf("unexpected refresh token: %q", got)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("FORT_HOST", srv.URL)
+	t.Setenv("SI_FORT_CONTAINER_HOST", srv.URL)
+
+	state := fortProfileSessionState{
+		ProfileID:        profile.ID,
+		AgentID:          fortAgentIDForProfile(profile.ID),
+		SessionID:        "rfs_existing",
+		Host:             srv.URL,
+		ContainerHost:    srv.URL,
+		AccessTokenPath:  paths.AccessTokenHostPath,
+		RefreshTokenPath: paths.RefreshTokenHostPath,
+		RefreshExpiresAt: "2030-01-02T00:00:00Z",
+		UpdatedAt:        time.Now().UTC().Format(time.RFC3339),
+	}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+
+	boot, err := ensureCodexProfileFortSession(context.Background(), nil, profile, "")
+	if err != nil {
+		t.Fatalf("ensureCodexProfileFortSession: %v", err)
+	}
+	if refreshCalls != 2 {
+		t.Fatalf("expected bootstrap refresh then profile refresh, got %d calls", refreshCalls)
+	}
+	if boot.ProfileID != profile.ID {
+		t.Fatalf("unexpected profile id: %q", boot.ProfileID)
+	}
+	if boot.AgentID != fortAgentIDForProfile(profile.ID) {
+		t.Fatalf("unexpected agent id: %q", boot.AgentID)
+	}
+	if got := strings.TrimSpace(readFileOrEmpty(t, paths.AccessTokenHostPath)); got != "profile-access-2" {
+		t.Fatalf("unexpected profile access token: %q", got)
+	}
+	if got := strings.TrimSpace(readFileOrEmpty(t, paths.RefreshTokenHostPath)); got != "profile-refresh-2" {
+		t.Fatalf("unexpected profile refresh token: %q", got)
+	}
+	updatedState, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+	if err != nil {
+		t.Fatalf("loadFortProfileSessionState: %v", err)
+	}
+	if updatedState.AccessExpiresAt != "2030-01-01T00:00:00Z" {
+		t.Fatalf("unexpected access expiry: %q", updatedState.AccessExpiresAt)
+	}
+	if updatedState.Host != srv.URL || updatedState.ContainerHost != srv.URL {
+		t.Fatalf("unexpected session state hosts: host=%q container=%q", updatedState.Host, updatedState.ContainerHost)
+	}
+}
+
 func TestFortTokenNeedsRefreshWithFutureExp(t *testing.T) {
 	token := makeTestJWT(time.Now().Add(10 * time.Minute))
 	needs, reason := fortTokenNeedsRefresh(token)

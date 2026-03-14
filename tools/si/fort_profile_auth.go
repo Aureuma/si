@@ -120,7 +120,11 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	}
 	cfg, err := resolveFortBootstrapConfig(ctx, client, preferredNetwork)
 	if err != nil {
-		return codexFortBootstrap{}, err
+		recovered, recoverErr := recoverCodexProfileFortSession(ctx, profile, paths)
+		if recoverErr == nil {
+			return recovered, nil
+		}
+		return codexFortBootstrap{}, fmt.Errorf("%w (existing profile Fort session recovery also failed: %v)", err, recoverErr)
 	}
 	agentID := fortAgentIDForProfile(profileID)
 	if err := fortEnsureAgent(ctx, cfg, agentID); err != nil {
@@ -160,6 +164,76 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 		SessionID:                 session.SessionID,
 		HostURL:                   cfg.HostURL,
 		ContainerHostURL:          cfg.ContainerHostURL,
+		AccessTokenHostPath:       paths.AccessTokenHostPath,
+		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
+		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
+		RefreshTokenContainerPath: paths.RefreshTokenContainerPath,
+	}, nil
+}
+
+func recoverCodexProfileFortSession(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
+	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	profileID := strings.TrimSpace(profile.ID)
+	if profileID == "" {
+		profileID = strings.TrimSpace(state.ProfileID)
+	}
+	if profileID == "" {
+		return codexFortBootstrap{}, fmt.Errorf("profile id required")
+	}
+	hostURL := strings.TrimSpace(state.Host)
+	if hostURL == "" {
+		return codexFortBootstrap{}, fmt.Errorf("fort host is missing in session state")
+	}
+	if err := fortValidateHostedURL(hostURL); err != nil {
+		return codexFortBootstrap{}, fmt.Errorf("invalid fort host in session state %q: %w", hostURL, err)
+	}
+	refreshToken, err := readStrictSecretFile(paths.RefreshTokenHostPath)
+	if err != nil {
+		return codexFortBootstrap{}, fmt.Errorf("read profile Fort refresh token %s: %w", paths.RefreshTokenHostPath, err)
+	}
+	ctxRefresh := ctx
+	if ctxRefresh == nil {
+		var cancel context.CancelFunc
+		ctxRefresh, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+	}
+	refreshed, err := fortRefreshSession(ctxRefresh, hostURL, refreshToken)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	if err := writeSecretFile(paths.AccessTokenHostPath, refreshed.AccessToken); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	if err := writeSecretFile(paths.RefreshTokenHostPath, refreshed.RefreshToken); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	state.ProfileID = profileID
+	if strings.TrimSpace(state.AgentID) == "" {
+		state.AgentID = fortAgentIDForProfile(profileID)
+	}
+	state.Host = hostURL
+	if strings.TrimSpace(state.ContainerHost) == "" {
+		state.ContainerHost = fortHostURLForContainer(hostURL)
+	}
+	if strings.TrimSpace(state.ContainerHost) == "" {
+		return codexFortBootstrap{}, fmt.Errorf("fort container host is missing in session state")
+	}
+	state.AccessTokenPath = paths.AccessTokenHostPath
+	state.RefreshTokenPath = paths.RefreshTokenHostPath
+	state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
+	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	return codexFortBootstrap{
+		ProfileID:                 profileID,
+		AgentID:                   strings.TrimSpace(state.AgentID),
+		SessionID:                 strings.TrimSpace(state.SessionID),
+		HostURL:                   hostURL,
+		ContainerHostURL:          strings.TrimSpace(state.ContainerHost),
 		AccessTokenHostPath:       paths.AccessTokenHostPath,
 		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
 		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
