@@ -77,7 +77,6 @@ Core:
   si orbits <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
-  si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
   si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync|bootstrap> [args]
   si fort [--repo <path>] [--bin <path>] [--build] [--json] -- <fort-args...>
@@ -356,34 +355,6 @@ fort:
 	    - Wrapper auto-refreshes runtime auth when possible using token-file flow.
 	    - FORT_TOKEN and FORT_REFRESH_TOKEN are stripped from child env before exec.
 	    - For fort-native global flags, pass them after -- (example: si fort -- --host https://fort.aureuma.ai doctor).
-
-sun:
-  si sun auth login [--url <url>] [--token <token>] [--google] [--login-url <url>] [--open-browser] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]
-  si sun auth status [--json]
-  si sun auth logout [--clear-account]
-  si sun doctor [--json]
-  si sun profile list [--json]
-  si sun profile push [--profile <id>] [--json]
-  si sun profile pull [--profile <id>] [--json]
-  si sun token list [--include-revoked] [--limit <n>] [--json]
-  si sun token create [--label <label>] [--scopes <csv>] [--expires-hours <n>] [--json]
-  si sun token revoke --token-id <id>
-  si sun audit list [--action <action>] [--kind <kind>] [--name <name>] [--limit <n>] [--json]
-  si sun taskboard use [--name <name>] [--agent <agent-id>]
-  si sun taskboard show [--name <name>] [--json]
-  si sun taskboard list [--name <name>] [--status <todo|doing|done>] [--owner <agent>] [--limit <n>] [--json]
-  si sun taskboard add --title <text> [--prompt <text>] [--priority <P1|P2|P3>] [--tags <csv>] [--name <name>] [--json]
-  si sun taskboard claim [--id <task-id>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--lease-seconds <n>] [--json]
-  si sun taskboard release --id <task-id> [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
-  si sun taskboard done --id <task-id> [--result <text>] [--name <name>] [--agent <agent-id>] [--dyad <name>] [--json]
-  si sun machine register [--machine <id>] [--operator <id>] [--display-name <name>] [--allow-operators <csv>] [--can-control-others] [--can-be-controlled=false] [--set-defaults] [--json]
-  si sun machine status [--machine <id>] [--json]
-  si sun machine list [--limit <n>] [--json]
-  si sun machine allow --machine <id> --grant <operator> [--as <operator>] [--json]
-  si sun machine deny --machine <id> --revoke <operator> [--as <operator>] [--json]
-  si sun machine run --machine <id> [--source-machine <id>] [--operator <id>] [--timeout-seconds <n>] [--wait] [--wait-timeout-seconds <n>] [--poll-seconds <n>] [--json] -- <si args...>
-  si sun machine jobs [--machine <id>] [--requested-by <operator>] [--status <queued|running|succeeded|failed|denied>] [--limit <n>] [--json]
-  si sun machine serve [--machine <id>] [--operator <id>] [--poll-seconds <n>] [--once] [--max-jobs <n>] [--json]
 
 github:
   si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]
@@ -887,7 +858,7 @@ func colorizeHelp(text string) string {
 		return text
 	}
 	sectionRe := regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 /-]*:$`)
-	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify|sun)\\b`)
+	cmdRe := regexp.MustCompile(`\\b(si|dyad|codex|docker|browser|image|persona|skill|analyze|lint|stripe|github|cloudflare|google|vault|creds|self|mintlify)\\b`)
 	flagRe := regexp.MustCompile(`--[a-zA-Z0-9-]+`)
 	shortFlagRe := regexp.MustCompile(`(^|\\s)(-[a-zA-Z])\\b`)
 	argRe := regexp.MustCompile(`<[^>]+>`)
@@ -972,4 +943,44 @@ func padRightANSI(s string, width int) string {
 
 func containsANSI(s string) bool {
 	return ansiStripRe.MatchString(s)
+}
+
+func boolString(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}
+
+func quoteSingle(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func isTruthyFlagValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func isPathWithin(path, root string) bool {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return false
+	}
+	if rel == "." {
+		return true
+	}
+	rel = filepath.Clean(rel)
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

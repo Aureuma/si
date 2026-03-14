@@ -368,76 +368,6 @@ func TestApplySettingsDefaultsNormalizesCodexLoginDefaultBrowser(t *testing.T) {
 	}
 }
 
-func TestLoadSettingsSunSection(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	path, err := settingsModulePath(settingsModuleSun)
-	if err != nil {
-		t.Fatalf("settingsModulePath(sun): %v", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatalf("mkdir: %v", err)
-	}
-	content := `
-[sun]
-base_url = "https://sun.example"
-token = "sun-token"
-timeout_seconds = 30
-taskboard = "shared"
-`
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("write settings: %v", err)
-	}
-
-	got, err := loadSettings()
-	if err != nil {
-		t.Fatalf("loadSettings: %v", err)
-	}
-	if got.Sun.BaseURL != "https://sun.example" {
-		t.Fatalf("expected sun base url override, got %q", got.Sun.BaseURL)
-	}
-	if got.Sun.Token != "sun-token" {
-		t.Fatalf("expected sun token override, got %q", got.Sun.Token)
-	}
-	if got.Sun.TimeoutSeconds != 30 {
-		t.Fatalf("expected sun timeout override, got %d", got.Sun.TimeoutSeconds)
-	}
-	if got.Sun.Taskboard != "shared" {
-		t.Fatalf("expected sun taskboard override, got %q", got.Sun.Taskboard)
-	}
-}
-
-func TestSaveSettingsWritesSunSection(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
-
-	settings := defaultSettings()
-	applySettingsDefaults(&settings)
-	settings.Sun.BaseURL = "https://sun-save.example"
-	settings.Sun.Token = "save-token"
-
-	if err := saveSettings(settings); err != nil {
-		t.Fatalf("saveSettings: %v", err)
-	}
-
-	path, err := settingsModulePath(settingsModuleSun)
-	if err != nil {
-		t.Fatalf("settingsModulePath(sun): %v", err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read settings file: %v", err)
-	}
-	text := string(data)
-	if !strings.Contains(text, "[sun]") {
-		t.Fatalf("expected [sun] section in saved settings, got:\n%s", text)
-	}
-	if !strings.Contains(text, "sun-save.example") {
-		t.Fatalf("expected sun base_url in saved settings, got:\n%s", text)
-	}
-}
-
 func TestLoadSettingsSurfSection(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
@@ -650,8 +580,6 @@ repos = ["si", "safe", "si"]
 shell_profile = "~/.zshrc"
 env_file = "~/.si/bootstrap.env"
 github_token_key = "GH_PAT_AUREUMA"
-sun_base_url_key = "SI_SUN_BASE_URL"
-sun_token_key = "SI_SUN_TOKEN"
 build_si = false
 pull_latest = false
 install_orbitals = ["remote-control", "surf"]

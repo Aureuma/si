@@ -27,6 +27,7 @@ Reference paths for the local `.si` directory layout.
 - `paths.root` (string): default `~/.si`
 - `paths.settings` (string): default `~/.si/settings.toml`
 - `paths.codex_profiles_dir` (string): default `~/.si/codex/profiles`
+- `paths.workspace_root` (string): optional host directory containing sibling repos. Used by commands such as `si github git ...`, `si remote-control`, and `si viva node bootstrap` when flags are omitted.
 
 Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/state.json` (reconcile state/feedback loop)
@@ -34,7 +35,7 @@ Warmup runtime files are also stored under `~/.si`:
 - `~/.si/warmup/disabled.v1` (warmup scheduler disabled marker)
 - `~/.si/logs/warmup.log` (JSONL operational log)
 
-Warmup scheduling is triggered by `si login` (and explicit `si warmup enable`), not by `si status`.
+Warmup scheduling is auto-enabled once SI sees cached codex auth for a profile, and it is also triggered by `si login` or explicit `si warmup enable`.
 
 ### `[codex]`
 Defaults for Codex container commands (spawn/respawn/login/run).
@@ -114,7 +115,9 @@ Defaults for dyad spawns.
 - `dyad.workspace` (string): host path for workspace bind.
   - If unset, `si dyad spawn` resolves from `--workspace` or current directory.
   - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
-- `dyad.configs` (string): host path for configs
+- `dyad.configs` (string): host path for configs.
+  - If unset, SI prefers a source-tree `configs/` near the selected workspace and otherwise materializes managed defaults under `~/.si/configs`.
+  - On first interactive use, SI prompts to save the resolved path into `~/.si/settings.toml`.
 - `dyad.forward_ports` (string): port range, e.g. `1455-1465`
 - `dyad.skills_volume` (string): shared skills volume name (default: `si-codex-skills`)
 - `dyad.docker_socket` (bool): mount host Docker socket into dyad containers (default: `true`)
@@ -329,36 +332,6 @@ Defaults for `si vault`.
 - `vault.key_file` (string): key file path when `vault.key_backend=\"file\"`
 - `vault.sync_backend` (string): Fort-only mode; only `fort` is accepted.
 
-### `[sun]`
-Defaults for `si sun` cloud sync.
-- `sun.base_url` (string): Sun API base URL (default: `http://127.0.0.1:8080`)
-- `sun.account` (string): expected account slug bound to the saved token
-- `sun.token` (string): Sun bearer token
-- `sun.timeout_seconds` (int): request timeout for Sun API calls (default: `15`)
-- `sun.auto_sync` (bool): enable automatic codex profile sync hooks
-- `sun.orbit_gateway_registry` (string): default remote integration registry for `si orbits gateway ...` (default: `global`)
-- `sun.orbit_gateway_slots` (int): default slots-per-namespace for gateway build/push partitioning (default: `16`, max: `256`)
-- `sun.taskboard` (string): default Sun object name for shared dyad taskboard (default: `default`)
-- `sun.taskboard_agent` (string): optional default agent id used by `si sun taskboard` and dyad autopilot claims
-- `sun.taskboard_lease_seconds` (int): default assignment lease duration in seconds (default: `1800`)
-- `sun.machine_id` (string): default machine id for `si sun machine ...` commands
-- `sun.operator_id` (string): default operator identity for machine ACL and dispatch actions
-
-Environment overrides:
-- `SI_SUN_BASE_URL`
-- `SI_SUN_TOKEN`
-- `SI_SUN_LOGIN_URL`
-- `SI_SUN_LOGIN_OPEN_CMD`
-- `SI_SUN_ALLOW_INSECURE_HTTP`
-- `SI_SUN_ORBIT_GATEWAY_REGISTRY`
-- `SI_SUN_ORBIT_GATEWAY_SLOTS`
-- `SI_SUN_TASKBOARD`
-- `SI_SUN_TASKBOARD_AGENT`
-- `SI_SUN_TASKBOARD_LEASE_SECONDS`
-- `SI_SUN_MACHINE_ID`
-- `SI_SUN_OPERATOR_ID`
-- `SI_VAULT_SYNC_BACKEND` (Fort-only; accepted value: `fort`)
-
 ### `[viva]`
 Defaults for `si viva` wrapper and Viva tunnel profile config.
 - `viva.repo` (string): default local `viva` repo path.
@@ -420,6 +393,7 @@ schema_version = 1
 root = "~/.si"
 settings = "~/.si/settings.toml"
 codex_profiles_dir = "~/.si/codex/profiles"
+workspace_root = "~/code"
 
 [codex]
 image = "aureuma/si:local"
@@ -589,19 +563,6 @@ audit_log = ""
 key_backend = "keyring"
 key_file = ""
 sync_backend = "fort"
-
-[sun]
-base_url = "http://127.0.0.1:8080"
-account = "acme"
-timeout_seconds = 15
-auto_sync = true
-orbit_gateway_registry = "global"
-orbit_gateway_slots = 16
-taskboard = "default"
-taskboard_agent = "dyad:main-laptop"
-taskboard_lease_seconds = 1800
-machine_id = "laptop-a"
-operator_id = "op:shawn@laptop-a"
 
 [shell.prompt]
 enabled = true

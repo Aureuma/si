@@ -29,7 +29,6 @@ var autoVaultEnvRootCommands = map[string]struct{}{
 	"provider":     {},
 	"integrations": {},
 	"apis":         {},
-	"paas":         {},
 }
 
 func maybeAutoHydrateVaultEnvForRootCommand(cmd string) {

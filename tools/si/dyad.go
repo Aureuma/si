@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -90,6 +89,7 @@ func cmdDyad(args []string) {
 
 func cmdDyadSpawn(args []string) {
 	workspaceSet := flagProvided(args, "workspace")
+	configsSet := flagProvided(args, "configs")
 	roleProvided := flagProvided(args, "role")
 	fs := flag.NewFlagSet("dyad spawn", flag.ExitOnError)
 	roleFlag := fs.String("role", "", "dyad role")
@@ -157,13 +157,6 @@ func cmdDyadSpawn(args []string) {
 	} else if !flagProvided(args, "skills-volume") && strings.TrimSpace(settings.Codex.SkillsVolume) != "" {
 		*skillsVolume = strings.TrimSpace(settings.Codex.SkillsVolume)
 	}
-	if !workspaceSet && strings.TrimSpace(settings.Dyad.Workspace) != "" {
-		*workspaceHost = strings.TrimSpace(settings.Dyad.Workspace)
-		workspaceSet = true
-	}
-	if !flagProvided(args, "configs") && strings.TrimSpace(settings.Dyad.Configs) != "" {
-		*configsHost = strings.TrimSpace(settings.Dyad.Configs)
-	}
 	if !flagProvided(args, "forward-ports") && strings.TrimSpace(settings.Dyad.ForwardPorts) != "" {
 		*forwardPorts = strings.TrimSpace(settings.Dyad.ForwardPorts)
 	}
@@ -221,48 +214,50 @@ func cmdDyadSpawn(args []string) {
 		}
 	}
 
-	root := ""
-	if !workspaceSet {
-		cwd, err := os.Getwd()
-		if err != nil {
-			fatal(err)
-		}
-		*workspaceHost = cwd
+	envWorkspace := strings.TrimSpace(os.Getenv("SI_WORKSPACE_HOST"))
+	envConfigs := strings.TrimSpace(os.Getenv("SI_CONFIGS_HOST"))
+	cwd, err := os.Getwd()
+	if err != nil {
+		fatal(err)
 	}
-	if strings.TrimSpace(*workspaceHost) == "" {
-		root = mustRepoRoot()
-		*workspaceHost = root
-	} else {
-		root = *workspaceHost
+	resolvedWorkspace, err := resolveWorkspaceDirectory(
+		workspaceScopeDyad,
+		workspaceSet,
+		strings.TrimSpace(*workspaceHost),
+		envWorkspace,
+		&settings,
+		cwd,
+	)
+	if err != nil {
+		fatal(err)
 	}
-	if abs, err := filepath.Abs(strings.TrimSpace(*workspaceHost)); err == nil && strings.TrimSpace(abs) != "" {
-		*workspaceHost = abs
-		root = abs
+	if resolvedWorkspace.StaleSettings {
+		warnf("saved default dyad workspace no longer exists; using %s", resolvedWorkspace.Path)
 	}
+	*workspaceHost = resolvedWorkspace.Path
 	maybePersistWorkspaceDefault(workspaceScopeDyad, &settings, strings.TrimSpace(*workspaceHost), isInteractiveTerminal())
-	if strings.TrimSpace(*configsHost) == "" {
-		resolved, err := resolveConfigsHost(root)
-		if err != nil {
-			fatal(err)
-		}
-		*configsHost = resolved
+	resolvedConfigs, err := resolveDyadConfigsDirectory(
+		configsSet,
+		strings.TrimSpace(*configsHost),
+		envConfigs,
+		&settings,
+		strings.TrimSpace(*workspaceHost),
+	)
+	if err != nil {
+		fatal(err)
 	}
+	if resolvedConfigs.StaleSettings {
+		warnf("saved default dyad configs no longer exist; using %s", resolvedConfigs.Path)
+	}
+	*configsHost = resolvedConfigs.Path
+	maybePersistDyadConfigsDefault(&settings, strings.TrimSpace(*configsHost), isInteractiveTerminal())
 	if strings.TrimSpace(*forwardPorts) == "" {
 		*forwardPorts = "1455-1465"
 	}
 
 	seedPrompt := strings.TrimSpace(*prompt)
-	var autopilotClaim *sunTaskboardClaimResult
 	if *autopilot && seedPrompt == "" {
-		claim, err := sunAutopilotClaimTask(settings, name)
-		if err != nil {
-			fatal(fmt.Errorf("dyad autopilot claim failed: %w", err))
-		}
-		seedPrompt = strings.TrimSpace(claim.Task.Prompt)
-		if seedPrompt == "" {
-			fatal(fmt.Errorf("dyad autopilot claimed task %s but prompt is empty", claim.Task.ID))
-		}
-		autopilotClaim = &claim
+		fatal(fmt.Errorf("dyad autopilot now requires --prompt"))
 	}
 
 	client, err := shared.NewClient()
@@ -348,9 +343,6 @@ func cmdDyadSpawn(args []string) {
 	if identity, ok := hostGitIdentity(); ok {
 		seedGitIdentity(ctx, client, actorID, "si", "/home/si", identity)
 		seedGitIdentity(ctx, client, criticID, "si", "/home/si", identity)
-	}
-	if autopilotClaim != nil {
-		successf("autopilot claimed %s from taskboard %s", autopilotClaim.Task.ID, autopilotClaim.BoardName)
 	}
 	successf("dyad %s ready (role=%s)", name, role)
 }

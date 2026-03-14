@@ -12,6 +12,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.53.0] - 2026-03-14
+### Added
+- Added first-run workspace-root and runtime-path persistence for installed SI environments so codex, dyad, viva, remote-control, and related wrappers no longer depend on checkout-specific host paths.
+
+### Changed
+- Changed workspace and config resolution to prefer `~/.si/settings.toml` path settings, infer sensible defaults from the current repo when possible, and prompt to persist those defaults during interactive first use.
+- Changed warmup auto-repair to treat cached logged-in profiles as an opt-in signal and to persist the scheduler marker when that fallback path is used.
+- Removed the `si paas` and `si sun` command families, their docs/workflows/tests, and the retired standalone Sun backend checkout.
+
+### Fixed
+- Fixed `si spawn`, `si dyad spawn`, `si viva node bootstrap`, and related wrapper flows to fall back cleanly when saved workspace/config paths are stale or no longer exist.
+- Fixed shared CLI utility coverage after removing the legacy command families by relocating common helpers into neutral shared code.
+
 ## [v0.52.0] - 2026-03-09
 ### Added
 - Added `fort-vault-ci` workflow preflight checks for required Fort cross-repo credentials and repository access before integration execution.
@@ -37,23 +50,23 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.51.0] - 2026-03-01
 ### Added
-- Added Sun-backed per-key vault KV sync (`vault_kv.<scope>/<KEY>`) with revision-history support via `si vault history`.
+- Added per-key vault KV sync (`vault_kv.<scope>/<KEY>`) with revision-history support via `si vault history`.
 - Added `cloud_kv` reporting in `si vault status` and KV metadata in `si vault sync status`.
 
 ### Changed
-- Changed `si vault get`, `si vault list`, and `si vault run` to prefer Sun KV reads when available, with local vault fallback.
-- Changed `si sun vault backup push`/`si vault sync push` to mirror dotenv entries into Sun KV objects in addition to backup snapshot objects.
+- Changed `si vault get`, `si vault list`, and `si vault run` to prefer remote KV reads when available, with local vault fallback.
+- Changed `si vault sync push` to mirror dotenv entries into remote KV objects in addition to backup snapshot objects.
 - Improved vault command flag UX by allowing mixed flag order for `si vault history` and `si vault unset`.
 
 ## [v0.50.0] - 2026-02-27
 ### Added
-- Added Sun-backed per-key vault KV mirroring (`vault_kv.<scope>/<KEY>`) with revision history via `si vault history`.
+- Added remote per-key vault KV mirroring (`vault_kv.<scope>/<KEY>`) with revision history via `si vault history`.
 - Added SSH directory and agent socket mounts for dyad Docker runtimes to support in-container Git/SSH workflows.
 - Added the `si viva` wrapper command and migrated browser runtime integration to `surf bridge`.
 
 ### Changed
-- Modernized vault crypto behavior to SI Vault native file encryption backed by Sun keys for portability.
-- Enforced Sun-only remote scope behavior in vault cloud workflows to keep remote data consistent.
+- Modernized vault crypto behavior to SI Vault native file encryption backed by remote keys for portability.
+- Enforced a single remote scope behavior in vault cloud workflows to keep remote data consistent.
 
 ### Fixed
 - Fixed vault flag parsing for `si vault get` and `si vault unset` with trailing/mixed-order flags.
@@ -66,24 +79,24 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.49.0] - 2026-02-24
 ### Added
-- Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit `git`, `dual`, and `sun` vault sync modes.
+- Added `si vault backend` commands (`status`, `use`) and `vault.sync_backend` policy support for explicit backend sync modes.
 - Added automated GitHub Release asset publishing for `si` CLI archives (`linux/amd64`, `linux/arm64`, `linux/armv7`, `darwin/amd64`, `darwin/arm64`) with generated `checksums.txt`.
 - Added `si build self release-assets` to run local release-archive preflight builds using the same target matrix used by release automation.
 
 ### Changed
-- Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy `sun.auto_sync`.
-- Hardened Sun vault backup pull flow with payload checksum/size verification when object metadata is available.
+- Changed vault auto-backup behavior to use explicit backend policy resolution, with backward-compatible fallback from legacy auto-sync settings.
+- Hardened remote vault backup pull flow with payload checksum/size verification when object metadata is available.
 - Changed `si vault run` subprocess environment handling to strip inherited `GIT_*` variables.
 
 ### Security
-- Hardened Sun client URL policy to require HTTPS for non-loopback endpoints by default (override with `SI_SUN_ALLOW_INSECURE_HTTP=1` only when intentional).
+- Hardened the remote vault client URL policy to require HTTPS for non-loopback endpoints by default.
 
 ## [v0.48.0] - 2026-02-22
 ### Added
-- Added the `si sun` cloud command surface for account auth, codex profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics.
-- Added Sun-focused CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
-- Added Sun cloud-sync operator documentation and settings reference coverage (`[sun]`).
-- Added native Go SSH transport support for SI PaaS remote deploy workflows, with companion architecture runbook documentation.
+- Added cloud account auth, profile sync, vault backup sync, token lifecycle, audit listing, and health diagnostics coverage.
+- Added cloud-sync CI coverage and subprocess round-trip tests for profile sync and vault backup flows.
+- Added cloud-sync operator documentation and settings reference coverage.
+- Added native Go SSH transport support for remote deploy workflows, with companion architecture runbook documentation.
 
 ### Changed
 - Updated GitHub and Cloudflare auth resolution so account credentials can be sourced directly from SI vault key references.
@@ -91,18 +104,18 @@ All notable changes to this project will be documented in this file.
 - Simplified `si build image` mode selection while preserving native `docker buildx` progress output behavior.
 
 ### Fixed
-- Stabilized SI CI lanes (`SI Tests` and Sun-focused workflow checks) by fixing empty-env headless detection and formatting gate regressions.
+- Stabilized SI CI lanes by fixing empty-env headless detection and formatting gate regressions.
 - Fixed `si vault` write paths to refuse updates when git index flags (`skip-worktree`/`assume-unchanged`) could hide dotenv changes.
 - Fixed `si logout-all` behavior to block unintended auth-cache recovery after explicit logout.
 
 ### Security
-- Hardened Sun vault auto-backup hooks to skip uploading dotenv files containing plaintext keys, preventing accidental plaintext secret sync to cloud storage.
+- Hardened vault auto-backup hooks to skip uploading dotenv files containing plaintext keys, preventing accidental plaintext secret sync to remote storage.
 
 ## [v0.47.0] - 2026-02-19
 ### Added
 - Added a full Orbitals command surface (`si orbits`) with catalog build/validate, policy controls (including namespace wildcards), update flows, and install diagnostics/provenance reporting.
 - Added `si browser` Docker runtime integration for Playwright MCP and wired browser MCP endpoints into spawned codex and dyad containers.
-- Added SI-managed Supabase backup workflows with WAL-G/Databackup profile support under `si paas backup`, including contract/run/status/restore operations.
+- Added SI-managed Supabase backup workflows with WAL-G/Databackup profile support, including contract/run/status/restore operations.
 - Added GitHub git-credential helper and remote normalization workflows under `si github git`, plus expanded PAT OAuth guidance for multi-repo operations.
 - Added first-run workspace defaults prompting/persistence and a strict vault-focused regression suite with explicit default vault-file management.
 - Added `si mintlify` docs lifecycle integration and Gemini image generation support in `si gcp`.
@@ -115,7 +128,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Fixed settings loading/ownership edge cases that produced permission-denied warnings for `~/.si/settings.toml` on host-driven executions.
 - Fixed mixed boolean flag reordering behavior and dyad `--skip-auth` boolean parsing edge cases.
-- Fixed installer smoke and website-sentry workflow output handling, plus environment-dependent codex/PaaS test flakiness.
+- Fixed installer smoke and website-sentry workflow output handling, plus environment-dependent codex/platform test flakiness.
 - Fixed host/container tooling parity by mounting host Docker config + SI Go toolchain into codex/dyad containers and resolving preflight/analyze Go without host PATH dependence.
 
 ### Removed
@@ -130,10 +143,10 @@ All notable changes to this project will be documented in this file.
 
 ## [v0.46.0] - 2026-02-18
 ### Added
-- Added the initial `si paas` platform management surface, including target storage/bootstrap, connectivity checks, compatibility preflight checks, Traefik ingress secret helpers, deploy strategy fan-out, webhook ingest/mapping, and compose-only blue/green cutover policy controls.
-- Added PaaS operational workflows for deploy event recording, health rollback orchestration with failure taxonomy, release bundle metadata, scrubbed metadata export/import, context vault namespace controls, logs/events live backends, operational alert routing (including Telegram), and operator callback acknowledge hooks.
-- Added PaaS incident and automation features: unified audit event model, incident queue retention, incident schema taxonomy dedupe, event bridge collectors, codex runtime adapter, live agent command backend, remediation policy engine, scheduler self-heal locks, offline fake-codex smoke loop, and agent-run audit artifact capture.
-- Added PaaS state and governance artifacts, including context state layout/init, state-classification storage policy, isolation guardrails, addon lifecycle/magic-variable merge validation, security checklist and threat model, failure-injection rollback drills, regression coverage, backup/restore policy, and context/incident operations runbooks.
+- Added the initial platform management surface, including target storage/bootstrap, connectivity checks, compatibility preflight checks, Traefik ingress secret helpers, deploy strategy fan-out, webhook ingest/mapping, and compose-only blue/green cutover policy controls.
+- Added platform operational workflows for deploy event recording, health rollback orchestration with failure taxonomy, release bundle metadata, scrubbed metadata export/import, context vault namespace controls, logs/events live backends, operational alert routing, and operator callback acknowledge hooks.
+- Added incident and automation features: unified audit event model, incident queue retention, incident schema taxonomy dedupe, event bridge collectors, codex runtime adapter, live agent command backend, remediation policy engine, scheduler self-heal locks, offline fake-codex smoke loop, and agent-run audit artifact capture.
+- Added state and governance artifacts, including context state layout/init, state-classification storage policy, isolation guardrails, addon lifecycle/magic-variable merge validation, security checklist and threat model, failure-injection rollback drills, regression coverage, backup/restore policy, and context/incident operations runbooks.
 - Added `si google play` direct API automation with service-account auth/context, custom app creation, listing/details/image management, release-track orchestration, metadata apply workflow, provider telemetry registration, and raw API access.
 - Added `si apple appstore` direct API automation with JWT auth/context, bundle/app onboarding, localized listing updates, metadata apply workflows, provider telemetry registration, and raw App Store Connect API access.
 
@@ -143,7 +156,7 @@ All notable changes to this project will be documented in this file.
 - Hardened Docker runtime compatibility for Colima-based macOS setups (including profile/context socket detection) and made `si build image` gracefully skip build secrets when `docker buildx` is unavailable.
 
 ### Fixed
-- Fixed a PaaS alerting crash path by guarding nil-map access in operational alert dispatch.
+- Fixed an alerting crash path by guarding nil-map access in operational alert dispatch.
 - Fixed `tools/si` module dependency metadata drift so image builds no longer fail with `go: updates to go.mod needed`.
 - Fixed `si build image` to disable BuildKit (`DOCKER_BUILDKIT=0`) when `docker buildx` is missing or broken, preventing BuildKit hard-fail errors on Colima-only hosts.
 
