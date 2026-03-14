@@ -30,7 +30,6 @@ func TestDispatchRootCommandAliases(t *testing.T) {
 		"dyad",
 		"build",
 		"mintlify",
-		"paas",
 		"sun",
 		"viva",
 		"fort",
