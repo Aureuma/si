@@ -244,11 +244,9 @@ jobs:
           tmp_dir="$(mktemp -d)"
           trap 'rm -rf "${tmp_dir}"' EXIT
 
-          tap_push_token="${HOMEBREW_TAP_PUSH_TOKEN}"
-          if [[ -z "${tap_push_token}" ]]; then
-            tap_push_token="${GH_PAT_AUREUMA}"
-          fi
-          if [[ -z "${tap_push_token}" ]]; then
+          primary_token="${HOMEBREW_TAP_PUSH_TOKEN}"
+          fallback_token="${GH_PAT_AUREUMA}"
+          if [[ -z "${primary_token}" && -z "${fallback_token}" ]]; then
             echo "tap push token resolved empty" >&2
             exit 1
           fi
@@ -256,7 +254,30 @@ jobs:
           curl --proto '=https' --tlsv1.2 -fsSL "${checksums_url}" -o "${tmp_dir}/checksums.txt"
 
           tap_dir="${tmp_dir}/homebrew-si"
-          git clone "https://x-access-token:${tap_push_token}@github.com/Aureuma/homebrew-si.git" "${tap_dir}"
+          clone_with_token() {
+            local token="$1"
+            [[ -n "${token}" ]] || return 1
+            rm -rf "${tap_dir}"
+            git clone "https://x-access-token:${token}@github.com/Aureuma/homebrew-si.git" "${tap_dir}"
+          }
+
+          tap_push_token=""
+          if [[ -n "${primary_token}" ]]; then
+            if clone_with_token "${primary_token}"; then
+              tap_push_token="${primary_token}"
+            elif [[ -n "${fallback_token}" && "${fallback_token}" != "${primary_token}" ]]; then
+              echo "Primary Homebrew token auth failed; retrying with GH_PAT_AUREUMA fallback."
+              clone_with_token "${fallback_token}"
+              tap_push_token="${fallback_token}"
+            else
+              echo "Primary Homebrew token auth failed and no distinct fallback token is available." >&2
+              exit 1
+            fi
+          else
+            clone_with_token "${fallback_token}"
+            tap_push_token="${fallback_token}"
+          fi
+
           git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
           git -C "${tap_dir}" config user.name "github-actions[bot]"
 
