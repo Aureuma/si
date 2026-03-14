@@ -213,13 +213,19 @@ jobs:
         shell: bash
         env:
           HOMEBREW_TAP_PUSH_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
+          GH_PAT_AUREUMA: ${{ secrets.GH_PAT_AUREUMA }}
         run: |
           set -euo pipefail
-          if [[ -z "${HOMEBREW_TAP_PUSH_TOKEN}" ]]; then
-            echo "enabled=false" >> "${GITHUB_OUTPUT}"
-            echo "HOMEBREW_TAP_PUSH_TOKEN is not configured; skipping tap update."
-          else
+          if [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" ]]; then
             echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "token_source=HOMEBREW_TAP_PUSH_TOKEN" >> "${GITHUB_OUTPUT}"
+          elif [[ -n "${GH_PAT_AUREUMA}" ]]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            echo "token_source=GH_PAT_AUREUMA" >> "${GITHUB_OUTPUT}"
+            echo "HOMEBREW_TAP_PUSH_TOKEN is not configured; falling back to GH_PAT_AUREUMA for Aureuma/homebrew-si."
+          else
+            echo "enabled=false" >> "${GITHUB_OUTPUT}"
+            echo "Neither HOMEBREW_TAP_PUSH_TOKEN nor GH_PAT_AUREUMA is configured; skipping tap update."
           fi
 
       - name: Checkout
@@ -230,6 +236,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         env:
           HOMEBREW_TAP_PUSH_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
+          GH_PAT_AUREUMA: ${{ secrets.GH_PAT_AUREUMA }}
         run: |
           set -euo pipefail
           tag="${{ needs.resolve-tag.outputs.tag }}"
@@ -237,10 +244,19 @@ jobs:
           tmp_dir="$(mktemp -d)"
           trap 'rm -rf "${tmp_dir}"' EXIT
 
+          tap_push_token="${HOMEBREW_TAP_PUSH_TOKEN}"
+          if [[ -z "${tap_push_token}" ]]; then
+            tap_push_token="${GH_PAT_AUREUMA}"
+          fi
+          if [[ -z "${tap_push_token}" ]]; then
+            echo "tap push token resolved empty" >&2
+            exit 1
+          fi
+
           curl --proto '=https' --tlsv1.2 -fsSL "${checksums_url}" -o "${tmp_dir}/checksums.txt"
 
           tap_dir="${tmp_dir}/homebrew-si"
-          git clone "https://x-access-token:${HOMEBREW_TAP_PUSH_TOKEN}@github.com/Aureuma/homebrew-si.git" "${tap_dir}"
+          git clone "https://x-access-token:${tap_push_token}@github.com/Aureuma/homebrew-si.git" "${tap_dir}"
           git -C "${tap_dir}" config user.email "github-actions[bot]@users.noreply.github.com"
           git -C "${tap_dir}" config user.name "github-actions[bot]"
 
@@ -263,6 +279,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           HOMEBREW_TAP_PUSH_TOKEN: ${{ secrets.HOMEBREW_TAP_PUSH_TOKEN }}
+          GH_PAT_AUREUMA: ${{ secrets.GH_PAT_AUREUMA }}
         run: |
           set -euo pipefail
 
@@ -321,7 +338,7 @@ jobs:
             echo "NPM_TOKEN is not configured; skipping npm verification."
           fi
 
-          if [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" ]]; then
+          if [[ -n "${HOMEBREW_TAP_PUSH_TOKEN}" || -n "${GH_PAT_AUREUMA}" ]]; then
             tap_url="https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb"
             if ! retry 12 10 bash -lc "curl --proto '=https' --tlsv1.2 -fsSL '${tap_url}' | grep -Eq 'version\\s+\"${version}\"'"; then
               echo "Homebrew tap formula did not update to ${version} after retries" >&2
@@ -329,5 +346,5 @@ jobs:
             fi
             echo "homebrew tap formula verified at version ${version}"
           else
-            echo "HOMEBREW_TAP_PUSH_TOKEN is not configured; skipping tap verification."
+            echo "Neither HOMEBREW_TAP_PUSH_TOKEN nor GH_PAT_AUREUMA is configured; skipping tap verification."
           fi
