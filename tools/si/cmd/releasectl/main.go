@@ -18,6 +18,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -897,10 +898,30 @@ func buildNPMPackage(opts npmBuildOptions) (string, error) {
 	sort.Strings(matches)
 	src := matches[len(matches)-1]
 	dst := filepath.Join(opts.OutDir, filepath.Base(src))
-	if err := os.Rename(src, dst); err != nil {
+	if err := moveFile(src, dst); err != nil {
 		return "", err
 	}
 	return dst, nil
+}
+
+func moveFile(src string, dst string) error {
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	} else if !errors.Is(err, syscall.EXDEV) {
+		return err
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := copyFile(src, dst, info.Mode()); err != nil {
+		return err
+	}
+	if err := os.Remove(src); err != nil {
+		return err
+	}
+	return nil
 }
 
 func rewritePackageVersion(path string, version string) error {
