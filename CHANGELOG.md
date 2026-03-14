@@ -12,6 +12,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.53.2] - 2026-03-14
+### Changed
+- Changed CLI release automation to fall back to `GH_PAT_AUREUMA` when the dedicated Homebrew tap token is unavailable, keeping Homebrew distribution updates on the automated release path.
+
+### Fixed
+- Fixed `si spawn` first-run workspace inference to prefer the surrounding workspace root over a repo checkout path, avoiding invalid bind mounts when SI is launched from inside the `si` repository.
+- Fixed local npm release packaging to fall back from `rename` to copy-and-remove when the staging directory and output directory are on different filesystems.
+
 ## [v0.53.1] - 2026-03-14
 ### Added
 - Added first-run workspace-root and runtime-path persistence for installed SI environments so codex, dyad, viva, remote-control, and related wrappers no longer depend on checkout-specific host paths.
