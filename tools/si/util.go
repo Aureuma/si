@@ -77,7 +77,6 @@ Core:
   si orbits <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
   si build <image|self>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
-  si paas [--context <name>] <target|app|deploy|rollback|logs|alert|secret|ai|context|doctor|agent|events|backup|taskboard> [args...]
   si sun <auth|profile|vault|token|audit|taskboard|machine|doctor> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
   si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync|bootstrap> [args]
@@ -357,10 +356,6 @@ fort:
 	    - Wrapper auto-refreshes runtime auth when possible using token-file flow.
 	    - FORT_TOKEN and FORT_REFRESH_TOKEN are stripped from child env before exec.
 	    - For fort-native global flags, pass them after -- (example: si fort -- --host https://fort.aureuma.ai doctor).
-
-paas:
-  Running si paas with no subcommand opens an interactive command picker.
-  Running si paas target/app/alert/ai/context/agent/events with no subcommand opens an interactive command picker.
 
 sun:
   si sun auth login [--url <url>] [--token <token>] [--google] [--login-url <url>] [--open-browser] [--account <slug>] [--timeout-seconds <n>] [--auto-sync]

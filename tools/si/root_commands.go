@@ -76,9 +76,6 @@ var (
 	loadSurfRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdSurf(args) }
 	}
-	loadPaasRootHandler = func() rootCommandHandler {
-		return func(_ string, args []string) { cmdPaas(args) }
-	}
 	loadSunRootHandler = func() rootCommandHandler {
 		return func(_ string, args []string) { cmdSun(args) }
 	}
@@ -151,7 +148,6 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadDyadRootHandler), "dyad")
 	register(newLazyRootHandler(loadBuildRootHandler), "build")
 	register(newLazyRootHandler(loadMintlifyRootHandler), "mintlify")
-	register(newLazyRootHandler(loadPaasRootHandler), "paas")
 	register(newLazyRootHandler(loadSunRootHandler), "sun")
 	register(newLazyRootHandler(loadPersonaRootHandler), "persona")
 	register(newLazyRootHandler(loadSkillRootHandler), "skill")
