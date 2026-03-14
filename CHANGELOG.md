@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Changed workspace and config resolution to prefer `~/.si/settings.toml` path settings, infer sensible defaults from the current repo when possible, and prompt to persist those defaults during interactive first use.
 - Changed warmup auto-repair to treat cached logged-in profiles as an opt-in signal and to persist the scheduler marker when that fallback path is used.
-- Removed the `si paas` and `si sun` command families, their docs/workflows/tests, and the retired standalone Sun backend checkout.
+- Removed the retired legacy platform/cloud command families, their docs/workflows/tests, and the obsolete backend checkout.
 
 ### Fixed
 - Fixed `si spawn`, `si dyad spawn`, `si viva node bootstrap`, and related wrapper flows to fall back cleanly when saved workspace/config paths are stale or no longer exist.
