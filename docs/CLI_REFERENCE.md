@@ -23,9 +23,8 @@ si <command> <subcommand> --help
 | --- | --- |
 | Runtime and orchestration | `si dyad`, codex lifecycle (`si spawn`, `si run`, `si status`, `si report`) |
 | Secrets and context | `si vault` (`si creds`), `si fort` |
-| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si sun` (non-vault secret path), `si releasemind` (`si release`) |
+| Integration bridges | `si github`, `si cloudflare`, `si gcp`, `si aws`, `si openai`, `si oci`, `si google`, `si social`, `si workos`, `si apple appstore`, `si stripe`, `si publish`, `si releasemind` (`si release`) |
 | Provider telemetry | `si providers` |
-| Platform operations | `si paas` |
 | Surf browser runtime | `si surf` |
 | Orbit ecosystem | `si orbits` |
 | Build and quality | `si build`, `si analyze` (`si lint`), `si docker` |
@@ -52,22 +51,6 @@ si viva -- tunnel status --profile dev
 si viva -- tunnel down --profile dev
 ```
 
-### Shared dyad taskboard
-
-```bash
-si sun taskboard add --name shared --title "Triage flaky test" --prompt "Reproduce and fix the flaky test in CI" --priority P1
-si dyad spawn ci-triage --autopilot --profile main
-```
-
-### Cross-machine SI control
-
-```bash
-si sun machine register --machine controller-a --operator op:controller@local --can-control-others --can-be-controlled=false
-si sun machine run --machine worker-a --source-machine controller-a --operator op:controller@local --wait -- version
-```
-
-`--wait` exits non-zero for remote `failed`/`denied` jobs, so it is safe for CI gating.
-
 ### Integration readiness
 
 ```bash
@@ -82,14 +65,6 @@ si gcp doctor --json
 ```bash
 si fort doctor
 si fort get --repo releasemind --env dev --key RM_OPENAI_API_KEY
-```
-
-### PaaS readiness
-
-```bash
-si paas doctor --json
-si paas backup run --app <slug> --json
-si paas events tail --app <slug> --json
 ```
 
 ### Docs quality

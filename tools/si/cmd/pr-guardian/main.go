@@ -124,7 +124,7 @@ func main() {
 	}
 	for _, file := range changedFiles {
 		switch {
-		case strings.HasPrefix(file, ".github/workflows/"), strings.HasPrefix(file, "tools/install-si.sh"), strings.Contains(file, "paas"), strings.HasPrefix(file, "agents/shared/docker/"):
+		case strings.HasPrefix(file, ".github/workflows/"), strings.HasPrefix(file, "tools/install-si.sh"), strings.HasPrefix(file, "agents/shared/docker/"):
 			risk = "high"
 		case strings.HasPrefix(file, "tools/"), strings.HasPrefix(file, "docs/"), file == "README.md":
 			if risk == "low" {

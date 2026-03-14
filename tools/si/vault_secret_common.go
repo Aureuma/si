@@ -32,6 +32,15 @@ type siVaultTarget struct {
 	RepoDir string
 }
 
+type siVaultKeyMaterial struct {
+	Repo              string   `json:"repo"`
+	Env               string   `json:"env"`
+	PublicKey         string   `json:"public_key"`
+	PrivateKey        string   `json:"private_key"`
+	BackupPrivateKeys []string `json:"backup_private_keys,omitempty"`
+	UpdatedAt         string   `json:"updated_at,omitempty"`
+}
+
 type siVaultEncryptStats struct {
 	Encrypted        int
 	Reencrypted      int

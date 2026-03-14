@@ -77,7 +77,15 @@ func cmdRemoteControl(args []string) {
 		resolvedRepo = strings.TrimSpace(settings.RemoteControl.Repo)
 	}
 	if resolvedRepo == "" {
-		resolvedRepo = defaultRemoteControlRepoPath()
+		cwd, err := os.Getwd()
+		if err != nil {
+			fatal(err)
+		}
+		root, err := resolveGitReposRoot(false, "", &settings, cwd)
+		if err == nil {
+			maybePersistWorkspaceRootDefault(&settings, root, isInteractiveTerminal())
+			resolvedRepo = filepath.Join(root, "remote-control")
+		}
 	}
 
 	resolvedBin := strings.TrimSpace(*bin)
@@ -309,17 +317,17 @@ func remoteControlFlagProvided(fs *flag.FlagSet, name string) bool {
 }
 
 func defaultRemoteControlRepoPath() string {
-	if wd, err := os.Getwd(); err == nil {
-		cand := filepath.Join(wd, "remote-control")
-		if fi, err := os.Stat(cand); err == nil && fi.IsDir() {
-			return cand
-		}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
 	}
-	if home, err := os.UserHomeDir(); err == nil {
-		cand := filepath.Join(home, "Development", "remote-control")
-		if fi, err := os.Stat(cand); err == nil && fi.IsDir() {
-			return cand
-		}
+	root, err := resolveGitReposRoot(false, "", nil, cwd)
+	if err != nil {
+		return ""
+	}
+	cand := filepath.Join(root, "remote-control")
+	if fi, err := os.Stat(cand); err == nil && fi.IsDir() {
+		return cand
 	}
 	return ""
 }
@@ -371,7 +379,15 @@ func cmdRemoteControlSafariSmoke(args []string) {
 		resolvedRepo = strings.TrimSpace(settings.RemoteControl.Repo)
 	}
 	if resolvedRepo == "" {
-		resolvedRepo = defaultRemoteControlRepoPath()
+		cwd, err := os.Getwd()
+		if err != nil {
+			fatal(err)
+		}
+		root, err := resolveGitReposRoot(false, "", &settings, cwd)
+		if err == nil {
+			maybePersistWorkspaceRootDefault(&settings, root, isInteractiveTerminal())
+			resolvedRepo = filepath.Join(root, "remote-control")
+		}
 	}
 
 	resolvedRunner := strings.TrimSpace(*runnerBin)

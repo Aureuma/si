@@ -57,35 +57,7 @@ func codexProfiles() []codexProfile {
 	sort.Slice(localProfiles, func(i, j int) bool {
 		return localProfiles[i].ID < localProfiles[j].ID
 	})
-
-	client, err := sunClientFromSettings(settings)
-	if err != nil {
-		return localProfiles
-	}
-	sunItems, err := client.listObjects(context.Background(), sunCodexProfileBundleKind, "", 200)
-	if err != nil || len(sunItems) == 0 {
-		return localProfiles
-	}
-
-	profiles := make([]codexProfile, 0, len(sunItems))
-	for _, item := range sunItems {
-		id := strings.TrimSpace(item.Name)
-		if id == "" {
-			continue
-		}
-		entry := entries[id]
-		name := strings.TrimSpace(entry.Name)
-		email := strings.TrimSpace(entry.Email)
-		profiles = append(profiles, codexProfile{
-			ID:    id,
-			Name:  name,
-			Email: email,
-		})
-	}
-	sort.Slice(profiles, func(i, j int) bool {
-		return profiles[i].ID < profiles[j].ID
-	})
-	return profiles
+	return localProfiles
 }
 
 func codexProfileByKey(key string) (codexProfile, bool) {
@@ -191,14 +163,7 @@ type codexAuthCacheStatus struct {
 var (
 	codexAuthSyncAttempts                sync.Map
 	syncProfileAuthFromContainerStatusFn = syncProfileAuthFromContainer
-	syncProfileAuthFromSunStatusFn       func(context.Context, codexProfile) (bool, error)
 )
-
-func init() {
-	if syncProfileAuthFromSunStatusFn == nil {
-		syncProfileAuthFromSunStatusFn = syncProfileAuthFromSun
-	}
-}
 
 func codexProfileAuthStatus(profile codexProfile) codexAuthCacheStatus {
 	path, err := codexProfileAuthPath(profile)
@@ -283,74 +248,7 @@ func attemptRecoverCodexAuthCache(profile codexProfile) bool {
 			return true
 		}
 	}
-	return recoverCodexAuthCacheFromSun(profile, 8*time.Second)
-}
-
-func recoverCodexAuthCacheFromSun(profile codexProfile, timeout time.Duration) bool {
-	if syncProfileAuthFromSunStatusFn == nil {
-		return false
-	}
-	if timeout <= 0 {
-		timeout = 8 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	ok, err := syncProfileAuthFromSunStatusFn(ctx, profile)
-	return err == nil && ok
-}
-
-func syncProfileAuthFromSun(ctx context.Context, profile codexProfile) (bool, error) {
-	profileID := strings.TrimSpace(profile.ID)
-	if profileID == "" {
-		return false, fmt.Errorf("profile id required")
-	}
-
-	settings := loadSettingsOrDefault()
-	client, err := sunClientFromSettings(settings)
-	if err != nil {
-		return false, err
-	}
-
-	payload, err := client.getPayload(ctx, sunCodexProfileBundleKind, profileID)
-	if err != nil {
-		if isSunNotFoundError(err) {
-			return false, nil
-		}
-		return false, err
-	}
-
-	var bundle sunCodexProfileBundle
-	if err := json.Unmarshal(payload, &bundle); err != nil {
-		return false, fmt.Errorf("profile %s payload invalid: %w", profileID, err)
-	}
-	if strings.TrimSpace(bundle.ID) == "" {
-		bundle.ID = profileID
-	}
-
-	localProfile := codexProfile{
-		ID:    strings.TrimSpace(bundle.ID),
-		Name:  firstNonEmpty(strings.TrimSpace(bundle.Name), strings.TrimSpace(profile.Name)),
-		Email: firstNonEmpty(strings.TrimSpace(bundle.Email), strings.TrimSpace(profile.Email)),
-	}
-	if localProfile.ID == "" {
-		return false, fmt.Errorf("profile payload missing id")
-	}
-
-	dir, err := ensureCodexProfileDir(localProfile)
-	if err != nil {
-		return false, err
-	}
-	authPath := filepath.Join(dir, "auth.json")
-	if err := writeFileAtomic0600(authPath, bundle.AuthJSON); err != nil {
-		return false, err
-	}
-	if err := codexAuthValidationError(authPath); err != nil {
-		return false, fmt.Errorf("downloaded auth cache invalid for %s: %w", localProfile.ID, err)
-	}
-	if err := upsertCodexProfilesInSettings([]codexProfile{localProfile}); err != nil {
-		return false, err
-	}
-	return true, nil
+	return false
 }
 
 func codexProfileSummaries() []codexProfileSummary {

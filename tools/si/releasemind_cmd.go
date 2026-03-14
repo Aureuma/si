@@ -128,8 +128,8 @@ func resolveReleasemindPlannerRepo(explicit string) (string, error) {
 		return filepath.Abs(fromEnv)
 	}
 	candidates := []string{
+		"releasemind",
 		"../releasemind",
-		"/home/shawn/Development/releasemind",
 	}
 	for _, candidate := range candidates {
 		resolved, err := filepath.Abs(candidate)

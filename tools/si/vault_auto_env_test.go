@@ -31,7 +31,6 @@ func TestShouldAutoHydrateVaultEnvForRootCommand(t *testing.T) {
 		"cf":     true,
 		"gcp":    true,
 		"vault":  false,
-		"sun":    false,
 		"build":  false,
 	}
 	for cmd, want := range cases {

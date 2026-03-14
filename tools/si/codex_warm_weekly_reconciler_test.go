@@ -216,3 +216,59 @@ func TestMaybeAutoRepairWarmupSchedulerLaunchesEnable(t *testing.T) {
 		t.Fatalf("unexpected launch args: got=%v want=%v", launches[0], want)
 	}
 }
+
+func TestWarmWeeklyAutostartRequestedFallsBackToLoggedInProfiles(t *testing.T) {
+	origLoggedInProfilesFn := loggedInProfilesFn
+	defer func() {
+		loggedInProfilesFn = origLoggedInProfilesFn
+	}()
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	loggedInProfilesFn = func() []codexProfile {
+		return []codexProfile{{ID: "profile-alpha"}}
+	}
+
+	requested, reason := warmWeeklyAutostartRequested()
+	if !requested {
+		t.Fatalf("expected autostart to be requested when logged-in profiles exist")
+	}
+	if reason != "cached_auth" {
+		t.Fatalf("expected cached_auth reason, got %q", reason)
+	}
+}
+
+func TestMaybeAutoRepairWarmupSchedulerPersistsMarkerFromCachedAuth(t *testing.T) {
+	origRequested := warmWeeklyAutostartRequestedFn
+	origHealth := warmWeeklySchedulerHealthFn
+	origLaunch := launchWarmupCommandAsyncFn
+	origArg0 := os.Args[0]
+	defer func() {
+		warmWeeklyAutostartRequestedFn = origRequested
+		warmWeeklySchedulerHealthFn = origHealth
+		launchWarmupCommandAsyncFn = origLaunch
+		os.Args[0] = origArg0
+	}()
+	os.Args[0] = "si"
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	warmWeeklyAutostartRequestedFn = func() (bool, string) { return true, "cached_auth" }
+	warmWeeklySchedulerHealthFn = func() (bool, string, error) { return true, "running", nil }
+	launchWarmupCommandAsyncFn = func(args ...string) error {
+		t.Fatalf("did not expect warmup launch when scheduler is already healthy")
+		return nil
+	}
+
+	maybeAutoRepairWarmupScheduler("status")
+
+	markerPath, err := warmWeeklyAutostartMarkerPath()
+	if err != nil {
+		t.Fatalf("warmWeeklyAutostartMarkerPath: %v", err)
+	}
+	if _, err := os.Stat(markerPath); err != nil {
+		t.Fatalf("expected autostart marker to be written, got %v", err)
+	}
+}

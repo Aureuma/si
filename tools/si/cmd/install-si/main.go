@@ -18,13 +18,7 @@ Usage:
   tools/install-si.sh [flags]
 
 Flags:
-  --backend <local|sun>
-  --sun-url <url>
-  --sun-token <token>
-  --sun-account <slug>
-  --sun-auto-sync
-  --no-sun-auto-sync
-  --skip-sun-auth
+  --backend <local>
   --source-dir <path>
   --repo <owner/repo>
   --repo-url <url>
@@ -109,8 +103,8 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return 0
 	}
 
-	if cfg.backend != "local" && cfg.backend != "sun" {
-		_, _ = fmt.Fprintf(stderr, "invalid --backend %s (expected local or sun)\n", cfg.backend)
+	if cfg.backend != "local" {
+		_, _ = fmt.Fprintf(stderr, "invalid --backend %s (expected local)\n", cfg.backend)
 		return 1
 	}
 
@@ -197,12 +191,6 @@ func parseArgs(args []string) (config, bool, error) {
 	fs.SetOutput(io.Discard)
 
 	fs.StringVar(&cfg.backend, "backend", cfg.backend, "backend")
-	_ = fs.String("sun-url", "", "sun url")
-	_ = fs.String("sun-token", "", "sun token")
-	_ = fs.String("sun-account", "", "sun account")
-	sunAutoSync := fs.Bool("sun-auto-sync", true, "sun auto sync")
-	noSunAutoSync := fs.Bool("no-sun-auto-sync", false, "disable sun auto sync")
-	_ = fs.Bool("skip-sun-auth", false, "skip sun auth")
 	fs.StringVar(&cfg.sourceDir, "source-dir", "", "source dir")
 	fs.StringVar(&cfg.repo, "repo", cfg.repo, "repo")
 	fs.StringVar(&cfg.repoURL, "repo-url", "", "repo url")
@@ -240,10 +228,6 @@ func parseArgs(args []string) (config, bool, error) {
 	if fs.NArg() > 0 {
 		return config{}, false, fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
 	}
-	if *noSunAutoSync {
-		*sunAutoSync = false
-	}
-	_ = sunAutoSync
 
 	cfg.backend = strings.ToLower(strings.TrimSpace(cfg.backend))
 	cfg.sourceDir = strings.TrimSpace(cfg.sourceDir)

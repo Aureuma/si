@@ -7,7 +7,6 @@ This repo supports running a paired **actor** + **critic** "dyad" in Docker. The
 - waits for a delimited work report between `<<WORK_REPORT_BEGIN>>` and `<<WORK_REPORT_END>>` (and has a tolerant fallback for Codex-native output)
 - persists artifacts under `~/.si/dyad/<dyad>/reports/` (host-backed SI state)
 
-Dyads can also pull tasks from a shared Sun taskboard (`si sun taskboard ...`) when spawned with autopilot.
 
 ## Requirements
 
@@ -36,10 +35,10 @@ Spawn a dyad:
 si dyad spawn <name> [role]
 ```
 
-Autopilot (claim from Sun taskboard when no explicit prompt is provided):
+Autopilot (explicit prompt required):
 
 ```bash
-si dyad spawn <name> [role] --autopilot
+si dyad spawn <name> [role] --autopilot --prompt "Investigate failing CI release job"
 ```
 
 Optional explicit seed prompt:
@@ -56,7 +55,7 @@ si dyad logs --member critic <name> --tail 200
 si dyad logs --member actor <name> --tail 200
 ```
 
-Machine-readable output (used by Sun automation and CLI integrations):
+Machine-readable output:
 
 ```bash
 si dyad list --json

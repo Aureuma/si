@@ -624,8 +624,6 @@ type vivaNodeBootstrapRepo struct {
 
 type vivaNodeBootstrapSecrets struct {
 	GitHubToken string `json:"-"`
-	SunBaseURL  string `json:"-"`
-	SunToken    string `json:"-"`
 }
 
 type vivaNodeBootstrapRuntime struct {
@@ -664,8 +662,6 @@ func cmdVivaNodeBootstrap(args []string) {
 	shellProfile := fs.String("shell-profile", "", "remote shell profile path")
 	envFile := fs.String("env-file", "", "remote env file path")
 	githubTokenKey := fs.String("github-token-key", "", "vault/env key for GitHub token")
-	sunBaseURLKey := fs.String("sun-base-url-key", "", "vault/env key for Sun base URL")
-	sunTokenKey := fs.String("sun-token-key", "", "vault/env key for Sun token")
 	buildSIRaw := fs.String("build-si", "", "build si on remote node (true|false)")
 	pullLatestRaw := fs.String("pull-latest", "", "pull latest commits for existing repos (true|false)")
 	installOrbitalsRaw := fs.String("install-orbitals", "", "comma-separated orbit names to install after bootstrap")
@@ -689,8 +685,6 @@ func cmdVivaNodeBootstrap(args []string) {
 
 	cfg := settings.Viva.Node.Bootstrap
 	githubTokenKeyProvided := vivaFlagProvided(fs, "github-token-key")
-	sunBaseURLKeyProvided := vivaFlagProvided(fs, "sun-base-url-key")
-	sunTokenKeyProvided := vivaFlagProvided(fs, "sun-token-key")
 	if vivaFlagProvided(fs, "source-root") {
 		cfg.SourceRoot = strings.TrimSpace(*sourceRoot)
 	}
@@ -708,12 +702,6 @@ func cmdVivaNodeBootstrap(args []string) {
 	}
 	if githubTokenKeyProvided {
 		cfg.GitHubTokenKey = strings.TrimSpace(*githubTokenKey)
-	}
-	if sunBaseURLKeyProvided {
-		cfg.SunBaseURLKey = strings.TrimSpace(*sunBaseURLKey)
-	}
-	if sunTokenKeyProvided {
-		cfg.SunTokenKey = strings.TrimSpace(*sunTokenKey)
 	}
 	if vivaFlagProvided(fs, "build-si") {
 		parsed, parseErr := strconv.ParseBool(strings.TrimSpace(*buildSIRaw))
@@ -736,11 +724,13 @@ func cmdVivaNodeBootstrap(args []string) {
 	if githubTokenKeyProvided {
 		cfg.GitHubTokenKey = strings.TrimSpace(*githubTokenKey)
 	}
-	if sunBaseURLKeyProvided {
-		cfg.SunBaseURLKey = strings.TrimSpace(*sunBaseURLKey)
+	cwd, err := os.Getwd()
+	if err != nil {
+		fatal(err)
 	}
-	if sunTokenKeyProvided {
-		cfg.SunTokenKey = strings.TrimSpace(*sunTokenKey)
+	cfg, err = applyVivaNodeBootstrapPathDefaults(&settings, cfg, cwd, isInteractiveTerminal())
+	if err != nil {
+		fatal(err)
 	}
 
 	runtime, err := resolveVivaNodeBootstrapRuntime(settings, cfg, !*dryRun)
@@ -825,6 +815,21 @@ func cmdVivaNodeBootstrap(args []string) {
 	}
 }
 
+func applyVivaNodeBootstrapPathDefaults(settings *Settings, cfg VivaNodeBootstrapSettings, cwd string, interactive bool) (VivaNodeBootstrapSettings, error) {
+	if strings.TrimSpace(cfg.SourceRoot) == "" {
+		resolved, err := resolveWorkspaceRootDirectory(false, "", strings.TrimSpace(os.Getenv("SI_WORKSPACE_ROOT")), settings, cwd)
+		if err != nil {
+			return cfg, fmt.Errorf("viva.node.bootstrap.source_root is required: %w", err)
+		}
+		cfg.SourceRoot = resolved.Path
+		maybePersistWorkspaceRootDefault(settings, resolved.Path, interactive)
+	}
+	if strings.TrimSpace(cfg.WorkspaceDir) == "" {
+		cfg.WorkspaceDir = filepath.Join("~", filepath.Base(strings.TrimSpace(cfg.SourceRoot)))
+	}
+	return cfg, nil
+}
+
 type vivaNodeBootstrapTarget struct {
 	Key   string
 	Entry VivaNodeProfile
@@ -902,18 +907,8 @@ func resolveVivaNodeBootstrapSecrets(settings Settings, cfg VivaNodeBootstrapSet
 	if err != nil {
 		return vivaNodeBootstrapSecrets{}, err
 	}
-	sunBaseURL, err := read(cfg.SunBaseURLKey)
-	if err != nil {
-		return vivaNodeBootstrapSecrets{}, err
-	}
-	sunToken, err := read(cfg.SunTokenKey)
-	if err != nil {
-		return vivaNodeBootstrapSecrets{}, err
-	}
 	return vivaNodeBootstrapSecrets{
 		GitHubToken: githubToken,
-		SunBaseURL:  sunBaseURL,
-		SunToken:    sunToken,
 	}, nil
 }
 
@@ -977,12 +972,6 @@ func buildVivaNodeBootstrapScript(runtime vivaNodeBootstrapRuntime) string {
 	envLines := []string{}
 	if strings.TrimSpace(runtime.Secrets.GitHubToken) != "" {
 		envLines = append(envLines, "export GH_PAT_AUREUMA="+vivaShellQuote(runtime.Secrets.GitHubToken))
-	}
-	if strings.TrimSpace(runtime.Secrets.SunBaseURL) != "" {
-		envLines = append(envLines, "export SI_SUN_BASE_URL="+vivaShellQuote(runtime.Secrets.SunBaseURL))
-	}
-	if strings.TrimSpace(runtime.Secrets.SunToken) != "" {
-		envLines = append(envLines, "export SI_SUN_TOKEN="+vivaShellQuote(runtime.Secrets.SunToken))
 	}
 	lines = append(lines, "cat > \"$ENV_FILE\" <<'SIEOF'")
 	lines = append(lines, envLines...)

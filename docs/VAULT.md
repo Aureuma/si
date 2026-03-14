@@ -12,7 +12,6 @@ Design goals:
 Architecture boundary:
 - SI Vault cryptography is local and file/keyring based.
 - Fort is the only API wrapper for policy/auth over SI Vault operations.
-- Sun is not part of SI Vault secret read/write flows.
 
 ## Fort Boundary (No Overlap Contract)
 

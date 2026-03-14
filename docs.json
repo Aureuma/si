@@ -93,46 +93,6 @@
         ]
       },
       {
-        "tab": "PaaS",
-        "groups": [
-          {
-            "group": "Platform",
-            "pages": [
-              "docs/PAAS_OVERVIEW",
-              "docs/PAAS_SSH_TRANSPORT_ARCHITECTURE",
-              "docs/PAAS_TEST_MATRIX",
-              "docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK",
-              "docs/PAAS_AUTOMATION_AGENTS",
-              "docs/PAAS_BACKUP_RESTORE_POLICY"
-            ]
-          },
-          {
-            "group": "Agents",
-            "pages": [
-              "docs/PAAS_AGENT_RUNTIME_COMMANDS",
-              "docs/PAAS_AGENT_RUNTIME_ADAPTER",
-              "docs/PAAS_AGENT_APPROVAL_FLOW",
-              "docs/PAAS_AGENT_OFFLINE_SMOKE_TESTS",
-              "docs/PAAS_AGENT_SCHEDULER_SELF_HEAL",
-              "docs/PAAS_AGENT_AUDIT_ARTIFACTS"
-            ]
-          },
-          {
-            "group": "Reliability",
-            "pages": [
-              "docs/PAAS_INCIDENT_RUNBOOK",
-              "docs/PAAS_INCIDENT_EVENT_SCHEMA",
-              "docs/PAAS_INCIDENT_QUEUE_POLICY",
-              "docs/PAAS_FAILURE_DRILLS",
-              "docs/PAAS_REMEDIATION_POLICY_ENGINE",
-              "docs/PAAS_STATE_CLASSIFICATION_POLICY",
-              "docs/PAAS_SECURITY_THREAT_MODEL",
-              "docs/PAAS_EVENT_BRIDGE_COLLECTORS"
-            ]
-          }
-        ]
-      },
-      {
         "tab": "Release",
         "groups": [
           {

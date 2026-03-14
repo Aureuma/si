@@ -23,9 +23,8 @@ si <command> <subcommand> --help
 | codex lifecycle (`si spawn`, `si run`, etc.) | Manage codex containers and one-off runs | `spawn`, `respawn`, `status`, `report`, `run`, `warmup` | [CLI Reference](./CLI_REFERENCE) |
 | `si vault` (`si creds`) | Encrypt and inject dotenv secrets | `keypair`, `status`, `check`, `hooks`, `encrypt`, `decrypt`, `restore`, `set`, `unset`, `get`, `list`, `run`, `docker exec` | [Vault](./VAULT) |
 | `si fort` | Wrapper for hosted Fort policy/auth API (runtime secret access path) | `doctor`, `auth`, `get`, `set`, `list`, `batch-get`, `run`, `agent`, `config show`, `config set` | [Vault](./VAULT) |
-| `si sun` | Cloud sync and machine orchestration for profiles, taskboards, and remote SI control (not SI Vault/Fort secret path) | `auth`, `profile`, `token`, `audit`, `taskboard`, `machine`, `doctor` | [Sun Cloud Sync](./SUN) |
 | `si surf` | Dockerized Playwright MCP runtime | `build`, `start`, `status`, `logs`, `proxy` | [Browser](./BROWSER) |
-| `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build/push/pull/status)` | [Orbitals](./ORBITALS) |
+| `si orbits` | Orbit registry and lifecycle | `list`, `install`, `update`, `enable`, `doctor`, `scaffold`, `policy`, `gateway (build)` | [Orbitals](./ORBITALS) |
 
 ## Provider and integration command families
 
@@ -46,15 +45,6 @@ si <command> <subcommand> --help
 | Apple App Store Connect | `si apple appstore ...` | `si apple appstore auth status`, `doctor` | [Apple App Store](./APPLE_APPSTORE) |
 | Publish flows | `si publish ...` | `si publish catalog list` | [Publish](./PUBLISH) |
 | Provider telemetry | `si providers ...` | `si providers characteristics`, `si providers health` | [Providers](./PROVIDERS) |
-
-## PaaS and operations commands
-
-| Command family | Purpose | High-signal commands | Guide |
-| --- | --- | --- | --- |
-| `si paas` | Deploy and operate apps on SI PaaS | `doctor`, `deploy`, `logs`, `backup`, `events` | [PaaS Overview](./PAAS_OVERVIEW) |
-| `si paas app` | App lifecycle controls | `list`, `status`, `env`, `deploy` | [PaaS Context Operations](./PAAS_CONTEXT_OPERATIONS_RUNBOOK) |
-| `si paas backup` | Backup and restore workflows | `run`, `list`, `restore` | [PaaS Backup Policy](./PAAS_BACKUP_RESTORE_POLICY) |
-| `si paas agent` | Automation agent runtime | `list`, `enable`, `run-once`, `logs` | [PaaS Agent Runtime Commands](./PAAS_AGENT_RUNTIME_COMMANDS) |
 
 ## Build, docs, and developer tooling
 
@@ -89,15 +79,7 @@ si github doctor --json
 si cloudflare doctor --json
 ```
 
-### 3. Pre-production PaaS check
-
-```bash
-si paas doctor --json
-si paas backup run --app <slug> --json
-si paas events tail --json
-```
-
-### 4. Release maintainer preflight
+### 3. Release maintainer preflight
 
 ```bash
 si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight

@@ -21,10 +21,11 @@ func TestWorkspaceDefaultValue(t *testing.T) {
 
 func TestSetWorkspaceDefault(t *testing.T) {
 	settings := defaultSettings()
-	if changed := setWorkspaceDefault(&settings, workspaceScopeCodex, " /tmp/codex "); !changed {
+	existing := t.TempDir()
+	if changed := setWorkspaceDefault(&settings, workspaceScopeCodex, " "+existing+" "); !changed {
 		t.Fatalf("expected codex workspace to be set")
 	}
-	if settings.Codex.Workspace != "/tmp/codex" {
+	if settings.Codex.Workspace != existing {
 		t.Fatalf("unexpected codex workspace: %q", settings.Codex.Workspace)
 	}
 
@@ -32,7 +33,7 @@ func TestSetWorkspaceDefault(t *testing.T) {
 	if changed := setWorkspaceDefault(&settings, workspaceScopeCodex, "/tmp/other"); changed {
 		t.Fatalf("expected existing codex workspace to remain unchanged")
 	}
-	if settings.Codex.Workspace != "/tmp/codex" {
+	if settings.Codex.Workspace != existing {
 		t.Fatalf("unexpected codex workspace after overwrite attempt: %q", settings.Codex.Workspace)
 	}
 }
@@ -161,5 +162,79 @@ func TestEnsureWorkspaceDefaultPropagatesSaveError(t *testing.T) {
 	}
 	if !errors.Is(err, saveErr) {
 		t.Fatalf("expected save error, got %v", err)
+	}
+}
+
+func TestSetWorkspaceDefaultReplacesMissingConfiguredPath(t *testing.T) {
+	settings := defaultSettings()
+	settings.Codex.Workspace = "/tmp/does-not-exist-anymore"
+
+	if changed := setWorkspaceDefault(&settings, workspaceScopeCodex, "/tmp/replacement"); !changed {
+		t.Fatalf("expected stale codex workspace to be replaced")
+	}
+	if settings.Codex.Workspace != "/tmp/replacement" {
+		t.Fatalf("unexpected codex workspace after replacement: %q", settings.Codex.Workspace)
+	}
+}
+
+func TestEnsureDyadConfigsDefaultPersistsWhenConfirmed(t *testing.T) {
+	settings := defaultSettings()
+	var promptSeen string
+	saved := false
+	confirm := func(prompt string, defaultYes bool) (bool, bool) {
+		promptSeen = prompt
+		return true, true
+	}
+	save := func(in Settings) error {
+		saved = true
+		if got := strings.TrimSpace(in.Dyad.Configs); got != "/tmp/configs" {
+			t.Fatalf("unexpected saved dyad configs: %q", got)
+		}
+		return nil
+	}
+
+	changed, err := ensureDyadConfigsDefault(&settings, "/tmp/configs", true, confirm, save)
+	if err != nil {
+		t.Fatalf("ensureDyadConfigsDefault() unexpected err: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected dyad configs default to be persisted")
+	}
+	if !saved {
+		t.Fatalf("expected save callback to be invoked")
+	}
+	if !strings.Contains(promptSeen, "/tmp/configs") || !strings.Contains(promptSeen, "dyad configs") {
+		t.Fatalf("unexpected prompt: %q", promptSeen)
+	}
+}
+
+func TestEnsureWorkspaceRootDefaultPersistsWhenConfirmed(t *testing.T) {
+	settings := defaultSettings()
+	var promptSeen string
+	saved := false
+	confirm := func(prompt string, defaultYes bool) (bool, bool) {
+		promptSeen = prompt
+		return true, true
+	}
+	save := func(in Settings) error {
+		saved = true
+		if got := strings.TrimSpace(in.Paths.WorkspaceRoot); got != "/tmp/root" {
+			t.Fatalf("unexpected saved workspace root: %q", got)
+		}
+		return nil
+	}
+
+	changed, err := ensureWorkspaceRootDefault(&settings, "/tmp/root", true, confirm, save)
+	if err != nil {
+		t.Fatalf("ensureWorkspaceRootDefault() unexpected err: %v", err)
+	}
+	if !changed {
+		t.Fatalf("expected workspace root default to be persisted")
+	}
+	if !saved {
+		t.Fatalf("expected save callback to be invoked")
+	}
+	if !strings.Contains(promptSeen, "/tmp/root") || !strings.Contains(promptSeen, "workspace root") {
+		t.Fatalf("unexpected prompt: %q", promptSeen)
 	}
 }

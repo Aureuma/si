@@ -27,6 +27,7 @@ var (
 	warmWeeklyAutostartRequestedFn = warmWeeklyAutostartRequested
 	warmWeeklySchedulerHealthFn    = warmWeeklySchedulerHealthy
 	launchWarmupCommandAsyncFn     = launchWarmupCommand
+	loggedInProfilesFn             = loggedInProfiles
 )
 
 const (
@@ -964,6 +965,9 @@ func maybeAutoRepairWarmupScheduler(trigger string) {
 	if !autostartRequested {
 		return
 	}
+	if autostartReason != "marker" {
+		_ = writeWarmWeeklyAutostartMarker()
+	}
 
 	healthy, healthReason, err := warmWeeklySchedulerHealthFn()
 	if err != nil {
@@ -975,10 +979,6 @@ func maybeAutoRepairWarmupScheduler(trigger string) {
 	}
 	if healthy {
 		return
-	}
-
-	if autostartReason == "legacy_state" {
-		_ = writeWarmWeeklyAutostartMarker()
 	}
 
 	appendWarmWeeklyLog("warn", "warmup_scheduler_auto_repair", "", map[string]interface{}{
@@ -1021,6 +1021,9 @@ func warmWeeklyAutostartRequested() (bool, string) {
 	}
 	if len(state.Profiles) > 0 {
 		return true, "legacy_state"
+	}
+	if len(loggedInProfilesFn()) > 0 {
+		return true, "cached_auth"
 	}
 	return false, "none"
 }

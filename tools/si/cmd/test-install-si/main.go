@@ -106,19 +106,9 @@ func run(args []string, stdout io.Writer, stderr io.Writer) int {
 		return fail("dry-run --yes")
 	}
 
-	note("dry-run: backend intent sun accepted")
-	if err := runCmd(root, nil, installer, "--dry-run", "--backend", "sun", "--source-dir", root, "--force"); err != nil {
-		return fail("dry-run backend sun")
-	}
-
-	note("dry-run: sun auth flags accepted")
-	if err := runCmd(root, nil, installer, "--dry-run", "--backend", "sun", "--sun-url", "https://sun.example", "--sun-account", "acme", "--sun-token", "token-123", "--no-sun-auto-sync", "--source-dir", root, "--force"); err != nil {
-		return fail("dry-run sun auth flags")
-	}
-
-	note("dry-run: skip sun auth accepted")
-	if err := runCmd(root, nil, installer, "--dry-run", "--backend", "sun", "--skip-sun-auth", "--source-dir", root, "--force"); err != nil {
-		return fail("dry-run skip sun auth")
+	note("dry-run: backend local accepted")
+	if err := runCmd(root, nil, installer, "--dry-run", "--backend", "local", "--source-dir", root, "--force"); err != nil {
+		return fail("dry-run backend local")
 	}
 
 	note("edge: invalid backend rejected")

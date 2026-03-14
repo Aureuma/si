@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"golang.org/x/term"
 )
@@ -94,7 +93,6 @@ func cmdCodexSwap(args []string) {
 	if err := updateSettingsProfile(profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
-	maybeSunAutoSyncProfile("swap", profile)
 	successf("swapped host codex auth to profile %s", res.ProfileID)
 }
 
@@ -113,9 +111,6 @@ func codexSwap(opts codexSwapOptions) (codexSwapResult, error) {
 	authBytes, err := os.ReadFile(authSrc)
 	if err != nil {
 		if os.IsNotExist(err) {
-			if recoverCodexAuthCacheFromSun(opts.Profile, 10*time.Second) {
-				authBytes, err = os.ReadFile(authSrc)
-			}
 			if err != nil {
 				return codexSwapResult{}, fmt.Errorf("auth cache not found at %s; run `si login %s`", authSrc, profileID)
 			}

@@ -14,7 +14,6 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	"si/tools/si/internal/orbitals"
 	"si/tools/si/internal/providers"
 )
 
@@ -23,7 +22,6 @@ type Settings struct {
 	Paths         SettingsPaths         `toml:"paths"`
 	Codex         CodexSettings         `toml:"codex"`
 	Vault         VaultSettings         `toml:"vault,omitempty"`
-	Paas          PaasSettings          `toml:"paas,omitempty"`
 	Stripe        StripeSettings        `toml:"stripe,omitempty"`
 	Github        GitHubSettings        `toml:"github,omitempty"`
 	Cloudflare    CloudflareSettings    `toml:"cloudflare,omitempty"`
@@ -38,7 +36,6 @@ type Settings struct {
 	Surf          SurfSettings          `toml:"surf,omitempty"`
 	RemoteControl RemoteControlSettings `toml:"remote_control,omitempty"`
 	Viva          VivaSettings          `toml:"viva,omitempty"`
-	Sun           SunSettings           `toml:"sun,omitempty"`
 	OCI           OCISettings           `toml:"oci,omitempty"`
 	Dyad          DyadSettings          `toml:"dyad"`
 	Shell         ShellSettings         `toml:"shell"`
@@ -53,6 +50,7 @@ type SettingsPaths struct {
 	Root             string `toml:"root,omitempty"`
 	SettingsFile     string `toml:"settings,omitempty"`
 	CodexProfilesDir string `toml:"codex_profiles_dir,omitempty"`
+	WorkspaceRoot    string `toml:"workspace_root,omitempty"`
 }
 
 type CodexSettings struct {
@@ -148,18 +146,6 @@ type VaultSettings struct {
 
 	// KeyFile is used when key_backend=file.
 	KeyFile string `toml:"key_file,omitempty"`
-}
-
-type PaasSettings struct {
-	// SyncBackend selects how paas state sync is handled.
-	// Supported values: git, sun
-	// - git: local/git-based only
-	// - sun: Sun snapshot backup required on mutating paas operations
-	SyncBackend string `toml:"sync_backend,omitempty"`
-
-	// SnapshotName is the Sun object name used for paas control plane snapshots.
-	// When empty, the current context name is used.
-	SnapshotName string `toml:"snapshot_name,omitempty"`
 }
 
 type StripeSettings struct {
@@ -569,26 +555,9 @@ type VivaNodeBootstrapSettings struct {
 	ShellProfile    string   `toml:"shell_profile,omitempty"`
 	EnvFile         string   `toml:"env_file,omitempty"`
 	GitHubTokenKey  string   `toml:"github_token_key,omitempty"`
-	SunBaseURLKey   string   `toml:"sun_base_url_key,omitempty"`
-	SunTokenKey     string   `toml:"sun_token_key,omitempty"`
 	BuildSI         *bool    `toml:"build_si,omitempty"`
 	PullLatest      *bool    `toml:"pull_latest,omitempty"`
 	InstallOrbitals []string `toml:"install_orbitals,omitempty"`
-}
-
-type SunSettings struct {
-	BaseURL               string `toml:"base_url,omitempty"`
-	Account               string `toml:"account,omitempty"`
-	Token                 string `toml:"token,omitempty"`
-	TimeoutSeconds        int    `toml:"timeout_seconds,omitempty"`
-	AutoSync              bool   `toml:"auto_sync,omitempty"`
-	OrbitGatewayRegistry  string `toml:"orbit_gateway_registry,omitempty"`
-	OrbitGatewaySlots     int    `toml:"orbit_gateway_slots,omitempty"`
-	Taskboard             string `toml:"taskboard,omitempty"`
-	TaskboardAgent        string `toml:"taskboard_agent,omitempty"`
-	TaskboardLeaseSeconds int    `toml:"taskboard_lease_seconds,omitempty"`
-	MachineID             string `toml:"machine_id,omitempty"`
-	OperatorID            string `toml:"operator_id,omitempty"`
 }
 
 type OCISettings struct {
@@ -642,56 +611,11 @@ type ShellPromptColors struct {
 	Reset   string `toml:"reset,omitempty"`
 }
 
-func mergeSunSettings(settings *Settings) {
-	if settings == nil {
-		return
-	}
-	sun := settings.Sun
-	if trimmed := strings.TrimSpace(sun.BaseURL); trimmed != "" {
-		settings.Sun.BaseURL = trimmed
-	}
-	if trimmed := strings.TrimSpace(sun.Account); trimmed != "" {
-		settings.Sun.Account = trimmed
-	}
-	if trimmed := strings.TrimSpace(sun.Token); trimmed != "" {
-		settings.Sun.Token = trimmed
-	}
-	if sun.TimeoutSeconds > 0 {
-		settings.Sun.TimeoutSeconds = sun.TimeoutSeconds
-	}
-	// Bool zero-value cannot distinguish unset from explicit false; prefer true when set.
-	if sun.AutoSync {
-		settings.Sun.AutoSync = true
-	}
-	if trimmed := strings.TrimSpace(sun.OrbitGatewayRegistry); trimmed != "" {
-		settings.Sun.OrbitGatewayRegistry = trimmed
-	}
-	if sun.OrbitGatewaySlots > 0 {
-		settings.Sun.OrbitGatewaySlots = sun.OrbitGatewaySlots
-	}
-	if trimmed := strings.TrimSpace(sun.Taskboard); trimmed != "" {
-		settings.Sun.Taskboard = trimmed
-	}
-	if trimmed := strings.TrimSpace(sun.TaskboardAgent); trimmed != "" {
-		settings.Sun.TaskboardAgent = trimmed
-	}
-	if sun.TaskboardLeaseSeconds > 0 {
-		settings.Sun.TaskboardLeaseSeconds = sun.TaskboardLeaseSeconds
-	}
-	if trimmed := strings.TrimSpace(sun.MachineID); trimmed != "" {
-		settings.Sun.MachineID = trimmed
-	}
-	if trimmed := strings.TrimSpace(sun.OperatorID); trimmed != "" {
-		settings.Sun.OperatorID = trimmed
-	}
-}
-
 const (
 	settingsModuleCore          = "core"
 	settingsModuleCodex         = "codex"
 	settingsModuleDyad          = "dyad"
 	settingsModuleVault         = "vault"
-	settingsModulePaas          = "paas"
 	settingsModuleStripe        = "stripe"
 	settingsModuleGitHub        = "github"
 	settingsModuleCloudflare    = "cloudflare"
@@ -706,7 +630,6 @@ const (
 	settingsModuleSurf          = "surf"
 	settingsModuleRemoteControl = "remote-control"
 	settingsModuleViva          = "viva"
-	settingsModuleSun           = "sun"
 	settingsModuleOCI           = "oci"
 )
 
@@ -716,7 +639,6 @@ func settingsModuleNames() []string {
 		settingsModuleCodex,
 		settingsModuleDyad,
 		settingsModuleVault,
-		settingsModulePaas,
 		settingsModuleStripe,
 		settingsModuleGitHub,
 		settingsModuleCloudflare,
@@ -731,7 +653,6 @@ func settingsModuleNames() []string {
 		settingsModuleSurf,
 		settingsModuleRemoteControl,
 		settingsModuleViva,
-		settingsModuleSun,
 		settingsModuleOCI,
 	}
 }
@@ -904,6 +825,7 @@ func applySettingsDefaults(settings *Settings) {
 	if settings.Paths.CodexProfilesDir == "" {
 		settings.Paths.CodexProfilesDir = "~/.si/codex/profiles"
 	}
+	settings.Paths.WorkspaceRoot = strings.TrimSpace(settings.Paths.WorkspaceRoot)
 	settings.Codex.Login.DefaultBrowser = normalizeLoginDefaultBrowser(settings.Codex.Login.DefaultBrowser)
 	if settings.Codex.Login.DefaultBrowser == "" && strings.TrimSpace(settings.Codex.Login.OpenURLCommand) == "" {
 		if runtime.GOOS == "darwin" {
@@ -928,8 +850,6 @@ func applySettingsDefaults(settings *Settings) {
 		settings.Vault.KeyFile = ""
 	}
 	settings.Vault.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Vault.SyncBackend))
-	settings.Paas.SyncBackend = strings.ToLower(strings.TrimSpace(settings.Paas.SyncBackend))
-	settings.Paas.SnapshotName = strings.TrimSpace(settings.Paas.SnapshotName)
 	settings.Dyad.Loop.TmuxCapture = strings.ToLower(strings.TrimSpace(settings.Dyad.Loop.TmuxCapture))
 	switch settings.Dyad.Loop.TmuxCapture {
 	case "", "main", "alt":
@@ -1246,36 +1166,6 @@ func applySettingsDefaults(settings *Settings) {
 			}
 		}
 	}
-	mergeSunSettings(settings)
-	settings.Sun.BaseURL = strings.TrimSpace(settings.Sun.BaseURL)
-	if settings.Sun.BaseURL == "" {
-		settings.Sun.BaseURL = "http://127.0.0.1:8080"
-	}
-	settings.Sun.Account = strings.TrimSpace(settings.Sun.Account)
-	settings.Sun.Token = strings.TrimSpace(settings.Sun.Token)
-	if settings.Sun.TimeoutSeconds <= 0 {
-		settings.Sun.TimeoutSeconds = 15
-	}
-	settings.Sun.OrbitGatewayRegistry = strings.TrimSpace(settings.Sun.OrbitGatewayRegistry)
-	if settings.Sun.OrbitGatewayRegistry == "" {
-		settings.Sun.OrbitGatewayRegistry = defaultOrbitGatewayName
-	}
-	if settings.Sun.OrbitGatewaySlots <= 0 {
-		settings.Sun.OrbitGatewaySlots = orbitals.GatewayDefaultSlotsPerNamespace
-	}
-	if settings.Sun.OrbitGatewaySlots > orbitals.GatewayMaxSlotsPerNamespace {
-		settings.Sun.OrbitGatewaySlots = orbitals.GatewayMaxSlotsPerNamespace
-	}
-	settings.Sun.Taskboard = strings.TrimSpace(settings.Sun.Taskboard)
-	if settings.Sun.Taskboard == "" {
-		settings.Sun.Taskboard = "default"
-	}
-	settings.Sun.TaskboardAgent = strings.TrimSpace(settings.Sun.TaskboardAgent)
-	if settings.Sun.TaskboardLeaseSeconds <= 0 {
-		settings.Sun.TaskboardLeaseSeconds = 1800
-	}
-	settings.Sun.MachineID = strings.TrimSpace(settings.Sun.MachineID)
-	settings.Sun.OperatorID = strings.TrimSpace(settings.Sun.OperatorID)
 	settings.OCI.DefaultAccount = strings.TrimSpace(settings.OCI.DefaultAccount)
 	settings.OCI.Profile = strings.TrimSpace(settings.OCI.Profile)
 	if settings.OCI.Profile == "" {
@@ -1475,14 +1365,6 @@ func decodeSettingsModule(module string, data []byte, settings *Settings) error 
 			return err
 		}
 		settings.Vault = payload.Vault
-	case settingsModulePaas:
-		var payload struct {
-			Paas PaasSettings `toml:"paas,omitempty"`
-		}
-		if err := toml.Unmarshal(data, &payload); err != nil {
-			return err
-		}
-		settings.Paas = payload.Paas
 	case settingsModuleStripe:
 		var payload struct {
 			Stripe StripeSettings `toml:"stripe,omitempty"`
@@ -1595,14 +1477,6 @@ func decodeSettingsModule(module string, data []byte, settings *Settings) error 
 			return err
 		}
 		settings.Viva = payload.Viva
-	case settingsModuleSun:
-		var payload struct {
-			Sun SunSettings `toml:"sun,omitempty"`
-		}
-		if err := toml.Unmarshal(data, &payload); err != nil {
-			return err
-		}
-		settings.Sun = payload.Sun
 	case settingsModuleOCI:
 		var payload struct {
 			OCI OCISettings `toml:"oci,omitempty"`
@@ -1649,12 +1523,6 @@ func encodeSettingsModule(module string, settings Settings) ([]byte, error) {
 			Vault         VaultSettings    `toml:"vault,omitempty"`
 			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
 		}{settings.SchemaVersion, settings.Vault, settings.Metadata})
-	case settingsModulePaas:
-		return toml.Marshal(struct {
-			SchemaVersion int              `toml:"schema_version"`
-			Paas          PaasSettings     `toml:"paas,omitempty"`
-			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
-		}{settings.SchemaVersion, settings.Paas, settings.Metadata})
 	case settingsModuleStripe:
 		return toml.Marshal(struct {
 			SchemaVersion int              `toml:"schema_version"`
@@ -1739,12 +1607,6 @@ func encodeSettingsModule(module string, settings Settings) ([]byte, error) {
 			Viva          VivaSettings     `toml:"viva,omitempty"`
 			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
 		}{settings.SchemaVersion, settings.Viva, settings.Metadata})
-	case settingsModuleSun:
-		return toml.Marshal(struct {
-			SchemaVersion int              `toml:"schema_version"`
-			Sun           SunSettings      `toml:"sun,omitempty"`
-			Metadata      SettingsMetadata `toml:"metadata,omitempty"`
-		}{settings.SchemaVersion, settings.Sun, settings.Metadata})
 	case settingsModuleOCI:
 		return toml.Marshal(struct {
 			SchemaVersion int              `toml:"schema_version"`
@@ -1916,15 +1778,7 @@ func normalizeVivaNodeProfile(profile VivaNodeProfile) VivaNodeProfile {
 
 func normalizeVivaNodeBootstrapSettings(cfg VivaNodeBootstrapSettings) VivaNodeBootstrapSettings {
 	cfg.SourceRoot = strings.TrimSpace(cfg.SourceRoot)
-	if cfg.SourceRoot == "" {
-		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			cfg.SourceRoot = filepath.Join(home, "Development")
-		}
-	}
 	cfg.WorkspaceDir = strings.TrimSpace(cfg.WorkspaceDir)
-	if cfg.WorkspaceDir == "" {
-		cfg.WorkspaceDir = "~/Development"
-	}
 	cfg.Repos = normalizeVivaNodeBootstrapRepos(cfg.Repos)
 	if len(cfg.Repos) == 0 {
 		cfg.Repos = defaultVivaNodeBootstrapRepos()
@@ -1940,14 +1794,6 @@ func normalizeVivaNodeBootstrapSettings(cfg VivaNodeBootstrapSettings) VivaNodeB
 	cfg.GitHubTokenKey = strings.TrimSpace(cfg.GitHubTokenKey)
 	if cfg.GitHubTokenKey == "" {
 		cfg.GitHubTokenKey = "GH_PAT_AUREUMA"
-	}
-	cfg.SunBaseURLKey = strings.TrimSpace(cfg.SunBaseURLKey)
-	if cfg.SunBaseURLKey == "" {
-		cfg.SunBaseURLKey = "SI_SUN_BASE_URL"
-	}
-	cfg.SunTokenKey = strings.TrimSpace(cfg.SunTokenKey)
-	if cfg.SunTokenKey == "" {
-		cfg.SunTokenKey = "SI_SUN_TOKEN"
 	}
 	if cfg.BuildSI == nil {
 		cfg.BuildSI = boolPtr(true)
@@ -1984,7 +1830,6 @@ func defaultVivaNodeBootstrapRepos() []string {
 		"si",
 		"safe",
 		"viva",
-		"sun",
 		"remote-control",
 		"surf",
 		"releasemind",
