@@ -12,6 +12,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.53.3] - 2026-03-14
+### Changed
+- Changed npm install guidance to prefer a user-owned global prefix so SI no longer defaults users back into stale `/usr/local/bin` installs.
+- Changed release/testing docs to include the npm installer smoke lane in the standard verification stack.
+
+### Fixed
+- Fixed the primary documented npm install path so shells pick up the newly installed SI CLI instead of continuing to launch an older root-owned binary.
+
 ## [v0.53.2] - 2026-03-14
 ### Changed
 - Changed CLI release automation to fall back to `GH_PAT_AUREUMA` when the dedicated Homebrew tap token is unavailable, keeping Homebrew distribution updates on the automated release path.
