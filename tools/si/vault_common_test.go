@@ -95,11 +95,9 @@ func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 		t.Fatalf("unexpected default resolution: %+v", got)
 	}
 
-	settings.Sun.AutoSync = true
-	settings.Vault.SyncBackend = ""
 	got, err = resolveVaultSyncBackend(settings)
 	if err != nil {
-		t.Fatalf("resolve backend with sun.auto_sync fallback removed: %v", err)
+		t.Fatalf("resolve backend with backend unset: %v", err)
 	}
 	if got.Mode != vaultSyncBackendFort || got.Source != "default" {
 		t.Fatalf("unexpected resolution when backend unset: %+v", got)
@@ -126,11 +124,6 @@ func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
 	}
 	if got.Mode != vaultSyncBackendFort || got.Source != "env" {
 		t.Fatalf("unexpected env resolution: %+v", got)
-	}
-
-	t.Setenv("SI_VAULT_SYNC_BACKEND", "sun")
-	if _, err := resolveVaultSyncBackend(settings); err == nil {
-		t.Fatalf("expected legacy env backend alias to fail")
 	}
 
 	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")

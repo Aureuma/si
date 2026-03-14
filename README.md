@@ -9,14 +9,13 @@
   <a href="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/go-1.25-00ADD8?logo=go&logoColor=white&style=for-the-badge" alt="Go 1.25"></a>
   <a href="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge"><img src="https://img.shields.io/badge/docker-required-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker required"></a>
   <a href="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge"><img src="https://img.shields.io/badge/docs-mintlify-0f766e?style=for-the-badge" alt="Docs: Mintlify"></a>
-  <a href="https://img.shields.io/badge/paas-docker--native-0ea5e9?style=for-the-badge"><img src="https://img.shields.io/badge/paas-docker--native-0ea5e9?style=for-the-badge" alt="PaaS: Docker Native"></a>
   <a href="https://www.npmjs.com/package/@aureuma/si"><img src="https://img.shields.io/npm/v/%40aureuma%2Fsi?logo=npm&logoColor=white&style=for-the-badge" alt="npm: @aureuma/si"></a>
   <a href="https://github.com/Aureuma/homebrew-si"><img src="https://img.shields.io/badge/homebrew-aureuma%2Fsi%2Fsi-fbbf24?logo=homebrew&logoColor=black&style=for-the-badge" alt="Homebrew Formula: aureuma/si/si"></a>
 </p>
 
-`si` is an AI-first CLI for orchestrating coding agents, provider bridges, and Docker-native PaaS operations.
+`si` is an AI-first CLI for orchestrating coding agents, provider bridges, and secure runtime workflows.
 
-Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md`](docs/PAAS_CONTEXT_OPERATIONS_RUNBOOK.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
+Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](docs/CLI_REFERENCE.md) · [`docs/VAULT.md`](docs/VAULT.md) · [`docs/RELEASING.md`](docs/RELEASING.md)
 
 ## What si covers
 
@@ -26,7 +25,6 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 - Provider bridges: Stripe, GitHub, Cloudflare, Google (Places/Play/YouTube), Apple, Social, WorkOS, AWS, GCP, OpenAI, OCI.
 - Orbitals: namespaced integration catalog + install/enable/doctor lifecycle (`si orbits ...`).
 - Browser runtime: Dockerized Playwright MCP runtime (`si browser ...`).
-- PaaS operations: app/target/deploy/rollback/logs/events/alerts/secrets + backup workflows.
 - Sustainable automation agents: PR guardian and website sentry (`tools/agents/*`).
 - Docs workflow: Mintlify wrapper (`si mintlify ...`) to bootstrap and maintain docs locally.
 
@@ -56,14 +54,6 @@ Direct installer script remains available:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh | bash
-```
-
-Optional Sun-aware install (configures `si sun auth login` during install):
-
-```bash
-SI_INSTALL_SUN_TOKEN="<sun-token>" \
-bash <(curl -fsSL https://raw.githubusercontent.com/Aureuma/si/main/tools/install-si.sh) \
-  --backend sun --sun-url https://sun.aureuma.ai --sun-account sun
 ```
 
 ## Quickstart
@@ -96,25 +86,6 @@ Dyad lifecycle:
 ./si dyad remove <name>
 ```
 
-PaaS lifecycle:
-
-```bash
-./si paas target add --target vps-main --host <ip-or-host>
-./si paas app init --app <slug>
-./si paas deploy --app <slug> --target vps-main --apply
-./si paas logs --app <slug> --target vps-main --follow
-./si paas rollback --app <slug> --target vps-main --apply
-```
-
-Supabase backup contract (WAL-G + Databasus profile):
-
-```bash
-./si paas backup contract
-./si paas backup run --app <slug>
-./si paas backup status --app <slug>
-./si paas backup restore --app <slug> --from LATEST --force
-```
-
 Browser runtime:
 
 ```bash
@@ -143,7 +114,6 @@ Mintlify docs tooling:
 - `si providers ...`: provider characteristics + health surfaces.
 - `si orbits ...`: Orbitals and integration onboarding.
 - `si browser ...`: Playwright MCP browser runtime.
-- `si paas ...`: Docker-native deployment and operations control-plane.
 - `si mintlify ...`: docs site bootstrap/validation/dev wrappers.
 - `si build ...`: local image + self-build workflows.
 

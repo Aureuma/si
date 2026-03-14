@@ -188,6 +188,40 @@ func TestListGitRepos(t *testing.T) {
 	}
 }
 
+func TestResolveGitReposRootUsesConfiguredWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	settings := defaultSettings()
+	settings.Paths.WorkspaceRoot = root
+
+	got, err := resolveGitReposRoot(false, "", &settings, t.TempDir())
+	if err != nil {
+		t.Fatalf("resolveGitReposRoot() unexpected err: %v", err)
+	}
+	if got != root {
+		t.Fatalf("resolveGitReposRoot()=%q want %q", got, root)
+	}
+}
+
+func TestResolveGitReposRootInfersParentOfCurrentRepo(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "si")
+	cwd := filepath.Join(repo, "tools", "si")
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatalf("mkdir .git: %v", err)
+	}
+	if err := os.MkdirAll(cwd, 0o755); err != nil {
+		t.Fatalf("mkdir cwd: %v", err)
+	}
+
+	got, err := resolveGitReposRoot(false, "", nil, cwd)
+	if err != nil {
+		t.Fatalf("resolveGitReposRoot() unexpected err: %v", err)
+	}
+	if got != root {
+		t.Fatalf("resolveGitReposRoot()=%q want %q", got, root)
+	}
+}
+
 func TestBuildGitHubRemoteURLWithPAT(t *testing.T) {
 	urlWithPAT, err := buildGitHubRemoteURLWithPAT("https://github.com/Aureuma/example.git", "github_pat_example123")
 	if err != nil {

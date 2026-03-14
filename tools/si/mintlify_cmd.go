@@ -252,20 +252,6 @@ func writeMintlifyDocsConfig(pathValue, docsDir, siteName, siteURL string, force
 						},
 					},
 				},
-				{
-					"tab": "PaaS",
-					"groups": []map[string]any{
-						{
-							"group": "Operations",
-							"pages": []string{
-								path.Join(docsDir, "PAAS_TEST_MATRIX"),
-								path.Join(docsDir, "PAAS_CONTEXT_OPERATIONS_RUNBOOK"),
-								path.Join(docsDir, "PAAS_BACKUP_RESTORE_POLICY"),
-								path.Join(docsDir, "PAAS_INCIDENT_RUNBOOK"),
-							},
-						},
-					},
-				},
 			},
 		},
 	}
@@ -290,19 +276,19 @@ func writeMintlifyIndexPage(pathValue, siteName string, force bool) error {
 	body := strings.Join([]string{
 		"---",
 		"title: " + siteName,
-		"description: AI-first CLI for dyads, provider bridges, and docker-native PaaS operations.",
+		"description: AI-first CLI for dyads, provider bridges, and secure runtime workflows.",
 		"---",
 		"",
 		"# " + siteName,
 		"",
-		"`si` is a single CLI for agent workflows, provider integrations, and Docker-native PaaS operations.",
+		"`si` is a single CLI for agent workflows, provider integrations, and secure runtime workflows.",
 		"",
 		"## Start Here",
 		"",
 		"1. `si build image`",
 		"2. `si dyad spawn <name> --profile <profile>`",
 		"3. `si vault status`",
-		"4. `si paas --help`",
+		"4. `si fort doctor`",
 		"",
 		"## Docs",
 		"",

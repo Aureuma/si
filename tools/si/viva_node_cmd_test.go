@@ -226,8 +226,6 @@ func TestResolveVivaNodeBootstrapRuntime(t *testing.T) {
 		return "git@github.com:aureuma/" + filepath.Base(path) + ".git", nil
 	}
 	t.Setenv("GH_PAT_AUREUMA", "ghp_test_123")
-	t.Setenv("SI_SUN_BASE_URL", "https://sun.example.com")
-	t.Setenv("SI_SUN_TOKEN", "sun_test_123")
 	runtime, err := resolveVivaNodeBootstrapRuntime(defaultSettings(), normalizeVivaNodeBootstrapSettings(VivaNodeBootstrapSettings{
 		SourceRoot: root,
 		Repos:      []string{"si"},
@@ -241,7 +239,7 @@ func TestResolveVivaNodeBootstrapRuntime(t *testing.T) {
 	if len(runtime.Repos) != 1 || runtime.Repos[0].Name != "si" {
 		t.Fatalf("unexpected repos: %#v", runtime.Repos)
 	}
-	if runtime.Secrets.GitHubToken == "" || runtime.Secrets.SunBaseURL == "" || runtime.Secrets.SunToken == "" {
+	if runtime.Secrets.GitHubToken == "" {
 		t.Fatalf("expected secrets to resolve, got: %#v", runtime.Secrets)
 	}
 }
@@ -263,8 +261,25 @@ func TestResolveVivaNodeBootstrapRuntimeAllowsMissingSecretsInDryRun(t *testing.
 	if err != nil {
 		t.Fatalf("resolveVivaNodeBootstrapRuntime dry-run: %v", err)
 	}
-	if runtime.Secrets.GitHubToken != "" || runtime.Secrets.SunBaseURL != "" || runtime.Secrets.SunToken != "" {
+	if runtime.Secrets.GitHubToken != "" {
 		t.Fatalf("expected empty secrets in dry-run mode, got: %#v", runtime.Secrets)
+	}
+}
+
+func TestApplyVivaNodeBootstrapPathDefaultsUsesWorkspaceRoot(t *testing.T) {
+	root := t.TempDir()
+	settings := defaultSettings()
+	settings.Paths.WorkspaceRoot = root
+
+	cfg, err := applyVivaNodeBootstrapPathDefaults(&settings, VivaNodeBootstrapSettings{}, t.TempDir(), false)
+	if err != nil {
+		t.Fatalf("applyVivaNodeBootstrapPathDefaults() unexpected err: %v", err)
+	}
+	if cfg.SourceRoot != root {
+		t.Fatalf("unexpected source root: %q", cfg.SourceRoot)
+	}
+	if cfg.WorkspaceDir != filepath.Join("~", filepath.Base(root)) {
+		t.Fatalf("unexpected workspace dir: %q", cfg.WorkspaceDir)
 	}
 }
 
@@ -281,8 +296,6 @@ func TestBuildVivaNodeBootstrapScript(t *testing.T) {
 		},
 		Secrets: vivaNodeBootstrapSecrets{
 			GitHubToken: "ghp_test",
-			SunBaseURL:  "https://sun.example.com",
-			SunToken:    "sun_test",
 		},
 	})
 	checks := []string{
@@ -290,7 +303,7 @@ func TestBuildVivaNodeBootstrapScript(t *testing.T) {
 		"git clone git@github.com:aureuma/si.git \"$WORKSPACE_DIR/si\"",
 		"go build -o bin/si ./tools/si",
 		"$SI_BIN orbits install remote-control",
-		"export SI_SUN_BASE_URL=https://sun.example.com",
+		"export GH_PAT_AUREUMA=ghp_test",
 	}
 	for _, needle := range checks {
 		if !strings.Contains(script, needle) {
@@ -319,8 +332,6 @@ func TestCmdVivaNodeBootstrapDryRunJSON(t *testing.T) {
 		t.Fatalf("saveSettings: %v", err)
 	}
 	t.Setenv("GH_PAT_AUREUMA", "ghp_test_123")
-	t.Setenv("SI_SUN_BASE_URL", "https://sun.example.com")
-	t.Setenv("SI_SUN_TOKEN", "sun_test_123")
 	origRemote := resolveVivaNodeGitRemoteOriginURL
 	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
 	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {
@@ -360,8 +371,6 @@ func TestCmdVivaNodeBootstrapExecutesSSH(t *testing.T) {
 		t.Fatalf("saveSettings: %v", err)
 	}
 	t.Setenv("GH_PAT_AUREUMA", "ghp_test_123")
-	t.Setenv("SI_SUN_BASE_URL", "https://sun.example.com")
-	t.Setenv("SI_SUN_TOKEN", "sun_test_123")
 	origRemote := resolveVivaNodeGitRemoteOriginURL
 	defer func() { resolveVivaNodeGitRemoteOriginURL = origRemote }()
 	resolveVivaNodeGitRemoteOriginURL = func(path string) (string, error) {

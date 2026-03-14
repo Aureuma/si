@@ -148,6 +148,7 @@ func cmdCodexSpawn(args []string) {
 	workspaceSet := flagProvided(args, "workspace")
 	explicitProfile := flagProvided(args, "profile")
 	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	envWorkspace := strings.TrimSpace(os.Getenv("SI_WORKSPACE_HOST"))
 	fs := flag.NewFlagSet("spawn", flag.ExitOnError)
 	flags := addCodexSpawnFlags(fs)
 	nameArg, filtered := splitNameAndFlags(args, codexSpawnBoolFlags())
@@ -160,10 +161,6 @@ func cmdCodexSpawn(args []string) {
 
 	if !flagProvided(args, "image") && strings.TrimSpace(settings.Codex.Image) != "" {
 		*flags.image = strings.TrimSpace(settings.Codex.Image)
-	}
-	if !workspaceSet && strings.TrimSpace(settings.Codex.Workspace) != "" {
-		*flags.workspaceHost = strings.TrimSpace(settings.Codex.Workspace)
-		workspaceSet = true
 	}
 	if !flagProvided(args, "network") && strings.TrimSpace(settings.Codex.Network) != "" {
 		*flags.networkName = strings.TrimSpace(settings.Codex.Network)
@@ -281,19 +278,25 @@ func cmdCodexSpawn(args []string) {
 		fatal(err)
 	}
 	containerName := codexContainerName(name)
-	if !workspaceSet {
-		cwd, err := os.Getwd()
-		if err != nil {
-			fatal(err)
-		}
-		*flags.workspaceHost = cwd
+	cwd, err := os.Getwd()
+	if err != nil {
+		fatal(err)
 	}
-	if strings.TrimSpace(*flags.workspaceHost) == "" {
-		*flags.workspaceHost = mustRepoRoot()
+	resolvedWorkspace, err := resolveWorkspaceDirectory(
+		workspaceScopeCodex,
+		workspaceSet,
+		strings.TrimSpace(*flags.workspaceHost),
+		envWorkspace,
+		&settings,
+		cwd,
+	)
+	if err != nil {
+		fatal(err)
 	}
-	if abs, err := filepath.Abs(strings.TrimSpace(*flags.workspaceHost)); err == nil && strings.TrimSpace(abs) != "" {
-		*flags.workspaceHost = abs
+	if resolvedWorkspace.StaleSettings {
+		warnf("saved default codex workspace no longer exists; using %s", resolvedWorkspace.Path)
 	}
+	*flags.workspaceHost = resolvedWorkspace.Path
 
 	// Always mount the host workspace at /workspace (stable) and also at the same
 	// absolute host path inside the container (for example
@@ -377,6 +380,7 @@ func cmdCodexSpawn(args []string) {
 					}
 					// Fall through to create a new container below.
 				} else {
+					ensureCodexDockerSocketAccess(ctx, client, existingID)
 					if !*flags.cleanSlate {
 						if identity, ok := hostGitIdentity(); ok {
 							seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
@@ -419,6 +423,7 @@ func cmdCodexSpawn(args []string) {
 				fatal(err)
 			}
 		} else {
+			ensureCodexDockerSocketAccess(ctx, client, existingID)
 			if !*flags.cleanSlate {
 				if identity, ok := hostGitIdentity(); ok {
 					seedGitIdentity(ctx, client, existingID, "si", "/home/si", identity)
@@ -542,6 +547,7 @@ func cmdCodexSpawn(args []string) {
 	if err := client.StartContainer(ctx, id); err != nil {
 		fatal(err)
 	}
+	ensureCodexDockerSocketAccess(ctx, client, id)
 	seedCodexConfig(ctx, client, id, *flags.cleanSlate)
 	if profile != nil {
 		seedCodexAuth(ctx, client, id, *flags.cleanSlate, *profile)
@@ -900,6 +906,7 @@ func cmdCodexExec(args []string) {
 		}
 
 		if strings.TrimSpace(containerID) != "" {
+			ensureCodexDockerSocketAccess(ctx, client, containerID)
 			missingRequiredMounts := containerInfo != nil &&
 				(!shared.HasHostSiMount(containerInfo, "/home/si") ||
 					!shared.HasHostDockerConfigMount(containerInfo, "/home/si") ||
@@ -1934,7 +1941,6 @@ func cmdCodexLogin(args []string) {
 	if err := updateSettingsProfile(*profile); err != nil {
 		warnf("settings update failed: %v", err)
 	}
-	maybeSunAutoSyncProfile("login", *profile)
 	triggerWarmupAfterLogin(*profile)
 	removeContainer()
 }
@@ -2240,6 +2246,7 @@ func cmdCodexStart(args []string) {
 	if err != nil || info == nil || info.Config == nil {
 		return
 	}
+	ensureCodexDockerSocketAccess(ctx, client, info.ID)
 	profileKey := strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
 	if profileKey == "" {
 		return
@@ -2324,6 +2331,39 @@ func ensureBrowserMCPForContainer(ctx context.Context, client *shared.Client, co
 
 	siCmd := []string{"bash", "-lc", fmt.Sprintf("if command -v codex >/dev/null 2>&1; then CODEX_HOME=/home/si/.codex codex mcp add %s --url %s >/dev/null 2>&1 || true; fi", quoteSingle(codexBrowserMCPName), quoteSingle(url))}
 	_ = client.Exec(ctx, containerID, siCmd, shared.ExecOptions{User: codexContainerUser}, nil, io.Discard, io.Discard)
+}
+
+func ensureCodexDockerSocketAccess(ctx context.Context, client *shared.Client, containerID string) {
+	if client == nil || strings.TrimSpace(containerID) == "" {
+		return
+	}
+	script := `
+sock=/var/run/docker.sock
+[ -S "$sock" ] || exit 0
+gid="$(stat -c '%g' "$sock" 2>/dev/null || true)"
+case "$gid" in
+	""|0)
+		exit 0
+		;;
+esac
+if id -G si 2>/dev/null | tr ' ' '\n' | grep -qx "$gid"; then
+	exit 0
+fi
+group="$(getent group "$gid" | cut -d: -f1)"
+if [ -z "$group" ]; then
+	group="si-docker-host"
+	if getent group "$group" >/dev/null 2>&1; then
+		group="${group}-${gid}"
+	fi
+	groupadd -f -g "$gid" "$group" >/dev/null 2>&1 || true
+	group="$(getent group "$gid" | cut -d: -f1)"
+fi
+[ -n "$group" ] || exit 0
+usermod -aG "$group" si >/dev/null 2>&1 || true
+`
+	if err := client.Exec(ctx, containerID, []string{"bash", "-lc", script}, shared.ExecOptions{}, nil, io.Discard, io.Discard); err != nil {
+		warnf("docker socket access repair skipped for %s: %v", strings.TrimSpace(containerID), err)
+	}
 }
 
 func codexBrowserMCPURL() string {

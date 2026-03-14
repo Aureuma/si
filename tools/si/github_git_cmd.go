@@ -180,7 +180,7 @@ type githubGitRemoteAuthRepoChange struct {
 
 func cmdGithubGitRemoteAuth(args []string) {
 	fs := flag.NewFlagSet("github git remote-auth", flag.ExitOnError)
-	root := fs.String("root", "", "root directory containing repositories (default: ~/Development)")
+	root := fs.String("root", "", "root directory containing repositories (default: [paths].workspace_root or inferred from cwd)")
 	remote := fs.String("remote", "origin", "remote name to rewrite")
 	vaultKey := fs.String("vault-key", "", "vault key containing PAT/token used for remote URL auth")
 	ownerFilter := fs.String("owner", "", "only rewrite repositories for this github owner/org")
@@ -212,10 +212,15 @@ func cmdGithubGitRemoteAuth(args []string) {
 		fatal(fmt.Errorf("vault key %q resolved to an empty value", key))
 	}
 
-	rootPath, err := resolveGitReposRoot(*root)
+	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)
 	}
+	rootPath, err := resolveGitReposRoot(flagProvided(args, "root"), *root, &settings, cwd)
+	if err != nil {
+		fatal(err)
+	}
+	maybePersistWorkspaceRootDefault(&settings, rootPath, isInteractiveTerminal())
 	repos, err := listGitRepos(rootPath)
 	if err != nil {
 		fatal(err)
@@ -359,7 +364,7 @@ func cmdGithubGitCloneAuth(args []string) {
 	})
 	fs := flag.NewFlagSet("github git clone-auth", flag.ExitOnError)
 	repoSource := fs.String("repo", "", "repository source (<owner/repo> or GitHub URL)")
-	root := fs.String("root", "", "destination root directory (default: ~/Development)")
+	root := fs.String("root", "", "destination root directory (default: [paths].workspace_root or inferred from cwd)")
 	destDir := fs.String("dest", "", "destination directory (absolute path or path relative to root)")
 	remote := fs.String("remote", "origin", "remote name")
 	vaultKey := fs.String("vault-key", "", "vault key containing PAT/token used for clone URL auth")
@@ -391,10 +396,16 @@ func cmdGithubGitCloneAuth(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	rootPath, err := resolveGitReposRoot(*root)
+	settings := loadSettingsOrDefault()
+	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)
 	}
+	rootPath, err := resolveGitReposRoot(flagProvided(args, "root"), *root, &settings, cwd)
+	if err != nil {
+		fatal(err)
+	}
+	maybePersistWorkspaceRootDefault(&settings, rootPath, isInteractiveTerminal())
 	destination := planGitCloneDestination(rootPath, normalized.Repo, strings.TrimSpace(*destDir))
 	if strings.TrimSpace(destination) == "" {
 		fatal(fmt.Errorf("destination path is required"))
@@ -403,7 +414,6 @@ func cmdGithubGitCloneAuth(args []string) {
 		fatal(err)
 	}
 
-	settings := loadSettingsOrDefault()
 	pat, ok := resolveVaultKeyValue(settings, key)
 	if !ok {
 		fatal(fmt.Errorf("vault key %q is missing or unreadable", key))
@@ -501,7 +511,7 @@ func cmdGithubGitCloneAuth(args []string) {
 
 func cmdGithubGitSetup(args []string) {
 	fs := flag.NewFlagSet("github git setup", flag.ExitOnError)
-	root := fs.String("root", "", "root directory containing repositories (default: ~/Development)")
+	root := fs.String("root", "", "root directory containing repositories (default: [paths].workspace_root or inferred from cwd)")
 	remote := fs.String("remote", "origin", "remote name")
 	dryRun := fs.Bool("dry-run", false, "preview changes without writing git config/remotes")
 	noVault := fs.Bool("no-vault", false, "configure helper without wrapping through `si vault run`")
@@ -522,10 +532,16 @@ func cmdGithubGitSetup(args []string) {
 		return
 	}
 
-	rootPath, err := resolveGitReposRoot(*root)
+	settings := loadSettingsOrDefault()
+	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)
 	}
+	rootPath, err := resolveGitReposRoot(flagProvided(args, "root"), *root, &settings, cwd)
+	if err != nil {
+		fatal(err)
+	}
+	maybePersistWorkspaceRootDefault(&settings, rootPath, isInteractiveTerminal())
 	repos, err := listGitRepos(rootPath)
 	if err != nil {
 		fatal(err)
@@ -905,37 +921,18 @@ func looksLikeGitHubHost(host string) bool {
 	return host == "github.com" || strings.Contains(host, "github")
 }
 
-func resolveGitReposRoot(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value != "" {
-		return filepath.Clean(expandTilde(value)), nil
-	}
-	home, err := os.UserHomeDir()
-	if err == nil && strings.TrimSpace(home) != "" {
-		candidate := filepath.Join(home, "Development")
-		if stat, statErr := os.Stat(candidate); statErr == nil && stat.IsDir() {
-			return candidate, nil
-		}
-	}
-	wd, err := os.Getwd()
+func resolveGitReposRoot(flagSet bool, value string, settings *Settings, cwd string) (string, error) {
+	resolved, err := resolveWorkspaceRootDirectory(
+		flagSet,
+		strings.TrimSpace(value),
+		strings.TrimSpace(os.Getenv("SI_WORKSPACE_ROOT")),
+		settings,
+		cwd,
+	)
 	if err != nil {
 		return "", err
 	}
-	parts := strings.Split(filepath.Clean(wd), string(filepath.Separator))
-	for idx := 0; idx < len(parts); idx++ {
-		if parts[idx] == "Development" {
-			prefix := parts[:idx+1]
-			if len(prefix) == 0 {
-				return string(filepath.Separator) + "Development", nil
-			}
-			joined := strings.Join(prefix, string(filepath.Separator))
-			if !strings.HasPrefix(joined, string(filepath.Separator)) {
-				joined = string(filepath.Separator) + joined
-			}
-			return joined, nil
-		}
-	}
-	return "", fmt.Errorf("unable to determine repo root, pass --root")
+	return resolved.Path, nil
 }
 
 func listGitRepos(root string) ([]string, error) {

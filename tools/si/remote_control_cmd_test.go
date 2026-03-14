@@ -103,6 +103,9 @@ func TestDefaultRemoteControlRepoPathFromWorkingDir(t *testing.T) {
 	defer func() { _ = os.Chdir(origWD) }()
 
 	base := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(base, "si", ".git"), 0o755); err != nil {
+		t.Fatalf("mkdir si git dir: %v", err)
+	}
 	repo := filepath.Join(base, "remote-control")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		t.Fatalf("mkdir repo: %v", err)
@@ -116,24 +119,18 @@ func TestDefaultRemoteControlRepoPathFromWorkingDir(t *testing.T) {
 	}
 }
 
-func TestDefaultRemoteControlRepoPathFromHome(t *testing.T) {
+func TestDefaultRemoteControlRepoPathReturnsEmptyWithoutWorkspaceRoot(t *testing.T) {
 	origWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
 	defer func() { _ = os.Chdir(origWD) }()
 
-	home := t.TempDir()
-	repo := filepath.Join(home, "Development", "remote-control")
-	if err := os.MkdirAll(repo, 0o755); err != nil {
-		t.Fatalf("mkdir repo: %v", err)
-	}
 	if err := os.Chdir(t.TempDir()); err != nil {
 		t.Fatalf("chdir: %v", err)
 	}
-	t.Setenv("HOME", home)
-	if got := defaultRemoteControlRepoPath(); got != repo {
-		t.Fatalf("defaultRemoteControlRepoPath()=%q want %q", got, repo)
+	if got := defaultRemoteControlRepoPath(); got != "" {
+		t.Fatalf("defaultRemoteControlRepoPath()=%q want empty", got)
 	}
 }
 

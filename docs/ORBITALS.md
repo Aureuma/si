@@ -6,7 +6,6 @@ This document defines SI's Orbitals model and the implementation now available i
 
 Related:
 - [Integrations Overview](./INTEGRATIONS_OVERVIEW)
-- [Integration Gateway Architecture](./INTEGRATION_GATEWAY_ARCHITECTURE)
 - [Documentation Style Guide](./DOCS_STYLE_GUIDE)
 
 ## Goals
@@ -94,10 +93,6 @@ Design:
 - Slot sharding: each namespace is further split into deterministic slots (`namespace--NN`) using stable hashing.
 - Index-first reads: a compact registry index tracks shards, counts, and capabilities so clients fetch only relevant shards.
 
-Sun storage model:
-- Registry index object kind: `integration_gateway_index`
-- Registry shard object kind: `integration_gateway_shard`
-
 Why this shape:
 - Avoids monolithic catalog payloads.
 - Supports targeted fetch by namespace/capability/prefix.
@@ -135,9 +130,6 @@ Install state tracks:
 - `si orbits catalog build --source <path> [--output <path>] [--channel <name>] [--verified] [--tag <value>]... [--added-at YYYY-MM-DD] [--json]`
 - `si orbits catalog validate --source <path> [--json]`
 - `si orbits gateway build --source <path> [--registry <name>] [--slots <n>] [--output-dir <dir>] [--json]`
-- `si orbits gateway push --source <path> [--registry <name>] [--slots <n>] [--channel <name>] [--verified] [--json]`
-- `si orbits gateway pull [--registry <name>] [--namespace <ns>] [--capability <cap>] [--prefix <prefix>] [--limit <n>] [--out <file>] [--json]`
-- `si orbits gateway status [--registry <name>] [--json]`
 
 Catalog metadata now includes source provenance:
 - `catalog_source` in `si orbits list --json`

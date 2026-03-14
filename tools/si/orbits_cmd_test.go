@@ -3,12 +3,9 @@ package main
 import (
 	"archive/zip"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 )
 
@@ -482,13 +479,12 @@ func TestOrbitsGatewayBuildWritesBundle(t *testing.T) {
 	}
 }
 
-func TestOrbitsGatewayPushPullRoundTrip(t *testing.T) {
+func TestOrbitsGatewayRejectsRemovedRemoteOps(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skip e2e-style subprocess test in short mode")
 	}
 	home := t.TempDir()
 	sourceRoot := t.TempDir()
-	outPath := filepath.Join(t.TempDir(), "pulled-catalog.json")
 	orbitDir := filepath.Join(sourceRoot, "acme", "chat")
 	if err := os.MkdirAll(orbitDir, 0o755); err != nil {
 		t.Fatalf("mkdir orbit dir: %v", err)
@@ -498,107 +494,21 @@ func TestOrbitsGatewayPushPullRoundTrip(t *testing.T) {
 		t.Fatalf("write manifest: %v", err)
 	}
 
-	var mu sync.Mutex
-	indexRaw := []byte(`{"registry":"team","shards":[]}`)
-	shardRawByKey := map[string][]byte{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.TrimSpace(r.Header.Get("Authorization")) != "Bearer token-123" {
-			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-			return
-		}
-		switch {
-		case r.Method == http.MethodPut && r.URL.Path == "/v1/integrations/registries/team":
-			var body struct {
-				Payload json.RawMessage `json:"payload"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			mu.Lock()
-			indexRaw = append([]byte{}, body.Payload...)
-			mu.Unlock()
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"result": map[string]any{
-					"object":   map[string]any{"latest_revision": 1},
-					"revision": map[string]any{"revision": 1},
-				},
-			})
-		case r.Method == http.MethodGet && r.URL.Path == "/v1/integrations/registries/team":
-			mu.Lock()
-			raw := append([]byte{}, indexRaw...)
-			mu.Unlock()
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"registry": "team",
-				"index":    json.RawMessage(raw),
-			})
-		case r.Method == http.MethodPut && strings.HasPrefix(r.URL.Path, "/v1/integrations/registries/team/shards/"):
-			shardKey := strings.TrimPrefix(r.URL.Path, "/v1/integrations/registries/team/shards/")
-			var body struct {
-				Payload json.RawMessage `json:"payload"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			mu.Lock()
-			shardRawByKey[shardKey] = append([]byte{}, body.Payload...)
-			mu.Unlock()
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"result": map[string]any{
-					"object":   map[string]any{"latest_revision": 1},
-					"revision": map[string]any{"revision": 1},
-				},
-			})
-		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/integrations/registries/team/shards/"):
-			shardKey := strings.TrimPrefix(r.URL.Path, "/v1/integrations/registries/team/shards/")
-			mu.Lock()
-			raw := append([]byte{}, shardRawByKey[shardKey]...)
-			mu.Unlock()
-			if len(raw) == 0 {
-				http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-				return
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"registry": "team",
-				"shard":    shardKey,
-				"payload":  json.RawMessage(raw),
-			})
-		default:
-			http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
-		}
-	}))
-	defer server.Close()
-
 	env := map[string]string{
-		"HOME":            home,
-		"SI_SUN_BASE_URL": server.URL,
-		"SI_SUN_TOKEN":    "token-123",
+		"HOME": home,
 	}
 	stdout, stderr, err := runSICommand(t, env, "orbits", "gateway", "push", "--source", sourceRoot, "--registry", "team", "--json")
 	if err != nil {
-		t.Fatalf("gateway push failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+		t.Fatalf("expected removed gateway push to fall back to usage output\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
-	stdout, stderr, err = runSICommand(t, env, "orbits", "gateway", "pull", "--registry", "team", "--out", outPath, "--json")
+	if !strings.Contains(stdout, "usage: si orbits gateway <build>") {
+		t.Fatalf("expected build-only usage for removed gateway push, got stdout=%q stderr=%q", stdout, stderr)
+	}
+	stdout, stderr, err = runSICommand(t, env, "orbits", "gateway", "pull", "--registry", "team", "--json")
 	if err != nil {
-		t.Fatalf("gateway pull failed: %v\nstdout=%s\nstderr=%s", err, stdout, stderr)
+		t.Fatalf("expected removed gateway pull to fall back to usage output\nstdout=%s\nstderr=%s", stdout, stderr)
 	}
-
-	raw, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("read pulled catalog: %v", err)
-	}
-	var catalog struct {
-		Entries []map[string]any `json:"entries"`
-	}
-	if err := json.Unmarshal(raw, &catalog); err != nil {
-		t.Fatalf("decode pulled catalog: %v", err)
-	}
-	if len(catalog.Entries) != 1 {
-		t.Fatalf("expected one pulled entry, got %d", len(catalog.Entries))
-	}
-	manifestRaw, _ := catalog.Entries[0]["manifest"].(map[string]any)
-	if id, _ := manifestRaw["id"].(string); id != "acme/chat" {
-		t.Fatalf("unexpected pulled entry: %s", string(raw))
+	if !strings.Contains(stdout, "usage: si orbits gateway <build>") {
+		t.Fatalf("expected build-only usage for removed gateway pull, got stdout=%q stderr=%q", stdout, stderr)
 	}
 }
