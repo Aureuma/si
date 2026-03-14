@@ -325,24 +325,13 @@ func TestResolveBootstrapConfigAndEnsureAgentWithExpiredBootstrapToken(t *testin
 	}
 }
 
-func TestEnsureCodexProfileFortSessionFallsBackToExistingProfileRefresh(t *testing.T) {
+func TestEnsureCodexProfileFortSessionPrefersExistingProfileRefresh(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
 
-	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
-	refreshFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.refresh.token")
-	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
-		t.Fatalf("mkdir bootstrap dir: %v", err)
-	}
-	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(-5*time.Minute))), 0o600); err != nil {
-		t.Fatalf("write expired bootstrap token: %v", err)
-	}
-	if err := os.WriteFile(refreshFile, []byte("bootstrap-refresh-1"), 0o600); err != nil {
-		t.Fatalf("write bootstrap refresh token: %v", err)
-	}
-	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
-	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", refreshFile)
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", filepath.Join(home, ".si", "fort", "bootstrap", "missing-admin.token"))
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", filepath.Join(home, ".si", "fort", "bootstrap", "missing-admin.refresh.token"))
 
 	profile := codexProfile{ID: "berylla"}
 	paths, err := fortProfileStatePaths(profile)
@@ -368,9 +357,6 @@ func TestEnsureCodexProfileFortSessionFallsBackToExistingProfileRefresh(t *testi
 		}
 		refreshCalls++
 		switch got := strings.TrimSpace(fmt.Sprint(req["refresh_token"])); got {
-		case "bootstrap-refresh-1":
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
 		case "profile-refresh-1":
 			_, _ = w.Write([]byte(`{"access_token":"profile-access-2","refresh_token":"profile-refresh-2","access_expires_at":"2030-01-01T00:00:00Z"}`))
 		default:
@@ -400,8 +386,8 @@ func TestEnsureCodexProfileFortSessionFallsBackToExistingProfileRefresh(t *testi
 	if err != nil {
 		t.Fatalf("ensureCodexProfileFortSession: %v", err)
 	}
-	if refreshCalls != 2 {
-		t.Fatalf("expected bootstrap refresh then profile refresh, got %d calls", refreshCalls)
+	if refreshCalls != 1 {
+		t.Fatalf("expected only profile refresh, got %d calls", refreshCalls)
 	}
 	if boot.ProfileID != profile.ID {
 		t.Fatalf("unexpected profile id: %q", boot.ProfileID)

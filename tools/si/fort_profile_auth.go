@@ -118,13 +118,12 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
+	if resumed, err := resumeCodexProfileFortSession(ctx, profile, paths); err == nil {
+		return resumed, nil
+	}
 	cfg, err := resolveFortBootstrapConfig(ctx, client, preferredNetwork)
 	if err != nil {
-		recovered, recoverErr := recoverCodexProfileFortSession(ctx, profile, paths)
-		if recoverErr == nil {
-			return recovered, nil
-		}
-		return codexFortBootstrap{}, fmt.Errorf("%w (existing profile Fort session recovery also failed: %v)", err, recoverErr)
+		return codexFortBootstrap{}, err
 	}
 	agentID := fortAgentIDForProfile(profileID)
 	if err := fortEnsureAgent(ctx, cfg, agentID); err != nil {
@@ -171,7 +170,7 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	}, nil
 }
 
-func recoverCodexProfileFortSession(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
+func resumeCodexProfileFortSession(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
 	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
 	if err != nil {
 		return codexFortBootstrap{}, err
