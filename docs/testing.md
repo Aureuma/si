@@ -67,6 +67,12 @@ To validate the `si` installer script end-to-end, run:
 
 Use `./tools/test-install-si.sh --help` for a quick usage reminder.
 
+To validate the npm launcher package end-to-end, run:
+
+```bash
+./tools/test-install-si-npm.sh
+```
+
 ## Vault strict suite
 Run the dedicated strict vault suite:
 

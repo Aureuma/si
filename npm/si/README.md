@@ -3,6 +3,9 @@
 Install the SI CLI with npm:
 
 ```bash
+mkdir -p "$HOME/.npm-global"
+npm config set prefix "$HOME/.npm-global"
+export PATH="$HOME/.npm-global/bin:$PATH"
 npm install -g @aureuma/si
 ```
 
@@ -11,6 +14,10 @@ Then run:
 ```bash
 si --help
 ```
+
+If you previously installed `si` into `/usr/local/bin`, remove that older binary or
+ensure your user-owned npm prefix comes first on `PATH`, otherwise your shell may
+continue launching the stale `/usr/local/bin/si`.
 
 ## How it works
 
