@@ -64,6 +64,7 @@ Update release version constants:
 ```
 ./tools/test.sh
 ./tools/test-install-si.sh
+./tools/test-install-si-npm.sh
 ./tools/test-install-si-docker.sh
 ./si analyze --module tools/si
 ./si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
@@ -72,6 +73,7 @@ git commit -m "Bump version to vX.Y.Z"
 ```
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
+- Include the npm smoke lane so user-owned global-prefix installs stay verified before release.
 
 ### 5) Create an annotated tag for the release commit
 ```
