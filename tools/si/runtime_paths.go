@@ -109,6 +109,14 @@ func resolveWorkspaceDirectory(
 		}
 	}
 
+	if inferredRoot, err := inferWorkspaceRootFromCWD(cwd); err == nil {
+		return resolvedDirectory{
+			Path:          inferredRoot,
+			Source:        resolvedPathSourceCwd,
+			StaleSettings: staleSettings,
+		}, nil
+	}
+
 	path, err := resolveDirectoryPath(cwd, label)
 	if err != nil {
 		return resolvedDirectory{}, err
