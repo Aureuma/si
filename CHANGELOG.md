@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [v0.53.0] - 2026-03-14
+## [v0.53.1] - 2026-03-14
 ### Added
 - Added first-run workspace-root and runtime-path persistence for installed SI environments so codex, dyad, viva, remote-control, and related wrappers no longer depend on checkout-specific host paths.
 
