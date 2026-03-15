@@ -2564,6 +2564,37 @@ func cmdCodexRemove(args []string) {
 	} else {
 		name = fs.Arg(0)
 	}
+	if result, delegated, err := maybeRunRustCodexRemoveResult(name, *removeVolumes); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(result.Output) != "" {
+			fmt.Println(strings.TrimSpace(result.Output))
+		}
+		containerName := strings.TrimSpace(result.ContainerName)
+		if containerName == "" {
+			containerName = codexContainerName(name)
+		}
+		profileID := strings.TrimSpace(result.ProfileID)
+		if profileID != "" {
+			client, clientErr := shared.NewClient()
+			if clientErr != nil {
+				warnf("fort session cleanup probe failed for %s: %v", profileID, clientErr)
+			} else {
+				defer client.Close()
+				ctx := context.Background()
+				remaining, remainingErr := codexContainersByProfile(ctx, client, profileID)
+				if remainingErr != nil {
+					warnf("fort session cleanup probe failed for %s: %v", profileID, remainingErr)
+				} else if len(remaining) == 0 {
+					if closeErr := closeCodexProfileFortSession(codexProfile{ID: profileID}); closeErr != nil {
+						warnf("fort session cleanup failed for %s: %v", profileID, closeErr)
+					}
+				}
+			}
+		}
+		successf("codex container %s removed", containerName)
+		return
+	}
 	containerName, err := resolveCodexContainerName(name)
 	if err != nil {
 		fatal(err)

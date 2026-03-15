@@ -643,6 +643,8 @@ enum CodexCommand {
         name: String,
         #[arg(long, default_value_t = false)]
         volumes: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -1219,6 +1221,16 @@ struct CodexRemovePlanView {
     slug: String,
     codex_volume: String,
     gh_volume: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexRemoveResultView {
+    name: String,
+    container_name: String,
+    profile_id: Option<String>,
+    codex_volume: Option<String>,
+    gh_volume: Option<String>,
+    output: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1864,8 +1876,8 @@ fn main() -> Result<()> {
                 docker_bin,
             )?,
             CodexCommand::RemovePlan { name, format } => show_codex_remove_plan(&name, format)?,
-            CodexCommand::Remove { name, volumes, docker_bin } => {
-                run_codex_remove(&name, volumes, docker_bin)?
+            CodexCommand::Remove { name, volumes, format, docker_bin } => {
+                run_codex_remove(&name, volumes, format, docker_bin)?
             }
             CodexCommand::Start { name, docker_bin } => {
                 run_codex_container_action(&name, ContainerAction::Start, docker_bin)?
@@ -3671,12 +3683,40 @@ fn show_codex_remove_plan(name: &str, format: OutputFormat) -> Result<()> {
     Ok(())
 }
 
-fn run_codex_remove(name: &str, volumes: bool, docker_bin: Option<PathBuf>) -> Result<()> {
+fn inspect_codex_profile_label(
+    docker_program: &str,
+    container_name: &str,
+) -> Result<Option<String>> {
+    let command = si_rs_process::CommandSpec::new(docker_program.to_owned()).args([
+        "inspect".to_owned(),
+        "--format".to_owned(),
+        "{{ index .Config.Labels \"si.codex.profile\" }}".to_owned(),
+        container_name.to_owned(),
+    ]);
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let value = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    if value.is_empty() || value == "<no value>" {
+        return Ok(None);
+    }
+    Ok(Some(value))
+}
+
+fn run_codex_remove(
+    name: &str,
+    volumes: bool,
+    format: OutputFormat,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
     let artifacts = build_remove_artifacts(name)?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let docker_program_str = docker_program.display().to_string();
+    let profile_id = inspect_codex_profile_label(&docker_program_str, &artifacts.container_name)?;
     let remove_container = docker_container_remove_command(
-        docker_program.display().to_string(),
+        docker_program_str.clone(),
         artifacts.container_name.clone(),
         true,
     )?;
@@ -3685,11 +3725,11 @@ fn run_codex_remove(name: &str, volumes: bool, docker_bin: Option<PathBuf>) -> R
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("docker rm failed: {}", stderr.trim());
     }
-    print!("{}", String::from_utf8_lossy(&output.stdout));
+    let mut rendered = String::from_utf8_lossy(&output.stdout).into_owned();
     if volumes {
         for volume_name in [&artifacts.codex_volume, &artifacts.gh_volume] {
             let remove_volume = docker_volume_remove_command(
-                docker_program.display().to_string(),
+                docker_program_str.clone(),
                 volume_name.clone(),
                 true,
             )?;
@@ -3698,8 +3738,22 @@ fn run_codex_remove(name: &str, volumes: bool, docker_bin: Option<PathBuf>) -> R
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 anyhow::bail!("docker volume rm failed: {}", stderr.trim());
             }
-            print!("{}", String::from_utf8_lossy(&output.stdout));
+            rendered.push_str(&String::from_utf8_lossy(&output.stdout));
         }
+    }
+    match format {
+        OutputFormat::Json => {
+            let view = CodexRemoveResultView {
+                name: artifacts.name,
+                container_name: artifacts.container_name,
+                profile_id,
+                codex_volume: volumes.then_some(artifacts.codex_volume),
+                gh_volume: volumes.then_some(artifacts.gh_volume),
+                output: rendered,
+            };
+            println!("{}", serde_json::to_string_pretty(&view)?);
+        }
+        OutputFormat::Text => print!("{rendered}"),
     }
     Ok(())
 }
