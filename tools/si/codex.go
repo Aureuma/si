@@ -2403,39 +2403,42 @@ func cmdCodexClone(args []string) {
 	if repo == "" {
 		fatal(fmt.Errorf("repo required"))
 	}
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		fatal(err)
-	}
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
-	ctx := context.Background()
-	id, _, err := client.ContainerByName(ctx, containerName)
-	if err != nil {
-		fatal(err)
-	}
-	if id == "" {
-		fatal(fmt.Errorf("codex container %s not found", containerName))
-	}
-
-	execArgs := []string{"exec"}
-	execArgs = append(execArgs, "--user", codexContainerUser)
-	execArgs = append(execArgs, "-e", "SI_REPO="+repo)
-	if strings.TrimSpace(*ghPat) != "" {
-		execArgs = append(execArgs, "-e", "SI_GH_PAT="+strings.TrimSpace(*ghPat))
-		execArgs = append(execArgs, "-e", "GH_TOKEN="+strings.TrimSpace(*ghPat))
-		execArgs = append(execArgs, "-e", "GITHUB_TOKEN="+strings.TrimSpace(*ghPat))
-	}
-	execArgs = append(execArgs, containerName, "/usr/local/bin/si-entrypoint", "bash", "-lc", "true")
 	if _, delegated, err := maybeRunRustCodexClone(name, repo, strings.TrimSpace(*ghPat)); err != nil {
 		fatal(err)
 	} else if !delegated {
+		containerName, err := resolveCodexContainerName(name)
+		if err != nil {
+			fatal(err)
+		}
+		client, err := shared.NewClient()
+		if err != nil {
+			fatal(err)
+		}
+		defer client.Close()
+		ctx := context.Background()
+		id, _, err := client.ContainerByName(ctx, containerName)
+		if err != nil {
+			fatal(err)
+		}
+		if id == "" {
+			fatal(fmt.Errorf("codex container %s not found", containerName))
+		}
+		execArgs := []string{"exec"}
+		execArgs = append(execArgs, "--user", codexContainerUser)
+		execArgs = append(execArgs, "-e", "SI_REPO="+repo)
+		if strings.TrimSpace(*ghPat) != "" {
+			execArgs = append(execArgs, "-e", "SI_GH_PAT="+strings.TrimSpace(*ghPat))
+			execArgs = append(execArgs, "-e", "GH_TOKEN="+strings.TrimSpace(*ghPat))
+			execArgs = append(execArgs, "-e", "GITHUB_TOKEN="+strings.TrimSpace(*ghPat))
+		}
+		execArgs = append(execArgs, containerName, "/usr/local/bin/si-entrypoint", "bash", "-lc", "true")
 		if err := execDockerCLI(execArgs...); err != nil {
 			fatal(err)
 		}
+	}
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
 	}
 	successf("repo %s cloned in %s", repo, containerName)
 }
