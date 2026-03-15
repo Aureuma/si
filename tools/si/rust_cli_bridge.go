@@ -127,6 +127,69 @@ type rustCodexRespawnPlan struct {
 	RemoveTargets []string `json:"remove_targets"`
 }
 
+type rustDyadSpawnPlanRequest struct {
+	Name                    string
+	Role                    string
+	ActorImage              string
+	CriticImage             string
+	CodexModel              string
+	CodexEffortActor        string
+	CodexEffortCritic       string
+	CodexModelLow           string
+	CodexModelMedium        string
+	CodexModelHigh          string
+	CodexEffortLow          string
+	CodexEffortMedium       string
+	CodexEffortHigh         string
+	Workspace               string
+	Configs                 string
+	VaultEnvFile            string
+	CodexVolume             string
+	SkillsVolume            string
+	Network                 string
+	ForwardPorts            string
+	DockerSocket            bool
+	ProfileID               string
+	ProfileName             string
+	LoopEnabled             *bool
+	LoopGoal                string
+	LoopSeedPrompt          string
+	LoopMaxTurns            *int
+	LoopSleepSeconds        *int
+	LoopStartupDelaySeconds *int
+	LoopTurnTimeoutSeconds  *int
+	LoopRetryMax            *int
+	LoopRetryBaseSeconds    *int
+	LoopPromptLines         *int
+	LoopAllowMCPStartup     *bool
+	LoopTmuxCapture         string
+	LoopPausePollSeconds    *int
+}
+
+type rustDyadSpawnPlan struct {
+	Dyad          string             `json:"dyad"`
+	Role          string             `json:"role"`
+	NetworkName   string             `json:"network_name"`
+	WorkspaceHost string             `json:"workspace_host"`
+	ConfigsHost   string             `json:"configs_host"`
+	CodexVolume   string             `json:"codex_volume"`
+	SkillsVolume  string             `json:"skills_volume"`
+	ForwardPorts  string             `json:"forward_ports"`
+	DockerSocket  bool               `json:"docker_socket"`
+	Actor         rustDyadMemberPlan `json:"actor"`
+	Critic        rustDyadMemberPlan `json:"critic"`
+}
+
+type rustDyadMemberPlan struct {
+	Member        string                    `json:"member"`
+	ContainerName string                    `json:"container_name"`
+	Image         string                    `json:"image"`
+	Workdir       string                    `json:"workdir,omitempty"`
+	Env           []string                  `json:"env"`
+	BindMounts    []rustCodexSpawnPlanMount `json:"bind_mounts"`
+	Command       []string                  `json:"command"`
+}
+
 type rustVaultTrustLookup struct {
 	Found               bool   `json:"found"`
 	Matches             bool   `json:"matches"`
@@ -213,6 +276,21 @@ func maybeBuildRustCodexSpawnSpec(request rustCodexSpawnSpecRequest) (*rustCodex
 		return nil, false, fmt.Errorf("decode rust codex spawn spec: %w", err)
 	}
 	return &spec, true, nil
+}
+
+func maybeBuildRustDyadSpawnPlan(request rustDyadSpawnPlanRequest) (*rustDyadSpawnPlan, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(buildRustDyadSpawnPlanArgs(request)...)
+	if err != nil {
+		return nil, false, err
+	}
+	var plan rustDyadSpawnPlan
+	if err := json.Unmarshal(output, &plan); err != nil {
+		return nil, false, fmt.Errorf("decode rust dyad spawn plan: %w", err)
+	}
+	return &plan, true, nil
 }
 
 func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
@@ -707,6 +785,92 @@ func buildRustCodexSpawnPlanArgs(request rustCodexSpawnPlanRequest) []string {
 		args = append(args, "--vault-env-file", value)
 	}
 	return args
+}
+
+func buildRustDyadSpawnPlanArgs(request rustDyadSpawnPlanRequest) []string {
+	args := []string{
+		"dyad", "spawn-plan",
+		"--name", strings.TrimSpace(request.Name),
+		"--role", strings.TrimSpace(request.Role),
+		"--actor-image", strings.TrimSpace(request.ActorImage),
+		"--critic-image", strings.TrimSpace(request.CriticImage),
+		"--codex-model", strings.TrimSpace(request.CodexModel),
+		"--codex-effort-actor", strings.TrimSpace(request.CodexEffortActor),
+		"--codex-effort-critic", strings.TrimSpace(request.CodexEffortCritic),
+		"--codex-model-low", strings.TrimSpace(request.CodexModelLow),
+		"--codex-model-medium", strings.TrimSpace(request.CodexModelMedium),
+		"--codex-model-high", strings.TrimSpace(request.CodexModelHigh),
+		"--codex-effort-low", strings.TrimSpace(request.CodexEffortLow),
+		"--codex-effort-medium", strings.TrimSpace(request.CodexEffortMedium),
+		"--codex-effort-high", strings.TrimSpace(request.CodexEffortHigh),
+		"--workspace", strings.TrimSpace(request.Workspace),
+		"--configs", strings.TrimSpace(request.Configs),
+		"--vault-env-file", strings.TrimSpace(request.VaultEnvFile),
+		"--codex-volume", strings.TrimSpace(request.CodexVolume),
+		"--skills-volume", strings.TrimSpace(request.SkillsVolume),
+		"--network", strings.TrimSpace(request.Network),
+		"--forward-ports", strings.TrimSpace(request.ForwardPorts),
+		"--docker-socket=" + strconv.FormatBool(request.DockerSocket),
+		"--profile-id", strings.TrimSpace(request.ProfileID),
+		"--profile-name", strings.TrimSpace(request.ProfileName),
+		"--loop-goal", strings.TrimSpace(request.LoopGoal),
+		"--loop-seed-prompt", strings.TrimSpace(request.LoopSeedPrompt),
+		"--loop-tmux-capture", strings.TrimSpace(request.LoopTmuxCapture),
+		"--format", "json",
+	}
+	if request.LoopEnabled != nil {
+		args = append(args, "--loop-enabled="+strconv.FormatBool(*request.LoopEnabled))
+	}
+	if request.LoopAllowMCPStartup != nil {
+		args = append(args, "--loop-allow-mcp-startup="+strconv.FormatBool(*request.LoopAllowMCPStartup))
+	}
+	if request.LoopMaxTurns != nil {
+		args = append(args, "--loop-max-turns", strconv.Itoa(*request.LoopMaxTurns))
+	}
+	if request.LoopSleepSeconds != nil {
+		args = append(args, "--loop-sleep-seconds", strconv.Itoa(*request.LoopSleepSeconds))
+	}
+	if request.LoopStartupDelaySeconds != nil {
+		args = append(args, "--loop-startup-delay-seconds", strconv.Itoa(*request.LoopStartupDelaySeconds))
+	}
+	if request.LoopTurnTimeoutSeconds != nil {
+		args = append(args, "--loop-turn-timeout-seconds", strconv.Itoa(*request.LoopTurnTimeoutSeconds))
+	}
+	if request.LoopRetryMax != nil {
+		args = append(args, "--loop-retry-max", strconv.Itoa(*request.LoopRetryMax))
+	}
+	if request.LoopRetryBaseSeconds != nil {
+		args = append(args, "--loop-retry-base-seconds", strconv.Itoa(*request.LoopRetryBaseSeconds))
+	}
+	if request.LoopPromptLines != nil {
+		args = append(args, "--loop-prompt-lines", strconv.Itoa(*request.LoopPromptLines))
+	}
+	if request.LoopPausePollSeconds != nil {
+		args = append(args, "--loop-pause-poll-seconds", strconv.Itoa(*request.LoopPausePollSeconds))
+	}
+	return filterEmptyFlagPairs(args)
+}
+
+func filterEmptyFlagPairs(args []string) []string {
+	filtered := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		current := strings.TrimSpace(args[i])
+		if current == "" {
+			continue
+		}
+		if i+1 < len(args) && strings.HasPrefix(current, "--") && !strings.Contains(current, "=") {
+			next := strings.TrimSpace(args[i+1])
+			if next == "" {
+				i++
+				continue
+			}
+			filtered = append(filtered, current, next)
+			i++
+			continue
+		}
+		filtered = append(filtered, current)
+	}
+	return filtered
 }
 
 func buildRustCodexSpawnSpecArgs(request rustCodexSpawnSpecRequest) []string {
