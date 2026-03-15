@@ -452,6 +452,42 @@ func maybeLoadRustFortRuntimeAgentState(path string) (fortProfileRuntimeAgentSta
 	}, true, nil
 }
 
+func maybeSaveRustFortSessionState(path string, state fortProfileSessionState) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return false, fmt.Errorf("encode rust fort session state: %w", err)
+	}
+	if _, err := runRustCLIText(
+		"fort", "session-state", "write",
+		"--path", strings.TrimSpace(path),
+		"--state-json", string(raw),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAgentState) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return false, fmt.Errorf("encode rust fort runtime agent state: %w", err)
+	}
+	if _, err := runRustCLIText(
+		"fort", "runtime-agent-state", "write",
+		"--path", strings.TrimSpace(path),
+		"--state-json", string(raw),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func decodeRustFortSessionClassification(raw []byte) (*rustFortSessionClassification, error) {
 	var decoded any
 	if err := json.Unmarshal(raw, &decoded); err != nil {

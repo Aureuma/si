@@ -193,6 +193,33 @@ func TestLoadFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 }
 
+func TestSaveFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	err := saveFortRuntimeAgentState("/tmp/runtime-agent.json", fortProfileRuntimeAgentState{
+		ProfileID: "alpha",
+		PID:       4242,
+	})
+	if err != nil {
+		t.Fatalf("saveFortRuntimeAgentState: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nruntime-agent-state\nwrite\n--path\n/tmp/runtime-agent.json\n--state-json\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
 func TestFortRuntimeAgentStepHonorsRustRevokedClassification(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

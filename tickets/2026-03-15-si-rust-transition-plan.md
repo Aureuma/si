@@ -267,6 +267,7 @@ Progress notes:
 - completed: experimental Go Fort session reuse now honors Rust session classification, so revoked persisted state can short-circuit reuse before Go attempts refresh
 - completed: experimental Go Fort runtime-agent state loading can now delegate to Rust `fort runtime-agent-state show`, moving another persisted-state read out of Go before the refresh loop cutover
 - completed: experimental Go Fort runtime-agent step now honors Rust session classification, so revoked persisted state can stop the refresh loop before any network refresh attempt
+- completed: experimental Go Fort session-state and runtime-agent-state writes can now delegate to Rust persistence surfaces, moving both persisted-state write paths behind the compatibility boundary
 - completed: initial `si-vault` crate for persisted trust-store state with translated round-trip, missing-file, and normalized path update/delete coverage from the Go vault trust path
 - completed: experimental Go vault trust enforcement can now delegate trust-store lookup to Rust behind the existing compatibility boundary, with focused bridge and consumer tests
 

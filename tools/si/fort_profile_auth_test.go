@@ -780,6 +780,34 @@ func TestLoadFortProfileSessionStateDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 }
 
+func TestSaveFortProfileSessionStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	err := saveFortProfileSessionState("/tmp/session.json", fortProfileSessionState{
+		ProfileID: "alpha",
+		AgentID:   "si-codex-alpha",
+		SessionID: "sess-1",
+	})
+	if err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nwrite\n--path\n/tmp/session.json\n--state-json\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
 func TestEnsureUsableCodexProfileFortSessionHonorsRustRevokedClassification(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
