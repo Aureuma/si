@@ -41,6 +41,8 @@ const (
 var (
 	openLoginURLFn              = openLoginURL
 	copyDeviceCodeToClipboardFn = copyDeviceCodeToClipboard
+	runCodexRemoveFn            = cmdCodexRemove
+	runCodexSpawnFn             = cmdCodexSpawn
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -846,15 +848,26 @@ func cmdCodexRespawn(args []string) {
 	} else if delegated && rustPlan != nil {
 		filtered, name, profileKey, targets = applyRustCodexRespawnPlan(filtered, name, profileKey, targets, rustPlan, resolveCodexProfileID)
 	}
+	runCodexRespawnActions(targets, *removeVolumes, filtered, name, runCodexRemoveFn, runCodexSpawnFn)
+}
+
+func runCodexRespawnActions(
+	targets []string,
+	removeVolumes bool,
+	filtered []string,
+	name string,
+	removeFn func([]string),
+	spawnFn func([]string),
+) {
 	for _, target := range targets {
 		removeArgs := []string{target}
-		if *removeVolumes {
+		if removeVolumes {
 			removeArgs = append([]string{"--volumes"}, removeArgs...)
 		}
-		cmdCodexRemove(removeArgs)
+		removeFn(removeArgs)
 	}
 	spawnArgs := append(stripFlag(filtered, "volumes"), name)
-	cmdCodexSpawn(spawnArgs)
+	spawnFn(spawnArgs)
 }
 
 func resolveCodexProfileID(key string) (string, bool) {
