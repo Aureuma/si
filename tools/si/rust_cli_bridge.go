@@ -126,6 +126,16 @@ type rustCodexRespawnPlan struct {
 	RemoveTargets []string `json:"remove_targets"`
 }
 
+type rustVaultTrustLookup struct {
+	Found              bool   `json:"found"`
+	Matches            bool   `json:"matches"`
+	RepoRoot           string `json:"repo_root"`
+	File               string `json:"file"`
+	ExpectedFingerprint string `json:"expected_fingerprint"`
+	StoredFingerprint  string `json:"stored_fingerprint,omitempty"`
+	TrustedAt          string `json:"trusted_at,omitempty"`
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -348,6 +358,29 @@ func maybeBuildRustCodexRespawnPlan(name string, profileID string, profileContai
 		return nil, false, fmt.Errorf("decode rust codex respawn plan: %w", err)
 	}
 	return &plan, true, nil
+}
+
+func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string, fingerprint string) (*rustVaultTrustLookup, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{
+		"vault", "trust", "lookup",
+		"--path", strings.TrimSpace(storePath),
+		"--repo-root", strings.TrimSpace(repoRoot),
+		"--file", strings.TrimSpace(file),
+		"--fingerprint", strings.TrimSpace(fingerprint),
+		"--format", "json",
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var lookup rustVaultTrustLookup
+	if err := json.Unmarshal(output, &lookup); err != nil {
+		return nil, false, fmt.Errorf("decode rust vault trust lookup: %w", err)
+	}
+	return &lookup, true, nil
 }
 
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {

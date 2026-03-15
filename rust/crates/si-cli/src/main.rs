@@ -22,6 +22,7 @@ use si_rs_fort::{
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_runtime::HostMountContext;
+use si_rs_vault::TrustStore;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -63,6 +64,10 @@ enum Command {
     Fort {
         #[command(subcommand)]
         command: FortCommand,
+    },
+    Vault {
+        #[command(subcommand)]
+        command: VaultCommand,
     },
 }
 
@@ -406,6 +411,30 @@ enum FortSessionStateCommand {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum VaultCommand {
+    Trust {
+        #[command(subcommand)]
+        command: VaultTrustCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum VaultTrustCommand {
+    Lookup {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        repo_root: String,
+        #[arg(long)]
+        file: String,
+        #[arg(long)]
+        fingerprint: String,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 enum OutputFormat {
     Text,
@@ -601,6 +630,19 @@ struct CodexRespawnPlanView {
     #[serde(skip_serializing_if = "Option::is_none")]
     profile_id: Option<String>,
     remove_targets: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct VaultTrustLookupView {
+    found: bool,
+    matches: bool,
+    repo_root: String,
+    file: String,
+    expected_fingerprint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stored_fingerprint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    trusted_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -926,6 +968,13 @@ fn main() -> Result<()> {
                 }
             },
         },
+        Command::Vault { command } => match command {
+            VaultCommand::Trust { command } => match command {
+                VaultTrustCommand::Lookup { path, repo_root, file, fingerprint, format } => {
+                    show_vault_trust_lookup(path, &repo_root, &file, &fingerprint, format)?
+                }
+            },
+        },
     }
 
     Ok(())
@@ -1053,6 +1102,46 @@ fn show_fort_session_state_classification(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&classified)?),
         OutputFormat::Text => render_fort_session_classification_text(&classified),
+    }
+
+    Ok(())
+}
+
+fn show_vault_trust_lookup(
+    path: PathBuf,
+    repo_root: &str,
+    file: &str,
+    fingerprint: &str,
+    format: OutputFormat,
+) -> Result<()> {
+    let store = TrustStore::load(path)?;
+    let entry = store.find(repo_root, file);
+    let view = VaultTrustLookupView {
+        found: entry.is_some(),
+        matches: entry.map(|entry| entry.fingerprint.trim() == fingerprint.trim()).unwrap_or(false),
+        repo_root: repo_root.trim().to_owned(),
+        file: file.trim().to_owned(),
+        expected_fingerprint: fingerprint.trim().to_owned(),
+        stored_fingerprint: entry.map(|entry| entry.fingerprint.clone()),
+        trusted_at: entry.and_then(|entry| {
+            if entry.trusted_at.trim().is_empty() { None } else { Some(entry.trusted_at.clone()) }
+        }),
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("found={}", view.found);
+            println!("matches={}", view.matches);
+            println!("repo_root={}", render_text_value(&view.repo_root));
+            println!("file={}", render_text_value(&view.file));
+            println!("expected_fingerprint={}", render_text_value(&view.expected_fingerprint));
+            println!(
+                "stored_fingerprint={}",
+                render_option_text_value(view.stored_fingerprint.as_deref())
+            );
+            println!("trusted_at={}", render_option_text_value(view.trusted_at.as_deref()));
+        }
     }
 
     Ok(())
