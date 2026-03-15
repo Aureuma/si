@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/docker/docker/api/types"
 
@@ -1118,6 +1119,82 @@ func TestDyadDelegatedLifecycleSmoke(t *testing.T) {
 		if !strings.Contains(argsText, expected) {
 			t.Fatalf("expected delegated args %q in %q", expected, argsText)
 		}
+	}
+}
+
+func TestCmdDyadPeekDelegatesPlanToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"dyad\":\"alpha\",\"actor_container_name\":\"si-dyad-alpha-actor-rust\",\"critic_container_name\":\"si-dyad-alpha-critic-rust\",\"actor_session_name\":\"actor-rust\",\"critic_session_name\":\"critic-rust\",\"peek_session_name\":\"peek-rust\",\"actor_attach_command\":\"attach actor rust\",\"critic_attach_command\":\"attach critic rust\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prevLookup := lookupDyadPeekContainersFn
+	prevEnsure := ensureDyadPeekTmuxAvailableFn
+	prevCleanup := cleanupDyadPeekTmuxSessionsFn
+	prevRun := runDyadTmuxCommandFn
+	prevAttach := attachDyadTmuxSessionFn
+	t.Cleanup(func() {
+		lookupDyadPeekContainersFn = prevLookup
+		ensureDyadPeekTmuxAvailableFn = prevEnsure
+		cleanupDyadPeekTmuxSessionsFn = prevCleanup
+		runDyadTmuxCommandFn = prevRun
+		attachDyadTmuxSessionFn = prevAttach
+	})
+
+	lookupDyadPeekContainersFn = func(context.Context, string, string) (string, string, error) {
+		return "actor-id", "critic-id", nil
+	}
+	ensureDyadPeekTmuxAvailableFn = func() error { return nil }
+	cleanupDyadPeekTmuxSessionsFn = func(context.Context, string, time.Duration, statusOptions) {}
+	var tmuxCalls [][]string
+	runDyadTmuxCommandFn = func(args ...string) error {
+		tmuxCalls = append(tmuxCalls, append([]string(nil), args...))
+		return nil
+	}
+	attachDyadTmuxSessionFn = func(string) error {
+		t.Fatalf("did not expect attach in detached mode")
+		return nil
+	}
+
+	output := captureOutputForTest(t, func() {
+		cmdDyadPeek([]string{"--detached", "alpha"})
+	})
+	if !strings.Contains(output, "dyad peek session ready: peek-rust") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\npeek-plan\nalpha\n--member\nboth\n--format\njson\n--session\nsi-dyad-peek-alpha" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+	if len(tmuxCalls) == 0 {
+		t.Fatalf("expected tmux calls")
+	}
+	foundNewSession := false
+	foundSplit := false
+	for _, call := range tmuxCalls {
+		text := strings.Join(call, "\n")
+		if strings.Contains(text, "new-session") && strings.Contains(text, "peek-rust") && strings.Contains(text, "attach actor rust") {
+			foundNewSession = true
+		}
+		if strings.Contains(text, "split-window") && strings.Contains(text, "attach critic rust") {
+			foundSplit = true
+		}
+	}
+	if !foundNewSession {
+		t.Fatalf("expected new-session call in %v", tmuxCalls)
+	}
+	if !foundSplit {
+		t.Fatalf("expected split-window call in %v", tmuxCalls)
 	}
 }
 

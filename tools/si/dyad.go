@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 
@@ -497,18 +498,9 @@ func cmdDyadPeek(args []string) {
 		criticCmd = strings.TrimSpace(rustPlan.CriticAttachCommand)
 	}
 
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
 	ctx := context.Background()
 
-	actorID, _, err := client.ContainerByName(ctx, actorContainer)
-	if err != nil {
-		fatal(err)
-	}
-	criticID, _, err := client.ContainerByName(ctx, criticContainer)
+	actorID, criticID, err := lookupDyadPeekContainersFn(ctx, actorContainer, criticContainer)
 	if err != nil {
 		fatal(err)
 	}
@@ -516,12 +508,13 @@ func cmdDyadPeek(args []string) {
 		fatal(fmt.Errorf("dyad not found: %s", dyad))
 	}
 
-	if _, err := exec.LookPath("tmux"); err != nil {
-		fatal(fmt.Errorf("tmux not found in PATH: %w", err))
+	if err := ensureDyadPeekTmuxAvailableFn(); err != nil {
+		fatal(err)
 	}
+	cleanupDyadPeekTmuxSessionsFn(ctx, "si-dyad-peek-", 30*time.Minute, statusOptions{})
 
 	// Always create (or replace) the host peek session for predictable behavior.
-	_ = dyadTmuxRun("kill-session", "-t", peekSession)
+	_ = runDyadTmuxCommandFn("kill-session", "-t", peekSession)
 
 	var first string
 	switch memberVal {
@@ -532,18 +525,18 @@ func cmdDyadPeek(args []string) {
 	default:
 		first = actorCmd
 	}
-	if err := dyadTmuxRun("new-session", "-d", "-s", peekSession, "bash", "-lc", first); err != nil {
+	if err := runDyadTmuxCommandFn("new-session", "-d", "-s", peekSession, "bash", "-lc", first); err != nil {
 		fatal(err)
 	}
 	dyadApplyTmuxSessionDefaults(peekSession)
 	// Make pane titles visible and consistent.
-	_ = dyadTmuxRun("rename-window", "-t", peekSession+":0", dyadPeekWindowTitle(dyad))
-	_ = dyadTmuxRun("set-option", "-t", peekSession, "pane-border-status", "top")
-	_ = dyadTmuxRun("set-option", "-t", peekSession, "pane-border-format", "#{pane_title}")
+	_ = runDyadTmuxCommandFn("rename-window", "-t", peekSession+":0", dyadPeekWindowTitle(dyad))
+	_ = runDyadTmuxCommandFn("set-option", "-t", peekSession, "pane-border-status", "top")
+	_ = runDyadTmuxCommandFn("set-option", "-t", peekSession, "pane-border-format", "#{pane_title}")
 
 	if memberVal == "both" {
-		if err := dyadTmuxRun("split-window", "-h", "-t", peekSession+":0", "bash", "-lc", criticCmd); err != nil {
-			_ = dyadTmuxRun("kill-session", "-t", peekSession)
+		if err := runDyadTmuxCommandFn("split-window", "-h", "-t", peekSession+":0", "bash", "-lc", criticCmd); err != nil {
+			_ = runDyadTmuxCommandFn("kill-session", "-t", peekSession)
 			fatal(err)
 		}
 		_, _ = dyadTmuxOutput("select-layout", "-t", peekSession, "even-horizontal")
@@ -551,12 +544,12 @@ func cmdDyadPeek(args []string) {
 	// Name panes so the user can immediately tell which dyad member they're driving.
 	switch memberVal {
 	case "actor":
-		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor"))
+		_ = runDyadTmuxCommandFn("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor"))
 	case "critic":
-		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "critic"))
+		_ = runDyadTmuxCommandFn("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "critic"))
 	default:
-		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor"))
-		_ = dyadTmuxRun("select-pane", "-t", peekSession+":0.1", "-T", dyadPeekPaneTitle(dyad, "critic"))
+		_ = runDyadTmuxCommandFn("select-pane", "-t", peekSession+":0.0", "-T", dyadPeekPaneTitle(dyad, "actor"))
+		_ = runDyadTmuxCommandFn("select-pane", "-t", peekSession+":0.1", "-T", dyadPeekPaneTitle(dyad, "critic"))
 	}
 
 	if *detached {
@@ -566,9 +559,35 @@ func cmdDyadPeek(args []string) {
 	if !isInteractiveTerminal() {
 		fatal(errors.New("dyad peek requires an interactive terminal (or use --detached)"))
 	}
-	if err := dyadTmuxAttach(peekSession); err != nil {
+	if err := attachDyadTmuxSessionFn(peekSession); err != nil {
 		fatal(err)
 	}
+}
+
+var (
+	lookupDyadPeekContainersFn    = lookupDyadPeekContainers
+	ensureDyadPeekTmuxAvailableFn = ensureTmuxAvailable
+	cleanupDyadPeekTmuxSessionsFn = cleanupStaleTmuxSessions
+	runDyadTmuxCommandFn          = dyadTmuxRun
+	attachDyadTmuxSessionFn       = dyadTmuxAttach
+)
+
+func lookupDyadPeekContainers(ctx context.Context, actorContainer string, criticContainer string) (string, string, error) {
+	client, err := shared.NewClient()
+	if err != nil {
+		return "", "", err
+	}
+	defer client.Close()
+
+	actorID, _, err := client.ContainerByName(ctx, actorContainer)
+	if err != nil {
+		return "", "", err
+	}
+	criticID, _, err := client.ContainerByName(ctx, criticContainer)
+	if err != nil {
+		return "", "", err
+	}
+	return actorID, criticID, nil
 }
 
 func buildDyadPeekFallbackPlan(dyad string, suffix string, peekSession string) (*rustDyadPeekPlan, error) {
