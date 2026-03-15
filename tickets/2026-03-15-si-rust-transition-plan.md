@@ -222,6 +222,7 @@ Progress notes:
 - completed: Rust `spawn-start` execution path now runs the generated codex container command through `si-process`, with a scriptable docker-bin override for integration-style testing
 - completed: experimental Go `spawn` can now delegate actual container startup to Rust `spawn-start`, with Go still owning Fort/bootstrap/session handling, post-start seeding, and `attach` behavior
 - completed: experimental Go `remove` can now consume Rust codex removal artifact planning for container/volume naming while Docker listing and Fort cleanup remain in Go
+- completed: experimental Go `start` and `stop` can now delegate the Docker container action to Rust while Go retains post-start inspection, Docker socket setup, and Fort/bootstrap session work
 
 ### Phase 5: Security/runtime migration
 

@@ -202,6 +202,37 @@ func TestRunProvidersCharacteristicsCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 }
 
+func TestMaybeRunRustCodexContainerActionDelegatesAndReturnsOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'si-codex-ferma'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustCodexContainerAction("stop", "ferma")
+	if err != nil {
+		t.Fatalf("maybeRunRustCodexContainerAction: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected stop action to delegate to Rust")
+	}
+	if output != "si-codex-ferma" {
+		t.Fatalf("expected trimmed Rust output, got %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nstop\nferma" {
+		t.Fatalf("expected Rust CLI args to be codex stop ferma, got %q", string(argsData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",

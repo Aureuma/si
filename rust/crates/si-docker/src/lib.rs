@@ -3,6 +3,21 @@ use std::path::{Path, PathBuf};
 use si_rs_process::CommandSpec;
 use thiserror::Error;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContainerAction {
+    Start,
+    Stop,
+}
+
+impl ContainerAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Start => "start",
+            Self::Stop => "stop",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindMount {
     source: PathBuf,
@@ -431,8 +446,26 @@ pub enum PublishedPortError {
     MissingHostPort,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ContainerActionError {
+    #[error("container name is required")]
+    MissingContainerName,
+}
+
 pub fn docker_binary_path() -> &'static Path {
     Path::new("docker")
+}
+
+pub fn docker_container_action_command(
+    docker_program: impl Into<String>,
+    action: ContainerAction,
+    container_name: impl Into<String>,
+) -> Result<CommandSpec, ContainerActionError> {
+    let container_name = container_name.into();
+    if container_name.trim().is_empty() {
+        return Err(ContainerActionError::MissingContainerName);
+    }
+    Ok(CommandSpec::new(docker_program).args([action.as_str().to_owned(), container_name]))
 }
 
 #[cfg(test)]
@@ -558,5 +591,23 @@ mod tests {
         assert_eq!(command.program(), "docker");
         assert!(command.args_slice().contains(&"run".to_owned()));
         assert!(command.args_slice().contains(&"-d".to_owned()));
+    }
+
+    #[test]
+    fn builds_docker_start_command() {
+        let command =
+            docker_container_action_command("docker", ContainerAction::Start, "si-codex-ferma")
+                .expect("start command");
+
+        assert_eq!(command.program(), "docker");
+        assert_eq!(command.args_slice(), ["start", "si-codex-ferma"]);
+    }
+
+    #[test]
+    fn rejects_empty_container_name_for_container_action() {
+        let err = docker_container_action_command("docker", ContainerAction::Stop, "   ")
+            .expect_err("missing container name");
+
+        assert_eq!(err, ContainerActionError::MissingContainerName);
     }
 }

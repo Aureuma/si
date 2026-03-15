@@ -10,6 +10,7 @@ use si_rs_command_manifest::{
 };
 use si_rs_config::paths::SiPaths;
 use si_rs_config::settings::Settings;
+use si_rs_docker::{ContainerAction, docker_container_action_command};
 use si_rs_process::{ProcessRunner, RunOptions};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_runtime::HostMountContext;
@@ -279,6 +280,16 @@ enum CodexCommand {
         name: String,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
+    },
+    Start {
+        name: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Stop {
+        name: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
     },
 }
 
@@ -662,6 +673,12 @@ fn main() -> Result<()> {
                 docker_bin,
             )?,
             CodexCommand::RemovePlan { name, format } => show_codex_remove_plan(&name, format)?,
+            CodexCommand::Start { name, docker_bin } => {
+                run_codex_container_action(&name, ContainerAction::Start, docker_bin)?
+            }
+            CodexCommand::Stop { name, docker_bin } => {
+                run_codex_container_action(&name, ContainerAction::Stop, docker_bin)?
+            }
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -1228,6 +1245,28 @@ fn show_codex_remove_plan(name: &str, format: OutputFormat) -> Result<()> {
             println!("gh_volume={}", view.gh_volume);
         }
     }
+    Ok(())
+}
+
+fn run_codex_container_action(
+    name: &str,
+    action: ContainerAction,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let command = docker_container_action_command(
+        docker_program.display().to_string(),
+        action,
+        artifacts.container_name,
+    )?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker {} failed: {}", action.as_str(), stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 
