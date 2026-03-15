@@ -24,7 +24,7 @@ wrapper flags:
 token/auth model:
   - Host bootstrap admin auth resolves from FORT_BOOTSTRAP_TOKEN_FILE.
   - Runtime container auth uses file paths FORT_TOKEN_PATH and FORT_REFRESH_TOKEN_PATH.
-  - This wrapper auto-refreshes runtime sessions when possible and uses token-file flow.
+  - Runtime refresh is owned by the profile-scoped Fort refresher; this wrapper reads file-based auth state.
   - FORT_TOKEN and FORT_REFRESH_TOKEN are deprecated/disallowed and sanitized from child process environment.
 
 examples:

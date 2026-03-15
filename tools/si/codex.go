@@ -2139,12 +2139,17 @@ func cmdCodexRemove(args []string) {
 			return
 		}
 		removed := 0
+		profilesToClose := map[string]codexProfile{}
 		for _, c := range containers {
+			profileID := strings.TrimSpace(c.Labels[codexProfileLabelKey])
 			if err := client.RemoveContainer(ctx, c.ID, true); err != nil {
 				warnf("remove container %s failed: %v", strings.TrimPrefix(c.Names[0], "/"), err)
 				continue
 			}
 			removed++
+			if profileID != "" {
+				profilesToClose[profileID] = codexProfile{ID: profileID}
+			}
 			if *removeVolumes {
 				slug := codexContainerSlug(strings.TrimPrefix(c.Names[0], "/"))
 				if strings.TrimSpace(slug) == "" {
@@ -2157,6 +2162,18 @@ func cmdCodexRemove(args []string) {
 				}
 				if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
 					warnf("gh volume remove failed: %v", err)
+				}
+			}
+		}
+		for profileID, profile := range profilesToClose {
+			remaining, err := codexContainersByProfile(ctx, client, profileID)
+			if err != nil {
+				warnf("fort session cleanup probe failed for %s: %v", profileID, err)
+				continue
+			}
+			if len(remaining) == 0 {
+				if err := closeCodexProfileFortSession(profile); err != nil {
+					warnf("fort session cleanup failed for %s: %v", profileID, err)
 				}
 			}
 		}
@@ -2180,7 +2197,7 @@ func cmdCodexRemove(args []string) {
 	}
 	defer client.Close()
 	ctx := context.Background()
-	id, _, err := client.ContainerByName(ctx, containerName)
+	id, info, err := client.ContainerByName(ctx, containerName)
 	if err != nil {
 		fatal(err)
 	}
@@ -2200,6 +2217,20 @@ func cmdCodexRemove(args []string) {
 		}
 		if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
 			warnf("gh volume remove failed: %v", err)
+		}
+	}
+	profileID := ""
+	if info != nil && info.Config != nil {
+		profileID = strings.TrimSpace(info.Config.Labels[codexProfileLabelKey])
+	}
+	if profileID != "" {
+		remaining, err := codexContainersByProfile(ctx, client, profileID)
+		if err != nil {
+			warnf("fort session cleanup probe failed for %s: %v", profileID, err)
+		} else if len(remaining) == 0 {
+			if err := closeCodexProfileFortSession(codexProfile{ID: profileID}); err != nil {
+				warnf("fort session cleanup failed for %s: %v", profileID, err)
+			}
 		}
 	}
 	successf("codex container %s removed", containerName)

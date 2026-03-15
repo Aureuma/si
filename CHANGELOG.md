@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [v0.54.0] - 2026-03-14
+### Added
+- Added a profile-scoped Fort runtime refresher that owns steady-state access-token rotation for spawned SI runtimes.
+
+### Changed
+- Changed `si spawn`/`si respawn` Fort session recovery to resume usable profile session state first, then ensure the dedicated refresher is running, instead of refreshing inline inside wrapper commands.
+- Changed `si fort` wrapper behavior and docs to use file-based runtime auth state only, with refresh ownership delegated to the profile-scoped refresher.
+- Changed Fort session state persistence to use strict regular-file validation and atomic state-file writes.
+
+### Fixed
+- Fixed cross-process Fort refresh races by adding a per-profile runtime lock around session reuse, refresh, refresher startup, and teardown.
+- Fixed `si remove` and `si logout --all` to close and clean up SI-managed Fort runtime sessions when the last profile runtime is torn down.
+- Fixed runtime auth drift in docs/help so the published contract matches the Fort-guideline-aligned implementation.
+
 ## [v0.53.3] - 2026-03-14
 ### Changed
 - Changed npm install guidance to prefer a user-owned global prefix so SI no longer defaults users back into stale `/usr/local/bin` installs.
