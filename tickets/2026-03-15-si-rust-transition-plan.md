@@ -248,6 +248,7 @@ Progress notes:
 - completed: initial `si-warmup` crate now owns persisted warmup state loading, legacy version normalization, and `warmup status` rendering, and Go `si warmup status` can consume that Rust state loader while preserving the current Go text output path
 - completed: live Go warmup reconcile/status state reads and writes now flow through the Rust warmup state loader/writer when the compatibility boundary is enabled, so Rust owns persisted warmup state normalization for both status and mutation paths
 - completed: warmup autostart/disabled marker reads and writes now flow through the Rust warmup crate behind the compatibility boundary, so Go scheduler self-repair and enable/disable paths reuse Rust marker semantics with Go-only legacy fallbacks for cached-auth and legacy-state detection
+- completed: Rust warmup now owns the marker-plus-state autostart decision (`disabled` / `marker` / `legacy_state` / `none`), and Go scheduler self-repair now consumes that Rust decision directly before applying its remaining Go-only cached-auth fallback
 
 ### Phase 5: Security/runtime migration
 

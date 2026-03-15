@@ -342,7 +342,7 @@ func TestWarmWeeklyAutostartRequestedUsesRustMarkerStateWhenConfigured(t *testin
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"disabled\":true,\"autostart_present\":true}'\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"requested\":false,\"reason\":\"disabled\"}'\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
@@ -357,7 +357,34 @@ func TestWarmWeeklyAutostartRequestedUsesRustMarkerStateWhenConfigured(t *testin
 	if err != nil {
 		t.Fatalf("read args file: %v", err)
 	}
-	if !strings.Contains(string(argsData), "warmup\nmarker\nshow\n--autostart-path\n") {
+	if !strings.Contains(string(argsData), "warmup\nautostart-decision\n--state-path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
+func TestWarmWeeklyAutostartRequestedDelegatesDecisionToRustWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"requested\":true,\"reason\":\"legacy_state\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	requested, reason := warmWeeklyAutostartRequested()
+	if !requested || reason != "legacy_state" {
+		t.Fatalf("unexpected autostart result: requested=%v reason=%q", requested, reason)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nautostart-decision\n--state-path\n") {
 		t.Fatalf("unexpected rust cli args: %q", string(argsData))
 	}
 }

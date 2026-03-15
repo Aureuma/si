@@ -419,6 +419,37 @@ func TestMaybeSetRustWarmupDisabledDelegates(t *testing.T) {
 	}
 }
 
+func TestMaybeReadRustWarmupAutostartDecisionDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"requested\":true,\"reason\":\"legacy_state\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	decision, delegated, err := maybeReadRustWarmupAutostartDecision("/tmp/state.json", "/tmp/autostart.v1", "/tmp/disabled.v1")
+	if err != nil {
+		t.Fatalf("maybeReadRustWarmupAutostartDecision: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup autostart decision to delegate to Rust")
+	}
+	if !decision.Requested || decision.Reason != "legacy_state" {
+		t.Fatalf("unexpected decision: %+v", decision)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nautostart-decision\n--state-path\n/tmp/state.json\n--autostart-path\n/tmp/autostart.v1\n--disabled-path\n/tmp/disabled.v1\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
