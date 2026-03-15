@@ -25,7 +25,8 @@ use si_rs_dyad::{
 use si_rs_fort::{
     PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome, RefreshSuccess,
     SessionState, apply_refresh_outcome_to_persisted_session_state,
-    classify_persisted_session_state, load_persisted_runtime_agent_state,
+    classify_persisted_session_state, clear_persisted_runtime_agent_state,
+    clear_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
 };
@@ -765,6 +766,10 @@ enum FortSessionStateCommand {
         #[arg(long)]
         state_json: String,
     },
+    Clear {
+        #[arg(long)]
+        path: PathBuf,
+    },
     Classify {
         #[arg(long)]
         path: PathBuf,
@@ -810,6 +815,10 @@ enum FortRuntimeAgentStateCommand {
         path: PathBuf,
         #[arg(long)]
         state_json: String,
+    },
+    Clear {
+        #[arg(long)]
+        path: PathBuf,
     },
 }
 
@@ -1825,6 +1834,7 @@ fn main() -> Result<()> {
                 FortSessionStateCommand::Write { path, state_json } => {
                     write_fort_session_state(path, &state_json)?
                 }
+                FortSessionStateCommand::Clear { path } => clear_fort_session_state(path)?,
                 FortSessionStateCommand::Classify { path, now_unix, format } => {
                     show_fort_session_state_classification(path, now_unix, format)?
                 }
@@ -1853,6 +1863,9 @@ fn main() -> Result<()> {
                 }
                 FortRuntimeAgentStateCommand::Write { path, state_json } => {
                     write_fort_runtime_agent_state(path, &state_json)?
+                }
+                FortRuntimeAgentStateCommand::Clear { path } => {
+                    clear_fort_runtime_agent_state(path)?
                 }
             },
         },
@@ -1985,6 +1998,11 @@ fn write_fort_session_state(path: PathBuf, state_json: &str) -> Result<()> {
     Ok(())
 }
 
+fn clear_fort_session_state(path: PathBuf) -> Result<()> {
+    clear_persisted_session_state(path)?;
+    Ok(())
+}
+
 fn show_fort_runtime_agent_state(path: PathBuf, format: OutputFormat) -> Result<()> {
     let state = load_persisted_runtime_agent_state(path)?;
 
@@ -1999,6 +2017,11 @@ fn show_fort_runtime_agent_state(path: PathBuf, format: OutputFormat) -> Result<
 fn write_fort_runtime_agent_state(path: PathBuf, state_json: &str) -> Result<()> {
     let state: PersistedRuntimeAgentState = serde_json::from_str(state_json)?;
     save_persisted_runtime_agent_state(path, &state)?;
+    Ok(())
+}
+
+fn clear_fort_runtime_agent_state(path: PathBuf) -> Result<()> {
+    clear_persisted_runtime_agent_state(path)?;
     Ok(())
 }
 

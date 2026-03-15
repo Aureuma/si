@@ -846,6 +846,36 @@ fn fort_runtime_agent_state_write_persists_normalized_json() {
 }
 
 #[test]
+fn fort_session_state_clear_removes_persisted_file() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("session.json");
+    fs::write(&state_path, "{}\n").expect("write session state");
+
+    cargo_bin()
+        .args(["fort", "session-state", "clear", "--path"])
+        .arg(&state_path)
+        .assert()
+        .success();
+
+    assert!(!state_path.exists());
+}
+
+#[test]
+fn fort_runtime_agent_state_clear_removes_persisted_file() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("runtime-agent.json");
+    fs::write(&state_path, "{}\n").expect("write runtime agent state");
+
+    cargo_bin()
+        .args(["fort", "runtime-agent-state", "clear", "--path"])
+        .arg(&state_path)
+        .assert()
+        .success();
+
+    assert!(!state_path.exists());
+}
+
+#[test]
 fn fort_session_state_refresh_outcome_returns_updated_state_and_classification() {
     let state_dir = tempdir().expect("tempdir");
     let state_path = state_dir.path().join("session.json");

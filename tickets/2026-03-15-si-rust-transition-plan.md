@@ -287,6 +287,7 @@ Progress notes:
 - completed: experimental Go Fort refresh success paths can now delegate persisted session-transition application to Rust, so both codex session refresh and runtime-agent refresh use Rust-owned lifecycle mutation instead of ad hoc Go expiry updates
 - completed: experimental Go Fort session close now delegates teardown-state transition to Rust before local cleanup and remote close, extending Rust lifecycle ownership beyond refresh into the shutdown path
 - completed: experimental Go unauthorized Fort refreshes now delegate revocation mutation to Rust before persisting state, so dead profile sessions are marked through the Rust lifecycle path instead of leaving stale resumable session ids behind
+- completed: Rust Fort now owns persisted session-state and runtime-agent-state clear operations, and the experimental Go runtime-agent/session cleanup paths can delegate those file removals instead of deleting the migrated state files directly
 - completed: initial `si-vault` crate for persisted trust-store state with translated round-trip, missing-file, and normalized path update/delete coverage from the Go vault trust path
 - completed: experimental Go vault trust enforcement can now delegate trust-store lookup to Rust behind the existing compatibility boundary, with focused bridge and consumer tests
 

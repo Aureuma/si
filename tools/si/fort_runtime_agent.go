@@ -319,7 +319,7 @@ func clearFortRuntimeAgentState(paths fortProfilePaths, pid int) {
 	if err != nil || state.PID != pid {
 		return
 	}
-	_ = os.Remove(paths.RuntimeAgentStateHostPath)
+	_ = clearFortRuntimeAgentStateFile(paths.RuntimeAgentStateHostPath)
 }
 
 func stopFortRuntimeAgentLocked(paths fortProfilePaths) error {
@@ -337,7 +337,7 @@ func stopFortRuntimeAgentLocked(paths fortProfilePaths) error {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	_ = os.Remove(paths.RuntimeAgentStateHostPath)
+	_ = clearFortRuntimeAgentStateFile(paths.RuntimeAgentStateHostPath)
 	return nil
 }
 
@@ -389,11 +389,35 @@ func closeCodexProfileFortSessionLocked(paths fortProfilePaths) error {
 	for _, path := range []string{
 		paths.AccessTokenHostPath,
 		paths.RefreshTokenHostPath,
-		paths.SessionStateHostPath,
-		paths.RuntimeAgentStateHostPath,
 		paths.RuntimeAgentLogHostPath,
 	} {
 		_ = os.Remove(path)
+	}
+	_ = clearFortSessionStateFile(paths.SessionStateHostPath)
+	_ = clearFortRuntimeAgentStateFile(paths.RuntimeAgentStateHostPath)
+	return nil
+}
+
+func clearFortSessionStateFile(path string) error {
+	if delegated, err := maybeClearRustFortSessionState(path); err != nil {
+		return err
+	} else if delegated {
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func clearFortRuntimeAgentStateFile(path string) error {
+	if delegated, err := maybeClearRustFortRuntimeAgentState(path); err != nil {
+		return err
+	} else if delegated {
+		return nil
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	return nil
 }

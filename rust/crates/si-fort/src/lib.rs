@@ -127,6 +127,8 @@ pub enum SessionStateFileError {
     Persist(#[source] std::io::Error),
     #[error("set state file permissions: {0}")]
     SetPermissions(#[source] std::io::Error),
+    #[error("remove state file: {0}")]
+    Remove(#[source] std::io::Error),
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -433,6 +435,16 @@ pub fn load_persisted_runtime_agent_state(
     Ok(state.normalized())
 }
 
+pub fn clear_persisted_session_state(path: impl AsRef<Path>) -> Result<(), SessionStateFileError> {
+    clear_state_file(path)
+}
+
+pub fn clear_persisted_runtime_agent_state(
+    path: impl AsRef<Path>,
+) -> Result<(), SessionStateFileError> {
+    clear_state_file(path)
+}
+
 pub fn acquire_session_lock(
     path: impl AsRef<Path>,
 ) -> Result<SessionMutationLock, SessionLockError> {
@@ -472,6 +484,15 @@ fn clean_state_path(path: &Path) -> Result<&Path, SessionStateFileError> {
         return Err(SessionStateFileError::MissingPath);
     }
     Ok(path)
+}
+
+fn clear_state_file(path: impl AsRef<Path>) -> Result<(), SessionStateFileError> {
+    let path = clean_state_path(path.as_ref())?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(SessionStateFileError::Remove(err)),
+    }
 }
 
 fn non_empty_string(value: String) -> Option<String> {
@@ -594,10 +615,10 @@ mod tests {
         SessionSnapshot, SessionState, SessionStateFileError, SessionTransitionError,
         acquire_session_lock, apply_refresh_outcome,
         apply_refresh_outcome_to_persisted_session_state, begin_refresh, begin_teardown,
-        classify_persisted_session_state, classify_session, complete_teardown,
-        load_persisted_runtime_agent_state, load_persisted_session_state,
-        save_persisted_runtime_agent_state, save_persisted_session_state,
-        teardown_persisted_session_state, try_acquire_session_lock,
+        classify_persisted_session_state, classify_session, clear_persisted_runtime_agent_state,
+        clear_persisted_session_state, complete_teardown, load_persisted_runtime_agent_state,
+        load_persisted_session_state, save_persisted_runtime_agent_state,
+        save_persisted_session_state, teardown_persisted_session_state, try_acquire_session_lock,
     };
 
     fn snapshot() -> SessionSnapshot {
@@ -925,5 +946,29 @@ mod tests {
         assert_eq!(loaded.command_path, "/tmp/si");
         assert_eq!(loaded.started_at, "2030-01-01T00:00:00Z");
         assert_eq!(loaded.updated_at, "2030-01-01T00:00:01Z");
+    }
+
+    #[test]
+    fn clear_persisted_session_state_removes_file() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("session.json");
+
+        save_persisted_session_state(&path, &PersistedSessionState::default())
+            .expect("save session state");
+        clear_persisted_session_state(&path).expect("clear session state");
+
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn clear_persisted_runtime_agent_state_removes_file() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("runtime-agent.json");
+
+        save_persisted_runtime_agent_state(&path, &PersistedRuntimeAgentState::default())
+            .expect("save runtime agent state");
+        clear_persisted_runtime_agent_state(&path).expect("clear runtime agent state");
+
+        assert!(!path.exists());
     }
 }

@@ -418,6 +418,52 @@ func TestSaveFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 }
 
+func TestClearFortRuntimeAgentStateFileDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if err := clearFortRuntimeAgentStateFile("/tmp/runtime-agent.json"); err != nil {
+		t.Fatalf("clearFortRuntimeAgentStateFile: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "fort\nruntime-agent-state\nclear\n--path\n/tmp/runtime-agent.json" {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
+func TestClearFortSessionStateFileDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if err := clearFortSessionStateFile("/tmp/session.json"); err != nil {
+		t.Fatalf("clearFortSessionStateFile: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "fort\nsession-state\nclear\n--path\n/tmp/session.json" {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
 func TestFortRuntimeAgentStepHonorsRustRevokedClassification(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
