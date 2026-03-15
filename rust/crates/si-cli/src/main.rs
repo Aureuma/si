@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use si_rs_codex::{
     RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
-    build_remove_artifacts, build_respawn_plan, build_spawn_plan,
+    build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_plan,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -693,6 +693,17 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
+    TmuxPlan {
+        name: String,
+        #[arg(long)]
+        start_dir: Option<String>,
+        #[arg(long)]
+        resume_session_id: Option<String>,
+        #[arg(long)]
+        resume_profile: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
     RespawnPlan {
         name: String,
         #[arg(long)]
@@ -1141,6 +1152,15 @@ struct CodexRespawnPlanView {
     #[serde(skip_serializing_if = "Option::is_none")]
     profile_id: Option<String>,
     remove_targets: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexTmuxPlanView {
+    session_name: String,
+    target: String,
+    launch_command: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    resume_command: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1732,6 +1752,19 @@ fn main() -> Result<()> {
             CodexCommand::StatusRead { name, raw, format, docker_bin } => {
                 run_codex_status_read(&name, raw, format, docker_bin)?
             }
+            CodexCommand::TmuxPlan {
+                name,
+                start_dir,
+                resume_session_id,
+                resume_profile,
+                format,
+            } => run_codex_tmux_plan(
+                &name,
+                start_dir.as_deref(),
+                resume_session_id.as_deref(),
+                resume_profile.as_deref(),
+                format,
+            )?,
             CodexCommand::RespawnPlan { name, profile_id, profile_containers, format } => {
                 run_codex_respawn_plan(&name, profile_id, profile_containers, format)?
             }
@@ -3620,6 +3653,40 @@ fn run_codex_status_read(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&status)?),
         OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&status)?),
+    }
+    Ok(())
+}
+
+fn run_codex_tmux_plan(
+    name: &str,
+    start_dir: Option<&str>,
+    resume_session_id: Option<&str>,
+    resume_profile: Option<&str>,
+    format: OutputFormat,
+) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    let plan = build_tmux_plan(
+        &artifacts.container_name,
+        start_dir.unwrap_or(""),
+        resume_session_id.unwrap_or(""),
+        resume_profile.unwrap_or(""),
+    )?;
+    let view = CodexTmuxPlanView {
+        session_name: plan.session_name,
+        target: plan.target,
+        launch_command: plan.launch_command,
+        resume_command: plan.resume_command,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("session_name={}", view.session_name);
+            println!("target={}", view.target);
+            println!("launch_command={}", view.launch_command);
+            if !view.resume_command.is_empty() {
+                println!("resume_command={}", view.resume_command);
+            }
+        }
     }
     Ok(())
 }

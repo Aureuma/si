@@ -1583,8 +1583,6 @@ func attachCodexTmuxPane(containerName string, resumeProfileKey string, resumeRe
 	if err := ensureTmuxAvailable(); err != nil {
 		return err
 	}
-	session := codexTmuxSessionName(containerName)
-	target := session + ":0.0"
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	hostCwd := ""
@@ -1605,9 +1603,25 @@ func attachCodexTmuxPane(containerName string, resumeProfileKey string, resumeRe
 			}
 		}
 	}
-	cmd := buildCodexTmuxCommand(containerName, startDir)
 	resumeSessionID := strings.TrimSpace(resumeRecord.SessionID)
+	session := codexTmuxSessionName(containerName)
+	target := session + ":0.0"
+	cmd := buildCodexTmuxCommand(containerName, startDir)
 	resumeCmd := buildCodexTmuxResumeCommand(containerName, startDir, resumeSessionID, resumeProfileKey)
+	if rustPlan, delegated, err := maybeReadRustCodexTmuxPlan(codexContainerSlug(containerName), startDir, resumeSessionID, resumeProfileKey); err != nil {
+		return err
+	} else if delegated && rustPlan != nil {
+		if value := strings.TrimSpace(rustPlan.SessionName); value != "" {
+			session = value
+		}
+		if value := strings.TrimSpace(rustPlan.Target); value != "" {
+			target = value
+		}
+		if value := strings.TrimSpace(rustPlan.LaunchCommand); value != "" {
+			cmd = value
+		}
+		resumeCmd = strings.TrimSpace(rustPlan.ResumeCommand)
+	}
 	// Hash a stable "shape" of the command so we don't thrash sessions just because the user attached
 	// from a different host subdirectory.
 	cmdHashShape := buildCodexTmuxCommand(containerName, "__SI_START_DIR__")

@@ -230,6 +230,7 @@ Progress notes:
 - completed: experimental Go codex `list`/`ps` now delegates Docker container listing to Rust for both text and JSON output
 - completed: experimental Go container-backed codex `status` can now delegate the app-server exec + parse step to Rust while Go retains container lookup, profile fallback, and final output rendering
 - completed: experimental Go `respawn` now delegates deterministic remove-target normalization and ordering to a Rust respawn planner while Go retains interactive profile/container selection and final spawn orchestration
+- completed: Rust codex now owns deterministic tmux session naming and launch/resume command assembly, and experimental Go tmux attach can consume that plan while retaining host cwd mapping, tmux session recovery, and final attach behavior
 - completed: initial `si-dyad` crate with deterministic dyad spawn planning for actor/critic names, mounts, labels, env, default volumes, configs mount, and loop/profile env wiring
 - completed: Rust `dyad spawn-plan` CLI surface with binary-level JSON coverage for default naming/volumes and critic-specific configs + loop env assembly
 - completed: experimental Go `dyad spawn` can now consume Rust dyad planning for deterministic role/image/network/workspace/configs/volume/forward-port defaults behind the compatibility boundary while container creation remains in Go

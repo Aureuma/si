@@ -1618,6 +1618,72 @@ fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
     assert_eq!(parsed["remove_targets"], serde_json::json!(["alpha", "ferma"]));
 }
 
+#[test]
+fn codex_tmux_plan_json_uses_bypass_flag_and_start_dir() {
+    let output = cargo_bin()
+        .args([
+            "codex",
+            "tmux-plan",
+            "profile-beta",
+            "--start-dir",
+            "/home/ubuntu/Development/si",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["session_name"], "si-codex-pane-profile-beta");
+    assert_eq!(parsed["target"], "si-codex-pane-profile-beta:0.0");
+    assert!(
+        parsed["launch_command"]
+            .as_str()
+            .unwrap_or("")
+            .contains("codex --dangerously-bypass-approvals-and-sandbox")
+    );
+    assert!(parsed["launch_command"].as_str().unwrap_or("").contains("--user 'si'"));
+    assert!(
+        parsed["launch_command"].as_str().unwrap_or("").contains("/home/ubuntu/Development/si")
+    );
+}
+
+#[test]
+fn codex_tmux_plan_json_includes_resume_command_when_present() {
+    let output = cargo_bin()
+        .args([
+            "codex",
+            "tmux-plan",
+            "profile-beta",
+            "--start-dir",
+            "/workspace/app",
+            "--resume-session-id",
+            "sess-123",
+            "--resume-profile",
+            "profile-beta",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert!(parsed["resume_command"].as_str().unwrap_or("").contains("codex resume"));
+    assert!(parsed["resume_command"].as_str().unwrap_or("").contains("sess-123"));
+    assert!(
+        parsed["resume_command"]
+            .as_str()
+            .unwrap_or("")
+            .contains("tmux session unavailable; attempting codex resume")
+    );
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

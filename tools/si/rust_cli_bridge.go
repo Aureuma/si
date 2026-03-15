@@ -127,6 +127,13 @@ type rustCodexRespawnPlan struct {
 	RemoveTargets []string `json:"remove_targets"`
 }
 
+type rustCodexTmuxPlan struct {
+	SessionName   string `json:"session_name"`
+	Target        string `json:"target"`
+	LaunchCommand string `json:"launch_command"`
+	ResumeCommand string `json:"resume_command,omitempty"`
+}
+
 type rustDyadSpawnPlanRequest struct {
 	Name                    string
 	Role                    string
@@ -645,6 +652,34 @@ func maybeBuildRustCodexRespawnPlan(name string, profileID string, profileContai
 	var plan rustCodexRespawnPlan
 	if err := json.Unmarshal(output, &plan); err != nil {
 		return nil, false, fmt.Errorf("decode rust codex respawn plan: %w", err)
+	}
+	return &plan, true, nil
+}
+
+func maybeReadRustCodexTmuxPlan(name string, startDir string, resumeSessionID string, resumeProfile string) (*rustCodexTmuxPlan, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{
+		"codex", "tmux-plan", strings.TrimSpace(name),
+		"--format", "json",
+	}
+	if value := strings.TrimSpace(startDir); value != "" {
+		args = append(args, "--start-dir", value)
+	}
+	if value := strings.TrimSpace(resumeSessionID); value != "" {
+		args = append(args, "--resume-session-id", value)
+	}
+	if value := strings.TrimSpace(resumeProfile); value != "" {
+		args = append(args, "--resume-profile", value)
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var plan rustCodexTmuxPlan
+	if err := json.Unmarshal(output, &plan); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex tmux plan: %w", err)
 	}
 	return &plan, true, nil
 }
