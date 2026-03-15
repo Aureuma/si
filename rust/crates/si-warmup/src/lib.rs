@@ -52,6 +52,12 @@ pub struct WarmupMarkerState {
     pub autostart_present: bool,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WarmupAutostartDecision {
+    pub requested: bool,
+    pub reason: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct RawWarmupState {
     #[serde(default)]
@@ -168,6 +174,22 @@ pub fn read_marker_state(
         disabled: disabled_path.exists(),
         autostart_present: autostart_path.exists(),
     })
+}
+
+pub fn classify_autostart_request(
+    marker_state: &WarmupMarkerState,
+    state: &WarmupState,
+) -> WarmupAutostartDecision {
+    if marker_state.disabled {
+        return WarmupAutostartDecision { requested: false, reason: "disabled".to_owned() };
+    }
+    if marker_state.autostart_present {
+        return WarmupAutostartDecision { requested: true, reason: "marker".to_owned() };
+    }
+    if !state.profiles.is_empty() {
+        return WarmupAutostartDecision { requested: true, reason: "legacy_state".to_owned() };
+    }
+    WarmupAutostartDecision { requested: false, reason: "none".to_owned() }
 }
 
 pub fn write_autostart_marker(
@@ -403,9 +425,10 @@ fn set_file_mode(path: &Path, mode: u32) -> Result<(), std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::{
-        WARMUP_STATE_VERSION, WarmupProfileState, default_autostart_marker_path,
-        default_disabled_marker_path, default_state_path, load_state, read_marker_state,
-        render_state_text, save_state, set_disabled_marker, write_autostart_marker,
+        WARMUP_STATE_VERSION, WarmupMarkerState, WarmupProfileState, classify_autostart_request,
+        default_autostart_marker_path, default_disabled_marker_path, default_state_path,
+        load_state, read_marker_state, render_state_text, save_state, set_disabled_marker,
+        write_autostart_marker,
     };
     use chrono::{TimeZone, Utc};
     use std::fs;
@@ -555,5 +578,28 @@ mod tests {
         set_disabled_marker(&disabled_path, true).expect("disable marker");
         set_disabled_marker(&disabled_path, false).expect("clear marker");
         assert!(!disabled_path.exists());
+    }
+
+    #[test]
+    fn classify_autostart_request_prefers_disabled_then_marker_then_legacy() {
+        let decision = classify_autostart_request(
+            &WarmupMarkerState { disabled: true, autostart_present: true },
+            &super::WarmupState::default(),
+        );
+        assert_eq!(decision.reason, "disabled");
+        assert!(!decision.requested);
+
+        let decision = classify_autostart_request(
+            &WarmupMarkerState { disabled: false, autostart_present: true },
+            &super::WarmupState::default(),
+        );
+        assert_eq!(decision.reason, "marker");
+        assert!(decision.requested);
+
+        let mut state = super::WarmupState::default();
+        state.profiles.insert("ferma".to_owned(), WarmupProfileState::default());
+        let decision = classify_autostart_request(&WarmupMarkerState::default(), &state);
+        assert_eq!(decision.reason, "legacy_state");
+        assert!(decision.requested);
     }
 }
