@@ -220,7 +220,7 @@ Progress notes:
 - completed: experimental Go `spawn` path integration can now consume the Rust codex container spec for env, command, bind mounts, volume mounts, restart policy, network, and working directory
 - completed: Rust docker/codex spec now models persistent container execution details needed for cutover (`detach`, `user`, labels, published ports, and non-`--rm` runs)
 - completed: Rust `spawn-start` execution path now runs the generated codex container command through `si-process`, with a scriptable docker-bin override for integration-style testing
-- completed: experimental detached Go `spawn` can now delegate actual container startup to Rust `spawn-start`, while Go still owns Fort/bootstrap/session handling and post-start seeding
+- completed: experimental Go `spawn` can now delegate actual container startup to Rust `spawn-start`, with Go still owning Fort/bootstrap/session handling, post-start seeding, and `attach` behavior
 
 ### Phase 5: Security/runtime migration
 
