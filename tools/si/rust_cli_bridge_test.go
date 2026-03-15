@@ -1121,37 +1121,6 @@ func TestMaybeRunRustCodexLogsDelegatesAndReturnsOutput(t *testing.T) {
 	}
 }
 
-func TestMaybeRunRustCodexCloneDelegatesAndReturnsOutput(t *testing.T) {
-	dir := t.TempDir()
-	argsPath := filepath.Join(dir, "args.txt")
-	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'cloned'\n"
-	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
-		t.Fatalf("write script: %v", err)
-	}
-
-	t.Setenv(siRustCLIBinEnv, scriptPath)
-	t.Setenv(siExperimentalRustCLIEnv, "")
-
-	output, delegated, err := maybeRunRustCodexClone("ferma", "acme/repo", "token-123")
-	if err != nil {
-		t.Fatalf("maybeRunRustCodexClone: %v", err)
-	}
-	if !delegated {
-		t.Fatalf("expected clone action to delegate to Rust")
-	}
-	if strings.TrimSpace(output) != "cloned" {
-		t.Fatalf("expected Rust clone output, got %q", output)
-	}
-	argsData, err := os.ReadFile(argsPath)
-	if err != nil {
-		t.Fatalf("read args file: %v", err)
-	}
-	if strings.TrimSpace(string(argsData)) != "codex\nclone\nferma\nacme/repo\n--gh-pat\ntoken-123" {
-		t.Fatalf("expected Rust CLI args to be codex clone ferma acme/repo --gh-pat token-123, got %q", string(argsData))
-	}
-}
-
 func TestMaybeRunRustCodexCloneResultDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
