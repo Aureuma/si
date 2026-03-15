@@ -829,14 +829,20 @@ func cmdCodexRespawn(args []string) {
 			removeTargets[codexContainerSlug(ref.Name)] = struct{}{}
 		}
 	}
-	targets := make([]string, 0, len(removeTargets))
+	profileContainers := make([]string, 0, len(removeTargets))
 	for target := range removeTargets {
 		target = strings.TrimSpace(target)
 		if target != "" {
-			targets = append(targets, target)
+			profileContainers = append(profileContainers, target)
 		}
 	}
+	targets := append([]string(nil), profileContainers...)
 	sort.Strings(targets)
+	if rustPlan, delegated, err := maybeBuildRustCodexRespawnPlan(name, profileKey, profileContainers); err != nil {
+		fatal(err)
+	} else if delegated && rustPlan != nil {
+		targets = append([]string(nil), rustPlan.RemoveTargets...)
+	}
 	for _, target := range targets {
 		removeArgs := []string{target}
 		if *removeVolumes {

@@ -1,5 +1,6 @@
 use si_rs_docker::{BindMount, ContainerSpec, PublishedPort, VolumeMount};
 use si_rs_runtime::{ContainerCoreMountPlan, HostMountContext, build_container_core_mounts};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use thiserror::Error;
 
@@ -61,6 +62,20 @@ pub struct RemoveArtifacts {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct RespawnRequest {
+    pub name: String,
+    pub profile_id: Option<String>,
+    pub profile_container_names: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RespawnPlan {
+    pub effective_name: String,
+    pub profile_id: Option<String>,
+    pub remove_targets: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnContainerOptions {
     pub command: Option<String>,
     pub labels: Vec<String>,
@@ -78,6 +93,12 @@ pub enum SpawnPlanError {
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum RemoveArtifactsError {
     #[error("remove target name is required")]
+    MissingName,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum RespawnPlanError {
+    #[error("respawn target name is required")]
     MissingName,
 }
 
@@ -230,6 +251,32 @@ pub fn build_remove_artifacts(name: &str) -> Result<RemoveArtifacts, RemoveArtif
     })
 }
 
+pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, RespawnPlanError> {
+    let effective_name = request.name.trim();
+    if effective_name.is_empty() {
+        return Err(RespawnPlanError::MissingName);
+    }
+    let profile_id = request
+        .profile_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned);
+    let mut targets = BTreeSet::new();
+    targets.insert(codex_container_slug(effective_name));
+    for item in &request.profile_container_names {
+        let item = codex_container_slug(item);
+        if !item.trim().is_empty() {
+            targets.insert(item);
+        }
+    }
+    Ok(RespawnPlan {
+        effective_name: effective_name.to_owned(),
+        profile_id,
+        remove_targets: targets.into_iter().collect(),
+    })
+}
+
 pub fn build_container_spec(
     plan: &SpawnPlan,
     options: &SpawnContainerOptions,
@@ -298,9 +345,10 @@ fn default_named_value(value: Option<&str>, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_SKILLS_VOLUME, RemoveArtifactsError, SpawnContainerOptions,
-        SpawnContainerSpecError, SpawnPlanError, SpawnRequest, build_container_spec,
-        build_remove_artifacts, build_spawn_plan, codex_container_name, codex_container_slug,
+        DEFAULT_SKILLS_VOLUME, RemoveArtifactsError, RespawnPlanError, RespawnRequest,
+        SpawnContainerOptions, SpawnContainerSpecError, SpawnPlanError, SpawnRequest,
+        build_container_spec, build_remove_artifacts, build_respawn_plan, build_spawn_plan,
+        codex_container_name, codex_container_slug,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::{Path, PathBuf};
@@ -607,5 +655,30 @@ mod tests {
     fn build_remove_artifacts_rejects_empty_name() {
         let err = build_remove_artifacts("   ").expect_err("missing name");
         assert_eq!(err, RemoveArtifactsError::MissingName);
+    }
+
+    #[test]
+    fn build_respawn_plan_collects_sorted_unique_remove_targets() {
+        let plan = build_respawn_plan(&RespawnRequest {
+            name: "ferma".to_owned(),
+            profile_id: Some("ferma".to_owned()),
+            profile_container_names: vec![
+                "si-codex-ferma".to_owned(),
+                "si-codex-alpha".to_owned(),
+                "alpha".to_owned(),
+            ],
+        })
+        .expect("respawn plan");
+
+        assert_eq!(plan.effective_name, "ferma");
+        assert_eq!(plan.profile_id.as_deref(), Some("ferma"));
+        assert_eq!(plan.remove_targets, vec!["alpha".to_owned(), "ferma".to_owned()]);
+    }
+
+    #[test]
+    fn build_respawn_plan_rejects_empty_name() {
+        let err = build_respawn_plan(&RespawnRequest::default()).expect_err("missing respawn name");
+
+        assert_eq!(err, RespawnPlanError::MissingName);
     }
 }

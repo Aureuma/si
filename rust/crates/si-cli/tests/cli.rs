@@ -725,6 +725,34 @@ fn codex_status_read_returns_parsed_app_server_usage() {
     assert!(input.contains("\"method\":\"account/rateLimits/read\""));
 }
 
+#[test]
+fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
+    let output = cargo_bin()
+        .args([
+            "codex",
+            "respawn-plan",
+            "ferma",
+            "--profile-id",
+            "ferma",
+            "--profile-container",
+            "si-codex-alpha",
+            "--profile-container",
+            "ferma",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["effective_name"], "ferma");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["remove_targets"], serde_json::json!(["alpha", "ferma"]));
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

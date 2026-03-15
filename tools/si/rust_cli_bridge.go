@@ -120,6 +120,12 @@ type rustCodexStatusRead struct {
 	WeeklyRemaining   int     `json:"weekly_remaining_minutes,omitempty"`
 }
 
+type rustCodexRespawnPlan struct {
+	EffectiveName string   `json:"effective_name"`
+	ProfileID     string   `json:"profile_id,omitempty"`
+	RemoveTargets []string `json:"remove_targets"`
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -317,6 +323,31 @@ func maybeReadRustCodexStatus(name string, raw bool) (*rustCodexStatusRead, bool
 		return nil, false, fmt.Errorf("decode rust codex status: %w", err)
 	}
 	return &status, true, nil
+}
+
+func maybeBuildRustCodexRespawnPlan(name string, profileID string, profileContainers []string) (*rustCodexRespawnPlan, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{"codex", "respawn-plan", strings.TrimSpace(name), "--format", "json"}
+	if value := strings.TrimSpace(profileID); value != "" {
+		args = append(args, "--profile-id", value)
+	}
+	for _, item := range profileContainers {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			args = append(args, "--profile-container", item)
+		}
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var plan rustCodexRespawnPlan
+	if err := json.Unmarshal(output, &plan); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex respawn plan: %w", err)
+	}
+	return &plan, true, nil
 }
 
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {

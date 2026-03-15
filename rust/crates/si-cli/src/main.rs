@@ -3,8 +3,8 @@ use chrono::TimeZone;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use si_rs_codex::{
-    SpawnContainerOptions, SpawnRequest, build_container_spec, build_remove_artifacts,
-    build_spawn_plan,
+    RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
+    build_remove_artifacts, build_respawn_plan, build_spawn_plan,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -349,6 +349,15 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
+    RespawnPlan {
+        name: String,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long = "profile-container")]
+        profile_containers: Vec<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -550,6 +559,14 @@ struct CodexStatusView {
     weekly_reset: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     weekly_remaining_minutes: Option<i32>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexRespawnPlanView {
+    effective_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    profile_id: Option<String>,
+    remove_targets: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -855,6 +872,9 @@ fn main() -> Result<()> {
             CodexCommand::List { format, docker_bin } => run_codex_list(format, docker_bin)?,
             CodexCommand::StatusRead { name, raw, format, docker_bin } => {
                 run_codex_status_read(&name, raw, format, docker_bin)?
+            }
+            CodexCommand::RespawnPlan { name, profile_id, profile_containers, format } => {
+                run_codex_respawn_plan(&name, profile_id, profile_containers, format)?
             }
         },
         Command::Paths { command } => match command {
@@ -1639,6 +1659,37 @@ fn run_codex_status_read(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&status)?),
         OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&status)?),
+    }
+    Ok(())
+}
+
+fn run_codex_respawn_plan(
+    name: &str,
+    profile_id: Option<String>,
+    profile_containers: Vec<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let plan = build_respawn_plan(&RespawnRequest {
+        name: name.trim().to_owned(),
+        profile_id,
+        profile_container_names: profile_containers,
+    })?;
+    let view = CodexRespawnPlanView {
+        effective_name: plan.effective_name,
+        profile_id: plan.profile_id,
+        remove_targets: plan.remove_targets,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("effective_name={}", view.effective_name);
+            if let Some(profile_id) = view.profile_id {
+                println!("profile_id={profile_id}");
+            }
+            for target in view.remove_targets {
+                println!("remove_target={target}");
+            }
+        }
     }
     Ok(())
 }
