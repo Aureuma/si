@@ -115,6 +115,41 @@ configs = "~/Development/si/configs"
 }
 
 #[test]
+fn providers_characteristics_json_matches_expected_shape() {
+    let output = cargo_bin()
+        .args(["providers", "characteristics", "--provider", "github", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["policy"]["defaults"], "built_in_go");
+    let providers = parsed["providers"].as_array().expect("providers array");
+    assert_eq!(providers.len(), 1);
+    assert_eq!(providers[0]["provider"], "github");
+    assert_eq!(providers[0]["base_url"], "https://api.github.com");
+    assert_eq!(providers[0]["api_version"], "2022-11-28");
+    assert_eq!(providers[0]["public_probe"]["path"], "/zen");
+}
+
+#[test]
+fn providers_characteristics_supports_alias_ids() {
+    let output = cargo_bin()
+        .args(["providers", "characteristics", "--provider", "twitter", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let providers = parsed["providers"].as_array().expect("providers array");
+    assert_eq!(providers[0]["provider"], "social_x");
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()
