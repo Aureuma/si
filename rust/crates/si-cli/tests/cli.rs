@@ -396,6 +396,60 @@ fn dyad_logs_executes_docker_logs_for_selected_member() {
 }
 
 #[test]
+fn dyad_list_json_groups_actor_and_critic_rows() {
+    let script_dir = tempdir().expect("tempdir");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        "#!/bin/sh\nprintf '%s\\n' 'si-actor-alpha\trunning\tactor-id\talpha\tios\tactor'\nprintf '%s\\n' 'si-critic-alpha\texited\tcritic-id\talpha\tios\tcritic'\n",
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "list", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let rows = parsed.as_array().expect("rows");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["dyad"], "alpha");
+    assert_eq!(rows[0]["role"], "ios");
+    assert_eq!(rows[0]["actor"], "running");
+    assert_eq!(rows[0]["critic"], "exited");
+}
+
+#[test]
+fn dyad_status_json_reports_member_states() {
+    let script_dir = tempdir().expect("tempdir");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        "#!/bin/sh\nprintf '%s\\n' 'si-actor-alpha\trunning\tactor-id\talpha\tios\tactor'\nprintf '%s\\n' 'si-critic-alpha\texited\tcritic-id\talpha\tios\tcritic'\n",
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "status", "alpha", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["dyad"], "alpha");
+    assert_eq!(parsed["found"], true);
+    assert_eq!(parsed["actor"]["name"], "si-actor-alpha");
+    assert_eq!(parsed["actor"]["status"], "running");
+    assert_eq!(parsed["critic"]["name"], "si-critic-alpha");
+    assert_eq!(parsed["critic"]["status"], "exited");
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()
