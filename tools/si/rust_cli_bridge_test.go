@@ -357,6 +357,37 @@ func TestMaybeRunRustCodexListDelegatesForTextOutput(t *testing.T) {
 	}
 }
 
+func TestMaybeRunRustCodexListDelegatesForJSONOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '[]'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustCodexList(true)
+	if err != nil {
+		t.Fatalf("maybeRunRustCodexList: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected json list action to delegate to Rust")
+	}
+	if strings.TrimSpace(output) != "[]" {
+		t.Fatalf("unexpected Rust list output %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nlist\n--format\njson" {
+		t.Fatalf("expected Rust CLI args to be codex list --format json, got %q", string(argsData))
+	}
+}
+
 func TestMaybeReadRustCodexStatusDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

@@ -286,10 +286,14 @@ func maybeRunRustCodexExec(name string, workdir string, interactive bool, tty bo
 }
 
 func maybeRunRustCodexList(jsonOut bool) (string, bool, error) {
-	if !shouldUseExperimentalRustCLI() || jsonOut {
+	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil
 	}
-	output, err := runRustCLIText("codex", "list", "--format", "text")
+	format := "text"
+	if jsonOut {
+		format = "json"
+	}
+	output, err := runRustCLIText("codex", "list", "--format", format)
 	if err != nil {
 		return "", false, err
 	}
