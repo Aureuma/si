@@ -303,6 +303,36 @@ func maybeStartRustDyadSpawn(request rustDyadSpawnPlanRequest) (bool, error) {
 	return true, nil
 }
 
+func maybeRunRustDyadContainerAction(action string, dyad string) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	action = strings.TrimSpace(action)
+	if action == "" {
+		return "", false, fmt.Errorf("rust dyad container action is required")
+	}
+	output, err := runRustCLIText("dyad", action, strings.TrimSpace(dyad))
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
+func maybeRunRustDyadLogs(dyad string, member string, tail int) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	output, err := runRustCLIText(
+		"dyad", "logs", strings.TrimSpace(dyad),
+		"--member", strings.TrimSpace(member),
+		"--tail", strconv.Itoa(tail),
+	)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil

@@ -358,6 +358,25 @@ enum DyadCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
+    Start {
+        name: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Stop {
+        name: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Logs {
+        name: String,
+        #[arg(long, default_value = "critic")]
+        member: String,
+        #[arg(long, default_value = "200")]
+        tail: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -1370,6 +1389,15 @@ fn main() -> Result<()> {
                 ssh_auth_sock,
                 docker_bin,
             )?,
+            DyadCommand::Start { name, docker_bin } => {
+                run_dyad_container_action(&name, ContainerAction::Start, docker_bin)?
+            }
+            DyadCommand::Stop { name, docker_bin } => {
+                run_dyad_container_action(&name, ContainerAction::Stop, docker_bin)?
+            }
+            DyadCommand::Logs { name, member, tail, docker_bin } => {
+                run_dyad_container_logs(&name, &member, &tail, docker_bin)?
+            }
         },
         Command::Codex { command } => match *command {
             CodexCommand::SpawnPlan {
@@ -2386,6 +2414,54 @@ fn run_dyad_spawn_start(
         }
         print!("{}", String::from_utf8_lossy(&output.stdout));
     }
+    Ok(())
+}
+
+fn run_dyad_container_action(
+    dyad: &str,
+    action: ContainerAction,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    for member in ["actor", "critic"] {
+        let container_name = si_rs_dyad::dyad_container_name(dyad, member);
+        let command = docker_container_action_command(
+            docker_program.display().to_string(),
+            action,
+            container_name,
+        )?;
+        let output = ProcessRunner.run(&command, &RunOptions::default())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("docker {} failed: {}", action.as_str(), stderr.trim());
+        }
+        print!("{}", String::from_utf8_lossy(&output.stdout));
+    }
+    Ok(())
+}
+
+fn run_dyad_container_logs(
+    dyad: &str,
+    member: &str,
+    tail: &str,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let container_name = si_rs_dyad::dyad_container_name(dyad, member);
+    let command = docker_container_logs_command(
+        docker_program.display().to_string(),
+        container_name,
+        tail,
+        false,
+    )?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker logs failed: {}", stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 

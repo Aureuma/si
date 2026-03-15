@@ -1195,9 +1195,16 @@ func cmdDyadLogs(args []string) {
 	if id == "" {
 		fatal(fmt.Errorf("container not found: %s", containerName))
 	}
-	out, err := client.Logs(context.Background(), id, shared.LogsOptions{Tail: *tail})
-	if err != nil {
+	out := ""
+	if output, delegated, err := maybeRunRustDyadLogs(dyad, memberVal, *tail); err != nil {
 		fatal(err)
+	} else if delegated {
+		out = output
+	} else {
+		out, err = client.Logs(context.Background(), id, shared.LogsOptions{Tail: *tail})
+		if err != nil {
+			fatal(err)
+		}
 	}
 	if *jsonOut {
 		printJSON(dyadLogsResult{
@@ -1268,6 +1275,15 @@ func cmdDyadStart(args []string) {
 		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
 		return
 	}
+	if output, delegated, err := maybeRunRustDyadContainerAction("start", name); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s started", name)
+		return
+	}
 	if err := execDockerCLI(append([]string{"start"}, targets...)...); err != nil {
 		fatal(err)
 	}
@@ -1298,6 +1314,15 @@ func cmdDyadStop(args []string) {
 	}
 	if len(targets) == 0 {
 		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
+		return
+	}
+	if output, delegated, err := maybeRunRustDyadContainerAction("stop", name); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s stopped", name)
 		return
 	}
 	if err := execDockerCLI(append([]string{"stop"}, targets...)...); err != nil {

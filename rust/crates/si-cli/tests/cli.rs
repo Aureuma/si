@@ -303,6 +303,99 @@ fn dyad_spawn_start_executes_actor_and_critic_docker_commands() {
 }
 
 #[test]
+fn dyad_start_executes_actor_and_critic_docker_start() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nprintf '%s\\n' 'started'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "start", "alpha", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("started"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("start"));
+    assert!(args.contains("si-actor-alpha"));
+    assert!(args.contains("si-critic-alpha"));
+}
+
+#[test]
+fn dyad_stop_executes_actor_and_critic_docker_stop() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nprintf '%s\\n' 'stopped'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "stop", "alpha", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("stopped"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("stop"));
+    assert!(args.contains("si-actor-alpha"));
+    assert!(args.contains("si-critic-alpha"));
+}
+
+#[test]
+fn dyad_logs_executes_docker_logs_for_selected_member() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'critic logs'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "logs", "alpha", "--member", "critic", "--tail", "50", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("critic logs"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("logs"));
+    assert!(args.contains("--tail"));
+    assert!(args.contains("50"));
+    assert!(args.contains("si-critic-alpha"));
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()
