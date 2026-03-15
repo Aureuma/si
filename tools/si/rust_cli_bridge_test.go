@@ -337,6 +337,9 @@ func TestBuildRustCodexSpawnSpecArgsIncludesSpecFlags(t *testing.T) {
 			IncludeHostSI: true,
 		},
 		Command: "echo hello",
+		Env:     []string{"FORT_TOKEN=abc"},
+		Labels:  []string{"si.codex.profile=ferma"},
+		Ports:   []string{"3000:3000"},
 	})
 	got := strings.Join(args, "\n")
 	if !strings.Contains(got, "codex\nspawn-spec") {
@@ -344,6 +347,15 @@ func TestBuildRustCodexSpawnSpecArgsIncludesSpecFlags(t *testing.T) {
 	}
 	if !strings.Contains(got, "--cmd\necho hello") {
 		t.Fatalf("expected command flag, got %q", got)
+	}
+	if !strings.Contains(got, "--env\nFORT_TOKEN=abc") {
+		t.Fatalf("expected env flag, got %q", got)
+	}
+	if !strings.Contains(got, "--label\nsi.codex.profile=ferma") {
+		t.Fatalf("expected label flag, got %q", got)
+	}
+	if !strings.Contains(got, "--port\n3000:3000") {
+		t.Fatalf("expected port flag, got %q", got)
 	}
 }
 
@@ -399,5 +411,69 @@ func TestMaybeBuildRustCodexSpawnSpecDelegatesAndParsesJSON(t *testing.T) {
 	}
 	if !strings.Contains(string(argsData), "codex\nspawn-spec") {
 		t.Fatalf("expected codex spawn-spec invocation, got %q", string(argsData))
+	}
+}
+
+func TestBuildRustCodexSpawnStartArgsIncludesStartFlags(t *testing.T) {
+	args := buildRustCodexSpawnStartArgs(rustCodexSpawnSpecRequest{
+		rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
+			Name:          "ferma",
+			Workspace:     "/tmp/workspace",
+			DockerSocket:  true,
+			Detach:        true,
+			IncludeHostSI: true,
+		},
+		Command: "echo hello",
+		Env:     []string{"FORT_TOKEN=abc"},
+		Labels:  []string{"si.codex.profile=ferma"},
+		Ports:   []string{"3000:3000"},
+	})
+	got := strings.Join(args, "\n")
+	if !strings.Contains(got, "codex\nspawn-start") {
+		t.Fatalf("expected spawn-start subcommand, got %q", got)
+	}
+	if !strings.Contains(got, "--label\nsi.codex.profile=ferma") {
+		t.Fatalf("expected label flag, got %q", got)
+	}
+}
+
+func TestMaybeStartRustCodexSpawnDelegatesAndReturnsContainerID(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'container-id-123'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	got, delegated, err := maybeStartRustCodexSpawn(rustCodexSpawnSpecRequest{
+		rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
+			Name:          "ferma",
+			Workspace:     "/tmp/workspace",
+			DockerSocket:  true,
+			Detach:        true,
+			IncludeHostSI: true,
+		},
+		Command: "echo hello",
+		Labels:  []string{"si.codex.profile=ferma"},
+	})
+	if err != nil {
+		t.Fatalf("maybeStartRustCodexSpawn: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected Rust spawn-start delegation")
+	}
+	if got != "container-id-123" {
+		t.Fatalf("expected container id, got %q", got)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "codex\nspawn-start") {
+		t.Fatalf("expected codex spawn-start invocation, got %q", string(argsData))
 	}
 }

@@ -279,7 +279,7 @@ fn codex_spawn_spec_json_includes_named_volumes_and_command() {
     let output = cargo_bin()
         .args(["codex", "spawn-spec", "--name", "ferma", "--workspace"])
         .arg(workspace.path())
-        .args(["--cmd", "echo hello", "--port", "3000:3000"])
+        .args(["--cmd", "echo hello", "--port", "3000:3000", "--label", "si.codex.profile=ferma"])
         .assert()
         .success()
         .get_output()
@@ -295,6 +295,9 @@ fn codex_spawn_spec_json_includes_named_volumes_and_command() {
     assert_eq!(parsed["auto_remove"], false);
     let labels = parsed["labels"].as_array().expect("labels array");
     assert!(labels.iter().any(|label| label["key"] == "si.component" && label["value"] == "codex"));
+    assert!(
+        labels.iter().any(|label| label["key"] == "si.codex.profile" && label["value"] == "ferma")
+    );
     let published_ports = parsed["published_ports"].as_array().expect("published ports");
     assert_eq!(published_ports[0]["host_ip"], "127.0.0.1");
     assert_eq!(published_ports[0]["host_port"], "3000");
@@ -311,7 +314,16 @@ fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
     let output = cargo_bin()
         .args(["codex", "spawn-run-args", "--name", "ferma", "--workspace"])
         .arg(workspace.path())
-        .args(["--cmd", "echo hello", "--port", "3000:3000", "--format", "text"])
+        .args([
+            "--cmd",
+            "echo hello",
+            "--port",
+            "3000:3000",
+            "--label",
+            "si.codex.profile=ferma",
+            "--format",
+            "text",
+        ])
         .assert()
         .success()
         .get_output()
@@ -323,6 +335,7 @@ fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
     assert!(text.contains("-d"));
     assert!(text.contains("--user root"));
     assert!(text.contains("--label si.component=codex"));
+    assert!(text.contains("--label si.codex.profile=ferma"));
     assert!(text.contains("-p 127.0.0.1:3000:3000"));
     assert!(text.contains("bash -lc echo hello"));
 }
@@ -352,7 +365,15 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     let output = cargo_bin()
         .args(["codex", "spawn-start", "--name", "ferma", "--workspace"])
         .arg(workspace.path())
-        .args(["--cmd", "echo hello", "--port", "3000:3000", "--docker-bin"])
+        .args([
+            "--cmd",
+            "echo hello",
+            "--port",
+            "3000:3000",
+            "--label",
+            "si.codex.profile=ferma",
+            "--docker-bin",
+        ])
         .arg(&docker_bin)
         .assert()
         .success()
@@ -369,6 +390,7 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     assert!(args.contains("root"));
     assert!(args.contains("--label"));
     assert!(args.contains("si.component=codex"));
+    assert!(args.contains("si.codex.profile=ferma"));
 }
 
 fn path_string(path: impl AsRef<Path>) -> Value {

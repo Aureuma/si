@@ -69,6 +69,9 @@ type rustCodexSpawnPlanMount struct {
 type rustCodexSpawnSpecRequest struct {
 	rustCodexSpawnPlanRequest
 	Command string
+	Env     []string
+	Labels  []string
+	Ports   []string
 }
 
 type rustCodexSpawnSpec struct {
@@ -154,6 +157,17 @@ func maybeBuildRustCodexSpawnSpec(request rustCodexSpawnSpecRequest) (*rustCodex
 	return &spec, true, nil
 }
 
+func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	output, err := runRustCLIText(buildRustCodexSpawnStartArgs(request)...)
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(output), true, nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil
@@ -189,6 +203,26 @@ func runRustCLIJSON(args ...string) ([]byte, error) {
 		return nil, fmt.Errorf("run rust si cli %q: %w", strings.Join(args, " "), err)
 	}
 	return stdout.Bytes(), nil
+}
+
+func runRustCLIText(args ...string) (string, error) {
+	bin, err := resolveRustCLIBinary()
+	if err != nil {
+		return "", err
+	}
+	cmd := rustCLIExecCommand(bin, args...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		stderrText := strings.TrimSpace(stderr.String())
+		if stderrText != "" {
+			return "", fmt.Errorf("run rust si cli %q: %w: %s", strings.Join(args, " "), err, stderrText)
+		}
+		return "", fmt.Errorf("run rust si cli %q: %w", strings.Join(args, " "), err)
+	}
+	return stdout.String(), nil
 }
 
 func buildRustCodexSpawnPlanArgs(request rustCodexSpawnPlanRequest) []string {
@@ -246,6 +280,30 @@ func buildRustCodexSpawnSpecArgs(request rustCodexSpawnSpecRequest) []string {
 	if value := strings.TrimSpace(request.Command); value != "" {
 		args = append(args, "--cmd", value)
 	}
+	for _, value := range request.Env {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			args = append(args, "--env", value)
+		}
+	}
+	for _, value := range request.Labels {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			args = append(args, "--label", value)
+		}
+	}
+	for _, value := range request.Ports {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			args = append(args, "--port", value)
+		}
+	}
+	return args
+}
+
+func buildRustCodexSpawnStartArgs(request rustCodexSpawnSpecRequest) []string {
+	args := buildRustCodexSpawnSpecArgs(request)
+	args[1] = "spawn-start"
 	return args
 }
 
