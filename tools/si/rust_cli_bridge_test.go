@@ -325,3 +325,79 @@ func TestMaybeBuildRustCodexSpawnPlanDelegatesAndParsesJSON(t *testing.T) {
 		t.Fatalf("expected codex spawn-plan invocation, got %q", string(argsData))
 	}
 }
+
+func TestBuildRustCodexSpawnSpecArgsIncludesSpecFlags(t *testing.T) {
+	args := buildRustCodexSpawnSpecArgs(rustCodexSpawnSpecRequest{
+		rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
+			Name:          "ferma",
+			Workspace:     "/tmp/workspace",
+			DockerSocket:  true,
+			Detach:        true,
+			CleanSlate:    false,
+			IncludeHostSI: true,
+		},
+		Command: "echo hello",
+	})
+	got := strings.Join(args, "\n")
+	if !strings.Contains(got, "codex\nspawn-spec") {
+		t.Fatalf("expected spawn-spec subcommand, got %q", got)
+	}
+	if !strings.Contains(got, "--cmd\necho hello") {
+		t.Fatalf("expected command flag, got %q", got)
+	}
+}
+
+func TestMaybeBuildRustCodexSpawnSpecDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	spec := rustCodexSpawnSpec{
+		Image:         "aureuma/si:test",
+		Name:          "si-codex-ferma",
+		Network:       "si",
+		RestartPolicy: "unless-stopped",
+		WorkingDir:    "/tmp/workspace",
+		Command:       []string{"bash", "-lc", "echo hello"},
+		Env:           []rustCodexSpawnSpecEnv{{Key: "HOME", Value: "/home/si"}},
+		BindMounts:    []rustCodexSpawnPlanMount{{Source: "/tmp/workspace", Target: "/workspace"}},
+		VolumeMounts:  []rustCodexSpawnSpecVolume{{Source: "si-codex-ferma", Target: "/home/si/.codex"}},
+	}
+	payload, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s' " + shellSingleQuote(string(payload)) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	got, delegated, err := maybeBuildRustCodexSpawnSpec(rustCodexSpawnSpecRequest{
+		rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
+			Name:          "ferma",
+			Workspace:     "/tmp/workspace",
+			DockerSocket:  true,
+			Detach:        true,
+			IncludeHostSI: true,
+		},
+		Command: "echo hello",
+	})
+	if err != nil {
+		t.Fatalf("maybeBuildRustCodexSpawnSpec: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected Rust spawn spec delegation")
+	}
+	if got == nil || got.Name != "si-codex-ferma" {
+		t.Fatalf("expected parsed spawn spec, got %#v", got)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "codex\nspawn-spec") {
+		t.Fatalf("expected codex spawn-spec invocation, got %q", string(argsData))
+	}
+}

@@ -356,6 +356,36 @@ func cmdCodexSpawn(args []string) {
 		*flags.detach = rustPlan.Detach
 		*flags.cleanSlate = rustPlan.CleanSlate
 	}
+	var rustSpec *rustCodexSpawnSpec
+	if delegatedSpawnPlan {
+		spec, delegated, err := maybeBuildRustCodexSpawnSpec(rustCodexSpawnSpecRequest{
+			rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
+				Name:          name,
+				ProfileID:     strings.TrimSpace(*flags.profile),
+				Workspace:     desiredWorkspaceHost,
+				Workdir:       strings.TrimSpace(*flags.workdir),
+				CodexVolume:   strings.TrimSpace(*flags.codexVolume),
+				SkillsVolume:  strings.TrimSpace(*flags.skillsVolume),
+				GHVolume:      strings.TrimSpace(*flags.ghVolume),
+				Repo:          strings.TrimSpace(*flags.repo),
+				GHPAT:         strings.TrimSpace(*flags.ghPat),
+				DockerSocket:  *flags.dockerSocket,
+				Detach:        *flags.detach,
+				CleanSlate:    *flags.cleanSlate,
+				Image:         strings.TrimSpace(*flags.image),
+				Network:       strings.TrimSpace(*flags.networkName),
+				VaultEnvFile:  requiredVaultFile,
+				IncludeHostSI: true,
+			},
+			Command: strings.TrimSpace(*flags.cmdStr),
+		})
+		if err != nil {
+			fatal(err)
+		}
+		if delegated {
+			rustSpec = spec
+		}
+	}
 
 	client, err := shared.NewClient()
 	if err != nil {
@@ -511,7 +541,15 @@ func cmdCodexSpawn(args []string) {
 	}
 
 	env := []string{}
-	if delegatedSpawnPlan {
+	if rustSpec != nil {
+		for _, entry := range rustSpec.Env {
+			key := strings.TrimSpace(entry.Key)
+			if key == "" {
+				continue
+			}
+			env = append(env, key+"="+entry.Value)
+		}
+	} else if delegatedSpawnPlan {
 		env = append(env, rustPlan.Env...)
 	} else {
 		env = []string{
@@ -538,7 +576,9 @@ func cmdCodexSpawn(args []string) {
 	env = append(env, (*flags.envs)...)
 
 	cmd := []string{"bash", "-lc", "sleep infinity"}
-	if strings.TrimSpace(*flags.cmdStr) != "" {
+	if rustSpec != nil && len(rustSpec.Command) > 0 {
+		cmd = append([]string(nil), rustSpec.Command...)
+	} else if strings.TrimSpace(*flags.cmdStr) != "" {
 		cmd = []string{"bash", "-lc", *flags.cmdStr}
 	}
 
@@ -561,7 +601,30 @@ func cmdCodexSpawn(args []string) {
 		{Type: mount.TypeVolume, Source: skillsVol, Target: "/home/si/.codex/skills"},
 		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
 	}
-	if delegatedSpawnPlan {
+	if rustSpec != nil {
+		cfg.Image = strings.TrimSpace(rustSpec.Image)
+		if strings.TrimSpace(rustSpec.WorkingDir) != "" {
+			cfg.WorkingDir = strings.TrimSpace(rustSpec.WorkingDir)
+			*flags.workdir = cfg.WorkingDir
+		}
+		mounts = mounts[:0]
+		for _, volume := range rustSpec.VolumeMounts {
+			mounts = append(mounts, mount.Mount{
+				Type:     mount.TypeVolume,
+				Source:   strings.TrimSpace(volume.Source),
+				Target:   strings.TrimSpace(volume.Target),
+				ReadOnly: volume.ReadOnly,
+			})
+		}
+		for _, plannedMount := range rustSpec.BindMounts {
+			mounts = append(mounts, mount.Mount{
+				Type:     mount.TypeBind,
+				Source:   strings.TrimSpace(plannedMount.Source),
+				Target:   strings.TrimSpace(plannedMount.Target),
+				ReadOnly: plannedMount.ReadOnly,
+			})
+		}
+	} else if delegatedSpawnPlan {
 		for _, plannedMount := range rustPlan.Mounts {
 			mounts = append(mounts, mount.Mount{
 				Type:     mount.TypeBind,
@@ -591,10 +654,20 @@ func cmdCodexSpawn(args []string) {
 		PortBindings:  bindings,
 	}
 	netCfg := &network.NetworkingConfig{}
-	if strings.TrimSpace(*flags.networkName) != "" {
+	if rustSpec != nil && strings.TrimSpace(rustSpec.RestartPolicy) != "" {
+		hostCfg.RestartPolicy = container.RestartPolicy{
+			Name: container.RestartPolicyMode(strings.TrimSpace(rustSpec.RestartPolicy)),
+		}
+	}
+	networkName := strings.TrimSpace(*flags.networkName)
+	if rustSpec != nil && strings.TrimSpace(rustSpec.Network) != "" {
+		networkName = strings.TrimSpace(rustSpec.Network)
+		*flags.networkName = networkName
+	}
+	if networkName != "" {
 		netCfg = &network.NetworkingConfig{
 			EndpointsConfig: map[string]*network.EndpointSettings{
-				*flags.networkName: {Aliases: []string{containerName}},
+				networkName: {Aliases: []string{containerName}},
 			},
 		}
 	}
