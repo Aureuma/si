@@ -221,18 +221,16 @@ func ensureUsableCodexProfileFortSession(ctx context.Context, profile codexProfi
 }
 
 func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
-	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+	profileID := strings.TrimSpace(profile.ID)
+	boot, err := loadCodexFortBootstrapFromPaths(profileID, paths)
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
-	profileID := strings.TrimSpace(profile.ID)
-	if profileID == "" {
-		profileID = strings.TrimSpace(state.ProfileID)
-	}
+	profileID = strings.TrimSpace(boot.ProfileID)
 	if profileID == "" {
 		return codexFortBootstrap{}, fmt.Errorf("profile id required")
 	}
-	boot, err := loadCodexFortBootstrapFromPaths(profileID, paths)
+	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
