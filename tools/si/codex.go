@@ -1135,7 +1135,10 @@ func cmdCodexExec(args []string) {
 		fatal(fmt.Errorf("--tmux and --no-tmux cannot be combined"))
 	}
 	name := rest[0]
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	cmd := rest[1:]
 	tmuxMode := true
 	if *noTmux {
@@ -2346,7 +2349,10 @@ func cmdCodexLogs(args []string) {
 	}
 	name := args[0]
 	tail := parseTail(args[1:], "200")
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	if _, delegated, err := maybeRunRustCodexLogs(name, tail, false); err != nil {
 		fatal(err)
 	} else if !delegated {
@@ -2367,7 +2373,10 @@ func cmdCodexTail(args []string) {
 	}
 	name := args[0]
 	tail := parseTail(args[1:], "200")
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	if _, delegated, err := maybeRunRustCodexLogs(name, tail, true); err != nil {
 		fatal(err)
 	} else if !delegated {
