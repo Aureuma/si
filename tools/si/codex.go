@@ -574,12 +574,75 @@ func cmdCodexSpawn(args []string) {
 		env = append(env, fortBootstrap.env()...)
 	}
 	env = append(env, (*flags.envs)...)
+	labelArgs := make([]string, 0, len(labels))
+	for key, value := range labels {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		labelArgs = append(labelArgs, key+"="+strings.TrimSpace(value))
+	}
+	sort.Strings(labelArgs)
 
 	cmd := []string{"bash", "-lc", "sleep infinity"}
 	if rustSpec != nil && len(rustSpec.Command) > 0 {
 		cmd = append([]string(nil), rustSpec.Command...)
 	} else if strings.TrimSpace(*flags.cmdStr) != "" {
 		cmd = []string{"bash", "-lc", *flags.cmdStr}
+	}
+
+	if rustSpec != nil && *flags.detach {
+		startID, delegated, err := maybeStartRustCodexSpawn(rustCodexSpawnSpecRequest{
+			rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
+				Name:          name,
+				ProfileID:     strings.TrimSpace(*flags.profile),
+				Workspace:     desiredWorkspaceHost,
+				Workdir:       strings.TrimSpace(*flags.workdir),
+				CodexVolume:   codexVol,
+				SkillsVolume:  skillsVol,
+				GHVolume:      ghVol,
+				Repo:          strings.TrimSpace(*flags.repo),
+				GHPAT:         strings.TrimSpace(*flags.ghPat),
+				DockerSocket:  *flags.dockerSocket,
+				Detach:        true,
+				CleanSlate:    *flags.cleanSlate,
+				Image:         strings.TrimSpace(*flags.image),
+				Network:       strings.TrimSpace(*flags.networkName),
+				VaultEnvFile:  requiredVaultFile,
+				IncludeHostSI: true,
+			},
+			Command: strings.TrimSpace(*flags.cmdStr),
+			Env:     env,
+			Labels:  labelArgs,
+			Ports:   append([]string(nil), (*flags.ports)...),
+		})
+		if err != nil {
+			fatal(err)
+		}
+		if delegated {
+			id := strings.TrimSpace(startID)
+			if id == "" {
+				id, _, err = client.ContainerByName(ctx, containerName)
+				if err != nil {
+					fatal(err)
+				}
+			}
+			if id == "" {
+				fatal(fmt.Errorf("rust spawn-start did not return a container id for %s", containerName))
+			}
+			ensureCodexDockerSocketAccess(ctx, client, id)
+			seedCodexConfig(ctx, client, id, *flags.cleanSlate)
+			if profile != nil {
+				seedCodexAuth(ctx, client, id, *flags.cleanSlate, *profile)
+			}
+			if !*flags.cleanSlate {
+				if identity, ok := hostGitIdentity(); ok {
+					seedGitIdentity(ctx, client, id, "si", "/home/si", identity)
+				}
+			}
+			successf("codex container %s started", containerName)
+			return
+		}
 	}
 
 	exposed, bindings, err := parsePortBindings(*flags.ports)

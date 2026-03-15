@@ -167,6 +167,8 @@ enum CodexCommand {
         include_host_si: bool,
         #[arg(long = "env")]
         env: Vec<String>,
+        #[arg(long = "label")]
+        labels: Vec<String>,
         #[arg(long = "port")]
         ports: Vec<String>,
         #[arg(long)]
@@ -213,6 +215,8 @@ enum CodexCommand {
         include_host_si: bool,
         #[arg(long = "env")]
         env: Vec<String>,
+        #[arg(long = "label")]
+        labels: Vec<String>,
         #[arg(long = "port")]
         ports: Vec<String>,
         #[arg(long)]
@@ -259,6 +263,8 @@ enum CodexCommand {
         include_host_si: bool,
         #[arg(long = "env")]
         env: Vec<String>,
+        #[arg(long = "label")]
+        labels: Vec<String>,
         #[arg(long = "port")]
         ports: Vec<String>,
         #[arg(long)]
@@ -511,6 +517,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                labels,
                 ports,
                 cmd,
                 format,
@@ -534,6 +541,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                labels,
                 ports,
                 cmd,
                 format,
@@ -558,6 +566,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                labels,
                 ports,
                 cmd,
                 format,
@@ -581,6 +590,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                labels,
                 ports,
                 cmd,
                 format,
@@ -605,6 +615,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                labels,
                 ports,
                 cmd,
                 docker_bin,
@@ -628,6 +639,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                labels,
                 ports,
                 cmd,
                 docker_bin,
@@ -940,6 +952,7 @@ fn show_codex_spawn_spec(
     vault_env_file: Option<PathBuf>,
     include_host_si: bool,
     env: Vec<String>,
+    labels: Vec<String>,
     ports: Vec<String>,
     cmd: Option<String>,
     format: OutputFormat,
@@ -974,7 +987,7 @@ fn show_codex_spawn_spec(
         },
         &host_ctx,
     )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, ports })?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
     let view = CodexSpawnSpecView {
         image: spec.image().to_owned(),
         name: spec.name_ref().map(str::to_owned),
@@ -1065,6 +1078,7 @@ fn show_codex_spawn_run_args(
     vault_env_file: Option<PathBuf>,
     include_host_si: bool,
     env: Vec<String>,
+    labels: Vec<String>,
     ports: Vec<String>,
     cmd: Option<String>,
     format: OutputFormat,
@@ -1099,7 +1113,7 @@ fn show_codex_spawn_run_args(
         },
         &host_ctx,
     )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, ports })?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
     let args = spec.docker_run_args()?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&args)?),
@@ -1129,6 +1143,7 @@ fn show_codex_spawn_start(
     vault_env_file: Option<PathBuf>,
     include_host_si: bool,
     env: Vec<String>,
+    labels: Vec<String>,
     ports: Vec<String>,
     cmd: Option<String>,
     docker_bin: Option<PathBuf>,
@@ -1163,7 +1178,7 @@ fn show_codex_spawn_start(
         },
         &host_ctx,
     )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, ports })?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, labels, ports })?;
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
     let command = spec.docker_run_command(docker_program.display().to_string())?;
