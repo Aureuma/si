@@ -153,3 +153,50 @@ func TestRunHelpCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("expected Rust CLI args to be help + remote-control, got %q", string(argsData))
 	}
 }
+
+func TestRunProvidersCharacteristicsCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runProvidersCharacteristicsCommand([]string{"--provider", "github", "--json"})
+	if err != nil {
+		t.Fatalf("runProvidersCharacteristicsCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go providers characteristics path by default")
+	}
+}
+
+func TestRunProvidersCharacteristicsCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-providers'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runProvidersCharacteristicsCommand([]string{"--provider", "github", "--json"})
+		if err != nil {
+			t.Fatalf("runProvidersCharacteristicsCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected providers characteristics to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-providers" {
+		t.Fatalf("expected delegated Rust providers output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "providers\ncharacteristics\n--provider\ngithub\n--json" {
+		t.Fatalf("expected Rust CLI args to be providers characteristics + flags, got %q", string(argsData))
+	}
+}

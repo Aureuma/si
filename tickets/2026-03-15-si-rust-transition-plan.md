@@ -182,6 +182,7 @@ Progress notes:
 - completed: experimental Go-to-Rust compatibility boundary for `si version` and `si help`
 - completed: focused Go tests covering fallback, explicit bin selection, repo-local binary discovery, and missing-binary failures
 - completed: Rust `providers characteristics` surface with JSON coverage and provider-id alias handling
+- completed: Go compatibility bridge for `si providers characteristics`, including `--json` passthrough and focused delegation tests
 
 ### Phase 4: Runtime substrate migration
 
