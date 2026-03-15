@@ -491,6 +491,14 @@ name = "si-rs-core"
 version = "0.54.0"
 
 [[package]]
+name = "si-rs-process"
+version = "0.54.0"
+dependencies = [
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "si-rs-provider-catalog"
 version = "0.54.0"
 dependencies = [
