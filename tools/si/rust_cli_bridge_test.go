@@ -268,6 +268,37 @@ func TestMaybeRunRustVaultTrustLookupDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeLoadRustWarmupStateDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"version\":3,\"updated_at\":\"2030-01-01T00:00:00Z\",\"profiles\":{\"ferma\":{\"profile_id\":\"ferma\",\"last_result\":\"ready\",\"next_due\":\"2030-01-02T00:00:00Z\"}}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	state, delegated, err := maybeLoadRustWarmupState("/tmp/warmup-state.json")
+	if err != nil {
+		t.Fatalf("maybeLoadRustWarmupState: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup state to delegate to Rust")
+	}
+	if state.Version != 3 || state.Profiles["ferma"].LastResult != "ready" {
+		t.Fatalf("unexpected state: %+v", state)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nstatus\n--path\n/tmp/warmup-state.json\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

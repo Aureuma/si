@@ -793,6 +793,25 @@ func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string
 	return &lookup, true, nil
 }
 
+func maybeLoadRustWarmupState(path string) (warmWeeklyState, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return warmWeeklyState{}, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"warmup", "status",
+		"--path", strings.TrimSpace(path),
+		"--format", "json",
+	)
+	if err != nil {
+		return warmWeeklyState{}, false, err
+	}
+	var state warmWeeklyState
+	if err := json.Unmarshal(output, &state); err != nil {
+		return warmWeeklyState{}, false, fmt.Errorf("decode rust warmup state: %w", err)
+	}
+	return state, true, nil
+}
+
 func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return fortProfileSessionState{}, false, nil

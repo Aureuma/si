@@ -245,6 +245,7 @@ Progress notes:
 - completed: Go `dyad recreate` now reuses the same Rust-compatible single-dyad removal path before falling back into the existing spawn flow, so recreate no longer bypasses the delegated Rust teardown path
 - completed: Go `dyad remove --all` now keeps its interactive confirmation UX while routing each per-dyad teardown through the same Rust-compatible removal helper used by single-dyad remove and recreate
 - completed: Rust `dyad peek-plan` now owns deterministic container/session naming and attach-command assembly, and experimental Go `dyad peek` consumes that plan while retaining tmux session creation and interactive attach behavior
+- completed: initial `si-warmup` crate now owns persisted warmup state loading, legacy version normalization, and `warmup status` rendering, and Go `si warmup status` can consume that Rust state loader while preserving the current Go text output path
 
 ### Phase 5: Security/runtime migration
 

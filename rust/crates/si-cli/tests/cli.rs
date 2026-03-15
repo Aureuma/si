@@ -118,6 +118,61 @@ configs = "~/Development/si/configs"
 }
 
 #[test]
+fn warmup_status_json_reads_and_upgrades_legacy_state() {
+    let home = tempdir().expect("tempdir");
+    let warmup_dir = home.path().join(".si/warmup");
+    fs::create_dir_all(&warmup_dir).expect("mkdir warmup dir");
+    fs::write(
+        warmup_dir.join("state.json"),
+        r#"{
+  "version": 2,
+  "profiles": {
+    "ferma": {
+      "profile_id": " ferma ",
+      "last_result": "warmed",
+      "last_weekly_used_pct": 12.5,
+      "last_weekly_reset": "2030-03-20T00:00:00Z"
+    }
+  }
+}
+"#,
+    )
+    .expect("write state");
+
+    let output = cargo_bin()
+        .args(["warmup", "status", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["version"], 3);
+    assert_eq!(parsed["profiles"]["ferma"]["profile_id"], "ferma");
+    assert_eq!(parsed["profiles"]["ferma"]["last_warmed_reset"], "2030-03-20T00:00:00Z");
+    assert_eq!(parsed["profiles"]["ferma"]["last_weekly_used_ok"], true);
+}
+
+#[test]
+fn warmup_status_text_reports_empty_state() {
+    let home = tempdir().expect("tempdir");
+
+    let output = cargo_bin()
+        .args(["warmup", "status", "--home"])
+        .arg(home.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    assert_eq!(String::from_utf8_lossy(&output), "warmup state is empty\n");
+}
+
+#[test]
 fn providers_characteristics_json_matches_expected_shape() {
     let output = cargo_bin()
         .args(["providers", "characteristics", "--provider", "github", "--format", "json"])

@@ -727,6 +727,7 @@ dependencies = [
  "si-rs-provider-catalog",
  "si-rs-runtime",
  "si-rs-vault",
+ "si-rs-warmup",
  "tempfile",
 ]
 
@@ -819,6 +820,17 @@ dependencies = [
 
 [[package]]
 name = "si-rs-vault"
+version = "0.54.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "si-rs-warmup"
 version = "0.54.0"
 dependencies = [
  "chrono",
