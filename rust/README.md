@@ -5,7 +5,7 @@ This workspace is the staged Rust rewrite for `si`.
 Current scope:
 
 - shared version metadata
-- `.si` path defaults and `[paths]` settings parsing
+- `.si` path defaults and staged modular settings parsing
 - typed process execution foundations with capture, cwd/env overrides, and timeout handling
 - a small Rust CLI entrypoint for read-only diagnostics
 

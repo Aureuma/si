@@ -157,6 +157,7 @@ Progress notes:
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
 - completed: Rust read-only `settings show` surface backed by the config crate
 - completed: initial `si-process` crate for typed command specs, env/cwd overrides, capture modes, and timeout handling
+- completed: modular Rust settings loading for the first non-core modules (`surf` and `viva`) with parity tests ported from Go settings cases
 
 ### Phase 3: Read-only command migration
 

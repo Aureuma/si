@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
@@ -13,6 +14,10 @@ pub struct Settings {
     pub codex: CodexSettings,
     #[serde(default)]
     pub dyad: DyadSettings,
+    #[serde(default)]
+    pub surf: SurfSettings,
+    #[serde(default)]
+    pub viva: VivaSettings,
 }
 
 impl Settings {
@@ -26,24 +31,20 @@ impl Settings {
     ) -> Result<Self, toml::de::Error> {
         let mut settings = Self::from_toml(source)?;
         settings.apply_home_defaults(home);
+        settings.apply_runtime_defaults();
         Ok(settings)
     }
 
     pub fn load(home: &Path, settings_file: Option<&Path>) -> Result<Self, LoadSettingsError> {
-        let defaults = Self::with_home_defaults(home);
-        let default_settings_path =
-            defaults.paths.settings_file.as_deref().unwrap_or_default().to_owned();
-        let path = settings_file.unwrap_or_else(|| Path::new(&default_settings_path));
-        if !path.exists() {
-            return Ok(defaults);
-        }
-
-        let source = fs::read_to_string(path).map_err(|source| {
-            LoadSettingsError::ReadSettings { path: path.to_path_buf(), source }
-        })?;
-
-        Self::from_toml_with_home_defaults(&source, home)
-            .map_err(|source| LoadSettingsError::ParseSettings { path: path.to_path_buf(), source })
+        let mut settings = Self::with_home_defaults(home);
+        let core_path =
+            settings_file.map(Path::to_path_buf).unwrap_or_else(|| SettingsModule::Core.path(home));
+        settings.merge_module_if_exists(SettingsModule::Core, &core_path)?;
+        settings.merge_module_if_exists(SettingsModule::Surf, &SettingsModule::Surf.path(home))?;
+        settings.merge_module_if_exists(SettingsModule::Viva, &SettingsModule::Viva.path(home))?;
+        settings.apply_home_defaults(home);
+        settings.apply_runtime_defaults();
+        Ok(settings)
     }
 
     pub fn with_home_defaults(home: &Path) -> Self {
@@ -61,7 +62,62 @@ impl Settings {
             },
             codex: CodexSettings::default(),
             dyad: DyadSettings::default(),
+            surf: SurfSettings::default(),
+            viva: VivaSettings::default(),
         }
+    }
+
+    fn merge_module_if_exists(
+        &mut self,
+        module: SettingsModule,
+        path: &Path,
+    ) -> Result<(), LoadSettingsError> {
+        if !path.exists() {
+            return Ok(());
+        }
+
+        let source =
+            fs::read_to_string(path).map_err(|source| LoadSettingsError::ReadSettings {
+                module: module.as_str(),
+                path: path.to_path_buf(),
+                source,
+            })?;
+
+        self.merge_module_from_toml(module, &source).map_err(|source| {
+            LoadSettingsError::ParseSettings {
+                module: module.as_str(),
+                path: path.to_path_buf(),
+                source: Box::new(source),
+            }
+        })
+    }
+
+    fn merge_module_from_toml(
+        &mut self,
+        module: SettingsModule,
+        source: &str,
+    ) -> Result<(), toml::de::Error> {
+        match module {
+            SettingsModule::Core => {
+                let payload: CoreSettingsModule = toml::from_str(source)?;
+                if let Some(schema_version) = payload.schema_version {
+                    self.schema_version = schema_version;
+                }
+                self.paths = payload.paths;
+                self.codex = payload.codex;
+                self.dyad = payload.dyad;
+            }
+            SettingsModule::Surf => {
+                let payload: SurfSettingsModule = toml::from_str(source)?;
+                self.surf = payload.surf;
+            }
+            SettingsModule::Viva => {
+                let payload: VivaSettingsModule = toml::from_str(source)?;
+                self.viva = payload.viva;
+            }
+        }
+
+        Ok(())
     }
 
     fn apply_home_defaults(&mut self, home: &Path) {
@@ -77,6 +133,70 @@ impl Settings {
         }
         if self.paths.codex_profiles_dir.is_none() {
             self.paths.codex_profiles_dir = defaults.paths.codex_profiles_dir;
+        }
+    }
+
+    fn apply_runtime_defaults(&mut self) {
+        normalize_option_string(&mut self.paths.workspace_root);
+        normalize_option_string(&mut self.codex.image);
+        normalize_option_string(&mut self.codex.network);
+        normalize_option_string(&mut self.codex.workspace);
+        normalize_option_string(&mut self.codex.workdir);
+        normalize_option_string(&mut self.codex.profile);
+        normalize_option_string(&mut self.dyad.actor_image);
+        normalize_option_string(&mut self.dyad.critic_image);
+        normalize_option_string(&mut self.dyad.workspace);
+        normalize_option_string(&mut self.dyad.configs);
+        self.surf.normalize();
+        self.viva.normalize();
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+struct CoreSettingsModule {
+    pub schema_version: Option<u32>,
+    #[serde(default)]
+    pub paths: SettingsPaths,
+    #[serde(default)]
+    pub codex: CodexSettings,
+    #[serde(default)]
+    pub dyad: DyadSettings,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+struct SurfSettingsModule {
+    #[serde(default)]
+    pub surf: SurfSettings,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+struct VivaSettingsModule {
+    #[serde(default)]
+    pub viva: VivaSettings,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum SettingsModule {
+    Core,
+    Surf,
+    Viva,
+}
+
+impl SettingsModule {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Core => "core",
+            Self::Surf => "surf",
+            Self::Viva => "viva",
+        }
+    }
+
+    fn path(self, home: &Path) -> PathBuf {
+        let root = home.join(".si");
+        match self {
+            Self::Core => root.join("settings.toml"),
+            Self::Surf => root.join("surf").join("si.settings.toml"),
+            Self::Viva => root.join("viva").join("settings.toml"),
         }
     }
 }
@@ -106,19 +226,410 @@ pub struct DyadSettings {
     pub configs: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SurfSettings {
+    #[serde(default)]
+    pub repo: String,
+    #[serde(default)]
+    pub bin: String,
+    pub build: Option<bool>,
+    #[serde(default)]
+    pub settings_file: String,
+    #[serde(default)]
+    pub state_dir: String,
+    #[serde(default)]
+    pub tunnel: SurfTunnelSettings,
+}
+
+impl SurfSettings {
+    fn normalize(&mut self) {
+        trim_string(&mut self.repo);
+        trim_string(&mut self.bin);
+        trim_string(&mut self.settings_file);
+        trim_string(&mut self.state_dir);
+        trim_string(&mut self.tunnel.name);
+        trim_string(&mut self.tunnel.vault_key);
+        self.tunnel.mode = normalize_choice(&self.tunnel.mode, &["quick", "token"]);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SurfTunnelSettings {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub mode: String,
+    #[serde(default)]
+    pub vault_key: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaSettings {
+    #[serde(default)]
+    pub repo: String,
+    #[serde(default)]
+    pub bin: String,
+    pub build: Option<bool>,
+    #[serde(default)]
+    pub tunnel: VivaTunnelSettings,
+    #[serde(default)]
+    pub node: VivaNodeSettings,
+}
+
+impl VivaSettings {
+    fn normalize(&mut self) {
+        trim_string(&mut self.repo);
+        trim_string(&mut self.bin);
+        self.tunnel.normalize();
+        self.node.normalize();
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaTunnelSettings {
+    #[serde(default)]
+    pub default_profile: String,
+    #[serde(default)]
+    pub profiles: BTreeMap<String, VivaTunnelProfile>,
+}
+
+impl VivaTunnelSettings {
+    fn normalize(&mut self) {
+        self.default_profile = self.default_profile.trim().to_lowercase();
+        if self.profiles.is_empty() {
+            return;
+        }
+
+        let mut normalized = BTreeMap::new();
+        for (key, profile) in std::mem::take(&mut self.profiles) {
+            let key = key.trim().to_lowercase();
+            if key.is_empty() {
+                continue;
+            }
+            normalized.insert(key, profile.normalized());
+        }
+        self.profiles = normalized;
+        if self.default_profile.is_empty() && self.profiles.contains_key("dev") {
+            self.default_profile = "dev".to_owned();
+        }
+        if !self.default_profile.is_empty() && !self.profiles.contains_key(&self.default_profile) {
+            self.default_profile.clear();
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaTunnelProfile {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub container_name: String,
+    #[serde(default)]
+    pub tunnel_id_env_key: String,
+    #[serde(default)]
+    pub credentials_env_key: String,
+    #[serde(default)]
+    pub metrics_addr: String,
+    #[serde(default)]
+    pub image: String,
+    #[serde(default)]
+    pub network_mode: String,
+    #[serde(default)]
+    pub additional_networks: Vec<String>,
+    pub no_autoupdate: Option<bool>,
+    pub pull_image: Option<bool>,
+    #[serde(default)]
+    pub runtime_dir: String,
+    #[serde(default)]
+    pub vault_env_file: String,
+    #[serde(default)]
+    pub vault_repo: String,
+    #[serde(default)]
+    pub vault_env: String,
+    #[serde(default)]
+    pub routes: Vec<VivaTunnelRoute>,
+}
+
+impl VivaTunnelProfile {
+    fn normalized(mut self) -> Self {
+        trim_string(&mut self.name);
+        trim_string(&mut self.container_name);
+        trim_string(&mut self.tunnel_id_env_key);
+        if self.tunnel_id_env_key.is_empty() {
+            self.tunnel_id_env_key = "VIVA_CLOUDFLARE_TUNNEL_ID".to_owned();
+        }
+        trim_string(&mut self.credentials_env_key);
+        if self.credentials_env_key.is_empty() {
+            self.credentials_env_key = "CLOUDFLARE_TUNNEL_CREDENTIALS_JSON".to_owned();
+        }
+        trim_string(&mut self.metrics_addr);
+        trim_string(&mut self.image);
+        if self.image.is_empty() {
+            self.image = "cloudflare/cloudflared:latest".to_owned();
+        }
+        trim_string(&mut self.network_mode);
+        if self.network_mode.is_empty() {
+            self.network_mode = "host".to_owned();
+        }
+        self.additional_networks =
+            normalize_unique_names(&self.additional_networks, Some(&self.network_mode));
+        if self.no_autoupdate.is_none() {
+            self.no_autoupdate = Some(true);
+        }
+        if self.pull_image.is_none() {
+            self.pull_image = Some(true);
+        }
+        trim_string(&mut self.runtime_dir);
+        trim_string(&mut self.vault_env_file);
+        trim_string(&mut self.vault_repo);
+        if self.vault_repo.is_empty() {
+            self.vault_repo = "viva".to_owned();
+        }
+        self.vault_env = self.vault_env.trim().to_lowercase();
+        if self.vault_env.is_empty() {
+            self.vault_env = "dev".to_owned();
+        }
+        self.routes = self
+            .routes
+            .into_iter()
+            .filter_map(|mut route| {
+                trim_string(&mut route.hostname);
+                trim_string(&mut route.service);
+                if route.service.is_empty() {
+                    return None;
+                }
+                Some(route)
+            })
+            .collect();
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaTunnelRoute {
+    #[serde(default)]
+    pub hostname: String,
+    #[serde(default)]
+    pub service: String,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaNodeSettings {
+    #[serde(default)]
+    pub default_node: String,
+    #[serde(default)]
+    pub entries: BTreeMap<String, VivaNodeProfile>,
+    #[serde(default)]
+    pub bootstrap: VivaNodeBootstrapSettings,
+}
+
+impl VivaNodeSettings {
+    fn normalize(&mut self) {
+        self.default_node = self.default_node.trim().to_lowercase();
+        self.bootstrap = std::mem::take(&mut self.bootstrap).normalized();
+        if self.entries.is_empty() {
+            return;
+        }
+
+        let mut normalized = BTreeMap::new();
+        for (key, profile) in std::mem::take(&mut self.entries) {
+            let key = key.trim().to_lowercase();
+            if key.is_empty() {
+                continue;
+            }
+            normalized.insert(key, profile.normalized());
+        }
+        self.entries = normalized;
+        if self.default_node.is_empty() && self.entries.contains_key("default") {
+            self.default_node = "default".to_owned();
+        }
+        if !self.default_node.is_empty() && !self.entries.contains_key(&self.default_node) {
+            self.default_node.clear();
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaNodeProfile {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub host: String,
+    #[serde(default)]
+    pub port: String,
+    #[serde(default)]
+    pub user: String,
+    #[serde(default)]
+    pub host_env_key: String,
+    #[serde(default)]
+    pub port_env_key: String,
+    #[serde(default)]
+    pub user_env_key: String,
+    #[serde(default)]
+    pub identity_file: String,
+    #[serde(default)]
+    pub identity_file_env_key: String,
+    #[serde(default)]
+    pub known_hosts_file: String,
+    #[serde(default)]
+    pub strict_host_key_checking: String,
+    #[serde(default)]
+    pub connect_timeout_seconds: i32,
+    #[serde(default)]
+    pub server_alive_interval_seconds: i32,
+    #[serde(default)]
+    pub server_alive_count_max: i32,
+    pub compression: Option<bool>,
+    pub multiplex: Option<bool>,
+    #[serde(default)]
+    pub control_persist: String,
+    #[serde(default)]
+    pub control_path: String,
+    #[serde(default)]
+    pub mosh_port: String,
+    #[serde(default)]
+    pub protocols: VivaNodeProtocols,
+}
+
+impl VivaNodeProfile {
+    fn normalized(mut self) -> Self {
+        trim_string(&mut self.name);
+        trim_string(&mut self.description);
+        trim_string(&mut self.host);
+        trim_string(&mut self.port);
+        if self.port.is_empty() {
+            self.port = "22".to_owned();
+        }
+        trim_string(&mut self.user);
+        trim_string(&mut self.host_env_key);
+        trim_string(&mut self.port_env_key);
+        trim_string(&mut self.user_env_key);
+        trim_string(&mut self.identity_file);
+        trim_string(&mut self.identity_file_env_key);
+        trim_string(&mut self.known_hosts_file);
+        self.strict_host_key_checking = normalize_choice_or_default(
+            &self.strict_host_key_checking,
+            &["yes", "accept-new", "no"],
+            "yes",
+        );
+        if self.connect_timeout_seconds <= 0 {
+            self.connect_timeout_seconds = 10;
+        }
+        if self.server_alive_interval_seconds <= 0 {
+            self.server_alive_interval_seconds = 30;
+        }
+        if self.server_alive_count_max <= 0 {
+            self.server_alive_count_max = 5;
+        }
+        if self.compression.is_none() {
+            self.compression = Some(true);
+        }
+        if self.multiplex.is_none() {
+            self.multiplex = Some(true);
+        }
+        trim_string(&mut self.control_persist);
+        if self.control_persist.is_empty() {
+            self.control_persist = "5m".to_owned();
+        }
+        trim_string(&mut self.control_path);
+        if self.control_path.is_empty() {
+            self.control_path = "~/.ssh/cm-si-viva-%C".to_owned();
+        }
+        trim_string(&mut self.mosh_port);
+        self.protocols.normalize();
+        self
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaNodeProtocols {
+    pub ssh: Option<bool>,
+    pub mosh: Option<bool>,
+    pub rsync: Option<bool>,
+}
+
+impl VivaNodeProtocols {
+    fn normalize(&mut self) {
+        if self.ssh.is_none() {
+            self.ssh = Some(true);
+        }
+        if self.mosh.is_none() {
+            self.mosh = Some(true);
+        }
+        if self.rsync.is_none() {
+            self.rsync = Some(true);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct VivaNodeBootstrapSettings {
+    #[serde(default)]
+    pub source_root: String,
+    #[serde(default)]
+    pub workspace_dir: String,
+    #[serde(default)]
+    pub repos: Vec<String>,
+    #[serde(default)]
+    pub shell_profile: String,
+    #[serde(default)]
+    pub env_file: String,
+    #[serde(default)]
+    pub github_token_key: String,
+    pub build_si: Option<bool>,
+    pub pull_latest: Option<bool>,
+    #[serde(default)]
+    pub install_orbitals: Vec<String>,
+}
+
+impl VivaNodeBootstrapSettings {
+    fn normalized(mut self) -> Self {
+        trim_string(&mut self.source_root);
+        trim_string(&mut self.workspace_dir);
+        self.repos = normalize_unique_names(&self.repos, None);
+        if self.repos.is_empty() {
+            self.repos = default_viva_node_bootstrap_repos();
+        }
+        trim_string(&mut self.shell_profile);
+        if self.shell_profile.is_empty() {
+            self.shell_profile = "~/.bashrc".to_owned();
+        }
+        trim_string(&mut self.env_file);
+        if self.env_file.is_empty() {
+            self.env_file = "~/.si/node-bootstrap.env".to_owned();
+        }
+        trim_string(&mut self.github_token_key);
+        if self.github_token_key.is_empty() {
+            self.github_token_key = "GH_PAT_AUREUMA".to_owned();
+        }
+        if self.build_si.is_none() {
+            self.build_si = Some(true);
+        }
+        if self.pull_latest.is_none() {
+            self.pull_latest = Some(true);
+        }
+        self.install_orbitals = normalize_unique_names(&self.install_orbitals, None);
+        self
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LoadSettingsError {
-    #[error("read settings {path}: {source}")]
+    #[error("read {module} settings {path}: {source}")]
     ReadSettings {
+        module: &'static str,
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
-    #[error("parse settings {path}: {source}")]
+    #[error("parse {module} settings {path}: {source}")]
     ParseSettings {
+        module: &'static str,
         path: PathBuf,
         #[source]
-        source: toml::de::Error,
+        source: Box<toml::de::Error>,
     },
 }
 
@@ -130,9 +641,75 @@ fn path_string(path: &Path) -> String {
     path.display().to_string()
 }
 
+fn normalize_option_string(value: &mut Option<String>) {
+    if let Some(current) = value {
+        let trimmed = current.trim();
+        if trimmed.is_empty() {
+            *value = None;
+        } else if trimmed.len() != current.len() {
+            *current = trimmed.to_owned();
+        }
+    }
+}
+
+fn trim_string(value: &mut String) {
+    *value = value.trim().to_owned();
+}
+
+fn normalize_choice(raw: &str, allowed: &[&str]) -> String {
+    let normalized = raw.trim().to_lowercase();
+    if allowed.contains(&normalized.as_str()) { normalized } else { String::new() }
+}
+
+fn normalize_choice_or_default(raw: &str, allowed: &[&str], default: &str) -> String {
+    let normalized = normalize_choice(raw, allowed);
+    if normalized.is_empty() { default.to_owned() } else { normalized }
+}
+
+fn normalize_unique_names(items: &[String], exclude: Option<&str>) -> Vec<String> {
+    let mut seen = BTreeMap::new();
+    if let Some(exclude) = exclude {
+        let exclude = exclude.trim();
+        if !exclude.is_empty() {
+            seen.insert(exclude.to_owned(), ());
+        }
+    }
+    let mut out = Vec::new();
+    for raw in items {
+        let name = raw.trim();
+        if name.is_empty() || seen.contains_key(name) {
+            continue;
+        }
+        seen.insert(name.to_owned(), ());
+        out.push(name.to_owned());
+    }
+    out
+}
+
+fn default_viva_node_bootstrap_repos() -> Vec<String> {
+    vec![
+        "si",
+        "safe",
+        "viva",
+        "remote-control",
+        "surf",
+        "releasemind",
+        "lingospeak",
+        "aureuma",
+        "svelta",
+        "convelt",
+        "core",
+        "homebrew-si",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::Settings;
+    use std::fs;
     use std::path::Path;
     use tempfile::tempdir;
 
@@ -178,9 +755,9 @@ codex_profiles_dir = "~/.si/codex/profiles"
     fn loads_runtime_fields_from_settings_file() {
         let home = tempdir().expect("tempdir");
         let settings_dir = home.path().join(".si");
-        std::fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+        fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
         let settings_path = settings_dir.join("settings.toml");
-        std::fs::write(
+        fs::write(
             &settings_path,
             r#"
 [paths]
@@ -207,5 +784,153 @@ configs = "~/Development/si/configs"
         assert_eq!(settings.codex.profile.as_deref(), Some("darmstada"));
         assert_eq!(settings.dyad.workspace.as_deref(), Some("~/Development"));
         assert_eq!(settings.dyad.configs.as_deref(), Some("~/Development/si/configs"));
+    }
+
+    #[test]
+    fn loads_surf_settings_module() {
+        let home = tempdir().expect("tempdir");
+        let settings_dir = home.path().join(".si").join("surf");
+        fs::create_dir_all(&settings_dir).expect("mkdir surf settings dir");
+        fs::write(
+            settings_dir.join("si.settings.toml"),
+            r#"
+[surf]
+repo = "/work/surf"
+bin = "/work/surf/bin/surf"
+build = true
+settings_file = "/home/user/.si/surf/settings.toml"
+state_dir = "/home/user/.surf-state"
+
+[surf.tunnel]
+name = "surf-cloudflared"
+mode = "token"
+vault_key = "SURF_CLOUDFLARE_TUNNEL_TOKEN"
+"#,
+        )
+        .expect("write surf settings");
+
+        let settings = Settings::load(home.path(), None).expect("load settings");
+
+        assert_eq!(settings.surf.repo, "/work/surf");
+        assert_eq!(settings.surf.bin, "/work/surf/bin/surf");
+        assert_eq!(settings.surf.build, Some(true));
+        assert_eq!(settings.surf.tunnel.mode, "token");
+        assert_eq!(settings.surf.tunnel.vault_key, "SURF_CLOUDFLARE_TUNNEL_TOKEN");
+    }
+
+    #[test]
+    fn loads_viva_tunnel_settings_module() {
+        let home = tempdir().expect("tempdir");
+        let settings_dir = home.path().join(".si").join("viva");
+        fs::create_dir_all(&settings_dir).expect("mkdir viva settings dir");
+        fs::write(
+            settings_dir.join("settings.toml"),
+            r#"
+[viva]
+repo = "/work/viva"
+bin = "/work/viva/bin/viva"
+
+[viva.tunnel]
+default_profile = "dev"
+
+[viva.tunnel.profiles.dev]
+container_name = "viva-cloudflared-dev-browser"
+network_mode = "viva-shared"
+additional_networks = ["si", "viva-shared", " ", "supabase_default"]
+vault_env_file = "/work/safe/sampleapp/.env.dev"
+vault_repo = "sampleapp"
+vault_env = "dev"
+
+[[viva.tunnel.profiles.dev.routes]]
+hostname = "dev.example.app"
+service = "http://127.0.0.1:3000"
+"#,
+        )
+        .expect("write viva settings");
+
+        let settings = Settings::load(home.path(), None).expect("load settings");
+
+        assert_eq!(settings.viva.repo, "/work/viva");
+        assert_eq!(settings.viva.bin, "/work/viva/bin/viva");
+        assert_eq!(settings.viva.tunnel.default_profile, "dev");
+        let profile = settings.viva.tunnel.profiles.get("dev").expect("dev profile");
+        assert_eq!(profile.container_name, "viva-cloudflared-dev-browser");
+        assert_eq!(profile.additional_networks, vec!["si", "supabase_default"]);
+        assert_eq!(profile.routes.len(), 1);
+        assert_eq!(profile.routes[0].hostname, "dev.example.app");
+    }
+
+    #[test]
+    fn loads_viva_node_settings_module() {
+        let home = tempdir().expect("tempdir");
+        let settings_dir = home.path().join(".si").join("viva");
+        fs::create_dir_all(&settings_dir).expect("mkdir viva settings dir");
+        fs::write(
+            settings_dir.join("settings.toml"),
+            r#"
+[viva.node]
+default_node = "prod"
+
+[viva.node.entries.prod]
+host_env_key = "PROD_SSH_HOST"
+user_env_key = "PROD_SSH_USER"
+port_env_key = "PROD_SSH_PORT"
+strict_host_key_checking = "accept-new"
+control_path = "~/.ssh/cm-%C"
+
+[viva.node.entries.prod.protocols]
+ssh = true
+mosh = false
+rsync = true
+"#,
+        )
+        .expect("write viva settings");
+
+        let settings = Settings::load(home.path(), None).expect("load settings");
+
+        assert_eq!(settings.viva.node.default_node, "prod");
+        let entry = settings.viva.node.entries.get("prod").expect("prod node");
+        assert_eq!(entry.port, "22");
+        assert_eq!(entry.strict_host_key_checking, "accept-new");
+        assert_eq!(entry.control_path, "~/.ssh/cm-%C");
+        assert_eq!(entry.protocols.ssh, Some(true));
+        assert_eq!(entry.protocols.mosh, Some(false));
+        assert_eq!(entry.protocols.rsync, Some(true));
+    }
+
+    #[test]
+    fn loads_viva_node_bootstrap_settings_module() {
+        let home = tempdir().expect("tempdir");
+        let settings_dir = home.path().join(".si").join("viva");
+        fs::create_dir_all(&settings_dir).expect("mkdir viva settings dir");
+        fs::write(
+            settings_dir.join("settings.toml"),
+            r#"
+[viva.node.bootstrap]
+source_root = "/work/src"
+workspace_dir = "~/Work"
+repos = ["si", "safe", "si"]
+shell_profile = "~/.zshrc"
+env_file = "~/.si/bootstrap.env"
+github_token_key = "GH_PAT_AUREUMA"
+build_si = false
+pull_latest = false
+install_orbitals = ["remote-control", "surf"]
+"#,
+        )
+        .expect("write viva settings");
+
+        let settings = Settings::load(home.path(), None).expect("load settings");
+        let bootstrap = settings.viva.node.bootstrap;
+
+        assert_eq!(bootstrap.source_root, "/work/src");
+        assert_eq!(bootstrap.workspace_dir, "~/Work");
+        assert_eq!(bootstrap.repos, vec!["si", "safe"]);
+        assert_eq!(bootstrap.shell_profile, "~/.zshrc");
+        assert_eq!(bootstrap.env_file, "~/.si/bootstrap.env");
+        assert_eq!(bootstrap.github_token_key, "GH_PAT_AUREUMA");
+        assert_eq!(bootstrap.build_si, Some(false));
+        assert_eq!(bootstrap.pull_latest, Some(false));
+        assert_eq!(bootstrap.install_orbitals, vec!["remote-control", "surf"]);
     }
 }
