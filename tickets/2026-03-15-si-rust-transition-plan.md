@@ -262,6 +262,7 @@ Progress notes:
 - completed: transition tests for refresh success, unauthorized refresh revocation, and teardown completion on top of the Rust Fort model
 - completed: strict persisted Fort session-state read/write handling in Rust with atomic writes, permission checks, whitespace normalization, and RFC3339 expiry parsing/classification tests
 - completed: Rust CLI Fort session-state inspection/classification surface for exercising the new persisted-state path end-to-end without changing live Go refresh behavior yet
+- completed: initial cross-process Fort session mutation lock in Rust with explicit lock acquisition tests and non-blocking contention coverage
 
 ### Phase 6: Codex/dyad lifecycle migration
 
