@@ -402,6 +402,21 @@ enum DyadCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
+    Exec {
+        name: String,
+        #[arg(long, default_value = "actor")]
+        member: String,
+        #[arg(long, num_args = 1, default_value = "false", value_parser = clap::value_parser!(bool))]
+        tty: bool,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+    Cleanup {
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
 }
 
 #[allow(clippy::enum_variant_names)]
@@ -1456,6 +1471,10 @@ fn main() -> Result<()> {
                 run_dyad_container_action(&name, ContainerAction::Restart, docker_bin)?
             }
             DyadCommand::Remove { name, docker_bin } => run_dyad_remove(&name, docker_bin)?,
+            DyadCommand::Exec { name, member, tty, docker_bin, command } => {
+                run_dyad_exec(&name, &member, tty, docker_bin, command)?
+            }
+            DyadCommand::Cleanup { docker_bin } => run_dyad_cleanup(docker_bin)?,
         },
         Command::Codex { command } => match *command {
             CodexCommand::SpawnPlan {
@@ -2540,6 +2559,59 @@ fn run_dyad_remove(dyad: &str, docker_bin: Option<PathBuf>) -> Result<()> {
         }
         print!("{}", String::from_utf8_lossy(&output.stdout));
     }
+    Ok(())
+}
+
+fn run_dyad_exec(
+    dyad: &str,
+    member: &str,
+    tty: bool,
+    docker_bin: Option<PathBuf>,
+    command: Vec<String>,
+) -> Result<()> {
+    if command.is_empty() {
+        anyhow::bail!("exec command is required");
+    }
+    let member = member.trim();
+    if member.is_empty() {
+        anyhow::bail!("member is required");
+    }
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let container_name = si_rs_dyad::dyad_container_name(dyad, member);
+    let spec = ContainerExecSpec::new(container_name)
+        .user("si")
+        .interactive(true)
+        .tty(tty)
+        .command(command);
+    let command = docker_container_exec_command(docker_program.display().to_string(), &spec)?;
+    let output = ProcessRunner
+        .run(&command, &RunOptions { stdin: StdinBehavior::Inherit, ..RunOptions::default() })?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker exec failed: {}", stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+fn run_dyad_cleanup(docker_bin: Option<PathBuf>) -> Result<()> {
+    let items = read_dyad_containers(docker_bin.clone())?;
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let mut removed = 0;
+    for item in items {
+        if item.state == "running" {
+            continue;
+        }
+        let command =
+            docker_container_remove_command(docker_program.display().to_string(), item.name, true)?;
+        let output = ProcessRunner.run(&command, &RunOptions::default())?;
+        if output.status.success() {
+            removed += 1;
+        }
+    }
+    println!("removed={removed}");
     Ok(())
 }
 
