@@ -1,9 +1,11 @@
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
-use std::fs;
+use std::fs::{self, File, OpenOptions};
+#[cfg(unix)]
+use std::os::fd::AsRawFd;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
@@ -115,6 +117,34 @@ pub enum PersistedSessionError {
     InvalidAccessExpiry { value: String },
     #[error("invalid refresh expiry timestamp {value:?}")]
     InvalidRefreshExpiry { value: String },
+}
+
+#[derive(Debug, Error)]
+pub enum SessionLockError {
+    #[error("lock path required")]
+    MissingPath,
+    #[error("create lock directory: {0}")]
+    CreateDirectory(#[source] std::io::Error),
+    #[error("open lock file: {0}")]
+    Open(#[source] std::io::Error),
+    #[cfg(unix)]
+    #[error("lock session file: {0}")]
+    Lock(#[source] std::io::Error),
+    #[cfg(unix)]
+    #[error("unlock session file: {0}")]
+    Unlock(#[source] std::io::Error),
+}
+
+#[derive(Debug)]
+pub struct SessionMutationLock {
+    path: PathBuf,
+    file: File,
+}
+
+impl SessionMutationLock {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
 }
 
 impl PersistedSessionState {
@@ -277,6 +307,40 @@ pub fn classify_persisted_session_state(
     Ok(classify_session(Some(state.to_snapshot()?), now_unix))
 }
 
+pub fn acquire_session_lock(
+    path: impl AsRef<Path>,
+) -> Result<SessionMutationLock, SessionLockError> {
+    let path = clean_lock_path(path.as_ref())?;
+    let dir = path.parent().ok_or(SessionLockError::MissingPath)?;
+    fs::create_dir_all(dir).map_err(SessionLockError::CreateDirectory)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+        .map_err(SessionLockError::Open)?;
+    set_file_mode(path, 0o600).map_err(lock_mode_error)?;
+    lock_file(file, path.to_path_buf(), false)
+}
+
+pub fn try_acquire_session_lock(
+    path: impl AsRef<Path>,
+) -> Result<Option<SessionMutationLock>, SessionLockError> {
+    let path = clean_lock_path(path.as_ref())?;
+    let dir = path.parent().ok_or(SessionLockError::MissingPath)?;
+    fs::create_dir_all(dir).map_err(SessionLockError::CreateDirectory)?;
+    let file = OpenOptions::new()
+        .create(true)
+        .read(true)
+        .write(true)
+        .truncate(false)
+        .open(path)
+        .map_err(SessionLockError::Open)?;
+    set_file_mode(path, 0o600).map_err(lock_mode_error)?;
+    try_lock_file(file, path.to_path_buf())
+}
+
 fn clean_state_path(path: &Path) -> Result<&Path, SessionStateFileError> {
     if path.as_os_str().is_empty() {
         return Err(SessionStateFileError::MissingPath);
@@ -313,6 +377,76 @@ fn set_file_mode(path: &Path, mode: u32) -> Result<(), SessionStateFileError> {
     Ok(())
 }
 
+fn clean_lock_path(path: &Path) -> Result<&Path, SessionLockError> {
+    if path.as_os_str().is_empty() {
+        return Err(SessionLockError::MissingPath);
+    }
+    Ok(path)
+}
+
+fn lock_mode_error(err: SessionStateFileError) -> SessionLockError {
+    match err {
+        SessionStateFileError::SetPermissions(source) => SessionLockError::Open(source),
+        other => SessionLockError::Open(std::io::Error::other(other.to_string())),
+    }
+}
+
+#[cfg(unix)]
+fn lock_file(
+    file: File,
+    path: PathBuf,
+    non_blocking: bool,
+) -> Result<SessionMutationLock, SessionLockError> {
+    let operation = if non_blocking { libc::LOCK_EX | libc::LOCK_NB } else { libc::LOCK_EX };
+    let rc = unsafe { libc::flock(file.as_raw_fd(), operation) };
+    if rc != 0 {
+        return Err(SessionLockError::Lock(std::io::Error::last_os_error()));
+    }
+    Ok(SessionMutationLock { path, file })
+}
+
+#[cfg(unix)]
+fn try_lock_file(
+    file: File,
+    path: PathBuf,
+) -> Result<Option<SessionMutationLock>, SessionLockError> {
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+    if rc == 0 {
+        return Ok(Some(SessionMutationLock { path, file }));
+    }
+    let err = std::io::Error::last_os_error();
+    match err.raw_os_error() {
+        Some(libc::EWOULDBLOCK) => Ok(None),
+        _ => Err(SessionLockError::Lock(err)),
+    }
+}
+
+#[cfg(not(unix))]
+fn lock_file(
+    file: File,
+    path: PathBuf,
+    _non_blocking: bool,
+) -> Result<SessionMutationLock, SessionLockError> {
+    Ok(SessionMutationLock { path, file })
+}
+
+#[cfg(not(unix))]
+fn try_lock_file(
+    file: File,
+    path: PathBuf,
+) -> Result<Option<SessionMutationLock>, SessionLockError> {
+    Ok(Some(SessionMutationLock { path, file }))
+}
+
+impl Drop for SessionMutationLock {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        {
+            let _ = unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_UN) };
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -323,9 +457,9 @@ mod tests {
     use super::{
         PersistedSessionError, PersistedSessionState, RefreshOutcome, RefreshSuccess,
         RevocationReason, SessionSnapshot, SessionState, SessionStateFileError,
-        SessionTransitionError, apply_refresh_outcome, begin_refresh, begin_teardown,
-        classify_persisted_session_state, classify_session, complete_teardown,
-        load_persisted_session_state, save_persisted_session_state,
+        SessionTransitionError, acquire_session_lock, apply_refresh_outcome, begin_refresh,
+        begin_teardown, classify_persisted_session_state, classify_session, complete_teardown,
+        load_persisted_session_state, save_persisted_session_state, try_acquire_session_lock,
     };
 
     fn snapshot() -> SessionSnapshot {
@@ -512,5 +646,30 @@ mod tests {
             err,
             PersistedSessionError::InvalidAccessExpiry { value: "not-a-timestamp".to_owned() }
         );
+    }
+
+    #[test]
+    fn acquire_session_lock_sets_strict_file_mode() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("runtime.lock");
+
+        let lock = acquire_session_lock(&path).expect("acquire session lock");
+        assert_eq!(lock.path(), path.as_path());
+        #[cfg(unix)]
+        {
+            let mode = fs::metadata(&path).expect("stat lock").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
+    }
+
+    #[test]
+    fn try_acquire_session_lock_returns_none_while_lock_is_held() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("runtime.lock");
+
+        let _lock = acquire_session_lock(&path).expect("acquire first lock");
+        let second = try_acquire_session_lock(&path).expect("try acquire second lock");
+
+        assert!(second.is_none());
     }
 }
