@@ -1,0 +1,16 @@
+[package]
+name = "si-rs-command-manifest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+
+[dev-dependencies]
+regex.workspace = true
+
+[lib]
+path = "src/lib.rs"

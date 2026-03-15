@@ -11,6 +11,7 @@ anyhow.workspace = true
 clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+si-rs-command-manifest = { path = "../si-command-manifest" }
 si-rs-config = { path = "../si-config" }
 si-rs-core = { path = "../si-core" }
 

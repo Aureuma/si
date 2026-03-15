@@ -12,6 +12,7 @@ Current entrypoint:
 
 ```bash
 cargo run -p si-rs-cli -- version
+cargo run -p si-rs-cli -- help --format json
 cargo run -p si-rs-cli -- paths show --format json
 ```
 
