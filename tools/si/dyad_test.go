@@ -724,6 +724,38 @@ func TestResolveDyadContainerNameFallsBackToGoNaming(t *testing.T) {
 	}
 }
 
+func TestBuildDyadPeekFallbackPlanUsesResolvedNames(t *testing.T) {
+	prev := readRustDyadStatusForLookup
+	t.Cleanup(func() {
+		readRustDyadStatusForLookup = prev
+	})
+	readRustDyadStatusForLookup = func(dyad string) (*rustDyadStatus, bool, error) {
+		return &rustDyadStatus{
+			Dyad: dyad,
+			Actor: &rustDyadContainerStatusRef{
+				Name: "si-dyad-atlas-actor-rust",
+			},
+			Critic: &rustDyadContainerStatusRef{
+				Name: "si-dyad-atlas-critic-rust",
+			},
+		}, true, nil
+	}
+
+	plan, err := buildDyadPeekFallbackPlan("atlas", "atlas", "")
+	if err != nil {
+		t.Fatalf("buildDyadPeekFallbackPlan: %v", err)
+	}
+	if plan.ActorContainerName != "si-dyad-atlas-actor-rust" || plan.CriticContainerName != "si-dyad-atlas-critic-rust" {
+		t.Fatalf("unexpected container names: %+v", plan)
+	}
+	if plan.PeekSessionName != "si-dyad-peek-atlas" {
+		t.Fatalf("unexpected peek session: %+v", plan)
+	}
+	if !strings.Contains(plan.ActorAttachCommand, "si-dyad-atlas-actor-rust") {
+		t.Fatalf("unexpected actor attach command %q", plan.ActorAttachCommand)
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)
