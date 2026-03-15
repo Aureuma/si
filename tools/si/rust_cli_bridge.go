@@ -210,6 +210,18 @@ type rustDyadContainerStatusRef struct {
 	Status string `json:"status"`
 }
 
+type rustDyadPeekPlan struct {
+	Dyad                string `json:"dyad"`
+	Member              string `json:"member"`
+	ActorContainerName  string `json:"actor_container_name"`
+	CriticContainerName string `json:"critic_container_name"`
+	ActorSessionName    string `json:"actor_session_name"`
+	CriticSessionName   string `json:"critic_session_name"`
+	PeekSessionName     string `json:"peek_session_name"`
+	ActorAttachCommand  string `json:"actor_attach_command"`
+	CriticAttachCommand string `json:"critic_attach_command"`
+}
+
 type rustVaultTrustLookup struct {
 	Found               bool   `json:"found"`
 	Matches             bool   `json:"matches"`
@@ -433,6 +445,29 @@ func maybeReadRustDyadStatus(dyad string) (*rustDyadStatus, bool, error) {
 		return nil, false, fmt.Errorf("decode rust dyad status: %w", err)
 	}
 	return &status, true, nil
+}
+
+func maybeReadRustDyadPeekPlan(dyad string, member string, session string) (*rustDyadPeekPlan, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{
+		"dyad", "peek-plan", strings.TrimSpace(dyad),
+		"--member", strings.TrimSpace(member),
+		"--format", "json",
+	}
+	if value := strings.TrimSpace(session); value != "" {
+		args = append(args, "--session", value)
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var plan rustDyadPeekPlan
+	if err := json.Unmarshal(output, &plan); err != nil {
+		return nil, false, fmt.Errorf("decode rust dyad peek plan: %w", err)
+	}
+	return &plan, true, nil
 }
 
 func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
