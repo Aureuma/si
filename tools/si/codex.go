@@ -2403,13 +2403,14 @@ func cmdCodexClone(args []string) {
 	if repo == "" {
 		fatal(fmt.Errorf("repo required"))
 	}
+	containerName := ""
 	if result, delegated, err := maybeRunRustCodexCloneResult(name, repo, strings.TrimSpace(*ghPat)); err != nil {
 		fatal(err)
 	} else if delegated {
 		if strings.TrimSpace(result.Output) != "" {
 			fmt.Print(result.Output)
 		}
-		containerName := strings.TrimSpace(result.ContainerName)
+		containerName = strings.TrimSpace(result.ContainerName)
 		if containerName == "" {
 			containerName, err = resolveCodexContainerName(name)
 			if err != nil {
@@ -2419,7 +2420,7 @@ func cmdCodexClone(args []string) {
 		successf("repo %s cloned in %s", repo, containerName)
 		return
 	} else {
-		containerName, err := resolveCodexContainerName(name)
+		containerName, err = resolveCodexContainerName(name)
 		if err != nil {
 			fatal(err)
 		}
@@ -2448,10 +2449,6 @@ func cmdCodexClone(args []string) {
 		if err := execDockerCLI(execArgs...); err != nil {
 			fatal(err)
 		}
-	}
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		fatal(err)
 	}
 	successf("repo %s cloned in %s", repo, containerName)
 }
