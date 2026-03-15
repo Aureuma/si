@@ -1956,6 +1956,127 @@ fn codex_status_read_returns_parsed_app_server_usage() {
 }
 
 #[test]
+fn codex_lifecycle_smoke_works_with_fake_docker() {
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let state_path = script_dir.path().join("state.txt");
+    let docker_bin = script_dir.path().join("docker");
+    let primary_reset = Local::now().timestamp() + 3600;
+    let secondary_reset = Local::now().timestamp() + 7200;
+    let rate_json = serde_json::json!({
+        "id": 2,
+        "result": {
+            "rateLimits": {
+                "primary": {
+                    "usedPercent": 25,
+                    "windowDurationMins": 300,
+                    "resetsAt": primary_reset,
+                },
+                "secondary": {
+                    "usedPercent": 12,
+                    "windowDurationMins": 10080,
+                    "resetsAt": secondary_reset,
+                }
+            }
+        }
+    })
+    .to_string();
+    let account_json = serde_json::json!({
+        "id": 3,
+        "result": {
+            "account": {
+                "type": "chatgpt",
+                "email": "ferma@example.com",
+                "planType": "pro"
+            }
+        }
+    })
+    .to_string();
+    let config_json = serde_json::json!({
+        "id": 4,
+        "result": {
+            "config": {
+                "model": "gpt-5.2-codex",
+                "model_reasoning_effort": "medium"
+            }
+        }
+    })
+    .to_string();
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nSTATE='{}'\ncmd=\"$1\"\nshift\ncase \"$cmd\" in\n  run)\n    printf '%s\\n' 'running' > \"$STATE\"\n    printf '%s\\n' 'container-id-123'\n    ;;\n  start)\n    printf '%s\\n' 'running' > \"$STATE\"\n    printf '%s\\n' 'si-codex-ferma'\n    ;;\n  stop)\n    printf '%s\\n' 'stopped' > \"$STATE\"\n    printf '%s\\n' 'si-codex-ferma'\n    ;;\n  logs)\n    printf '%s\\n' 'log line'\n    ;;\n  inspect)\n    printf '%s\\n' 'ferma'\n    ;;\n  rm)\n    printf '%s\\n' 'removed' > \"$STATE\"\n    printf '%s\\n' 'si-codex-ferma'\n    ;;\n  volume)\n    shift\n    printf '%s\\n' 'removed-volume'\n    ;;\n  exec)\n    cat >/dev/null\n    if [ \"$1\" = \"--user\" ]; then shift 2; fi\n    while [ $# -gt 0 ]; do\n      case \"$1\" in\n        -e|-w) shift 2 ;;\n        -i|-t) shift ;;\n        si-codex-*) shift; break ;;\n        *) shift ;;\n      esac\n    done\n    if [ \"$1\" = \"/usr/local/bin/si-entrypoint\" ]; then\n      printf '%s\\n' 'cloned'\n    else\n      printf '%s\\n' '{}' '{}' '{}'\n    fi\n    ;;\n  *)\n    printf 'unexpected docker command: %s\\n' \"$cmd\" >&2\n    exit 1\n    ;;\nesac\n",
+            state_path.display(),
+            rate_json,
+            account_json,
+            config_json
+        ),
+    );
+
+    cargo_bin()
+        .args(["codex", "spawn-start", "--name", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .args(["--cmd", "echo hello", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
+
+    let status_output = cargo_bin()
+        .args(["codex", "status-read", "ferma", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status: Value = serde_json::from_slice(&status_output).expect("json output");
+    assert_eq!(status["account_email"], "ferma@example.com");
+    assert_eq!(status["model"], "gpt-5.2-codex");
+
+    let logs_output = cargo_bin()
+        .args(["codex", "logs", "ferma", "--tail", "10", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(logs_output).expect("utf8 output").contains("log line"));
+
+    cargo_bin()
+        .args(["codex", "stop", "ferma", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "stopped\n");
+
+    cargo_bin()
+        .args(["codex", "start", "ferma", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
+
+    let clone_output = cargo_bin()
+        .args(["codex", "clone", "ferma", "acme/repo", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(clone_output).expect("utf8 output").contains("cloned"));
+
+    cargo_bin()
+        .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "removed\n");
+}
+
+#[test]
 fn codex_respawn_plan_returns_sorted_unique_remove_targets() {
     let output = cargo_bin()
         .args([
