@@ -968,6 +968,37 @@ func TestMaybeRunRustDyadListDelegatesAndReturnsOutput(t *testing.T) {
 	}
 }
 
+func TestMaybeRunRustDyadStatusDelegatesAndReturnsOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'dyad-status'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustDyadStatus("alpha", true)
+	if err != nil {
+		t.Fatalf("maybeRunRustDyadStatus: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected dyad status to delegate to Rust")
+	}
+	if strings.TrimSpace(output) != "dyad-status" {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\nstatus\nalpha\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeReadRustDyadStatusDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
