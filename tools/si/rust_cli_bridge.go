@@ -383,6 +383,21 @@ func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string
 	return &lookup, true, nil
 }
 
+func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return fortProfileSessionState{}, false, nil
+	}
+	output, err := runRustCLIJSON("fort", "session-state", "show", "--path", strings.TrimSpace(path), "--format", "json")
+	if err != nil {
+		return fortProfileSessionState{}, false, err
+	}
+	var state fortProfileSessionState
+	if err := json.Unmarshal(output, &state); err != nil {
+		return fortProfileSessionState{}, false, fmt.Errorf("decode rust fort session state: %w", err)
+	}
+	return state, true, nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil
