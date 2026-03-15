@@ -1118,6 +1118,30 @@ func dyadContainerState(info *types.ContainerJSON) string {
 	return strings.TrimSpace(info.State.Status)
 }
 
+var readRustDyadStatusForLookup = maybeReadRustDyadStatus
+
+func resolveDyadContainerName(dyad string, member string) (string, error) {
+	member, err := normalizeDyadMember(member, "")
+	if err != nil {
+		return "", err
+	}
+	if rustStatus, delegated, err := readRustDyadStatusForLookup(dyad); err != nil {
+		return "", err
+	} else if delegated {
+		switch member {
+		case "actor":
+			if rustStatus.Actor != nil && strings.TrimSpace(rustStatus.Actor.Name) != "" {
+				return strings.TrimSpace(rustStatus.Actor.Name), nil
+			}
+		case "critic":
+			if rustStatus.Critic != nil && strings.TrimSpace(rustStatus.Critic.Name) != "" {
+				return strings.TrimSpace(rustStatus.Critic.Name), nil
+			}
+		}
+	}
+	return shared.DyadContainerName(dyad, member), nil
+}
+
 func cmdDyadExec(args []string) {
 	memberProvided := flagProvided(args, "member")
 	fs := flag.NewFlagSet("dyad exec", flag.ExitOnError)
@@ -1187,7 +1211,10 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 		return err
 	}
 	defer client.Close()
-	containerName := shared.DyadContainerName(dyad, member)
+	containerName, err := resolveDyadContainerName(dyad, member)
+	if err != nil {
+		return err
+	}
 	id, info, err := client.ContainerByName(context.Background(), containerName)
 	if err != nil {
 		return err
@@ -1260,7 +1287,10 @@ func cmdDyadLogs(args []string) {
 		fatal(err)
 	}
 	defer client.Close()
-	containerName := shared.DyadContainerName(dyad, memberVal)
+	containerName, err := resolveDyadContainerName(dyad, memberVal)
+	if err != nil {
+		fatal(err)
+	}
 	id, _, err := client.ContainerByName(context.Background(), containerName)
 	if err != nil {
 		fatal(err)
@@ -1418,8 +1448,14 @@ func dyadContainerTargets(ctx context.Context, client *shared.Client, dyad strin
 	if dyad == "" {
 		return nil, errors.New("dyad required")
 	}
-	actorName := shared.DyadContainerName(dyad, "actor")
-	criticName := shared.DyadContainerName(dyad, "critic")
+	actorName, err := resolveDyadContainerName(dyad, "actor")
+	if err != nil {
+		return nil, err
+	}
+	criticName, err := resolveDyadContainerName(dyad, "critic")
+	if err != nil {
+		return nil, err
+	}
 	actorID, _, err := client.ContainerByName(ctx, actorName)
 	if err != nil {
 		return nil, err

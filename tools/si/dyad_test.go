@@ -641,6 +641,60 @@ func TestBuildDyadStatusResult(t *testing.T) {
 	}
 }
 
+func TestResolveDyadContainerNameUsesRustStatusWhenConfigured(t *testing.T) {
+	prev := readRustDyadStatusForLookup
+	t.Cleanup(func() {
+		readRustDyadStatusForLookup = prev
+	})
+	readRustDyadStatusForLookup = func(dyad string) (*rustDyadStatus, bool, error) {
+		if dyad != "atlas" {
+			t.Fatalf("unexpected dyad %q", dyad)
+		}
+		return &rustDyadStatus{
+			Dyad: "atlas",
+			Actor: &rustDyadContainerStatusRef{
+				Name: "si-dyad-atlas-actor-rust",
+			},
+			Critic: &rustDyadContainerStatusRef{
+				Name: "si-dyad-atlas-critic-rust",
+			},
+		}, true, nil
+	}
+
+	actorName, err := resolveDyadContainerName("atlas", "actor")
+	if err != nil {
+		t.Fatalf("resolveDyadContainerName actor: %v", err)
+	}
+	if actorName != "si-dyad-atlas-actor-rust" {
+		t.Fatalf("unexpected actor name %q", actorName)
+	}
+	criticName, err := resolveDyadContainerName("atlas", "critic")
+	if err != nil {
+		t.Fatalf("resolveDyadContainerName critic: %v", err)
+	}
+	if criticName != "si-dyad-atlas-critic-rust" {
+		t.Fatalf("unexpected critic name %q", criticName)
+	}
+}
+
+func TestResolveDyadContainerNameFallsBackToGoNaming(t *testing.T) {
+	prev := readRustDyadStatusForLookup
+	t.Cleanup(func() {
+		readRustDyadStatusForLookup = prev
+	})
+	readRustDyadStatusForLookup = func(dyad string) (*rustDyadStatus, bool, error) {
+		return &rustDyadStatus{Dyad: dyad}, true, nil
+	}
+
+	name, err := resolveDyadContainerName("atlas", "actor")
+	if err != nil {
+		t.Fatalf("resolveDyadContainerName: %v", err)
+	}
+	if name != shared.DyadContainerName("atlas", "actor") {
+		t.Fatalf("expected Go fallback name, got %q", name)
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)
