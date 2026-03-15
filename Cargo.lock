@@ -582,6 +582,7 @@ dependencies = [
  "si-rs-process",
  "si-rs-provider-catalog",
  "si-rs-runtime",
+ "si-rs-vault",
  "tempfile",
 ]
 
