@@ -632,6 +632,11 @@ func loadWarmWeeklyState() (warmWeeklyState, error) {
 	if err != nil {
 		return warmWeeklyState{}, err
 	}
+	if state, delegated, err := maybeLoadRustWarmupState(path); err != nil {
+		return warmWeeklyState{}, err
+	} else if delegated {
+		return state, nil
+	}
 	raw, err := readLocalFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -674,6 +679,11 @@ func saveWarmWeeklyState(state warmWeeklyState) error {
 	path, err := warmWeeklyStatePath()
 	if err != nil {
 		return err
+	}
+	if delegated, err := maybeSaveRustWarmupState(path, state); err != nil {
+		return err
+	} else if delegated {
+		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err

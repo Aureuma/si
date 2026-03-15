@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use tempfile::NamedTempFile;
 use thiserror::Error;
 
 pub const WARMUP_STATE_VERSION: i32 = 3;
@@ -67,6 +70,18 @@ pub enum WarmupStateError {
     Read(#[source] std::io::Error),
     #[error("parse state file: {0}")]
     Parse(#[source] serde_json::Error),
+    #[error("create state directory: {0}")]
+    CreateDirectory(#[source] std::io::Error),
+    #[error("serialize state file: {0}")]
+    Serialize(#[source] serde_json::Error),
+    #[error("create temp state file: {0}")]
+    CreateTemp(#[source] std::io::Error),
+    #[error("write temp state file: {0}")]
+    WriteTemp(#[source] std::io::Error),
+    #[error("persist temp state file: {0}")]
+    Persist(#[source] std::io::Error),
+    #[error("set state file permissions: {0}")]
+    SetPermissions(#[source] std::io::Error),
 }
 
 pub fn default_state_path(home: Option<&Path>) -> Result<PathBuf, WarmupStateError> {
@@ -100,6 +115,25 @@ pub fn load_state(path: impl AsRef<Path>) -> Result<WarmupState, WarmupStateErro
     let raw = fs::read(path).map_err(WarmupStateError::Read)?;
     let state: RawWarmupState = serde_json::from_slice(&raw).map_err(WarmupStateError::Parse)?;
     Ok(normalize_state(state))
+}
+
+pub fn save_state(path: impl AsRef<Path>, state: &WarmupState) -> Result<(), WarmupStateError> {
+    let path = clean_path(path.as_ref())?;
+    let dir = path.parent().ok_or(WarmupStateError::MissingPath)?;
+    fs::create_dir_all(dir).map_err(WarmupStateError::CreateDirectory)?;
+
+    let mut payload =
+        serde_json::to_vec_pretty(&state.normalized()).map_err(WarmupStateError::Serialize)?;
+    payload.push(b'\n');
+
+    let mut tmp = NamedTempFile::new_in(dir).map_err(WarmupStateError::CreateTemp)?;
+    set_file_mode(tmp.path(), 0o600).map_err(WarmupStateError::SetPermissions)?;
+    use std::io::Write as _;
+    tmp.write_all(&payload).map_err(WarmupStateError::WriteTemp)?;
+    tmp.flush().map_err(WarmupStateError::WriteTemp)?;
+    tmp.persist(path).map_err(|err| WarmupStateError::Persist(err.error))?;
+    set_file_mode(path, 0o600).map_err(WarmupStateError::SetPermissions)?;
+    Ok(())
 }
 
 pub fn render_state_text(state: &WarmupState, now: DateTime<Utc>) -> String {
@@ -183,6 +217,20 @@ fn normalize_state(raw: RawWarmupState) -> WarmupState {
     state
 }
 
+impl WarmupState {
+    fn normalized(&self) -> Self {
+        Self {
+            version: self.version.max(WARMUP_STATE_VERSION),
+            updated_at: self.updated_at.trim().to_owned(),
+            profiles: self
+                .profiles
+                .iter()
+                .map(|(key, row)| (key.trim().to_owned(), row.normalized()))
+                .collect(),
+        }
+    }
+}
+
 impl WarmupProfileState {
     fn normalized(&self) -> Self {
         Self {
@@ -258,13 +306,28 @@ fn format_next_due(raw: &str, now: DateTime<Utc>) -> String {
     }
 }
 
+fn set_file_mode(path: &Path, mode: u32) -> Result<(), std::io::Error> {
+    #[cfg(unix)]
+    {
+        fs::set_permissions(path, PermissionsExt::from_mode(mode))?;
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, mode);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        WARMUP_STATE_VERSION, WarmupProfileState, default_state_path, load_state, render_state_text,
+        WARMUP_STATE_VERSION, WarmupProfileState, default_state_path, load_state,
+        render_state_text, save_state,
     };
     use chrono::{TimeZone, Utc};
     use std::fs;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
     use tempfile::tempdir;
 
     #[test]
@@ -351,5 +414,36 @@ mod tests {
         let dir = tempdir().expect("tempdir");
         let path = default_state_path(Some(dir.path())).expect("path");
         assert!(path.ends_with(".si/warmup/state.json"));
+    }
+
+    #[test]
+    fn save_state_round_trips_with_strict_permissions() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("state.json");
+        let mut state = super::WarmupState {
+            version: 0,
+            updated_at: " 2030-03-19T12:00:00Z ".to_owned(),
+            profiles: Default::default(),
+        };
+        state.profiles.insert(
+            " ferma ".to_owned(),
+            WarmupProfileState {
+                profile_id: " ferma ".to_owned(),
+                last_result: " ready ".to_owned(),
+                ..WarmupProfileState::default()
+            },
+        );
+
+        save_state(&path, &state).expect("save state");
+        let loaded = load_state(&path).expect("load state");
+        assert_eq!(loaded.version, WARMUP_STATE_VERSION);
+        assert_eq!(loaded.updated_at, "2030-03-19T12:00:00Z");
+        assert_eq!(loaded.profiles["ferma"].profile_id, "ferma");
+        assert_eq!(loaded.profiles["ferma"].last_result, "ready");
+        #[cfg(unix)]
+        {
+            let mode = fs::metadata(&path).expect("stat state").permissions().mode() & 0o777;
+            assert_eq!(mode, 0o600);
+        }
     }
 }

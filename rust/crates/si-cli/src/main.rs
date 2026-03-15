@@ -35,8 +35,8 @@ use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as par
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
-    default_state_path as default_warmup_state_path, load_state as load_warmup_state,
-    render_state_text as render_warmup_state_text,
+    WarmupState, default_state_path as default_warmup_state_path, load_state as load_warmup_state,
+    render_state_text as render_warmup_state_text, save_state as save_warmup_state,
 };
 use std::fmt;
 use std::io::{self, Read};
@@ -855,6 +855,20 @@ enum WarmupCommand {
         home: Option<PathBuf>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+    State {
+        #[command(subcommand)]
+        command: WarmupStateCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WarmupStateCommand {
+    Write {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        state_json: String,
     },
 }
 
@@ -1924,6 +1938,11 @@ fn main() -> Result<()> {
         },
         Command::Warmup { command } => match command {
             WarmupCommand::Status { path, home, format } => run_warmup_status(path, home, format)?,
+            WarmupCommand::State { command } => match command {
+                WarmupStateCommand::Write { path, state_json } => {
+                    write_warmup_state(path, &state_json)?
+                }
+            },
         },
         Command::Vault { command } => match command {
             VaultCommand::Trust { command } => match command {
@@ -4121,6 +4140,12 @@ fn run_warmup_status(
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
         OutputFormat::Text => print!("{}", render_warmup_state_text(&state, chrono::Utc::now())),
     }
+    Ok(())
+}
+
+fn write_warmup_state(path: PathBuf, state_json: &str) -> Result<()> {
+    let state: WarmupState = serde_json::from_str(state_json)?;
+    save_warmup_state(path, &state)?;
     Ok(())
 }
 
