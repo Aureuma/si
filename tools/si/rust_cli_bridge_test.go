@@ -299,6 +299,39 @@ func TestMaybeLoadRustWarmupStateDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeSaveRustWarmupStateDelegatesAndWritesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeSaveRustWarmupState("/tmp/warmup-state.json", warmWeeklyState{
+		Version: 3,
+		Profiles: map[string]*warmWeeklyProfileState{
+			"ferma": {ProfileID: "ferma", LastResult: "ready"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("maybeSaveRustWarmupState: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup state save to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nstate\nwrite\n--path\n/tmp/warmup-state.json\n--state-json\n") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

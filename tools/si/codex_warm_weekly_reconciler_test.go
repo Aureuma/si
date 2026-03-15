@@ -272,3 +272,65 @@ func TestMaybeAutoRepairWarmupSchedulerPersistsMarkerFromCachedAuth(t *testing.T
 		t.Fatalf("expected autostart marker to be written, got %v", err)
 	}
 }
+
+func TestLoadWarmWeeklyStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"version\":3,\"profiles\":{\"ferma\":{\"profile_id\":\"ferma\",\"last_result\":\"ready\"}}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	state, err := loadWarmWeeklyState()
+	if err != nil {
+		t.Fatalf("loadWarmWeeklyState: %v", err)
+	}
+	if state.Version != 3 || state.Profiles["ferma"].LastResult != "ready" {
+		t.Fatalf("unexpected state: %+v", state)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nstatus\n--path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
+func TestSaveWarmWeeklyStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	err := saveWarmWeeklyState(warmWeeklyState{
+		Version: 3,
+		Profiles: map[string]*warmWeeklyProfileState{
+			"ferma": {ProfileID: "ferma", LastResult: "ready"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("saveWarmWeeklyState: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nstate\nwrite\n--path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}

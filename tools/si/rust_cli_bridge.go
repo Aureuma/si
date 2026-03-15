@@ -812,6 +812,24 @@ func maybeLoadRustWarmupState(path string) (warmWeeklyState, bool, error) {
 	return state, true, nil
 }
 
+func maybeSaveRustWarmupState(path string, state warmWeeklyState) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return false, fmt.Errorf("encode rust warmup state: %w", err)
+	}
+	if _, err := runRustCLIText(
+		"warmup", "state", "write",
+		"--path", strings.TrimSpace(path),
+		"--state-json", string(raw),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return fortProfileSessionState{}, false, nil
