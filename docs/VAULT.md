@@ -108,6 +108,7 @@ si vault hooks install
 ```
 
 The hook runs `si vault check --staged` and blocks commits if plaintext values are found in `.env*` files.
+It resolves `si` in this order: `SI_BIN`, a repo-local `./si`, then `si` on `PATH`.
 
 ## Commands
 

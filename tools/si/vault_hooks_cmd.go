@@ -76,8 +76,7 @@ func cmdVaultHooksInstall(args []string) {
 	}
 
 	hookPath := filepath.Join(hooksDir, "pre-commit")
-	exe, _ := os.Executable()
-	script := renderVaultPreCommitHook(exe)
+	script := renderVaultPreCommitHook()
 
 	if err := writeHookFile(hookPath, script, *force); err != nil {
 		fatal(err)
@@ -162,22 +161,18 @@ func cmdVaultHooksUninstall(args []string) {
 	fmt.Printf("removed: %s\n", filepath.Clean(hookPath))
 }
 
-func renderVaultPreCommitHook(selfExe string) string {
-	selfExe = strings.TrimSpace(selfExe)
+func renderVaultPreCommitHook() string {
 	var b strings.Builder
 	b.WriteString("#!/bin/sh\n")
 	b.WriteString("set -e\n")
-	b.WriteString("# si-vault:hook pre-commit v1\n")
-	if selfExe != "" {
-		b.WriteString("SI_BIN_DEFAULT=")
-		b.WriteString(shellSingleQuote(selfExe))
-		b.WriteString("\n")
-	} else {
-		b.WriteString("SI_BIN_DEFAULT=\n")
-	}
-	b.WriteString("SI_BIN=${SI_BIN:-$SI_BIN_DEFAULT}\n")
-	b.WriteString("if [ -n \"$SI_BIN\" ] && [ -x \"$SI_BIN\" ]; then\n")
+	b.WriteString("# si-vault:hook pre-commit v2\n")
+	b.WriteString("if [ -n \"${SI_BIN:-}\" ] && [ -x \"$SI_BIN\" ]; then\n")
 	b.WriteString("  exec \"$SI_BIN\" vault check --staged --all\n")
+	b.WriteString("fi\n")
+	b.WriteString("if repo_root=$(git rev-parse --show-toplevel 2>/dev/null); then\n")
+	b.WriteString("  if [ -x \"$repo_root/si\" ]; then\n")
+	b.WriteString("    exec \"$repo_root/si\" vault check --staged --all\n")
+	b.WriteString("  fi\n")
 	b.WriteString("fi\n")
 	b.WriteString("if command -v si >/dev/null 2>&1; then\n")
 	b.WriteString("  exec si vault check --staged --all\n")
@@ -189,7 +184,7 @@ func renderVaultPreCommitHook(selfExe string) string {
 
 func isVaultHookScript(data []byte) bool {
 	txt := string(data)
-	return strings.Contains(txt, "si-vault:hook pre-commit v1")
+	return strings.Contains(txt, "si-vault:hook pre-commit v")
 }
 
 func writeHookFile(path string, contents string, force bool) error {
