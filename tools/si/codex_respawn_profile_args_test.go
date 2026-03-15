@@ -69,3 +69,42 @@ func TestNormalizeRespawnSpawnProfileArgs_PreservesExplicitProfileFlag(t *testin
 		}
 	}
 }
+
+func TestApplyRustCodexRespawnPlanUsesRustEffectiveNameProfileAndTargets(t *testing.T) {
+	filtered, name, profile, targets := applyRustCodexRespawnPlan(
+		[]string{"--detach=false", "--profile="},
+		"custom",
+		"",
+		[]string{"custom"},
+		&rustCodexRespawnPlan{
+			EffectiveName: "profile-alpha",
+			ProfileID:     "profile-alpha",
+			RemoveTargets: []string{"alpha", "profile-alpha", "", "alpha"},
+		},
+		func(string) (string, bool) { return "", false },
+	)
+	if name != "profile-alpha" {
+		t.Fatalf("unexpected name %q", name)
+	}
+	if profile != "profile-alpha" {
+		t.Fatalf("unexpected profile %q", profile)
+	}
+	wantFiltered := []string{"--detach=false", "--profile", "profile-alpha"}
+	if len(filtered) != len(wantFiltered) {
+		t.Fatalf("unexpected filtered len=%d want=%d (%v)", len(filtered), len(wantFiltered), filtered)
+	}
+	for i := range wantFiltered {
+		if filtered[i] != wantFiltered[i] {
+			t.Fatalf("unexpected filtered[%d]=%q want=%q", i, filtered[i], wantFiltered[i])
+		}
+	}
+	wantTargets := []string{"alpha", "profile-alpha"}
+	if len(targets) != len(wantTargets) {
+		t.Fatalf("unexpected targets len=%d want=%d (%v)", len(targets), len(wantTargets), targets)
+	}
+	for i := range wantTargets {
+		if targets[i] != wantTargets[i] {
+			t.Fatalf("unexpected targets[%d]=%q want=%q", i, targets[i], wantTargets[i])
+		}
+	}
+}

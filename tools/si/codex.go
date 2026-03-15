@@ -841,7 +841,7 @@ func cmdCodexRespawn(args []string) {
 	if rustPlan, delegated, err := maybeBuildRustCodexRespawnPlan(name, profileKey, profileContainers); err != nil {
 		fatal(err)
 	} else if delegated && rustPlan != nil {
-		targets = append([]string(nil), rustPlan.RemoveTargets...)
+		filtered, name, profileKey, targets = applyRustCodexRespawnPlan(filtered, name, profileKey, targets, rustPlan, resolveCodexProfileID)
 	}
 	for _, target := range targets {
 		removeArgs := []string{target}
@@ -888,6 +888,68 @@ func normalizeRespawnSpawnProfileArgs(
 		out = append(out, "--profile=")
 	}
 	return out, ""
+}
+
+func applyRustCodexRespawnPlan(
+	filtered []string,
+	name string,
+	profileKey string,
+	targets []string,
+	plan *rustCodexRespawnPlan,
+	resolveProfileID func(string) (string, bool),
+) ([]string, string, string, []string) {
+	nextFiltered := append([]string(nil), filtered...)
+	nextName := strings.TrimSpace(name)
+	nextProfile := strings.TrimSpace(profileKey)
+	nextTargets := append([]string(nil), targets...)
+	if plan == nil {
+		return nextFiltered, nextName, nextProfile, nextTargets
+	}
+	if value := strings.TrimSpace(plan.EffectiveName); value != "" {
+		nextName = value
+	}
+	if value := strings.TrimSpace(plan.ProfileID); value != "" {
+		nextProfile = value
+	}
+	nextTargets = nextTargets[:0]
+	seenTargets := map[string]struct{}{}
+	for _, target := range plan.RemoveTargets {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		if _, exists := seenTargets[target]; exists {
+			continue
+		}
+		seenTargets[target] = struct{}{}
+		nextTargets = append(nextTargets, target)
+	}
+	nextFiltered = stripFlagWithValue(nextFiltered, "profile")
+	nextFiltered, nextProfile = normalizeRespawnSpawnProfileArgs(nextFiltered, nextName, nextProfile, resolveProfileID)
+	return nextFiltered, nextName, nextProfile, nextTargets
+}
+
+func stripFlagWithValue(args []string, name string) []string {
+	short := "-" + name
+	long := "--" + name
+	shortEq := short + "="
+	longEq := long + "="
+	out := make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == short, arg == long:
+			if i+1 < len(args) {
+				i++
+			}
+			continue
+		case strings.HasPrefix(arg, shortEq), strings.HasPrefix(arg, longEq):
+			continue
+		default:
+			out = append(out, arg)
+		}
+	}
+	return out
 }
 
 func cmdCodexList(args []string) {
