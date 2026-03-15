@@ -122,6 +122,13 @@ type rustCodexContainerActionResult struct {
 	Output        string `json:"output"`
 }
 
+type rustCodexCloneResult struct {
+	Name          string `json:"name"`
+	Repo          string `json:"repo"`
+	ContainerName string `json:"container_name"`
+	Output        string `json:"output"`
+}
+
 type rustCodexStatusRead struct {
 	Source            string  `json:"source,omitempty"`
 	Raw               string  `json:"raw,omitempty"`
@@ -699,6 +706,25 @@ func maybeRunRustCodexClone(name string, repo string, ghPAT string) (string, boo
 		return "", false, err
 	}
 	return output, true, nil
+}
+
+func maybeRunRustCodexCloneResult(name string, repo string, ghPAT string) (*rustCodexCloneResult, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{"codex", "clone", strings.TrimSpace(name), strings.TrimSpace(repo), "--format", "json"}
+	if value := strings.TrimSpace(ghPAT); value != "" {
+		args = append(args, "--gh-pat", value)
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var result rustCodexCloneResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex clone result: %w", err)
+	}
+	return &result, true, nil
 }
 
 func maybeRunRustCodexExec(name string, workdir string, interactive bool, tty bool, env []string, cmd []string) (string, bool, error) {
