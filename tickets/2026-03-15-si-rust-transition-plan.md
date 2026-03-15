@@ -189,6 +189,7 @@ Progress notes:
 - completed: Rust `providers characteristics` surface with JSON coverage and provider-id alias handling
 - completed: Go compatibility bridge for `si providers characteristics`, including `--json` passthrough and focused delegation tests
 - completed: Rust provider catalog snapshot helpers with translated alias/capability/probe assertions from Go provider tests
+- completed: Rust `codex spawn-plan` CLI surface with binary-level tests for planner output, mount assembly, and env defaults
 
 ### Phase 4: Runtime substrate migration
 

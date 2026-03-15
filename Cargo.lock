@@ -461,10 +461,12 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "si-rs-codex",
  "si-rs-command-manifest",
  "si-rs-config",
  "si-rs-core",
  "si-rs-provider-catalog",
+ "si-rs-runtime",
  "tempfile",
 ]
 
