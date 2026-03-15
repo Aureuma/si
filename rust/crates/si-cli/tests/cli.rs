@@ -14,6 +14,42 @@ fn version_matches_go_repo_version() {
 }
 
 #[test]
+fn help_json_lists_known_root_commands() {
+    let output = cargo_bin()
+        .args(["help", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let commands = parsed["commands"].as_array().expect("commands array should be present");
+
+    assert!(commands.iter().any(|entry| entry["name"] == "github"));
+    assert!(commands.iter().any(|entry| entry["name"] == "spawn"));
+    assert!(!commands.iter().any(|entry| entry["name"] == "__fort-runtime-agent"));
+}
+
+#[test]
+fn help_json_for_specific_command_includes_aliases() {
+    let output = cargo_bin()
+        .args(["help", "remote-control", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let commands = parsed["commands"].as_array().expect("commands array should be present");
+
+    assert_eq!(commands.len(), 1);
+    assert_eq!(commands[0]["name"], "remote-control");
+    assert_eq!(commands[0]["aliases"][0], "rc");
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()
