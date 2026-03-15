@@ -719,6 +719,25 @@ func maybeReadRustCodexStatus(name string, raw bool) (*rustCodexStatusRead, bool
 	return &status, true, nil
 }
 
+func maybeRunRustCodexStatus(name string, raw bool, jsonOut bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	format := "text"
+	if jsonOut {
+		format = "json"
+	}
+	args := []string{"codex", "status-read", strings.TrimSpace(name), "--format", format}
+	if raw {
+		args = append(args, "--raw")
+	}
+	output, err := runRustCLIText(args...)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeBuildRustCodexRespawnPlan(name string, profileID string, profileContainers []string) (*rustCodexRespawnPlan, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil
