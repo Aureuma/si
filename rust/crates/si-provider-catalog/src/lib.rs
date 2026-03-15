@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize)]
@@ -353,6 +355,20 @@ pub fn find(id: ProviderId) -> Option<&'static ProviderCatalogEntry> {
     ENTRIES.iter().find(|entry| entry.id == id)
 }
 
+pub fn specs_snapshot(ids: &[ProviderId]) -> BTreeMap<ProviderId, ProviderSpec> {
+    let ids = if ids.is_empty() { default_ids() } else { ids.to_vec() };
+    ids.into_iter().filter_map(|id| find(id).map(|entry| (id, entry.spec))).collect()
+}
+
+pub fn capabilities_snapshot(ids: &[ProviderId]) -> BTreeMap<ProviderId, Capability> {
+    let ids = if ids.is_empty() { default_ids() } else { ids.to_vec() };
+    ids.into_iter().filter_map(|id| find(id).map(|entry| (id, entry.capabilities))).collect()
+}
+
+pub fn public_probe(id: ProviderId) -> Option<PublicProbe> {
+    find(id).and_then(|entry| entry.spec.public_probe)
+}
+
 pub fn parse_id(raw: &str) -> Option<ProviderId> {
     let normalized = raw.trim().to_ascii_lowercase().replace('-', "_");
     match normalized.as_str() {
@@ -380,7 +396,10 @@ pub fn parse_id(raw: &str) -> Option<ProviderId> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ProviderId, default_ids, find, parse_id};
+    use super::{
+        ProviderId, capabilities_snapshot, default_ids, find, parse_id, public_probe,
+        specs_snapshot,
+    };
 
     #[test]
     fn default_catalog_has_expected_count() {
@@ -392,6 +411,7 @@ mod tests {
         assert_eq!(parse_id("twitter"), Some(ProviderId::SocialX));
         assert_eq!(parse_id("google-play"), Some(ProviderId::GooglePlay));
         assert_eq!(parse_id("app_store_connect"), Some(ProviderId::AppleAppStore));
+        assert_eq!(parse_id("app-store-connect"), Some(ProviderId::AppleAppStore));
         assert_eq!(parse_id("iam"), Some(ProviderId::AwsIam));
     }
 
@@ -403,5 +423,32 @@ mod tests {
         assert_eq!(github.spec.rate_limit_burst, 2);
         assert!(github.capabilities.supports_raw);
         assert_eq!(github.spec.public_probe.expect("probe").path, "/zen");
+    }
+
+    #[test]
+    fn capabilities_snapshot_matches_go_expectations() {
+        let snapshot = capabilities_snapshot(&[ProviderId::Stripe, ProviderId::GitHub]);
+
+        assert!(snapshot[&ProviderId::Stripe].supports_idempotency);
+        assert!(snapshot[&ProviderId::GitHub].supports_raw);
+    }
+
+    #[test]
+    fn specs_snapshot_preserves_selected_entries() {
+        let snapshot = specs_snapshot(&[ProviderId::GitHub, ProviderId::GooglePlay]);
+
+        assert_eq!(snapshot[&ProviderId::GitHub].base_url, "https://api.github.com");
+        assert_eq!(
+            snapshot[&ProviderId::GooglePlay].upload_base_url,
+            Some("https://androidpublisher.googleapis.com")
+        );
+    }
+
+    #[test]
+    fn public_probe_exposes_catalog_probe() {
+        let probe = public_probe(ProviderId::GitHub).expect("github probe");
+
+        assert_eq!(probe.method, "GET");
+        assert_eq!(probe.path, "/zen");
     }
 }
