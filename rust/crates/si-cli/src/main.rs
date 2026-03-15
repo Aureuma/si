@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use si_rs_codex::{
     RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
     build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_command_for_container,
-    build_tmux_plan,
+    build_tmux_plan, parse_report_capture,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -34,6 +34,7 @@ use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as par
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use std::fmt;
+use std::io::{self, Read};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -711,6 +712,10 @@ enum CodexCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    ReportParse {
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
     RespawnPlan {
         name: String,
         #[arg(long)]
@@ -1174,6 +1179,27 @@ struct CodexTmuxPlanView {
 struct CodexTmuxCommandView {
     container: String,
     launch_command: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexReportParseInput {
+    clean: String,
+    raw: String,
+    prompt_index: usize,
+    ansi: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexPromptSegmentView {
+    prompt: String,
+    lines: Vec<String>,
+    raw: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexReportParseView {
+    segments: Vec<CodexPromptSegmentView>,
+    report: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1781,6 +1807,7 @@ fn main() -> Result<()> {
             CodexCommand::TmuxCommand { container, format } => {
                 run_codex_tmux_command(&container, format)?
             }
+            CodexCommand::ReportParse { format } => run_codex_report_parse(format)?,
             CodexCommand::RespawnPlan { name, profile_id, profile_containers, format } => {
                 run_codex_respawn_plan(&name, profile_id, profile_containers, format)?
             }
@@ -3716,6 +3743,39 @@ fn run_codex_tmux_command(container: &str, format: OutputFormat) -> Result<()> {
         OutputFormat::Text => {
             println!("container={}", view.container);
             println!("launch_command={}", view.launch_command);
+        }
+    }
+    Ok(())
+}
+
+fn run_codex_report_parse(format: OutputFormat) -> Result<()> {
+    let mut input = String::new();
+    io::stdin().read_to_string(&mut input)?;
+    let payload: CodexReportParseInput = serde_json::from_str(&input)?;
+    let parsed =
+        parse_report_capture(&payload.clean, &payload.raw, payload.prompt_index, payload.ansi);
+    let view = CodexReportParseView {
+        segments: parsed
+            .segments
+            .into_iter()
+            .map(|segment| CodexPromptSegmentView {
+                prompt: segment.prompt,
+                lines: segment.lines,
+                raw: segment.raw,
+            })
+            .collect(),
+        report: parsed.report,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("report={}", view.report);
+            for segment in view.segments {
+                println!("prompt={}", segment.prompt);
+                for line in segment.lines {
+                    println!("line={line}");
+                }
+            }
         }
     }
     Ok(())

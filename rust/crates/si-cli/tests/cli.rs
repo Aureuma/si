@@ -1705,6 +1705,32 @@ fn codex_tmux_command_json_uses_bypass_flag() {
     assert!(parsed["launch_command"].as_str().unwrap_or("").contains("--user 'si'"));
 }
 
+#[test]
+fn codex_report_parse_json_extracts_report_for_prompt_index() {
+    let output = cargo_bin()
+        .args(["codex", "report-parse", "--format", "json"])
+        .write_stdin(
+            r#"{
+  "clean": "› first\n• Working…\n\n› second\n• Finished task\n  with detail\nWorked for 5s\n",
+  "raw": "› first\n• Working…\n\n› second\n• Finished task\n  with detail\nWorked for 5s\n",
+  "prompt_index": 1,
+  "ansi": false
+}"#,
+        )
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let segments = parsed["segments"].as_array().expect("segments array");
+    assert_eq!(segments.len(), 2);
+    assert_eq!(segments[0]["prompt"], "first");
+    assert_eq!(segments[1]["prompt"], "second");
+    assert_eq!(parsed["report"], "• Finished task\n  with detail\nWorked for 5s");
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

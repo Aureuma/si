@@ -318,6 +318,7 @@ Progress notes:
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
+- completed: Rust codex now owns prompt segmentation and report extraction for tmux report captures, and the experimental Go report flow can delegate that parsing while preserving tmux polling, prompt submission, and session lifecycle control
 
 ### Phase 7: Provider migration
 

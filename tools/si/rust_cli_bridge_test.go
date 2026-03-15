@@ -1123,6 +1123,44 @@ func TestMaybeReadRustCodexTmuxCommandDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeParseRustCodexReportCaptureDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	stdinPath := filepath.Join(dir, "stdin.json")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\ncat >" + shellSingleQuote(stdinPath) + "\nprintf '%s\\n' '{\"segments\":[{\"prompt\":\"first\",\"lines\":[\"line a\"],\"raw\":[\"line a\"]},{\"prompt\":\"second\",\"lines\":[\"• Done\",\"Worked for 5s\"],\"raw\":[\"• Done\",\"Worked for 5s\"]}],\"report\":\"• Done\\nWorked for 5s\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	parsed, delegated, err := maybeParseRustCodexReportCapture("› first\nline a\n› second\n• Done\nWorked for 5s", "› first\nline a\n› second\n• Done\nWorked for 5s", 1, false)
+	if err != nil {
+		t.Fatalf("maybeParseRustCodexReportCapture: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected codex report parse to delegate to Rust")
+	}
+	if parsed == nil || parsed.Report != "• Done\nWorked for 5s" || len(parsed.Segments) != 2 {
+		t.Fatalf("unexpected report parse %#v", parsed)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nreport-parse\n--format\njson" {
+		t.Fatalf("unexpected report parse args %q", string(argsData))
+	}
+	stdinData, err := os.ReadFile(stdinPath)
+	if err != nil {
+		t.Fatalf("read stdin file: %v", err)
+	}
+	if !strings.Contains(string(stdinData), "\"prompt_index\":1") {
+		t.Fatalf("expected stdin payload to contain prompt_index, got %q", string(stdinData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",
