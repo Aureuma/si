@@ -196,6 +196,58 @@ fn warmup_state_write_persists_normalized_json() {
 }
 
 #[test]
+fn warmup_marker_show_reports_disabled_and_autostart() {
+    let home = tempdir().expect("tempdir");
+    let warmup_dir = home.path().join(".si/warmup");
+    fs::create_dir_all(&warmup_dir).expect("mkdir warmup dir");
+    fs::write(warmup_dir.join("autostart.v1"), "2030-03-19T12:00:00Z\n").expect("write autostart");
+    fs::write(warmup_dir.join("disabled.v1"), "disabled\n").expect("write disabled");
+
+    let output = cargo_bin()
+        .args(["warmup", "marker", "show", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["disabled"], true);
+    assert_eq!(parsed["autostart_present"], true);
+}
+
+#[test]
+fn warmup_marker_write_and_set_disabled_update_files() {
+    let state_dir = tempdir().expect("tempdir");
+    let autostart_path = state_dir.path().join("autostart.v1");
+    let disabled_path = state_dir.path().join("disabled.v1");
+
+    cargo_bin()
+        .args(["warmup", "marker", "write-autostart", "--path"])
+        .arg(&autostart_path)
+        .assert()
+        .success();
+    cargo_bin()
+        .args(["warmup", "marker", "set-disabled", "--path"])
+        .arg(&disabled_path)
+        .args(["--disabled=true"])
+        .assert()
+        .success();
+    assert!(autostart_path.exists());
+    assert!(disabled_path.exists());
+
+    cargo_bin()
+        .args(["warmup", "marker", "set-disabled", "--path"])
+        .arg(&disabled_path)
+        .args(["--disabled=false"])
+        .assert()
+        .success();
+    assert!(!disabled_path.exists());
+}
+
+#[test]
 fn providers_characteristics_json_matches_expected_shape() {
     let output = cargo_bin()
         .args(["providers", "characteristics", "--provider", "github", "--format", "json"])

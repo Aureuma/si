@@ -334,3 +334,82 @@ func TestSaveWarmWeeklyStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("unexpected rust cli args: %q", string(argsData))
 	}
 }
+
+func TestWarmWeeklyAutostartRequestedUsesRustMarkerStateWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"disabled\":true,\"autostart_present\":true}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	requested, reason := warmWeeklyAutostartRequested()
+	if requested || reason != "disabled" {
+		t.Fatalf("unexpected autostart result: requested=%v reason=%q", requested, reason)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nmarker\nshow\n--autostart-path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
+func TestWriteWarmWeeklyAutostartMarkerDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if err := writeWarmWeeklyAutostartMarker(); err != nil {
+		t.Fatalf("writeWarmWeeklyAutostartMarker: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nmarker\nwrite-autostart\n--path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
+func TestSetWarmWeeklyDisabledDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if err := setWarmWeeklyDisabled(true); err != nil {
+		t.Fatalf("setWarmWeeklyDisabled: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "warmup\nmarker\nset-disabled\n--path\n") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}

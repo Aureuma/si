@@ -1025,11 +1025,23 @@ func isGoTestBinary() bool {
 }
 
 func warmWeeklyAutostartRequested() (bool, string) {
+	autostartPath, autostartErr := warmWeeklyAutostartMarkerPath()
+	disabledPath, disabledErr := warmWeeklyDisabledMarkerPath()
+	if autostartErr == nil && disabledErr == nil {
+		if state, delegated, err := maybeReadRustWarmupMarkerState(autostartPath, disabledPath); err == nil && delegated {
+			if state.Disabled {
+				return false, "disabled"
+			}
+			if state.AutostartPresent {
+				return true, "marker"
+			}
+		}
+	}
 	if warmWeeklyDisabled() {
 		return false, "disabled"
 	}
-	if path, err := warmWeeklyAutostartMarkerPath(); err == nil {
-		if _, statErr := os.Stat(path); statErr == nil {
+	if autostartErr == nil {
+		if _, statErr := os.Stat(autostartPath); statErr == nil {
 			return true, "marker"
 		}
 	}
@@ -1182,6 +1194,11 @@ func writeWarmWeeklyAutostartMarker() error {
 	if err != nil {
 		return err
 	}
+	if delegated, err := maybeWriteRustWarmupAutostartMarker(path); err != nil {
+		return err
+	} else if delegated {
+		return nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
@@ -1189,6 +1206,13 @@ func writeWarmWeeklyAutostartMarker() error {
 }
 
 func warmWeeklyDisabled() bool {
+	autostartPath, autostartErr := warmWeeklyAutostartMarkerPath()
+	disabledPath, disabledErr := warmWeeklyDisabledMarkerPath()
+	if autostartErr == nil && disabledErr == nil {
+		if state, delegated, err := maybeReadRustWarmupMarkerState(autostartPath, disabledPath); err == nil && delegated {
+			return state.Disabled
+		}
+	}
 	path, err := warmWeeklyDisabledMarkerPath()
 	if err != nil {
 		return false
@@ -1201,6 +1225,11 @@ func setWarmWeeklyDisabled(disabled bool) error {
 	path, err := warmWeeklyDisabledMarkerPath()
 	if err != nil {
 		return err
+	}
+	if delegated, err := maybeSetRustWarmupDisabled(path, disabled); err != nil {
+		return err
+	} else if delegated {
+		return nil
 	}
 	if !disabled {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {

@@ -46,6 +46,12 @@ pub struct WarmupProfileState {
     pub paused: bool,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct WarmupMarkerState {
+    pub disabled: bool,
+    pub autostart_present: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct RawWarmupState {
     #[serde(default)]
@@ -84,14 +90,30 @@ pub enum WarmupStateError {
     SetPermissions(#[source] std::io::Error),
 }
 
+#[derive(Debug, Error)]
+pub enum WarmupMarkerError {
+    #[error("marker path required")]
+    MissingPath,
+    #[error("create marker directory: {0}")]
+    CreateDirectory(#[source] std::io::Error),
+    #[error("write marker file: {0}")]
+    Write(#[source] std::io::Error),
+    #[error("remove marker file: {0}")]
+    Remove(#[source] std::io::Error),
+    #[error("set marker file permissions: {0}")]
+    SetPermissions(#[source] std::io::Error),
+}
+
 pub fn default_state_path(home: Option<&Path>) -> Result<PathBuf, WarmupStateError> {
-    let root = match home {
-        Some(path) => path.to_path_buf(),
-        None => std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .ok_or(WarmupStateError::MissingHomeDirectory)?,
-    };
-    Ok(root.join(".si").join("warmup").join("state.json"))
+    Ok(default_warmup_dir(home, WarmupStateError::MissingHomeDirectory)?.join("state.json"))
+}
+
+pub fn default_autostart_marker_path(home: Option<&Path>) -> Result<PathBuf, WarmupMarkerError> {
+    Ok(default_warmup_dir(home, WarmupMarkerError::MissingPath)?.join("autostart.v1"))
+}
+
+pub fn default_disabled_marker_path(home: Option<&Path>) -> Result<PathBuf, WarmupMarkerError> {
+    Ok(default_warmup_dir(home, WarmupMarkerError::MissingPath)?.join("disabled.v1"))
 }
 
 pub fn load_state(path: impl AsRef<Path>) -> Result<WarmupState, WarmupStateError> {
@@ -133,6 +155,49 @@ pub fn save_state(path: impl AsRef<Path>, state: &WarmupState) -> Result<(), War
     tmp.flush().map_err(WarmupStateError::WriteTemp)?;
     tmp.persist(path).map_err(|err| WarmupStateError::Persist(err.error))?;
     set_file_mode(path, 0o600).map_err(WarmupStateError::SetPermissions)?;
+    Ok(())
+}
+
+pub fn read_marker_state(
+    autostart_path: impl AsRef<Path>,
+    disabled_path: impl AsRef<Path>,
+) -> Result<WarmupMarkerState, WarmupMarkerError> {
+    let autostart_path = clean_marker_path(autostart_path.as_ref())?;
+    let disabled_path = clean_marker_path(disabled_path.as_ref())?;
+    Ok(WarmupMarkerState {
+        disabled: disabled_path.exists(),
+        autostart_present: autostart_path.exists(),
+    })
+}
+
+pub fn write_autostart_marker(
+    path: impl AsRef<Path>,
+    now: DateTime<Utc>,
+) -> Result<(), WarmupMarkerError> {
+    let path = clean_marker_path(path.as_ref())?;
+    let dir = path.parent().ok_or(WarmupMarkerError::MissingPath)?;
+    fs::create_dir_all(dir).map_err(WarmupMarkerError::CreateDirectory)?;
+    fs::write(path, format!("{}\n", now.to_rfc3339())).map_err(WarmupMarkerError::Write)?;
+    set_file_mode(path, 0o600).map_err(WarmupMarkerError::SetPermissions)?;
+    Ok(())
+}
+
+pub fn set_disabled_marker(
+    path: impl AsRef<Path>,
+    disabled: bool,
+) -> Result<(), WarmupMarkerError> {
+    let path = clean_marker_path(path.as_ref())?;
+    if !disabled {
+        match fs::remove_file(path) {
+            Ok(()) => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(WarmupMarkerError::Remove(err)),
+        }
+    }
+    let dir = path.parent().ok_or(WarmupMarkerError::MissingPath)?;
+    fs::create_dir_all(dir).map_err(WarmupMarkerError::CreateDirectory)?;
+    fs::write(path, "disabled\n").map_err(WarmupMarkerError::Write)?;
+    set_file_mode(path, 0o600).map_err(WarmupMarkerError::SetPermissions)?;
     Ok(())
 }
 
@@ -250,9 +315,26 @@ impl WarmupProfileState {
     }
 }
 
+fn default_warmup_dir<E>(home: Option<&Path>, missing_error: E) -> Result<PathBuf, E> {
+    match home {
+        Some(path) => Ok(path.join(".si").join("warmup")),
+        None => std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .map(|path| path.join(".si").join("warmup"))
+            .ok_or(missing_error),
+    }
+}
+
 fn clean_path(path: &Path) -> Result<&Path, WarmupStateError> {
     if path.as_os_str().is_empty() {
         return Err(WarmupStateError::MissingPath);
+    }
+    Ok(path)
+}
+
+fn clean_marker_path(path: &Path) -> Result<&Path, WarmupMarkerError> {
+    if path.as_os_str().is_empty() {
+        return Err(WarmupMarkerError::MissingPath);
     }
     Ok(path)
 }
@@ -321,8 +403,9 @@ fn set_file_mode(path: &Path, mode: u32) -> Result<(), std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::{
-        WARMUP_STATE_VERSION, WarmupProfileState, default_state_path, load_state,
-        render_state_text, save_state,
+        WARMUP_STATE_VERSION, WarmupProfileState, default_autostart_marker_path,
+        default_disabled_marker_path, default_state_path, load_state, read_marker_state,
+        render_state_text, save_state, set_disabled_marker, write_autostart_marker,
     };
     use chrono::{TimeZone, Utc};
     use std::fs;
@@ -445,5 +528,32 @@ mod tests {
             let mode = fs::metadata(&path).expect("stat state").permissions().mode() & 0o777;
             assert_eq!(mode, 0o600);
         }
+    }
+
+    #[test]
+    fn marker_state_tracks_autostart_and_disabled_files() {
+        let dir = tempdir().expect("tempdir");
+        let autostart_path = default_autostart_marker_path(Some(dir.path())).expect("autostart");
+        let disabled_path = default_disabled_marker_path(Some(dir.path())).expect("disabled");
+
+        write_autostart_marker(
+            &autostart_path,
+            Utc.with_ymd_and_hms(2030, 3, 19, 12, 0, 0).unwrap(),
+        )
+        .expect("write marker");
+        set_disabled_marker(&disabled_path, true).expect("disable marker");
+
+        let state = read_marker_state(&autostart_path, &disabled_path).expect("read marker state");
+        assert!(state.autostart_present);
+        assert!(state.disabled);
+    }
+
+    #[test]
+    fn set_disabled_marker_removes_file_when_false() {
+        let dir = tempdir().expect("tempdir");
+        let disabled_path = default_disabled_marker_path(Some(dir.path())).expect("disabled");
+        set_disabled_marker(&disabled_path, true).expect("disable marker");
+        set_disabled_marker(&disabled_path, false).expect("clear marker");
+        assert!(!disabled_path.exists());
     }
 }
