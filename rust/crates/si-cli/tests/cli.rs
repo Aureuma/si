@@ -205,6 +205,84 @@ codex_profiles_dir = "~/state/si/profiles"
 }
 
 #[test]
+fn fort_session_state_show_reads_and_normalizes_persisted_state() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("session.json");
+    fs::write(
+        &state_path,
+        r#"{
+  "profile_id": " ferma ",
+  "agent_id": " agent-ferma ",
+  "session_id": " session-123 ",
+  "host": " https://fort.example.test ",
+  "container_host": " http://fort.internal:8088 ",
+  "access_expires_at": " 2030-01-01T00:00:00Z ",
+  "refresh_expires_at": " 2030-02-01T00:00:00Z "
+}
+"#,
+    )
+    .expect("write session state");
+    #[cfg(unix)]
+    fs::set_permissions(&state_path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+        .expect("chmod session state");
+
+    let output = cargo_bin()
+        .args(["fort", "session-state", "show", "--path"])
+        .arg(&state_path)
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["agent_id"], "agent-ferma");
+    assert_eq!(parsed["session_id"], "session-123");
+    assert_eq!(parsed["host"], "https://fort.example.test");
+    assert_eq!(parsed["container_host"], "http://fort.internal:8088");
+}
+
+#[test]
+fn fort_session_state_classify_reports_refreshing_state() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("session.json");
+    fs::write(
+        &state_path,
+        r#"{
+  "profile_id": "ferma",
+  "agent_id": "agent-ferma",
+  "session_id": "session-123",
+  "access_expires_at": "1970-01-01T00:01:30Z",
+  "refresh_expires_at": "1970-01-01T00:06:40Z"
+}
+"#,
+    )
+    .expect("write session state");
+    #[cfg(unix)]
+    fs::set_permissions(&state_path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+        .expect("chmod session state");
+
+    let output = cargo_bin()
+        .args(["fort", "session-state", "classify", "--path"])
+        .arg(&state_path)
+        .args(["--now-unix", "100", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["Refreshing"]["profile_id"], "ferma");
+    assert_eq!(parsed["Refreshing"]["agent_id"], "agent-ferma");
+    assert_eq!(parsed["Refreshing"]["session_id"], "session-123");
+    assert_eq!(parsed["Refreshing"]["access_expires_at_unix"], 90);
+    assert_eq!(parsed["Refreshing"]["refresh_expires_at_unix"], 400);
+}
+
+#[test]
 fn codex_spawn_plan_json_defaults_profile_name_and_workdir() {
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
