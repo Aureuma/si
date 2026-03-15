@@ -255,6 +255,11 @@ type rustVaultTrustLookup struct {
 	TrustedAt           string `json:"trusted_at,omitempty"`
 }
 
+type rustWarmupMarkerState struct {
+	Disabled        bool `json:"disabled"`
+	AutostartPresent bool `json:"autostart_present"`
+}
+
 type rustFortSessionClassification struct {
 	State  string `json:"state"`
 	Reason string `json:"reason,omitempty"`
@@ -824,6 +829,53 @@ func maybeSaveRustWarmupState(path string, state warmWeeklyState) (bool, error) 
 		"warmup", "state", "write",
 		"--path", strings.TrimSpace(path),
 		"--state-json", string(raw),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func maybeReadRustWarmupMarkerState(autostartPath string, disabledPath string) (*rustWarmupMarkerState, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"warmup", "marker", "show",
+		"--autostart-path", strings.TrimSpace(autostartPath),
+		"--disabled-path", strings.TrimSpace(disabledPath),
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	var state rustWarmupMarkerState
+	if err := json.Unmarshal(output, &state); err != nil {
+		return nil, false, fmt.Errorf("decode rust warmup marker state: %w", err)
+	}
+	return &state, true, nil
+}
+
+func maybeWriteRustWarmupAutostartMarker(path string) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	if _, err := runRustCLIText(
+		"warmup", "marker", "write-autostart",
+		"--path", strings.TrimSpace(path),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func maybeSetRustWarmupDisabled(path string, disabled bool) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	if _, err := runRustCLIText(
+		"warmup", "marker", "set-disabled",
+		"--path", strings.TrimSpace(path),
+		"--disabled="+strconv.FormatBool(disabled),
 	); err != nil {
 		return false, err
 	}

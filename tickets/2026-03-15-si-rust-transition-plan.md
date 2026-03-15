@@ -247,6 +247,7 @@ Progress notes:
 - completed: Rust `dyad peek-plan` now owns deterministic container/session naming and attach-command assembly, and experimental Go `dyad peek` consumes that plan while retaining tmux session creation and interactive attach behavior
 - completed: initial `si-warmup` crate now owns persisted warmup state loading, legacy version normalization, and `warmup status` rendering, and Go `si warmup status` can consume that Rust state loader while preserving the current Go text output path
 - completed: live Go warmup reconcile/status state reads and writes now flow through the Rust warmup state loader/writer when the compatibility boundary is enabled, so Rust owns persisted warmup state normalization for both status and mutation paths
+- completed: warmup autostart/disabled marker reads and writes now flow through the Rust warmup crate behind the compatibility boundary, so Go scheduler self-repair and enable/disable paths reuse Rust marker semantics with Go-only legacy fallbacks for cached-auth and legacy-state detection
 
 ### Phase 5: Security/runtime migration
 
