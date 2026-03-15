@@ -426,6 +426,11 @@ func readFortStateFile(path string, out any) error {
 }
 
 func saveFortRuntimeAgentState(path string, state fortProfileRuntimeAgentState) error {
+	if delegated, err := maybeSaveRustFortRuntimeAgentState(path, state); err != nil {
+		return err
+	} else if delegated {
+		return nil
+	}
 	return writeFortStateFile(path, state)
 }
 

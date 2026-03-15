@@ -18,7 +18,7 @@ use si_rs_docker::{
 use si_rs_fort::{
     PersistedRuntimeAgentState, PersistedSessionState, SessionState,
     classify_persisted_session_state, load_persisted_runtime_agent_state,
-    load_persisted_session_state,
+    load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
@@ -406,6 +406,12 @@ enum FortSessionStateCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    Write {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        state_json: String,
+    },
     Classify {
         #[arg(long)]
         path: PathBuf,
@@ -423,6 +429,12 @@ enum FortRuntimeAgentStateCommand {
         path: PathBuf,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
+    },
+    Write {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        state_json: String,
     },
 }
 
@@ -978,6 +990,9 @@ fn main() -> Result<()> {
                 FortSessionStateCommand::Show { path, format } => {
                     show_fort_session_state(path, format)?
                 }
+                FortSessionStateCommand::Write { path, state_json } => {
+                    write_fort_session_state(path, &state_json)?
+                }
                 FortSessionStateCommand::Classify { path, now_unix, format } => {
                     show_fort_session_state_classification(path, now_unix, format)?
                 }
@@ -985,6 +1000,9 @@ fn main() -> Result<()> {
             FortCommand::RuntimeAgentState { command } => match command {
                 FortRuntimeAgentStateCommand::Show { path, format } => {
                     show_fort_runtime_agent_state(path, format)?
+                }
+                FortRuntimeAgentStateCommand::Write { path, state_json } => {
+                    write_fort_runtime_agent_state(path, &state_json)?
                 }
             },
         },
@@ -1111,6 +1129,12 @@ fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
     Ok(())
 }
 
+fn write_fort_session_state(path: PathBuf, state_json: &str) -> Result<()> {
+    let state: PersistedSessionState = serde_json::from_str(state_json)?;
+    save_persisted_session_state(path, &state)?;
+    Ok(())
+}
+
 fn show_fort_runtime_agent_state(path: PathBuf, format: OutputFormat) -> Result<()> {
     let state = load_persisted_runtime_agent_state(path)?;
 
@@ -1119,6 +1143,12 @@ fn show_fort_runtime_agent_state(path: PathBuf, format: OutputFormat) -> Result<
         OutputFormat::Text => render_fort_runtime_agent_state_text(&state),
     }
 
+    Ok(())
+}
+
+fn write_fort_runtime_agent_state(path: PathBuf, state_json: &str) -> Result<()> {
+    let state: PersistedRuntimeAgentState = serde_json::from_str(state_json)?;
+    save_persisted_runtime_agent_state(path, &state)?;
     Ok(())
 }
 
