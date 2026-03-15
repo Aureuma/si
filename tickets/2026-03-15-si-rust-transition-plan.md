@@ -235,6 +235,7 @@ Progress notes:
 - completed: Rust `dyad spawn-spec` now materializes actor/critic container specs, published ports, bind mounts, and command payloads on top of the dyad planner with binary-level JSON coverage
 - completed: Rust `dyad spawn-start` now executes the actor and critic container startup commands end to end through `si-process`, backed by fake-docker integration tests and Docker primitive support for dynamic host port binding
 - completed: experimental Go `dyad spawn` can now delegate fresh actor/critic container creation to Rust `spawn-start` behind the compatibility boundary while existing-container reuse and drift reconciliation stay on the Go path
+- completed: Rust dyad now owns `start`, `stop`, and member-specific `logs` Docker invocation surfaces, and the experimental Go dyad commands can delegate those actions after Go-side name/existence checks
 
 ### Phase 5: Security/runtime migration
 
