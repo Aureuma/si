@@ -681,6 +681,8 @@ enum CodexCommand {
         repo: String,
         #[arg(long)]
         gh_pat: Option<String>,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -1241,6 +1243,14 @@ struct CodexRemoveResultView {
 struct CodexContainerActionView {
     action: String,
     name: String,
+    container_name: String,
+    output: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexCloneResultView {
+    name: String,
+    repo: String,
     container_name: String,
     output: String,
 }
@@ -1903,8 +1913,8 @@ fn main() -> Result<()> {
             CodexCommand::Tail { name, tail, docker_bin } => {
                 run_codex_container_logs(&name, &tail, true, docker_bin)?
             }
-            CodexCommand::Clone { name, repo, gh_pat, docker_bin } => {
-                run_codex_clone(&name, &repo, gh_pat.as_deref(), docker_bin)?
+            CodexCommand::Clone { name, repo, gh_pat, format, docker_bin } => {
+                run_codex_clone(&name, &repo, gh_pat.as_deref(), format, docker_bin)?
             }
             CodexCommand::Exec {
                 name,
@@ -3833,6 +3843,7 @@ fn run_codex_clone(
     name: &str,
     repo: &str,
     gh_pat: Option<&str>,
+    format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
     let artifacts = build_remove_artifacts(name)?;
@@ -3842,7 +3853,7 @@ fn run_codex_clone(
     }
     let docker_program =
         docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
-    let mut spec = ContainerExecSpec::new(artifacts.container_name)
+    let mut spec = ContainerExecSpec::new(artifacts.container_name.clone())
         .user("si")
         .env("SI_REPO", repo)
         .command(["/usr/local/bin/si-entrypoint", "bash", "-lc", "true"]);
@@ -3855,7 +3866,19 @@ fn run_codex_clone(
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("docker exec failed: {}", stderr.trim());
     }
-    print!("{}", String::from_utf8_lossy(&output.stdout));
+    let rendered = String::from_utf8_lossy(&output.stdout).into_owned();
+    match format {
+        OutputFormat::Json => {
+            let view = CodexCloneResultView {
+                name: name.trim().to_owned(),
+                repo: repo.trim().to_owned(),
+                container_name: artifacts.container_name,
+                output: rendered,
+            };
+            println!("{}", serde_json::to_string_pretty(&view)?);
+        }
+        OutputFormat::Text => print!("{rendered}"),
+    }
     Ok(())
 }
 
