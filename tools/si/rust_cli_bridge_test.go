@@ -332,6 +332,93 @@ func TestMaybeSaveRustWarmupStateDelegatesAndWritesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeReadRustWarmupMarkerStateDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"disabled\":true,\"autostart_present\":false}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	state, delegated, err := maybeReadRustWarmupMarkerState("/tmp/autostart.v1", "/tmp/disabled.v1")
+	if err != nil {
+		t.Fatalf("maybeReadRustWarmupMarkerState: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup marker state to delegate to Rust")
+	}
+	if !state.Disabled || state.AutostartPresent {
+		t.Fatalf("unexpected marker state: %+v", state)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nmarker\nshow\n--autostart-path\n/tmp/autostart.v1\n--disabled-path\n/tmp/disabled.v1\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestMaybeWriteRustWarmupAutostartMarkerDelegates(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeWriteRustWarmupAutostartMarker("/tmp/autostart.v1")
+	if err != nil {
+		t.Fatalf("maybeWriteRustWarmupAutostartMarker: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup autostart marker to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nmarker\nwrite-autostart\n--path\n/tmp/autostart.v1" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestMaybeSetRustWarmupDisabledDelegates(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeSetRustWarmupDisabled("/tmp/disabled.v1", true)
+	if err != nil {
+		t.Fatalf("maybeSetRustWarmupDisabled: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup disabled marker to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nmarker\nset-disabled\n--path\n/tmp/disabled.v1\n--disabled=true" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

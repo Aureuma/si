@@ -35,8 +35,11 @@ use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as par
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
-    WarmupState, default_state_path as default_warmup_state_path, load_state as load_warmup_state,
-    render_state_text as render_warmup_state_text, save_state as save_warmup_state,
+    WarmupState, default_autostart_marker_path, default_disabled_marker_path,
+    default_state_path as default_warmup_state_path, load_state as load_warmup_state,
+    read_marker_state as read_warmup_marker_state, render_state_text as render_warmup_state_text,
+    save_state as save_warmup_state, set_disabled_marker as set_rust_warmup_disabled_marker,
+    write_autostart_marker as write_rust_warmup_autostart_marker,
 };
 use std::fmt;
 use std::io::{self, Read};
@@ -860,6 +863,10 @@ enum WarmupCommand {
         #[command(subcommand)]
         command: WarmupStateCommand,
     },
+    Marker {
+        #[command(subcommand)]
+        command: WarmupMarkerCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -869,6 +876,30 @@ enum WarmupStateCommand {
         path: PathBuf,
         #[arg(long)]
         state_json: String,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WarmupMarkerCommand {
+    Show {
+        #[arg(long)]
+        autostart_path: Option<PathBuf>,
+        #[arg(long)]
+        disabled_path: Option<PathBuf>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    WriteAutostart {
+        #[arg(long)]
+        path: PathBuf,
+    },
+    SetDisabled {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        disabled: String,
     },
 }
 
@@ -1941,6 +1972,17 @@ fn main() -> Result<()> {
             WarmupCommand::State { command } => match command {
                 WarmupStateCommand::Write { path, state_json } => {
                     write_warmup_state(path, &state_json)?
+                }
+            },
+            WarmupCommand::Marker { command } => match command {
+                WarmupMarkerCommand::Show { autostart_path, disabled_path, home, format } => {
+                    run_warmup_marker_show(autostart_path, disabled_path, home, format)?
+                }
+                WarmupMarkerCommand::WriteAutostart { path } => {
+                    write_warmup_autostart_marker(path)?
+                }
+                WarmupMarkerCommand::SetDisabled { path, disabled } => {
+                    set_warmup_disabled_marker(path, &disabled)?
                 }
             },
         },
@@ -4146,6 +4188,44 @@ fn run_warmup_status(
 fn write_warmup_state(path: PathBuf, state_json: &str) -> Result<()> {
     let state: WarmupState = serde_json::from_str(state_json)?;
     save_warmup_state(path, &state)?;
+    Ok(())
+}
+
+fn run_warmup_marker_show(
+    autostart_path: Option<PathBuf>,
+    disabled_path: Option<PathBuf>,
+    home: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let autostart_path = match autostart_path {
+        Some(path) => path,
+        None => default_autostart_marker_path(home.as_deref())?,
+    };
+    let disabled_path = match disabled_path {
+        Some(path) => path,
+        None => default_disabled_marker_path(home.as_deref())?,
+    };
+    let state = read_warmup_marker_state(autostart_path, disabled_path)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+        OutputFormat::Text => {
+            println!("disabled={} autostart_present={}", state.disabled, state.autostart_present)
+        }
+    }
+    Ok(())
+}
+
+fn write_warmup_autostart_marker(path: PathBuf) -> Result<()> {
+    write_rust_warmup_autostart_marker(path, chrono::Utc::now())?;
+    Ok(())
+}
+
+fn set_warmup_disabled_marker(path: PathBuf, disabled: &str) -> Result<()> {
+    let disabled = disabled
+        .trim()
+        .parse::<bool>()
+        .map_err(|_| anyhow::anyhow!("invalid bool for --disabled: {disabled}"))?;
+    set_rust_warmup_disabled_marker(path, disabled)?;
     Ok(())
 }
 
