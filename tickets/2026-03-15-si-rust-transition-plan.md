@@ -190,6 +190,7 @@ Progress notes:
 - completed: Go compatibility bridge for `si providers characteristics`, including `--json` passthrough and focused delegation tests
 - completed: Rust provider catalog snapshot helpers with translated alias/capability/probe assertions from Go provider tests
 - completed: Rust `codex spawn-plan` CLI surface with binary-level tests for planner output, mount assembly, and env defaults
+- completed: Go experimental bridge for `spawn` planning so the shipping `si spawn` path can consume Rust container naming, workdir defaults, core env, and core mount plans without changing the default Go execution path
 
 ### Phase 4: Runtime substrate migration
 
@@ -214,6 +215,7 @@ Exit criteria:
 Progress notes:
 
 - completed: initial `si-runtime` crate for shared codex/dyad core mount planning on top of Rust Docker primitives, with translated Go mount behavior coverage
+- completed: experimental Go `spawn` path integration that consumes Rust-generated core mount plans and deterministic spawn planning data behind the Rust CLI compatibility boundary
 
 ### Phase 5: Security/runtime migration
 
@@ -265,6 +267,7 @@ Exit criteria:
 Progress notes:
 
 - completed: initial `si-codex` crate for deterministic spawn planning (profile/name normalization, workspace/workdir defaults, volume naming, env assembly, and runtime mount consumption)
+- completed: the shipping Go `spawn` path can now delegate deterministic planning to Rust behind the experimental boundary while Fort/bootstrap/session handling remains in Go
 
 ### Phase 7: Provider migration
 
