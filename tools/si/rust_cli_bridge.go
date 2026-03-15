@@ -115,6 +115,13 @@ type rustCodexRemoveResult struct {
 	Output        string `json:"output"`
 }
 
+type rustCodexContainerActionResult struct {
+	Action        string `json:"action"`
+	Name          string `json:"name"`
+	ContainerName string `json:"container_name"`
+	Output        string `json:"output"`
+}
+
 type rustCodexStatusRead struct {
 	Source            string  `json:"source,omitempty"`
 	Raw               string  `json:"raw,omitempty"`
@@ -628,6 +635,21 @@ func maybeRunRustCodexContainerAction(action string, name string) (string, bool,
 		return "", false, err
 	}
 	return strings.TrimSpace(output), true, nil
+}
+
+func maybeRunRustCodexContainerActionResult(action string, name string) (*rustCodexContainerActionResult, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON("codex", strings.TrimSpace(action), strings.TrimSpace(name), "--format", "json")
+	if err != nil {
+		return nil, false, err
+	}
+	var result rustCodexContainerActionResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex %s result: %w", strings.TrimSpace(action), err)
+	}
+	return &result, true, nil
 }
 
 func maybeRunRustCodexRemoveResult(name string, removeVolumes bool) (*rustCodexRemoveResult, bool, error) {

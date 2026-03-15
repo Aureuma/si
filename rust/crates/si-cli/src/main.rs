@@ -650,11 +650,15 @@ enum CodexCommand {
     },
     Start {
         name: String,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
     Stop {
         name: String,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -1230,6 +1234,14 @@ struct CodexRemoveResultView {
     profile_id: Option<String>,
     codex_volume: Option<String>,
     gh_volume: Option<String>,
+    output: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexContainerActionView {
+    action: String,
+    name: String,
+    container_name: String,
     output: String,
 }
 
@@ -1879,11 +1891,11 @@ fn main() -> Result<()> {
             CodexCommand::Remove { name, volumes, format, docker_bin } => {
                 run_codex_remove(&name, volumes, format, docker_bin)?
             }
-            CodexCommand::Start { name, docker_bin } => {
-                run_codex_container_action(&name, ContainerAction::Start, docker_bin)?
+            CodexCommand::Start { name, format, docker_bin } => {
+                run_codex_container_action(&name, ContainerAction::Start, format, docker_bin)?
             }
-            CodexCommand::Stop { name, docker_bin } => {
-                run_codex_container_action(&name, ContainerAction::Stop, docker_bin)?
+            CodexCommand::Stop { name, format, docker_bin } => {
+                run_codex_container_action(&name, ContainerAction::Stop, format, docker_bin)?
             }
             CodexCommand::Logs { name, tail, docker_bin } => {
                 run_codex_container_logs(&name, &tail, false, docker_bin)?
@@ -3761,6 +3773,7 @@ fn run_codex_remove(
 fn run_codex_container_action(
     name: &str,
     action: ContainerAction,
+    format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
     let artifacts = build_remove_artifacts(name)?;
@@ -3769,14 +3782,26 @@ fn run_codex_container_action(
     let command = docker_container_action_command(
         docker_program.display().to_string(),
         action,
-        artifacts.container_name,
+        artifacts.container_name.clone(),
     )?;
     let output = ProcessRunner.run(&command, &RunOptions::default())?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("docker {} failed: {}", action.as_str(), stderr.trim());
     }
-    print!("{}", String::from_utf8_lossy(&output.stdout));
+    let rendered = String::from_utf8_lossy(&output.stdout).into_owned();
+    match format {
+        OutputFormat::Json => {
+            let view = CodexContainerActionView {
+                action: action.as_str().to_owned(),
+                name: name.trim().to_owned(),
+                container_name: artifacts.container_name,
+                output: rendered,
+            };
+            println!("{}", serde_json::to_string_pretty(&view)?);
+        }
+        OutputFormat::Text => print!("{rendered}"),
+    }
     Ok(())
 }
 
