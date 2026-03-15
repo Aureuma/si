@@ -78,15 +78,15 @@ type fortProfileSessionState struct {
 }
 
 type codexFortBootstrap struct {
-	ProfileID                 string
-	AgentID                   string
-	SessionID                 string
-	HostURL                   string
-	ContainerHostURL          string
-	AccessTokenHostPath       string
-	RefreshTokenHostPath      string
-	AccessTokenContainerPath  string
-	RefreshTokenContainerPath string
+	ProfileID                 string `json:"profile_id"`
+	AgentID                   string `json:"agent_id"`
+	SessionID                 string `json:"session_id"`
+	HostURL                   string `json:"host_url"`
+	ContainerHostURL          string `json:"container_host_url"`
+	AccessTokenHostPath       string `json:"access_token_path"`
+	RefreshTokenHostPath      string `json:"refresh_token_path"`
+	AccessTokenContainerPath  string `json:"access_token_container_path"`
+	RefreshTokenContainerPath string `json:"refresh_token_container_path"`
 }
 
 func (b codexFortBootstrap) env() []string {
@@ -327,6 +327,18 @@ func loadCodexFortBootstrapFromProfileState(profile codexProfile) (codexFortBoot
 	paths, err := fortProfileStatePaths(profile)
 	if err != nil {
 		return codexFortBootstrap{}, err
+	}
+	if boot, delegated, err := maybeLoadRustCodexFortBootstrap(
+		paths.SessionStateHostPath,
+		strings.TrimSpace(profile.ID),
+		paths.AccessTokenHostPath,
+		paths.RefreshTokenHostPath,
+		paths.AccessTokenContainerPath,
+		paths.RefreshTokenContainerPath,
+	); err != nil {
+		return codexFortBootstrap{}, err
+	} else if delegated {
+		return *boot, nil
 	}
 	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
 	if err != nil {
