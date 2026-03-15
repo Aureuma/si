@@ -45,6 +45,14 @@ type promptSegment struct {
 
 const tmuxReportPrefix = "si-codex-report-"
 
+var (
+	acquireCodexReportLockFn         = acquireCodexLock
+	lookupCodexReportContainerFn     = lookupCodexReportContainer
+	ensureCodexReportTmuxAvailableFn = ensureTmuxAvailable
+	cleanupCodexReportTmuxSessionsFn = cleanupStaleTmuxSessions
+	fetchCodexReportsViaTmuxFn       = fetchCodexReportsViaTmux
+)
+
 func cmdCodexReport(args []string) {
 	if isSingleHelpArg(args) {
 		printUsage("usage: si report <name> --prompt '...'")
@@ -139,7 +147,7 @@ func cmdCodexReport(args []string) {
 		fatal(fmt.Errorf("invalid tmux capture mode: %s", opts.CaptureMode))
 	}
 
-	unlock, lockErr := acquireCodexLock("report", name, opts.LockTimeout, opts.LockStaleAfter)
+	unlock, lockErr := acquireCodexReportLockFn("report", name, opts.LockTimeout, opts.LockStaleAfter)
 	if lockErr != nil {
 		fatal(lockErr)
 	}
@@ -157,18 +165,8 @@ func cmdCodexReport(args []string) {
 	}
 	defer releaseLock()
 
-	client, err := shared.NewClient()
-	if err != nil {
-		failWithUnlock(err)
-	}
-	defer client.Close()
-
 	ctx := context.Background()
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		failWithUnlock(err)
-	}
-	id, _, err := client.ContainerByName(ctx, containerName)
+	containerName, id, err := lookupCodexReportContainerFn(ctx, name)
 	if err != nil {
 		failWithUnlock(err)
 	}
@@ -176,15 +174,15 @@ func cmdCodexReport(args []string) {
 		failWithUnlock(fmt.Errorf("codex container %s not found", containerName))
 	}
 
-	if err := ensureTmuxAvailable(); err != nil {
+	if err := ensureCodexReportTmuxAvailableFn(); err != nil {
 		failWithUnlock(err)
 	}
-	cleanupStaleTmuxSessions(ctx, opts.TmuxPrefix, 30*time.Minute, statusOptions{Debug: opts.Debug})
+	cleanupCodexReportTmuxSessionsFn(ctx, opts.TmuxPrefix, 30*time.Minute, statusOptions{Debug: opts.Debug})
 
 	reportCtx, reportCancel := context.WithTimeout(ctx, opts.ReadyTimeout+opts.TurnTimeout*time.Duration(len(prompts))+10*time.Second)
 	defer reportCancel()
 
-	output, reports, err := fetchCodexReportsViaTmux(reportCtx, id, prompts, opts)
+	output, reports, err := fetchCodexReportsViaTmuxFn(reportCtx, id, prompts, opts)
 	if err != nil {
 		failWithUnlock(err)
 	}
@@ -213,6 +211,24 @@ func cmdCodexReport(args []string) {
 	}
 
 	_ = output
+}
+
+func lookupCodexReportContainer(ctx context.Context, name string) (string, string, error) {
+	client, err := shared.NewClient()
+	if err != nil {
+		return "", "", err
+	}
+	defer client.Close()
+
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		return "", "", err
+	}
+	id, _, err := client.ContainerByName(ctx, containerName)
+	if err != nil {
+		return "", "", err
+	}
+	return containerName, id, nil
 }
 
 func loadPrompts(dst *multiFlag, path string) error {

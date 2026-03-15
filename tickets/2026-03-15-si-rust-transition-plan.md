@@ -373,6 +373,7 @@ Progress notes:
 - completed: the shipping Go codex and dyad `list` commands now have direct delegated command proofs for the migrated Rust text/json list surfaces, not just helper-level bridge tests
 - completed: the shipping Go `run --no-tmux` path now has a direct delegated command proof for the migrated Rust codex exec surface, and `dyad exec` has a command-level proof for its parsed argument handoff into the migrated exec seam
 - completed: the shipping Go `dyad peek --detached` path now has a direct command-level proof that the Rust peek plan drives the tmux session name and attach-command assembly on the live happy path
+- completed: the shipping Go `report` command now has a command-level happy-path proof that the live report flow consumes the migrated Rust parsing surface while lock, lookup, and tmux orchestration remain on the Go side
 
 ### Phase 7: Provider migration
 
