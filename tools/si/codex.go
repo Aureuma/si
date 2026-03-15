@@ -2668,13 +2668,13 @@ func cmdCodexStop(args []string) {
 		return
 	}
 	name := args[0]
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		fatal(err)
-	}
 	if _, delegated, err := maybeRunRustCodexContainerAction("stop", name); err != nil {
 		fatal(err)
 	} else if !delegated {
+		containerName, err := resolveCodexContainerName(name)
+		if err != nil {
+			fatal(err)
+		}
 		if err := execDockerCLI("stop", containerName); err != nil {
 			fatal(err)
 		}
