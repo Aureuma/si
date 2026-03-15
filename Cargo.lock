@@ -578,6 +578,7 @@ dependencies = [
  "si-rs-config",
  "si-rs-core",
  "si-rs-docker",
+ "si-rs-fort",
  "si-rs-process",
  "si-rs-provider-catalog",
  "si-rs-runtime",
