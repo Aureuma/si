@@ -115,7 +115,11 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 		}
 	}
 
-	register(func(_ string, _ []string) { printVersion() }, "version", "--version", "-v")
+	register(func(_ string, _ []string) {
+		if err := runVersionCommand(); err != nil {
+			fatal(err)
+		}
+	}, "version", "--version", "-v")
 	register(func(cmd string, args []string) {
 		if !dispatchCodexCommand(cmd, args) {
 			printUnknown("", cmd)
