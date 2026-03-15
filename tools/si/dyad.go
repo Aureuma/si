@@ -463,25 +463,24 @@ func cmdDyadPeek(args []string) {
 	}
 
 	suffix := sanitizeDyadTmuxSuffix(dyad)
-	actorContainer := shared.DyadContainerName(dyad, "actor")
-	criticContainer := shared.DyadContainerName(dyad, "critic")
-	actorSession := fmt.Sprintf("si-dyad-%s-actor", suffix)
-	criticSession := fmt.Sprintf("si-dyad-%s-critic", suffix)
 	peekSession := strings.TrimSpace(*hostSession)
-	actorCmd := dyadPeekAttachCmd(actorContainer, actorSession)
-	criticCmd := dyadPeekAttachCmd(criticContainer, criticSession)
+	fallbackPlan, err := buildDyadPeekFallbackPlan(dyad, suffix, peekSession)
+	if err != nil {
+		fatal(err)
+	}
+	actorContainer := fallbackPlan.ActorContainerName
+	criticContainer := fallbackPlan.CriticContainerName
+	actorCmd := fallbackPlan.ActorAttachCommand
+	criticCmd := fallbackPlan.CriticAttachCommand
+	peekSession = fallbackPlan.PeekSessionName
 	if rustPlan, delegated, err := maybeReadRustDyadPeekPlan(dyad, memberVal, peekSession); err != nil {
 		fatal(err)
 	} else if delegated {
 		actorContainer = strings.TrimSpace(rustPlan.ActorContainerName)
 		criticContainer = strings.TrimSpace(rustPlan.CriticContainerName)
-		actorSession = strings.TrimSpace(rustPlan.ActorSessionName)
-		criticSession = strings.TrimSpace(rustPlan.CriticSessionName)
 		peekSession = strings.TrimSpace(rustPlan.PeekSessionName)
 		actorCmd = strings.TrimSpace(rustPlan.ActorAttachCommand)
 		criticCmd = strings.TrimSpace(rustPlan.CriticAttachCommand)
-	} else if peekSession == "" {
-		peekSession = fmt.Sprintf("si-dyad-peek-%s", suffix)
 	}
 
 	client, err := shared.NewClient()
@@ -556,6 +555,33 @@ func cmdDyadPeek(args []string) {
 	if err := dyadTmuxAttach(peekSession); err != nil {
 		fatal(err)
 	}
+}
+
+func buildDyadPeekFallbackPlan(dyad string, suffix string, peekSession string) (*rustDyadPeekPlan, error) {
+	actorContainer, err := resolveDyadContainerName(dyad, "actor")
+	if err != nil {
+		return nil, err
+	}
+	criticContainer, err := resolveDyadContainerName(dyad, "critic")
+	if err != nil {
+		return nil, err
+	}
+	actorSession := fmt.Sprintf("si-dyad-%s-actor", suffix)
+	criticSession := fmt.Sprintf("si-dyad-%s-critic", suffix)
+	peekSession = strings.TrimSpace(peekSession)
+	if peekSession == "" {
+		peekSession = fmt.Sprintf("si-dyad-peek-%s", suffix)
+	}
+	return &rustDyadPeekPlan{
+		Dyad:                strings.TrimSpace(dyad),
+		ActorContainerName:  actorContainer,
+		CriticContainerName: criticContainer,
+		ActorSessionName:    actorSession,
+		CriticSessionName:   criticSession,
+		PeekSessionName:     peekSession,
+		ActorAttachCommand:  dyadPeekAttachCmd(actorContainer, actorSession),
+		CriticAttachCommand: dyadPeekAttachCmd(criticContainer, criticSession),
+	}, nil
 }
 
 func dyadTmuxRun(args ...string) error {
