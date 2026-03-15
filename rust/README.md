@@ -1,0 +1,18 @@
+# Rust Transition Workspace
+
+This workspace is the staged Rust rewrite for `si`.
+
+Current scope:
+
+- shared version metadata
+- `.si` path defaults and `[paths]` settings parsing
+- a small Rust CLI entrypoint for read-only diagnostics
+
+Current entrypoint:
+
+```bash
+cargo run -p si-rs-cli -- version
+cargo run -p si-rs-cli -- paths show --format json
+```
+
+The shipping Go `si` CLI remains the source of truth until a command family reaches the cutover criteria in `tickets/2026-03-15-si-rust-transition-plan.md`.

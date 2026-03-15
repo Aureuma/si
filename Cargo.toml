@@ -1,0 +1,24 @@
+[workspace]
+members = [
+    "rust/crates/si-core",
+    "rust/crates/si-config",
+    "rust/crates/si-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.54.0"
+edition = "2024"
+license = "AGPL-3.0-only"
+repository = "https://github.com/Aureuma/si"
+rust-version = "1.86"
+
+[workspace.dependencies]
+anyhow = "1.0.98"
+assert_cmd = "2.0.17"
+clap = { version = "4.5.39", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+tempfile = "3.20.0"
+thiserror = "2.0.12"
+toml = "0.8.22"
