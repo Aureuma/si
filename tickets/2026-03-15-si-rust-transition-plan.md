@@ -238,6 +238,7 @@ Progress notes:
 - completed: Rust dyad now owns `start`, `stop`, and member-specific `logs` Docker invocation surfaces, and the experimental Go dyad commands can delegate those actions after Go-side name/existence checks
 - completed: Rust dyad now owns label-aware `list` and `status` parsing on top of the shared Docker substrate, and the experimental Go dyad read-only commands can delegate to those Rust surfaces
 - completed: Rust dyad now owns single-dyad `restart` and `remove` Docker invocation surfaces, while Go intentionally retains the interactive `remove --all` confirmation and batch-removal flow
+- completed: Rust dyad now owns member-targeted `exec` and cleanup of stopped dyad containers, while Go intentionally retains the pre-exec mount-policy checks and user-facing cleanup success formatting
 
 ### Phase 5: Security/runtime migration
 

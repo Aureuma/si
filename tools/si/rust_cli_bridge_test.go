@@ -638,6 +638,63 @@ func TestMaybeRunRustDyadRemoveDelegatesAndReturnsOutput(t *testing.T) {
 	}
 }
 
+func TestMaybeRunRustDyadExecDelegatesToRustCLI(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeRunRustDyadExec("alpha", "critic", true, []string{"bash", "-lc", "echo hi"})
+	if err != nil {
+		t.Fatalf("maybeRunRustDyadExec: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected dyad exec to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\nexec\nalpha\n--member\ncritic\n--tty=true\n--\nbash\n-lc\necho hi" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestMaybeRunRustDyadCleanupDelegatesAndReturnsOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'removed=2'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustDyadCleanup()
+	if err != nil {
+		t.Fatalf("maybeRunRustDyadCleanup: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected dyad cleanup to delegate to Rust")
+	}
+	if strings.TrimSpace(output) != "removed=2" {
+		t.Fatalf("unexpected output %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\ncleanup" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeRunRustDyadLogsDelegatesAndReturnsOutput(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

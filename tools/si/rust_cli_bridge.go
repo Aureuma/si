@@ -349,6 +349,47 @@ func maybeRunRustDyadRemove(dyad string) (string, bool, error) {
 	return output, true, nil
 }
 
+func maybeRunRustDyadExec(dyad string, member string, tty bool, cmd []string) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	bin, err := resolveRustCLIBinary()
+	if err != nil {
+		return false, err
+	}
+	args := []string{
+		"dyad", "exec", strings.TrimSpace(dyad),
+		"--member", strings.TrimSpace(member),
+		"--tty=" + strconv.FormatBool(tty),
+		"--",
+	}
+	for _, item := range cmd {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			args = append(args, item)
+		}
+	}
+	command := rustCLIExecCommand(bin, args...)
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	if err := command.Run(); err != nil {
+		return false, fmt.Errorf("run rust si cli %q: %w", strings.Join(args, " "), err)
+	}
+	return true, nil
+}
+
+func maybeRunRustDyadCleanup() (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	output, err := runRustCLIText("dyad", "cleanup")
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeRunRustDyadLogs(dyad string, member string, tail int) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil

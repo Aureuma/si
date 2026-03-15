@@ -1181,6 +1181,11 @@ func execInDyad(dyad, member string, cmd []string, tty bool) error {
 	if strings.TrimSpace(requiredVaultFile) != "" && !shared.HasHostVaultEnvFileMount(info, requiredVaultFile) {
 		return fmt.Errorf("dyad container %s is missing the host vault env file mount required for `si vault`; run `si dyad recreate %s`", containerName, strings.TrimSpace(dyad))
 	}
+	if delegated, err := maybeRunRustDyadExec(dyad, member, tty, cmd); err != nil {
+		return err
+	} else if delegated {
+		return nil
+	}
 	opts := shared.ExecOptions{
 		TTY:  tty,
 		User: "si",
@@ -1425,6 +1430,21 @@ func cmdDyadCleanup(args []string) {
 		fatal(err)
 	}
 	removed := 0
+	if output, delegated, err := maybeRunRustDyadCleanup(); err != nil {
+		fatal(err)
+	} else if delegated {
+		trimmed := strings.TrimSpace(output)
+		if strings.HasPrefix(trimmed, "removed=") {
+			if count, parseErr := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(trimmed, "removed="))); parseErr == nil {
+				successf("removed %d stopped dyad containers", count)
+				return
+			}
+		}
+		if trimmed != "" {
+			fmt.Print(output)
+		}
+		return
+	}
 	for _, c := range containers {
 		if c.State == "running" {
 			continue

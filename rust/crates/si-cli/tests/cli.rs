@@ -513,6 +513,70 @@ fn dyad_remove_executes_actor_and_critic_docker_rm() {
 }
 
 #[test]
+fn dyad_exec_executes_docker_exec_for_selected_member() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'exec-ok'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "exec", "alpha", "--member", "critic", "--tty=true", "--docker-bin"])
+        .arg(&docker_bin)
+        .args(["--", "bash", "-lc", "echo hi"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("exec-ok"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("exec"));
+    assert!(args.contains("-it"));
+    assert!(args.contains("si-critic-alpha"));
+    assert!(args.contains("bash"));
+}
+
+#[test]
+fn dyad_cleanup_removes_only_stopped_members() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nif [ \"$1\" = \"ps\" ]; then\n  printf '%s\\n' 'si-actor-alpha\trunning\tactor-id\talpha\tios\tactor'\n  printf '%s\\n' 'si-critic-alpha\texited\tcritic-id\talpha\tios\tcritic'\n  printf '%s\\n' 'si-actor-beta\tdead\tactor2-id\tbeta\tgeneric\tactor'\n  exit 0\nfi\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "cleanup", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("removed=2"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("rm"));
+    assert!(args.contains("si-critic-alpha"));
+    assert!(args.contains("si-actor-beta"));
+    assert!(!args.contains("si-actor-alpha"));
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()
