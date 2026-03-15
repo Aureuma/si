@@ -1,0 +1,24 @@
+[package]
+name = "si-rs-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+si-rs-config = { path = "../si-config" }
+si-rs-core = { path = "../si-core" }
+
+[dev-dependencies]
+assert_cmd.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[[bin]]
+name = "si-rs"
+path = "src/main.rs"
