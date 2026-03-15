@@ -206,6 +206,21 @@ func maybeRunRustCodexContainerAction(action string, name string) (string, bool,
 	return strings.TrimSpace(output), true, nil
 }
 
+func maybeRunRustCodexLogs(name string, tail string, follow bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	subcommand := "logs"
+	if follow {
+		subcommand = "tail"
+	}
+	output, err := runRustCLIText("codex", subcommand, strings.TrimSpace(name), "--tail", strings.TrimSpace(tail))
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil

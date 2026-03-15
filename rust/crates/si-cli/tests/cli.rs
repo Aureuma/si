@@ -482,6 +482,78 @@ fn codex_stop_executes_docker_stop_for_container_name() {
     assert_eq!(args.lines().collect::<Vec<_>>(), ["stop", "si-codex-ferma"]);
 }
 
+#[test]
+fn codex_logs_executes_docker_logs_for_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::write(
+        &docker_bin,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'log line'\n",
+            args_path.display()
+        ),
+    )
+    .expect("write docker script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&docker_bin, perms).expect("chmod");
+    }
+
+    let output = cargo_bin()
+        .args(["codex", "logs", "ferma", "--tail", "25", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("log line"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(args.lines().collect::<Vec<_>>(), ["logs", "--tail", "25", "si-codex-ferma"]);
+}
+
+#[test]
+fn codex_tail_executes_following_docker_logs_for_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::write(
+        &docker_bin,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'tail line'\n",
+            args_path.display()
+        ),
+    )
+    .expect("write docker script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&docker_bin, perms).expect("chmod");
+    }
+
+    let output = cargo_bin()
+        .args(["codex", "tail", "ferma", "--tail", "25", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("tail line"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(args.lines().collect::<Vec<_>>(), ["logs", "-f", "--tail", "25", "si-codex-ferma"]);
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }
