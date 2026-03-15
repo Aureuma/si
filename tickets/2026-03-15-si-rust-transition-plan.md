@@ -333,6 +333,7 @@ Progress notes:
 - completed: experimental Go dyad `peek` fallback now seeds container/session attach planning from the shared Rust-aware dyad lookup helper too, so the interactive tmux path no longer reconstructs actor/critic container names independently before optional Rust peek-plan delegation
 - completed: experimental Go dyad spawn preflight now resolves existing actor/critic container names through the shared Rust-aware dyad lookup helper too, so the reuse-vs-create decision before Rust spawn-start no longer bypasses the migrated runtime naming boundary
 - completed: the host-side Fort wrapper session bootstrap fallback now reuses the shared Rust-aware bootstrap loader path too, so runtime env preparation no longer carries a separate Go-only reconstruction of persisted bootstrap host/token details when Rust delegation is unavailable
+- completed: single-container Go codex remove now resolves its target container name through the shared Rust-aware artifact helper from the start, so the live remove flow no longer seeds with raw Go naming before consulting the migrated remove-plan boundary
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
