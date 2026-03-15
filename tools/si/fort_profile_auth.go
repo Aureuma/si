@@ -266,6 +266,19 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	if err := writeSecretFile(paths.RefreshTokenHostPath, refreshed.RefreshToken); err != nil {
 		return codexFortBootstrap{}, err
 	}
+	now := time.Now().UTC()
+	if transition, delegated, err := maybeApplyRustFortSessionRefreshOutcome(paths.SessionStateHostPath, refreshed, now); err != nil {
+		return codexFortBootstrap{}, err
+	} else if delegated {
+		if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
+			state = stateFromRust
+		}
+		if classification := strings.TrimSpace(transition.Classification.State); classification != "" && classification != "resumable" {
+			return codexFortBootstrap{}, fmt.Errorf("unexpected rust fort refresh classification: %s", classification)
+		}
+	} else {
+		state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
+	}
 	state.ProfileID = profileID
 	if strings.TrimSpace(state.AgentID) == "" {
 		state.AgentID = fortAgentIDForProfile(profileID)
@@ -279,8 +292,7 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	}
 	state.AccessTokenPath = paths.AccessTokenHostPath
 	state.RefreshTokenPath = paths.RefreshTokenHostPath
-	state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
-	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	state.UpdatedAt = now.Format(time.RFC3339)
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		return codexFortBootstrap{}, err
 	}

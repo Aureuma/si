@@ -153,11 +153,23 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 	if err := writeSecretFile(paths.RefreshTokenHostPath, refreshed.RefreshToken); err != nil {
 		return 0, err
 	}
+	now := time.Now().UTC()
+	if transition, delegated, err := maybeApplyRustFortSessionRefreshOutcome(paths.SessionStateHostPath, refreshed, now); err != nil {
+		return 0, err
+	} else if delegated {
+		if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
+			state = stateFromRust
+		}
+		if classification := strings.TrimSpace(transition.Classification.State); classification != "" && classification != "resumable" {
+			return 0, fmt.Errorf("unexpected rust fort refresh classification: %s", classification)
+		}
+	} else {
+		state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
+	}
 	state.ProfileID = strings.TrimSpace(profile.ID)
 	state.AccessTokenPath = paths.AccessTokenHostPath
 	state.RefreshTokenPath = paths.RefreshTokenHostPath
-	state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
-	state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
+	state.UpdatedAt = now.Format(time.RFC3339)
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		return 0, err
 	}

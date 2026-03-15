@@ -1,4 +1,4 @@
-use chrono::DateTime;
+use chrono::{DateTime, SecondsFormat, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 #[cfg(unix)]
@@ -50,6 +50,12 @@ pub struct PersistedRuntimeAgentState {
     pub started_at: String,
     #[serde(default)]
     pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PersistedSessionTransition {
+    pub state: PersistedSessionState,
+    pub classification: SessionState,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -129,6 +135,10 @@ pub enum PersistedSessionError {
     InvalidAccessExpiry { value: String },
     #[error("invalid refresh expiry timestamp {value:?}")]
     InvalidRefreshExpiry { value: String },
+    #[error("invalid access expiry unix timestamp {value}")]
+    InvalidAccessExpiryUnix { value: i64 },
+    #[error("invalid refresh expiry unix timestamp {value}")]
+    InvalidRefreshExpiryUnix { value: i64 },
 }
 
 #[derive(Debug, Error)]
@@ -331,6 +341,34 @@ pub fn classify_persisted_session_state(
     Ok(classify_session(Some(state.to_snapshot()?), now_unix))
 }
 
+pub fn apply_refresh_outcome_to_persisted_session_state(
+    state: &PersistedSessionState,
+    outcome: RefreshOutcome,
+    now_unix: i64,
+) -> Result<PersistedSessionTransition, PersistedSessionError> {
+    let normalized = state.normalized();
+    let classification = apply_refresh_outcome(
+        SessionState::Refreshing(normalized.to_snapshot()?),
+        outcome.clone(),
+        now_unix,
+    )
+    .map_err(|_| PersistedSessionError::InvalidRefreshExpiry {
+        value: normalized.refresh_expires_at.clone(),
+    })?;
+    let mut next = normalized;
+    if let RefreshOutcome::Success(success) = outcome {
+        next.access_expires_at = format_unix_rfc3339(success.access_expires_at_unix, |value| {
+            PersistedSessionError::InvalidAccessExpiryUnix { value }
+        })?;
+        if let Some(refresh_expires_at_unix) = success.refresh_expires_at_unix {
+            next.refresh_expires_at = format_unix_rfc3339(refresh_expires_at_unix, |value| {
+                PersistedSessionError::InvalidRefreshExpiryUnix { value }
+            })?;
+        }
+    }
+    Ok(PersistedSessionTransition { state: next, classification })
+}
+
 pub fn save_persisted_runtime_agent_state(
     path: impl AsRef<Path>,
     state: &PersistedRuntimeAgentState,
@@ -431,6 +469,14 @@ where
     Ok(Some(parsed.timestamp()))
 }
 
+fn format_unix_rfc3339<F>(value: i64, err: F) -> Result<String, PersistedSessionError>
+where
+    F: Fn(i64) -> PersistedSessionError,
+{
+    let parsed = Utc.timestamp_opt(value, 0).single().ok_or_else(|| err(value))?;
+    Ok(parsed.to_rfc3339_opts(SecondsFormat::Secs, true))
+}
+
 fn set_file_mode(path: &Path, mode: u32) -> Result<(), SessionStateFileError> {
     #[cfg(unix)]
     {
@@ -522,10 +568,12 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        PersistedRuntimeAgentState, PersistedSessionError, PersistedSessionState, RefreshOutcome,
-        RefreshSuccess, RevocationReason, SessionSnapshot, SessionState, SessionStateFileError,
-        SessionTransitionError, acquire_session_lock, apply_refresh_outcome, begin_refresh,
-        begin_teardown, classify_persisted_session_state, classify_session, complete_teardown,
+        PersistedRuntimeAgentState, PersistedSessionError, PersistedSessionState,
+        PersistedSessionTransition, RefreshOutcome, RefreshSuccess, RevocationReason,
+        SessionSnapshot, SessionState, SessionStateFileError, SessionTransitionError,
+        acquire_session_lock, apply_refresh_outcome,
+        apply_refresh_outcome_to_persisted_session_state, begin_refresh, begin_teardown,
+        classify_persisted_session_state, classify_session, complete_teardown,
         load_persisted_runtime_agent_state, load_persisted_session_state,
         save_persisted_runtime_agent_state, save_persisted_session_state, try_acquire_session_lock,
     };
@@ -713,6 +761,80 @@ mod tests {
         assert_eq!(
             err,
             PersistedSessionError::InvalidAccessExpiry { value: "not-a-timestamp".to_owned() }
+        );
+    }
+
+    #[test]
+    fn apply_refresh_outcome_to_persisted_session_state_updates_expiries() {
+        let state = PersistedSessionState {
+            profile_id: "ferma".to_owned(),
+            agent_id: "agent-ferma".to_owned(),
+            session_id: "session-123".to_owned(),
+            access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
+            refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
+            ..PersistedSessionState::default()
+        };
+
+        let transitioned = apply_refresh_outcome_to_persisted_session_state(
+            &state,
+            RefreshOutcome::Success(RefreshSuccess {
+                access_expires_at_unix: 500,
+                refresh_expires_at_unix: Some(800),
+            }),
+            100,
+        )
+        .expect("transition refresh outcome");
+
+        assert_eq!(
+            transitioned,
+            PersistedSessionTransition {
+                state: PersistedSessionState {
+                    access_expires_at: "1970-01-01T00:08:20Z".to_owned(),
+                    refresh_expires_at: "1970-01-01T00:13:20Z".to_owned(),
+                    ..state
+                },
+                classification: SessionState::Resumable(SessionSnapshot {
+                    profile_id: "ferma".to_owned(),
+                    agent_id: "agent-ferma".to_owned(),
+                    session_id: Some("session-123".to_owned()),
+                    access_expires_at_unix: Some(500),
+                    refresh_expires_at_unix: Some(800),
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn apply_refresh_outcome_to_persisted_session_state_revokes_on_unauthorized() {
+        let state = PersistedSessionState {
+            profile_id: "ferma".to_owned(),
+            agent_id: "agent-ferma".to_owned(),
+            session_id: "session-123".to_owned(),
+            access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
+            refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
+            ..PersistedSessionState::default()
+        };
+
+        let transitioned = apply_refresh_outcome_to_persisted_session_state(
+            &state,
+            RefreshOutcome::Unauthorized,
+            100,
+        )
+        .expect("transition unauthorized outcome");
+
+        assert_eq!(transitioned.state, state);
+        assert_eq!(
+            transitioned.classification,
+            SessionState::Revoked {
+                snapshot: Some(SessionSnapshot {
+                    profile_id: "ferma".to_owned(),
+                    agent_id: "agent-ferma".to_owned(),
+                    session_id: Some("session-123".to_owned()),
+                    access_expires_at_unix: Some(90),
+                    refresh_expires_at_unix: Some(400),
+                }),
+                reason: RevocationReason::RefreshUnauthorized,
+            }
         );
     }
 

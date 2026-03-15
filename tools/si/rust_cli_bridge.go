@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -127,18 +128,18 @@ type rustCodexRespawnPlan struct {
 }
 
 type rustVaultTrustLookup struct {
-	Found              bool   `json:"found"`
-	Matches            bool   `json:"matches"`
-	RepoRoot           string `json:"repo_root"`
-	File               string `json:"file"`
+	Found               bool   `json:"found"`
+	Matches             bool   `json:"matches"`
+	RepoRoot            string `json:"repo_root"`
+	File                string `json:"file"`
 	ExpectedFingerprint string `json:"expected_fingerprint"`
-	StoredFingerprint  string `json:"stored_fingerprint,omitempty"`
-	TrustedAt          string `json:"trusted_at,omitempty"`
+	StoredFingerprint   string `json:"stored_fingerprint,omitempty"`
+	TrustedAt           string `json:"trusted_at,omitempty"`
 }
 
 type rustFortSessionClassification struct {
-	State  string
-	Reason string
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type rustFortRuntimeAgentState struct {
@@ -147,6 +148,11 @@ type rustFortRuntimeAgentState struct {
 	CommandPath string `json:"command_path,omitempty"`
 	StartedAt   string `json:"started_at,omitempty"`
 	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
+type rustFortSessionTransition struct {
+	State          fortProfileSessionState       `json:"state"`
+	Classification rustFortSessionClassification `json:"classification"`
 }
 
 func runVersionCommand() error {
@@ -486,6 +492,33 @@ func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAge
 		return false, err
 	}
 	return true, nil
+}
+
+func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionRefreshResult, now time.Time) (*rustFortSessionTransition, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	accessExpiry, err := time.Parse(time.RFC3339, strings.TrimSpace(refreshed.AccessExpiresAt))
+	if err != nil {
+		return nil, false, fmt.Errorf("parse rust fort access expiry: %w", err)
+	}
+	args := []string{
+		"fort", "session-state", "refresh-outcome",
+		"--path", strings.TrimSpace(path),
+		"--outcome", "success",
+		"--now-unix", strconv.FormatInt(now.UTC().Unix(), 10),
+		"--access-expires-at-unix", strconv.FormatInt(accessExpiry.UTC().Unix(), 10),
+		"--format", "json",
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var transition rustFortSessionTransition
+	if err := json.Unmarshal(output, &transition); err != nil {
+		return nil, false, fmt.Errorf("decode rust fort refresh outcome: %w", err)
+	}
+	return &transition, true, nil
 }
 
 func decodeRustFortSessionClassification(raw []byte) (*rustFortSessionClassification, error) {
