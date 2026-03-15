@@ -160,6 +160,7 @@ Progress notes:
 - completed: modular Rust settings loading for the first non-core modules (`surf` and `viva`) with parity tests ported from Go settings cases
 - completed: initial `si-docker` crate for typed bind mounts, container specs, Docker `run` arg rendering, and preflight mount validation
 - completed: runtime path resolution module with Rust parity tests for stale-settings fallback, workspace-root inference, and dyad bundled-vs-repo config discovery
+- completed: initial `si-runtime` crate that consumes Rust Docker primitives for codex/dyad core mount planning, with translated Go mount behavior tests
 
 ### Phase 3: Read-only command migration
 
