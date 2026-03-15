@@ -270,6 +270,17 @@ func maybeRunRustCodexExec(name string, workdir string, interactive bool, tty bo
 	return output, true, nil
 }
 
+func maybeRunRustCodexList(jsonOut bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() || jsonOut {
+		return "", false, nil
+	}
+	output, err := runRustCLIText("codex", "list", "--format", "text")
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil

@@ -889,6 +889,16 @@ func cmdCodexList(args []string) {
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
 
+	if output, delegated, err := maybeRunRustCodexList(*jsonOut); err != nil {
+		fatal(err)
+	} else if delegated {
+		fmt.Print(output)
+		if strings.TrimSpace(output) != "" && !strings.HasSuffix(output, "\n") {
+			fmt.Println()
+		}
+		return
+	}
+
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
