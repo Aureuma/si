@@ -182,16 +182,9 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		return codexFortBootstrap{}, err
 	}
-	boot := codexFortBootstrap{
-		ProfileID:                 profileID,
-		AgentID:                   agentID,
-		SessionID:                 session.SessionID,
-		HostURL:                   cfg.HostURL,
-		ContainerHostURL:          cfg.ContainerHostURL,
-		AccessTokenHostPath:       paths.AccessTokenHostPath,
-		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
-		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
-		RefreshTokenContainerPath: paths.RefreshTokenContainerPath,
+	boot, err := loadCodexFortBootstrapFromProfileState(profile)
+	if err != nil {
+		return codexFortBootstrap{}, err
 	}
 	if err := ensureFortRuntimeAgentLocked(profile, paths); err != nil {
 		return codexFortBootstrap{}, err
@@ -310,17 +303,7 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		return codexFortBootstrap{}, err
 	}
-	return codexFortBootstrap{
-		ProfileID:                 profileID,
-		AgentID:                   strings.TrimSpace(state.AgentID),
-		SessionID:                 strings.TrimSpace(state.SessionID),
-		HostURL:                   hostURL,
-		ContainerHostURL:          strings.TrimSpace(state.ContainerHost),
-		AccessTokenHostPath:       paths.AccessTokenHostPath,
-		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
-		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
-		RefreshTokenContainerPath: paths.RefreshTokenContainerPath,
-	}, nil
+	return loadCodexFortBootstrapFromProfileState(profile)
 }
 
 func loadCodexFortBootstrapFromProfileState(profile codexProfile) (codexFortBootstrap, error) {

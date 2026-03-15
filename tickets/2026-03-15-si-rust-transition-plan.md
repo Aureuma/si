@@ -289,6 +289,7 @@ Progress notes:
 - completed: experimental Go unauthorized Fort refreshes now delegate revocation mutation to Rust before persisting state, so dead profile sessions are marked through the Rust lifecycle path instead of leaving stale resumable session ids behind
 - completed: Rust Fort now owns persisted session-state and runtime-agent-state clear operations, and the experimental Go runtime-agent/session cleanup paths can delegate those file removals instead of deleting the migrated state files directly
 - completed: experimental Go codex bootstrap loading can now delegate persisted Fort bootstrap-view normalization to Rust, moving another live Fort state interpretation path behind the compatibility boundary while preserving Go-owned profile path derivation
+- completed: live Go Fort open and refresh flows now reuse the persisted Rust bootstrap-view loader after saving session state, so new-session and refreshed-session bootstrap output no longer reassemble profile/agent/container-host data separately from the migrated Rust interpretation path
 - completed: initial `si-vault` crate for persisted trust-store state with translated round-trip, missing-file, and normalized path update/delete coverage from the Go vault trust path
 - completed: experimental Go vault trust enforcement can now delegate trust-store lookup to Rust behind the existing compatibility boundary, with focused bridge and consumer tests
 
