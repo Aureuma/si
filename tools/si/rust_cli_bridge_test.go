@@ -469,6 +469,37 @@ func TestMaybeApplyRustFortSessionRefreshOutcomeDelegatesAndParsesJSON(t *testin
 	}
 }
 
+func TestMaybeRunRustFortSessionTeardownDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"state\":\"closed\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	classification, delegated, err := maybeRunRustFortSessionTeardown("/tmp/session.json", time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatalf("maybeRunRustFortSessionTeardown: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected fort teardown to delegate to Rust")
+	}
+	if classification.State != "closed" {
+		t.Fatalf("unexpected teardown classification: %+v", classification)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "fort\nsession-state\nteardown\n--path\n/tmp/session.json\n--now-unix\n100\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeRunRustCodexLogsDelegatesAndReturnsOutput(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

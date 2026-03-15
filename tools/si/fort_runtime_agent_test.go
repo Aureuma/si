@@ -232,6 +232,76 @@ func TestCloseCodexProfileFortSessionRemovesArtifacts(t *testing.T) {
 	}
 }
 
+func TestCloseCodexProfileFortSessionDelegatesTeardownToRustCLIWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+	profile := codexProfile{ID: "alpha"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+	if err := writeSecretFile(paths.AccessTokenHostPath, makeTestJWT(time.Now().Add(10*time.Minute))); err != nil {
+		t.Fatalf("write access token: %v", err)
+	}
+	if err := writeSecretFile(paths.RefreshTokenHostPath, "refresh-1"); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if err := saveFortRuntimeAgentState(paths.RuntimeAgentStateHostPath, fortProfileRuntimeAgentState{
+		ProfileID: profile.ID,
+		PID:       999999,
+		StartedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("saveFortRuntimeAgentState: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/session/close" {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer srv.Close()
+	state := fortProfileSessionState{
+		ProfileID:        profile.ID,
+		AgentID:          fortAgentIDForProfile(profile.ID),
+		SessionID:        "rfs_existing",
+		Host:             srv.URL,
+		ContainerHost:    srv.URL,
+		AccessTokenPath:  paths.AccessTokenHostPath,
+		RefreshTokenPath: paths.RefreshTokenHostPath,
+		AccessExpiresAt:  "1970-01-01T00:01:30Z",
+		RefreshExpiresAt: "1970-01-01T00:06:40Z",
+	}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"rfs_existing\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_expires_at\":\"1970-01-01T00:01:30Z\",\"refresh_expires_at\":\"1970-01-01T00:06:40Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"teardown\" ]; then\n  printf '%s\\n' '{\"state\":\"closed\"}'\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if err := closeCodexProfileFortSession(profile); err != nil {
+		t.Fatalf("closeCodexProfileFortSession: %v", err)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nteardown\n") {
+		t.Fatalf("expected teardown delegation, got %q", string(argsData))
+	}
+}
+
 func TestLoadFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
