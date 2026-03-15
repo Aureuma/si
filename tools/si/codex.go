@@ -313,6 +313,49 @@ func cmdCodexSpawn(args []string) {
 	}
 	desiredWorkspaceHost := filepath.Clean(strings.TrimSpace(*flags.workspaceHost))
 	maybePersistWorkspaceDefault(workspaceScopeCodex, &settings, desiredWorkspaceHost, interactive)
+	rustPlan, delegatedSpawnPlan, err := maybeBuildRustCodexSpawnPlan(rustCodexSpawnPlanRequest{
+		Name:          name,
+		ProfileID:     strings.TrimSpace(*flags.profile),
+		Workspace:     desiredWorkspaceHost,
+		Workdir:       strings.TrimSpace(*flags.workdir),
+		CodexVolume:   strings.TrimSpace(*flags.codexVolume),
+		SkillsVolume:  strings.TrimSpace(*flags.skillsVolume),
+		GHVolume:      strings.TrimSpace(*flags.ghVolume),
+		Repo:          strings.TrimSpace(*flags.repo),
+		GHPAT:         strings.TrimSpace(*flags.ghPat),
+		DockerSocket:  *flags.dockerSocket,
+		Detach:        *flags.detach,
+		CleanSlate:    *flags.cleanSlate,
+		Image:         strings.TrimSpace(*flags.image),
+		Network:       strings.TrimSpace(*flags.networkName),
+		VaultEnvFile:  requiredVaultFile,
+		IncludeHostSI: true,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	if delegatedSpawnPlan {
+		containerName = strings.TrimSpace(rustPlan.ContainerName)
+		*flags.workspaceHost = filepath.Clean(strings.TrimSpace(rustPlan.WorkspaceHost))
+		desiredWorkspaceHost = filepath.Clean(strings.TrimSpace(rustPlan.WorkspaceHost))
+		workspaceTargetPrimary = filepath.ToSlash(strings.TrimSpace(rustPlan.WorkspacePrimaryTarget))
+		if workspaceTargetPrimary == "" {
+			workspaceTargetPrimary = "/workspace"
+		}
+		workspaceTargetMirror = filepath.ToSlash(strings.TrimSpace(rustPlan.WorkspaceMirrorTarget))
+		if workspaceTargetMirror == "" || !strings.HasPrefix(workspaceTargetMirror, "/") {
+			workspaceTargetMirror = workspaceTargetPrimary
+		}
+		*flags.workdir = strings.TrimSpace(rustPlan.Workdir)
+		*flags.codexVolume = strings.TrimSpace(rustPlan.CodexVolume)
+		*flags.skillsVolume = strings.TrimSpace(rustPlan.SkillsVolume)
+		*flags.ghVolume = strings.TrimSpace(rustPlan.GHVolume)
+		*flags.image = strings.TrimSpace(rustPlan.Image)
+		*flags.networkName = strings.TrimSpace(rustPlan.NetworkName)
+		*flags.dockerSocket = rustPlan.DockerSocket
+		*flags.detach = rustPlan.Detach
+		*flags.cleanSlate = rustPlan.CleanSlate
+	}
 
 	client, err := shared.NewClient()
 	if err != nil {
@@ -467,23 +510,28 @@ func cmdCodexSpawn(args []string) {
 		labels[codexProfileLabelKey] = profile.ID
 	}
 
-	env := []string{
-		"HOME=/home/si",
-		"CODEX_HOME=/home/si/.codex",
-		"SI_WORKSPACE_PRIMARY=" + workspaceTargetPrimary,
-		"SI_WORKSPACE_MIRROR=" + workspaceTargetMirror,
-		"SI_WORKSPACE_HOST=" + strings.TrimSpace(*flags.workspaceHost),
+	env := []string{}
+	if delegatedSpawnPlan {
+		env = append(env, rustPlan.Env...)
+	} else {
+		env = []string{
+			"HOME=/home/si",
+			"CODEX_HOME=/home/si/.codex",
+			"SI_WORKSPACE_PRIMARY=" + workspaceTargetPrimary,
+			"SI_WORKSPACE_MIRROR=" + workspaceTargetMirror,
+			"SI_WORKSPACE_HOST=" + strings.TrimSpace(*flags.workspaceHost),
+		}
+		if strings.TrimSpace(*flags.repo) != "" {
+			env = append(env, "SI_REPO="+strings.TrimSpace(*flags.repo))
+		}
+		if strings.TrimSpace(*flags.ghPat) != "" {
+			env = append(env, "SI_GH_PAT="+strings.TrimSpace(*flags.ghPat))
+			env = append(env, "GH_TOKEN="+strings.TrimSpace(*flags.ghPat))
+			env = append(env, "GITHUB_TOKEN="+strings.TrimSpace(*flags.ghPat))
+		}
 	}
 	env = append(env, hostUserEnv()...)
 	env = appendContainerProfileEnv(env, profile)
-	if strings.TrimSpace(*flags.repo) != "" {
-		env = append(env, "SI_REPO="+strings.TrimSpace(*flags.repo))
-	}
-	if strings.TrimSpace(*flags.ghPat) != "" {
-		env = append(env, "SI_GH_PAT="+strings.TrimSpace(*flags.ghPat))
-		env = append(env, "GH_TOKEN="+strings.TrimSpace(*flags.ghPat))
-		env = append(env, "GITHUB_TOKEN="+strings.TrimSpace(*flags.ghPat))
-	}
 	if fortBootstrap != nil {
 		env = append(env, fortBootstrap.env()...)
 	}
@@ -513,14 +561,25 @@ func cmdCodexSpawn(args []string) {
 		{Type: mount.TypeVolume, Source: skillsVol, Target: "/home/si/.codex/skills"},
 		{Type: mount.TypeVolume, Source: ghVol, Target: "/home/si/.config/gh"},
 	}
-	mounts = append(mounts, shared.BuildContainerCoreMounts(shared.ContainerCoreMountPlan{
-		WorkspaceHost:          *flags.workspaceHost,
-		WorkspacePrimaryTarget: workspaceTargetPrimary,
-		WorkspaceMirrorTarget:  workspaceTargetMirror,
-		ContainerHome:          "/home/si",
-		IncludeHostSi:          true,
-		HostVaultEnvFile:       requiredVaultFile,
-	})...)
+	if delegatedSpawnPlan {
+		for _, plannedMount := range rustPlan.Mounts {
+			mounts = append(mounts, mount.Mount{
+				Type:     mount.TypeBind,
+				Source:   strings.TrimSpace(plannedMount.Source),
+				Target:   strings.TrimSpace(plannedMount.Target),
+				ReadOnly: plannedMount.ReadOnly,
+			})
+		}
+	} else {
+		mounts = append(mounts, shared.BuildContainerCoreMounts(shared.ContainerCoreMountPlan{
+			WorkspaceHost:          *flags.workspaceHost,
+			WorkspacePrimaryTarget: workspaceTargetPrimary,
+			WorkspaceMirrorTarget:  workspaceTargetMirror,
+			ContainerHome:          "/home/si",
+			IncludeHostSi:          true,
+			HostVaultEnvFile:       requiredVaultFile,
+		})...)
+	}
 	if *flags.dockerSocket {
 		if socketMount, ok := shared.DockerSocketMount(); ok {
 			mounts = append(mounts, socketMount)

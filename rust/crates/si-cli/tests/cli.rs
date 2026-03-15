@@ -253,6 +253,26 @@ fn codex_spawn_plan_json_includes_repo_pat_env_and_host_mounts() {
     assert!(mounts.iter().any(|mount| mount["target"] == "/home/si/.si"));
 }
 
+#[test]
+fn codex_spawn_plan_uses_env_host_context_when_flags_are_omitted() {
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    let workspace = tempdir().expect("tempdir");
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .args(["codex", "spawn-plan", "--name", "einsteina", "--workspace"])
+        .arg(workspace.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let mounts = parsed["mounts"].as_array().expect("mounts array");
+    assert!(mounts.iter().any(|mount| mount["target"] == "/home/si/.si"));
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }
