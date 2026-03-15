@@ -133,11 +133,6 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 		}
 	}
 
-	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
-	if err != nil {
-		return 0, err
-	}
-
 	refreshToken, err := readStrictSecretFile(paths.RefreshTokenHostPath)
 	if err != nil {
 		return 0, err
@@ -148,6 +143,22 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 		ctxRefresh, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 	}
+	var (
+		state       fortProfileSessionState
+		stateLoaded bool
+	)
+	loadState := func() error {
+		if stateLoaded {
+			return nil
+		}
+		loaded, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+		if err != nil {
+			return err
+		}
+		state = loaded
+		stateLoaded = true
+		return nil
+	}
 	refreshed, err := fortRefreshSession(ctxRefresh, hostURL, refreshToken)
 	if err != nil {
 		if fortStatusUnauthorized(err) {
@@ -157,6 +168,9 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 			} else if delegated {
 				if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
 					state = stateFromRust
+					stateLoaded = true
+				} else if loadErr := loadState(); loadErr != nil {
+					return 0, loadErr
 				}
 				state.UpdatedAt = now.Format(time.RFC3339)
 				if saveErr := saveFortProfileSessionState(paths.SessionStateHostPath, state); saveErr != nil {
@@ -178,11 +192,17 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 	} else if delegated {
 		if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
 			state = stateFromRust
+			stateLoaded = true
+		} else if loadErr := loadState(); loadErr != nil {
+			return 0, loadErr
 		}
 		if classification := strings.TrimSpace(transition.Classification.State); classification != "" && classification != "resumable" {
 			return 0, fmt.Errorf("unexpected rust fort refresh classification: %s", classification)
 		}
 	} else {
+		if err := loadState(); err != nil {
+			return 0, err
+		}
 		state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
 	}
 	state.ProfileID = strings.TrimSpace(profile.ID)

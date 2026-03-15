@@ -230,10 +230,6 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	if profileID == "" {
 		return codexFortBootstrap{}, fmt.Errorf("profile id required")
 	}
-	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
-	if err != nil {
-		return codexFortBootstrap{}, err
-	}
 	hostURL := strings.TrimSpace(boot.HostURL)
 	if hostURL == "" {
 		return codexFortBootstrap{}, fmt.Errorf("fort host is missing in bootstrap view")
@@ -251,6 +247,22 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 		ctxRefresh, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 	}
+	var (
+		state       fortProfileSessionState
+		stateLoaded bool
+	)
+	loadState := func() error {
+		if stateLoaded {
+			return nil
+		}
+		loaded, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+		if err != nil {
+			return err
+		}
+		state = loaded
+		stateLoaded = true
+		return nil
+	}
 	refreshed, err := fortRefreshSession(ctxRefresh, hostURL, refreshToken)
 	if err != nil {
 		if fortStatusUnauthorized(err) {
@@ -260,6 +272,9 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 			} else if delegated {
 				if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
 					state = stateFromRust
+					stateLoaded = true
+				} else if loadErr := loadState(); loadErr != nil {
+					return codexFortBootstrap{}, loadErr
 				}
 				state.UpdatedAt = now.Format(time.RFC3339)
 				if saveErr := saveFortProfileSessionState(paths.SessionStateHostPath, state); saveErr != nil {
@@ -281,11 +296,17 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	} else if delegated {
 		if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
 			state = stateFromRust
+			stateLoaded = true
+		} else if loadErr := loadState(); loadErr != nil {
+			return codexFortBootstrap{}, loadErr
 		}
 		if classification := strings.TrimSpace(transition.Classification.State); classification != "" && classification != "resumable" {
 			return codexFortBootstrap{}, fmt.Errorf("unexpected rust fort refresh classification: %s", classification)
 		}
 	} else {
+		if err := loadState(); err != nil {
+			return codexFortBootstrap{}, err
+		}
 		state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
 	}
 	state.ProfileID = profileID
