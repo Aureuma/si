@@ -187,6 +187,7 @@ Progress notes:
 - completed: focused Go tests covering fallback, explicit bin selection, repo-local binary discovery, and missing-binary failures
 - completed: Rust `providers characteristics` surface with JSON coverage and provider-id alias handling
 - completed: Go compatibility bridge for `si providers characteristics`, including `--json` passthrough and focused delegation tests
+- completed: Rust provider catalog snapshot helpers with translated alias/capability/probe assertions from Go provider tests
 
 ### Phase 4: Runtime substrate migration
 
