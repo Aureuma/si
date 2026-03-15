@@ -450,6 +450,37 @@ func TestMaybeReadRustWarmupAutostartDecisionDelegatesAndParsesJSON(t *testing.T
 	}
 }
 
+func TestMaybeRunRustWarmupStatusDelegatesAndReturnsOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'warmup-status'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustWarmupStatus(true)
+	if err != nil {
+		t.Fatalf("maybeRunRustWarmupStatus: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected warmup status to delegate to Rust")
+	}
+	if strings.TrimSpace(output) != "warmup-status" {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nstatus\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

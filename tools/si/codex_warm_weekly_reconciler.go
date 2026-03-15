@@ -207,6 +207,12 @@ func cmdWarmupStatus(args []string) {
 		printUsage("usage: si warmup status [--json]")
 		return
 	}
+	if output, delegated, err := maybeRunRustWarmupStatus(*jsonOut); err != nil {
+		fatal(err)
+	} else if delegated {
+		fmt.Print(output)
+		return
+	}
 	path, err := warmWeeklyStatePath()
 	if err != nil {
 		fatal(err)
