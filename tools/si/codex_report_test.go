@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestExtractReportLinesSingle(t *testing.T) {
 	raw := "› Hello\n\n• Hi there!\n\n› Next"
@@ -81,5 +86,35 @@ func TestExtractReportIncludesWorkedLine(t *testing.T) {
 	expected := "• Done.\nWorked for 0m 2s"
 	if report != expected {
 		t.Fatalf("unexpected report: %q", report)
+	}
+}
+
+func TestReadCodexReportCaptureDelegatesToRustWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\ncat >/dev/null\nprintf '%s\\n' '{\"segments\":[{\"prompt\":\"Prompt\",\"lines\":[\"• Done.\",\"Worked for 0m 2s\"],\"raw\":[\"• Done.\",\"Worked for 0m 2s\"]},{\"prompt\":\"Next\",\"lines\":[],\"raw\":[]}],\"report\":\"• Done.\\nWorked for 0m 2s\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	segments, report, err := readCodexReportCapture("› Prompt\n• Done.\nWorked for 0m 2s\n› Next", "› Prompt\n• Done.\nWorked for 0m 2s\n› Next", 0, false)
+	if err != nil {
+		t.Fatalf("readCodexReportCapture: %v", err)
+	}
+	if len(segments) != 2 || segments[0].Prompt != "Prompt" {
+		t.Fatalf("unexpected segments: %#v", segments)
+	}
+	if report != "• Done.\nWorked for 0m 2s" {
+		t.Fatalf("unexpected report: %q", report)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nreport-parse\n--format\njson" {
+		t.Fatalf("unexpected delegated args %q", string(argsData))
 	}
 }

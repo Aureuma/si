@@ -139,6 +139,17 @@ type rustCodexTmuxCommand struct {
 	LaunchCommand string `json:"launch_command"`
 }
 
+type rustCodexPromptSegment struct {
+	Prompt string   `json:"prompt"`
+	Lines  []string `json:"lines"`
+	Raw    []string `json:"raw"`
+}
+
+type rustCodexReportParseResult struct {
+	Segments []rustCodexPromptSegment `json:"segments"`
+	Report   string                   `json:"report"`
+}
+
 type rustDyadSpawnPlanRequest struct {
 	Name                    string
 	Role                    string
@@ -708,6 +719,30 @@ func maybeReadRustCodexTmuxCommand(container string) (*rustCodexTmuxCommand, boo
 	return &command, true, nil
 }
 
+func maybeParseRustCodexReportCapture(clean string, raw string, promptIndex int, ansi bool) (*rustCodexReportParseResult, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	payload, err := json.Marshal(map[string]any{
+		"clean":        clean,
+		"raw":          raw,
+		"prompt_index": promptIndex,
+		"ansi":         ansi,
+	})
+	if err != nil {
+		return nil, false, fmt.Errorf("encode rust codex report parse input: %w", err)
+	}
+	output, err := runRustCLIJSONWithStdin(payload, "codex", "report-parse", "--format", "json")
+	if err != nil {
+		return nil, false, err
+	}
+	var result rustCodexReportParseResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex report parse: %w", err)
+	}
+	return &result, true, nil
+}
+
 func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string, fingerprint string) (*rustVaultTrustLookup, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil
@@ -957,6 +992,27 @@ func runRustCLIJSON(args ...string) ([]byte, error) {
 	cmd := rustCLIExecCommand(bin, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		stderrText := strings.TrimSpace(stderr.String())
+		if stderrText != "" {
+			return nil, fmt.Errorf("run rust si cli %q: %w: %s", strings.Join(args, " "), err, stderrText)
+		}
+		return nil, fmt.Errorf("run rust si cli %q: %w", strings.Join(args, " "), err)
+	}
+	return stdout.Bytes(), nil
+}
+
+func runRustCLIJSONWithStdin(stdin []byte, args ...string) ([]byte, error) {
+	bin, err := resolveRustCLIBinary()
+	if err != nil {
+		return nil, err
+	}
+	cmd := rustCLIExecCommand(bin, args...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdin = bytes.NewReader(stdin)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
