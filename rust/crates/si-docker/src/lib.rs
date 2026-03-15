@@ -32,6 +32,18 @@ impl BindMount {
         Ok(())
     }
 
+    pub fn source(&self) -> &Path {
+        &self.source
+    }
+
+    pub fn target(&self) -> &Path {
+        &self.target
+    }
+
+    pub fn is_read_only(&self) -> bool {
+        self.read_only
+    }
+
     pub fn docker_mount_arg(&self) -> Result<String, BindMountError> {
         self.validate()?;
         let mut options = vec![
