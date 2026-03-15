@@ -1,3 +1,3 @@
 package main
 
-const siVersion = "v0.53.3"
+const siVersion = "v0.54.0"

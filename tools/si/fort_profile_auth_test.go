@@ -329,6 +329,19 @@ func TestEnsureCodexProfileFortSessionPrefersExistingProfileRefresh(t *testing.T
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+	prevStart := fortRuntimeAgentStartProcess
+	prevAlive := fortRuntimeAgentProcessAlive
+	t.Cleanup(func() {
+		fortRuntimeAgentStartProcess = prevStart
+		fortRuntimeAgentProcessAlive = prevAlive
+	})
+	fortRuntimeAgentStartProcess = func(profile codexProfile, paths fortProfilePaths) (fortProfileRuntimeAgentState, error) {
+		now := time.Now().UTC().Format(time.RFC3339)
+		return fortProfileRuntimeAgentState{ProfileID: profile.ID, PID: 4242, StartedAt: now, UpdatedAt: now}, nil
+	}
+	fortRuntimeAgentProcessAlive = func(state fortProfileRuntimeAgentState, profile codexProfile) bool {
+		return state.PID == 4242
+	}
 
 	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", filepath.Join(home, ".si", "fort", "bootstrap", "missing-admin.token"))
 	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", filepath.Join(home, ".si", "fort", "bootstrap", "missing-admin.refresh.token"))
@@ -497,7 +510,7 @@ func TestFortAgentIDForProfile(t *testing.T) {
 	}
 }
 
-func TestPrepareFortRuntimeAuthRefresh(t *testing.T) {
+func TestPrepareFortRuntimeAuthDoesNotRefreshInline(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
@@ -538,25 +551,21 @@ func TestPrepareFortRuntimeAuthRefresh(t *testing.T) {
 	if err != nil {
 		t.Fatalf("prepareFortRuntimeAuth: %v", err)
 	}
-	if refreshCalls != 1 {
-		t.Fatalf("expected one refresh call, got %d", refreshCalls)
+	if refreshCalls != 0 {
+		t.Fatalf("expected no inline refresh call, got %d", refreshCalls)
 	}
-	if accessToken != "access-2" {
+	if accessToken != "" {
 		t.Fatalf("unexpected access token: %q", accessToken)
 	}
 	tokenPath := filepath.Join(profileFortDir, fortProfileAccessTokenFileName)
-	tokenBytes, err := os.ReadFile(tokenPath)
-	if err != nil {
-		t.Fatalf("read access token file: %v", err)
-	}
-	if strings.TrimSpace(string(tokenBytes)) != "access-2" {
-		t.Fatalf("unexpected access token file contents: %q", string(tokenBytes))
+	if _, err := os.Stat(tokenPath); !os.IsNotExist(err) {
+		t.Fatalf("expected access token file to remain absent, err=%v", err)
 	}
 	refreshBytes, err := os.ReadFile(refreshPath)
 	if err != nil {
 		t.Fatalf("read refresh token file: %v", err)
 	}
-	if strings.TrimSpace(string(refreshBytes)) != "refresh-2" {
+	if strings.TrimSpace(string(refreshBytes)) != "refresh-1" {
 		t.Fatalf("unexpected refresh token file contents: %q", string(refreshBytes))
 	}
 }
@@ -719,5 +728,26 @@ func TestFortDesiredFileOwnershipDefaultsToProcessIdentity(t *testing.T) {
 	}
 	if uid != os.Getuid() || gid != os.Getgid() {
 		t.Fatalf("unexpected ownership uid=%d gid=%d want uid=%d gid=%d", uid, gid, os.Getuid(), os.Getgid())
+	}
+}
+
+func TestSaveFortProfileSessionStateUsesStrictFileMode(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "alpha"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+	state := fortProfileSessionState{ProfileID: "alpha", Host: "https://fort.example.test"}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+	info, err := os.Stat(paths.SessionStateHostPath)
+	if err != nil {
+		t.Fatalf("stat session state: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("unexpected session state mode: %03o", got)
 	}
 }

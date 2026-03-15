@@ -28,6 +28,9 @@ const (
 	fortProfileSessionStateFileName = "session.json"
 	fortProfileAccessTokenFileName  = "access.token"
 	fortProfileRefreshTokenFileName = "refresh.token"
+	fortProfileRuntimeLockFileName  = "runtime.lock"
+	fortProfileRuntimeStateFileName = "runtime-agent.json"
+	fortProfileRuntimeLogFileName   = "runtime-agent.log"
 )
 
 type fortRequestAuth struct {
@@ -46,6 +49,19 @@ type fortSessionRefreshResult struct {
 	AccessToken     string
 	RefreshToken    string
 	AccessExpiresAt string
+}
+
+type fortStatusError struct {
+	Operation string
+	Status    int
+	Message   string
+}
+
+func (e *fortStatusError) Error() string {
+	if e == nil {
+		return "fort request failed"
+	}
+	return fmt.Sprintf("fort %s failed (status=%d): %s", strings.TrimSpace(e.Operation), e.Status, strings.TrimSpace(e.Message))
 }
 
 type fortProfileSessionState struct {
@@ -118,7 +134,16 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
-	if resumed, err := resumeCodexProfileFortSession(ctx, profile, paths); err == nil {
+	lockFile, err := lockFortProfile(paths)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	defer unlockFortProfile(lockFile)
+
+	if resumed, err := ensureUsableCodexProfileFortSession(ctx, profile, paths); err == nil {
+		if err := ensureFortRuntimeAgentLocked(profile, paths); err != nil {
+			return codexFortBootstrap{}, err
+		}
 		return resumed, nil
 	}
 	cfg, err := resolveFortBootstrapConfig(ctx, client, preferredNetwork)
@@ -157,7 +182,7 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
 		return codexFortBootstrap{}, err
 	}
-	return codexFortBootstrap{
+	boot := codexFortBootstrap{
 		ProfileID:                 profileID,
 		AgentID:                   agentID,
 		SessionID:                 session.SessionID,
@@ -167,10 +192,28 @@ func ensureCodexProfileFortSession(ctx context.Context, client *shared.Client, p
 		RefreshTokenHostPath:      paths.RefreshTokenHostPath,
 		AccessTokenContainerPath:  paths.AccessTokenContainerPath,
 		RefreshTokenContainerPath: paths.RefreshTokenContainerPath,
-	}, nil
+	}
+	if err := ensureFortRuntimeAgentLocked(profile, paths); err != nil {
+		return codexFortBootstrap{}, err
+	}
+	return boot, nil
 }
 
-func resumeCodexProfileFortSession(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
+func ensureUsableCodexProfileFortSession(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
+	boot, err := loadCodexFortBootstrapFromProfileState(profile)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	accessToken, accessErr := readStrictSecretFile(paths.AccessTokenHostPath)
+	if accessErr == nil {
+		if needsRefresh, _ := fortTokenNeedsRefresh(accessToken); !needsRefresh {
+			return boot, nil
+		}
+	}
+	return refreshCodexProfileFortSessionLocked(ctx, profile, paths)
+}
+
+func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProfile, paths fortProfilePaths) (codexFortBootstrap, error) {
 	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
 	if err != nil {
 		return codexFortBootstrap{}, err
@@ -286,6 +329,9 @@ type fortProfilePaths struct {
 	AccessTokenHostPath       string
 	RefreshTokenHostPath      string
 	SessionStateHostPath      string
+	RuntimeLockHostPath       string
+	RuntimeAgentStateHostPath string
+	RuntimeAgentLogHostPath   string
 	AccessTokenContainerPath  string
 	RefreshTokenContainerPath string
 }
@@ -295,30 +341,7 @@ func fortProfileStatePaths(profile codexProfile) (fortProfilePaths, error) {
 	if err != nil {
 		return fortProfilePaths{}, err
 	}
-	fortDir := filepath.Join(profileDir, fortProfileStateDirName)
-	if err := os.MkdirAll(fortDir, 0o700); err != nil {
-		return fortProfilePaths{}, err
-	}
-	accessHost := filepath.Join(fortDir, fortProfileAccessTokenFileName)
-	refreshHost := filepath.Join(fortDir, fortProfileRefreshTokenFileName)
-	sessionHost := filepath.Join(fortDir, fortProfileSessionStateFileName)
-	accessContainer, err := fortContainerPathFromHost(accessHost)
-	if err != nil {
-		return fortProfilePaths{}, err
-	}
-	refreshContainer, err := fortContainerPathFromHost(refreshHost)
-	if err != nil {
-		return fortProfilePaths{}, err
-	}
-	return fortProfilePaths{
-		ProfileRootHostPath:       profileDir,
-		FortRootHostPath:          fortDir,
-		AccessTokenHostPath:       accessHost,
-		RefreshTokenHostPath:      refreshHost,
-		SessionStateHostPath:      sessionHost,
-		AccessTokenContainerPath:  accessContainer,
-		RefreshTokenContainerPath: refreshContainer,
-	}, nil
+	return fortProfilePathsFromProfileDir(profileDir, true)
 }
 
 func fortContainerPathFromHost(hostPath string) (string, error) {
@@ -346,39 +369,12 @@ func fortContainerPathFromHost(hostPath string) (string, error) {
 }
 
 func saveFortProfileSessionState(path string, state fortProfileSessionState) error {
-	path = filepath.Clean(strings.TrimSpace(path))
-	if path == "" {
-		return fmt.Errorf("session path required")
-	}
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	fortNormalizeFileOwnership(dir, 0o700)
-	raw, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	raw = append(raw, '\n')
-	if err := os.WriteFile(path, raw, 0o600); err != nil {
-		return err
-	}
-	fortNormalizeFileOwnership(path, 0o600)
-	return nil
+	return writeFortStateFile(path, state)
 }
 
 func loadFortProfileSessionState(path string) (fortProfileSessionState, error) {
-	path = filepath.Clean(strings.TrimSpace(path))
-	if path == "" {
-		return fortProfileSessionState{}, fmt.Errorf("session path required")
-	}
-	// #nosec G304 -- path is derived from local ~/.si profile state.
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return fortProfileSessionState{}, err
-	}
 	var state fortProfileSessionState
-	if err := json.Unmarshal(raw, &state); err != nil {
+	if err := readFortStateFile(path, &state); err != nil {
 		return fortProfileSessionState{}, err
 	}
 	state.ProfileID = strings.TrimSpace(state.ProfileID)
@@ -1050,7 +1046,7 @@ func fortOpenSession(ctx context.Context, cfg fortBootstrapConfig, agentID strin
 		return fortSessionOpenResult{}, err
 	}
 	if status != http.StatusOK {
-		return fortSessionOpenResult{}, fmt.Errorf("fort auth session open failed (status=%d): %s", status, fortAPIError(body))
+		return fortSessionOpenResult{}, &fortStatusError{Operation: "auth session open", Status: status, Message: fortAPIError(body)}
 	}
 	result := fortSessionOpenResult{
 		SessionID:        strings.TrimSpace(fmt.Sprint(body["session_id"])),
@@ -1072,7 +1068,7 @@ func fortRefreshSession(ctx context.Context, hostURL string, refreshToken string
 		return fortSessionRefreshResult{}, err
 	}
 	if status != http.StatusOK {
-		return fortSessionRefreshResult{}, fmt.Errorf("fort auth session refresh failed (status=%d): %s", status, fortAPIError(body))
+		return fortSessionRefreshResult{}, &fortStatusError{Operation: "auth session refresh", Status: status, Message: fortAPIError(body)}
 	}
 	result := fortSessionRefreshResult{
 		AccessToken:     strings.TrimSpace(fmt.Sprint(body["access_token"])),
@@ -1166,7 +1162,7 @@ func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState)
 }
 
 func prepareFortRuntimeAuth(rest []string) (string, error) {
-	tokenPath, refreshPath, sessionPath, state := fortSessionPathsFromEnv()
+	tokenPath, refreshPath, _, state := fortSessionPathsFromEnv()
 	settings := loadSettingsOrDefault()
 	if tokenPath != "" {
 		_ = os.Setenv("FORT_TOKEN_PATH", tokenPath)
@@ -1192,36 +1188,11 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 		}
 	}
 	accessToken := readSecretFile(tokenPath)
-	refreshToken := readSecretFile(refreshPath)
 	if fortShouldSkipAutoRefresh(rest) {
 		return accessToken, nil
 	}
-	host := strings.TrimSpace(os.Getenv("FORT_HOST"))
-	if host == "" || refreshToken == "" {
-		return accessToken, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	refreshed, err := fortRefreshSession(ctx, host, refreshToken)
-	if err != nil {
-		// Keep existing token-file behavior intact and continue.
-		return accessToken, nil
-	}
-	accessToken = strings.TrimSpace(refreshed.AccessToken)
-	if tokenPath != "" {
-		_ = writeSecretFile(tokenPath, accessToken)
-	}
-	if refreshPath != "" {
-		_ = writeSecretFile(refreshPath, refreshed.RefreshToken)
-	}
-	if sessionPath != "" {
-		state.AccessExpiresAt = strings.TrimSpace(refreshed.AccessExpiresAt)
-		state.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
-		if state.Host == "" {
-			state.Host = strings.TrimSpace(os.Getenv("FORT_HOST"))
-		}
-		_ = saveFortProfileSessionState(sessionPath, state)
-	}
+	_ = refreshPath
+	_ = state
 	return accessToken, nil
 }
 

@@ -103,6 +103,15 @@ func codexLogout(opts codexLogoutOptions) (codexLogoutResult, error) {
 		blocked := make([]string, 0, len(opts.ProfileIDs)+8)
 		blocked = append(blocked, opts.ProfileIDs...)
 		blocked = append(blocked, discoverCachedCodexProfileIDs(home)...)
+		for _, profileID := range blocked {
+			profileID = strings.TrimSpace(profileID)
+			if profileID == "" || !isValidSlug(profileID) {
+				continue
+			}
+			if err := closeCodexProfileFortSession(codexProfile{ID: profileID}); err != nil {
+				return res, err
+			}
+		}
 
 		siCodexDir := filepath.Join(home, ".si", "codex")
 		removed, err := removeHomeChildDir(home, siCodexDir)

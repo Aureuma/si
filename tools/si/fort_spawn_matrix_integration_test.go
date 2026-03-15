@@ -236,7 +236,7 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 		fortImageTag = "fort:e2e-spawn-matrix"
 	}
 
-	tmpRoot := t.TempDir()
+	tmpRoot := mustWorkspaceTempDir(t, filepath.Join(siRepo, ".tmp", "fort-e2e"), "spawn-matrix-")
 	seedDir, seedErr := createTempSeedWorkspace(t, fortRepo)
 	if seedErr != nil {
 		t.Fatalf("prepare seed workspace: %v", seedErr)
@@ -259,7 +259,7 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 		seedFile:         filepath.Join(seedDir, "seed.go"),
 		seedWorkspace:    seedDir,
 		binDir:           filepath.Join(tmpRoot, "bin"),
-		profileTestHome:  mustTempDir(t, "si-fort-matrix-home"),
+		profileTestHome:  filepath.Join(tmpRoot, "home"),
 		fortImageTag:     fortImageTag,
 		uid:              os.Getuid(),
 		gid:              os.Getgid(),
@@ -273,6 +273,9 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 	ctx.fortContainerURL = "http://" + ctx.fortContainer + ":8088"
 	ctx.fortHostURL = fmt.Sprintf("http://127.0.0.1:%d", port)
 	ctx.fortHost = ctx.fortHostURL
+	if err := os.MkdirAll(ctx.profileTestHome, 0o700); err != nil {
+		t.Fatalf("create profile test home: %v", err)
+	}
 	t.Setenv("SI_SETTINGS_HOME", ctx.profileTestHome)
 	t.Setenv("HOME", ctx.profileTestHome)
 	if err := seedTestCodexProfiles(t, ctx.profiles); err != nil {
@@ -309,6 +312,9 @@ func setupFortMatrixContext(t *testing.T) *fortMatrixContext {
 		runCommandIgnore("docker", "rm", "-f", profileContainerName(ctx.profiles[0]))
 		runCommandIgnore("docker", "rm", "-f", profileContainerName(ctx.profiles[1]))
 		runCommandIgnore("docker", "rm", "-f", ctx.fortContainer)
+		if ctx.tmpRoot != "" {
+			_ = os.RemoveAll(ctx.tmpRoot)
+		}
 		if ctx.seedWorkspace != "" {
 			_ = os.RemoveAll(ctx.seedWorkspace)
 		}
@@ -421,7 +427,7 @@ func (ctx *fortMatrixContext) runFortAdmin(args ...string) (string, error) {
 func (ctx *fortMatrixContext) startFortServer() {
 	t := ctx.t
 	if _, _, err := runCommandWithOutput(t, "", nil,
-		"docker", "run", "-d", "--rm",
+		"docker", "run", "-d",
 		"--name", ctx.fortContainer,
 		"--network", ctx.network,
 		"-p", fmt.Sprintf("%d:8088", ctx.fortPort),
@@ -438,16 +444,30 @@ func (ctx *fortMatrixContext) startFortServer() {
 	); err != nil {
 		t.Fatalf("start fort container: %v", err)
 	}
-	if !waitUntil(time.Now().Add(180*time.Second), 250*time.Millisecond, func() bool {
-		return ctx.fortHTTPReady()
-	}) {
-		logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
-		t.Fatalf("fort did not become ready (logs=%q)", logs)
+	deadline := time.Now().Add(180 * time.Second)
+	publishedPortGrace := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if ctx.fortHTTPReady() {
+			if out, err := ctx.fortDoctor(); err != nil {
+				logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
+				state := ctx.fortContainerInspectState()
+				t.Fatalf("fort doctor failed after readiness: %v (doctor=%q state=%q logs=%q)", err, out, state, logs)
+			}
+			return
+		}
+		state := ctx.fortContainerInspectState()
+		if strings.HasPrefix(state, "exited ") || strings.HasPrefix(state, "dead ") {
+			logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
+			t.Fatalf("fort container exited before readiness (state=%q logs=%q)", state, logs)
+		}
+		if time.Now().After(publishedPortGrace) && strings.HasPrefix(state, "running ") && ctx.fortHTTPReadyInsideContainer() {
+			t.Skipf("docker published ports are unreachable from the host in this environment: fort is healthy inside container %s but host probe %s never became ready", ctx.fortContainer, ctx.fortHostURL)
+		}
+		time.Sleep(250 * time.Millisecond)
 	}
-	if out, err := ctx.fortDoctor(); err != nil {
-		logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
-		t.Fatalf("fort doctor failed after readiness: %v (doctor=%q logs=%q)", err, out, logs)
-	}
+	logs, _, _ := runCommandWithOutput(ctx.t, "", nil, "docker", "logs", ctx.fortContainer)
+	state := ctx.fortContainerInspectState()
+	t.Fatalf("fort did not become ready (state=%q logs=%q)", state, logs)
 }
 
 func (ctx *fortMatrixContext) fortDoctor() (string, error) {
@@ -470,6 +490,25 @@ func (ctx *fortMatrixContext) fortHTTPReady() bool {
 		}
 	}
 	return true
+}
+
+func (ctx *fortMatrixContext) fortContainerInspectState() string {
+	out, _, err := runCommandWithOutput(ctx.t, "", nil, "docker", "inspect", "--format", "{{.State.Status}} {{.State.ExitCode}} {{.State.Error}}", ctx.fortContainer)
+	if err != nil {
+		return strings.TrimSpace(err.Error())
+	}
+	return strings.TrimSpace(out)
+}
+
+func (ctx *fortMatrixContext) fortHTTPReadyInsideContainer() bool {
+	out, _, err := runCommandWithOutput(ctx.t, "", nil,
+		"docker", "exec", ctx.fortContainer, "sh", "-lc",
+		"wget -qO- http://127.0.0.1:8088/v1/health >/dev/null && wget -qO- http://127.0.0.1:8088/v1/ready >/dev/null",
+	)
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) == ""
 }
 
 func (ctx *fortMatrixContext) fortSupportsTokenFileFlag() bool {
@@ -899,6 +938,22 @@ func mustTempDir(t *testing.T, prefix string) string {
 	dir, err := os.MkdirTemp("", prefix)
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)
+	}
+	return dir
+}
+
+func mustWorkspaceTempDir(t *testing.T, baseDir string, prefix string) string {
+	t.Helper()
+	baseDir = filepath.Clean(baseDir)
+	if err := os.MkdirAll(baseDir, 0o755); err != nil {
+		t.Fatalf("create workspace temp base %s: %v", baseDir, err)
+	}
+	dir, err := os.MkdirTemp(baseDir, prefix)
+	if err != nil {
+		t.Fatalf("create workspace temp dir: %v", err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatalf("chmod workspace temp dir: %v", err)
 	}
 	return dir
 }
