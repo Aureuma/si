@@ -219,6 +219,7 @@ Progress notes:
 - completed: Rust codex container-spec builder on top of the spawn planner, including named-volume, restart-policy, workdir, and shell-command rendering
 - completed: experimental Go `spawn` path integration can now consume the Rust codex container spec for env, command, bind mounts, volume mounts, restart policy, network, and working directory
 - completed: Rust docker/codex spec now models persistent container execution details needed for cutover (`detach`, `user`, labels, published ports, and non-`--rm` runs)
+- completed: Rust `spawn-start` execution path now runs the generated codex container command through `si-process`, with a scriptable docker-bin override for integration-style testing
 
 ### Phase 5: Security/runtime migration
 

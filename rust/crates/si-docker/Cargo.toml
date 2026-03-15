@@ -7,6 +7,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+si-rs-process = { path = "../si-process" }
 thiserror.workspace = true
 
 [dev-dependencies]

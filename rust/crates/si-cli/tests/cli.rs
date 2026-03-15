@@ -327,6 +327,50 @@ fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
     assert!(text.contains("bash -lc echo hello"));
 }
 
+#[test]
+fn codex_spawn_start_executes_docker_command_from_generated_spec() {
+    let workspace = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::write(
+        &docker_bin,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'container-id-123'\n",
+            args_path.display()
+        ),
+    )
+    .expect("write docker script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&docker_bin, perms).expect("chmod");
+    }
+
+    let output = cargo_bin()
+        .args(["codex", "spawn-start", "--name", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .args(["--cmd", "echo hello", "--port", "3000:3000", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("container-id-123"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("run"));
+    assert!(args.contains("-d"));
+    assert!(args.contains("--user"));
+    assert!(args.contains("root"));
+    assert!(args.contains("--label"));
+    assert!(args.contains("si.component=codex"));
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

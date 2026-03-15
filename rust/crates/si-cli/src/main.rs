@@ -7,6 +7,7 @@ use si_rs_command_manifest::{
 };
 use si_rs_config::paths::SiPaths;
 use si_rs_config::settings::Settings;
+use si_rs_process::{ProcessRunner, RunOptions};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_runtime::HostMountContext;
 use std::fmt;
@@ -218,6 +219,52 @@ enum CodexCommand {
         cmd: Option<String>,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
+    },
+    SpawnStart {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        workdir: Option<String>,
+        #[arg(long)]
+        codex_volume: Option<String>,
+        #[arg(long)]
+        skills_volume: Option<String>,
+        #[arg(long)]
+        gh_volume: Option<String>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        gh_pat: Option<String>,
+        #[arg(long, default_value_t = true)]
+        docker_socket: bool,
+        #[arg(long, default_value_t = true)]
+        detach: bool,
+        #[arg(long, default_value_t = false)]
+        clean_slate: bool,
+        #[arg(long)]
+        image: Option<String>,
+        #[arg(long)]
+        network: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        ssh_auth_sock: Option<PathBuf>,
+        #[arg(long)]
+        vault_env_file: Option<PathBuf>,
+        #[arg(long, default_value_t = true)]
+        include_host_si: bool,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long = "port")]
+        ports: Vec<String>,
+        #[arg(long)]
+        cmd: Option<String>,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
     },
 }
 
@@ -537,6 +584,53 @@ fn main() -> Result<()> {
                 ports,
                 cmd,
                 format,
+            )?,
+            CodexCommand::SpawnStart {
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                ports,
+                cmd,
+                docker_bin,
+            } => show_codex_spawn_start(
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                ports,
+                cmd,
+                docker_bin,
             )?,
         },
         Command::Paths { command } => match command {
@@ -1011,6 +1105,74 @@ fn show_codex_spawn_run_args(
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&args)?),
         OutputFormat::Text => println!("{}", args.join(" ")),
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_codex_spawn_start(
+    name: Option<String>,
+    profile_id: Option<String>,
+    workspace: PathBuf,
+    workdir: Option<String>,
+    codex_volume: Option<String>,
+    skills_volume: Option<String>,
+    gh_volume: Option<String>,
+    repo: Option<String>,
+    gh_pat: Option<String>,
+    docker_socket: bool,
+    detach: bool,
+    clean_slate: bool,
+    image: Option<String>,
+    network: Option<String>,
+    home: Option<PathBuf>,
+    ssh_auth_sock: Option<PathBuf>,
+    vault_env_file: Option<PathBuf>,
+    include_host_si: bool,
+    env: Vec<String>,
+    ports: Vec<String>,
+    cmd: Option<String>,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let mut host_ctx = HostMountContext::from_env();
+    if home.is_some() {
+        host_ctx.home_dir = home;
+    }
+    if ssh_auth_sock.is_some() {
+        host_ctx.ssh_auth_sock = ssh_auth_sock;
+    }
+    let plan = build_spawn_plan(
+        &SpawnRequest {
+            name,
+            profile_id,
+            image,
+            network_name: network,
+            workspace_host: workspace,
+            workdir,
+            codex_volume,
+            skills_volume,
+            gh_volume,
+            repo,
+            gh_pat,
+            docker_socket,
+            clean_slate,
+            detach,
+            container_home: None,
+            host_vault_env_file: vault_env_file,
+            include_host_si,
+            additional_env: env,
+        },
+        &host_ctx,
+    )?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, ports })?;
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let command = spec.docker_run_command(docker_program.display().to_string())?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker run failed: {}", stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
 }
 

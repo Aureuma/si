@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use si_rs_process::CommandSpec;
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -286,6 +287,13 @@ impl ContainerSpec {
         args.extend(self.command.iter().cloned());
         Ok(args)
     }
+
+    pub fn docker_run_command(
+        &self,
+        docker_program: impl Into<String>,
+    ) -> Result<CommandSpec, ContainerSpecError> {
+        Ok(CommandSpec::new(docker_program).args(self.docker_run_args()?))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -533,5 +541,22 @@ mod tests {
     #[test]
     fn exposes_docker_binary_name() {
         assert_eq!(docker_binary_path(), Path::new("docker"));
+    }
+
+    #[test]
+    fn builds_docker_run_command_spec() {
+        let temp_dir = tempdir().expect("tempdir");
+        let spec = ContainerSpec::new("ghcr.io/aureuma/si:latest")
+            .name("si-codex-ferma")
+            .auto_remove(false)
+            .detach(true)
+            .mount(BindMount::new(temp_dir.path(), "/workspace"))
+            .command(["bash", "-lc", "sleep infinity"]);
+
+        let command = spec.docker_run_command("docker").expect("command spec");
+
+        assert_eq!(command.program(), "docker");
+        assert!(command.args_slice().contains(&"run".to_owned()));
+        assert!(command.args_slice().contains(&"-d".to_owned()));
     }
 }
