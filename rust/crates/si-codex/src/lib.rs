@@ -9,6 +9,8 @@ pub const DEFAULT_NETWORK: &str = "si";
 pub const DEFAULT_WORKSPACE_PRIMARY: &str = "/workspace";
 pub const DEFAULT_CONTAINER_HOME: &str = "/home/si";
 pub const DEFAULT_SKILLS_VOLUME: &str = "si-codex-skills";
+pub const DEFAULT_CONTAINER_USER: &str = "si";
+pub const TMUX_SESSION_PREFIX: &str = "si-codex-pane-";
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnRequest {
@@ -75,6 +77,14 @@ pub struct RespawnPlan {
     pub remove_targets: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TmuxPlan {
+    pub session_name: String,
+    pub target: String,
+    pub launch_command: String,
+    pub resume_command: String,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnContainerOptions {
     pub command: Option<String>,
@@ -100,6 +110,12 @@ pub enum RemoveArtifactsError {
 pub enum RespawnPlanError {
     #[error("respawn target name is required")]
     MissingName,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum TmuxPlanError {
+    #[error("container name is required")]
+    MissingContainerName,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -277,6 +293,36 @@ pub fn build_respawn_plan(request: &RespawnRequest) -> Result<RespawnPlan, Respa
     })
 }
 
+pub fn codex_tmux_session_name(container_name: &str) -> String {
+    let slug = codex_container_slug(container_name);
+    let suffix = if slug.trim().is_empty() { container_name.trim() } else { slug.trim() };
+    format!("{TMUX_SESSION_PREFIX}{suffix}")
+}
+
+pub fn build_tmux_plan(
+    container_name: &str,
+    host_cwd: &str,
+    resume_session_id: &str,
+    resume_profile_key: &str,
+) -> Result<TmuxPlan, TmuxPlanError> {
+    let container_name = container_name.trim();
+    if container_name.is_empty() {
+        return Err(TmuxPlanError::MissingContainerName);
+    }
+    let session_name = codex_tmux_session_name(container_name);
+    Ok(TmuxPlan {
+        target: format!("{session_name}:0.0"),
+        launch_command: build_tmux_command(container_name, host_cwd),
+        resume_command: build_tmux_resume_command(
+            container_name,
+            host_cwd,
+            resume_session_id,
+            resume_profile_key,
+        ),
+        session_name,
+    })
+}
+
 pub fn build_container_spec(
     plan: &SpawnPlan,
     options: &SpawnContainerOptions,
@@ -342,13 +388,93 @@ fn default_named_value(value: Option<&str>, fallback: &str) -> String {
     value.map(str::trim).filter(|value| !value.is_empty()).unwrap_or(fallback).to_owned()
 }
 
+fn build_tmux_command(container_name: &str, host_cwd: &str) -> String {
+    let start_dir = host_cwd.trim();
+    let cd_start = if !start_dir.is_empty() && start_dir.starts_with('/') {
+        format!("cd {} 2>/dev/null || ", shell_single_quote(start_dir))
+    } else {
+        String::new()
+    };
+    let inner = "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; ".to_owned()
+        + &cd_start
+        + "cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; "
+        + "codex --dangerously-bypass-approvals-and-sandbox; status=$?; "
+        + "printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; "
+        + "exec bash -il";
+    let base = format!(
+        "docker exec -it --user {} {} bash -lc {}",
+        shell_single_quote(DEFAULT_CONTAINER_USER),
+        shell_single_quote(container_name),
+        shell_single_quote(&inner)
+    );
+    format!("{base} || sudo -n {base}")
+}
+
+fn build_tmux_resume_command(
+    container_name: &str,
+    host_cwd: &str,
+    session_id: &str,
+    profile_key: &str,
+) -> String {
+    let session_id = session_id.trim();
+    if session_id.is_empty() {
+        return String::new();
+    }
+    let start_dir = host_cwd.trim();
+    let cd_start = if !start_dir.is_empty() && start_dir.starts_with('/') {
+        format!("cd {} 2>/dev/null || ", shell_single_quote(start_dir))
+    } else {
+        String::new()
+    };
+    let profile_label = {
+        let value = profile_key.trim();
+        if value.is_empty() { codex_container_slug(container_name) } else { value.to_owned() }
+    };
+    let inner = "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; ".to_owned()
+        + &cd_start
+        + "cd \"${SI_WORKSPACE_MIRROR:-/workspace}\" 2>/dev/null || cd /workspace 2>/dev/null || true; "
+        + &format!(
+            "printf '\\n[si] tmux session unavailable; attempting codex resume %s for profile %s.\\n' {} {}; ",
+            shell_single_quote(session_id),
+            shell_single_quote(profile_label.trim())
+        )
+        + &format!(
+            "codex resume {} --dangerously-bypass-approvals-and-sandbox || codex --dangerously-bypass-approvals-and-sandbox; ",
+            shell_single_quote(session_id)
+        )
+        + "status=$?; "
+        + "printf '\\n[si] codex exited (status %s). Run codex again, or exit to close this pane.\\n' \"$status\"; "
+        + "exec bash -il";
+    let base = format!(
+        "docker exec -it --user {} {} bash -lc {}",
+        shell_single_quote(DEFAULT_CONTAINER_USER),
+        shell_single_quote(container_name),
+        shell_single_quote(&inner)
+    );
+    format!("{base} || sudo -n {base}")
+}
+
+fn shell_single_quote(value: &str) -> String {
+    let mut quoted = String::from("'");
+    for ch in value.chars() {
+        if ch == '\'' {
+            quoted.push_str("'\"'\"'");
+        } else {
+            quoted.push(ch);
+        }
+    }
+    quoted.push('\'');
+    quoted
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         DEFAULT_SKILLS_VOLUME, RemoveArtifactsError, RespawnPlanError, RespawnRequest,
         SpawnContainerOptions, SpawnContainerSpecError, SpawnPlanError, SpawnRequest,
-        build_container_spec, build_remove_artifacts, build_respawn_plan, build_spawn_plan,
-        codex_container_name, codex_container_slug,
+        TmuxPlanError, build_container_spec, build_remove_artifacts, build_respawn_plan,
+        build_spawn_plan, build_tmux_plan, codex_container_name, codex_container_slug,
+        codex_tmux_session_name,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::{Path, PathBuf};
@@ -680,5 +806,46 @@ mod tests {
         let err = build_respawn_plan(&RespawnRequest::default()).expect_err("missing respawn name");
 
         assert_eq!(err, RespawnPlanError::MissingName);
+    }
+
+    #[test]
+    fn codex_tmux_session_name_uses_slug() {
+        assert_eq!(
+            codex_tmux_session_name("si-codex-profile-delta"),
+            "si-codex-pane-profile-delta"
+        );
+    }
+
+    #[test]
+    fn build_tmux_plan_uses_bypass_flag_and_start_dir() {
+        let plan = build_tmux_plan("si-codex-profile-beta", "/home/ubuntu/Development/si", "", "")
+            .expect("tmux plan");
+
+        assert_eq!(plan.session_name, "si-codex-pane-profile-beta");
+        assert_eq!(plan.target, "si-codex-pane-profile-beta:0.0");
+        assert!(plan.launch_command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
+        assert!(plan.launch_command.contains("--user 'si'"));
+        assert!(plan.launch_command.contains("exec bash -il"));
+        assert!(plan.launch_command.contains("sudo -n"));
+        assert!(plan.launch_command.contains("/home/ubuntu/Development/si"));
+        assert!(plan.resume_command.is_empty());
+    }
+
+    #[test]
+    fn build_tmux_plan_includes_resume_flow_when_session_present() {
+        let plan =
+            build_tmux_plan("si-codex-profile-beta", "/workspace/app", "sess-123", "profile-beta")
+                .expect("tmux plan");
+
+        assert!(plan.resume_command.contains("codex resume"));
+        assert!(plan.resume_command.contains("sess-123"));
+        assert!(plan.resume_command.contains("tmux session unavailable; attempting codex resume"));
+        assert!(plan.resume_command.contains("'profile-beta'"));
+    }
+
+    #[test]
+    fn build_tmux_plan_rejects_empty_container_name() {
+        let err = build_tmux_plan("   ", "/workspace", "", "").expect_err("missing container");
+        assert_eq!(err, TmuxPlanError::MissingContainerName);
     }
 }
