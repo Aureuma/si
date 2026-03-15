@@ -45,6 +45,10 @@ func runHelpCommand(args []string) error {
 	return nil
 }
 
+func runProvidersCharacteristicsCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("providers", append([]string{"characteristics"}, args...)...)
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil

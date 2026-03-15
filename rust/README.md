@@ -23,6 +23,7 @@ Experimental Go-to-Rust delegation path for the first migrated read-only command
 ```bash
 SI_EXPERIMENTAL_RUST_CLI=1 SI_RUST_CLI_BIN="$(pwd)/.artifacts/cargo-target/debug/si-rs" ./si version
 SI_EXPERIMENTAL_RUST_CLI=1 SI_RUST_CLI_BIN="$(pwd)/.artifacts/cargo-target/debug/si-rs" ./si help remote-control
+SI_EXPERIMENTAL_RUST_CLI=1 SI_RUST_CLI_BIN="$(pwd)/.artifacts/cargo-target/debug/si-rs" ./si providers characteristics --provider github --json
 ```
 
 The shipping Go `si` CLI remains the source of truth until a command family reaches the cutover criteria in `tickets/2026-03-15-si-rust-transition-plan.md`.
