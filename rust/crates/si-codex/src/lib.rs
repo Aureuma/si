@@ -54,6 +54,7 @@ pub struct SpawnPlan {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnContainerOptions {
     pub command: Option<String>,
+    pub labels: Vec<String>,
     pub ports: Vec<String>,
 }
 
@@ -69,6 +70,8 @@ pub enum SpawnPlanError {
 pub enum SpawnContainerSpecError {
     #[error("invalid env entry {entry:?}")]
     InvalidEnvEntry { entry: String },
+    #[error("invalid label entry {entry:?}")]
+    InvalidLabelEntry { entry: String },
     #[error("invalid published port mapping {entry:?}")]
     InvalidPublishedPort { entry: String },
 }
@@ -222,6 +225,16 @@ pub fn build_container_spec(
             return Err(SpawnContainerSpecError::InvalidEnvEntry { entry: entry.clone() });
         };
         spec = spec.env(key.trim(), value);
+    }
+    for entry in &options.labels {
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(SpawnContainerSpecError::InvalidLabelEntry { entry: entry.clone() });
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(SpawnContainerSpecError::InvalidLabelEntry { entry: entry.clone() });
+        }
+        spec = spec.label(key, value);
     }
     for entry in &options.ports {
         let Some((host_port, container_port)) = entry.split_once(':') else {
@@ -427,6 +440,7 @@ mod tests {
             &plan,
             &SpawnContainerOptions {
                 command: Some("echo hello".to_owned()),
+                labels: vec!["si.codex.profile=ferma".to_owned()],
                 ports: vec!["3000:3000".to_owned()],
             },
         )
@@ -438,6 +452,7 @@ mod tests {
         assert!(args.contains(&"root".to_owned()));
         assert!(args.contains(&"--label".to_owned()));
         assert!(args.contains(&"si.component=codex".to_owned()));
+        assert!(args.contains(&"si.codex.profile=ferma".to_owned()));
         assert!(args.contains(&"-p".to_owned()));
         assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
         assert!(args.contains(&"--restart".to_owned()));
@@ -470,6 +485,35 @@ mod tests {
     }
 
     #[test]
+    fn build_container_spec_rejects_invalid_label_entry() {
+        let workspace = tempdir().expect("tempdir");
+        let plan = build_spawn_plan(
+            &SpawnRequest {
+                name: Some("ferma".to_owned()),
+                workspace_host: workspace.path().to_path_buf(),
+                detach: true,
+                docker_socket: true,
+                include_host_si: false,
+                ..SpawnRequest::default()
+            },
+            &HostMountContext::default(),
+        )
+        .expect("spawn plan");
+
+        let err = build_container_spec(
+            &plan,
+            &SpawnContainerOptions {
+                command: None,
+                labels: vec!["=".to_owned()],
+                ports: Vec::new(),
+            },
+        )
+        .expect_err("invalid label should fail");
+
+        assert_eq!(err, SpawnContainerSpecError::InvalidLabelEntry { entry: "=".to_owned() });
+    }
+
+    #[test]
     fn build_container_spec_rejects_invalid_port_mapping() {
         let workspace = tempdir().expect("tempdir");
         let plan = build_spawn_plan(
@@ -487,7 +531,11 @@ mod tests {
 
         let err = build_container_spec(
             &plan,
-            &SpawnContainerOptions { command: None, ports: vec!["bad".to_owned()] },
+            &SpawnContainerOptions {
+                command: None,
+                labels: Vec::new(),
+                ports: vec!["bad".to_owned()],
+            },
         )
         .expect_err("invalid port mapping should fail");
 
