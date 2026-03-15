@@ -216,6 +216,7 @@ Progress notes:
 
 - completed: initial `si-runtime` crate for shared codex/dyad core mount planning on top of Rust Docker primitives, with translated Go mount behavior coverage
 - completed: experimental Go `spawn` path integration that consumes Rust-generated core mount plans and deterministic spawn planning data behind the Rust CLI compatibility boundary
+- completed: Rust codex container-spec builder on top of the spawn planner, including named-volume, restart-policy, workdir, and shell-command rendering
 
 ### Phase 5: Security/runtime migration
 
@@ -268,6 +269,7 @@ Progress notes:
 
 - completed: initial `si-codex` crate for deterministic spawn planning (profile/name normalization, workspace/workdir defaults, volume naming, env assembly, and runtime mount consumption)
 - completed: the shipping Go `spawn` path can now delegate deterministic planning to Rust behind the experimental boundary while Fort/bootstrap/session handling remains in Go
+- completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 
 ### Phase 7: Provider migration
 
