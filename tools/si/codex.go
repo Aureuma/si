@@ -2558,13 +2558,13 @@ func cmdCodexRemove(args []string) {
 	} else {
 		name = fs.Arg(0)
 	}
-	containerName := codexContainerName(name)
-	removeArtifacts, delegatedRemovePlan, err := resolveCodexRemoveArtifacts(name)
+	containerName, err := resolveCodexContainerName(name)
 	if err != nil {
 		fatal(err)
 	}
-	if delegatedRemovePlan {
-		containerName = strings.TrimSpace(removeArtifacts.ContainerName)
+	removeArtifacts, delegatedRemovePlan, err := resolveCodexRemoveArtifacts(name)
+	if err != nil {
+		fatal(err)
 	}
 	client, err := shared.NewClient()
 	if err != nil {
