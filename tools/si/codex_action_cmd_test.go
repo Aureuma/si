@@ -110,7 +110,7 @@ func TestCmdCodexCloneDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '--' >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"codex\" ] && [ \"$2\" = \"remove-plan\" ]; then\n  printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"slug\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-github-ferma\"}'\nfi\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"name\":\"ferma\",\"repo\":\"acme/repo\",\"container_name\":\"si-codex-ferma\",\"output\":\"cloned\"}'\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestCmdCodexCloneDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read args file: %v", err)
 	}
-	if !strings.Contains(string(argsData), "codex\nclone\nferma\nacme/repo\n--gh-pat\ntok") {
+	if strings.TrimSpace(string(argsData)) != "codex\nclone\nferma\nacme/repo\n--format\njson\n--gh-pat\ntok" {
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }

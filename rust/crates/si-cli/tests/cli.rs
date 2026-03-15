@@ -1664,6 +1664,34 @@ fn codex_stop_executes_docker_stop_for_container_name() {
 }
 
 #[test]
+fn codex_clone_json_reports_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'cloned'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "clone", "ferma", "acme/repo", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["repo"], "acme/repo");
+    assert_eq!(parsed["container_name"], "si-codex-ferma");
+    assert!(parsed["output"].as_str().expect("output string").contains("cloned"));
+}
+
+#[test]
 fn codex_logs_executes_docker_logs_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
