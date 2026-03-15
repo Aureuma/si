@@ -544,6 +544,8 @@ pub enum ContainerExecError {
 pub enum ContainerListError {
     #[error("container label filter is required")]
     MissingLabelFilter,
+    #[error("container list format is required")]
+    MissingFormat,
 }
 
 pub fn docker_binary_path() -> &'static Path {
@@ -630,9 +632,27 @@ pub fn docker_container_list_command(
     label_filter: impl Into<String>,
     all: bool,
 ) -> Result<CommandSpec, ContainerListError> {
+    docker_container_list_with_format_command(
+        docker_program,
+        label_filter,
+        all,
+        "{{.Names}}\t{{.State}}\t{{.Image}}",
+    )
+}
+
+pub fn docker_container_list_with_format_command(
+    docker_program: impl Into<String>,
+    label_filter: impl Into<String>,
+    all: bool,
+    format: impl Into<String>,
+) -> Result<CommandSpec, ContainerListError> {
     let label_filter = label_filter.into();
+    let format = format.into();
     if label_filter.trim().is_empty() {
         return Err(ContainerListError::MissingLabelFilter);
+    }
+    if format.trim().is_empty() {
+        return Err(ContainerListError::MissingFormat);
     }
     let mut command = CommandSpec::new(docker_program).arg("ps");
     if all {
@@ -642,7 +662,7 @@ pub fn docker_container_list_command(
         "--filter".to_owned(),
         format!("label={}", label_filter.trim()),
         "--format".to_owned(),
-        "{{.Names}}\t{{.State}}\t{{.Image}}".to_owned(),
+        format.trim().to_owned(),
     ]))
 }
 
@@ -871,6 +891,22 @@ mod tests {
                 "--format",
                 "{{.Names}}\t{{.State}}\t{{.Image}}",
             ]
+        );
+    }
+
+    #[test]
+    fn builds_docker_list_command_with_custom_format() {
+        let command = docker_container_list_with_format_command(
+            "docker",
+            "app=si-dyad",
+            true,
+            "{{.Names}}\t{{.ID}}",
+        )
+        .expect("list command");
+
+        assert_eq!(
+            command.args_slice(),
+            ["ps", "--all", "--filter", "label=app=si-dyad", "--format", "{{.Names}}\t{{.ID}}",]
         );
     }
 }

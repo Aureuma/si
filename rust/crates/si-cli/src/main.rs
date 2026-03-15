@@ -13,7 +13,8 @@ use si_rs_config::paths::SiPaths;
 use si_rs_config::settings::Settings;
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
-    docker_container_exec_command, docker_container_list_command, docker_container_logs_command,
+    docker_container_exec_command, docker_container_list_command,
+    docker_container_list_with_format_command, docker_container_logs_command,
 };
 use si_rs_dyad::{
     SpawnRequest as DyadSpawnRequest, build_container_specs as build_dyad_container_specs,
@@ -374,6 +375,19 @@ enum DyadCommand {
         member: String,
         #[arg(long, default_value = "200")]
         tail: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    List {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Status {
+        name: String,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -877,6 +891,31 @@ struct DyadSpawnPlanView {
 struct DyadSpawnSpecView {
     actor: DyadContainerSpecView,
     critic: DyadContainerSpecView,
+}
+
+#[derive(Debug, Serialize)]
+struct DyadListEntryView {
+    dyad: String,
+    role: String,
+    actor: String,
+    critic: String,
+}
+
+#[derive(Debug, Serialize)]
+struct DyadStatusView {
+    dyad: String,
+    found: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    actor: Option<DyadContainerStatusView>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    critic: Option<DyadContainerStatusView>,
+}
+
+#[derive(Debug, Serialize)]
+struct DyadContainerStatusView {
+    name: String,
+    id: String,
+    status: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1397,6 +1436,10 @@ fn main() -> Result<()> {
             }
             DyadCommand::Logs { name, member, tail, docker_bin } => {
                 run_dyad_container_logs(&name, &member, &tail, docker_bin)?
+            }
+            DyadCommand::List { format, docker_bin } => run_dyad_list(format, docker_bin)?,
+            DyadCommand::Status { name, format, docker_bin } => {
+                run_dyad_status(&name, format, docker_bin)?
             }
         },
         Command::Codex { command } => match *command {
@@ -2463,6 +2506,138 @@ fn run_dyad_container_logs(
     }
     print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
+}
+
+fn run_dyad_list(format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<()> {
+    let entries = read_dyad_rows(docker_bin)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&entries)?),
+        OutputFormat::Text => {
+            for item in entries {
+                println!("{}\t{}\t{}\t{}", item.dyad, item.role, item.actor, item.critic);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn run_dyad_status(name: &str, format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<()> {
+    let items = read_dyad_containers(docker_bin)?;
+    let name = name.trim();
+    let mut actor = None;
+    let mut critic = None;
+    for item in items {
+        if item.dyad != name {
+            continue;
+        }
+        let status = DyadContainerStatusView {
+            name: item.name.clone(),
+            id: item.id.clone(),
+            status: item.state.clone(),
+        };
+        match item.member.as_str() {
+            "actor" => actor = Some(status),
+            "critic" => critic = Some(status),
+            _ => {}
+        }
+    }
+    let view = DyadStatusView {
+        dyad: name.to_owned(),
+        found: actor.is_some() || critic.is_some(),
+        actor,
+        critic,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("dyad={}", view.dyad);
+            println!("found={}", view.found);
+            println!(
+                "actor={}",
+                view.actor.as_ref().map(|item| item.status.as_str()).unwrap_or("(none)")
+            );
+            println!(
+                "critic={}",
+                view.critic.as_ref().map(|item| item.status.as_str()).unwrap_or("(none)")
+            );
+        }
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct DyadContainerListItem {
+    name: String,
+    state: String,
+    id: String,
+    dyad: String,
+    role: String,
+    member: String,
+}
+
+fn read_dyad_rows(docker_bin: Option<PathBuf>) -> Result<Vec<DyadListEntryView>> {
+    let items = read_dyad_containers(docker_bin)?;
+    let mut rows = std::collections::BTreeMap::<String, DyadListEntryView>::new();
+    for item in items {
+        let entry = rows.entry(item.dyad.clone()).or_insert_with(|| DyadListEntryView {
+            dyad: item.dyad.clone(),
+            role: item.role.clone(),
+            actor: String::new(),
+            critic: String::new(),
+        });
+        if entry.role.trim().is_empty() && !item.role.trim().is_empty() {
+            entry.role = item.role.clone();
+        }
+        match item.member.as_str() {
+            "actor" => entry.actor = item.state.clone(),
+            "critic" => entry.critic = item.state.clone(),
+            _ => {}
+        }
+    }
+    Ok(rows.into_values().collect())
+}
+
+fn read_dyad_containers(docker_bin: Option<PathBuf>) -> Result<Vec<DyadContainerListItem>> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let command = docker_container_list_with_format_command(
+        docker_program.display().to_string(),
+        "app=si-dyad",
+        true,
+        "{{.Names}}\t{{.State}}\t{{.ID}}\t{{.Label \"si.dyad\"}}\t{{.Label \"si.role\"}}\t{{.Label \"si.member\"}}",
+    )?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker ps failed: {}", stderr.trim());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut items = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(6, '\t');
+        let name = parts.next().unwrap_or("").trim();
+        let state = parts.next().unwrap_or("").trim();
+        let id = parts.next().unwrap_or("").trim();
+        let dyad = parts.next().unwrap_or("").trim();
+        let role = parts.next().unwrap_or("").trim();
+        let member = parts.next().unwrap_or("").trim();
+        if name.is_empty() || dyad.is_empty() {
+            continue;
+        }
+        items.push(DyadContainerListItem {
+            name: name.to_owned(),
+            state: state.to_owned(),
+            id: id.to_owned(),
+            dyad: dyad.to_owned(),
+            role: role.to_owned(),
+            member: member.to_owned(),
+        });
+    }
+    Ok(items)
 }
 
 #[allow(clippy::too_many_arguments)]

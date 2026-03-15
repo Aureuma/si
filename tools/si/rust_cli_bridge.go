@@ -190,6 +190,26 @@ type rustDyadMemberPlan struct {
 	Command       []string                  `json:"command"`
 }
 
+type rustDyadListEntry struct {
+	Dyad   string `json:"dyad"`
+	Role   string `json:"role"`
+	Actor  string `json:"actor"`
+	Critic string `json:"critic"`
+}
+
+type rustDyadStatus struct {
+	Dyad   string                      `json:"dyad"`
+	Found  bool                        `json:"found"`
+	Actor  *rustDyadContainerStatusRef `json:"actor,omitempty"`
+	Critic *rustDyadContainerStatusRef `json:"critic,omitempty"`
+}
+
+type rustDyadContainerStatusRef struct {
+	Name   string `json:"name"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
+}
+
 type rustVaultTrustLookup struct {
 	Found               bool   `json:"found"`
 	Matches             bool   `json:"matches"`
@@ -331,6 +351,36 @@ func maybeRunRustDyadLogs(dyad string, member string, tail int) (string, bool, e
 		return "", false, err
 	}
 	return output, true, nil
+}
+
+func maybeRunRustDyadList(jsonOut bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	format := "text"
+	if jsonOut {
+		format = "json"
+	}
+	output, err := runRustCLIText("dyad", "list", "--format", format)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
+func maybeReadRustDyadStatus(dyad string) (*rustDyadStatus, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON("dyad", "status", strings.TrimSpace(dyad), "--format", "json")
+	if err != nil {
+		return nil, false, err
+	}
+	var status rustDyadStatus
+	if err := json.Unmarshal(output, &status); err != nil {
+		return nil, false, fmt.Errorf("decode rust dyad status: %w", err)
+	}
+	return &status, true, nil
 }
 
 func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
