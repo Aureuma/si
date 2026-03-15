@@ -9,136 +9,75 @@ import (
 	"si/tools/si/internal/vault"
 )
 
-func TestVaultValidateImplicitTargetRepoScopeBlocksCrossRepoDefault(t *testing.T) {
-	currentRepo := t.TempDir()
-	otherRepo := t.TempDir()
-	mustMkdir(t, filepath.Join(currentRepo, "configs"))
-	mustMkdir(t, filepath.Join(currentRepo, "agents"))
+func TestVaultRequireTrustedUsesGoTrustStoreByDefault(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
 
-	oldWD, err := os.Getwd()
+	doc := vault.ParseDotenv([]byte("# si-vault:recipient age1example\nSECRET=value\n"))
+	fp, err := vaultTrustFingerprint(doc)
 	if err != nil {
-		t.Fatalf("getwd: %v", err)
+		t.Fatalf("vaultTrustFingerprint: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Chdir(oldWD)
+
+	storePath := filepath.Join(t.TempDir(), "trust.json")
+	store := &vault.TrustStore{SchemaVersion: 3}
+	store.Upsert(vault.TrustEntry{
+		RepoRoot:    "/repo",
+		File:        "/repo/.env",
+		Fingerprint: fp,
 	})
-	if err := os.Chdir(currentRepo); err != nil {
-		t.Fatalf("chdir current repo: %v", err)
+	if err := store.Save(storePath); err != nil {
+		t.Fatalf("save trust store: %v", err)
 	}
 
-	err = vaultValidateImplicitTargetRepoScope(vault.Target{
-		File:           filepath.Join(otherRepo, ".env.dev"),
-		RepoRoot:       otherRepo,
-		FileIsExplicit: false,
-	})
-	if err == nil {
-		t.Fatalf("expected cross-repo implicit target to fail")
-	}
-	if !strings.Contains(err.Error(), "si vault use --file") {
-		t.Fatalf("expected remediation hint in error, got: %v", err)
-	}
-}
-
-func TestVaultValidateImplicitTargetRepoScopeAllowsExplicitAndOverride(t *testing.T) {
-	currentRepo := t.TempDir()
-	otherRepo := t.TempDir()
-	mustMkdir(t, filepath.Join(currentRepo, "configs"))
-	mustMkdir(t, filepath.Join(currentRepo, "agents"))
-
-	oldWD, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(oldWD)
-	})
-	if err := os.Chdir(currentRepo); err != nil {
-		t.Fatalf("chdir current repo: %v", err)
-	}
-
-	// Explicit file selections are always allowed.
-	if err := vaultValidateImplicitTargetRepoScope(vault.Target{
-		File:           filepath.Join(otherRepo, ".env.dev"),
-		RepoRoot:       otherRepo,
-		FileIsExplicit: true,
-	}); err != nil {
-		t.Fatalf("explicit target should be allowed: %v", err)
-	}
-
-	// Global override keeps backward-compatible cross-repo defaults.
-	t.Setenv("SI_VAULT_ALLOW_CROSS_REPO", "1")
-	if err := vaultValidateImplicitTargetRepoScope(vault.Target{
-		File:           filepath.Join(otherRepo, ".env.dev"),
-		RepoRoot:       otherRepo,
-		FileIsExplicit: false,
-	}); err != nil {
-		t.Fatalf("override should allow cross-repo default: %v", err)
-	}
-}
-
-func mustMkdir(t *testing.T, path string) {
-	t.Helper()
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", path, err)
-	}
-}
-
-func TestResolveVaultSyncBackendDefaultsAndNoLegacyAutoMode(t *testing.T) {
 	settings := Settings{}
-	applySettingsDefaults(&settings)
+	settings.Vault.TrustStore = storePath
+	target := vault.Target{RepoRoot: "/repo", File: "/repo/.env"}
 
-	got, err := resolveVaultSyncBackend(settings)
+	got, err := vaultRequireTrusted(settings, target, doc)
 	if err != nil {
-		t.Fatalf("resolve default backend: %v", err)
+		t.Fatalf("vaultRequireTrusted: %v", err)
 	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "default" {
-		t.Fatalf("unexpected default resolution: %+v", got)
-	}
-
-	got, err = resolveVaultSyncBackend(settings)
-	if err != nil {
-		t.Fatalf("resolve backend with backend unset: %v", err)
-	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "default" {
-		t.Fatalf("unexpected resolution when backend unset: %+v", got)
+	if got != fp {
+		t.Fatalf("expected fingerprint %q, got %q", fp, got)
 	}
 }
 
-func TestResolveVaultSyncBackendOverridesAndValidation(t *testing.T) {
+func TestVaultRequireTrustedDelegatesToRustLookupWhenConfigured(t *testing.T) {
+	doc := vault.ParseDotenv([]byte("# si-vault:recipient age1example\nSECRET=value\n"))
+	fp, err := vaultTrustFingerprint(doc)
+	if err != nil {
+		t.Fatalf("vaultTrustFingerprint: %v", err)
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"found\":true,\"matches\":true,\"repo_root\":\"/repo\",\"file\":\"/repo/.env\",\"expected_fingerprint\":\"" + fp + "\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
 	settings := Settings{}
-	applySettingsDefaults(&settings)
-	settings.Vault.SyncBackend = "fort"
+	settings.Vault.TrustStore = filepath.Join(dir, "trust.json")
+	target := vault.Target{RepoRoot: "/repo", File: "/repo/.env"}
 
-	got, err := resolveVaultSyncBackend(settings)
+	got, err := vaultRequireTrusted(settings, target, doc)
 	if err != nil {
-		t.Fatalf("resolve settings backend: %v", err)
+		t.Fatalf("vaultRequireTrusted: %v", err)
 	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "settings" {
-		t.Fatalf("unexpected settings resolution: %+v", got)
+	if got != fp {
+		t.Fatalf("expected fingerprint %q, got %q", fp, got)
 	}
 
-	t.Setenv("SI_VAULT_SYNC_BACKEND", "fort")
-	got, err = resolveVaultSyncBackend(settings)
+	argsData, err := os.ReadFile(argsPath)
 	if err != nil {
-		t.Fatalf("resolve env backend: %v", err)
+		t.Fatalf("read args file: %v", err)
 	}
-	if got.Mode != vaultSyncBackendFort || got.Source != "env" {
-		t.Fatalf("unexpected env resolution: %+v", got)
-	}
-
-	t.Setenv("SI_VAULT_SYNC_BACKEND", "git")
-	if _, err := resolveVaultSyncBackend(settings); err == nil {
-		t.Fatalf("expected legacy env backend alias to fail")
-	}
-
-	t.Setenv("SI_VAULT_SYNC_BACKEND", "invalid")
-	if _, err := resolveVaultSyncBackend(settings); err == nil {
-		t.Fatalf("expected invalid env backend to fail")
-	}
-
-	t.Setenv("SI_VAULT_SYNC_BACKEND", "")
-	settings.Vault.SyncBackend = "invalid"
-	if _, err := resolveVaultSyncBackend(settings); err == nil {
-		t.Fatalf("expected invalid settings backend to fail")
+	if !strings.Contains(string(argsData), "vault\ntrust\nlookup") {
+		t.Fatalf("expected Rust vault trust lookup invocation, got %q", string(argsData))
 	}
 }

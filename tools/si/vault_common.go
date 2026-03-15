@@ -156,6 +156,18 @@ func vaultRequireTrusted(settings Settings, target vault.Target, doc vault.Doten
 		return "", err
 	}
 	storePath := vaultTrustStorePath(settings)
+	if lookup, delegated, err := maybeRunRustVaultTrustLookup(storePath, target.RepoRoot, target.File, fp); err != nil {
+		return "", err
+	} else if delegated {
+		targetFile := filepath.Clean(target.File)
+		if !lookup.Found {
+			return "", fmt.Errorf("vault trust not established for %s: run `si vault trust accept --file %s`", targetFile, shellSingleQuote(targetFile))
+		}
+		if !lookup.Matches {
+			return "", fmt.Errorf("vault trust fingerprint changed for %s: run `si vault trust status --file %s` and `si vault trust accept --file %s`", targetFile, shellSingleQuote(targetFile), shellSingleQuote(targetFile))
+		}
+		return fp, nil
+	}
 	store, err := vault.LoadTrustStore(storePath)
 	if err != nil {
 		return "", err

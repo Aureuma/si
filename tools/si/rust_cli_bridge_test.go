@@ -233,6 +233,40 @@ func TestMaybeRunRustCodexContainerActionDelegatesAndReturnsOutput(t *testing.T)
 	}
 }
 
+func TestMaybeRunRustVaultTrustLookupDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"found\":true,\"matches\":false,\"repo_root\":\"/repo\",\"file\":\"/repo/.env\",\"expected_fingerprint\":\"expected\",\"stored_fingerprint\":\"stored\",\"trusted_at\":\"2030-01-01T00:00:00Z\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	lookup, delegated, err := maybeRunRustVaultTrustLookup("/tmp/trust.json", "/repo", "/repo/.env", "expected")
+	if err != nil {
+		t.Fatalf("maybeRunRustVaultTrustLookup: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected vault trust lookup to delegate to Rust")
+	}
+	if !lookup.Found || lookup.Matches {
+		t.Fatalf("unexpected lookup result: %+v", lookup)
+	}
+	if lookup.StoredFingerprint != "stored" {
+		t.Fatalf("unexpected stored fingerprint: %+v", lookup)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "vault\ntrust\nlookup\n--path\n/tmp/trust.json\n--repo-root\n/repo\n--file\n/repo/.env\n--fingerprint\nexpected\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeRunRustCodexLogsDelegatesAndReturnsOutput(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

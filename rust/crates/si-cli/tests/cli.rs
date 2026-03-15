@@ -283,6 +283,82 @@ fn fort_session_state_classify_reports_refreshing_state() {
 }
 
 #[test]
+fn vault_trust_lookup_reports_matching_entry() {
+    let store_dir = tempdir().expect("tempdir");
+    let store_path = store_dir.path().join("trust.json");
+    fs::write(
+        &store_path,
+        r#"{
+  "schema_version": 3,
+  "entries": [
+    {
+      "repo_root": "/repo",
+      "file": "/repo/.env",
+      "fingerprint": "deadbeef",
+      "trusted_at": "2030-01-01T00:00:00Z"
+    }
+  ]
+}
+"#,
+    )
+    .expect("write trust store");
+
+    let output = cargo_bin()
+        .args(["vault", "trust", "lookup", "--path"])
+        .arg(&store_path)
+        .args([
+            "--repo-root",
+            "/repo",
+            "--file",
+            "/repo/.env",
+            "--fingerprint",
+            "deadbeef",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["found"], true);
+    assert_eq!(parsed["matches"], true);
+    assert_eq!(parsed["stored_fingerprint"], "deadbeef");
+    assert_eq!(parsed["trusted_at"], "2030-01-01T00:00:00Z");
+}
+
+#[test]
+fn vault_trust_lookup_reports_missing_entry() {
+    let store_dir = tempdir().expect("tempdir");
+    let store_path = store_dir.path().join("missing.json");
+
+    let output = cargo_bin()
+        .args(["vault", "trust", "lookup", "--path"])
+        .arg(&store_path)
+        .args([
+            "--repo-root",
+            "/repo",
+            "--file",
+            "/repo/.env",
+            "--fingerprint",
+            "deadbeef",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["found"], false);
+    assert_eq!(parsed["matches"], false);
+}
+
+#[test]
 fn codex_spawn_plan_json_defaults_profile_name_and_workdir() {
     let workspace = tempdir().expect("tempdir");
     let output = cargo_bin()
