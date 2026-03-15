@@ -327,6 +327,7 @@ Progress notes:
 - completed: experimental Go codex `start`, `stop`, and `clone` now resolve their target container name through the shared Rust-aware remove-plan helper as well, so the post-action lookup and clone preflight paths no longer reconstruct container naming separately from the migrated artifact boundary
 - completed: experimental Go codex `status` and `report` now resolve their target container lookup through the same shared Rust-aware artifact helper, so additional read-only and tmux-backed flows no longer rebuild container naming independently before entering the migrated Rust-backed status/report paths
 - completed: experimental Go codex `run`/`exec`, `logs`, and `tail` now resolve their target container lookup through the shared Rust-aware artifact helper too, so more live action paths no longer bypass the migrated codex artifact naming boundary before executing Rust-backed or Docker-backed flows
+- completed: profile-auth/status container preference now resolves through the shared Rust-aware codex artifact helper too, so profile auth sync and volume discovery no longer rebuild their preferred container name purely on the Go path
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
