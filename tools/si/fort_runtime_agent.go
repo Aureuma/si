@@ -101,10 +101,6 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 	}
 	defer unlockFortProfile(lockFile)
 
-	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
-	if err != nil {
-		return 0, err
-	}
 	if classification, delegated, err := maybeClassifyRustFortSessionState(paths.SessionStateHostPath, time.Now().UTC().Unix()); err != nil {
 		return 0, err
 	} else if delegated {
@@ -135,6 +131,11 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 		if needsRefresh, _ := fortTokenNeedsRefresh(accessToken); !needsRefresh {
 			return fortRuntimeAgentNextDelay(accessToken), nil
 		}
+	}
+
+	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
+	if err != nil {
+		return 0, err
 	}
 
 	refreshToken, err := readStrictSecretFile(paths.RefreshTokenHostPath)
