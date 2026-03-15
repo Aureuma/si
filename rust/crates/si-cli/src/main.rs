@@ -1,7 +1,10 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Serialize;
-use si_rs_codex::{SpawnContainerOptions, SpawnRequest, build_container_spec, build_spawn_plan};
+use si_rs_codex::{
+    SpawnContainerOptions, SpawnRequest, build_container_spec, build_remove_artifacts,
+    build_spawn_plan,
+};
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
 };
@@ -272,6 +275,11 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
+    RemovePlan {
+        name: String,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -422,6 +430,15 @@ struct CodexSpawnSpecView {
     user: Option<String>,
     detach: bool,
     auto_remove: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexRemovePlanView {
+    name: String,
+    container_name: String,
+    slug: String,
+    codex_volume: String,
+    gh_volume: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -644,6 +661,7 @@ fn main() -> Result<()> {
                 cmd,
                 docker_bin,
             )?,
+            CodexCommand::RemovePlan { name, format } => show_codex_remove_plan(&name, format)?,
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -1188,6 +1206,28 @@ fn show_codex_spawn_start(
         anyhow::bail!("docker run failed: {}", stderr.trim());
     }
     print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+fn show_codex_remove_plan(name: &str, format: OutputFormat) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    let view = CodexRemovePlanView {
+        name: artifacts.name,
+        container_name: artifacts.container_name,
+        slug: artifacts.slug,
+        codex_volume: artifacts.codex_volume,
+        gh_volume: artifacts.gh_volume,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("name={}", view.name);
+            println!("container_name={}", view.container_name);
+            println!("slug={}", view.slug);
+            println!("codex_volume={}", view.codex_volume);
+            println!("gh_volume={}", view.gh_volume);
+        }
+    }
     Ok(())
 }
 
