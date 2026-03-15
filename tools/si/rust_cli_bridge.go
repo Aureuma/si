@@ -629,21 +629,6 @@ func maybeRunRustCodexRemove(name string, removeVolumes bool) (string, bool, err
 	return strings.TrimSpace(output), true, nil
 }
 
-func maybeRunRustCodexContainerAction(action string, name string) (string, bool, error) {
-	if !shouldUseExperimentalRustCLI() {
-		return "", false, nil
-	}
-	action = strings.TrimSpace(action)
-	if action == "" {
-		return "", false, fmt.Errorf("rust codex container action is required")
-	}
-	output, err := runRustCLIText("codex", action, strings.TrimSpace(name))
-	if err != nil {
-		return "", false, err
-	}
-	return strings.TrimSpace(output), true, nil
-}
-
 func maybeRunRustCodexContainerActionResult(action string, name string) (*rustCodexContainerActionResult, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil
