@@ -1237,6 +1237,12 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 	tokenPath, refreshPath, _, boot := fortSessionPathsFromEnv()
 	settings := loadSettingsOrDefault()
 	if boot != nil {
+		if strings.TrimSpace(os.Getenv("FORT_TOKEN_PATH")) == "" && strings.TrimSpace(boot.AccessTokenHostPath) != "" {
+			tokenPath = strings.TrimSpace(boot.AccessTokenHostPath)
+		}
+		if strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN_PATH")) == "" && strings.TrimSpace(boot.RefreshTokenHostPath) != "" {
+			refreshPath = strings.TrimSpace(boot.RefreshTokenHostPath)
+		}
 		if strings.TrimSpace(os.Getenv("FORT_AGENT_ID")) == "" && strings.TrimSpace(boot.AgentID) != "" {
 			_ = os.Setenv("FORT_AGENT_ID", strings.TrimSpace(boot.AgentID))
 		}
