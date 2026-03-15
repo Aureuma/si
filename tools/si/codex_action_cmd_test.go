@@ -227,6 +227,30 @@ func TestCmdCodexRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdCodexRemoveAllUsesBatchFlow(t *testing.T) {
+	prev := runCodexRemoveAllFn
+	t.Cleanup(func() {
+		runCodexRemoveAllFn = prev
+	})
+
+	called := false
+	runCodexRemoveAllFn = func(removeVolumes bool) error {
+		called = true
+		if !removeVolumes {
+			t.Fatalf("expected removeVolumes to be true")
+		}
+		return nil
+	}
+
+	_ = captureOutputForTest(t, func() {
+		cmdCodexRemove([]string{"--all", "--volumes"})
+	})
+
+	if !called {
+		t.Fatalf("expected batch remove flow")
+	}
+}
+
 func TestCodexDelegatedLifecycleSmoke(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
