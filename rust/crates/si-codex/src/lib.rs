@@ -323,6 +323,14 @@ pub fn build_tmux_plan(
     })
 }
 
+pub fn build_tmux_command_for_container(container_name: &str) -> Result<String, TmuxPlanError> {
+    let container_name = container_name.trim();
+    if container_name.is_empty() {
+        return Err(TmuxPlanError::MissingContainerName);
+    }
+    Ok(build_tmux_command(container_name, ""))
+}
+
 pub fn build_container_spec(
     plan: &SpawnPlan,
     options: &SpawnContainerOptions,
@@ -473,8 +481,8 @@ mod tests {
         DEFAULT_SKILLS_VOLUME, RemoveArtifactsError, RespawnPlanError, RespawnRequest,
         SpawnContainerOptions, SpawnContainerSpecError, SpawnPlanError, SpawnRequest,
         TmuxPlanError, build_container_spec, build_remove_artifacts, build_respawn_plan,
-        build_spawn_plan, build_tmux_plan, codex_container_name, codex_container_slug,
-        codex_tmux_session_name,
+        build_spawn_plan, build_tmux_command_for_container, build_tmux_plan, codex_container_name,
+        codex_container_slug, codex_tmux_session_name,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::{Path, PathBuf};
@@ -847,5 +855,13 @@ mod tests {
     fn build_tmux_plan_rejects_empty_container_name() {
         let err = build_tmux_plan("   ", "/workspace", "", "").expect_err("missing container");
         assert_eq!(err, TmuxPlanError::MissingContainerName);
+    }
+
+    #[test]
+    fn build_tmux_command_for_container_uses_bypass_flag() {
+        let command = build_tmux_command_for_container("abc123").expect("tmux command");
+
+        assert!(command.contains("codex --dangerously-bypass-approvals-and-sandbox"));
+        assert!(command.contains("--user 'si'"));
     }
 }

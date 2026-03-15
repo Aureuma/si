@@ -1093,6 +1093,36 @@ func TestMaybeReadRustCodexTmuxPlanDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeReadRustCodexTmuxCommandDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"container\":\"abc123\",\"launch_command\":\"launch-cmd\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	command, delegated, err := maybeReadRustCodexTmuxCommand("abc123")
+	if err != nil {
+		t.Fatalf("maybeReadRustCodexTmuxCommand: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected codex tmux command to delegate to Rust")
+	}
+	if command == nil || command.Container != "abc123" || command.LaunchCommand != "launch-cmd" {
+		t.Fatalf("unexpected tmux command %#v", command)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\ntmux-command\n--container\nabc123\n--format\njson" {
+		t.Fatalf("unexpected tmux command args %q", string(argsData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",

@@ -134,6 +134,11 @@ type rustCodexTmuxPlan struct {
 	ResumeCommand string `json:"resume_command,omitempty"`
 }
 
+type rustCodexTmuxCommand struct {
+	Container     string `json:"container"`
+	LaunchCommand string `json:"launch_command"`
+}
+
 type rustDyadSpawnPlanRequest struct {
 	Name                    string
 	Role                    string
@@ -682,6 +687,25 @@ func maybeReadRustCodexTmuxPlan(name string, startDir string, resumeSessionID st
 		return nil, false, fmt.Errorf("decode rust codex tmux plan: %w", err)
 	}
 	return &plan, true, nil
+}
+
+func maybeReadRustCodexTmuxCommand(container string) (*rustCodexTmuxCommand, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"codex", "tmux-command",
+		"--container", strings.TrimSpace(container),
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	var command rustCodexTmuxCommand
+	if err := json.Unmarshal(output, &command); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex tmux command: %w", err)
+	}
+	return &command, true, nil
 }
 
 func maybeRunRustVaultTrustLookup(storePath string, repoRoot string, file string, fingerprint string) (*rustVaultTrustLookup, bool, error) {

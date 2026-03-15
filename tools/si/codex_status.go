@@ -205,6 +205,11 @@ func codexStatusBoolFlags() map[string]bool {
 }
 
 func buildTmuxCodexCommand(containerID string) string {
+	if rustCommand, delegated, err := maybeReadRustCodexTmuxCommand(containerID); err == nil && delegated && rustCommand != nil {
+		if value := strings.TrimSpace(rustCommand.LaunchCommand); value != "" {
+			return value
+		}
+	}
 	inner := "export TERM=xterm-256color COLORTERM=truecolor COLUMNS=160 LINES=60 HOME=/home/si CODEX_HOME=/home/si/.codex; codex --dangerously-bypass-approvals-and-sandbox"
 	base := fmt.Sprintf("docker exec -it --user %s %s bash -lc %q", shellSingleQuote(codexContainerUser), containerID, inner)
 	return fmt.Sprintf("%s || sudo -n %s", base, base)
