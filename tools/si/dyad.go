@@ -1519,17 +1519,6 @@ func cmdDyadCleanup(args []string) {
 		printUsage("usage: si dyad cleanup")
 		return
 	}
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
-	ctx := context.Background()
-	containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
-	if err != nil {
-		fatal(err)
-	}
-	removed := 0
 	if output, delegated, err := maybeRunRustDyadCleanup(); err != nil {
 		fatal(err)
 	} else if delegated {
@@ -1545,6 +1534,17 @@ func cmdDyadCleanup(args []string) {
 		}
 		return
 	}
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
+	ctx := context.Background()
+	containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
+	if err != nil {
+		fatal(err)
+	}
+	removed := 0
 	for _, c := range containers {
 		if c.State == "running" {
 			continue
