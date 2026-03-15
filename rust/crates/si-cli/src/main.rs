@@ -11,7 +11,8 @@ use si_rs_command_manifest::{
 use si_rs_config::paths::SiPaths;
 use si_rs_config::settings::Settings;
 use si_rs_docker::{
-    ContainerAction, docker_container_action_command, docker_container_logs_command,
+    ContainerAction, ContainerExecSpec, docker_container_action_command,
+    docker_container_exec_command, docker_container_logs_command,
 };
 use si_rs_process::{ProcessRunner, RunOptions};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
@@ -304,6 +305,14 @@ enum CodexCommand {
         name: String,
         #[arg(long, default_value = "200")]
         tail: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Clone {
+        name: String,
+        repo: String,
+        #[arg(long)]
+        gh_pat: Option<String>,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -700,6 +709,9 @@ fn main() -> Result<()> {
             }
             CodexCommand::Tail { name, tail, docker_bin } => {
                 run_codex_container_logs(&name, &tail, true, docker_bin)?
+            }
+            CodexCommand::Clone { name, repo, gh_pat, docker_bin } => {
+                run_codex_clone(&name, &repo, gh_pat.as_deref(), docker_bin)?
             }
         },
         Command::Paths { command } => match command {
@@ -1311,6 +1323,36 @@ fn run_codex_container_logs(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("docker logs failed: {}", stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+fn run_codex_clone(
+    name: &str,
+    repo: &str,
+    gh_pat: Option<&str>,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    let repo = repo.trim();
+    if repo.is_empty() {
+        anyhow::bail!("repo is required");
+    }
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let mut spec = ContainerExecSpec::new(artifacts.container_name)
+        .user("si")
+        .env("SI_REPO", repo)
+        .command(["/usr/local/bin/si-entrypoint", "bash", "-lc", "true"]);
+    if let Some(gh_pat) = gh_pat.map(str::trim).filter(|value| !value.is_empty()) {
+        spec = spec.env("SI_GH_PAT", gh_pat).env("GH_TOKEN", gh_pat).env("GITHUB_TOKEN", gh_pat);
+    }
+    let command = docker_container_exec_command(docker_program.display().to_string(), &spec)?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker exec failed: {}", stderr.trim());
     }
     print!("{}", String::from_utf8_lossy(&output.stdout));
     Ok(())
