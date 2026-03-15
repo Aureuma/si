@@ -153,6 +153,79 @@ fn providers_characteristics_supports_alias_ids() {
 }
 
 #[test]
+fn dyad_spawn_plan_json_defaults_names_and_volumes() {
+    let workspace = tempdir().expect("tempdir");
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+
+    let output = cargo_bin()
+        .args(["dyad", "spawn-plan", "--name", "alpha", "--workspace"])
+        .arg(workspace.path())
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["dyad"], "alpha");
+    assert_eq!(parsed["role"], "generic");
+    assert_eq!(parsed["codex_volume"], "si-codex-alpha");
+    assert_eq!(parsed["skills_volume"], "si-codex-skills");
+    assert_eq!(parsed["actor"]["container_name"], "si-actor-alpha");
+    assert_eq!(parsed["critic"]["container_name"], "si-critic-alpha");
+}
+
+#[test]
+fn dyad_spawn_plan_json_includes_critic_configs_and_loop_env() {
+    let workspace = tempdir().expect("tempdir");
+    let configs = tempdir().expect("tempdir");
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+
+    let output = cargo_bin()
+        .args(["dyad", "spawn-plan", "--name", "alpha", "--role", "ios", "--workspace"])
+        .arg(workspace.path())
+        .args(["--configs"])
+        .arg(configs.path())
+        .args(["--profile-id", "ferma", "--loop-enabled", "true", "--loop-goal", "ship", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["role"], "ios");
+    assert!(
+        parsed["actor"]["env"]
+            .as_array()
+            .expect("actor env")
+            .iter()
+            .any(|value| value == "SI_CODEX_PROFILE_ID=ferma")
+    );
+    assert!(
+        parsed["critic"]["env"]
+            .as_array()
+            .expect("critic env")
+            .iter()
+            .any(|value| value == "DYAD_LOOP_ENABLED=true")
+    );
+    assert!(
+        parsed["critic"]["bind_mounts"]
+            .as_array()
+            .expect("critic bind mounts")
+            .iter()
+            .any(|mount| mount["target"] == "/configs")
+    );
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()

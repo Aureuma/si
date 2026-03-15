@@ -11,7 +11,9 @@ Current scope:
 - typed Docker run specs with early bind-mount validation
 - shared runtime core-mount planning for codex/dyad containers
 - initial codex spawn planning for names, volumes, env, workdir, and mount assembly
+- initial dyad spawn planning for actor/critic names, env, labels, volumes, configs mount, and core mount assembly
 - Rust CLI exposure for codex spawn planning via `si-rs codex spawn-plan`
+- Rust CLI exposure for dyad spawn planning via `si-rs dyad spawn-plan`
 - a small Rust CLI entrypoint for read-only diagnostics
 
 Current entrypoint:
@@ -22,6 +24,7 @@ cargo run -p si-rs-cli -- help --format json
 cargo run -p si-rs-cli -- settings show --format json
 cargo run -p si-rs-cli -- providers characteristics --provider github --format json
 cargo run -p si-rs-cli -- paths show --format json
+cargo run -p si-rs-cli -- dyad spawn-plan --name alpha --workspace "$PWD" --format json
 ```
 
 Experimental Go-to-Rust delegation path for the first migrated read-only command:

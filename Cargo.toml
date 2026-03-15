@@ -10,6 +10,7 @@ members = [
     "rust/crates/si-fort",
     "rust/crates/si-vault",
     "rust/crates/si-codex",
+    "rust/crates/si-dyad",
     "rust/crates/si-cli",
 ]
 resolver = "2"
