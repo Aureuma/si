@@ -8,6 +8,7 @@ members = [
     "rust/crates/si-docker",
     "rust/crates/si-runtime",
     "rust/crates/si-fort",
+    "rust/crates/si-vault",
     "rust/crates/si-codex",
     "rust/crates/si-cli",
 ]
