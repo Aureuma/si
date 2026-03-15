@@ -2352,13 +2352,13 @@ func cmdCodexLogs(args []string) {
 	}
 	name := args[0]
 	tail := parseTail(args[1:], "200")
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		fatal(err)
-	}
 	if _, delegated, err := maybeRunRustCodexLogs(name, tail, false); err != nil {
 		fatal(err)
 	} else if !delegated {
+		containerName, err := resolveCodexContainerName(name)
+		if err != nil {
+			fatal(err)
+		}
 		if err := execDockerCLI("logs", "--tail", tail, containerName); err != nil {
 			fatal(err)
 		}
@@ -2376,13 +2376,13 @@ func cmdCodexTail(args []string) {
 	}
 	name := args[0]
 	tail := parseTail(args[1:], "200")
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		fatal(err)
-	}
 	if _, delegated, err := maybeRunRustCodexLogs(name, tail, true); err != nil {
 		fatal(err)
 	} else if !delegated {
+		containerName, err := resolveCodexContainerName(name)
+		if err != nil {
+			fatal(err)
+		}
 		if err := execDockerCLI("logs", "-f", "--tail", tail, containerName); err != nil {
 			fatal(err)
 		}
