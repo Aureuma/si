@@ -2391,26 +2391,39 @@ func cmdCodexRemove(args []string) {
 		profilesToClose := map[string]codexProfile{}
 		for _, c := range containers {
 			profileID := strings.TrimSpace(c.Labels[codexProfileLabelKey])
-			if err := client.RemoveContainer(ctx, c.ID, true); err != nil {
-				warnf("remove container %s failed: %v", strings.TrimPrefix(c.Names[0], "/"), err)
+			containerName := strings.TrimPrefix(c.Names[0], "/")
+			output, delegated, err := maybeRunRustCodexRemove(codexContainerSlug(containerName), *removeVolumes)
+			if err != nil {
+				warnf("remove container %s failed: %v", containerName, err)
 				continue
+			} else if delegated {
+				if strings.TrimSpace(output) != "" {
+					fmt.Println(strings.TrimSpace(output))
+				}
+			} else {
+				if err := client.RemoveContainer(ctx, c.ID, true); err != nil {
+					warnf("remove container %s failed: %v", containerName, err)
+					continue
+				}
 			}
 			removed++
 			if profileID != "" {
 				profilesToClose[profileID] = codexProfile{ID: profileID}
 			}
 			if *removeVolumes {
-				slug := codexContainerSlug(strings.TrimPrefix(c.Names[0], "/"))
+				slug := codexContainerSlug(containerName)
 				if strings.TrimSpace(slug) == "" {
 					continue
 				}
 				codexVol := "si-codex-" + slug
 				ghVol := "si-gh-" + slug
-				if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
-					warnf("codex volume remove failed: %v", err)
-				}
-				if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
-					warnf("gh volume remove failed: %v", err)
+				if !delegated {
+					if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
+						warnf("codex volume remove failed: %v", err)
+					}
+					if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
+						warnf("gh volume remove failed: %v", err)
+					}
 				}
 			}
 		}
@@ -2461,22 +2474,30 @@ func cmdCodexRemove(args []string) {
 		fmt.Printf("%s %s\n", styleError("codex container not found:"), containerName)
 		return
 	}
-	if err := client.RemoveContainer(ctx, id, true); err != nil {
+	if output, delegated, err := maybeRunRustCodexRemove(name, *removeVolumes); err != nil {
 		fatal(err)
-	}
-	if *removeVolumes {
-		slug := codexContainerSlug(containerName)
-		codexVol := "si-codex-" + slug
-		ghVol := "si-gh-" + slug
-		if delegatedRemovePlan && removeArtifacts != nil {
-			codexVol = strings.TrimSpace(removeArtifacts.CodexVolume)
-			ghVol = strings.TrimSpace(removeArtifacts.GHVolume)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Println(strings.TrimSpace(output))
 		}
-		if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
-			warnf("codex volume remove failed: %v", err)
+	} else {
+		if err := client.RemoveContainer(ctx, id, true); err != nil {
+			fatal(err)
 		}
-		if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
-			warnf("gh volume remove failed: %v", err)
+		if *removeVolumes {
+			slug := codexContainerSlug(containerName)
+			codexVol := "si-codex-" + slug
+			ghVol := "si-gh-" + slug
+			if delegatedRemovePlan && removeArtifacts != nil {
+				codexVol = strings.TrimSpace(removeArtifacts.CodexVolume)
+				ghVol = strings.TrimSpace(removeArtifacts.GHVolume)
+			}
+			if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
+				warnf("codex volume remove failed: %v", err)
+			}
+			if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
+				warnf("gh volume remove failed: %v", err)
+			}
 		}
 	}
 	profileID := ""
