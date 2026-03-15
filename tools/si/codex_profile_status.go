@@ -64,6 +64,7 @@ type usageAPIError struct {
 }
 
 var profileAuthRefreshLocks sync.Map
+var resolveCodexContainerNameForProfileStatus = resolveCodexContainerName
 
 func (e *usageAPIError) Error() string {
 	if e == nil {
@@ -567,16 +568,20 @@ func syncProfileAuthFromContainer(ctx context.Context, profile codexProfile) (pr
 	var containerErr error
 	refs, err := codexContainersByProfile(ctx, client, profile.ID)
 	if err == nil && len(refs) > 0 {
-		preferred := choosePreferredCodexContainer(refs, codexContainerName(profile.ID))
-		id, _, lookupErr := client.ContainerByName(ctx, preferred.Name)
-		if lookupErr != nil {
-			containerErr = lookupErr
-		} else if strings.TrimSpace(id) == "" {
-			containerErr = fmt.Errorf("codex container %s not found", preferred.Name)
-		} else if cacheErr := cacheCodexAuthFromContainer(ctx, client, id, profile); cacheErr != nil {
-			containerErr = cacheErr
+		preferredName, resolveErr := preferredCodexProfileContainerName(profile.ID, refs)
+		if resolveErr != nil {
+			containerErr = resolveErr
 		} else {
-			return loadProfileAuthTokens(profile)
+			id, _, lookupErr := client.ContainerByName(ctx, preferredName)
+			if lookupErr != nil {
+				containerErr = lookupErr
+			} else if strings.TrimSpace(id) == "" {
+				containerErr = fmt.Errorf("codex container %s not found", preferredName)
+			} else if cacheErr := cacheCodexAuthFromContainer(ctx, client, id, profile); cacheErr != nil {
+				containerErr = cacheErr
+			} else {
+				return loadProfileAuthTokens(profile)
+			}
 		}
 	} else if err != nil {
 		containerErr = err
@@ -611,11 +616,13 @@ func syncProfileAuthFromContainer(ctx context.Context, profile codexProfile) (pr
 
 func profileCodexAuthVolume(profile codexProfile, refs []codexProfileContainerRef, client *shared.Client, ctx context.Context) string {
 	if client != nil && len(refs) > 0 {
-		preferred := choosePreferredCodexContainer(refs, codexContainerName(profile.ID))
-		id, info, err := client.ContainerByName(ctx, preferred.Name)
-		if err == nil && strings.TrimSpace(id) != "" {
-			if volumeName := codexAuthVolumeFromContainerInfo(info); strings.TrimSpace(volumeName) != "" {
-				return volumeName
+		preferredName, err := preferredCodexProfileContainerName(profile.ID, refs)
+		if err == nil {
+			id, info, err := client.ContainerByName(ctx, preferredName)
+			if err == nil && strings.TrimSpace(id) != "" {
+				if volumeName := codexAuthVolumeFromContainerInfo(info); strings.TrimSpace(volumeName) != "" {
+					return volumeName
+				}
 			}
 		}
 	}
@@ -624,6 +631,14 @@ func profileCodexAuthVolume(profile codexProfile, refs []codexProfileContainerRe
 		return ""
 	}
 	return "si-codex-" + id
+}
+
+func preferredCodexProfileContainerName(profileID string, refs []codexProfileContainerRef) (string, error) {
+	preferredName, err := resolveCodexContainerNameForProfileStatus(profileID)
+	if err != nil {
+		return "", err
+	}
+	return choosePreferredCodexContainer(refs, preferredName).Name, nil
 }
 
 func codexStatusFromUsage(payload usagePayload, now time.Time) codexStatus {
