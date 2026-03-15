@@ -273,6 +273,33 @@ type rustFortSessionTransition struct {
 	Classification rustFortSessionClassification `json:"classification"`
 }
 
+func maybeLoadRustCodexFortBootstrap(sessionStatePath string, profileID string, accessTokenPath string, refreshTokenPath string, accessTokenContainerPath string, refreshTokenContainerPath string) (*codexFortBootstrap, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{
+		"fort", "session-state", "bootstrap-view",
+		"--path", strings.TrimSpace(sessionStatePath),
+		"--access-token-path", strings.TrimSpace(accessTokenPath),
+		"--refresh-token-path", strings.TrimSpace(refreshTokenPath),
+		"--access-token-container-path", strings.TrimSpace(accessTokenContainerPath),
+		"--refresh-token-container-path", strings.TrimSpace(refreshTokenContainerPath),
+		"--format", "json",
+	}
+	if value := strings.TrimSpace(profileID); value != "" {
+		args = append(args, "--profile-id", value)
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var boot codexFortBootstrap
+	if err := json.Unmarshal(output, &boot); err != nil {
+		return nil, false, fmt.Errorf("decode rust fort bootstrap view: %w", err)
+	}
+	return &boot, true, nil
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {

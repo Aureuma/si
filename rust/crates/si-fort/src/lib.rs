@@ -52,6 +52,19 @@ pub struct PersistedRuntimeAgentState {
     pub updated_at: String,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BootstrapView {
+    pub profile_id: String,
+    pub agent_id: String,
+    pub session_id: String,
+    pub host_url: String,
+    pub container_host_url: String,
+    pub access_token_path: String,
+    pub refresh_token_path: String,
+    pub access_token_container_path: String,
+    pub refresh_token_container_path: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PersistedSessionTransition {
     pub state: PersistedSessionState,
@@ -141,6 +154,10 @@ pub enum PersistedSessionError {
     InvalidAccessExpiryUnix { value: i64 },
     #[error("invalid refresh expiry unix timestamp {value}")]
     InvalidRefreshExpiryUnix { value: i64 },
+    #[error("profile id required")]
+    MissingProfileID,
+    #[error("fort container host is missing in session state")]
+    MissingContainerHost,
 }
 
 #[derive(Debug, Error)]
@@ -215,6 +232,50 @@ impl PersistedRuntimeAgentState {
             updated_at: self.updated_at.trim().to_owned(),
         }
     }
+}
+
+pub fn build_bootstrap_view(
+    state: &PersistedSessionState,
+    profile_id_override: Option<&str>,
+    access_token_path: &str,
+    refresh_token_path: &str,
+    access_token_container_path: &str,
+    refresh_token_container_path: &str,
+) -> Result<BootstrapView, PersistedSessionError> {
+    let state = state.normalized();
+    let profile_id = profile_id_override
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(state.profile_id.as_str())
+        .trim()
+        .to_owned();
+    if profile_id.is_empty() {
+        return Err(PersistedSessionError::MissingProfileID);
+    }
+    let agent_id = if state.agent_id.trim().is_empty() {
+        format!("si-codex-{profile_id}")
+    } else {
+        state.agent_id.trim().to_owned()
+    };
+    let container_host_url = if state.container_host.trim().is_empty() {
+        container_host_for_runtime(&state.host)
+    } else {
+        state.container_host.trim().to_owned()
+    };
+    if container_host_url.trim().is_empty() {
+        return Err(PersistedSessionError::MissingContainerHost);
+    }
+    Ok(BootstrapView {
+        profile_id,
+        agent_id,
+        session_id: state.session_id.trim().to_owned(),
+        host_url: state.host.trim().to_owned(),
+        container_host_url,
+        access_token_path: access_token_path.trim().to_owned(),
+        refresh_token_path: refresh_token_path.trim().to_owned(),
+        access_token_container_path: access_token_container_path.trim().to_owned(),
+        refresh_token_container_path: refresh_token_container_path.trim().to_owned(),
+    })
 }
 
 pub fn classify_session(snapshot: Option<SessionSnapshot>, now_unix: i64) -> SessionState {
@@ -495,6 +556,31 @@ fn clear_state_file(path: impl AsRef<Path>) -> Result<(), SessionStateFileError>
     }
 }
 
+fn container_host_for_runtime(host_url: &str) -> String {
+    let host_url = host_url.trim();
+    if host_url.is_empty() {
+        return String::new();
+    }
+    let Ok(mut parsed) = url::Url::parse(host_url) else {
+        return host_url.to_owned();
+    };
+    let Some(hostname) = parsed.host_str().map(str::trim) else {
+        return host_url.to_owned();
+    };
+    if hostname == "127.0.0.1"
+        || hostname == "localhost"
+        || hostname == "0.0.0.0"
+        || hostname == "::1"
+    {
+        let port = parsed.port().unwrap_or(8088);
+        if parsed.set_host(Some("host.docker.internal")).is_ok() {
+            let _ = parsed.set_port(Some(port));
+            return parsed.to_string();
+        }
+    }
+    host_url.to_owned()
+}
+
 fn non_empty_string(value: String) -> Option<String> {
     if value.trim().is_empty() { None } else { Some(value) }
 }
@@ -610,15 +696,16 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        PersistedRuntimeAgentState, PersistedSessionError, PersistedSessionState,
+        BootstrapView, PersistedRuntimeAgentState, PersistedSessionError, PersistedSessionState,
         PersistedSessionTransition, RefreshOutcome, RefreshSuccess, RevocationReason,
         SessionSnapshot, SessionState, SessionStateFileError, SessionTransitionError,
         acquire_session_lock, apply_refresh_outcome,
         apply_refresh_outcome_to_persisted_session_state, begin_refresh, begin_teardown,
-        classify_persisted_session_state, classify_session, clear_persisted_runtime_agent_state,
-        clear_persisted_session_state, complete_teardown, load_persisted_runtime_agent_state,
-        load_persisted_session_state, save_persisted_runtime_agent_state,
-        save_persisted_session_state, teardown_persisted_session_state, try_acquire_session_lock,
+        build_bootstrap_view, classify_persisted_session_state, classify_session,
+        clear_persisted_runtime_agent_state, clear_persisted_session_state, complete_teardown,
+        load_persisted_runtime_agent_state, load_persisted_session_state,
+        save_persisted_runtime_agent_state, save_persisted_session_state,
+        teardown_persisted_session_state, try_acquire_session_lock,
     };
 
     fn snapshot() -> SessionSnapshot {
@@ -970,5 +1057,37 @@ mod tests {
         clear_persisted_runtime_agent_state(&path).expect("clear runtime agent state");
 
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn build_bootstrap_view_defaults_agent_and_container_host() {
+        let view = build_bootstrap_view(
+            &PersistedSessionState {
+                profile_id: "ferma".to_owned(),
+                host: "http://127.0.0.1:8088".to_owned(),
+                ..PersistedSessionState::default()
+            },
+            None,
+            "/tmp/access.token",
+            "/tmp/refresh.token",
+            "/home/si/.si/access.token",
+            "/home/si/.si/refresh.token",
+        )
+        .expect("bootstrap view");
+
+        assert_eq!(
+            view,
+            BootstrapView {
+                profile_id: "ferma".to_owned(),
+                agent_id: "si-codex-ferma".to_owned(),
+                session_id: String::new(),
+                host_url: "http://127.0.0.1:8088".to_owned(),
+                container_host_url: "http://host.docker.internal:8088/".to_owned(),
+                access_token_path: "/tmp/access.token".to_owned(),
+                refresh_token_path: "/tmp/refresh.token".to_owned(),
+                access_token_container_path: "/home/si/.si/access.token".to_owned(),
+                refresh_token_container_path: "/home/si/.si/refresh.token".to_owned(),
+            }
+        );
     }
 }

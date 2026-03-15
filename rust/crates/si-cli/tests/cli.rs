@@ -861,6 +861,52 @@ fn fort_session_state_clear_removes_persisted_file() {
 }
 
 #[test]
+fn fort_session_state_bootstrap_view_normalizes_fallbacks() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("session.json");
+    fs::write(
+        &state_path,
+        r#"{
+  "profile_id": " ferma ",
+  "agent_id": "",
+  "host": " http://127.0.0.1:8088 "
+}
+"#,
+    )
+    .expect("write session state");
+    #[cfg(unix)]
+    fs::set_permissions(&state_path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+        .expect("chmod session state");
+
+    let output = cargo_bin()
+        .args(["fort", "session-state", "bootstrap-view", "--path"])
+        .arg(&state_path)
+        .args([
+            "--access-token-path",
+            "/tmp/access.token",
+            "--refresh-token-path",
+            "/tmp/refresh.token",
+            "--access-token-container-path",
+            "/home/si/.si/access.token",
+            "--refresh-token-container-path",
+            "/home/si/.si/refresh.token",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["agent_id"], "si-codex-ferma");
+    assert_eq!(parsed["container_host_url"], "http://host.docker.internal:8088/");
+    assert_eq!(parsed["access_token_container_path"], "/home/si/.si/access.token");
+}
+
+#[test]
 fn fort_runtime_agent_state_clear_removes_persisted_file() {
     let state_dir = tempdir().expect("tempdir");
     let state_path = state_dir.path().join("runtime-agent.json");
