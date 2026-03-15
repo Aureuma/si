@@ -66,6 +66,34 @@ type rustCodexSpawnPlanMount struct {
 	ReadOnly bool   `json:"read_only"`
 }
 
+type rustCodexSpawnSpecRequest struct {
+	rustCodexSpawnPlanRequest
+	Command string
+}
+
+type rustCodexSpawnSpec struct {
+	Image         string                     `json:"image"`
+	Name          string                     `json:"name"`
+	Network       string                     `json:"network"`
+	RestartPolicy string                     `json:"restart_policy"`
+	WorkingDir    string                     `json:"working_dir"`
+	Command       []string                   `json:"command"`
+	Env           []rustCodexSpawnSpecEnv    `json:"env"`
+	BindMounts    []rustCodexSpawnPlanMount  `json:"bind_mounts"`
+	VolumeMounts  []rustCodexSpawnSpecVolume `json:"volume_mounts"`
+}
+
+type rustCodexSpawnSpecEnv struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type rustCodexSpawnSpecVolume struct {
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	ReadOnly bool   `json:"read_only"`
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -109,6 +137,21 @@ func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodex
 		return nil, false, fmt.Errorf("decode rust codex spawn plan: %w", err)
 	}
 	return &plan, true, nil
+}
+
+func maybeBuildRustCodexSpawnSpec(request rustCodexSpawnSpecRequest) (*rustCodexSpawnSpec, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(buildRustCodexSpawnSpecArgs(request)...)
+	if err != nil {
+		return nil, false, err
+	}
+	var spec rustCodexSpawnSpec
+	if err := json.Unmarshal(output, &spec); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex spawn spec: %w", err)
+	}
+	return &spec, true, nil
 }
 
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
@@ -193,6 +236,15 @@ func buildRustCodexSpawnPlanArgs(request rustCodexSpawnPlanRequest) []string {
 	}
 	if value := strings.TrimSpace(request.VaultEnvFile); value != "" {
 		args = append(args, "--vault-env-file", value)
+	}
+	return args
+}
+
+func buildRustCodexSpawnSpecArgs(request rustCodexSpawnSpecRequest) []string {
+	args := buildRustCodexSpawnPlanArgs(request.rustCodexSpawnPlanRequest)
+	args[1] = "spawn-spec"
+	if value := strings.TrimSpace(request.Command); value != "" {
+		args = append(args, "--cmd", value)
 	}
 	return args
 }
