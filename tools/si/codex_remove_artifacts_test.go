@@ -60,3 +60,32 @@ func TestResolveCodexRemoveArtifactsUsesRustPlanWhenConfigured(t *testing.T) {
 		t.Fatalf("expected codex remove-plan invocation, got %q", string(argsData))
 	}
 }
+
+func TestResolveCodexContainerNameUsesRustPlanWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	payload := `{"name":"ferma","container_name":"si-codex-rust-ferma","slug":"rust-ferma","codex_volume":"si-codex-rust-ferma","gh_volume":"si-gh-rust-ferma"}`
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s' " + shellSingleQuote(payload) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	containerName, err := resolveCodexContainerName("ferma")
+	if err != nil {
+		t.Fatalf("resolveCodexContainerName: %v", err)
+	}
+	if containerName != "si-codex-rust-ferma" {
+		t.Fatalf("unexpected container name %q", containerName)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "codex\nremove-plan\nferma") {
+		t.Fatalf("expected codex remove-plan invocation, got %q", string(argsData))
+	}
+}
