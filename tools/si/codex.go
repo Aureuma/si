@@ -2477,104 +2477,9 @@ func cmdCodexRemove(args []string) {
 			printUsage("usage: si remove [--all] [--volumes] [name]")
 			return
 		}
-		client, err := shared.NewClient()
-		if err != nil {
+		if err := runCodexRemoveAllFn(*removeVolumes); err != nil {
 			fatal(err)
 		}
-		defer client.Close()
-		ctx := context.Background()
-		containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
-		if err != nil {
-			fatal(err)
-		}
-		if len(containers) == 0 {
-			fmt.Println(styleDim("no codex containers found"))
-			return
-		}
-		names := make([]string, 0, len(containers))
-		for _, c := range containers {
-			n := strings.TrimPrefix(c.Names[0], "/")
-			if strings.TrimSpace(n) != "" {
-				names = append(names, n)
-			}
-		}
-		sort.Strings(names)
-		confirmed, ok := confirmYN(fmt.Sprintf("Remove ALL codex containers (%d): %s?", len(names), strings.Join(names, ", ")), false)
-		if !ok || !confirmed {
-			infof("canceled")
-			return
-		}
-		removed := 0
-		profilesToClose := map[string]codexProfile{}
-		for _, c := range containers {
-			profileID := strings.TrimSpace(c.Labels[codexProfileLabelKey])
-			containerName := strings.TrimPrefix(c.Names[0], "/")
-			targetName := codexContainerSlug(containerName)
-			removeArtifacts, delegatedRemovePlan, err := resolveCodexRemoveArtifacts(targetName)
-			if err != nil {
-				warnf("remove plan for %s failed: %v", containerName, err)
-				continue
-			}
-			if removeArtifacts != nil && strings.TrimSpace(removeArtifacts.ContainerName) != "" {
-				containerName = strings.TrimSpace(removeArtifacts.ContainerName)
-			}
-			output, delegated, err := maybeRunRustCodexRemove(targetName, *removeVolumes)
-			if err != nil {
-				warnf("remove container %s failed: %v", containerName, err)
-				continue
-			} else if delegated {
-				if strings.TrimSpace(output) != "" {
-					fmt.Println(strings.TrimSpace(output))
-				}
-			} else {
-				if err := client.RemoveContainer(ctx, c.ID, true); err != nil {
-					warnf("remove container %s failed: %v", containerName, err)
-					continue
-				}
-			}
-			removed++
-			if profileID != "" {
-				profilesToClose[profileID] = codexProfile{ID: profileID}
-			}
-			if *removeVolumes {
-				codexVol := ""
-				ghVol := ""
-				if removeArtifacts != nil {
-					codexVol = strings.TrimSpace(removeArtifacts.CodexVolume)
-					ghVol = strings.TrimSpace(removeArtifacts.GHVolume)
-				}
-				if !delegated {
-					if codexVol == "" || ghVol == "" {
-						slug := codexContainerSlug(containerName)
-						if strings.TrimSpace(slug) == "" {
-							continue
-						}
-						codexVol = "si-codex-" + slug
-						ghVol = "si-gh-" + slug
-					}
-					if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
-						warnf("codex volume remove failed: %v", err)
-					}
-					if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
-						warnf("gh volume remove failed: %v", err)
-					}
-				}
-				_ = delegatedRemovePlan
-			}
-		}
-		for profileID, profile := range profilesToClose {
-			remaining, err := codexContainersByProfile(ctx, client, profileID)
-			if err != nil {
-				warnf("fort session cleanup probe failed for %s: %v", profileID, err)
-				continue
-			}
-			if len(remaining) == 0 {
-				if err := closeCodexProfileFortSession(profile); err != nil {
-					warnf("fort session cleanup failed for %s: %v", profileID, err)
-				}
-			}
-		}
-		successf("removed %d codex containers", removed)
 		return
 	}
 
@@ -2681,6 +2586,110 @@ func cmdCodexRemove(args []string) {
 		}
 	}
 	successf("codex container %s removed", containerName)
+}
+
+var runCodexRemoveAllFn = runCodexRemoveAll
+
+func runCodexRemoveAll(removeVolumes bool) error {
+	client, err := shared.NewClient()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	ctx := context.Background()
+	containers, err := client.ListContainers(ctx, true, map[string]string{codexLabelKey: codexLabelValue})
+	if err != nil {
+		return err
+	}
+	if len(containers) == 0 {
+		fmt.Println(styleDim("no codex containers found"))
+		return nil
+	}
+	names := make([]string, 0, len(containers))
+	for _, c := range containers {
+		n := strings.TrimPrefix(c.Names[0], "/")
+		if strings.TrimSpace(n) != "" {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	confirmed, ok := confirmYN(fmt.Sprintf("Remove ALL codex containers (%d): %s?", len(names), strings.Join(names, ", ")), false)
+	if !ok || !confirmed {
+		infof("canceled")
+		return nil
+	}
+	removed := 0
+	profilesToClose := map[string]codexProfile{}
+	for _, c := range containers {
+		profileID := strings.TrimSpace(c.Labels[codexProfileLabelKey])
+		containerName := strings.TrimPrefix(c.Names[0], "/")
+		targetName := codexContainerSlug(containerName)
+		removeArtifacts, delegatedRemovePlan, err := resolveCodexRemoveArtifacts(targetName)
+		if err != nil {
+			warnf("remove plan for %s failed: %v", containerName, err)
+			continue
+		}
+		if removeArtifacts != nil && strings.TrimSpace(removeArtifacts.ContainerName) != "" {
+			containerName = strings.TrimSpace(removeArtifacts.ContainerName)
+		}
+		output, delegated, err := maybeRunRustCodexRemove(targetName, removeVolumes)
+		if err != nil {
+			warnf("remove container %s failed: %v", containerName, err)
+			continue
+		} else if delegated {
+			if strings.TrimSpace(output) != "" {
+				fmt.Println(strings.TrimSpace(output))
+			}
+		} else {
+			if err := client.RemoveContainer(ctx, c.ID, true); err != nil {
+				warnf("remove container %s failed: %v", containerName, err)
+				continue
+			}
+		}
+		removed++
+		if profileID != "" {
+			profilesToClose[profileID] = codexProfile{ID: profileID}
+		}
+		if removeVolumes {
+			codexVol := ""
+			ghVol := ""
+			if removeArtifacts != nil {
+				codexVol = strings.TrimSpace(removeArtifacts.CodexVolume)
+				ghVol = strings.TrimSpace(removeArtifacts.GHVolume)
+			}
+			if !delegated {
+				if codexVol == "" || ghVol == "" {
+					slug := codexContainerSlug(containerName)
+					if strings.TrimSpace(slug) == "" {
+						continue
+					}
+					codexVol = "si-codex-" + slug
+					ghVol = "si-gh-" + slug
+				}
+				if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
+					warnf("codex volume remove failed: %v", err)
+				}
+				if err := client.RemoveVolume(ctx, ghVol, true); err != nil {
+					warnf("gh volume remove failed: %v", err)
+				}
+			}
+			_ = delegatedRemovePlan
+		}
+	}
+	for profileID, profile := range profilesToClose {
+		remaining, err := codexContainersByProfile(ctx, client, profileID)
+		if err != nil {
+			warnf("fort session cleanup probe failed for %s: %v", profileID, err)
+			continue
+		}
+		if len(remaining) == 0 {
+			if err := closeCodexProfileFortSession(profile); err != nil {
+				warnf("fort session cleanup failed for %s: %v", profileID, err)
+			}
+		}
+	}
+	successf("removed %d codex containers", removed)
+	return nil
 }
 
 func resolveCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts, bool, error) {
