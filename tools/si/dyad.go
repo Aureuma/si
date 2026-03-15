@@ -333,9 +333,15 @@ func cmdDyadSpawn(args []string) {
 		fatal(err)
 	}
 
-	actorID, criticID, err := client.EnsureDyad(ctx, opts)
+	actorID, criticID, usedRustStart, err := maybeEnsureDyadSpawnWithRust(ctx, client, opts)
 	if err != nil {
 		fatal(err)
+	}
+	if !usedRustStart {
+		actorID, criticID, err = client.EnsureDyad(ctx, opts)
+		if err != nil {
+			fatal(err)
+		}
 	}
 	ensureDyadContainerSiHomeOwnership(ctx, client, actorID)
 	ensureDyadContainerSiHomeOwnership(ctx, client, criticID)
@@ -348,6 +354,81 @@ func cmdDyadSpawn(args []string) {
 		seedGitIdentity(ctx, client, criticID, "si", "/home/si", identity)
 	}
 	successf("dyad %s ready (role=%s)", name, role)
+}
+
+func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, opts shared.DyadOptions) (string, string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", "", false, nil
+	}
+	actorName := shared.DyadContainerName(opts.Dyad, "actor")
+	criticName := shared.DyadContainerName(opts.Dyad, "critic")
+	actorID, _, err := client.ContainerByName(ctx, actorName)
+	if err != nil {
+		return "", "", false, err
+	}
+	criticID, _, err := client.ContainerByName(ctx, criticName)
+	if err != nil {
+		return "", "", false, err
+	}
+	if actorID != "" || criticID != "" {
+		return "", "", false, nil
+	}
+	delegated, err := maybeStartRustDyadSpawn(rustDyadSpawnPlanRequest{
+		Name:                    opts.Dyad,
+		Role:                    opts.Role,
+		ActorImage:              opts.ActorImage,
+		CriticImage:             opts.CriticImage,
+		CodexModel:              opts.CodexModel,
+		CodexEffortActor:        opts.CodexEffortActor,
+		CodexEffortCritic:       opts.CodexEffortCritic,
+		CodexModelLow:           opts.CodexModelLow,
+		CodexModelMedium:        opts.CodexModelMedium,
+		CodexModelHigh:          opts.CodexModelHigh,
+		CodexEffortLow:          opts.CodexEffortLow,
+		CodexEffortMedium:       opts.CodexEffortMedium,
+		CodexEffortHigh:         opts.CodexEffortHigh,
+		Workspace:               opts.WorkspaceHost,
+		Configs:                 opts.ConfigsHost,
+		VaultEnvFile:            opts.VaultEnvFile,
+		CodexVolume:             opts.CodexVolume,
+		SkillsVolume:            opts.SkillsVolume,
+		Network:                 opts.Network,
+		ForwardPorts:            opts.ForwardPorts,
+		DockerSocket:            opts.DockerSocket,
+		ProfileID:               opts.ProfileID,
+		ProfileName:             opts.ProfileName,
+		LoopEnabled:             opts.LoopEnabled,
+		LoopGoal:                opts.LoopGoal,
+		LoopSeedPrompt:          opts.LoopSeedPrompt,
+		LoopMaxTurns:            intPtrValue(opts.LoopMaxTurns),
+		LoopSleepSeconds:        intPtrValue(opts.LoopSleepSeconds),
+		LoopStartupDelaySeconds: intPtrValue(opts.LoopStartupDelay),
+		LoopTurnTimeoutSeconds:  intPtrValue(opts.LoopTurnTimeout),
+		LoopRetryMax:            intPtrValue(opts.LoopRetryMax),
+		LoopRetryBaseSeconds:    intPtrValue(opts.LoopRetryBase),
+		LoopPromptLines:         intPtrValue(opts.LoopPromptLines),
+		LoopAllowMCPStartup:     opts.LoopAllowMCP,
+		LoopTmuxCapture:         opts.LoopTmuxCapture,
+		LoopPausePollSeconds:    intPtrValue(opts.LoopPausePoll),
+	})
+	if err != nil {
+		return "", "", false, err
+	}
+	if !delegated {
+		return "", "", false, nil
+	}
+	actorID, _, err = client.ContainerByName(ctx, actorName)
+	if err != nil {
+		return "", "", true, err
+	}
+	criticID, _, err = client.ContainerByName(ctx, criticName)
+	if err != nil {
+		return "", "", true, err
+	}
+	if actorID == "" || criticID == "" {
+		return "", "", true, fmt.Errorf("rust dyad spawn did not create both actor and critic containers")
+	}
+	return actorID, criticID, true, nil
 }
 
 func cmdDyadPeek(args []string) {
