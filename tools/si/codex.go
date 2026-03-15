@@ -277,7 +277,10 @@ func cmdCodexSpawn(args []string) {
 	if err := validateSlug(name); err != nil {
 		fatal(err)
 	}
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		fatal(err)

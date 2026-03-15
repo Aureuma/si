@@ -338,6 +338,7 @@ Progress notes:
 - completed: the Fort runtime-agent step now resolves Rust-backed session classification and bootstrap host data before loading raw session state, so no-refresh iterations stay on the migrated interpretation path and only touch persisted state when a refresh mutation must be saved
 - completed: live codex-session refresh and runtime-agent refresh now defer raw session-state loading until a Rust transition result actually needs fallback persisted state mutation, reducing direct Go state handling in the hot refresh path when Rust already returns the next lifecycle snapshot
 - completed: single-container Go codex remove now resolves its target container name through the shared Rust-aware artifact helper from the start, so the live remove flow no longer seeds with raw Go naming before consulting the migrated remove-plan boundary
+- completed: the shipping Go codex spawn path now seeds its target container name through the shared Rust-aware artifact helper from the start, so live spawn orchestration no longer begins from a separate raw Go naming rule before Rust-aware planning takes over
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
