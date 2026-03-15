@@ -7,7 +7,7 @@ use std::path::Path;
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SessionSnapshot {
     pub profile_id: String,
     pub agent_id: String,
@@ -38,7 +38,7 @@ pub struct PersistedSessionState {
     pub updated_at: String,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum SessionState {
     BootstrapRequired,
     Resumable(SessionSnapshot),
@@ -48,7 +48,7 @@ pub enum SessionState {
     Closed,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RevocationReason {
     MissingSession,
     RefreshExpired,
@@ -56,13 +56,13 @@ pub enum RevocationReason {
     InvalidRefreshResult,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RefreshSuccess {
     pub access_expires_at_unix: i64,
     pub refresh_expires_at_unix: Option<i64>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum RefreshOutcome {
     Success(RefreshSuccess),
     Unauthorized,

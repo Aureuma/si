@@ -17,6 +17,7 @@ si-rs-codex = { path = "../si-codex" }
 si-rs-config = { path = "../si-config" }
 si-rs-core = { path = "../si-core" }
 si-rs-docker = { path = "../si-docker" }
+si-rs-fort = { path = "../si-fort" }
 si-rs-process = { path = "../si-process" }
 si-rs-provider-catalog = { path = "../si-provider-catalog" }
 si-rs-runtime = { path = "../si-runtime" }

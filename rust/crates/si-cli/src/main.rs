@@ -15,6 +15,10 @@ use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command, docker_container_logs_command,
 };
+use si_rs_fort::{
+    PersistedSessionState, SessionState, classify_persisted_session_state,
+    load_persisted_session_state,
+};
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_runtime::HostMountContext;
@@ -55,6 +59,10 @@ enum Command {
     Paths {
         #[command(subcommand)]
         command: PathsCommand,
+    },
+    Fort {
+        #[command(subcommand)]
+        command: FortCommand,
     },
 }
 
@@ -368,6 +376,32 @@ enum PathsCommand {
         #[arg(long)]
         settings_file: Option<PathBuf>,
         #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum FortCommand {
+    SessionState {
+        #[command(subcommand)]
+        command: FortSessionStateCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum FortSessionStateCommand {
+    Show {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Classify {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        now_unix: i64,
+        #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
 }
@@ -882,6 +916,16 @@ fn main() -> Result<()> {
                 show_paths(home, settings_file, format)?
             }
         },
+        Command::Fort { command } => match command {
+            FortCommand::SessionState { command } => match command {
+                FortSessionStateCommand::Show { path, format } => {
+                    show_fort_session_state(path, format)?
+                }
+                FortSessionStateCommand::Classify { path, now_unix, format } => {
+                    show_fort_session_state_classification(path, now_unix, format)?
+                }
+            },
+        },
     }
 
     Ok(())
@@ -985,6 +1029,95 @@ fn show_settings(
     }
 
     Ok(())
+}
+
+fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
+    let state = load_persisted_session_state(path)?;
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+        OutputFormat::Text => render_fort_session_state_text(&state),
+    }
+
+    Ok(())
+}
+
+fn show_fort_session_state_classification(
+    path: PathBuf,
+    now_unix: i64,
+    format: OutputFormat,
+) -> Result<()> {
+    let state = load_persisted_session_state(path)?;
+    let classified = classify_persisted_session_state(&state, now_unix)?;
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&classified)?),
+        OutputFormat::Text => render_fort_session_classification_text(&classified),
+    }
+
+    Ok(())
+}
+
+fn render_fort_session_state_text(state: &PersistedSessionState) {
+    println!("profile_id={}", render_text_value(&state.profile_id));
+    println!("agent_id={}", render_text_value(&state.agent_id));
+    println!("session_id={}", render_text_value(&state.session_id));
+    println!("host={}", render_text_value(&state.host));
+    println!("container_host={}", render_text_value(&state.container_host));
+    println!("access_token_path={}", render_text_value(&state.access_token_path));
+    println!("refresh_token_path={}", render_text_value(&state.refresh_token_path));
+    println!("access_expires_at={}", render_text_value(&state.access_expires_at));
+    println!("refresh_expires_at={}", render_text_value(&state.refresh_expires_at));
+    println!("updated_at={}", render_text_value(&state.updated_at));
+}
+
+fn render_fort_session_classification_text(state: &SessionState) {
+    match state {
+        SessionState::BootstrapRequired => println!("state=bootstrap_required"),
+        SessionState::Closed => println!("state=closed"),
+        SessionState::Resumable(snapshot) => {
+            println!("state=resumable");
+            render_fort_snapshot_text(snapshot);
+        }
+        SessionState::Refreshing(snapshot) => {
+            println!("state=refreshing");
+            render_fort_snapshot_text(snapshot);
+        }
+        SessionState::TeardownPending(snapshot) => {
+            println!("state=teardown_pending");
+            render_fort_snapshot_text(snapshot);
+        }
+        SessionState::Revoked { snapshot, reason } => {
+            println!("state=revoked");
+            println!("reason={reason:?}");
+            if let Some(snapshot) = snapshot {
+                render_fort_snapshot_text(snapshot);
+            }
+        }
+    }
+}
+
+fn render_fort_snapshot_text(snapshot: &si_rs_fort::SessionSnapshot) {
+    println!("profile_id={}", render_option_text_value(Some(&snapshot.profile_id)));
+    println!("agent_id={}", render_option_text_value(Some(&snapshot.agent_id)));
+    println!("session_id={}", render_option_text_value(snapshot.session_id.as_deref()));
+    println!("access_expires_at_unix={}", render_option_number(snapshot.access_expires_at_unix));
+    println!("refresh_expires_at_unix={}", render_option_number(snapshot.refresh_expires_at_unix));
+}
+
+fn render_text_value(value: &str) -> &str {
+    if value.trim().is_empty() { "(none)" } else { value }
+}
+
+fn render_option_text_value(value: Option<&str>) -> &str {
+    match value {
+        Some(value) if !value.trim().is_empty() => value,
+        _ => "(none)",
+    }
+}
+
+fn render_option_number(value: Option<i64>) -> String {
+    value.map(|item| item.to_string()).unwrap_or_else(|| "(none)".to_owned())
 }
 
 fn show_provider_characteristics(provider: Option<&str>, format: OutputFormat) -> Result<()> {
