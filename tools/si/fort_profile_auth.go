@@ -383,6 +383,11 @@ func fortContainerPathFromHost(hostPath string) (string, error) {
 }
 
 func saveFortProfileSessionState(path string, state fortProfileSessionState) error {
+	if delegated, err := maybeSaveRustFortSessionState(path, state); err != nil {
+		return err
+	} else if delegated {
+		return nil
+	}
 	return writeFortStateFile(path, state)
 }
 

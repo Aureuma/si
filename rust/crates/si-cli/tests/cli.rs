@@ -319,6 +319,53 @@ fn fort_runtime_agent_state_show_reads_and_normalizes_persisted_state() {
 }
 
 #[test]
+fn fort_session_state_write_persists_normalized_json() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("session.json");
+
+    cargo_bin()
+        .args([
+            "fort",
+            "session-state",
+            "write",
+            "--path",
+        ])
+        .arg(&state_path)
+        .args([
+            "--state-json",
+            r#"{"profile_id":" ferma ","agent_id":" agent-ferma ","session_id":" session-123 ","host":" https://fort.example.test "}"#,
+        ])
+        .assert()
+        .success();
+
+    let raw = fs::read_to_string(&state_path).expect("read persisted state");
+    let parsed: Value = serde_json::from_str(&raw).expect("json");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["agent_id"], "agent-ferma");
+    assert_eq!(parsed["session_id"], "session-123");
+    assert_eq!(parsed["host"], "https://fort.example.test");
+}
+
+#[test]
+fn fort_runtime_agent_state_write_persists_normalized_json() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("runtime-agent.json");
+
+    cargo_bin()
+        .args(["fort", "runtime-agent-state", "write", "--path"])
+        .arg(&state_path)
+        .args(["--state-json", r#"{"profile_id":" ferma ","pid":4242,"command_path":" /tmp/si "}"#])
+        .assert()
+        .success();
+
+    let raw = fs::read_to_string(&state_path).expect("read persisted runtime state");
+    let parsed: Value = serde_json::from_str(&raw).expect("json");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["pid"], 4242);
+    assert_eq!(parsed["command_path"], "/tmp/si");
+}
+
+#[test]
 fn vault_trust_lookup_reports_matching_entry() {
     let store_dir = tempdir().expect("tempdir");
     let store_path = store_dir.path().join("trust.json");

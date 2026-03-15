@@ -360,6 +360,75 @@ func TestMaybeLoadRustFortRuntimeAgentStateDelegatesAndParsesJSON(t *testing.T) 
 	}
 }
 
+func TestMaybeSaveRustFortSessionStateDelegatesAndWritesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeSaveRustFortSessionState("/tmp/session.json", fortProfileSessionState{
+		ProfileID: "ferma",
+		AgentID:   "si-codex-ferma",
+		SessionID: "session-123",
+	})
+	if err != nil {
+		t.Fatalf("maybeSaveRustFortSessionState: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected fort session state write to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nwrite\n--path\n/tmp/session.json\n--state-json\n") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+	if !strings.Contains(string(argsData), "\"profile_id\":\"ferma\"") {
+		t.Fatalf("expected marshaled session state json in args, got %q", string(argsData))
+	}
+}
+
+func TestMaybeSaveRustFortRuntimeAgentStateDelegatesAndWritesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeSaveRustFortRuntimeAgentState("/tmp/runtime-agent.json", fortProfileRuntimeAgentState{
+		ProfileID: "ferma",
+		PID:       4242,
+	})
+	if err != nil {
+		t.Fatalf("maybeSaveRustFortRuntimeAgentState: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected fort runtime agent state write to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nruntime-agent-state\nwrite\n--path\n/tmp/runtime-agent.json\n--state-json\n") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+	if !strings.Contains(string(argsData), "\"profile_id\":\"ferma\"") {
+		t.Fatalf("expected marshaled runtime state json in args, got %q", string(argsData))
+	}
+}
+
 func TestMaybeRunRustCodexLogsDelegatesAndReturnsOutput(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
