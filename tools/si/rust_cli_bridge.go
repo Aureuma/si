@@ -858,6 +858,32 @@ func maybeSaveRustFortRuntimeAgentState(path string, state fortProfileRuntimeAge
 	return true, nil
 }
 
+func maybeClearRustFortSessionState(path string) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	if _, err := runRustCLIText(
+		"fort", "session-state", "clear",
+		"--path", strings.TrimSpace(path),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func maybeClearRustFortRuntimeAgentState(path string) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	if _, err := runRustCLIText(
+		"fort", "runtime-agent-state", "clear",
+		"--path", strings.TrimSpace(path),
+	); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionRefreshResult, now time.Time) (*rustFortSessionTransition, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil
