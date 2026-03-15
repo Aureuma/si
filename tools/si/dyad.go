@@ -260,14 +260,6 @@ func cmdDyadSpawn(args []string) {
 	if *autopilot && seedPrompt == "" {
 		fatal(fmt.Errorf("dyad autopilot now requires --prompt"))
 	}
-
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
-
-	ctx := context.Background()
 	var profile *codexProfile
 	if !*skipAuth {
 		resolved, err := resolveDyadSpawnProfile(strings.TrimSpace(*profileKey))
@@ -333,15 +325,29 @@ func cmdDyadSpawn(args []string) {
 	if err := maybeApplyRustDyadSpawnPlan(&opts); err != nil {
 		fatal(err)
 	}
+	if err := runDyadSpawnFlowFn(opts, profile); err != nil {
+		fatal(err)
+	}
+}
 
+var runDyadSpawnFlowFn = runDyadSpawnFlow
+
+func runDyadSpawnFlow(opts shared.DyadOptions, profile *codexProfile) error {
+	client, err := shared.NewClient()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	ctx := context.Background()
 	actorID, criticID, usedRustStart, err := maybeEnsureDyadSpawnWithRust(ctx, client, opts)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	if !usedRustStart {
 		actorID, criticID, err = client.EnsureDyad(ctx, opts)
 		if err != nil {
-			fatal(err)
+			return err
 		}
 	}
 	ensureDyadContainerSiHomeOwnership(ctx, client, actorID)
@@ -354,7 +360,8 @@ func cmdDyadSpawn(args []string) {
 		seedGitIdentity(ctx, client, actorID, "si", "/home/si", identity)
 		seedGitIdentity(ctx, client, criticID, "si", "/home/si", identity)
 	}
-	successf("dyad %s ready (role=%s)", name, role)
+	successf("dyad %s ready (role=%s)", opts.Dyad, opts.Role)
+	return nil
 }
 
 func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, opts shared.DyadOptions) (string, string, bool, error) {

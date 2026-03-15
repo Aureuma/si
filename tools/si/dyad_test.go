@@ -1198,6 +1198,84 @@ func TestCmdDyadPeekDelegatesPlanToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdDyadSpawnUsesRustPlanBeforeExecution(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	workspace := filepath.Join(dir, "workspace")
+	configs := filepath.Join(dir, "configs")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	if err := os.MkdirAll(configs, 0o755); err != nil {
+		t.Fatalf("mkdir configs: %v", err)
+	}
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"name\":\"alpha\",\"role\":\"research\",\"workspace_host\":\"" + filepath.ToSlash(workspace) + "\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"" + filepath.ToSlash(workspace) + "\",\"configs_host\":\"" + filepath.ToSlash(configs) + "\",\"codex_volume\":\"codex-rust\",\"skills_volume\":\"skills-rust\",\"network_name\":\"si-rust\",\"forward_ports\":\"1555-1556\",\"docker_socket\":true,\"actor\":{\"name\":\"si-dyad-alpha-actor\",\"image\":\"actor-rust\"},\"critic\":{\"name\":\"si-dyad-alpha-critic\",\"image\":\"critic-rust\"}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prevRun := runDyadSpawnFlowFn
+	t.Cleanup(func() {
+		runDyadSpawnFlowFn = prevRun
+	})
+
+	var gotOpts shared.DyadOptions
+	var gotProfile *codexProfile
+	runDyadSpawnFlowFn = func(opts shared.DyadOptions, profile *codexProfile) error {
+		gotOpts = opts
+		gotProfile = profile
+		return nil
+	}
+
+	_ = captureOutputForTest(t, func() {
+		cmdDyadSpawn([]string{
+			"alpha",
+			"--skip-auth",
+			"--workspace", workspace,
+			"--configs", configs,
+			"--actor-image", "actor-old",
+			"--critic-image", "critic-old",
+			"--forward-ports", "1234-1235",
+			"--docker-socket=false",
+		})
+	})
+
+	if gotProfile != nil {
+		t.Fatalf("expected nil profile with --skip-auth")
+	}
+	if gotOpts.Dyad != "alpha" || gotOpts.Role != "research" {
+		t.Fatalf("unexpected opts: %#v", gotOpts)
+	}
+	if gotOpts.ActorImage != "actor-rust" || gotOpts.CriticImage != "critic-rust" {
+		t.Fatalf("unexpected images: %#v", gotOpts)
+	}
+	if gotOpts.WorkspaceHost != filepath.ToSlash(workspace) || gotOpts.ConfigsHost != filepath.ToSlash(configs) {
+		t.Fatalf("unexpected paths: %#v", gotOpts)
+	}
+	if gotOpts.CodexVolume != "codex-rust" || gotOpts.SkillsVolume != "skills-rust" {
+		t.Fatalf("unexpected volumes: %#v", gotOpts)
+	}
+	if gotOpts.Network != "si-rust" || gotOpts.ForwardPorts != "1555-1556" || !gotOpts.DockerSocket {
+		t.Fatalf("unexpected runtime opts: %#v", gotOpts)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := string(argsData)
+	if !strings.Contains(argsText, "dyad\nspawn-plan\n--name\nalpha") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+	if !strings.Contains(argsText, "--actor-image\nactor-old") || !strings.Contains(argsText, "--critic-image\ncritic-old") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)
