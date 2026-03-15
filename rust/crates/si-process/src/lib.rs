@@ -79,8 +79,15 @@ pub enum StreamBehavior {
     Capture,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StdinBehavior {
+    Null,
+    Inherit,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RunOptions {
+    pub stdin: StdinBehavior,
     pub stdout: StreamBehavior,
     pub stderr: StreamBehavior,
     pub timeout: Option<Duration>,
@@ -88,7 +95,12 @@ pub struct RunOptions {
 
 impl Default for RunOptions {
     fn default() -> Self {
-        Self { stdout: StreamBehavior::Capture, stderr: StreamBehavior::Capture, timeout: None }
+        Self {
+            stdin: StdinBehavior::Null,
+            stdout: StreamBehavior::Capture,
+            stderr: StreamBehavior::Capture,
+            timeout: None,
+        }
     }
 }
 
@@ -149,7 +161,10 @@ impl ProcessRunner {
     ) -> Result<CommandOutput, ProcessError> {
         let mut command = Command::new(&spec.program);
         command.args(&spec.args);
-        command.stdin(Stdio::null());
+        command.stdin(match options.stdin {
+            StdinBehavior::Null => Stdio::null(),
+            StdinBehavior::Inherit => Stdio::inherit(),
+        });
 
         if let Some(current_dir) = &spec.current_dir {
             command.current_dir(current_dir);

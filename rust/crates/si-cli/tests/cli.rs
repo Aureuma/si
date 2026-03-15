@@ -564,6 +564,65 @@ fn codex_clone_executes_docker_exec_for_container_name() {
     );
 }
 
+#[test]
+fn codex_exec_executes_docker_exec_for_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'exec-output'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args([
+            "codex",
+            "exec",
+            "ferma",
+            "--interactive=false",
+            "--tty=false",
+            "--workdir",
+            "/workspace/project",
+            "--env",
+            "A=1",
+            "--env",
+            "B=2",
+            "--docker-bin",
+        ])
+        .arg(&docker_bin)
+        .arg("--")
+        .args(["git", "status"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("exec-output"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        [
+            "exec",
+            "--user",
+            "si",
+            "-w",
+            "/workspace/project",
+            "-e",
+            "A=1",
+            "-e",
+            "B=2",
+            "si-codex-ferma",
+            "git",
+            "status",
+        ]
+    );
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

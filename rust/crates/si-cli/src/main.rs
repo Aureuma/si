@@ -14,7 +14,7 @@ use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_logs_command,
 };
-use si_rs_process::{ProcessRunner, RunOptions};
+use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_runtime::HostMountContext;
 use std::fmt;
@@ -315,6 +315,23 @@ enum CodexCommand {
         gh_pat: Option<String>,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
+    },
+    Exec {
+        name: String,
+        #[arg(long)]
+        workdir: Option<PathBuf>,
+        #[arg(long, num_args = 1, default_value = "true", value_parser = clap::value_parser!(bool))]
+        interactive: bool,
+        #[arg(long, num_args = 1, default_value = "false", value_parser = clap::value_parser!(bool))]
+        tty: bool,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long, default_value = "si")]
+        user: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
     },
 }
 
@@ -713,6 +730,16 @@ fn main() -> Result<()> {
             CodexCommand::Clone { name, repo, gh_pat, docker_bin } => {
                 run_codex_clone(&name, &repo, gh_pat.as_deref(), docker_bin)?
             }
+            CodexCommand::Exec {
+                name,
+                workdir,
+                interactive,
+                tty,
+                env,
+                user,
+                docker_bin,
+                command,
+            } => run_codex_exec(&name, workdir, interactive, tty, env, &user, docker_bin, command)?,
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -1350,6 +1377,55 @@ fn run_codex_clone(
     }
     let command = docker_container_exec_command(docker_program.display().to_string(), &spec)?;
     let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker exec failed: {}", stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_codex_exec(
+    name: &str,
+    workdir: Option<PathBuf>,
+    interactive: bool,
+    tty: bool,
+    env: Vec<String>,
+    user: &str,
+    docker_bin: Option<PathBuf>,
+    command: Vec<String>,
+) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    if command.is_empty() {
+        anyhow::bail!("exec command is required");
+    }
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let mut spec = ContainerExecSpec::new(artifacts.container_name)
+        .user(user.trim())
+        .interactive(interactive)
+        .tty(tty)
+        .command(command);
+    if let Some(workdir) = workdir {
+        spec = spec.workdir(workdir);
+    }
+    for item in env {
+        let item = item.trim();
+        if item.is_empty() {
+            continue;
+        }
+        let (key, value) = item.split_once('=').unwrap_or((item, ""));
+        spec = spec.env(key.trim(), value);
+    }
+    let command = docker_container_exec_command(docker_program.display().to_string(), &spec)?;
+    let output = ProcessRunner.run(
+        &command,
+        &RunOptions {
+            stdin: if interactive { StdinBehavior::Inherit } else { StdinBehavior::Null },
+            ..RunOptions::default()
+        },
+    )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("docker exec failed: {}", stderr.trim());
