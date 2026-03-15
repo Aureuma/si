@@ -452,6 +452,14 @@ pub enum ContainerActionError {
     MissingContainerName,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ContainerLogsError {
+    #[error("container name is required")]
+    MissingContainerName,
+    #[error("tail value is required")]
+    MissingTail,
+}
+
 pub fn docker_binary_path() -> &'static Path {
     Path::new("docker")
 }
@@ -466,6 +474,28 @@ pub fn docker_container_action_command(
         return Err(ContainerActionError::MissingContainerName);
     }
     Ok(CommandSpec::new(docker_program).args([action.as_str().to_owned(), container_name]))
+}
+
+pub fn docker_container_logs_command(
+    docker_program: impl Into<String>,
+    container_name: impl Into<String>,
+    tail: impl Into<String>,
+    follow: bool,
+) -> Result<CommandSpec, ContainerLogsError> {
+    let container_name = container_name.into();
+    if container_name.trim().is_empty() {
+        return Err(ContainerLogsError::MissingContainerName);
+    }
+    let tail = tail.into();
+    if tail.trim().is_empty() {
+        return Err(ContainerLogsError::MissingTail);
+    }
+    let mut command = CommandSpec::new(docker_program);
+    command = command.arg("logs");
+    if follow {
+        command = command.arg("-f");
+    }
+    Ok(command.args(["--tail".to_owned(), tail, container_name]))
 }
 
 #[cfg(test)]
@@ -609,5 +639,22 @@ mod tests {
             .expect_err("missing container name");
 
         assert_eq!(err, ContainerActionError::MissingContainerName);
+    }
+
+    #[test]
+    fn builds_docker_logs_command() {
+        let command = docker_container_logs_command("docker", "si-codex-ferma", "200", true)
+            .expect("logs command");
+
+        assert_eq!(command.program(), "docker");
+        assert_eq!(command.args_slice(), ["logs", "-f", "--tail", "200", "si-codex-ferma"]);
+    }
+
+    #[test]
+    fn rejects_empty_tail_for_container_logs() {
+        let err = docker_container_logs_command("docker", "si-codex-ferma", "   ", false)
+            .expect_err("missing tail");
+
+        assert_eq!(err, ContainerLogsError::MissingTail);
     }
 }
