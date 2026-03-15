@@ -356,15 +356,22 @@ pub fn apply_refresh_outcome_to_persisted_session_state(
         value: normalized.refresh_expires_at.clone(),
     })?;
     let mut next = normalized;
-    if let RefreshOutcome::Success(success) = outcome {
-        next.access_expires_at = format_unix_rfc3339(success.access_expires_at_unix, |value| {
-            PersistedSessionError::InvalidAccessExpiryUnix { value }
-        })?;
-        if let Some(refresh_expires_at_unix) = success.refresh_expires_at_unix {
-            next.refresh_expires_at = format_unix_rfc3339(refresh_expires_at_unix, |value| {
-                PersistedSessionError::InvalidRefreshExpiryUnix { value }
-            })?;
+    match outcome {
+        RefreshOutcome::Success(success) => {
+            next.access_expires_at =
+                format_unix_rfc3339(success.access_expires_at_unix, |value| {
+                    PersistedSessionError::InvalidAccessExpiryUnix { value }
+                })?;
+            if let Some(refresh_expires_at_unix) = success.refresh_expires_at_unix {
+                next.refresh_expires_at = format_unix_rfc3339(refresh_expires_at_unix, |value| {
+                    PersistedSessionError::InvalidRefreshExpiryUnix { value }
+                })?;
+            }
         }
+        RefreshOutcome::Unauthorized => {
+            next.session_id.clear();
+        }
+        RefreshOutcome::Retryable => {}
     }
     Ok(PersistedSessionTransition { state: next, classification })
 }
@@ -837,7 +844,10 @@ mod tests {
         )
         .expect("transition unauthorized outcome");
 
-        assert_eq!(transitioned.state, state);
+        assert_eq!(
+            transitioned.state,
+            PersistedSessionState { session_id: String::new(), ..state }
+        );
         assert_eq!(
             transitioned.classification,
             SessionState::Revoked {
