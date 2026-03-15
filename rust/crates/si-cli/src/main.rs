@@ -82,6 +82,7 @@ enum ProvidersCommand {
     },
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, Subcommand)]
 enum CodexCommand {
     SpawnPlan {
@@ -165,6 +166,54 @@ enum CodexCommand {
         include_host_si: bool,
         #[arg(long = "env")]
         env: Vec<String>,
+        #[arg(long = "port")]
+        ports: Vec<String>,
+        #[arg(long)]
+        cmd: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    SpawnRunArgs {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        workdir: Option<String>,
+        #[arg(long)]
+        codex_volume: Option<String>,
+        #[arg(long)]
+        skills_volume: Option<String>,
+        #[arg(long)]
+        gh_volume: Option<String>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        gh_pat: Option<String>,
+        #[arg(long, default_value_t = true)]
+        docker_socket: bool,
+        #[arg(long, default_value_t = true)]
+        detach: bool,
+        #[arg(long, default_value_t = false)]
+        clean_slate: bool,
+        #[arg(long)]
+        image: Option<String>,
+        #[arg(long)]
+        network: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        ssh_auth_sock: Option<PathBuf>,
+        #[arg(long)]
+        vault_env_file: Option<PathBuf>,
+        #[arg(long, default_value_t = true)]
+        include_host_si: bool,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long = "port")]
+        ports: Vec<String>,
         #[arg(long)]
         cmd: Option<String>,
         #[arg(long, default_value = "json")]
@@ -315,6 +364,18 @@ struct CodexSpawnSpecView {
     env: Vec<CodexEnvVarView>,
     bind_mounts: Vec<CodexBindMountView>,
     volume_mounts: Vec<CodexVolumeMountView>,
+    labels: Vec<CodexEnvVarView>,
+    published_ports: Vec<CodexPublishedPortView>,
+    user: Option<String>,
+    detach: bool,
+    auto_remove: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexPublishedPortView {
+    host_ip: String,
+    host_port: String,
+    container_port: u16,
 }
 
 fn main() -> Result<()> {
@@ -403,6 +464,7 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                ports,
                 cmd,
                 format,
             } => show_codex_spawn_spec(
@@ -425,6 +487,54 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                ports,
+                cmd,
+                format,
+            )?,
+            CodexCommand::SpawnRunArgs {
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                ports,
+                cmd,
+                format,
+            } => show_codex_spawn_run_args(
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                ports,
                 cmd,
                 format,
             )?,
@@ -736,6 +846,7 @@ fn show_codex_spawn_spec(
     vault_env_file: Option<PathBuf>,
     include_host_si: bool,
     env: Vec<String>,
+    ports: Vec<String>,
     cmd: Option<String>,
     format: OutputFormat,
 ) -> Result<()> {
@@ -769,7 +880,7 @@ fn show_codex_spawn_spec(
         },
         &host_ctx,
     )?;
-    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd })?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, ports })?;
     let view = CodexSpawnSpecView {
         image: spec.image().to_owned(),
         name: spec.name_ref().map(str::to_owned),
@@ -781,6 +892,20 @@ fn show_codex_spawn_spec(
             .env_vars()
             .iter()
             .map(|(key, value)| CodexEnvVarView { key: key.clone(), value: value.clone() })
+            .collect(),
+        labels: spec
+            .labels()
+            .iter()
+            .map(|(key, value)| CodexEnvVarView { key: key.clone(), value: value.clone() })
+            .collect(),
+        published_ports: spec
+            .published_ports()
+            .iter()
+            .map(|port| CodexPublishedPortView {
+                host_ip: port.host_ip_ref().to_owned(),
+                host_port: port.host_port().to_owned(),
+                container_port: port.container_port(),
+            })
             .collect(),
         bind_mounts: spec
             .bind_mounts()
@@ -800,6 +925,9 @@ fn show_codex_spawn_spec(
                 read_only: mount.is_read_only(),
             })
             .collect(),
+        user: spec.user_ref().map(str::to_owned),
+        detach: spec.detach_enabled(),
+        auto_remove: spec.auto_remove_enabled(),
     };
 
     match format {
@@ -812,11 +940,77 @@ fn show_codex_spawn_spec(
             println!("working_dir={}", view.working_dir.as_deref().unwrap_or("-"));
             println!("command={}", view.command.join(" "));
             println!("env={}", view.env.len());
+            println!("labels={}", view.labels.len());
+            println!("published_ports={}", view.published_ports.len());
             println!("bind_mounts={}", view.bind_mounts.len());
             println!("volume_mounts={}", view.volume_mounts.len());
         }
     }
 
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_codex_spawn_run_args(
+    name: Option<String>,
+    profile_id: Option<String>,
+    workspace: PathBuf,
+    workdir: Option<String>,
+    codex_volume: Option<String>,
+    skills_volume: Option<String>,
+    gh_volume: Option<String>,
+    repo: Option<String>,
+    gh_pat: Option<String>,
+    docker_socket: bool,
+    detach: bool,
+    clean_slate: bool,
+    image: Option<String>,
+    network: Option<String>,
+    home: Option<PathBuf>,
+    ssh_auth_sock: Option<PathBuf>,
+    vault_env_file: Option<PathBuf>,
+    include_host_si: bool,
+    env: Vec<String>,
+    ports: Vec<String>,
+    cmd: Option<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let mut host_ctx = HostMountContext::from_env();
+    if home.is_some() {
+        host_ctx.home_dir = home;
+    }
+    if ssh_auth_sock.is_some() {
+        host_ctx.ssh_auth_sock = ssh_auth_sock;
+    }
+    let plan = build_spawn_plan(
+        &SpawnRequest {
+            name,
+            profile_id,
+            image,
+            network_name: network,
+            workspace_host: workspace,
+            workdir,
+            codex_volume,
+            skills_volume,
+            gh_volume,
+            repo,
+            gh_pat,
+            docker_socket,
+            clean_slate,
+            detach,
+            container_home: None,
+            host_vault_env_file: vault_env_file,
+            include_host_si,
+            additional_env: env,
+        },
+        &host_ctx,
+    )?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd, ports })?;
+    let args = spec.docker_run_args()?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&args)?),
+        OutputFormat::Text => println!("{}", args.join(" ")),
+    }
     Ok(())
 }
 

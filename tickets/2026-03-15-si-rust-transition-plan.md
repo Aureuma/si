@@ -218,6 +218,7 @@ Progress notes:
 - completed: experimental Go `spawn` path integration that consumes Rust-generated core mount plans and deterministic spawn planning data behind the Rust CLI compatibility boundary
 - completed: Rust codex container-spec builder on top of the spawn planner, including named-volume, restart-policy, workdir, and shell-command rendering
 - completed: experimental Go `spawn` path integration can now consume the Rust codex container spec for env, command, bind mounts, volume mounts, restart policy, network, and working directory
+- completed: Rust docker/codex spec now models persistent container execution details needed for cutover (`detach`, `user`, labels, published ports, and non-`--rm` runs)
 
 ### Phase 5: Security/runtime migration
 
@@ -272,6 +273,7 @@ Progress notes:
 - completed: the shipping Go `spawn` path can now delegate deterministic planning to Rust behind the experimental boundary while Fort/bootstrap/session handling remains in Go
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
+- completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
 
 ### Phase 7: Provider migration
 

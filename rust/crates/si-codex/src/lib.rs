@@ -1,4 +1,4 @@
-use si_rs_docker::{BindMount, ContainerSpec, VolumeMount};
+use si_rs_docker::{BindMount, ContainerSpec, PublishedPort, VolumeMount};
 use si_rs_runtime::{ContainerCoreMountPlan, HostMountContext, build_container_core_mounts};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -54,6 +54,7 @@ pub struct SpawnPlan {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnContainerOptions {
     pub command: Option<String>,
+    pub ports: Vec<String>,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -68,6 +69,8 @@ pub enum SpawnPlanError {
 pub enum SpawnContainerSpecError {
     #[error("invalid env entry {entry:?}")]
     InvalidEnvEntry { entry: String },
+    #[error("invalid published port mapping {entry:?}")]
+    InvalidPublishedPort { entry: String },
 }
 
 pub fn build_spawn_plan(
@@ -191,9 +194,14 @@ pub fn build_container_spec(
 ) -> Result<ContainerSpec, SpawnContainerSpecError> {
     let mut spec = ContainerSpec::new(plan.image.clone())
         .name(plan.container_name.clone())
+        .detach(plan.detach)
+        .auto_remove(false)
         .network(plan.network_name.clone())
         .restart_policy("unless-stopped")
         .workdir(plan.workdir.clone())
+        .user("root")
+        .label("si.component", "codex")
+        .label("si.name", plan.name.clone())
         .volume_mount(VolumeMount::new(
             plan.codex_volume.clone(),
             PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex"),
@@ -214,6 +222,17 @@ pub fn build_container_spec(
             return Err(SpawnContainerSpecError::InvalidEnvEntry { entry: entry.clone() });
         };
         spec = spec.env(key.trim(), value);
+    }
+    for entry in &options.ports {
+        let Some((host_port, container_port)) = entry.split_once(':') else {
+            return Err(SpawnContainerSpecError::InvalidPublishedPort { entry: entry.clone() });
+        };
+        let host_port = host_port.trim();
+        let container_port = container_port
+            .trim()
+            .parse::<u16>()
+            .map_err(|_| SpawnContainerSpecError::InvalidPublishedPort { entry: entry.clone() })?;
+        spec = spec.published_port(PublishedPort::new(host_port, container_port));
     }
     let shell_command = options.command.as_deref().map(str::trim).filter(|value| !value.is_empty());
     let cmd = shell_command.unwrap_or("sleep infinity");
@@ -406,11 +425,21 @@ mod tests {
 
         let spec = build_container_spec(
             &plan,
-            &SpawnContainerOptions { command: Some("echo hello".to_owned()) },
+            &SpawnContainerOptions {
+                command: Some("echo hello".to_owned()),
+                ports: vec!["3000:3000".to_owned()],
+            },
         )
         .expect("container spec");
 
         let args = spec.docker_run_args().expect("docker args");
+        assert!(args.contains(&"-d".to_owned()));
+        assert!(args.contains(&"--user".to_owned()));
+        assert!(args.contains(&"root".to_owned()));
+        assert!(args.contains(&"--label".to_owned()));
+        assert!(args.contains(&"si.component=codex".to_owned()));
+        assert!(args.contains(&"-p".to_owned()));
+        assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
         assert!(args.contains(&"--restart".to_owned()));
         assert!(args.iter().any(|arg| arg.contains("type=volume")));
         assert!(args.contains(&"ghcr.io/aureuma/si:latest".to_owned()));
@@ -438,6 +467,31 @@ mod tests {
             .expect_err("malformed env entry should fail");
 
         assert_eq!(err, SpawnContainerSpecError::InvalidEnvEntry { entry: "BROKEN".to_owned() });
+    }
+
+    #[test]
+    fn build_container_spec_rejects_invalid_port_mapping() {
+        let workspace = tempdir().expect("tempdir");
+        let plan = build_spawn_plan(
+            &SpawnRequest {
+                name: Some("ferma".to_owned()),
+                workspace_host: workspace.path().to_path_buf(),
+                detach: true,
+                docker_socket: true,
+                include_host_si: false,
+                ..SpawnRequest::default()
+            },
+            &HostMountContext::default(),
+        )
+        .expect("spawn plan");
+
+        let err = build_container_spec(
+            &plan,
+            &SpawnContainerOptions { command: None, ports: vec!["bad".to_owned()] },
+        )
+        .expect_err("invalid port mapping should fail");
+
+        assert_eq!(err, SpawnContainerSpecError::InvalidPublishedPort { entry: "bad".to_owned() });
     }
 
     #[test]
