@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestNormalizeRespawnSpawnProfileArgs_InfersProfileFromContainerName(t *testing.T) {
 	filtered, profile := normalizeRespawnSpawnProfileArgs(
@@ -106,5 +111,81 @@ func TestApplyRustCodexRespawnPlanUsesRustEffectiveNameProfileAndTargets(t *test
 		if targets[i] != wantTargets[i] {
 			t.Fatalf("unexpected targets[%d]=%q want=%q", i, targets[i], wantTargets[i])
 		}
+	}
+}
+
+func TestCmdCodexRespawnUsesRustPlanForRemoveAndSpawnActions(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"effective_name\":\"ferma\",\"profile_id\":\"ferma\",\"remove_targets\":[\"alpha\",\"ferma\"]}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prevRemove := runCodexRemoveFn
+	prevSpawn := runCodexSpawnFn
+	t.Cleanup(func() {
+		runCodexRemoveFn = prevRemove
+		runCodexSpawnFn = prevSpawn
+	})
+
+	var removes [][]string
+	var spawns [][]string
+	runCodexRemoveFn = func(args []string) {
+		removes = append(removes, append([]string(nil), args...))
+	}
+	runCodexSpawnFn = func(args []string) {
+		spawns = append(spawns, append([]string(nil), args...))
+	}
+
+	cmdCodexRespawn([]string{"ferma", "--profile=", "--volumes", "--repo", "acme/repo"})
+
+	if len(removes) != 2 {
+		t.Fatalf("unexpected remove calls: %#v", removes)
+	}
+	wantRemoves := [][]string{
+		{"--volumes", "alpha"},
+		{"--volumes", "ferma"},
+	}
+	for i := range wantRemoves {
+		if len(removes[i]) != len(wantRemoves[i]) {
+			t.Fatalf("unexpected remove args[%d]=%v want %v", i, removes[i], wantRemoves[i])
+		}
+		for j := range wantRemoves[i] {
+			if removes[i][j] != wantRemoves[i][j] {
+				t.Fatalf("unexpected remove args[%d][%d]=%q want %q", i, j, removes[i][j], wantRemoves[i][j])
+			}
+		}
+	}
+	if len(spawns) != 1 {
+		t.Fatalf("unexpected spawn calls: %#v", spawns)
+	}
+	wantSpawn := []string{"--repo", "acme/repo", "--profile", "ferma", "ferma"}
+	if len(spawns[0]) != len(wantSpawn) {
+		t.Fatalf("unexpected spawn args=%v want %v", spawns[0], wantSpawn)
+	}
+	for i := range wantSpawn {
+		if spawns[0][i] != wantSpawn[i] {
+			t.Fatalf("unexpected spawn args[%d]=%q want %q", i, spawns[0][i], wantSpawn[i])
+		}
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := string(argsData)
+	if !strings.Contains(argsText, "codex\nrespawn-plan\nferma\n--format\njson") {
+		t.Fatalf("unexpected rust respawn args: %q", argsText)
+	}
+	if !strings.Contains(argsText, "--profile-container\nferma") {
+		t.Fatalf("unexpected rust respawn args: %q", argsText)
+	}
+	if !strings.Contains(argsText, "--profile-id\nferma") {
+		t.Fatalf("unexpected rust respawn args: %q", string(argsData))
 	}
 }
