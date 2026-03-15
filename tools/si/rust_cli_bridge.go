@@ -236,6 +236,40 @@ func maybeRunRustCodexClone(name string, repo string, ghPAT string) (string, boo
 	return output, true, nil
 }
 
+func maybeRunRustCodexExec(name string, workdir string, interactive bool, tty bool, env []string, cmd []string) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	args := []string{
+		"codex",
+		"exec",
+		strings.TrimSpace(name),
+		"--interactive=" + strconv.FormatBool(interactive),
+		"--tty=" + strconv.FormatBool(tty),
+	}
+	if value := strings.TrimSpace(workdir); value != "" {
+		args = append(args, "--workdir", value)
+	}
+	for _, value := range env {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			args = append(args, "--env", value)
+		}
+	}
+	args = append(args, "--")
+	for _, value := range cmd {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			args = append(args, value)
+		}
+	}
+	output, err := runRustCLIText(args...)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil

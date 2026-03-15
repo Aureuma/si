@@ -509,6 +509,10 @@ impl ContainerExecSpec {
         self.command = values.into_iter().map(Into::into).collect();
         self
     }
+
+    pub fn container_name(&self) -> &str {
+        &self.container_name
+    }
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

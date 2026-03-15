@@ -1231,6 +1231,7 @@ exec bash --rcfile "$rc" -i`, rc)}
 	execArgs := make([]string, 0, len(baseArgs)+2+len(cmd))
 	execArgs = append(execArgs, baseArgs...)
 	usedWorkdir := false
+	execWorkdir := ""
 	if hostCwd != "" && strings.HasPrefix(hostCwd, "/") {
 		wd := hostCwd
 		if containerInfo != nil {
@@ -1240,9 +1241,31 @@ exec bash --rcfile "$rc" -i`, rc)}
 		}
 		execArgs = append(execArgs, "-w", wd)
 		usedWorkdir = true
+		execWorkdir = wd
 	}
 	execArgs = append(execArgs, containerName)
 	execArgs = append(execArgs, cmd...)
+	if len(cmd) > 0 {
+		execEnv := []string{"SI_TERM_TITLE=" + name}
+		if profileID != "" {
+			execEnv = append(execEnv, "SI_CODEX_PROFILE_ID="+profileID)
+		}
+		if profileName != "" {
+			execEnv = append(execEnv, "SI_CODEX_PROFILE_NAME="+profileName)
+		}
+		stdinInteractive := true
+		ttyInteractive := term.IsTerminal(int(os.Stdin.Fd()))
+		if _, delegated, err := maybeRunRustCodexExec(name, execWorkdir, stdinInteractive, ttyInteractive, execEnv, cmd); err != nil {
+			if usedWorkdir {
+				if _, delegatedRetry, retryErr := maybeRunRustCodexExec(name, "", stdinInteractive, ttyInteractive, execEnv, cmd); retryErr == nil && delegatedRetry {
+					return
+				}
+			}
+			fatal(err)
+		} else if delegated {
+			return
+		}
+	}
 	if err := execDockerCLI(execArgs...); err != nil {
 		// If the host cwd isn't mapped inside the container (e.g. old container mounts),
 		// retry without forcing the working directory.
