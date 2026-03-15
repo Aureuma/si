@@ -324,6 +324,7 @@ Progress notes:
 - completed: the shipping Go `spawn` path can now delegate deterministic planning to Rust behind the experimental boundary while Fort/bootstrap/session handling remains in Go
 - completed: experimental Go `respawn` now applies the delegated Rust respawn plan back into the live flow for effective container name, profile flag normalization, and ordered remove-target selection instead of using the Rust planner only as advisory remove-target output
 - completed: experimental Go codex remove now resolves artifact naming for both single-container and `remove --all` batch paths through a shared Rust-aware remove-plan helper, so batch teardown no longer reconstructs container/volume artifacts purely in Go
+- completed: experimental Go codex `start`, `stop`, and `clone` now resolve their target container name through the shared Rust-aware remove-plan helper as well, so the post-action lookup and clone preflight paths no longer reconstruct container naming separately from the migrated artifact boundary
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path

@@ -2391,7 +2391,10 @@ func cmdCodexClone(args []string) {
 	if repo == "" {
 		fatal(fmt.Errorf("repo required"))
 	}
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -2632,6 +2635,17 @@ func resolveCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts, bool, 
 	}, false, nil
 }
 
+func resolveCodexContainerName(name string) (string, error) {
+	artifacts, _, err := resolveCodexRemoveArtifacts(name)
+	if err != nil {
+		return "", err
+	}
+	if artifacts != nil && strings.TrimSpace(artifacts.ContainerName) != "" {
+		return strings.TrimSpace(artifacts.ContainerName), nil
+	}
+	return codexContainerName(name), nil
+}
+
 func cmdCodexStop(args []string) {
 	if isSingleHelpArg(args) {
 		printUsage("usage: si stop <name>")
@@ -2642,7 +2656,10 @@ func cmdCodexStop(args []string) {
 		return
 	}
 	name := args[0]
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	if _, delegated, err := maybeRunRustCodexContainerAction("stop", name); err != nil {
 		fatal(err)
 	} else if !delegated {
@@ -2662,7 +2679,10 @@ func cmdCodexStart(args []string) {
 		return
 	}
 	name := args[0]
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 	if _, delegated, err := maybeRunRustCodexContainerAction("start", name); err != nil {
 		fatal(err)
 	} else if !delegated {
