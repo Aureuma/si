@@ -141,6 +141,14 @@ type rustFortSessionClassification struct {
 	Reason string
 }
 
+type rustFortRuntimeAgentState struct {
+	ProfileID   string `json:"profile_id"`
+	PID         int    `json:"pid"`
+	CommandPath string `json:"command_path,omitempty"`
+	StartedAt   string `json:"started_at,omitempty"`
+	UpdatedAt   string `json:"updated_at,omitempty"`
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -421,6 +429,27 @@ func maybeClassifyRustFortSessionState(path string, nowUnix int64) (*rustFortSes
 		return nil, false, err
 	}
 	return classification, true, nil
+}
+
+func maybeLoadRustFortRuntimeAgentState(path string) (fortProfileRuntimeAgentState, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return fortProfileRuntimeAgentState{}, false, nil
+	}
+	output, err := runRustCLIJSON("fort", "runtime-agent-state", "show", "--path", strings.TrimSpace(path), "--format", "json")
+	if err != nil {
+		return fortProfileRuntimeAgentState{}, false, err
+	}
+	var state rustFortRuntimeAgentState
+	if err := json.Unmarshal(output, &state); err != nil {
+		return fortProfileRuntimeAgentState{}, false, fmt.Errorf("decode rust fort runtime agent state: %w", err)
+	}
+	return fortProfileRuntimeAgentState{
+		ProfileID:   strings.TrimSpace(state.ProfileID),
+		PID:         state.PID,
+		CommandPath: strings.TrimSpace(state.CommandPath),
+		StartedAt:   strings.TrimSpace(state.StartedAt),
+		UpdatedAt:   strings.TrimSpace(state.UpdatedAt),
+	}, true, nil
 }
 
 func decodeRustFortSessionClassification(raw []byte) (*rustFortSessionClassification, error) {

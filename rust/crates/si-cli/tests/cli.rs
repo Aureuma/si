@@ -283,6 +283,42 @@ fn fort_session_state_classify_reports_refreshing_state() {
 }
 
 #[test]
+fn fort_runtime_agent_state_show_reads_and_normalizes_persisted_state() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("runtime-agent.json");
+    fs::write(
+        &state_path,
+        r#"{
+  "profile_id": " ferma ",
+  "pid": 4242,
+  "command_path": " /tmp/si ",
+  "started_at": " 2030-01-01T00:00:00Z ",
+  "updated_at": " 2030-01-01T00:00:01Z "
+}
+"#,
+    )
+    .expect("write runtime agent state");
+    #[cfg(unix)]
+    fs::set_permissions(&state_path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+        .expect("chmod runtime agent state");
+
+    let output = cargo_bin()
+        .args(["fort", "runtime-agent-state", "show", "--path"])
+        .arg(&state_path)
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["pid"], 4242);
+    assert_eq!(parsed["command_path"], "/tmp/si");
+}
+
+#[test]
 fn vault_trust_lookup_reports_matching_entry() {
     let store_dir = tempdir().expect("tempdir");
     let store_path = store_dir.path().join("trust.json");
