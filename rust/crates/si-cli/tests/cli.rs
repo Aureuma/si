@@ -226,6 +226,40 @@ fn dyad_spawn_plan_json_includes_critic_configs_and_loop_env() {
 }
 
 #[test]
+fn dyad_spawn_spec_json_includes_actor_ports_and_critic_configs_mount() {
+    let workspace = tempdir().expect("tempdir");
+    let configs = tempdir().expect("tempdir");
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+
+    let output = cargo_bin()
+        .args(["dyad", "spawn-spec", "--name", "alpha", "--workspace"])
+        .arg(workspace.path())
+        .args(["--configs"])
+        .arg(configs.path())
+        .args(["--forward-ports", "1455-1456", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["actor"]["name"], "si-actor-alpha");
+    assert_eq!(parsed["critic"]["name"], "si-critic-alpha");
+    assert_eq!(parsed["actor"]["published_ports"].as_array().expect("ports").len(), 2);
+    assert!(
+        parsed["critic"]["bind_mounts"]
+            .as_array()
+            .expect("critic bind mounts")
+            .iter()
+            .any(|mount| mount["target"] == "/configs")
+    );
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()

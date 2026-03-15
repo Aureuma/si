@@ -1,4 +1,4 @@
-use si_rs_docker::BindMount;
+use si_rs_docker::{BindMount, ContainerSpec, PublishedPort, VolumeMount};
 use si_rs_runtime::{ContainerCoreMountPlan, HostMountContext, build_container_core_mounts};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -102,6 +102,14 @@ pub enum SpawnPlanError {
     InvalidWorkspace,
     #[error("configs host must be an absolute path")]
     InvalidConfigs,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum SpawnContainerSpecError {
+    #[error("invalid forward port entry {entry:?}")]
+    InvalidForwardPortEntry { entry: String },
+    #[error("invalid forward port range {start}-{end}")]
+    InvalidForwardPortRange { start: i32, end: i32 },
 }
 
 pub fn build_spawn_plan(
@@ -237,6 +245,70 @@ pub fn dyad_container_name(dyad: &str, member: &str) -> String {
     format!("si-{member}-{dyad}")
 }
 
+pub fn build_container_specs(
+    plan: &SpawnPlan,
+) -> Result<(ContainerSpec, ContainerSpec), SpawnContainerSpecError> {
+    let mut actor = ContainerSpec::new(plan.actor.image.clone())
+        .name(plan.actor.container_name.clone())
+        .detach(true)
+        .auto_remove(false)
+        .network(plan.network_name.clone())
+        .restart_policy("unless-stopped")
+        .user("root")
+        .workdir(PathBuf::from(DEFAULT_WORKSPACE_TARGET));
+    for (key, value) in &plan.actor.labels {
+        actor = actor.label(key.clone(), value.clone());
+    }
+    for entry in &plan.actor.env {
+        if let Some((key, value)) = entry.split_once('=') {
+            actor = actor.env(key.trim(), value);
+        }
+    }
+    for mount in &plan.actor.bind_mounts {
+        actor = actor.mount(
+            BindMount::new(mount.source.clone(), mount.target.clone()).read_only(mount.read_only),
+        );
+    }
+    for mount in &plan.actor.volume_mounts {
+        actor = actor.volume_mount(
+            VolumeMount::new(mount.source.clone(), mount.target.clone()).read_only(mount.read_only),
+        );
+    }
+    for port in parse_forward_ports(&plan.forward_ports)? {
+        actor = actor.published_port(port);
+    }
+    actor = actor.command(plan.actor.command.clone());
+
+    let mut critic = ContainerSpec::new(plan.critic.image.clone())
+        .name(plan.critic.container_name.clone())
+        .detach(true)
+        .auto_remove(false)
+        .network(plan.network_name.clone())
+        .restart_policy("unless-stopped")
+        .user("root");
+    for (key, value) in &plan.critic.labels {
+        critic = critic.label(key.clone(), value.clone());
+    }
+    for entry in &plan.critic.env {
+        if let Some((key, value)) = entry.split_once('=') {
+            critic = critic.env(key.trim(), value);
+        }
+    }
+    for mount in &plan.critic.bind_mounts {
+        critic = critic.mount(
+            BindMount::new(mount.source.clone(), mount.target.clone()).read_only(mount.read_only),
+        );
+    }
+    for mount in &plan.critic.volume_mounts {
+        critic = critic.volume_mount(
+            VolumeMount::new(mount.source.clone(), mount.target.clone()).read_only(mount.read_only),
+        );
+    }
+    critic = critic.command(plan.critic.command.clone());
+
+    Ok((actor, critic))
+}
+
 fn build_member_env(request: &SpawnRequest, dyad: &str, role: &str, member: &str) -> Vec<String> {
     let mut env = vec![
         format!("ROLE={role}"),
@@ -367,11 +439,47 @@ fn append_optional_bool_env(env: &mut Vec<String>, key: &str, value: Option<bool
     }
 }
 
+fn parse_forward_ports(raw: &str) -> Result<Vec<PublishedPort>, SpawnContainerSpecError> {
+    let raw = raw.trim();
+    let raw = if raw.is_empty() { DEFAULT_FORWARD_PORTS } else { raw };
+    let mut ports = Vec::new();
+    for part in raw.split(',').map(str::trim).filter(|part| !part.is_empty()) {
+        if let Some((start, end)) = part.split_once('-') {
+            let start = parse_forward_port(start)?;
+            let end = parse_forward_port(end)?;
+            if end < start {
+                return Err(SpawnContainerSpecError::InvalidForwardPortRange { start, end });
+            }
+            for port in start..=end {
+                ports.push(PublishedPort::new("", port as u16));
+            }
+            continue;
+        }
+        let port = parse_forward_port(part)?;
+        ports.push(PublishedPort::new("", port as u16));
+    }
+    Ok(ports)
+}
+
+fn parse_forward_port(raw: &str) -> Result<i32, SpawnContainerSpecError> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err(SpawnContainerSpecError::InvalidForwardPortEntry { entry: raw.to_owned() });
+    }
+    let value = raw
+        .parse::<i32>()
+        .map_err(|_| SpawnContainerSpecError::InvalidForwardPortEntry { entry: raw.to_owned() })?;
+    if !(1..=65535).contains(&value) {
+        return Err(SpawnContainerSpecError::InvalidForwardPortEntry { entry: raw.to_owned() });
+    }
+    Ok(value)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_FORWARD_PORTS, DEFAULT_SKILLS_VOLUME, SpawnRequest, build_spawn_plan,
-        dyad_container_name,
+        DEFAULT_FORWARD_PORTS, DEFAULT_SKILLS_VOLUME, SpawnContainerSpecError, SpawnRequest,
+        build_container_specs, build_spawn_plan, dyad_container_name,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::Path;
@@ -447,6 +555,58 @@ mod tests {
             plan.critic.bind_mounts.iter().any(
                 |mount| mount.source == configs.path() && mount.target == Path::new("/configs")
             )
+        );
+    }
+
+    #[test]
+    fn build_container_specs_renders_actor_ports_and_critic_configs_mount() {
+        let workspace = tempdir().expect("tempdir");
+        let configs = tempdir().expect("tempdir");
+
+        let plan = build_spawn_plan(
+            &SpawnRequest {
+                name: "alpha".to_owned(),
+                workspace_host: workspace.path().to_path_buf(),
+                configs_host: Some(configs.path().to_path_buf()),
+                forward_ports: Some("1455-1456".to_owned()),
+                docker_socket: true,
+                ..SpawnRequest::default()
+            },
+            &HostMountContext::default(),
+        )
+        .expect("build dyad spawn plan");
+
+        let (actor, critic) = build_container_specs(&plan).expect("build dyad container specs");
+
+        assert_eq!(actor.name_ref(), Some("si-actor-alpha"));
+        assert_eq!(actor.network_ref(), Some("si"));
+        assert_eq!(actor.published_ports().len(), 2);
+        assert_eq!(actor.working_dir(), Some(Path::new("/workspace")));
+        assert_eq!(critic.name_ref(), Some("si-critic-alpha"));
+        assert_eq!(critic.network_ref(), Some("si"));
+        assert!(critic.bind_mounts().iter().any(|mount| mount.target() == Path::new("/configs")));
+        assert_eq!(critic.command_args(), &["critic".to_owned()]);
+    }
+
+    #[test]
+    fn build_container_specs_rejects_invalid_forward_port_range() {
+        let workspace = tempdir().expect("tempdir");
+        let plan = build_spawn_plan(
+            &SpawnRequest {
+                name: "alpha".to_owned(),
+                workspace_host: workspace.path().to_path_buf(),
+                forward_ports: Some("1460-1455".to_owned()),
+                docker_socket: true,
+                ..SpawnRequest::default()
+            },
+            &HostMountContext::default(),
+        )
+        .expect("build dyad spawn plan");
+
+        let err = build_container_specs(&plan).expect_err("invalid port range should fail");
+        assert_eq!(
+            err,
+            SpawnContainerSpecError::InvalidForwardPortRange { start: 1460, end: 1455 }
         );
     }
 }

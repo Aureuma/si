@@ -15,7 +15,10 @@ use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command, docker_container_logs_command,
 };
-use si_rs_dyad::{SpawnRequest as DyadSpawnRequest, build_spawn_plan as build_dyad_spawn_plan};
+use si_rs_dyad::{
+    SpawnRequest as DyadSpawnRequest, build_container_specs as build_dyad_container_specs,
+    build_spawn_plan as build_dyad_spawn_plan,
+};
 use si_rs_fort::{
     PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome, RefreshSuccess,
     SessionState, apply_refresh_outcome_to_persisted_session_state,
@@ -115,6 +118,86 @@ enum ProvidersCommand {
 #[derive(Debug, Subcommand)]
 enum DyadCommand {
     SpawnPlan {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        role: Option<String>,
+        #[arg(long)]
+        actor_image: Option<String>,
+        #[arg(long)]
+        critic_image: Option<String>,
+        #[arg(long)]
+        codex_model: Option<String>,
+        #[arg(long)]
+        codex_effort_actor: Option<String>,
+        #[arg(long)]
+        codex_effort_critic: Option<String>,
+        #[arg(long)]
+        codex_model_low: Option<String>,
+        #[arg(long)]
+        codex_model_medium: Option<String>,
+        #[arg(long)]
+        codex_model_high: Option<String>,
+        #[arg(long)]
+        codex_effort_low: Option<String>,
+        #[arg(long)]
+        codex_effort_medium: Option<String>,
+        #[arg(long)]
+        codex_effort_high: Option<String>,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        configs: Option<PathBuf>,
+        #[arg(long)]
+        vault_env_file: Option<PathBuf>,
+        #[arg(long)]
+        codex_volume: Option<String>,
+        #[arg(long)]
+        skills_volume: Option<String>,
+        #[arg(long)]
+        network: Option<String>,
+        #[arg(long)]
+        forward_ports: Option<String>,
+        #[arg(long, default_value_t = true)]
+        docker_socket: bool,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long)]
+        profile_name: Option<String>,
+        #[arg(long)]
+        loop_enabled: Option<bool>,
+        #[arg(long)]
+        loop_goal: Option<String>,
+        #[arg(long)]
+        loop_seed_prompt: Option<String>,
+        #[arg(long)]
+        loop_max_turns: Option<i32>,
+        #[arg(long)]
+        loop_sleep_seconds: Option<i32>,
+        #[arg(long)]
+        loop_startup_delay_seconds: Option<i32>,
+        #[arg(long)]
+        loop_turn_timeout_seconds: Option<i32>,
+        #[arg(long)]
+        loop_retry_max: Option<i32>,
+        #[arg(long)]
+        loop_retry_base_seconds: Option<i32>,
+        #[arg(long)]
+        loop_prompt_lines: Option<i32>,
+        #[arg(long)]
+        loop_allow_mcp_startup: Option<bool>,
+        #[arg(long)]
+        loop_tmux_capture: Option<String>,
+        #[arg(long)]
+        loop_pause_poll_seconds: Option<i32>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        ssh_auth_sock: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    SpawnSpec {
         #[arg(long)]
         name: String,
         #[arg(long)]
@@ -691,6 +774,12 @@ struct DyadSpawnPlanView {
 }
 
 #[derive(Debug, Serialize)]
+struct DyadSpawnSpecView {
+    actor: DyadContainerSpecView,
+    critic: DyadContainerSpecView,
+}
+
+#[derive(Debug, Serialize)]
 struct DyadMemberPlanView {
     member: String,
     container_name: String,
@@ -716,6 +805,25 @@ struct DyadVolumeMountView {
     source: String,
     target: String,
     read_only: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct DyadContainerSpecView {
+    image: String,
+    name: Option<String>,
+    network: Option<String>,
+    restart_policy: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    working_dir: Option<String>,
+    command: Vec<String>,
+    env: Vec<CodexEnvVarView>,
+    bind_mounts: Vec<DyadBindMountView>,
+    volume_mounts: Vec<DyadVolumeMountView>,
+    labels: Vec<DyadLabelView>,
+    published_ports: Vec<CodexPublishedPortView>,
+    user: Option<String>,
+    detach: bool,
+    auto_remove: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -979,6 +1087,87 @@ fn main() -> Result<()> {
                 ssh_auth_sock,
                 format,
             } => run_dyad_spawn_plan(
+                &name,
+                role,
+                actor_image,
+                critic_image,
+                codex_model,
+                codex_effort_actor,
+                codex_effort_critic,
+                codex_model_low,
+                codex_model_medium,
+                codex_model_high,
+                codex_effort_low,
+                codex_effort_medium,
+                codex_effort_high,
+                workspace,
+                configs,
+                vault_env_file,
+                codex_volume,
+                skills_volume,
+                network,
+                forward_ports,
+                docker_socket,
+                profile_id,
+                profile_name,
+                loop_enabled,
+                loop_goal,
+                loop_seed_prompt,
+                loop_max_turns,
+                loop_sleep_seconds,
+                loop_startup_delay_seconds,
+                loop_turn_timeout_seconds,
+                loop_retry_max,
+                loop_retry_base_seconds,
+                loop_prompt_lines,
+                loop_allow_mcp_startup,
+                loop_tmux_capture,
+                loop_pause_poll_seconds,
+                home,
+                ssh_auth_sock,
+                format,
+            )?,
+            DyadCommand::SpawnSpec {
+                name,
+                role,
+                actor_image,
+                critic_image,
+                codex_model,
+                codex_effort_actor,
+                codex_effort_critic,
+                codex_model_low,
+                codex_model_medium,
+                codex_model_high,
+                codex_effort_low,
+                codex_effort_medium,
+                codex_effort_high,
+                workspace,
+                configs,
+                vault_env_file,
+                codex_volume,
+                skills_volume,
+                network,
+                forward_ports,
+                docker_socket,
+                profile_id,
+                profile_name,
+                loop_enabled,
+                loop_goal,
+                loop_seed_prompt,
+                loop_max_turns,
+                loop_sleep_seconds,
+                loop_startup_delay_seconds,
+                loop_turn_timeout_seconds,
+                loop_retry_max,
+                loop_retry_base_seconds,
+                loop_prompt_lines,
+                loop_allow_mcp_startup,
+                loop_tmux_capture,
+                loop_pause_poll_seconds,
+                home,
+                ssh_auth_sock,
+                format,
+            } => run_dyad_spawn_spec(
                 &name,
                 role,
                 actor_image,
@@ -1771,12 +1960,223 @@ fn run_dyad_spawn_plan(
     ssh_auth_sock: Option<PathBuf>,
     format: OutputFormat,
 ) -> Result<()> {
+    let plan = build_dyad_plan(
+        name,
+        role,
+        actor_image,
+        critic_image,
+        codex_model,
+        codex_effort_actor,
+        codex_effort_critic,
+        codex_model_low,
+        codex_model_medium,
+        codex_model_high,
+        codex_effort_low,
+        codex_effort_medium,
+        codex_effort_high,
+        workspace,
+        configs,
+        vault_env_file,
+        codex_volume,
+        skills_volume,
+        network,
+        forward_ports,
+        docker_socket,
+        profile_id,
+        profile_name,
+        loop_enabled,
+        loop_goal,
+        loop_seed_prompt,
+        loop_max_turns,
+        loop_sleep_seconds,
+        loop_startup_delay_seconds,
+        loop_turn_timeout_seconds,
+        loop_retry_max,
+        loop_retry_base_seconds,
+        loop_prompt_lines,
+        loop_allow_mcp_startup,
+        loop_tmux_capture,
+        loop_pause_poll_seconds,
+        home,
+        ssh_auth_sock,
+    )?;
+    let view = DyadSpawnPlanView {
+        dyad: plan.dyad,
+        role: plan.role,
+        network_name: plan.network_name,
+        workspace_host: plan.workspace_host.display().to_string(),
+        configs_host: plan.configs_host.display().to_string(),
+        codex_volume: plan.codex_volume,
+        skills_volume: plan.skills_volume,
+        forward_ports: plan.forward_ports,
+        docker_socket: plan.docker_socket,
+        actor: dyad_member_plan_view(plan.actor),
+        critic: dyad_member_plan_view(plan.critic),
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("dyad={}", view.dyad);
+            println!("role={}", view.role);
+            println!("network_name={}", view.network_name);
+            println!("actor.container_name={}", view.actor.container_name);
+            println!("critic.container_name={}", view.critic.container_name);
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_dyad_spawn_spec(
+    name: &str,
+    role: Option<String>,
+    actor_image: Option<String>,
+    critic_image: Option<String>,
+    codex_model: Option<String>,
+    codex_effort_actor: Option<String>,
+    codex_effort_critic: Option<String>,
+    codex_model_low: Option<String>,
+    codex_model_medium: Option<String>,
+    codex_model_high: Option<String>,
+    codex_effort_low: Option<String>,
+    codex_effort_medium: Option<String>,
+    codex_effort_high: Option<String>,
+    workspace: PathBuf,
+    configs: Option<PathBuf>,
+    vault_env_file: Option<PathBuf>,
+    codex_volume: Option<String>,
+    skills_volume: Option<String>,
+    network: Option<String>,
+    forward_ports: Option<String>,
+    docker_socket: bool,
+    profile_id: Option<String>,
+    profile_name: Option<String>,
+    loop_enabled: Option<bool>,
+    loop_goal: Option<String>,
+    loop_seed_prompt: Option<String>,
+    loop_max_turns: Option<i32>,
+    loop_sleep_seconds: Option<i32>,
+    loop_startup_delay_seconds: Option<i32>,
+    loop_turn_timeout_seconds: Option<i32>,
+    loop_retry_max: Option<i32>,
+    loop_retry_base_seconds: Option<i32>,
+    loop_prompt_lines: Option<i32>,
+    loop_allow_mcp_startup: Option<bool>,
+    loop_tmux_capture: Option<String>,
+    loop_pause_poll_seconds: Option<i32>,
+    home: Option<PathBuf>,
+    ssh_auth_sock: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let plan = build_dyad_plan(
+        name,
+        role,
+        actor_image,
+        critic_image,
+        codex_model,
+        codex_effort_actor,
+        codex_effort_critic,
+        codex_model_low,
+        codex_model_medium,
+        codex_model_high,
+        codex_effort_low,
+        codex_effort_medium,
+        codex_effort_high,
+        workspace,
+        configs,
+        vault_env_file,
+        codex_volume,
+        skills_volume,
+        network,
+        forward_ports,
+        docker_socket,
+        profile_id,
+        profile_name,
+        loop_enabled,
+        loop_goal,
+        loop_seed_prompt,
+        loop_max_turns,
+        loop_sleep_seconds,
+        loop_startup_delay_seconds,
+        loop_turn_timeout_seconds,
+        loop_retry_max,
+        loop_retry_base_seconds,
+        loop_prompt_lines,
+        loop_allow_mcp_startup,
+        loop_tmux_capture,
+        loop_pause_poll_seconds,
+        home,
+        ssh_auth_sock,
+    )?;
+    let (actor, critic) = build_dyad_container_specs(&plan)?;
+    let view = DyadSpawnSpecView {
+        actor: dyad_container_spec_view(&actor),
+        critic: dyad_container_spec_view(&critic),
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("actor.name={}", view.actor.name.as_deref().unwrap_or("-"));
+            println!("critic.name={}", view.critic.name.as_deref().unwrap_or("-"));
+            println!("actor.bind_mounts={}", view.actor.bind_mounts.len());
+            println!("critic.bind_mounts={}", view.critic.bind_mounts.len());
+            println!("actor.published_ports={}", view.actor.published_ports.len());
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_dyad_plan(
+    name: &str,
+    role: Option<String>,
+    actor_image: Option<String>,
+    critic_image: Option<String>,
+    codex_model: Option<String>,
+    codex_effort_actor: Option<String>,
+    codex_effort_critic: Option<String>,
+    codex_model_low: Option<String>,
+    codex_model_medium: Option<String>,
+    codex_model_high: Option<String>,
+    codex_effort_low: Option<String>,
+    codex_effort_medium: Option<String>,
+    codex_effort_high: Option<String>,
+    workspace: PathBuf,
+    configs: Option<PathBuf>,
+    vault_env_file: Option<PathBuf>,
+    codex_volume: Option<String>,
+    skills_volume: Option<String>,
+    network: Option<String>,
+    forward_ports: Option<String>,
+    docker_socket: bool,
+    profile_id: Option<String>,
+    profile_name: Option<String>,
+    loop_enabled: Option<bool>,
+    loop_goal: Option<String>,
+    loop_seed_prompt: Option<String>,
+    loop_max_turns: Option<i32>,
+    loop_sleep_seconds: Option<i32>,
+    loop_startup_delay_seconds: Option<i32>,
+    loop_turn_timeout_seconds: Option<i32>,
+    loop_retry_max: Option<i32>,
+    loop_retry_base_seconds: Option<i32>,
+    loop_prompt_lines: Option<i32>,
+    loop_allow_mcp_startup: Option<bool>,
+    loop_tmux_capture: Option<String>,
+    loop_pause_poll_seconds: Option<i32>,
+    home: Option<PathBuf>,
+    ssh_auth_sock: Option<PathBuf>,
+) -> Result<si_rs_dyad::SpawnPlan> {
     let host_ctx = HostMountContext {
         home_dir: home.or_else(|| std::env::var_os("HOME").map(PathBuf::from)),
         ssh_auth_sock: ssh_auth_sock
             .or_else(|| std::env::var_os("SSH_AUTH_SOCK").map(PathBuf::from)),
     };
-    let plan = build_dyad_spawn_plan(
+    Ok(build_dyad_spawn_plan(
         &DyadSpawnRequest {
             name: name.trim().to_owned(),
             role,
@@ -1816,33 +2216,7 @@ fn run_dyad_spawn_plan(
             loop_pause_poll_seconds,
         },
         &host_ctx,
-    )?;
-    let view = DyadSpawnPlanView {
-        dyad: plan.dyad,
-        role: plan.role,
-        network_name: plan.network_name,
-        workspace_host: plan.workspace_host.display().to_string(),
-        configs_host: plan.configs_host.display().to_string(),
-        codex_volume: plan.codex_volume,
-        skills_volume: plan.skills_volume,
-        forward_ports: plan.forward_ports,
-        docker_socket: plan.docker_socket,
-        actor: dyad_member_plan_view(plan.actor),
-        critic: dyad_member_plan_view(plan.critic),
-    };
-
-    match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
-        OutputFormat::Text => {
-            println!("dyad={}", view.dyad);
-            println!("role={}", view.role);
-            println!("network_name={}", view.network_name);
-            println!("actor.container_name={}", view.actor.container_name);
-            println!("critic.container_name={}", view.critic.container_name);
-        }
-    }
-
-    Ok(())
+    )?)
 }
 
 fn dyad_member_plan_view(plan: si_rs_dyad::MemberPlan) -> DyadMemberPlanView {
@@ -1872,6 +2246,57 @@ fn dyad_member_plan_view(plan: si_rs_dyad::MemberPlan) -> DyadMemberPlanView {
             .collect(),
         labels: plan.labels.into_iter().map(|(key, value)| DyadLabelView { key, value }).collect(),
         command: plan.command,
+    }
+}
+
+fn dyad_container_spec_view(spec: &si_rs_docker::ContainerSpec) -> DyadContainerSpecView {
+    DyadContainerSpecView {
+        image: spec.image().to_owned(),
+        name: spec.name_ref().map(str::to_owned),
+        network: spec.network_ref().map(str::to_owned),
+        restart_policy: spec.restart_policy_ref().map(str::to_owned),
+        working_dir: spec.working_dir().map(|path| path.display().to_string()),
+        command: spec.command_args().to_vec(),
+        env: spec
+            .env_vars()
+            .iter()
+            .map(|(key, value)| CodexEnvVarView { key: key.clone(), value: value.clone() })
+            .collect(),
+        bind_mounts: spec
+            .bind_mounts()
+            .iter()
+            .map(|mount| DyadBindMountView {
+                source: mount.source().display().to_string(),
+                target: mount.target().display().to_string(),
+                read_only: mount.is_read_only(),
+            })
+            .collect(),
+        volume_mounts: spec
+            .volume_mounts()
+            .iter()
+            .map(|mount| DyadVolumeMountView {
+                source: mount.source().to_owned(),
+                target: mount.target().display().to_string(),
+                read_only: mount.is_read_only(),
+            })
+            .collect(),
+        labels: spec
+            .labels()
+            .iter()
+            .map(|(key, value)| DyadLabelView { key: key.clone(), value: value.clone() })
+            .collect(),
+        published_ports: spec
+            .published_ports()
+            .iter()
+            .map(|port| CodexPublishedPortView {
+                host_ip: port.host_ip_ref().to_owned(),
+                host_port: port.host_port().to_owned(),
+                container_port: port.container_port(),
+            })
+            .collect(),
+        user: spec.user_ref().map(str::to_owned),
+        detach: spec.detach_enabled(),
+        auto_remove: spec.auto_remove_enabled(),
     }
 }
 
