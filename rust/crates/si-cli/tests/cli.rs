@@ -393,6 +393,23 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     assert!(args.contains("si.codex.profile=ferma"));
 }
 
+#[test]
+fn codex_remove_plan_json_returns_container_and_volume_names() {
+    let output = cargo_bin()
+        .args(["codex", "remove-plan", "ferma", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["container_name"], "si-codex-ferma");
+    assert_eq!(parsed["slug"], "ferma");
+    assert_eq!(parsed["codex_volume"], "si-codex-ferma");
+    assert_eq!(parsed["gh_volume"], "si-gh-ferma");
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

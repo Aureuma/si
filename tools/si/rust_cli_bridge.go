@@ -97,6 +97,14 @@ type rustCodexSpawnSpecVolume struct {
 	ReadOnly bool   `json:"read_only"`
 }
 
+type rustCodexRemoveArtifacts struct {
+	Name          string `json:"name"`
+	ContainerName string `json:"container_name"`
+	Slug          string `json:"slug"`
+	CodexVolume   string `json:"codex_volume"`
+	GHVolume      string `json:"gh_volume"`
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -166,6 +174,21 @@ func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, 
 		return "", false, err
 	}
 	return strings.TrimSpace(output), true, nil
+}
+
+func maybeBuildRustCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON("codex", "remove-plan", strings.TrimSpace(name), "--format", "json")
+	if err != nil {
+		return nil, false, err
+	}
+	var artifacts rustCodexRemoveArtifacts
+	if err := json.Unmarshal(output, &artifacts); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex remove plan: %w", err)
+	}
+	return &artifacts, true, nil
 }
 
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {

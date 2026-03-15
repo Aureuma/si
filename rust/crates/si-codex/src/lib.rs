@@ -51,6 +51,15 @@ pub struct SpawnPlan {
     pub mounts: Vec<BindMount>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RemoveArtifacts {
+    pub name: String,
+    pub container_name: String,
+    pub slug: String,
+    pub codex_volume: String,
+    pub gh_volume: String,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SpawnContainerOptions {
     pub command: Option<String>,
@@ -64,6 +73,12 @@ pub enum SpawnPlanError {
     MissingName,
     #[error("workspace host must be an absolute directory")]
     InvalidWorkspace,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum RemoveArtifactsError {
+    #[error("remove target name is required")]
+    MissingName,
 }
 
 #[derive(Debug, Error, Eq, PartialEq)]
@@ -191,6 +206,30 @@ pub fn codex_container_name(name: &str) -> String {
     format!("si-codex-{name}")
 }
 
+pub fn codex_container_slug(name: &str) -> String {
+    let name = name.trim();
+    if name.is_empty() {
+        return String::new();
+    }
+    name.strip_prefix("si-codex-").unwrap_or(name).to_owned()
+}
+
+pub fn build_remove_artifacts(name: &str) -> Result<RemoveArtifacts, RemoveArtifactsError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err(RemoveArtifactsError::MissingName);
+    }
+    let container_name = codex_container_name(trimmed);
+    let slug = codex_container_slug(&container_name);
+    Ok(RemoveArtifacts {
+        name: trimmed.to_owned(),
+        container_name: container_name.clone(),
+        slug: slug.clone(),
+        codex_volume: format!("si-codex-{slug}"),
+        gh_volume: format!("si-gh-{slug}"),
+    })
+}
+
 pub fn build_container_spec(
     plan: &SpawnPlan,
     options: &SpawnContainerOptions,
@@ -259,8 +298,9 @@ fn default_named_value(value: Option<&str>, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_SKILLS_VOLUME, SpawnContainerOptions, SpawnContainerSpecError, SpawnPlanError,
-        SpawnRequest, build_container_spec, build_spawn_plan, codex_container_name,
+        DEFAULT_SKILLS_VOLUME, RemoveArtifactsError, SpawnContainerOptions,
+        SpawnContainerSpecError, SpawnPlanError, SpawnRequest, build_container_spec,
+        build_remove_artifacts, build_spawn_plan, codex_container_name, codex_container_slug,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::{Path, PathBuf};
@@ -546,5 +586,26 @@ mod tests {
     fn codex_container_name_preserves_existing_prefix() {
         assert_eq!(codex_container_name("si-codex-ferma"), "si-codex-ferma");
         assert_eq!(codex_container_name("ferma"), "si-codex-ferma");
+    }
+
+    #[test]
+    fn codex_container_slug_strips_prefix_when_present() {
+        assert_eq!(codex_container_slug("si-codex-ferma"), "ferma");
+        assert_eq!(codex_container_slug("ferma"), "ferma");
+    }
+
+    #[test]
+    fn build_remove_artifacts_defaults_legacy_volume_names() {
+        let artifacts = build_remove_artifacts("ferma").expect("remove artifacts");
+        assert_eq!(artifacts.container_name, "si-codex-ferma");
+        assert_eq!(artifacts.slug, "ferma");
+        assert_eq!(artifacts.codex_volume, "si-codex-ferma");
+        assert_eq!(artifacts.gh_volume, "si-gh-ferma");
+    }
+
+    #[test]
+    fn build_remove_artifacts_rejects_empty_name() {
+        let err = build_remove_artifacts("   ").expect_err("missing name");
+        assert_eq!(err, RemoveArtifactsError::MissingName);
     }
 }

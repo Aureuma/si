@@ -2389,6 +2389,13 @@ func cmdCodexRemove(args []string) {
 		name = fs.Arg(0)
 	}
 	containerName := codexContainerName(name)
+	removeArtifacts, delegatedRemovePlan, err := maybeBuildRustCodexRemoveArtifacts(name)
+	if err != nil {
+		fatal(err)
+	}
+	if delegatedRemovePlan {
+		containerName = strings.TrimSpace(removeArtifacts.ContainerName)
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -2410,6 +2417,10 @@ func cmdCodexRemove(args []string) {
 		slug := codexContainerSlug(containerName)
 		codexVol := "si-codex-" + slug
 		ghVol := "si-gh-" + slug
+		if delegatedRemovePlan && removeArtifacts != nil {
+			codexVol = strings.TrimSpace(removeArtifacts.CodexVolume)
+			ghVol = strings.TrimSpace(removeArtifacts.GHVolume)
+		}
 		if err := client.RemoveVolume(ctx, codexVol, true); err != nil {
 			warnf("codex volume remove failed: %v", err)
 		}
