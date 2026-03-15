@@ -136,6 +136,33 @@ func TestCmdCodexCloneDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdCodexListDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '[{\"name\":\"si-codex-ferma\",\"state\":\"running\"}]'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output := captureOutputForTest(t, func() {
+		cmdCodexList([]string{"--json"})
+	})
+	if !strings.Contains(output, "\"name\":\"si-codex-ferma\"") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nlist\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestCmdCodexRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
