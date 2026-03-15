@@ -156,6 +156,7 @@ Progress notes:
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
 - completed: Rust read-only `settings show` surface backed by the config crate
+- completed: initial `si-process` crate for typed command specs, env/cwd overrides, capture modes, and timeout handling
 
 ### Phase 3: Read-only command migration
 

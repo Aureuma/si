@@ -6,6 +6,7 @@ Current scope:
 
 - shared version metadata
 - `.si` path defaults and `[paths]` settings parsing
+- typed process execution foundations with capture, cwd/env overrides, and timeout handling
 - a small Rust CLI entrypoint for read-only diagnostics
 
 Current entrypoint:

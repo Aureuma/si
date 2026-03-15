@@ -1,0 +1,16 @@
+[package]
+name = "si-rs-process"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lib]
+path = "src/lib.rs"
