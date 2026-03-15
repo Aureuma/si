@@ -3,6 +3,7 @@ members = [
     "rust/crates/si-core",
     "rust/crates/si-config",
     "rust/crates/si-command-manifest",
+    "rust/crates/si-provider-catalog",
     "rust/crates/si-cli",
 ]
 resolver = "2"

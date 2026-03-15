@@ -464,6 +464,7 @@ dependencies = [
  "si-rs-command-manifest",
  "si-rs-config",
  "si-rs-core",
+ "si-rs-provider-catalog",
  "tempfile",
 ]
 
@@ -488,6 +489,13 @@ dependencies = [
 [[package]]
 name = "si-rs-core"
 version = "0.54.0"
+
+[[package]]
+name = "si-rs-provider-catalog"
+version = "0.54.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "strsim"
