@@ -232,12 +232,16 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	if profileID == "" {
 		return codexFortBootstrap{}, fmt.Errorf("profile id required")
 	}
-	hostURL := strings.TrimSpace(state.Host)
+	boot, err := loadCodexFortBootstrapFromPaths(profileID, paths)
+	if err != nil {
+		return codexFortBootstrap{}, err
+	}
+	hostURL := strings.TrimSpace(boot.HostURL)
 	if hostURL == "" {
-		return codexFortBootstrap{}, fmt.Errorf("fort host is missing in session state")
+		return codexFortBootstrap{}, fmt.Errorf("fort host is missing in bootstrap view")
 	}
 	if err := fortValidateHostedURL(hostURL); err != nil {
-		return codexFortBootstrap{}, fmt.Errorf("invalid fort host in session state %q: %w", hostURL, err)
+		return codexFortBootstrap{}, fmt.Errorf("invalid fort host in bootstrap view %q: %w", hostURL, err)
 	}
 	refreshToken, err := readStrictSecretFile(paths.RefreshTokenHostPath)
 	if err != nil {
