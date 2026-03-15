@@ -23,6 +23,7 @@ si-rs-process = { path = "../si-process" }
 si-rs-provider-catalog = { path = "../si-provider-catalog" }
 si-rs-runtime = { path = "../si-runtime" }
 si-rs-vault = { path = "../si-vault" }
+si-rs-warmup = { path = "../si-warmup" }
 
 [dev-dependencies]
 assert_cmd.workspace = true

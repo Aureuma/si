@@ -34,6 +34,10 @@ use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
+use si_rs_warmup::{
+    default_state_path as default_warmup_state_path, load_state as load_warmup_state,
+    render_state_text as render_warmup_state_text,
+};
 use std::fmt;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -80,6 +84,10 @@ enum Command {
     Fort {
         #[command(subcommand)]
         command: FortCommand,
+    },
+    Warmup {
+        #[command(subcommand)]
+        command: WarmupCommand,
     },
     Vault {
         #[command(subcommand)]
@@ -835,6 +843,18 @@ enum FortRuntimeAgentStateCommand {
     Clear {
         #[arg(long)]
         path: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WarmupCommand {
+    Status {
+        #[arg(long)]
+        path: Option<PathBuf>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -1901,6 +1921,9 @@ fn main() -> Result<()> {
                     clear_fort_runtime_agent_state(path)?
                 }
             },
+        },
+        Command::Warmup { command } => match command {
+            WarmupCommand::Status { path, home, format } => run_warmup_status(path, home, format)?,
         },
         Command::Vault { command } => match command {
             VaultCommand::Trust { command } => match command {
@@ -4082,6 +4105,23 @@ fn window_usage(
 
 fn format_reset_at(time: chrono::DateTime<chrono::Local>) -> String {
     time.format("%b %-d, %Y %-I:%M %p").to_string()
+}
+
+fn run_warmup_status(
+    path: Option<PathBuf>,
+    home: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let path = match path {
+        Some(path) => path,
+        None => default_warmup_state_path(home.as_deref())?,
+    };
+    let state = load_warmup_state(path)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+        OutputFormat::Text => print!("{}", render_warmup_state_text(&state, chrono::Utc::now())),
+    }
+    Ok(())
 }
 
 fn default_home_dir() -> PathBuf {

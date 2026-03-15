@@ -207,9 +207,19 @@ func cmdWarmupStatus(args []string) {
 		printUsage("usage: si warmup status [--json]")
 		return
 	}
-	state, err := loadWarmWeeklyState()
+	path, err := warmWeeklyStatePath()
 	if err != nil {
 		fatal(err)
+	}
+	state, delegated, err := maybeLoadRustWarmupState(path)
+	if err != nil {
+		fatal(err)
+	}
+	if !delegated {
+		state, err = loadWarmWeeklyState()
+		if err != nil {
+			fatal(err)
+		}
 	}
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
