@@ -884,17 +884,17 @@ func cmdDyadRemove(args []string) {
 	if fs.NArg() > 0 {
 		name = strings.TrimSpace(fs.Arg(0))
 	}
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
 	ctx := context.Background()
 	if *all {
 		if name != "" || fs.NArg() > 0 {
 			printUsage("usage: si dyad remove [--all] <name>")
 			return
 		}
+		client, err := shared.NewClient()
+		if err != nil {
+			fatal(err)
+		}
+		defer client.Close()
 		containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
 		if err != nil {
 			fatal(err)
@@ -934,6 +934,22 @@ func cmdDyadRemove(args []string) {
 		}
 		name = selected
 	}
+	if output, delegated, err := removeDyadWithCompatibility(ctx, nil, name); err != nil {
+		if !strings.Contains(err.Error(), "dyad client required") {
+			fatal(err)
+		}
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s removed", name)
+		return
+	}
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
 	if output, delegated, err := removeDyadWithCompatibility(ctx, client, name); err != nil {
 		fatal(err)
 	} else if delegated {
