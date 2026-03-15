@@ -163,6 +163,43 @@ func TestCmdCodexListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdCodexExecDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\ncase \"$2\" in\n  remove-plan)\n    printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"slug\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-gh-ferma\"}'\n    ;;\n  exec)\n    ;;\n  *)\n    printf 'unexpected command: %s\\n' \"$2\" >&2\n    exit 1\n    ;;\nesac\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	_ = captureOutputForTest(t, func() {
+		cmdCodexExec([]string{"ferma", "--no-tmux", "--", "git", "status"})
+	})
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := strings.TrimSpace(string(argsData))
+	if !strings.Contains(argsText, "codex\nexec\nferma") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+	if !strings.Contains(argsText, "\n--interactive=true") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+	if !strings.Contains(argsText, "\n--tty=false") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+	if !strings.Contains(argsText, "\n--env\nSI_TERM_TITLE=ferma") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+	if !strings.HasSuffix(argsText, "\n--\n--\ngit\nstatus") {
+		t.Fatalf("unexpected Rust CLI args: %q", argsText)
+	}
+}
+
 func TestCmdCodexRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
