@@ -106,6 +106,15 @@ type rustCodexRemoveArtifacts struct {
 	GHVolume      string `json:"gh_volume"`
 }
 
+type rustCodexRemoveResult struct {
+	Name          string `json:"name"`
+	ContainerName string `json:"container_name"`
+	ProfileID     string `json:"profile_id"`
+	CodexVolume   string `json:"codex_volume"`
+	GHVolume      string `json:"gh_volume"`
+	Output        string `json:"output"`
+}
+
 type rustCodexStatusRead struct {
 	Source            string  `json:"source,omitempty"`
 	Raw               string  `json:"raw,omitempty"`
@@ -619,6 +628,25 @@ func maybeRunRustCodexContainerAction(action string, name string) (string, bool,
 		return "", false, err
 	}
 	return strings.TrimSpace(output), true, nil
+}
+
+func maybeRunRustCodexRemoveResult(name string, removeVolumes bool) (*rustCodexRemoveResult, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{"codex", "remove", strings.TrimSpace(name), "--format", "json"}
+	if removeVolumes {
+		args = append(args, "--volumes")
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var result rustCodexRemoveResult
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex remove result: %w", err)
+	}
+	return &result, true, nil
 }
 
 func maybeRunRustCodexLogs(name string, tail string, follow bool) (string, bool, error) {

@@ -1775,6 +1775,43 @@ func TestMaybeRunRustCodexRemoveDelegatesAndReturnsOutput(t *testing.T) {
 	}
 }
 
+func TestMaybeRunRustCodexRemoveResultDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"profile_id\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-gh-ferma\",\"output\":\"removed\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	result, delegated, err := maybeRunRustCodexRemoveResult("ferma", true)
+	if err != nil {
+		t.Fatalf("maybeRunRustCodexRemoveResult: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected codex remove result to delegate to Rust")
+	}
+	if result == nil {
+		t.Fatal("expected remove result")
+	}
+	if result.ContainerName != "si-codex-ferma" || result.ProfileID != "ferma" {
+		t.Fatalf("unexpected result %#v", result)
+	}
+	if result.CodexVolume != "si-codex-ferma" || result.GHVolume != "si-gh-ferma" {
+		t.Fatalf("unexpected result volumes %#v", result)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nremove\nferma\n--format\njson\n--volumes" {
+		t.Fatalf("unexpected Rust CLI args %q", string(argsData))
+	}
+}
+
 func TestMaybeClearRustFortSessionStateDelegates(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

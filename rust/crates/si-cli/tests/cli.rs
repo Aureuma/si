@@ -1549,6 +1549,37 @@ fn codex_remove_executes_container_and_volume_removal() {
 }
 
 #[test]
+fn codex_remove_json_reports_profile_and_removed_artifacts() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nif [ \"$1\" = \"inspect\" ]; then\n  printf '%s\\n' 'ferma'\nelse\n  printf '%s\\n' 'removed'\nfi\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "remove", "ferma", "--volumes", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["container_name"], "si-codex-ferma");
+    assert_eq!(parsed["profile_id"], "ferma");
+    assert_eq!(parsed["codex_volume"], "si-codex-ferma");
+    assert_eq!(parsed["gh_volume"], "si-gh-ferma");
+    assert!(parsed["output"].as_str().expect("output string").contains("removed"));
+}
+
+#[test]
 fn codex_start_executes_docker_start_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
