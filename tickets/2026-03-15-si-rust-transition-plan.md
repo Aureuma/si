@@ -179,7 +179,7 @@ Exit criteria:
 
 Progress notes:
 
-- completed: experimental Go-to-Rust compatibility boundary for `si version`
+- completed: experimental Go-to-Rust compatibility boundary for `si version` and `si help`
 - completed: focused Go tests covering fallback, explicit bin selection, repo-local binary discovery, and missing-binary failures
 
 ### Phase 4: Runtime substrate migration

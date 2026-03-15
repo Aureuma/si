@@ -108,3 +108,48 @@ func TestRunVersionCommandUsesRepoBuiltRustBinaryWhenEnabled(t *testing.T) {
 		t.Fatalf("expected Rust CLI args to be 'version', got %q", string(argsData))
 	}
 }
+
+func TestRunHelpCommandDefaultsToGoUsage(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		if err := runHelpCommand(nil); err != nil {
+			t.Fatalf("runHelpCommand: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Holistic CLI for si.") {
+		t.Fatalf("expected Go usage output, got %q", out)
+	}
+}
+
+func TestRunHelpCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-help'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		if err := runHelpCommand([]string{"remote-control"}); err != nil {
+			t.Fatalf("runHelpCommand: %v", err)
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-help" {
+		t.Fatalf("expected delegated Rust help output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "help\nremote-control" {
+		t.Fatalf("expected Rust CLI args to be help + remote-control, got %q", string(argsData))
+	}
+}

@@ -157,7 +157,11 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadRemoteControlRootHandler), "remote-control", "rc")
 	register(func(_ string, args []string) { cmdFortRuntimeAgent(args) }, "__fort-runtime-agent")
 	register(func(_ string, args []string) { cmdTest(args) }, "test")
-	register(func(_ string, _ []string) { usage() }, "help", "-h", "--help")
+	register(func(_ string, args []string) {
+		if err := runHelpCommand(args); err != nil {
+			fatal(err)
+		}
+	}, "help", "-h", "--help")
 
 	return handlers
 }
