@@ -208,6 +208,44 @@ func TestLoadProfileAuthTokensAllowsRefreshOnly(t *testing.T) {
 	}
 }
 
+func TestPreferredCodexProfileContainerNameUsesRustAwareResolution(t *testing.T) {
+	prev := resolveCodexContainerNameForProfileStatus
+	t.Cleanup(func() {
+		resolveCodexContainerNameForProfileStatus = prev
+	})
+	resolveCodexContainerNameForProfileStatus = func(profileID string) (string, error) {
+		if profileID != "profile-gamma" {
+			t.Fatalf("unexpected profile id %q", profileID)
+		}
+		return "si-codex-profile-gamma-rust", nil
+	}
+
+	name, err := preferredCodexProfileContainerName("profile-gamma", []codexProfileContainerRef{
+		{Name: "si-codex-profile-gamma-rust", State: "exited"},
+		{Name: "si-codex-profile-gamma", State: "running"},
+	})
+	if err != nil {
+		t.Fatalf("preferredCodexProfileContainerName: %v", err)
+	}
+	if name != "si-codex-profile-gamma-rust" {
+		t.Fatalf("expected rust-aware preferred container, got %q", name)
+	}
+}
+
+func TestPreferredCodexProfileContainerNamePropagatesResolutionError(t *testing.T) {
+	prev := resolveCodexContainerNameForProfileStatus
+	t.Cleanup(func() {
+		resolveCodexContainerNameForProfileStatus = prev
+	})
+	resolveCodexContainerNameForProfileStatus = func(profileID string) (string, error) {
+		return "", errors.New("boom")
+	}
+
+	if _, err := preferredCodexProfileContainerName("profile-gamma", []codexProfileContainerRef{{Name: "si-codex-profile-gamma", State: "running"}}); err == nil {
+		t.Fatalf("expected resolution error")
+	}
+}
+
 func TestRefreshProfileAuthTokensReusedFallsBackToLatestFromDisk(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
