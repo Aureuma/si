@@ -154,6 +154,8 @@ Progress notes:
 
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
+- completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
+- completed: Rust read-only `settings show` surface backed by the config crate
 
 ### Phase 3: Read-only command migration
 

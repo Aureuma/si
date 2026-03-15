@@ -47,7 +47,7 @@ impl SiPaths {
 
         let source = fs::read_to_string(path)
             .map_err(|source| LoadPathsError::ReadSettings { path: path.to_path_buf(), source })?;
-        let settings = Settings::from_toml(&source)
+        let settings = Settings::from_toml_with_home_defaults(&source, home)
             .map_err(|source| LoadPathsError::ParseSettings { path: path.to_path_buf(), source })?;
 
         Ok(Self::from_settings(home, &settings))
