@@ -65,9 +65,12 @@ enum SettingsCommand {
 
 #[derive(Debug, Subcommand)]
 enum ProvidersCommand {
+    #[command(visible_aliases = ["chars", "status", "list"])]
     Characteristics {
         #[arg(long)]
         provider: Option<String>,
+        #[arg(long)]
+        json: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -182,7 +185,8 @@ fn main() -> Result<()> {
             }
         },
         Command::Providers { command } => match command {
-            ProvidersCommand::Characteristics { provider, format } => {
+            ProvidersCommand::Characteristics { provider, json, format } => {
+                let format = if json { OutputFormat::Json } else { format };
                 show_provider_characteristics(provider.as_deref(), format)?
             }
         },
