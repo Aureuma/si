@@ -886,7 +886,7 @@ func cmdDyadRemove(args []string) {
 		}
 		name = selected
 	}
-	if output, delegated, err := maybeRunRustDyadRemove(name); err != nil {
+	if output, delegated, err := removeDyadWithCompatibility(ctx, client, name); err != nil {
 		fatal(err)
 	} else if delegated {
 		if strings.TrimSpace(output) != "" {
@@ -933,8 +933,24 @@ func cmdDyadRecreate(args []string) {
 		fatal(err)
 	}
 	defer client.Close()
-	_ = client.RemoveDyad(context.Background(), name, true)
+	if output, delegated, err := removeDyadWithCompatibility(context.Background(), client, name); err != nil {
+		fatal(err)
+	} else if delegated && strings.TrimSpace(output) != "" {
+		fmt.Print(output)
+	}
 	cmdDyadSpawn(args)
+}
+
+func removeDyadWithCompatibility(ctx context.Context, client *shared.Client, name string) (string, bool, error) {
+	if output, delegated, err := maybeRunRustDyadRemove(name); err != nil {
+		return "", false, err
+	} else if delegated {
+		return output, true, nil
+	}
+	if client == nil {
+		return "", false, fmt.Errorf("dyad client required")
+	}
+	return "", false, client.RemoveDyad(ctx, name, true)
 }
 
 func dyadSkipAuthArg(args []string) bool {
