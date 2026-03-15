@@ -1,4 +1,4 @@
-use si_rs_docker::BindMount;
+use si_rs_docker::{BindMount, ContainerSpec, VolumeMount};
 use si_rs_runtime::{ContainerCoreMountPlan, HostMountContext, build_container_core_mounts};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -51,12 +51,23 @@ pub struct SpawnPlan {
     pub mounts: Vec<BindMount>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SpawnContainerOptions {
+    pub command: Option<String>,
+}
+
 #[derive(Debug, Error, Eq, PartialEq)]
 pub enum SpawnPlanError {
     #[error("spawn name or profile is required")]
     MissingName,
     #[error("workspace host must be an absolute directory")]
     InvalidWorkspace,
+}
+
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum SpawnContainerSpecError {
+    #[error("invalid env entry {entry:?}")]
+    InvalidEnvEntry { entry: String },
 }
 
 pub fn build_spawn_plan(
@@ -174,6 +185,41 @@ pub fn codex_container_name(name: &str) -> String {
     format!("si-codex-{name}")
 }
 
+pub fn build_container_spec(
+    plan: &SpawnPlan,
+    options: &SpawnContainerOptions,
+) -> Result<ContainerSpec, SpawnContainerSpecError> {
+    let mut spec = ContainerSpec::new(plan.image.clone())
+        .name(plan.container_name.clone())
+        .network(plan.network_name.clone())
+        .restart_policy("unless-stopped")
+        .workdir(plan.workdir.clone())
+        .volume_mount(VolumeMount::new(
+            plan.codex_volume.clone(),
+            PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex"),
+        ))
+        .volume_mount(VolumeMount::new(
+            plan.skills_volume.clone(),
+            PathBuf::from(DEFAULT_CONTAINER_HOME).join(".codex").join("skills"),
+        ))
+        .volume_mount(VolumeMount::new(
+            plan.gh_volume.clone(),
+            PathBuf::from(DEFAULT_CONTAINER_HOME).join(".config").join("gh"),
+        ));
+    for mount in &plan.mounts {
+        spec = spec.mount(mount.clone());
+    }
+    for entry in &plan.env {
+        let Some((key, value)) = entry.split_once('=') else {
+            return Err(SpawnContainerSpecError::InvalidEnvEntry { entry: entry.clone() });
+        };
+        spec = spec.env(key.trim(), value);
+    }
+    let shell_command = options.command.as_deref().map(str::trim).filter(|value| !value.is_empty());
+    let cmd = shell_command.unwrap_or("sleep infinity");
+    Ok(spec.command(["bash", "-lc", cmd]))
+}
+
 fn default_named_value(value: Option<&str>, fallback: &str) -> String {
     value.map(str::trim).filter(|value| !value.is_empty()).unwrap_or(fallback).to_owned()
 }
@@ -181,7 +227,8 @@ fn default_named_value(value: Option<&str>, fallback: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_SKILLS_VOLUME, SpawnPlanError, SpawnRequest, build_spawn_plan, codex_container_name,
+        DEFAULT_SKILLS_VOLUME, SpawnContainerOptions, SpawnContainerSpecError, SpawnPlanError,
+        SpawnRequest, build_container_spec, build_spawn_plan, codex_container_name,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::{Path, PathBuf};
@@ -338,6 +385,59 @@ mod tests {
         .expect_err("invalid workspace");
 
         assert_eq!(err, SpawnPlanError::InvalidWorkspace);
+    }
+
+    #[test]
+    fn build_container_spec_renders_named_volumes_and_shell_command() {
+        let workspace = tempdir().expect("tempdir");
+        let plan = build_spawn_plan(
+            &SpawnRequest {
+                name: Some("ferma".to_owned()),
+                workspace_host: workspace.path().to_path_buf(),
+                image: Some("ghcr.io/aureuma/si:latest".to_owned()),
+                detach: true,
+                docker_socket: true,
+                include_host_si: false,
+                ..SpawnRequest::default()
+            },
+            &HostMountContext::default(),
+        )
+        .expect("spawn plan");
+
+        let spec = build_container_spec(
+            &plan,
+            &SpawnContainerOptions { command: Some("echo hello".to_owned()) },
+        )
+        .expect("container spec");
+
+        let args = spec.docker_run_args().expect("docker args");
+        assert!(args.contains(&"--restart".to_owned()));
+        assert!(args.iter().any(|arg| arg.contains("type=volume")));
+        assert!(args.contains(&"ghcr.io/aureuma/si:latest".to_owned()));
+        assert_eq!(args.last().map(String::as_str), Some("echo hello"));
+    }
+
+    #[test]
+    fn build_container_spec_rejects_malformed_env_entry() {
+        let workspace = tempdir().expect("tempdir");
+        let mut plan = build_spawn_plan(
+            &SpawnRequest {
+                name: Some("ferma".to_owned()),
+                workspace_host: workspace.path().to_path_buf(),
+                detach: true,
+                docker_socket: true,
+                include_host_si: false,
+                ..SpawnRequest::default()
+            },
+            &HostMountContext::default(),
+        )
+        .expect("spawn plan");
+        plan.env.push("BROKEN".to_owned());
+
+        let err = build_container_spec(&plan, &SpawnContainerOptions::default())
+            .expect_err("malformed env entry should fail");
+
+        assert_eq!(err, SpawnContainerSpecError::InvalidEnvEntry { entry: "BROKEN".to_owned() });
     }
 
     #[test]

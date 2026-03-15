@@ -273,6 +273,29 @@ fn codex_spawn_plan_uses_env_host_context_when_flags_are_omitted() {
     assert!(mounts.iter().any(|mount| mount["target"] == "/home/si/.si"));
 }
 
+#[test]
+fn codex_spawn_spec_json_includes_named_volumes_and_command() {
+    let workspace = tempdir().expect("tempdir");
+    let output = cargo_bin()
+        .args(["codex", "spawn-spec", "--name", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .args(["--cmd", "echo hello"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let command = parsed["command"].as_array().expect("command array");
+    assert_eq!(command[0], "bash");
+    assert_eq!(command[2], "echo hello");
+    let volume_mounts = parsed["volume_mounts"].as_array().expect("volume mounts");
+    assert_eq!(volume_mounts.len(), 3);
+    assert!(volume_mounts.iter().any(|mount| mount["target"] == "/home/si/.codex"));
+    assert_eq!(parsed["restart_policy"], "unless-stopped");
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }
