@@ -799,6 +799,14 @@ func cmdDyadList(args []string) {
 		printUsage("usage: si dyad list [--json]")
 		return
 	}
+	if output, delegated, err := maybeRunRustDyadList(*jsonOut); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -969,6 +977,30 @@ func cmdDyadStatus(args []string) {
 		}
 		name = selected
 	}
+	if rustResult, delegated, err := maybeReadRustDyadStatus(name); err != nil {
+		fatal(err)
+	} else if delegated {
+		result := dyadStatusResult{
+			Dyad:  strings.TrimSpace(rustResult.Dyad),
+			Found: rustResult.Found,
+		}
+		if rustResult.Actor != nil {
+			result.Actor = &dyadContainerStatus{
+				Name:   strings.TrimSpace(rustResult.Actor.Name),
+				ID:     strings.TrimSpace(rustResult.Actor.ID),
+				Status: strings.TrimSpace(rustResult.Actor.Status),
+			}
+		}
+		if rustResult.Critic != nil {
+			result.Critic = &dyadContainerStatus{
+				Name:   strings.TrimSpace(rustResult.Critic.Name),
+				ID:     strings.TrimSpace(rustResult.Critic.ID),
+				Status: strings.TrimSpace(rustResult.Critic.Status),
+			}
+		}
+		renderDyadStatusResult(result, *jsonOut)
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -985,20 +1017,23 @@ func cmdDyadStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	result := buildDyadStatusResult(name, actorID, actorInfo, criticID, criticInfo)
+	renderDyadStatusResult(buildDyadStatusResult(name, actorID, actorInfo, criticID, criticInfo), *jsonOut)
+}
+
+func renderDyadStatusResult(result dyadStatusResult, jsonOut bool) {
 	if !result.Found {
-		if *jsonOut {
+		if jsonOut {
 			printJSON(result)
 			return
 		}
-		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
+		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(result.Dyad))
 		return
 	}
-	if *jsonOut {
+	if jsonOut {
 		printJSON(result)
 		return
 	}
-	fmt.Printf("%s %s\n", styleHeading("dyad"), styleCmd(name))
+	fmt.Printf("%s %s\n", styleHeading("dyad"), styleCmd(result.Dyad))
 	if result.Actor != nil {
 		fmt.Printf(" %s %s (%s)\n", styleSection("actor:"), shortContainerID(result.Actor.ID), styleStatus(result.Actor.Status))
 	} else {
