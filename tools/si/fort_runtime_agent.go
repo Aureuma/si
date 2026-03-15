@@ -369,8 +369,7 @@ func closeCodexProfileFortSession(profile codexProfile) error {
 
 func closeCodexProfileFortSessionLocked(paths fortProfilePaths) error {
 	_ = stopFortRuntimeAgentLocked(paths)
-	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
-	if err == nil {
+	if _, err := loadFortProfileSessionState(paths.SessionStateHostPath); err == nil {
 		if classification, delegated, err := maybeRunRustFortSessionTeardown(paths.SessionStateHostPath, time.Now().UTC()); err != nil {
 			return err
 		} else if delegated {
@@ -378,7 +377,7 @@ func closeCodexProfileFortSessionLocked(paths fortProfilePaths) error {
 				return fmt.Errorf("unexpected rust fort teardown classification: %s", stateValue)
 			}
 		}
-		boot, bootErr := loadCodexFortBootstrapFromPaths(strings.TrimSpace(state.ProfileID), paths)
+		boot, bootErr := loadCodexFortBootstrapFromPaths("", paths)
 		if bootErr != nil {
 			return bootErr
 		}
