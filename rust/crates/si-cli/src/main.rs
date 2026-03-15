@@ -15,6 +15,7 @@ use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command,
     docker_container_list_with_format_command, docker_container_logs_command,
+    docker_container_remove_command,
 };
 use si_rs_dyad::{
     SpawnRequest as DyadSpawnRequest, build_container_specs as build_dyad_container_specs,
@@ -388,6 +389,16 @@ enum DyadCommand {
         name: String,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Restart {
+        name: String,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
+    Remove {
+        name: String,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -1441,6 +1452,10 @@ fn main() -> Result<()> {
             DyadCommand::Status { name, format, docker_bin } => {
                 run_dyad_status(&name, format, docker_bin)?
             }
+            DyadCommand::Restart { name, docker_bin } => {
+                run_dyad_container_action(&name, ContainerAction::Restart, docker_bin)?
+            }
+            DyadCommand::Remove { name, docker_bin } => run_dyad_remove(&name, docker_bin)?,
         },
         Command::Codex { command } => match *command {
             CodexCommand::SpawnPlan {
@@ -2505,6 +2520,26 @@ fn run_dyad_container_logs(
         anyhow::bail!("docker logs failed: {}", stderr.trim());
     }
     print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+fn run_dyad_remove(dyad: &str, docker_bin: Option<PathBuf>) -> Result<()> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    for member in ["actor", "critic"] {
+        let container_name = si_rs_dyad::dyad_container_name(dyad, member);
+        let command = docker_container_remove_command(
+            docker_program.display().to_string(),
+            container_name,
+            true,
+        )?;
+        let output = ProcessRunner.run(&command, &RunOptions::default())?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("docker rm failed: {}", stderr.trim());
+        }
+        print!("{}", String::from_utf8_lossy(&output.stdout));
+    }
     Ok(())
 }
 

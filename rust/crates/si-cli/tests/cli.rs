@@ -450,6 +450,69 @@ fn dyad_status_json_reports_member_states() {
 }
 
 #[test]
+fn dyad_restart_executes_actor_and_critic_docker_restart() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nprintf '%s\\n' 'restarted'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "restart", "alpha", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("restarted"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("restart"));
+    assert!(args.contains("si-actor-alpha"));
+    assert!(args.contains("si-critic-alpha"));
+}
+
+#[test]
+fn dyad_remove_executes_actor_and_critic_docker_rm() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nprintf '%s\\n' 'removed'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "remove", "alpha", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("removed"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("rm"));
+    assert!(args.contains("-f"));
+    assert!(args.contains("si-actor-alpha"));
+    assert!(args.contains("si-critic-alpha"));
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()

@@ -886,6 +886,15 @@ func cmdDyadRemove(args []string) {
 		}
 		name = selected
 	}
+	if output, delegated, err := maybeRunRustDyadRemove(name); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s removed", name)
+		return
+	}
 	if err := client.RemoveDyad(ctx, name, true); err != nil {
 		fatal(err)
 	}
@@ -1278,6 +1287,15 @@ func cmdDyadRestart(args []string) {
 		fatal(err)
 	}
 	defer client.Close()
+	if output, delegated, err := maybeRunRustDyadContainerAction("restart", name); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s restarted", name)
+		return
+	}
 	if err := client.RestartDyad(context.Background(), name); err != nil {
 		fatal(err)
 	}
