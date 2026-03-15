@@ -31,6 +31,20 @@ func runVersionCommand() error {
 	return nil
 }
 
+func runHelpCommand(args []string) error {
+	if len(args) <= 1 {
+		delegated, err := maybeDispatchRustCLIReadOnly("help", args...)
+		if err != nil {
+			return err
+		}
+		if delegated {
+			return nil
+		}
+	}
+	usage()
+	return nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil
