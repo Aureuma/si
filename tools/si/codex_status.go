@@ -108,7 +108,10 @@ func cmdCodexStatus(args []string) {
 	}
 
 	profileCandidate, hasProfileCandidate := codexProfileByKey(name)
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
+	}
 
 	client, err := shared.NewClient()
 	if err != nil {

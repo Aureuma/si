@@ -164,7 +164,10 @@ func cmdCodexReport(args []string) {
 	defer client.Close()
 
 	ctx := context.Background()
-	containerName := codexContainerName(name)
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		failWithUnlock(err)
+	}
 	id, _, err := client.ContainerByName(ctx, containerName)
 	if err != nil {
 		failWithUnlock(err)
