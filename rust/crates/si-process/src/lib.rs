@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
@@ -79,10 +79,11 @@ pub enum StreamBehavior {
     Capture,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StdinBehavior {
     Null,
     Inherit,
+    Bytes(Vec<u8>),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -163,7 +164,8 @@ impl ProcessRunner {
         command.args(&spec.args);
         command.stdin(match options.stdin {
             StdinBehavior::Null => Stdio::null(),
-            StdinBehavior::Inherit => Stdio::inherit(),
+            StdinBehavior::Inherit => Stdio::piped(),
+            StdinBehavior::Bytes(_) => Stdio::piped(),
         });
 
         if let Some(current_dir) = &spec.current_dir {
@@ -188,9 +190,11 @@ impl ProcessRunner {
 
         let stdout = spawn_reader(child.stdout.take(), &spec.program, "stdout");
         let stderr = spawn_reader(child.stderr.take(), &spec.program, "stderr");
+        let stdin = spawn_stdin_writer(child.stdin.take(), &spec.program, options.stdin.clone());
         let status = wait_for_child(&mut child, &spec.program, options.timeout)?;
         let stdout = join_reader(stdout)?;
         let stderr = join_reader(stderr)?;
+        join_stdin_writer(stdin)?;
 
         Ok(CommandOutput { status, stdout, stderr })
     }
@@ -242,6 +246,44 @@ fn join_reader(
             Err(_) => Err(ProcessError::Join { program: "process".to_owned(), stream: "capture" }),
         },
         None => Ok(Vec::new()),
+    }
+}
+
+fn spawn_stdin_writer(
+    pipe: Option<impl std::io::Write + Send + 'static>,
+    program: &str,
+    behavior: StdinBehavior,
+) -> Option<thread::JoinHandle<Result<(), ProcessError>>> {
+    match (pipe, behavior) {
+        (Some(mut pipe), StdinBehavior::Bytes(bytes)) => {
+            let program = program.to_owned();
+            Some(thread::spawn(move || {
+                std::io::copy(&mut Cursor::new(bytes), &mut pipe)
+                    .map_err(|source| ProcessError::Read { program, stream: "stdin", source })?;
+                Ok(())
+            }))
+        }
+        (Some(mut pipe), StdinBehavior::Inherit) => {
+            let program = program.to_owned();
+            Some(thread::spawn(move || {
+                std::io::copy(&mut std::io::stdin(), &mut pipe)
+                    .map_err(|source| ProcessError::Read { program, stream: "stdin", source })?;
+                Ok(())
+            }))
+        }
+        _ => None,
+    }
+}
+
+fn join_stdin_writer(
+    handle: Option<thread::JoinHandle<Result<(), ProcessError>>>,
+) -> Result<(), ProcessError> {
+    match handle {
+        Some(handle) => match handle.join() {
+            Ok(result) => result,
+            Err(_) => Err(ProcessError::Join { program: "process".to_owned(), stream: "stdin" }),
+        },
+        None => Ok(()),
     }
 }
 
@@ -361,5 +403,21 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[test]
+    fn writes_static_stdin_bytes() {
+        let runner = ProcessRunner;
+        let output = runner
+            .run(
+                &sh("cat"),
+                &RunOptions {
+                    stdin: StdinBehavior::Bytes(b"hello".to_vec()),
+                    ..RunOptions::default()
+                },
+            )
+            .expect("run process");
+
+        assert_eq!(String::from_utf8_lossy(&output.stdout), "hello");
     }
 }

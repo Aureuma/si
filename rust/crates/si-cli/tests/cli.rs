@@ -1,4 +1,5 @@
 use assert_cmd::Command;
+use chrono::Local;
 use serde_json::Value;
 use std::fs;
 use std::fs::File;
@@ -621,6 +622,107 @@ fn codex_exec_executes_docker_exec_for_container_name() {
             "status",
         ]
     );
+}
+
+#[test]
+fn codex_status_read_returns_parsed_app_server_usage() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let input_path = script_dir.path().join("input.txt");
+    let docker_bin = script_dir.path().join("docker");
+    let primary_reset = Local::now().timestamp() + 3600;
+    let secondary_reset = Local::now().timestamp() + 7200;
+    let rate_json = serde_json::json!({
+        "id": 2,
+        "result": {
+            "rateLimits": {
+                "primary": {
+                    "usedPercent": 25,
+                    "windowDurationMins": 300,
+                    "resetsAt": primary_reset,
+                },
+                "secondary": {
+                    "usedPercent": 12,
+                    "windowDurationMins": 10080,
+                    "resetsAt": secondary_reset,
+                }
+            }
+        }
+    })
+    .to_string();
+    let account_json = serde_json::json!({
+        "id": 3,
+        "result": {
+            "account": {
+                "type": "chatgpt",
+                "email": "ferma@example.com",
+                "planType": "pro"
+            }
+        }
+    })
+    .to_string();
+    let config_json = serde_json::json!({
+        "id": 4,
+        "result": {
+            "config": {
+                "model": "gpt-5.2-codex",
+                "model_reasoning_effort": "medium"
+            }
+        }
+    })
+    .to_string();
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\ncat > '{}'\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' '{}' '{}' '{}'\n",
+            input_path.display(),
+            args_path.display(),
+            rate_json,
+            account_json,
+            config_json,
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "status-read", "ferma", "--raw", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["source"], "app-server");
+    assert_eq!(parsed["account_email"], "ferma@example.com");
+    assert_eq!(parsed["account_plan"], "pro");
+    assert_eq!(parsed["model"], "gpt-5.2-codex");
+    assert_eq!(parsed["reasoning_effort"], "medium");
+    assert_eq!(parsed["five_hour_left_pct"], 75.0);
+    assert_eq!(parsed["weekly_left_pct"], 88.0);
+    assert!(parsed["raw"].as_str().unwrap_or("").contains("\"id\":2"));
+
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        [
+            "exec",
+            "-i",
+            "--user",
+            "si",
+            "-e",
+            "HOME=/home/si",
+            "-e",
+            "CODEX_HOME=/home/si/.codex",
+            "-e",
+            "TERM=xterm-256color",
+            "si-codex-ferma",
+            "codex",
+            "app-server",
+        ]
+    );
+    let input = fs::read_to_string(input_path).expect("input file");
+    assert!(input.contains("\"method\":\"account/rateLimits/read\""));
 }
 
 fn path_string(path: impl AsRef<Path>) -> Value {

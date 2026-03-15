@@ -105,6 +105,21 @@ type rustCodexRemoveArtifacts struct {
 	GHVolume      string `json:"gh_volume"`
 }
 
+type rustCodexStatusRead struct {
+	Source            string  `json:"source,omitempty"`
+	Raw               string  `json:"raw,omitempty"`
+	Model             string  `json:"model,omitempty"`
+	ReasoningEffort   string  `json:"reasoning_effort,omitempty"`
+	AccountEmail      string  `json:"account_email,omitempty"`
+	AccountPlan       string  `json:"account_plan,omitempty"`
+	FiveHourLeftPct   float64 `json:"five_hour_left_pct,omitempty"`
+	FiveHourReset     string  `json:"five_hour_reset,omitempty"`
+	FiveHourRemaining int     `json:"five_hour_remaining_minutes,omitempty"`
+	WeeklyLeftPct     float64 `json:"weekly_left_pct,omitempty"`
+	WeeklyReset       string  `json:"weekly_reset,omitempty"`
+	WeeklyRemaining   int     `json:"weekly_remaining_minutes,omitempty"`
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -279,6 +294,25 @@ func maybeRunRustCodexList(jsonOut bool) (string, bool, error) {
 		return "", false, err
 	}
 	return output, true, nil
+}
+
+func maybeReadRustCodexStatus(name string, raw bool) (*rustCodexStatusRead, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	args := []string{"codex", "status-read", strings.TrimSpace(name), "--format", "json"}
+	if raw {
+		args = append(args, "--raw")
+	}
+	output, err := runRustCLIJSON(args...)
+	if err != nil {
+		return nil, false, err
+	}
+	var status rustCodexStatusRead
+	if err := json.Unmarshal(output, &status); err != nil {
+		return nil, false, fmt.Errorf("decode rust codex status: %w", err)
+	}
+	return &status, true, nil
 }
 
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {

@@ -357,6 +357,37 @@ func TestMaybeRunRustCodexListDelegatesForTextOutput(t *testing.T) {
 	}
 }
 
+func TestMaybeReadRustCodexStatusDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"source\":\"app-server\",\"model\":\"gpt-5.2-codex\",\"five_hour_left_pct\":75,\"weekly_left_pct\":88}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	status, delegated, err := maybeReadRustCodexStatus("ferma", true)
+	if err != nil {
+		t.Fatalf("maybeReadRustCodexStatus: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected status action to delegate to Rust")
+	}
+	if status == nil || status.Model != "gpt-5.2-codex" || status.FiveHourLeftPct != 75 || status.WeeklyLeftPct != 88 {
+		t.Fatalf("unexpected status payload: %#v", status)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nstatus-read\nferma\n--format\njson\n--raw" {
+		t.Fatalf("expected Rust CLI args to be codex status-read ferma --format json --raw, got %q", string(argsData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",
