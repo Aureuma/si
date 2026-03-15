@@ -451,12 +451,12 @@ fn parse_forward_ports(raw: &str) -> Result<Vec<PublishedPort>, SpawnContainerSp
                 return Err(SpawnContainerSpecError::InvalidForwardPortRange { start, end });
             }
             for port in start..=end {
-                ports.push(PublishedPort::new("", port as u16));
+                ports.push(PublishedPort::dynamic(port as u16));
             }
             continue;
         }
         let port = parse_forward_port(part)?;
-        ports.push(PublishedPort::new("", port as u16));
+        ports.push(PublishedPort::dynamic(port as u16));
     }
     Ok(ports)
 }

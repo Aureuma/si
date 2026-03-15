@@ -233,6 +233,7 @@ Progress notes:
 - completed: Rust `dyad spawn-plan` CLI surface with binary-level JSON coverage for default naming/volumes and critic-specific configs + loop env assembly
 - completed: experimental Go `dyad spawn` can now consume Rust dyad planning for deterministic role/image/network/workspace/configs/volume/forward-port defaults behind the compatibility boundary while container creation remains in Go
 - completed: Rust `dyad spawn-spec` now materializes actor/critic container specs, published ports, bind mounts, and command payloads on top of the dyad planner with binary-level JSON coverage
+- completed: Rust `dyad spawn-start` now executes the actor and critic container startup commands end to end through `si-process`, backed by fake-docker integration tests and Docker primitive support for dynamic host port binding
 
 ### Phase 5: Security/runtime migration
 

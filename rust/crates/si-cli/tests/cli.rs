@@ -260,6 +260,49 @@ fn dyad_spawn_spec_json_includes_actor_ports_and_critic_configs_mount() {
 }
 
 #[test]
+fn dyad_spawn_start_executes_actor_and_critic_docker_commands() {
+    let workspace = tempdir().expect("tempdir");
+    let configs = tempdir().expect("tempdir");
+    let home = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nprintf '%s\\n' 'container-id'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["dyad", "spawn-start", "--name", "alpha", "--workspace"])
+        .arg(workspace.path())
+        .args(["--configs"])
+        .arg(configs.path())
+        .args(["--forward-ports", "1455-1456", "--home"])
+        .arg(home.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("container-id"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("si-actor-alpha"));
+    assert!(args.contains("si-critic-alpha"));
+    assert!(args.contains("127.0.0.1::1455"));
+    assert!(args.contains("--label"));
+    assert!(args.contains("si.dyad=alpha"));
+}
+
+#[test]
 fn paths_show_uses_home_defaults() {
     let home = tempdir().expect("tempdir");
     let output = cargo_bin()
