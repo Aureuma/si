@@ -500,6 +500,45 @@ func TestMaybeRunRustFortSessionTeardownDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeBuildRustDyadSpawnPlanDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"dyad\":\"alpha\",\"role\":\"ios\",\"network_name\":\"si\",\"workspace_host\":\"/workspace\",\"configs_host\":\"/configs-src\",\"codex_volume\":\"si-codex-alpha\",\"skills_volume\":\"si-codex-skills\",\"forward_ports\":\"1455-1465\",\"docker_socket\":true,\"actor\":{\"member\":\"actor\",\"container_name\":\"si-actor-alpha\",\"image\":\"actor:latest\",\"env\":[],\"bind_mounts\":[],\"command\":[]},\"critic\":{\"member\":\"critic\",\"container_name\":\"si-critic-alpha\",\"image\":\"critic:latest\",\"env\":[],\"bind_mounts\":[],\"command\":[]}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	plan, delegated, err := maybeBuildRustDyadSpawnPlan(rustDyadSpawnPlanRequest{
+		Name:         "alpha",
+		Role:         "ios",
+		ActorImage:   "actor:latest",
+		CriticImage:  "critic:latest",
+		Workspace:    "/workspace",
+		Configs:      "/configs-src",
+		ForwardPorts: "1455-1465",
+		DockerSocket: true,
+	})
+	if err != nil {
+		t.Fatalf("maybeBuildRustDyadSpawnPlan: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected dyad spawn plan to delegate to Rust")
+	}
+	if plan.Actor.ContainerName != "si-actor-alpha" || plan.Critic.ContainerName != "si-critic-alpha" {
+		t.Fatalf("unexpected dyad plan: %+v", plan)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "dyad\nspawn-plan\n--name\nalpha") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeApplyRustFortUnauthorizedRefreshOutcomeDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

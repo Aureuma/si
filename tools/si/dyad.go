@@ -329,6 +329,9 @@ func cmdDyadSpawn(args []string) {
 	if *autopilot {
 		opts.LoopEnabled = boolPtr(true)
 	}
+	if err := maybeApplyRustDyadSpawnPlan(&opts); err != nil {
+		fatal(err)
+	}
 
 	actorID, criticID, err := client.EnsureDyad(ctx, opts)
 	if err != nil {
@@ -609,6 +612,73 @@ func dyadLoopStringSetting(envKey string, fallback string) string {
 		return val
 	}
 	return strings.TrimSpace(fallback)
+}
+
+func maybeApplyRustDyadSpawnPlan(opts *shared.DyadOptions) error {
+	if opts == nil {
+		return nil
+	}
+	request := rustDyadSpawnPlanRequest{
+		Name:                strings.TrimSpace(opts.Dyad),
+		Role:                strings.TrimSpace(opts.Role),
+		ActorImage:          strings.TrimSpace(opts.ActorImage),
+		CriticImage:         strings.TrimSpace(opts.CriticImage),
+		CodexModel:          strings.TrimSpace(opts.CodexModel),
+		CodexEffortActor:    strings.TrimSpace(opts.CodexEffortActor),
+		CodexEffortCritic:   strings.TrimSpace(opts.CodexEffortCritic),
+		CodexModelLow:       strings.TrimSpace(opts.CodexModelLow),
+		CodexModelMedium:    strings.TrimSpace(opts.CodexModelMedium),
+		CodexModelHigh:      strings.TrimSpace(opts.CodexModelHigh),
+		CodexEffortLow:      strings.TrimSpace(opts.CodexEffortLow),
+		CodexEffortMedium:   strings.TrimSpace(opts.CodexEffortMedium),
+		CodexEffortHigh:     strings.TrimSpace(opts.CodexEffortHigh),
+		Workspace:           strings.TrimSpace(opts.WorkspaceHost),
+		Configs:             strings.TrimSpace(opts.ConfigsHost),
+		VaultEnvFile:        strings.TrimSpace(opts.VaultEnvFile),
+		CodexVolume:         strings.TrimSpace(opts.CodexVolume),
+		SkillsVolume:        strings.TrimSpace(opts.SkillsVolume),
+		Network:             strings.TrimSpace(opts.Network),
+		ForwardPorts:        strings.TrimSpace(opts.ForwardPorts),
+		DockerSocket:        opts.DockerSocket,
+		ProfileID:           strings.TrimSpace(opts.ProfileID),
+		ProfileName:         strings.TrimSpace(opts.ProfileName),
+		LoopEnabled:         opts.LoopEnabled,
+		LoopGoal:            strings.TrimSpace(opts.LoopGoal),
+		LoopSeedPrompt:      strings.TrimSpace(opts.LoopSeedPrompt),
+		LoopAllowMCPStartup: opts.LoopAllowMCP,
+		LoopTmuxCapture:     strings.TrimSpace(opts.LoopTmuxCapture),
+	}
+	request.LoopMaxTurns = intPtrValue(opts.LoopMaxTurns)
+	request.LoopSleepSeconds = intPtrValue(opts.LoopSleepSeconds)
+	request.LoopStartupDelaySeconds = intPtrValue(opts.LoopStartupDelay)
+	request.LoopTurnTimeoutSeconds = intPtrValue(opts.LoopTurnTimeout)
+	request.LoopRetryMax = intPtrValue(opts.LoopRetryMax)
+	request.LoopRetryBaseSeconds = intPtrValue(opts.LoopRetryBase)
+	request.LoopPromptLines = intPtrValue(opts.LoopPromptLines)
+	request.LoopPausePollSeconds = intPtrValue(opts.LoopPausePoll)
+
+	plan, delegated, err := maybeBuildRustDyadSpawnPlan(request)
+	if err != nil {
+		return err
+	}
+	if !delegated {
+		return nil
+	}
+	opts.Role = strings.TrimSpace(plan.Role)
+	opts.ActorImage = strings.TrimSpace(plan.Actor.Image)
+	opts.CriticImage = strings.TrimSpace(plan.Critic.Image)
+	opts.WorkspaceHost = strings.TrimSpace(plan.WorkspaceHost)
+	opts.ConfigsHost = strings.TrimSpace(plan.ConfigsHost)
+	opts.CodexVolume = strings.TrimSpace(plan.CodexVolume)
+	opts.SkillsVolume = strings.TrimSpace(plan.SkillsVolume)
+	opts.Network = strings.TrimSpace(plan.NetworkName)
+	opts.ForwardPorts = strings.TrimSpace(plan.ForwardPorts)
+	opts.DockerSocket = plan.DockerSocket
+	return nil
+}
+
+func intPtrValue(value int) *int {
+	return &value
 }
 
 func dyadLoopIntSetting(envKey string, fallback int) int {
