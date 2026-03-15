@@ -360,8 +360,10 @@ func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, op
 	if !shouldUseExperimentalRustCLI() {
 		return "", "", false, nil
 	}
-	actorName := shared.DyadContainerName(opts.Dyad, "actor")
-	criticName := shared.DyadContainerName(opts.Dyad, "critic")
+	actorName, criticName, err := resolveDyadSpawnExistingContainerNames(opts.Dyad)
+	if err != nil {
+		return "", "", false, err
+	}
 	actorID, _, err := client.ContainerByName(ctx, actorName)
 	if err != nil {
 		return "", "", false, err
@@ -429,6 +431,18 @@ func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, op
 		return "", "", true, fmt.Errorf("rust dyad spawn did not create both actor and critic containers")
 	}
 	return actorID, criticID, true, nil
+}
+
+func resolveDyadSpawnExistingContainerNames(dyad string) (string, string, error) {
+	actorName, err := resolveDyadContainerName(dyad, "actor")
+	if err != nil {
+		return "", "", err
+	}
+	criticName, err := resolveDyadContainerName(dyad, "critic")
+	if err != nil {
+		return "", "", err
+	}
+	return actorName, criticName, nil
 }
 
 func cmdDyadPeek(args []string) {
