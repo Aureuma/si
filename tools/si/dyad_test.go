@@ -836,6 +836,33 @@ func TestCmdDyadCleanupDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdDyadLogsDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"dyad\":\"alpha\",\"member\":\"critic\",\"tail\":50,\"logs\":\"critic logs\\n\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output := captureOutputForTest(t, func() {
+		cmdDyadLogs([]string{"--json", "--member", "critic", "--tail", "50", "alpha"})
+	})
+	if !strings.Contains(output, "{\"dyad\":\"alpha\",\"member\":\"critic\",\"tail\":50,\"logs\":\"critic logs\\n\"}") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\nlogs\nalpha\n--member\ncritic\n--tail\n50\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)

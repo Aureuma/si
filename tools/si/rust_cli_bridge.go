@@ -462,14 +462,19 @@ func maybeRunRustDyadCleanup() (string, bool, error) {
 	return output, true, nil
 }
 
-func maybeRunRustDyadLogs(dyad string, member string, tail int) (string, bool, error) {
+func maybeRunRustDyadLogs(dyad string, member string, tail int, jsonOut bool) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil
+	}
+	format := "text"
+	if jsonOut {
+		format = "json"
 	}
 	output, err := runRustCLIText(
 		"dyad", "logs", strings.TrimSpace(dyad),
 		"--member", strings.TrimSpace(member),
 		"--tail", strconv.Itoa(tail),
+		"--format", format,
 	)
 	if err != nil {
 		return "", false, err

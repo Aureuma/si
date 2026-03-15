@@ -1322,6 +1322,14 @@ func cmdDyadLogs(args []string) {
 		}
 		memberVal = selected
 	}
+	if output, delegated, err := maybeRunRustDyadLogs(dyad, memberVal, *tail, *jsonOut); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -1338,16 +1346,9 @@ func cmdDyadLogs(args []string) {
 	if id == "" {
 		fatal(fmt.Errorf("container not found: %s", containerName))
 	}
-	out := ""
-	if output, delegated, err := maybeRunRustDyadLogs(dyad, memberVal, *tail); err != nil {
+	out, err := client.Logs(context.Background(), id, shared.LogsOptions{Tail: *tail})
+	if err != nil {
 		fatal(err)
-	} else if delegated {
-		out = output
-	} else {
-		out, err = client.Logs(context.Background(), id, shared.LogsOptions{Tail: *tail})
-		if err != nil {
-			fatal(err)
-		}
 	}
 	if *jsonOut {
 		printJSON(dyadLogsResult{

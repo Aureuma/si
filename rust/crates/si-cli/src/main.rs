@@ -391,6 +391,8 @@ enum DyadCommand {
         member: String,
         #[arg(long, default_value = "200")]
         tail: String,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
@@ -1651,8 +1653,8 @@ fn main() -> Result<()> {
             DyadCommand::Stop { name, docker_bin } => {
                 run_dyad_container_action(&name, ContainerAction::Stop, docker_bin)?
             }
-            DyadCommand::Logs { name, member, tail, docker_bin } => {
-                run_dyad_container_logs(&name, &member, &tail, docker_bin)?
+            DyadCommand::Logs { name, member, tail, format, docker_bin } => {
+                run_dyad_container_logs(&name, &member, &tail, format, docker_bin)?
             }
             DyadCommand::List { format, docker_bin } => run_dyad_list(format, docker_bin)?,
             DyadCommand::Status { name, format, docker_bin } => {
@@ -2838,6 +2840,7 @@ fn run_dyad_container_logs(
     dyad: &str,
     member: &str,
     tail: &str,
+    format: OutputFormat,
     docker_bin: Option<PathBuf>,
 ) -> Result<()> {
     let docker_program =
@@ -2854,7 +2857,21 @@ fn run_dyad_container_logs(
         let stderr = String::from_utf8_lossy(&output.stderr);
         anyhow::bail!("docker logs failed: {}", stderr.trim());
     }
-    print!("{}", String::from_utf8_lossy(&output.stdout));
+    let logs = String::from_utf8_lossy(&output.stdout).into_owned();
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "dyad": dyad,
+                    "member": member,
+                    "tail": tail.parse::<i32>().unwrap_or(0),
+                    "logs": logs,
+                }))?
+            );
+        }
+        OutputFormat::Text => print!("{logs}"),
+    }
     Ok(())
 }
 
