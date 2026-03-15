@@ -16,7 +16,8 @@ use si_rs_docker::{
     docker_container_exec_command, docker_container_list_command, docker_container_logs_command,
 };
 use si_rs_fort::{
-    PersistedRuntimeAgentState, PersistedSessionState, SessionState,
+    PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome, RefreshSuccess,
+    SessionState, apply_refresh_outcome_to_persisted_session_state,
     classify_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
 };
@@ -420,6 +421,20 @@ enum FortSessionStateCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    RefreshOutcome {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        outcome: FortRefreshOutcomeArg,
+        #[arg(long)]
+        now_unix: i64,
+        #[arg(long)]
+        access_expires_at_unix: Option<i64>,
+        #[arg(long)]
+        refresh_expires_at_unix: Option<i64>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -436,6 +451,13 @@ enum FortRuntimeAgentStateCommand {
         #[arg(long)]
         state_json: String,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum FortRefreshOutcomeArg {
+    Success,
+    Unauthorized,
+    Retryable,
 }
 
 #[derive(Debug, Subcommand)]
@@ -483,6 +505,19 @@ struct PathView {
     root: String,
     settings_file: String,
     codex_profiles_dir: String,
+}
+
+#[derive(Debug, Serialize)]
+struct FortSessionClassificationView {
+    state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FortSessionTransitionView {
+    state: PersistedSessionState,
+    classification: FortSessionClassificationView,
 }
 
 #[derive(Debug, Serialize)]
@@ -996,6 +1031,21 @@ fn main() -> Result<()> {
                 FortSessionStateCommand::Classify { path, now_unix, format } => {
                     show_fort_session_state_classification(path, now_unix, format)?
                 }
+                FortSessionStateCommand::RefreshOutcome {
+                    path,
+                    outcome,
+                    now_unix,
+                    access_expires_at_unix,
+                    refresh_expires_at_unix,
+                    format,
+                } => show_fort_session_state_refresh_outcome(
+                    path,
+                    outcome,
+                    now_unix,
+                    access_expires_at_unix,
+                    refresh_expires_at_unix,
+                    format,
+                )?,
             },
             FortCommand::RuntimeAgentState { command } => match command {
                 FortRuntimeAgentStateCommand::Show { path, format } => {
@@ -1166,6 +1216,82 @@ fn show_fort_session_state_classification(
     }
 
     Ok(())
+}
+
+fn show_fort_session_state_refresh_outcome(
+    path: PathBuf,
+    outcome: FortRefreshOutcomeArg,
+    now_unix: i64,
+    access_expires_at_unix: Option<i64>,
+    refresh_expires_at_unix: Option<i64>,
+    format: OutputFormat,
+) -> Result<()> {
+    let state = load_persisted_session_state(path)?;
+    let transition = apply_refresh_outcome_to_persisted_session_state(
+        &state,
+        build_fort_refresh_outcome(outcome, access_expires_at_unix, refresh_expires_at_unix)?,
+        now_unix,
+    )?;
+    let view = FortSessionTransitionView {
+        state: transition.state,
+        classification: fort_session_classification_view(&transition.classification),
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            render_fort_session_state_text(&view.state);
+            println!("classification.state={}", view.classification.state);
+            if let Some(reason) = view.classification.reason {
+                println!("classification.reason={reason}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn build_fort_refresh_outcome(
+    outcome: FortRefreshOutcomeArg,
+    access_expires_at_unix: Option<i64>,
+    refresh_expires_at_unix: Option<i64>,
+) -> Result<RefreshOutcome> {
+    Ok(match outcome {
+        FortRefreshOutcomeArg::Success => RefreshOutcome::Success(RefreshSuccess {
+            access_expires_at_unix: access_expires_at_unix.ok_or_else(|| {
+                anyhow::anyhow!("--access-expires-at-unix is required for success outcomes")
+            })?,
+            refresh_expires_at_unix,
+        }),
+        FortRefreshOutcomeArg::Unauthorized => RefreshOutcome::Unauthorized,
+        FortRefreshOutcomeArg::Retryable => RefreshOutcome::Retryable,
+    })
+}
+
+fn fort_session_classification_view(
+    classification: &SessionState,
+) -> FortSessionClassificationView {
+    match classification {
+        SessionState::BootstrapRequired => {
+            FortSessionClassificationView { state: "bootstrap_required".to_owned(), reason: None }
+        }
+        SessionState::Resumable(_) => {
+            FortSessionClassificationView { state: "resumable".to_owned(), reason: None }
+        }
+        SessionState::Refreshing(_) => {
+            FortSessionClassificationView { state: "refreshing".to_owned(), reason: None }
+        }
+        SessionState::Revoked { reason, .. } => FortSessionClassificationView {
+            state: "revoked".to_owned(),
+            reason: Some(format!("{reason:?}")),
+        },
+        SessionState::TeardownPending(_) => {
+            FortSessionClassificationView { state: "teardown_pending".to_owned(), reason: None }
+        }
+        SessionState::Closed => {
+            FortSessionClassificationView { state: "closed".to_owned(), reason: None }
+        }
+    }
 }
 
 fn show_vault_trust_lookup(
