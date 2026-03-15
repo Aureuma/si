@@ -496,6 +496,21 @@ func maybeBuildRustCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts,
 	return &artifacts, true, nil
 }
 
+func maybeRunRustCodexRemove(name string, removeVolumes bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	args := []string{"codex", "remove", strings.TrimSpace(name)}
+	if removeVolumes {
+		args = append(args, "--volumes")
+	}
+	output, err := runRustCLIText(args...)
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(output), true, nil
+}
+
 func maybeRunRustCodexContainerAction(action string, name string) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil

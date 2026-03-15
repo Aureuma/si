@@ -556,6 +556,12 @@ pub enum ContainerListError {
     MissingFormat,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum VolumeRemoveError {
+    #[error("volume name is required")]
+    MissingVolumeName,
+}
+
 pub fn docker_binary_path() -> &'static Path {
     Path::new("docker")
 }
@@ -608,6 +614,22 @@ pub fn docker_container_remove_command(
         command = command.arg("-f");
     }
     Ok(command.arg(container_name))
+}
+
+pub fn docker_volume_remove_command(
+    docker_program: impl Into<String>,
+    volume_name: impl Into<String>,
+    force: bool,
+) -> Result<CommandSpec, VolumeRemoveError> {
+    let volume_name = volume_name.into();
+    if volume_name.trim().is_empty() {
+        return Err(VolumeRemoveError::MissingVolumeName);
+    }
+    let mut command = CommandSpec::new(docker_program).args(["volume".to_owned(), "rm".to_owned()]);
+    if force {
+        command = command.arg("-f");
+    }
+    Ok(command.arg(volume_name))
 }
 
 pub fn docker_container_exec_command(
@@ -866,6 +888,23 @@ mod tests {
 
         assert_eq!(command.program(), "docker");
         assert_eq!(command.args_slice(), ["rm", "-f", "si-codex-ferma"]);
+    }
+
+    #[test]
+    fn builds_docker_volume_remove_command() {
+        let command =
+            docker_volume_remove_command("docker", "si-codex-ferma", true).expect("volume rm");
+
+        assert_eq!(command.program(), "docker");
+        assert_eq!(command.args_slice(), ["volume", "rm", "-f", "si-codex-ferma"]);
+    }
+
+    #[test]
+    fn rejects_empty_volume_name_for_volume_remove() {
+        let err =
+            docker_volume_remove_command("docker", "   ", false).expect_err("missing volume name");
+
+        assert_eq!(err, VolumeRemoveError::MissingVolumeName);
     }
 
     #[test]

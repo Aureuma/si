@@ -1239,6 +1239,38 @@ fn codex_remove_plan_json_returns_container_and_volume_names() {
 }
 
 #[test]
+fn codex_remove_executes_container_and_volume_removal() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{}'\nprintf '%s\\n' '--' >> '{}'\nprintf '%s\\n' 'removed'\n",
+            args_path.display(),
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "remove", "ferma", "--volumes", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("removed"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert!(args.contains("rm"));
+    assert!(args.contains("si-codex-ferma"));
+    assert!(args.contains("volume"));
+    assert!(args.contains("si-gh-ferma"));
+}
+
+#[test]
 fn codex_start_executes_docker_start_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");

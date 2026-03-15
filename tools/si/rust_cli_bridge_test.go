@@ -1370,3 +1370,34 @@ func TestMaybeBuildRustCodexRemoveArtifactsDelegatesAndParsesJSON(t *testing.T) 
 		t.Fatalf("expected codex remove-plan invocation, got %q", string(argsData))
 	}
 }
+
+func TestMaybeRunRustCodexRemoveDelegatesAndReturnsOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'removed'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustCodexRemove("ferma", true)
+	if err != nil {
+		t.Fatalf("maybeRunRustCodexRemove: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected codex remove to delegate to Rust")
+	}
+	if strings.TrimSpace(output) != "removed" {
+		t.Fatalf("unexpected output %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nremove\nferma\n--volumes" {
+		t.Fatalf("unexpected Rust CLI args %q", string(argsData))
+	}
+}

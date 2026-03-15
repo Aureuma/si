@@ -15,7 +15,7 @@ use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
     docker_container_exec_command, docker_container_list_command,
     docker_container_list_with_format_command, docker_container_logs_command,
-    docker_container_remove_command,
+    docker_container_remove_command, docker_volume_remove_command,
 };
 use si_rs_dyad::{
     SpawnRequest as DyadSpawnRequest, build_container_specs as build_dyad_container_specs,
@@ -621,6 +621,13 @@ enum CodexCommand {
         name: String,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
+    },
+    Remove {
+        name: String,
+        #[arg(long, default_value_t = false)]
+        volumes: bool,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
     },
     Start {
         name: String,
@@ -1693,6 +1700,9 @@ fn main() -> Result<()> {
                 docker_bin,
             )?,
             CodexCommand::RemovePlan { name, format } => show_codex_remove_plan(&name, format)?,
+            CodexCommand::Remove { name, volumes, docker_bin } => {
+                run_codex_remove(&name, volumes, docker_bin)?
+            }
             CodexCommand::Start { name, docker_bin } => {
                 run_codex_container_action(&name, ContainerAction::Start, docker_bin)?
             }
@@ -3358,6 +3368,39 @@ fn show_codex_remove_plan(name: &str, format: OutputFormat) -> Result<()> {
             println!("slug={}", view.slug);
             println!("codex_volume={}", view.codex_volume);
             println!("gh_volume={}", view.gh_volume);
+        }
+    }
+    Ok(())
+}
+
+fn run_codex_remove(name: &str, volumes: bool, docker_bin: Option<PathBuf>) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let remove_container = docker_container_remove_command(
+        docker_program.display().to_string(),
+        artifacts.container_name.clone(),
+        true,
+    )?;
+    let output = ProcessRunner.run(&remove_container, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker rm failed: {}", stderr.trim());
+    }
+    print!("{}", String::from_utf8_lossy(&output.stdout));
+    if volumes {
+        for volume_name in [&artifacts.codex_volume, &artifacts.gh_volume] {
+            let remove_volume = docker_volume_remove_command(
+                docker_program.display().to_string(),
+                volume_name.clone(),
+                true,
+            )?;
+            let output = ProcessRunner.run(&remove_volume, &RunOptions::default())?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                anyhow::bail!("docker volume rm failed: {}", stderr.trim());
+            }
+            print!("{}", String::from_utf8_lossy(&output.stdout));
         }
     }
     Ok(())
