@@ -565,6 +565,39 @@ fn dyad_logs_executes_docker_logs_for_selected_member() {
 }
 
 #[test]
+fn dyad_logs_json_wraps_selected_member_output() {
+    let script_dir = tempdir().expect("tempdir");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(&docker_bin, "#!/bin/sh\nprintf '%s\\n' 'critic logs'\n");
+
+    let output = cargo_bin()
+        .args([
+            "dyad",
+            "logs",
+            "alpha",
+            "--member",
+            "critic",
+            "--tail",
+            "50",
+            "--format",
+            "json",
+            "--docker-bin",
+        ])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["dyad"], "alpha");
+    assert_eq!(parsed["member"], "critic");
+    assert_eq!(parsed["tail"], 50);
+    assert_eq!(parsed["logs"], "critic logs\n");
+}
+
+#[test]
 fn dyad_list_json_groups_actor_and_critic_rows() {
     let script_dir = tempdir().expect("tempdir");
     let docker_bin = script_dir.path().join("docker");

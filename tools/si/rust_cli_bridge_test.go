@@ -919,7 +919,7 @@ func TestMaybeRunRustDyadLogsDelegatesAndReturnsOutput(t *testing.T) {
 	t.Setenv(siRustCLIBinEnv, scriptPath)
 	t.Setenv(siExperimentalRustCLIEnv, "")
 
-	output, delegated, err := maybeRunRustDyadLogs("alpha", "critic", 42)
+	output, delegated, err := maybeRunRustDyadLogs("alpha", "critic", 42, true)
 	if err != nil {
 		t.Fatalf("maybeRunRustDyadLogs: %v", err)
 	}
@@ -933,7 +933,7 @@ func TestMaybeRunRustDyadLogsDelegatesAndReturnsOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read args file: %v", err)
 	}
-	if strings.TrimSpace(string(argsData)) != "dyad\nlogs\nalpha\n--member\ncritic\n--tail\n42" {
+	if strings.TrimSpace(string(argsData)) != "dyad\nlogs\nalpha\n--member\ncritic\n--tail\n42\n--format\njson" {
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }
