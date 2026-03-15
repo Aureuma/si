@@ -2691,16 +2691,20 @@ func cmdCodexStart(args []string) {
 		return
 	}
 	name := args[0]
-	containerName, err := resolveCodexContainerName(name)
-	if err != nil {
-		fatal(err)
-	}
 	if _, delegated, err := maybeRunRustCodexContainerAction("start", name); err != nil {
 		fatal(err)
 	} else if !delegated {
+		containerName, err := resolveCodexContainerName(name)
+		if err != nil {
+			fatal(err)
+		}
 		if err := execDockerCLI("start", containerName); err != nil {
 			fatal(err)
 		}
+	}
+	containerName, err := resolveCodexContainerName(name)
+	if err != nil {
+		fatal(err)
 	}
 	client, err := shared.NewClient()
 	if err != nil {
