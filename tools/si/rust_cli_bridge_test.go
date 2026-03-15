@@ -785,6 +785,36 @@ func TestMaybeReadRustDyadStatusDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeReadRustDyadPeekPlanDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"dyad\":\"alpha\",\"member\":\"critic\",\"actor_container_name\":\"si-actor-alpha\",\"critic_container_name\":\"si-critic-alpha\",\"actor_session_name\":\"si-dyad-alpha-actor\",\"critic_session_name\":\"si-dyad-alpha-critic\",\"peek_session_name\":\"peek-main\",\"actor_attach_command\":\"actor-cmd\",\"critic_attach_command\":\"critic-cmd\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	plan, delegated, err := maybeReadRustDyadPeekPlan("alpha", "critic", "peek-main")
+	if err != nil {
+		t.Fatalf("maybeReadRustDyadPeekPlan: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected dyad peek plan to delegate to Rust")
+	}
+	if plan == nil || plan.PeekSessionName != "peek-main" || plan.CriticAttachCommand != "critic-cmd" {
+		t.Fatalf("unexpected plan %+v", plan)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\npeek-plan\nalpha\n--member\ncritic\n--format\njson\n--session\npeek-main" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeApplyRustFortUnauthorizedRefreshOutcomeDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

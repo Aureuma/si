@@ -19,7 +19,7 @@ use si_rs_docker::{
 };
 use si_rs_dyad::{
     SpawnRequest as DyadSpawnRequest, build_container_specs as build_dyad_container_specs,
-    build_spawn_plan as build_dyad_spawn_plan,
+    build_peek_plan as build_dyad_peek_plan, build_spawn_plan as build_dyad_spawn_plan,
 };
 use si_rs_fort::{
     PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome, RefreshSuccess,
@@ -391,6 +391,15 @@ enum DyadCommand {
         format: OutputFormat,
         #[arg(long)]
         docker_bin: Option<PathBuf>,
+    },
+    PeekPlan {
+        name: String,
+        #[arg(long, default_value = "both")]
+        member: String,
+        #[arg(long)]
+        session: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
     },
     Restart {
         name: String,
@@ -938,6 +947,19 @@ struct DyadStatusView {
 }
 
 #[derive(Debug, Serialize)]
+struct DyadPeekPlanView {
+    dyad: String,
+    member: String,
+    actor_container_name: String,
+    critic_container_name: String,
+    actor_session_name: String,
+    critic_session_name: String,
+    peek_session_name: String,
+    actor_attach_command: String,
+    critic_attach_command: String,
+}
+
+#[derive(Debug, Serialize)]
 struct DyadContainerStatusView {
     name: String,
     id: String,
@@ -1466,6 +1488,9 @@ fn main() -> Result<()> {
             DyadCommand::List { format, docker_bin } => run_dyad_list(format, docker_bin)?,
             DyadCommand::Status { name, format, docker_bin } => {
                 run_dyad_status(&name, format, docker_bin)?
+            }
+            DyadCommand::PeekPlan { name, member, session, format } => {
+                run_dyad_peek_plan(&name, &member, session, format)?
             }
             DyadCommand::Restart { name, docker_bin } => {
                 run_dyad_container_action(&name, ContainerAction::Restart, docker_bin)?
@@ -2667,6 +2692,39 @@ fn run_dyad_status(name: &str, format: OutputFormat, docker_bin: Option<PathBuf>
                 "critic={}",
                 view.critic.as_ref().map(|item| item.status.as_str()).unwrap_or("(none)")
             );
+        }
+    }
+    Ok(())
+}
+
+fn run_dyad_peek_plan(
+    name: &str,
+    member: &str,
+    session: Option<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let plan = build_dyad_peek_plan(name, member, session.as_deref())?;
+    let view = DyadPeekPlanView {
+        dyad: plan.dyad,
+        member: plan.member,
+        actor_container_name: plan.actor_container_name,
+        critic_container_name: plan.critic_container_name,
+        actor_session_name: plan.actor_session_name,
+        critic_session_name: plan.critic_session_name,
+        peek_session_name: plan.peek_session_name,
+        actor_attach_command: plan.actor_attach_command,
+        critic_attach_command: plan.critic_attach_command,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("dyad={}", view.dyad);
+            println!("member={}", view.member);
+            println!("peek_session_name={}", view.peek_session_name);
+            println!("actor_container_name={}", view.actor_container_name);
+            println!("critic_container_name={}", view.critic_container_name);
+            println!("actor_session_name={}", view.actor_session_name);
+            println!("critic_session_name={}", view.critic_session_name);
         }
     }
     Ok(())

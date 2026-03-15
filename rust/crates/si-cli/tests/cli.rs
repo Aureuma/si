@@ -450,6 +450,62 @@ fn dyad_status_json_reports_member_states() {
 }
 
 #[test]
+fn dyad_peek_plan_json_defaults_session_and_attach_commands() {
+    let output = cargo_bin()
+        .args(["dyad", "peek-plan", "alpha", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["dyad"], "alpha");
+    assert_eq!(parsed["member"], "both");
+    assert_eq!(parsed["actor_container_name"], "si-actor-alpha");
+    assert_eq!(parsed["critic_container_name"], "si-critic-alpha");
+    assert_eq!(parsed["peek_session_name"], "si-dyad-peek-alpha");
+    assert!(
+        parsed["actor_attach_command"]
+            .as_str()
+            .unwrap_or("")
+            .contains("docker exec si-actor-alpha tmux has-session -t si-dyad-alpha-actor")
+    );
+    assert!(
+        parsed["critic_attach_command"]
+            .as_str()
+            .unwrap_or("")
+            .contains("docker exec -it si-critic-alpha tmux attach -t si-dyad-alpha-critic")
+    );
+}
+
+#[test]
+fn dyad_peek_plan_json_honors_member_and_session_override() {
+    let output = cargo_bin()
+        .args([
+            "dyad",
+            "peek-plan",
+            "alpha",
+            "--member",
+            "critic",
+            "--session",
+            "peek-main",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["member"], "critic");
+    assert_eq!(parsed["peek_session_name"], "peek-main");
+    assert_eq!(parsed["critic_session_name"], "si-dyad-alpha-critic");
+}
+
+#[test]
 fn dyad_restart_executes_actor_and_critic_docker_restart() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
