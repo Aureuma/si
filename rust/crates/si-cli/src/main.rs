@@ -1,12 +1,14 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Serialize;
+use si_rs_codex::{SpawnRequest, build_spawn_plan};
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
 };
 use si_rs_config::paths::SiPaths;
 use si_rs_config::settings::Settings;
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
+use si_rs_runtime::HostMountContext;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -36,6 +38,10 @@ enum Command {
     Providers {
         #[command(subcommand)]
         command: ProvidersCommand,
+    },
+    Codex {
+        #[command(subcommand)]
+        command: Box<CodexCommand>,
     },
     Paths {
         #[command(subcommand)]
@@ -72,6 +78,52 @@ enum ProvidersCommand {
         #[arg(long)]
         json: bool,
         #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CodexCommand {
+    SpawnPlan {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        workdir: Option<String>,
+        #[arg(long)]
+        codex_volume: Option<String>,
+        #[arg(long)]
+        skills_volume: Option<String>,
+        #[arg(long)]
+        gh_volume: Option<String>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        gh_pat: Option<String>,
+        #[arg(long, default_value_t = true)]
+        docker_socket: bool,
+        #[arg(long, default_value_t = true)]
+        detach: bool,
+        #[arg(long, default_value_t = false)]
+        clean_slate: bool,
+        #[arg(long)]
+        image: Option<String>,
+        #[arg(long)]
+        network: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        ssh_auth_sock: Option<PathBuf>,
+        #[arg(long)]
+        vault_env_file: Option<PathBuf>,
+        #[arg(long, default_value_t = true)]
+        include_host_si: bool,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
 }
@@ -168,6 +220,33 @@ struct ProviderCapabilitiesView {
     supports_raw: bool,
 }
 
+#[derive(Debug, Serialize)]
+struct CodexSpawnPlanView {
+    name: String,
+    container_name: String,
+    image: String,
+    network_name: String,
+    workspace_host: String,
+    workspace_primary_target: String,
+    workspace_mirror_target: String,
+    workdir: String,
+    codex_volume: String,
+    skills_volume: String,
+    gh_volume: String,
+    docker_socket: bool,
+    clean_slate: bool,
+    detach: bool,
+    env: Vec<String>,
+    mounts: Vec<CodexBindMountView>,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexBindMountView {
+    source: String,
+    target: String,
+    read_only: bool,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -189,6 +268,51 @@ fn main() -> Result<()> {
                 let format = if json { OutputFormat::Json } else { format };
                 show_provider_characteristics(provider.as_deref(), format)?
             }
+        },
+        Command::Codex { command } => match *command {
+            CodexCommand::SpawnPlan {
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                format,
+            } => show_codex_spawn_plan(
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                format,
+            )?,
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -364,6 +488,106 @@ fn show_provider_characteristics(provider: Option<&str>, format: OutputFormat) -
                     println!("  public_probe=-");
                 }
             }
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_codex_spawn_plan(
+    name: Option<String>,
+    profile_id: Option<String>,
+    workspace: PathBuf,
+    workdir: Option<String>,
+    codex_volume: Option<String>,
+    skills_volume: Option<String>,
+    gh_volume: Option<String>,
+    repo: Option<String>,
+    gh_pat: Option<String>,
+    docker_socket: bool,
+    detach: bool,
+    clean_slate: bool,
+    image: Option<String>,
+    network: Option<String>,
+    home: Option<PathBuf>,
+    ssh_auth_sock: Option<PathBuf>,
+    vault_env_file: Option<PathBuf>,
+    include_host_si: bool,
+    env: Vec<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let host_ctx = HostMountContext { home_dir: home, ssh_auth_sock };
+    let plan = build_spawn_plan(
+        &SpawnRequest {
+            name,
+            profile_id,
+            image,
+            network_name: network,
+            workspace_host: workspace,
+            workdir,
+            codex_volume,
+            skills_volume,
+            gh_volume,
+            repo,
+            gh_pat,
+            docker_socket,
+            clean_slate,
+            detach,
+            container_home: None,
+            host_vault_env_file: vault_env_file,
+            include_host_si,
+            additional_env: env,
+        },
+        &host_ctx,
+    )?;
+
+    let view = CodexSpawnPlanView {
+        name: plan.name,
+        container_name: plan.container_name,
+        image: plan.image,
+        network_name: plan.network_name,
+        workspace_host: plan.workspace_host.display().to_string(),
+        workspace_primary_target: plan.workspace_primary_target.display().to_string(),
+        workspace_mirror_target: plan.workspace_mirror_target.display().to_string(),
+        workdir: plan.workdir.display().to_string(),
+        codex_volume: plan.codex_volume,
+        skills_volume: plan.skills_volume,
+        gh_volume: plan.gh_volume,
+        docker_socket: plan.docker_socket,
+        clean_slate: plan.clean_slate,
+        detach: plan.detach,
+        env: plan.env,
+        mounts: plan
+            .mounts
+            .into_iter()
+            .map(|mount| CodexBindMountView {
+                source: mount.source().display().to_string(),
+                target: mount.target().display().to_string(),
+                read_only: mount.is_read_only(),
+            })
+            .collect(),
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("name={}", view.name);
+            println!("container_name={}", view.container_name);
+            println!("image={}", view.image);
+            println!("network_name={}", view.network_name);
+            println!("workspace_host={}", view.workspace_host);
+            println!("workspace_primary_target={}", view.workspace_primary_target);
+            println!("workspace_mirror_target={}", view.workspace_mirror_target);
+            println!("workdir={}", view.workdir);
+            println!("codex_volume={}", view.codex_volume);
+            println!("skills_volume={}", view.skills_volume);
+            println!("gh_volume={}", view.gh_volume);
+            println!("docker_socket={}", view.docker_socket);
+            println!("clean_slate={}", view.clean_slate);
+            println!("detach={}", view.detach);
+            println!("env={}", view.env.join(","));
+            println!("mounts={}", view.mounts.len());
         }
     }
 

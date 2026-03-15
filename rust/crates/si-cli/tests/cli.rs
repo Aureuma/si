@@ -201,6 +201,58 @@ codex_profiles_dir = "~/state/si/profiles"
     assert_eq!(parsed["codex_profiles_dir"], path_string(home.path().join("state/si/profiles")));
 }
 
+#[test]
+fn codex_spawn_plan_json_defaults_profile_name_and_workdir() {
+    let workspace = tempdir().expect("tempdir");
+    let output = cargo_bin()
+        .args(["codex", "spawn-plan", "--profile-id", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["name"], "ferma");
+    assert_eq!(parsed["container_name"], "si-codex-ferma");
+    assert_eq!(parsed["workspace_mirror_target"], path_string(workspace.path()));
+    assert_eq!(parsed["workdir"], path_string(workspace.path()));
+    assert_eq!(parsed["codex_volume"], "si-codex-ferma");
+    assert_eq!(parsed["skills_volume"], "si-codex-skills");
+    assert_eq!(parsed["gh_volume"], "si-gh-ferma");
+}
+
+#[test]
+fn codex_spawn_plan_json_includes_repo_pat_env_and_host_mounts() {
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    let workspace = tempdir().expect("tempdir");
+    let output = cargo_bin()
+        .args(["codex", "spawn-plan", "--name", "darmstada", "--workspace"])
+        .arg(workspace.path())
+        .args(["--repo", "acme/repo", "--gh-pat", "token-123", "--home"])
+        .arg(home.path())
+        .args(["--env", "EXTRA=1"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let env = parsed["env"].as_array().expect("env array");
+    assert!(env.iter().any(|value| value == "SI_REPO=acme/repo"));
+    assert!(env.iter().any(|value| value == "SI_GH_PAT=token-123"));
+    assert!(env.iter().any(|value| value == "GH_TOKEN=token-123"));
+    assert!(env.iter().any(|value| value == "GITHUB_TOKEN=token-123"));
+    assert!(env.iter().any(|value| value == "EXTRA=1"));
+
+    let mounts = parsed["mounts"].as_array().expect("mounts array");
+    assert!(mounts.iter().any(|mount| mount["target"] == "/workspace"));
+    assert!(mounts.iter().any(|mount| mount["target"] == "/home/si/.si"));
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }
