@@ -1179,7 +1179,7 @@ func fortAPIError(body map[string]any) string {
 	return string(payload)
 }
 
-func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState) {
+func fortSessionPathsFromEnv() (string, string, string, *codexFortBootstrap) {
 	profileID := strings.TrimSpace(os.Getenv("SI_CODEX_PROFILE_ID"))
 	if !isValidSlug(profileID) {
 		profileID = ""
@@ -1189,7 +1189,7 @@ func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState)
 	defaultTokenPath := strings.TrimSpace(os.Getenv("FORT_TOKEN_PATH"))
 	defaultRefreshPath := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN_PATH"))
 	sessionPath := ""
-	state := fortProfileSessionState{}
+	var boot *codexFortBootstrap
 	if profileID != "" && home != "" {
 		base := filepath.Join(home, ".si", "codex", "profiles", profileID, fortProfileStateDirName)
 		if defaultTokenPath == "" {
@@ -1199,16 +1199,43 @@ func fortSessionPathsFromEnv() (string, string, string, fortProfileSessionState)
 			defaultRefreshPath = filepath.Join(base, fortProfileRefreshTokenFileName)
 		}
 		sessionPath = filepath.Join(base, fortProfileSessionStateFileName)
-		if loaded, err := loadFortProfileSessionState(sessionPath); err == nil {
-			state = loaded
+		if loaded, delegated, err := maybeLoadRustCodexFortBootstrap(
+			sessionPath,
+			profileID,
+			defaultTokenPath,
+			defaultRefreshPath,
+			filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileAccessTokenFileName)),
+			filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileRefreshTokenFileName)),
+		); err == nil && delegated && loaded != nil {
+			boot = loaded
+		} else if loadedState, err := loadFortProfileSessionState(sessionPath); err == nil {
+			boot = &codexFortBootstrap{
+				ProfileID:                 strings.TrimSpace(loadedState.ProfileID),
+				AgentID:                   strings.TrimSpace(loadedState.AgentID),
+				SessionID:                 strings.TrimSpace(loadedState.SessionID),
+				HostURL:                   strings.TrimSpace(loadedState.Host),
+				ContainerHostURL:          strings.TrimSpace(loadedState.ContainerHost),
+				AccessTokenHostPath:       defaultTokenPath,
+				RefreshTokenHostPath:      defaultRefreshPath,
+				AccessTokenContainerPath:  filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileAccessTokenFileName)),
+				RefreshTokenContainerPath: filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileRefreshTokenFileName)),
+			}
 		}
 	}
-	return defaultTokenPath, defaultRefreshPath, sessionPath, state
+	return defaultTokenPath, defaultRefreshPath, sessionPath, boot
 }
 
 func prepareFortRuntimeAuth(rest []string) (string, error) {
-	tokenPath, refreshPath, _, state := fortSessionPathsFromEnv()
+	tokenPath, refreshPath, _, boot := fortSessionPathsFromEnv()
 	settings := loadSettingsOrDefault()
+	if boot != nil {
+		if strings.TrimSpace(os.Getenv("FORT_AGENT_ID")) == "" && strings.TrimSpace(boot.AgentID) != "" {
+			_ = os.Setenv("FORT_AGENT_ID", strings.TrimSpace(boot.AgentID))
+		}
+		if strings.TrimSpace(os.Getenv("FORT_PROFILE_ID")) == "" && strings.TrimSpace(boot.ProfileID) != "" {
+			_ = os.Setenv("FORT_PROFILE_ID", strings.TrimSpace(boot.ProfileID))
+		}
+	}
 	if tokenPath != "" {
 		_ = os.Setenv("FORT_TOKEN_PATH", tokenPath)
 	}
@@ -1216,9 +1243,12 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 		_ = os.Setenv("FORT_REFRESH_TOKEN_PATH", refreshPath)
 	}
 	if strings.TrimSpace(os.Getenv("FORT_HOST")) == "" {
-		host := strings.TrimSpace(state.ContainerHost)
-		if host == "" {
-			host = strings.TrimSpace(state.Host)
+		host := ""
+		if boot != nil {
+			host = strings.TrimSpace(boot.ContainerHostURL)
+			if host == "" {
+				host = strings.TrimSpace(boot.HostURL)
+			}
 		}
 		if host == "" {
 			host = strings.TrimSpace(settings.Fort.ContainerHost)
@@ -1237,7 +1267,7 @@ func prepareFortRuntimeAuth(rest []string) (string, error) {
 		return accessToken, nil
 	}
 	_ = refreshPath
-	_ = state
+	_ = boot
 	return accessToken, nil
 }
 
