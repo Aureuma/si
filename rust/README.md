@@ -10,6 +10,7 @@ Current scope:
 - typed process execution foundations with capture, cwd/env overrides, and timeout handling
 - typed Docker run specs with early bind-mount validation
 - shared runtime core-mount planning for codex/dyad containers
+- initial codex spawn planning for names, volumes, env, workdir, and mount assembly
 - a small Rust CLI entrypoint for read-only diagnostics
 
 Current entrypoint:

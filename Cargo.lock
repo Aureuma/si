@@ -469,6 +469,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "si-rs-codex"
+version = "0.54.0"
+dependencies = [
+ "si-rs-docker",
+ "si-rs-runtime",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "si-rs-command-manifest"
 version = "0.54.0"
 dependencies = [

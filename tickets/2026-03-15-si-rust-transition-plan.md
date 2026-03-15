@@ -89,9 +89,9 @@ Planned follow-on crates:
 | 1. Rust workspace bootstrap | completed | Rust workspace builds/tests in repo without changing current behavior | workspace files, first crates, CI lane, version/path foundations | `cargo fmt`, `cargo clippy`, `cargo test`, existing Go build/tests still pass |
 | 2. Shared config/runtime foundations | in_progress | Rust becomes source for settings/path/process primitives | settings loader, path expansion, command manifest, process abstraction | golden tests against Go settings/path behavior, cross-platform path tests |
 | 3. Read-only command migration | in_progress | safe informational surfaces start moving to Rust | `version`, `help`, `providers health`, config inspection, diagnostics | CLI snapshots, golden stdout/exit code parity, smoke tests in CI |
-| 4. Runtime substrate migration | planned | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
+| 4. Runtime substrate migration | in_progress | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
 | 5. Security/runtime migration | planned | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
-| 6. Codex/dyad lifecycle migration | planned | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
+| 6. Codex/dyad lifecycle migration | in_progress | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
 | 7. Provider migration | planned | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
 | 8. Release/install migration | planned | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
 | 9. Primary binary cutover | planned | Rust binary becomes default `si` | Go compatibility shell, packaging switch, release notes, rollback plan | full CI green, release candidate soak, Homebrew/npm/manual install verification |
@@ -192,7 +192,7 @@ Progress notes:
 
 ### Phase 4: Runtime substrate migration
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -209,6 +209,10 @@ Testing:
 Exit criteria:
 
 - codex/dyad implementations can depend on Rust runtime primitives without re-shelling everything.
+
+Progress notes:
+
+- completed: initial `si-runtime` crate for shared codex/dyad core mount planning on top of Rust Docker primitives, with translated Go mount behavior coverage
 
 ### Phase 5: Security/runtime migration
 
@@ -238,7 +242,7 @@ Exit criteria:
 
 ### Phase 6: Codex/dyad lifecycle migration
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -256,6 +260,10 @@ Testing:
 Exit criteria:
 
 - Rust runtime can replace the Go path for at least one full lifecycle end to end.
+
+Progress notes:
+
+- completed: initial `si-codex` crate for deterministic spawn planning (profile/name normalization, workspace/workdir defaults, volume naming, env assembly, and runtime mount consumption)
 
 ### Phase 7: Provider migration
 
