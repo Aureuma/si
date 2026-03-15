@@ -119,12 +119,16 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 			return 0, fmt.Errorf("fort session state is %s", reason)
 		}
 	}
-	hostURL := strings.TrimSpace(state.Host)
+	boot, err := loadCodexFortBootstrapFromPaths(strings.TrimSpace(profile.ID), paths)
+	if err != nil {
+		return 0, err
+	}
+	hostURL := strings.TrimSpace(boot.HostURL)
 	if hostURL == "" {
-		return 0, fmt.Errorf("fort host is missing in session state")
+		return 0, fmt.Errorf("fort host is missing in bootstrap view")
 	}
 	if err := fortValidateHostedURL(hostURL); err != nil {
-		return 0, fmt.Errorf("invalid fort host in session state %q: %w", hostURL, err)
+		return 0, fmt.Errorf("invalid fort host in bootstrap view %q: %w", hostURL, err)
 	}
 
 	if accessToken, err := readStrictSecretFile(paths.AccessTokenHostPath); err == nil {
@@ -374,7 +378,11 @@ func closeCodexProfileFortSessionLocked(paths fortProfilePaths) error {
 				return fmt.Errorf("unexpected rust fort teardown classification: %s", stateValue)
 			}
 		}
-		hostURL := strings.TrimSpace(state.Host)
+		boot, bootErr := loadCodexFortBootstrapFromPaths(strings.TrimSpace(state.ProfileID), paths)
+		if bootErr != nil {
+			return bootErr
+		}
+		hostURL := strings.TrimSpace(boot.HostURL)
 		if hostURL != "" {
 			if refreshToken, refreshErr := readStrictSecretFile(paths.RefreshTokenHostPath); refreshErr == nil {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

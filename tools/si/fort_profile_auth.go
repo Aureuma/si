@@ -311,9 +311,13 @@ func loadCodexFortBootstrapFromProfileState(profile codexProfile) (codexFortBoot
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
+	return loadCodexFortBootstrapFromPaths(strings.TrimSpace(profile.ID), paths)
+}
+
+func loadCodexFortBootstrapFromPaths(profileID string, paths fortProfilePaths) (codexFortBootstrap, error) {
 	if boot, delegated, err := maybeLoadRustCodexFortBootstrap(
 		paths.SessionStateHostPath,
-		strings.TrimSpace(profile.ID),
+		strings.TrimSpace(profileID),
 		paths.AccessTokenHostPath,
 		paths.RefreshTokenHostPath,
 		paths.AccessTokenContainerPath,
@@ -327,7 +331,7 @@ func loadCodexFortBootstrapFromProfileState(profile codexProfile) (codexFortBoot
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
-	profileID := strings.TrimSpace(profile.ID)
+	profileID = strings.TrimSpace(profileID)
 	if profileID == "" {
 		profileID = strings.TrimSpace(state.ProfileID)
 	}
