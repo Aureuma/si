@@ -525,6 +525,12 @@ pub enum ContainerExecError {
     InvalidWorkingDir { path: PathBuf },
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ContainerListError {
+    #[error("container label filter is required")]
+    MissingLabelFilter,
+}
+
 pub fn docker_binary_path() -> &'static Path {
     Path::new("docker")
 }
@@ -602,6 +608,27 @@ pub fn docker_container_exec_command(
     }
     command = command.arg(spec.container_name.clone());
     Ok(command.args(spec.command.clone()))
+}
+
+pub fn docker_container_list_command(
+    docker_program: impl Into<String>,
+    label_filter: impl Into<String>,
+    all: bool,
+) -> Result<CommandSpec, ContainerListError> {
+    let label_filter = label_filter.into();
+    if label_filter.trim().is_empty() {
+        return Err(ContainerListError::MissingLabelFilter);
+    }
+    let mut command = CommandSpec::new(docker_program).arg("ps");
+    if all {
+        command = command.arg("--all");
+    }
+    Ok(command.args([
+        "--filter".to_owned(),
+        format!("label={}", label_filter.trim()),
+        "--format".to_owned(),
+        "{{.Names}}\t{{.State}}\t{{.Image}}".to_owned(),
+    ]))
 }
 
 #[cfg(test)]
@@ -805,5 +832,23 @@ mod tests {
                 .expect_err("missing command");
 
         assert_eq!(err, ContainerExecError::MissingCommand);
+    }
+
+    #[test]
+    fn builds_docker_list_command() {
+        let command = docker_container_list_command("docker", "si.component=codex", true)
+            .expect("list command");
+
+        assert_eq!(
+            command.args_slice(),
+            [
+                "ps",
+                "--all",
+                "--filter",
+                "label=si.component=codex",
+                "--format",
+                "{{.Names}}\t{{.State}}\t{{.Image}}",
+            ]
+        );
     }
 }

@@ -12,7 +12,7 @@ use si_rs_config::paths::SiPaths;
 use si_rs_config::settings::Settings;
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
-    docker_container_exec_command, docker_container_logs_command,
+    docker_container_exec_command, docker_container_list_command, docker_container_logs_command,
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
@@ -333,6 +333,12 @@ enum CodexCommand {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         command: Vec<String>,
     },
+    List {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -499,6 +505,13 @@ struct CodexPublishedPortView {
     host_ip: String,
     host_port: String,
     container_port: u16,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexListEntryView {
+    name: String,
+    state: String,
+    image: String,
 }
 
 fn main() -> Result<()> {
@@ -740,6 +753,7 @@ fn main() -> Result<()> {
                 docker_bin,
                 command,
             } => run_codex_exec(&name, workdir, interactive, tty, env, &user, docker_bin, command)?,
+            CodexCommand::List { format, docker_bin } => run_codex_list(format, docker_bin)?,
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -1431,6 +1445,50 @@ fn run_codex_exec(
         anyhow::bail!("docker exec failed: {}", stderr.trim());
     }
     print!("{}", String::from_utf8_lossy(&output.stdout));
+    Ok(())
+}
+
+fn run_codex_list(format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<()> {
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let command = docker_container_list_command(
+        docker_program.display().to_string(),
+        "si.component=codex",
+        true,
+    )?;
+    let output = ProcessRunner.run(&command, &RunOptions::default())?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("docker ps failed: {}", stderr.trim());
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut items = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let mut parts = line.splitn(3, '\t');
+        let name = parts.next().unwrap_or("").trim();
+        let state = parts.next().unwrap_or("").trim();
+        let image = parts.next().unwrap_or("").trim();
+        if name.is_empty() {
+            continue;
+        }
+        items.push(CodexListEntryView {
+            name: name.to_owned(),
+            state: state.to_owned(),
+            image: image.to_owned(),
+        });
+    }
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&items)?),
+        OutputFormat::Text => {
+            for item in items {
+                println!("{}\t{}\t{}", item.name, item.state, item.image);
+            }
+        }
+    }
     Ok(())
 }
 

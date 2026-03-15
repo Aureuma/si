@@ -326,6 +326,37 @@ func TestMaybeRunRustCodexExecDelegatesAndReturnsOutput(t *testing.T) {
 	}
 }
 
+func TestMaybeRunRustCodexListDelegatesForTextOutput(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'si-codex-ferma\trunning\taureuma/si:local'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := maybeRunRustCodexList(false)
+	if err != nil {
+		t.Fatalf("maybeRunRustCodexList: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected list action to delegate to Rust")
+	}
+	if strings.TrimSpace(output) != "si-codex-ferma\trunning\taureuma/si:local" {
+		t.Fatalf("unexpected Rust list output %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nlist\n--format\ntext" {
+		t.Fatalf("expected Rust CLI args to be codex list --format text, got %q", string(argsData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",
