@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExtractReportLinesSingle(t *testing.T) {
@@ -110,6 +112,74 @@ func TestReadCodexReportCaptureDelegatesToRustWhenConfigured(t *testing.T) {
 	if report != "• Done.\nWorked for 0m 2s" {
 		t.Fatalf("unexpected report: %q", report)
 	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nreport-parse\n--format\njson" {
+		t.Fatalf("unexpected delegated args %q", string(argsData))
+	}
+}
+
+func TestCmdCodexReportUsesInjectedHappyPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\ncat >/dev/null\nprintf '%s\\n' '{\"segments\":[{\"prompt\":\"Prompt\",\"lines\":[\"• Done.\"],\"raw\":[\"• Done.\"]},{\"prompt\":\"Next\",\"lines\":[],\"raw\":[]}],\"report\":\"• Done.\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prevLock := acquireCodexReportLockFn
+	prevLookup := lookupCodexReportContainerFn
+	prevEnsure := ensureCodexReportTmuxAvailableFn
+	prevCleanup := cleanupCodexReportTmuxSessionsFn
+	prevFetch := fetchCodexReportsViaTmuxFn
+	t.Cleanup(func() {
+		acquireCodexReportLockFn = prevLock
+		lookupCodexReportContainerFn = prevLookup
+		ensureCodexReportTmuxAvailableFn = prevEnsure
+		cleanupCodexReportTmuxSessionsFn = prevCleanup
+		fetchCodexReportsViaTmuxFn = prevFetch
+	})
+
+	acquireCodexReportLockFn = func(string, string, time.Duration, time.Duration) (func(), error) {
+		return func() {}, nil
+	}
+	lookupCodexReportContainerFn = func(context.Context, string) (string, string, error) {
+		return "si-codex-ferma", "container-id", nil
+	}
+	ensureCodexReportTmuxAvailableFn = func() error { return nil }
+	cleanupCodexReportTmuxSessionsFn = func(context.Context, string, time.Duration, statusOptions) {}
+	fetchCodexReportsViaTmuxFn = func(ctx context.Context, containerID string, prompts []string, opts reportOptions) (string, []codexTurnReport, error) {
+		segments, report, err := readCodexReportCapture("› Prompt\n• Done.\n› Next", "› Prompt\n• Done.\n› Next", 0, false)
+		if err != nil {
+			return "", nil, err
+		}
+		if containerID != "container-id" {
+			t.Fatalf("unexpected container id %q", containerID)
+		}
+		if len(prompts) != 1 || prompts[0] != "Prompt" {
+			t.Fatalf("unexpected prompts %#v", prompts)
+		}
+		if len(segments) == 0 {
+			t.Fatalf("expected parsed segments")
+		}
+		return "raw-output", []codexTurnReport{{Prompt: prompts[0], Report: report}}, nil
+	}
+
+	output := captureOutputForTest(t, func() {
+		cmdCodexReport([]string{"ferma", "--prompt", "Prompt"})
+	})
+	if !strings.Contains(output, "Turn 1: Prompt") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	if !strings.Contains(output, "• Done.") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+
 	argsData, err := os.ReadFile(argsPath)
 	if err != nil {
 		t.Fatalf("read args file: %v", err)
