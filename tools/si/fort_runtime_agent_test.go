@@ -192,3 +192,53 @@ func TestLoadFortRuntimeAgentStateDelegatesToRustCLIWhenConfigured(t *testing.T)
 		t.Fatalf("unexpected rust cli args: %q", string(argsData))
 	}
 }
+
+func TestFortRuntimeAgentStepHonorsRustRevokedClassification(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "alpha"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+	if err := writeSecretFile(paths.RefreshTokenHostPath, "refresh-1"); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	state := fortProfileSessionState{
+		ProfileID:        profile.ID,
+		AgentID:          fortAgentIDForProfile(profile.ID),
+		SessionID:        "rfs_existing",
+		Host:             "https://fort.example.test",
+		ContainerHost:    "http://fort.internal:8088",
+		AccessTokenPath:  paths.AccessTokenHostPath,
+		RefreshTokenPath: paths.RefreshTokenHostPath,
+	}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"rfs_existing\",\"host\":\"https://fort.example.test\",\"container_host\":\"http://fort.internal:8088\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"classify\" ]; then\n  printf '%s\\n' '{\"Revoked\":{\"snapshot\":{\"profile_id\":\"alpha\"},\"reason\":\"RefreshUnauthorized\"}}'\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	refreshCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		refreshCalls++
+		http.NotFound(w, r)
+	}))
+	defer srv.Close()
+	t.Setenv("FORT_HOST", srv.URL)
+
+	if _, err := fortRuntimeAgentStep(context.Background(), profile, paths); err == nil {
+		t.Fatalf("expected revoked rust classification to stop runtime agent step")
+	}
+	if refreshCalls != 0 {
+		t.Fatalf("expected no refresh attempt, got %d calls", refreshCalls)
+	}
+}
