@@ -43,6 +43,7 @@ var (
 	copyDeviceCodeToClipboardFn = copyDeviceCodeToClipboard
 	runCodexRemoveFn            = cmdCodexRemove
 	runCodexSpawnFn             = cmdCodexSpawn
+	observeCodexSpawnPreparedFn = func(codexSpawnPrepared) (bool, error) { return false, nil }
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -104,6 +105,26 @@ type codexSpawnFlags struct {
 	cleanSlate    *bool
 	envs          *multiFlag
 	ports         *multiFlag
+}
+
+type codexSpawnPrepared struct {
+	Name                   string
+	ContainerName          string
+	DesiredWorkspaceHost   string
+	WorkspaceTargetPrimary string
+	WorkspaceTargetMirror  string
+	Image                  string
+	NetworkName            string
+	Workdir                string
+	CodexVolume            string
+	SkillsVolume           string
+	GHVolume               string
+	DockerSocket           bool
+	Detach                 bool
+	CleanSlate             bool
+	ProfileID              string
+	DelegatedSpawnPlan     bool
+	HasRustSpec            bool
 }
 
 func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
@@ -390,6 +411,30 @@ func cmdCodexSpawn(args []string) {
 		if delegated {
 			rustSpec = spec
 		}
+	}
+	prepared := codexSpawnPrepared{
+		Name:                   name,
+		ContainerName:          containerName,
+		DesiredWorkspaceHost:   desiredWorkspaceHost,
+		WorkspaceTargetPrimary: workspaceTargetPrimary,
+		WorkspaceTargetMirror:  workspaceTargetMirror,
+		Image:                  strings.TrimSpace(*flags.image),
+		NetworkName:            strings.TrimSpace(*flags.networkName),
+		Workdir:                strings.TrimSpace(*flags.workdir),
+		CodexVolume:            strings.TrimSpace(*flags.codexVolume),
+		SkillsVolume:           strings.TrimSpace(*flags.skillsVolume),
+		GHVolume:               strings.TrimSpace(*flags.ghVolume),
+		DockerSocket:           *flags.dockerSocket,
+		Detach:                 *flags.detach,
+		CleanSlate:             *flags.cleanSlate,
+		ProfileID:              strings.TrimSpace(*flags.profile),
+		DelegatedSpawnPlan:     delegatedSpawnPlan,
+		HasRustSpec:            rustSpec != nil,
+	}
+	if intercepted, err := observeCodexSpawnPreparedFn(prepared); err != nil {
+		fatal(err)
+	} else if intercepted {
+		return
 	}
 
 	client, err := shared.NewClient()
