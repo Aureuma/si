@@ -591,7 +591,7 @@ func cmdCodexSpawn(args []string) {
 		cmd = []string{"bash", "-lc", *flags.cmdStr}
 	}
 
-	if rustSpec != nil && *flags.detach {
+	if rustSpec != nil {
 		startID, delegated, err := maybeStartRustCodexSpawn(rustCodexSpawnSpecRequest{
 			rustCodexSpawnPlanRequest: rustCodexSpawnPlanRequest{
 				Name:          name,
@@ -641,6 +641,9 @@ func cmdCodexSpawn(args []string) {
 				}
 			}
 			successf("codex container %s started", containerName)
+			if !*flags.detach {
+				_ = execDockerCLI("attach", containerName)
+			}
 			return
 		}
 	}
