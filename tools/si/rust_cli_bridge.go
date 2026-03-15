@@ -293,6 +293,16 @@ func maybeBuildRustDyadSpawnPlan(request rustDyadSpawnPlanRequest) (*rustDyadSpa
 	return &plan, true, nil
 }
 
+func maybeStartRustDyadSpawn(request rustDyadSpawnPlanRequest) (bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return false, nil
+	}
+	if _, err := runRustCLIText(buildRustDyadSpawnStartArgs(request)...); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func maybeStartRustCodexSpawn(request rustCodexSpawnSpecRequest) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil
@@ -788,8 +798,16 @@ func buildRustCodexSpawnPlanArgs(request rustCodexSpawnPlanRequest) []string {
 }
 
 func buildRustDyadSpawnPlanArgs(request rustDyadSpawnPlanRequest) []string {
+	return buildRustDyadSpawnArgs(request, "spawn-plan", true)
+}
+
+func buildRustDyadSpawnStartArgs(request rustDyadSpawnPlanRequest) []string {
+	return buildRustDyadSpawnArgs(request, "spawn-start", false)
+}
+
+func buildRustDyadSpawnArgs(request rustDyadSpawnPlanRequest, subcommand string, includeFormat bool) []string {
 	args := []string{
-		"dyad", "spawn-plan",
+		"dyad", subcommand,
 		"--name", strings.TrimSpace(request.Name),
 		"--role", strings.TrimSpace(request.Role),
 		"--actor-image", strings.TrimSpace(request.ActorImage),
@@ -816,7 +834,9 @@ func buildRustDyadSpawnPlanArgs(request rustDyadSpawnPlanRequest) []string {
 		"--loop-goal", strings.TrimSpace(request.LoopGoal),
 		"--loop-seed-prompt", strings.TrimSpace(request.LoopSeedPrompt),
 		"--loop-tmux-capture", strings.TrimSpace(request.LoopTmuxCapture),
-		"--format", "json",
+	}
+	if includeFormat {
+		args = append(args, "--format", "json")
 	}
 	if request.LoopEnabled != nil {
 		args = append(args, "--loop-enabled="+strconv.FormatBool(*request.LoopEnabled))

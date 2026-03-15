@@ -539,6 +539,45 @@ func TestMaybeBuildRustDyadSpawnPlanDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeStartRustDyadSpawnDelegatesToRustCLI(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'started'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := maybeStartRustDyadSpawn(rustDyadSpawnPlanRequest{
+		Name:         "alpha",
+		Role:         "ios",
+		ActorImage:   "actor:latest",
+		CriticImage:  "critic:latest",
+		Workspace:    "/workspace",
+		Configs:      "/configs-src",
+		ForwardPorts: "1455-1465",
+		DockerSocket: true,
+	})
+	if err != nil {
+		t.Fatalf("maybeStartRustDyadSpawn: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected dyad spawn start to delegate to Rust")
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "dyad\nspawn-start\n--name\nalpha") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+	if strings.Contains(string(argsData), "--format\njson") {
+		t.Fatalf("did not expect spawn-start to pass --format json: %q", string(argsData))
+	}
+}
+
 func TestMaybeApplyRustFortUnauthorizedRefreshOutcomeDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
