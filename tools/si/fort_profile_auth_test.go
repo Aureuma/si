@@ -588,6 +588,57 @@ func TestPrepareFortRuntimeAuthSkipsSessionSubcommands(t *testing.T) {
 	}
 }
 
+func TestPrepareFortRuntimeAuthUsesRustBootstrapViewForHostResolution(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+	t.Setenv("FORT_HOST", "")
+	t.Setenv("FORT_AGENT_ID", "")
+	t.Setenv("FORT_PROFILE_ID", "")
+	t.Setenv("FORT_TOKEN_PATH", "")
+	t.Setenv("FORT_REFRESH_TOKEN_PATH", "")
+
+	profileFortDir := filepath.Join(home, ".si", "codex", "profiles", "alpha", fortProfileStateDirName)
+	if err := os.MkdirAll(profileFortDir, 0o700); err != nil {
+		t.Fatalf("mkdir profile fort dir: %v", err)
+	}
+	sessionPath := filepath.Join(profileFortDir, fortProfileSessionStateFileName)
+	if err := os.WriteFile(sessionPath, []byte(`{"profile_id":"alpha","agent_id":"si-codex-alpha","host":"http://127.0.0.1:8088"}`), 0o600); err != nil {
+		t.Fatalf("write session: %v", err)
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"\",\"host_url\":\"http://127.0.0.1:8088\",\"container_host_url\":\"http://host.docker.internal:8088/\",\"access_token_path\":\"" + strings.ReplaceAll(filepath.Join(profileFortDir, fortProfileAccessTokenFileName), "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(filepath.Join(profileFortDir, fortProfileRefreshTokenFileName), "\\", "\\\\") + "\",\"access_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/access.token\",\"refresh_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/refresh.token\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if _, err := prepareFortRuntimeAuth([]string{"get"}); err != nil {
+		t.Fatalf("prepareFortRuntimeAuth: %v", err)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_HOST")); got != "http://host.docker.internal:8088/" {
+		t.Fatalf("unexpected FORT_HOST %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_AGENT_ID")); got != "si-codex-alpha" {
+		t.Fatalf("unexpected FORT_AGENT_ID %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_PROFILE_ID")); got != "alpha" {
+		t.Fatalf("unexpected FORT_PROFILE_ID %q", got)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nbootstrap-view\n--path\n"+sessionPath) {
+		t.Fatalf("expected bootstrap-view delegation, got %q", string(argsData))
+	}
+}
+
 func TestFortRequireAgentPolicyBindingsRejectsEmpty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
