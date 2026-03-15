@@ -1382,11 +1382,6 @@ func cmdDyadRestart(args []string) {
 		}
 		name = selected
 	}
-	client, err := shared.NewClient()
-	if err != nil {
-		fatal(err)
-	}
-	defer client.Close()
 	if output, delegated, err := maybeRunRustDyadContainerAction("restart", name); err != nil {
 		fatal(err)
 	} else if delegated {
@@ -1396,6 +1391,11 @@ func cmdDyadRestart(args []string) {
 		successf("dyad %s restarted", name)
 		return
 	}
+	client, err := shared.NewClient()
+	if err != nil {
+		fatal(err)
+	}
+	defer client.Close()
 	if err := client.RestartDyad(context.Background(), name); err != nil {
 		fatal(err)
 	}
@@ -1414,6 +1414,15 @@ func cmdDyadStart(args []string) {
 		}
 		name = selected
 	}
+	if output, delegated, err := maybeRunRustDyadContainerAction("start", name); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s started", name)
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -1426,15 +1435,6 @@ func cmdDyadStart(args []string) {
 	}
 	if len(targets) == 0 {
 		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
-		return
-	}
-	if output, delegated, err := maybeRunRustDyadContainerAction("start", name); err != nil {
-		fatal(err)
-	} else if delegated {
-		if strings.TrimSpace(output) != "" {
-			fmt.Print(output)
-		}
-		successf("dyad %s started", name)
 		return
 	}
 	if err := execDockerCLI(append([]string{"start"}, targets...)...); err != nil {
@@ -1455,6 +1455,15 @@ func cmdDyadStop(args []string) {
 		}
 		name = selected
 	}
+	if output, delegated, err := maybeRunRustDyadContainerAction("stop", name); err != nil {
+		fatal(err)
+	} else if delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		successf("dyad %s stopped", name)
+		return
+	}
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -1467,15 +1476,6 @@ func cmdDyadStop(args []string) {
 	}
 	if len(targets) == 0 {
 		fmt.Printf("%s %s\n", styleError("dyad not found:"), styleCmd(name))
-		return
-	}
-	if output, delegated, err := maybeRunRustDyadContainerAction("stop", name); err != nil {
-		fatal(err)
-	} else if delegated {
-		if strings.TrimSpace(output) != "" {
-			fmt.Print(output)
-		}
-		successf("dyad %s stopped", name)
 		return
 	}
 	if err := execDockerCLI(append([]string{"stop"}, targets...)...); err != nil {
