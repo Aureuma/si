@@ -88,7 +88,7 @@ Planned follow-on crates:
 | 0. Repo preparation | completed | `tickets/` reset and migration plan established | clear old tickets, define architecture, define parity rules | plan reviewed, `tickets/` contains only the active transition plan |
 | 1. Rust workspace bootstrap | completed | Rust workspace builds/tests in repo without changing current behavior | workspace files, first crates, CI lane, version/path foundations | `cargo fmt`, `cargo clippy`, `cargo test`, existing Go build/tests still pass |
 | 2. Shared config/runtime foundations | in_progress | Rust becomes source for settings/path/process primitives | settings loader, path expansion, command manifest, process abstraction | golden tests against Go settings/path behavior, cross-platform path tests |
-| 3. Read-only command migration | planned | safe informational surfaces start moving to Rust | `version`, `help`, `providers health`, config inspection, diagnostics | CLI snapshots, golden stdout/exit code parity, smoke tests in CI |
+| 3. Read-only command migration | in_progress | safe informational surfaces start moving to Rust | `version`, `help`, `providers health`, config inspection, diagnostics | CLI snapshots, golden stdout/exit code parity, smoke tests in CI |
 | 4. Runtime substrate migration | planned | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
 | 5. Security/runtime migration | planned | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
 | 6. Codex/dyad lifecycle migration | planned | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
@@ -159,7 +159,7 @@ Progress notes:
 
 ### Phase 3: Read-only command migration
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -176,6 +176,11 @@ Testing:
 Exit criteria:
 
 - at least one user-visible command family runs from Rust in CI and release artifacts.
+
+Progress notes:
+
+- completed: experimental Go-to-Rust compatibility boundary for `si version`
+- completed: focused Go tests covering fallback, explicit bin selection, repo-local binary discovery, and missing-binary failures
 
 ### Phase 4: Runtime substrate migration
 
