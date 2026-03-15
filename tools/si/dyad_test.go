@@ -971,6 +971,87 @@ func TestCmdDyadRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestDyadDelegatedLifecycleSmoke(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '--' >>" + shellSingleQuote(argsPath) + "\ncase \"$2\" in\n  status)\n    printf '%s\\n' '{\"dyad\":\"alpha\",\"found\":true,\"actor\":{\"name\":\"si-dyad-alpha-actor\",\"status\":\"running\"},\"critic\":{\"name\":\"si-dyad-alpha-critic\",\"status\":\"running\"}}'\n    ;;\n  logs)\n    printf '%s\\n' '{\"dyad\":\"alpha\",\"member\":\"critic\",\"tail\":50,\"logs\":\"critic logs\\n\"}'\n    ;;\n  start)\n    printf '%s\\n' 'started'\n    ;;\n  stop)\n    printf '%s\\n' 'stopped'\n    ;;\n  restart)\n    printf '%s\\n' 'restarted'\n    ;;\n  remove)\n    printf '%s\\n' 'removed'\n    ;;\n  cleanup)\n    printf '%s\\n' 'removed=3'\n    ;;\n  *)\n    printf 'unexpected command: %s\\n' \"$2\" >&2\n    exit 1\n    ;;\nesac\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	statusOutput := captureOutputForTest(t, func() {
+		cmdDyadStatus([]string{"--json", "alpha"})
+	})
+	if !strings.Contains(statusOutput, "\"dyad\":\"alpha\"") {
+		t.Fatalf("unexpected status output: %q", statusOutput)
+	}
+
+	logsOutput := captureOutputForTest(t, func() {
+		cmdDyadLogs([]string{"--json", "--member", "critic", "--tail", "50", "alpha"})
+	})
+	if !strings.Contains(logsOutput, "\"logs\":\"critic logs\\n\"") {
+		t.Fatalf("unexpected logs output: %q", logsOutput)
+	}
+
+	startOutput := captureOutputForTest(t, func() {
+		cmdDyadStart([]string{"alpha"})
+	})
+	if !strings.Contains(startOutput, "dyad alpha started") {
+		t.Fatalf("unexpected start output: %q", startOutput)
+	}
+
+	stopOutput := captureOutputForTest(t, func() {
+		cmdDyadStop([]string{"alpha"})
+	})
+	if !strings.Contains(stopOutput, "dyad alpha stopped") {
+		t.Fatalf("unexpected stop output: %q", stopOutput)
+	}
+
+	restartOutput := captureOutputForTest(t, func() {
+		cmdDyadRestart([]string{"alpha"})
+	})
+	if !strings.Contains(restartOutput, "dyad alpha restarted") {
+		t.Fatalf("unexpected restart output: %q", restartOutput)
+	}
+
+	removeOutput := captureOutputForTest(t, func() {
+		cmdDyadRemove([]string{"alpha"})
+	})
+	if !strings.Contains(removeOutput, "dyad alpha removed") {
+		t.Fatalf("unexpected remove output: %q", removeOutput)
+	}
+
+	cleanupOutput := captureOutputForTest(t, func() {
+		cmdDyadCleanup(nil)
+	})
+	if !strings.Contains(cleanupOutput, "removed 3 stopped dyad containers") {
+		t.Fatalf("unexpected cleanup output: %q", cleanupOutput)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := string(argsData)
+	for _, expected := range []string{
+		"dyad\nstatus\nalpha\n--format\njson",
+		"dyad\nlogs\nalpha\n--member\ncritic\n--tail\n50\n--format\njson",
+		"dyad\nstart\nalpha",
+		"dyad\nstop\nalpha",
+		"dyad\nrestart\nalpha",
+		"dyad\nremove\nalpha",
+		"dyad\ncleanup",
+	} {
+		if !strings.Contains(argsText, expected) {
+			t.Fatalf("expected delegated args %q in %q", expected, argsText)
+		}
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)
