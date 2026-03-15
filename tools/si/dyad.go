@@ -1040,8 +1040,14 @@ func cmdDyadStatus(args []string) {
 	}
 	defer client.Close()
 	ctx := context.Background()
-	actorName := shared.DyadContainerName(name, "actor")
-	criticName := shared.DyadContainerName(name, "critic")
+	actorName, err := resolveDyadContainerName(name, "actor")
+	if err != nil {
+		fatal(err)
+	}
+	criticName, err := resolveDyadContainerName(name, "critic")
+	if err != nil {
+		fatal(err)
+	}
 	actorID, actorInfo, err := client.ContainerByName(ctx, actorName)
 	if err != nil {
 		fatal(err)
@@ -1050,7 +1056,7 @@ func cmdDyadStatus(args []string) {
 	if err != nil {
 		fatal(err)
 	}
-	renderDyadStatusResult(buildDyadStatusResult(name, actorID, actorInfo, criticID, criticInfo), *jsonOut)
+	renderDyadStatusResult(buildDyadStatusResultWithNames(name, actorName, actorID, actorInfo, criticName, criticID, criticInfo), *jsonOut)
 }
 
 func renderDyadStatusResult(result dyadStatusResult, jsonOut bool) {
@@ -1080,13 +1086,25 @@ func renderDyadStatusResult(result dyadStatusResult, jsonOut bool) {
 }
 
 func buildDyadStatusResult(name string, actorID string, actorInfo *types.ContainerJSON, criticID string, criticInfo *types.ContainerJSON) dyadStatusResult {
+	return buildDyadStatusResultWithNames(
+		name,
+		shared.DyadContainerName(name, "actor"),
+		actorID,
+		actorInfo,
+		shared.DyadContainerName(name, "critic"),
+		criticID,
+		criticInfo,
+	)
+}
+
+func buildDyadStatusResultWithNames(name string, actorName string, actorID string, actorInfo *types.ContainerJSON, criticName string, criticID string, criticInfo *types.ContainerJSON) dyadStatusResult {
 	out := dyadStatusResult{
 		Dyad: strings.TrimSpace(name),
 	}
 	actorID = strings.TrimSpace(actorID)
 	if actorInfo != nil && actorID != "" {
 		out.Actor = &dyadContainerStatus{
-			Name:   shared.DyadContainerName(name, "actor"),
+			Name:   strings.TrimSpace(actorName),
 			ID:     actorID,
 			Status: dyadContainerState(actorInfo),
 		}
@@ -1094,7 +1112,7 @@ func buildDyadStatusResult(name string, actorID string, actorInfo *types.Contain
 	criticID = strings.TrimSpace(criticID)
 	if criticInfo != nil && criticID != "" {
 		out.Critic = &dyadContainerStatus{
-			Name:   shared.DyadContainerName(name, "critic"),
+			Name:   strings.TrimSpace(criticName),
 			ID:     criticID,
 			Status: dyadContainerState(criticInfo),
 		}

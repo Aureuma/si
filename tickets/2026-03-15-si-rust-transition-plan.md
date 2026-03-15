@@ -329,6 +329,7 @@ Progress notes:
 - completed: experimental Go codex `run`/`exec`, `logs`, and `tail` now resolve their target container lookup through the shared Rust-aware artifact helper too, so more live action paths no longer bypass the migrated codex artifact naming boundary before executing Rust-backed or Docker-backed flows
 - completed: profile-auth/status container preference now resolves through the shared Rust-aware codex artifact helper too, so profile auth sync and volume discovery no longer rebuild their preferred container name purely on the Go path
 - completed: experimental Go dyad `stop`, `exec`, and `logs` now resolve member container names through Rust-backed dyad status before falling back to Go naming, so more live dyad actions no longer bypass the migrated runtime lookup boundary
+- completed: experimental Go dyad `status` fallback now uses the same resolved member container names end-to-end, so even the non-delegated status rendering path no longer rebuilds actor/critic names after lookup
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
