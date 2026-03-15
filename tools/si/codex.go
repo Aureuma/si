@@ -2640,7 +2640,7 @@ func resolveCodexRemoveArtifacts(name string) (*rustCodexRemoveArtifacts, bool, 
 	}
 	return &rustCodexRemoveArtifacts{
 		Name:          strings.TrimSpace(name),
-		ContainerName: codexContainerName(name),
+		ContainerName: "si-codex-" + slug,
 		Slug:          slug,
 		CodexVolume:   "si-codex-" + slug,
 		GHVolume:      "si-gh-" + slug,

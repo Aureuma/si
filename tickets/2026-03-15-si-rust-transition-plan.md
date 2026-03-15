@@ -339,6 +339,7 @@ Progress notes:
 - completed: live codex-session refresh and runtime-agent refresh now defer raw session-state loading until a Rust transition result actually needs fallback persisted state mutation, reducing direct Go state handling in the hot refresh path when Rust already returns the next lifecycle snapshot
 - completed: single-container Go codex remove now resolves its target container name through the shared Rust-aware artifact helper from the start, so the live remove flow no longer seeds with raw Go naming before consulting the migrated remove-plan boundary
 - completed: the shipping Go codex spawn path now seeds its target container name through the shared Rust-aware artifact helper from the start, so live spawn orchestration no longer begins from a separate raw Go naming rule before Rust-aware planning takes over
+- completed: the shared Go codex remove-artifact fallback now derives its default container name directly from the canonical slug it already resolved, removing one more internal dependency on the separate raw Go container-name helper inside the migrated artifact boundary
 - completed: Rust `codex spawn-spec` surface exposing the next cutover boundary after planning, with JSON tests covering named volumes and command rendering
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
