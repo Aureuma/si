@@ -268,7 +268,10 @@ func fetchCodexReportsViaTmux(ctx context.Context, containerID string, prompts [
 		return "", nil, err
 	}
 	cleanOutput := stripANSI(output)
-	segments := parsePromptSegmentsDual(cleanOutput, output)
+	segments, err := readCodexPromptSegments(cleanOutput, output)
+	if err != nil {
+		return output, nil, err
+	}
 	promptIndex := len(segments) - 1
 	if promptIndex < 0 {
 		promptIndex = 0
@@ -287,7 +290,10 @@ func fetchCodexReportsViaTmux(ctx context.Context, containerID string, prompts [
 		segmentRaw := ""
 		if report != "" {
 			cleanOutput = stripANSI(tmpOutput)
-			segments = parsePromptSegmentsDual(cleanOutput, tmpOutput)
+			segments, err = readCodexPromptSegments(cleanOutput, tmpOutput)
+			if err != nil {
+				return tmpOutput, reports, err
+			}
 			if promptIndex < len(segments) {
 				segmentRaw = strings.Join(segments[promptIndex].Raw, "\n")
 			}
@@ -295,7 +301,10 @@ func fetchCodexReportsViaTmux(ctx context.Context, containerID string, prompts [
 		reports = append(reports, codexTurnReport{Prompt: prompt, Report: report, Raw: strings.TrimSpace(segmentRaw)})
 		output = tmpOutput
 		cleanOutput = stripANSI(output)
-		segments = parsePromptSegmentsDual(cleanOutput, output)
+		segments, err = readCodexPromptSegments(cleanOutput, output)
+		if err != nil {
+			return output, reports, err
+		}
 		promptIndex = len(segments) - 1
 		if promptIndex < 0 {
 			promptIndex = 0
@@ -340,12 +349,14 @@ func waitForTurnReport(ctx context.Context, target string, opts reportOptions, p
 			lastOutput = output
 		}
 		clean := stripANSI(output)
-		segments := parsePromptSegments(clean)
+		segments, report, err := readCodexReportCapture(clean, output, promptIndex, opts.Ansi)
+		if err != nil {
+			return output, "", err
+		}
 		if len(segments) <= promptIndex {
 			time.Sleep(opts.PollInterval)
 			continue
 		}
-		report := extractReportLinesFromLines(segments[promptIndex].Raw, segments[promptIndex].Lines, opts.Ansi)
 		if len(segments) > promptIndex+1 && report != "" {
 			return output, report, nil
 		}
@@ -362,6 +373,45 @@ func waitForTurnReport(ctx context.Context, target string, opts reportOptions, p
 		return "", "", errors.New("timeout waiting for codex report")
 	}
 	return lastOutput, "", errors.New("timeout waiting for codex report")
+}
+
+func readCodexPromptSegments(clean, raw string) ([]promptSegment, error) {
+	parsed, delegated, err := maybeParseRustCodexReportCapture(clean, raw, 0, false)
+	if err != nil {
+		return nil, err
+	}
+	if delegated {
+		return rustPromptSegmentsToGo(parsed.Segments), nil
+	}
+	return parsePromptSegmentsDual(clean, raw), nil
+}
+
+func readCodexReportCapture(clean, raw string, promptIndex int, ansi bool) ([]promptSegment, string, error) {
+	parsed, delegated, err := maybeParseRustCodexReportCapture(clean, raw, promptIndex, ansi)
+	if err != nil {
+		return nil, "", err
+	}
+	if delegated {
+		return rustPromptSegmentsToGo(parsed.Segments), strings.TrimSpace(parsed.Report), nil
+	}
+	segments := parsePromptSegmentsDual(clean, raw)
+	report := ""
+	if promptIndex >= 0 && promptIndex < len(segments) {
+		report = extractReportLinesFromLines(segments[promptIndex].Raw, segments[promptIndex].Lines, ansi)
+	}
+	return segments, report, nil
+}
+
+func rustPromptSegmentsToGo(segments []rustCodexPromptSegment) []promptSegment {
+	converted := make([]promptSegment, 0, len(segments))
+	for _, segment := range segments {
+		converted = append(converted, promptSegment{
+			Prompt: segment.Prompt,
+			Lines:  append([]string(nil), segment.Lines...),
+			Raw:    append([]string(nil), segment.Raw...),
+		})
+	}
+	return converted
 }
 
 func parsePromptSegments(raw string) []promptSegment {
