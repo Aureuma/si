@@ -626,6 +626,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "si-rs-fort"
+version = "0.54.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "si-rs-process"
 version = "0.54.0"
 dependencies = [

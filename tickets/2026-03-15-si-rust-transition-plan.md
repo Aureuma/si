@@ -90,7 +90,7 @@ Planned follow-on crates:
 | 2. Shared config/runtime foundations | in_progress | Rust becomes source for settings/path/process primitives | settings loader, path expansion, command manifest, process abstraction | golden tests against Go settings/path behavior, cross-platform path tests |
 | 3. Read-only command migration | in_progress | safe informational surfaces start moving to Rust | `version`, `help`, `providers health`, config inspection, diagnostics | CLI snapshots, golden stdout/exit code parity, smoke tests in CI |
 | 4. Runtime substrate migration | in_progress | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
-| 5. Security/runtime migration | planned | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
+| 5. Security/runtime migration | in_progress | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
 | 6. Codex/dyad lifecycle migration | in_progress | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
 | 7. Provider migration | planned | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
 | 8. Release/install migration | planned | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
@@ -232,7 +232,7 @@ Progress notes:
 
 ### Phase 5: Security/runtime migration
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -255,6 +255,11 @@ Testing:
 Exit criteria:
 
 - no inline ad hoc refresh logic remains in Go for migrated flows.
+
+Progress notes:
+
+- completed: initial `si-fort` crate with a typed Fort session lifecycle model covering bootstrap-required, resumable, refreshing, revoked, teardown, and closed states
+- completed: transition tests for refresh success, unauthorized refresh revocation, and teardown completion on top of the Rust Fort model
 
 ### Phase 6: Codex/dyad lifecycle migration
 
