@@ -11,7 +11,7 @@ func TestCmdCodexStopDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"action\":\"stop\",\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"output\":\"stopped\"}'\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
@@ -19,14 +19,17 @@ func TestCmdCodexStopDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	t.Setenv(siRustCLIBinEnv, scriptPath)
 	t.Setenv(siExperimentalRustCLIEnv, "")
 
-	_ = captureOutputForTest(t, func() {
+	output := captureOutputForTest(t, func() {
 		cmdCodexStop([]string{"ferma"})
 	})
+	if !strings.Contains(output, "stopped") {
+		t.Fatalf("unexpected output: %q", output)
+	}
 	argsData, err := os.ReadFile(argsPath)
 	if err != nil {
 		t.Fatalf("read args file: %v", err)
 	}
-	if strings.TrimSpace(string(argsData)) != "codex\nstop\nferma" {
+	if strings.TrimSpace(string(argsData)) != "codex\nstop\nferma\n--format\njson" {
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }

@@ -2712,9 +2712,14 @@ func cmdCodexStop(args []string) {
 		return
 	}
 	name := args[0]
-	if _, delegated, err := maybeRunRustCodexContainerAction("stop", name); err != nil {
+	if result, delegated, err := maybeRunRustCodexContainerActionResult("stop", name); err != nil {
 		fatal(err)
-	} else if !delegated {
+	} else if delegated {
+		if strings.TrimSpace(result.Output) != "" {
+			fmt.Print(result.Output)
+		}
+		return
+	} else {
 		containerName, err := resolveCodexContainerName(name)
 		if err != nil {
 			fatal(err)
