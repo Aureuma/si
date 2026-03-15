@@ -751,3 +751,31 @@ func TestSaveFortProfileSessionStateUsesStrictFileMode(t *testing.T) {
 		t.Fatalf("unexpected session state mode: %03o", got)
 	}
 }
+
+func TestLoadFortProfileSessionStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"https://fort.example.test\",\"container_host\":\"http://fort.internal:8088\",\"access_token_path\":\"/tmp/access.token\",\"refresh_token_path\":\"/tmp/refresh.token\",\"access_expires_at\":\"2030-01-01T00:00:00Z\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\",\"updated_at\":\"2030-01-01T00:00:00Z\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	state, err := loadFortProfileSessionState("/tmp/session.json")
+	if err != nil {
+		t.Fatalf("loadFortProfileSessionState: %v", err)
+	}
+	if state.ProfileID != "alpha" || state.SessionID != "sess-1" {
+		t.Fatalf("unexpected state: %+v", state)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "fort\nsession-state\nshow\n--path\n/tmp/session.json\n--format\njson" {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}

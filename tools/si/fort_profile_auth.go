@@ -373,6 +373,11 @@ func saveFortProfileSessionState(path string, state fortProfileSessionState) err
 }
 
 func loadFortProfileSessionState(path string) (fortProfileSessionState, error) {
+	if state, delegated, err := maybeLoadRustFortSessionState(path); err != nil {
+		return fortProfileSessionState{}, err
+	} else if delegated {
+		return state, nil
+	}
 	var state fortProfileSessionState
 	if err := readFortStateFile(path, &state); err != nil {
 		return fortProfileSessionState{}, err
