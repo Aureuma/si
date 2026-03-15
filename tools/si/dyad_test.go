@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -257,6 +259,43 @@ func TestSplitDyadSpawnArgsBoolFlagWithSeparateValue(t *testing.T) {
 		if filtered[i] != want[i] {
 			t.Fatalf("unexpected filtered[%d]=%q want %q (%v)", i, filtered[i], want[i], filtered)
 		}
+	}
+}
+
+func TestMaybeApplyRustDyadSpawnPlanMutatesOptionsWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"dyad\":\"alpha\",\"role\":\"ios\",\"network_name\":\"si\",\"workspace_host\":\"/workspace\",\"configs_host\":\"/configs-src\",\"codex_volume\":\"si-codex-alpha\",\"skills_volume\":\"si-codex-skills\",\"forward_ports\":\"1455-1465\",\"docker_socket\":true,\"actor\":{\"member\":\"actor\",\"container_name\":\"si-actor-alpha\",\"image\":\"actor:latest\",\"env\":[],\"bind_mounts\":[],\"command\":[]},\"critic\":{\"member\":\"critic\",\"container_name\":\"si-critic-alpha\",\"image\":\"critic:latest\",\"env\":[],\"bind_mounts\":[],\"command\":[]}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	opts := &shared.DyadOptions{
+		Dyad:          "alpha",
+		Role:          "generic",
+		ActorImage:    "actor:old",
+		CriticImage:   "critic:old",
+		WorkspaceHost: "/workspace",
+		ConfigsHost:   "/configs-old",
+		SkillsVolume:  "skills-old",
+		ForwardPorts:  "9999-9999",
+		Network:       "old-net",
+	}
+	if err := maybeApplyRustDyadSpawnPlan(opts); err != nil {
+		t.Fatalf("maybeApplyRustDyadSpawnPlan: %v", err)
+	}
+	if opts.Role != "ios" || opts.ConfigsHost != "/configs-src" || opts.ForwardPorts != "1455-1465" {
+		t.Fatalf("unexpected mutated options: %+v", opts)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "dyad\nspawn-plan\n--name\nalpha") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }
 
