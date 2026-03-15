@@ -338,6 +338,17 @@ func maybeRunRustDyadContainerAction(action string, dyad string) (string, bool, 
 	return output, true, nil
 }
 
+func maybeRunRustDyadRemove(dyad string) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	output, err := runRustCLIText("dyad", "remove", strings.TrimSpace(dyad))
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeRunRustDyadLogs(dyad string, member string, tail int) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil

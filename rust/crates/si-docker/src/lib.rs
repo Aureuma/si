@@ -7,6 +7,7 @@ use thiserror::Error;
 pub enum ContainerAction {
     Start,
     Stop,
+    Restart,
 }
 
 impl ContainerAction {
@@ -14,6 +15,7 @@ impl ContainerAction {
         match self {
             Self::Start => "start",
             Self::Stop => "stop",
+            Self::Restart => "restart",
         }
     }
 }
@@ -475,6 +477,12 @@ pub enum ContainerLogsError {
     MissingTail,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ContainerRemoveError {
+    #[error("container name is required")]
+    MissingContainerName,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ContainerExecSpec {
     container_name: String,
@@ -584,6 +592,22 @@ pub fn docker_container_logs_command(
         command = command.arg("-f");
     }
     Ok(command.args(["--tail".to_owned(), tail, container_name]))
+}
+
+pub fn docker_container_remove_command(
+    docker_program: impl Into<String>,
+    container_name: impl Into<String>,
+    force: bool,
+) -> Result<CommandSpec, ContainerRemoveError> {
+    let container_name = container_name.into();
+    if container_name.trim().is_empty() {
+        return Err(ContainerRemoveError::MissingContainerName);
+    }
+    let mut command = CommandSpec::new(docker_program).arg("rm");
+    if force {
+        command = command.arg("-f");
+    }
+    Ok(command.arg(container_name))
 }
 
 pub fn docker_container_exec_command(
@@ -809,6 +833,16 @@ mod tests {
     }
 
     #[test]
+    fn builds_docker_restart_command() {
+        let command =
+            docker_container_action_command("docker", ContainerAction::Restart, "si-codex-ferma")
+                .expect("restart command");
+
+        assert_eq!(command.program(), "docker");
+        assert_eq!(command.args_slice(), ["restart", "si-codex-ferma"]);
+    }
+
+    #[test]
     fn rejects_empty_container_name_for_container_action() {
         let err = docker_container_action_command("docker", ContainerAction::Stop, "   ")
             .expect_err("missing container name");
@@ -823,6 +857,15 @@ mod tests {
 
         assert_eq!(command.program(), "docker");
         assert_eq!(command.args_slice(), ["logs", "-f", "--tail", "200", "si-codex-ferma"]);
+    }
+
+    #[test]
+    fn builds_docker_remove_command() {
+        let command =
+            docker_container_remove_command("docker", "si-codex-ferma", true).expect("rm command");
+
+        assert_eq!(command.program(), "docker");
+        assert_eq!(command.args_slice(), ["rm", "-f", "si-codex-ferma"]);
     }
 
     #[test]
