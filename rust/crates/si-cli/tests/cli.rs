@@ -1684,6 +1684,27 @@ fn codex_tmux_plan_json_includes_resume_command_when_present() {
     );
 }
 
+#[test]
+fn codex_tmux_command_json_uses_bypass_flag() {
+    let output = cargo_bin()
+        .args(["codex", "tmux-command", "--container", "abc123", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["container"], "abc123");
+    assert!(
+        parsed["launch_command"]
+            .as_str()
+            .unwrap_or("")
+            .contains("codex --dangerously-bypass-approvals-and-sandbox")
+    );
+    assert!(parsed["launch_command"].as_str().unwrap_or("").contains("--user 'si'"));
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

@@ -4,7 +4,8 @@ use clap::{Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use si_rs_codex::{
     RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
-    build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_plan,
+    build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_command_for_container,
+    build_tmux_plan,
 };
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
@@ -704,6 +705,12 @@ enum CodexCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    TmuxCommand {
+        #[arg(long)]
+        container: String,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
     RespawnPlan {
         name: String,
         #[arg(long)]
@@ -1161,6 +1168,12 @@ struct CodexTmuxPlanView {
     launch_command: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     resume_command: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexTmuxCommandView {
+    container: String,
+    launch_command: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -1765,6 +1778,9 @@ fn main() -> Result<()> {
                 resume_profile.as_deref(),
                 format,
             )?,
+            CodexCommand::TmuxCommand { container, format } => {
+                run_codex_tmux_command(&container, format)?
+            }
             CodexCommand::RespawnPlan { name, profile_id, profile_containers, format } => {
                 run_codex_respawn_plan(&name, profile_id, profile_containers, format)?
             }
@@ -3686,6 +3702,20 @@ fn run_codex_tmux_plan(
             if !view.resume_command.is_empty() {
                 println!("resume_command={}", view.resume_command);
             }
+        }
+    }
+    Ok(())
+}
+
+fn run_codex_tmux_command(container: &str, format: OutputFormat) -> Result<()> {
+    let container = container.trim();
+    let launch_command = build_tmux_command_for_container(container)?;
+    let view = CodexTmuxCommandView { container: container.to_owned(), launch_command };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("container={}", view.container);
+            println!("launch_command={}", view.launch_command);
         }
     }
     Ok(())
