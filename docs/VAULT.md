@@ -31,7 +31,7 @@ Architecture boundary:
   - `FORT_TOKEN_PATH` (short-lived access token file)
   - `FORT_REFRESH_TOKEN_PATH` (rotating refresh token file)
 - Wrapper behavior:
-  - auto-refreshes runtime token sessions when refresh file and hosted endpoint are available
+  - runtime refresh is owned by the profile-scoped Fort refresher
   - uses token-file auth flow (no bearer token argv injection)
   - rejects deprecated token-value env vars (`FORT_TOKEN`, `FORT_REFRESH_TOKEN`)
   - strips legacy token env entries from child process env if present

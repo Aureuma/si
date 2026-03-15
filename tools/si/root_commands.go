@@ -151,6 +151,7 @@ func buildRootCommandHandlers() map[string]rootCommandHandler {
 	register(newLazyRootHandler(loadVivaRootHandler), "viva")
 	register(newLazyRootHandler(loadFortRootHandler), "fort")
 	register(newLazyRootHandler(loadRemoteControlRootHandler), "remote-control", "rc")
+	register(func(_ string, args []string) { cmdFortRuntimeAgent(args) }, "__fort-runtime-agent")
 	register(func(_ string, args []string) { cmdTest(args) }, "test")
 	register(func(_ string, _ []string) { usage() }, "help", "-h", "--help")
 

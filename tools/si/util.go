@@ -352,7 +352,7 @@ fort:
 	  Wrapper auth behavior:
 	    - Host bootstrap admin auth: FORT_BOOTSTRAP_TOKEN_FILE (default ~/.si/fort/bootstrap/admin.token).
 	    - Runtime session files: FORT_TOKEN_PATH + FORT_REFRESH_TOKEN_PATH.
-	    - Wrapper auto-refreshes runtime auth when possible using token-file flow.
+	    - Runtime refresh is owned by the profile-scoped Fort refresher using token-file flow.
 	    - FORT_TOKEN and FORT_REFRESH_TOKEN are stripped from child env before exec.
 	    - For fort-native global flags, pass them after -- (example: si fort -- --host https://fort.aureuma.ai doctor).
 
