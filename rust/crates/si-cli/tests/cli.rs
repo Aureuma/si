@@ -1608,6 +1608,34 @@ fn codex_start_executes_docker_start_for_container_name() {
 }
 
 #[test]
+fn codex_start_json_reports_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'started'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "start", "ferma", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["action"], "start");
+    assert_eq!(parsed["container_name"], "si-codex-ferma");
+    assert!(parsed["output"].as_str().expect("output string").contains("started"));
+}
+
+#[test]
 fn codex_stop_executes_docker_stop_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
