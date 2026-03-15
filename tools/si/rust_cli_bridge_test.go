@@ -419,6 +419,37 @@ func TestMaybeReadRustCodexStatusDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeBuildRustCodexRespawnPlanDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"effective_name\":\"ferma\",\"profile_id\":\"ferma\",\"remove_targets\":[\"alpha\",\"ferma\"]}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	plan, delegated, err := maybeBuildRustCodexRespawnPlan("ferma", "ferma", []string{"si-codex-alpha", "ferma"})
+	if err != nil {
+		t.Fatalf("maybeBuildRustCodexRespawnPlan: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected respawn plan to delegate to Rust")
+	}
+	if plan == nil || plan.EffectiveName != "ferma" || len(plan.RemoveTargets) != 2 || plan.RemoveTargets[0] != "alpha" {
+		t.Fatalf("unexpected respawn plan payload: %#v", plan)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nrespawn-plan\nferma\n--format\njson\n--profile-id\nferma\n--profile-container\nsi-codex-alpha\n--profile-container\nferma" {
+		t.Fatalf("unexpected respawn plan args %q", string(argsData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",
