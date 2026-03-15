@@ -963,6 +963,68 @@ func TestRefreshCodexProfileFortSessionLockedDelegatesRefreshTransitionToRustCLI
 	}
 }
 
+func TestRefreshCodexProfileFortSessionLockedUsesRustBootstrapViewForHostResolution(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+	profile := codexProfile{ID: "alpha"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+	if err := writeSecretFile(paths.RefreshTokenHostPath, "refresh-1"); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+	state := fortProfileSessionState{
+		ProfileID:        profile.ID,
+		AgentID:          fortAgentIDForProfile(profile.ID),
+		SessionID:        "sess-1",
+		Host:             "",
+		ContainerHost:    "",
+		AccessTokenPath:  paths.AccessTokenHostPath,
+		RefreshTokenPath: paths.RefreshTokenHostPath,
+		RefreshExpiresAt: "2030-02-01T00:00:00Z",
+	}
+	if err := saveFortProfileSessionState(paths.SessionStateHostPath, state); err != nil {
+		t.Fatalf("saveFortProfileSessionState: %v", err)
+	}
+
+	refreshCalls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/session/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		refreshCalls++
+		_, _ = w.Write([]byte(`{"access_token":"` + makeTestJWT(time.Now().Add(10*time.Minute)) + `","refresh_token":"refresh-2","access_expires_at":"2030-01-01T00:00:00Z"}`))
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"\",\"container_host\":\"\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"bootstrap-view\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host_url\":\"" + srv.URL + "\",\"container_host_url\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_token_container_path\":\"" + strings.ReplaceAll(paths.AccessTokenContainerPath, "\\", "\\\\") + "\",\"refresh_token_container_path\":\"" + strings.ReplaceAll(paths.RefreshTokenContainerPath, "\\", "\\\\") + "\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"refresh-outcome\" ]; then\n  printf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_expires_at\":\"2030-01-01T00:00:00Z\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"resumable\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	if _, err := refreshCodexProfileFortSessionLocked(context.Background(), profile, paths); err != nil {
+		t.Fatalf("refreshCodexProfileFortSessionLocked: %v", err)
+	}
+	if refreshCalls != 1 {
+		t.Fatalf("expected one refresh call, got %d", refreshCalls)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nbootstrap-view\n") {
+		t.Fatalf("expected delegated bootstrap view, got %q", string(argsData))
+	}
+}
+
 func TestEnsureCodexProfileFortSessionUsesRustBootstrapViewAfterOpenWhenConfigured(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -1086,7 +1148,7 @@ func TestRefreshCodexProfileFortSessionLockedPersistsRustRevocationOnUnauthorize
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"refresh-outcome\" ]; then\n  printf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"revoked\",\"reason\":\"RefreshUnauthorized\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"bootstrap-view\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host_url\":\"" + srv.URL + "\",\"container_host_url\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_token_container_path\":\"" + strings.ReplaceAll(paths.AccessTokenContainerPath, "\\", "\\\\") + "\",\"refresh_token_container_path\":\"" + strings.ReplaceAll(paths.RefreshTokenContainerPath, "\\", "\\\\") + "\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"refresh-outcome\" ]; then\n  printf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"revoked\",\"reason\":\"RefreshUnauthorized\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
