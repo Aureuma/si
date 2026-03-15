@@ -517,7 +517,13 @@ fn show_codex_spawn_plan(
     env: Vec<String>,
     format: OutputFormat,
 ) -> Result<()> {
-    let host_ctx = HostMountContext { home_dir: home, ssh_auth_sock };
+    let mut host_ctx = HostMountContext::from_env();
+    if home.is_some() {
+        host_ctx.home_dir = home;
+    }
+    if ssh_auth_sock.is_some() {
+        host_ctx.ssh_auth_sock = ssh_auth_sock;
+    }
     let plan = build_spawn_plan(
         &SpawnRequest {
             name,
