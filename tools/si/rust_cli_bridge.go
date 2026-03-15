@@ -521,6 +521,27 @@ func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionR
 	return &transition, true, nil
 }
 
+func maybeApplyRustFortUnauthorizedRefreshOutcome(path string, now time.Time) (*rustFortSessionTransition, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"fort", "session-state", "refresh-outcome",
+		"--path", strings.TrimSpace(path),
+		"--outcome", "unauthorized",
+		"--now-unix", strconv.FormatInt(now.UTC().Unix(), 10),
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	var transition rustFortSessionTransition
+	if err := json.Unmarshal(output, &transition); err != nil {
+		return nil, false, fmt.Errorf("decode rust fort unauthorized refresh outcome: %w", err)
+	}
+	return &transition, true, nil
+}
+
 func maybeRunRustFortSessionTeardown(path string, now time.Time) (*rustFortSessionClassification, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil

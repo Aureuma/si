@@ -258,6 +258,20 @@ func refreshCodexProfileFortSessionLocked(ctx context.Context, profile codexProf
 	}
 	refreshed, err := fortRefreshSession(ctxRefresh, hostURL, refreshToken)
 	if err != nil {
+		if fortStatusUnauthorized(err) {
+			now := time.Now().UTC()
+			if transition, delegated, transitionErr := maybeApplyRustFortUnauthorizedRefreshOutcome(paths.SessionStateHostPath, now); transitionErr != nil {
+				return codexFortBootstrap{}, transitionErr
+			} else if delegated {
+				if stateFromRust := transition.State; stateFromRust != (fortProfileSessionState{}) {
+					state = stateFromRust
+				}
+				state.UpdatedAt = now.Format(time.RFC3339)
+				if saveErr := saveFortProfileSessionState(paths.SessionStateHostPath, state); saveErr != nil {
+					return codexFortBootstrap{}, saveErr
+				}
+			}
+		}
 		return codexFortBootstrap{}, err
 	}
 	if err := writeSecretFile(paths.AccessTokenHostPath, refreshed.AccessToken); err != nil {
