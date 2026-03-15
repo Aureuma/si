@@ -260,6 +260,11 @@ type rustWarmupMarkerState struct {
 	AutostartPresent bool `json:"autostart_present"`
 }
 
+type rustWarmupAutostartDecision struct {
+	Requested bool   `json:"requested"`
+	Reason    string `json:"reason"`
+}
+
 type rustFortSessionClassification struct {
 	State  string `json:"state"`
 	Reason string `json:"reason,omitempty"`
@@ -880,6 +885,27 @@ func maybeSetRustWarmupDisabled(path string, disabled bool) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func maybeReadRustWarmupAutostartDecision(statePath string, autostartPath string, disabledPath string) (*rustWarmupAutostartDecision, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"warmup", "autostart-decision",
+		"--state-path", strings.TrimSpace(statePath),
+		"--autostart-path", strings.TrimSpace(autostartPath),
+		"--disabled-path", strings.TrimSpace(disabledPath),
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	var decision rustWarmupAutostartDecision
+	if err := json.Unmarshal(output, &decision); err != nil {
+		return nil, false, fmt.Errorf("decode rust warmup autostart decision: %w", err)
+	}
+	return &decision, true, nil
 }
 
 func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, error) {

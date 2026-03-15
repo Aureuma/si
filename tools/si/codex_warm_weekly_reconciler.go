@@ -1027,13 +1027,11 @@ func isGoTestBinary() bool {
 func warmWeeklyAutostartRequested() (bool, string) {
 	autostartPath, autostartErr := warmWeeklyAutostartMarkerPath()
 	disabledPath, disabledErr := warmWeeklyDisabledMarkerPath()
-	if autostartErr == nil && disabledErr == nil {
-		if state, delegated, err := maybeReadRustWarmupMarkerState(autostartPath, disabledPath); err == nil && delegated {
-			if state.Disabled {
-				return false, "disabled"
-			}
-			if state.AutostartPresent {
-				return true, "marker"
+	statePath, stateErr := warmWeeklyStatePath()
+	if autostartErr == nil && disabledErr == nil && stateErr == nil {
+		if decision, delegated, err := maybeReadRustWarmupAutostartDecision(statePath, autostartPath, disabledPath); err == nil && delegated {
+			if decision.Requested || strings.TrimSpace(decision.Reason) != "none" {
+				return decision.Requested, strings.TrimSpace(decision.Reason)
 			}
 		}
 	}

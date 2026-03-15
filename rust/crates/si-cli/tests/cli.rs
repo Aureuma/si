@@ -248,6 +248,45 @@ fn warmup_marker_write_and_set_disabled_update_files() {
 }
 
 #[test]
+fn warmup_autostart_decision_prefers_disabled_and_legacy_state() {
+    let home = tempdir().expect("tempdir");
+    let warmup_dir = home.path().join(".si/warmup");
+    fs::create_dir_all(&warmup_dir).expect("mkdir warmup dir");
+    fs::write(
+        warmup_dir.join("state.json"),
+        r#"{"version":3,"profiles":{"ferma":{"profile_id":"ferma","last_result":"ready"}}}"#,
+    )
+    .expect("write state");
+
+    let output = cargo_bin()
+        .args(["warmup", "autostart-decision", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["requested"], true);
+    assert_eq!(parsed["reason"], "legacy_state");
+
+    fs::write(warmup_dir.join("disabled.v1"), "disabled\n").expect("write disabled");
+    let output = cargo_bin()
+        .args(["warmup", "autostart-decision", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["requested"], false);
+    assert_eq!(parsed["reason"], "disabled");
+}
+
+#[test]
 fn providers_characteristics_json_matches_expected_shape() {
     let output = cargo_bin()
         .args(["providers", "characteristics", "--provider", "github", "--format", "json"])

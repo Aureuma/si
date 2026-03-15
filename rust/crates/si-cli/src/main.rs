@@ -35,10 +35,11 @@ use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as par
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
-    WarmupState, default_autostart_marker_path, default_disabled_marker_path,
-    default_state_path as default_warmup_state_path, load_state as load_warmup_state,
-    read_marker_state as read_warmup_marker_state, render_state_text as render_warmup_state_text,
-    save_state as save_warmup_state, set_disabled_marker as set_rust_warmup_disabled_marker,
+    WarmupState, classify_autostart_request, default_autostart_marker_path,
+    default_disabled_marker_path, default_state_path as default_warmup_state_path,
+    load_state as load_warmup_state, read_marker_state as read_warmup_marker_state,
+    render_state_text as render_warmup_state_text, save_state as save_warmup_state,
+    set_disabled_marker as set_rust_warmup_disabled_marker,
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
 use std::fmt;
@@ -851,6 +852,18 @@ enum FortRuntimeAgentStateCommand {
 
 #[derive(Debug, Subcommand)]
 enum WarmupCommand {
+    AutostartDecision {
+        #[arg(long)]
+        state_path: Option<PathBuf>,
+        #[arg(long)]
+        autostart_path: Option<PathBuf>,
+        #[arg(long)]
+        disabled_path: Option<PathBuf>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
     Status {
         #[arg(long)]
         path: Option<PathBuf>,
@@ -1968,6 +1981,19 @@ fn main() -> Result<()> {
             },
         },
         Command::Warmup { command } => match command {
+            WarmupCommand::AutostartDecision {
+                state_path,
+                autostart_path,
+                disabled_path,
+                home,
+                format,
+            } => run_warmup_autostart_decision(
+                state_path,
+                autostart_path,
+                disabled_path,
+                home,
+                format,
+            )?,
             WarmupCommand::Status { path, home, format } => run_warmup_status(path, home, format)?,
             WarmupCommand::State { command } => match command {
                 WarmupStateCommand::Write { path, state_json } => {
@@ -4181,6 +4207,37 @@ fn run_warmup_status(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
         OutputFormat::Text => print!("{}", render_warmup_state_text(&state, chrono::Utc::now())),
+    }
+    Ok(())
+}
+
+fn run_warmup_autostart_decision(
+    state_path: Option<PathBuf>,
+    autostart_path: Option<PathBuf>,
+    disabled_path: Option<PathBuf>,
+    home: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let state_path = match state_path {
+        Some(path) => path,
+        None => default_warmup_state_path(home.as_deref())?,
+    };
+    let autostart_path = match autostart_path {
+        Some(path) => path,
+        None => default_autostart_marker_path(home.as_deref())?,
+    };
+    let disabled_path = match disabled_path {
+        Some(path) => path,
+        None => default_disabled_marker_path(home.as_deref())?,
+    };
+    let marker_state = read_warmup_marker_state(autostart_path, disabled_path)?;
+    let state = load_warmup_state(state_path)?;
+    let decision = classify_autostart_request(&marker_state, &state);
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&decision)?),
+        OutputFormat::Text => {
+            println!("requested={} reason={}", decision.requested, decision.reason)
+        }
     }
     Ok(())
 }
