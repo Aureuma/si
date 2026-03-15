@@ -1063,6 +1063,36 @@ func TestMaybeBuildRustCodexRespawnPlanDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeReadRustCodexTmuxPlanDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"session_name\":\"si-codex-pane-profile-beta\",\"target\":\"si-codex-pane-profile-beta:0.0\",\"launch_command\":\"launch-cmd\",\"resume_command\":\"resume-cmd\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	plan, delegated, err := maybeReadRustCodexTmuxPlan("profile-beta", "/workspace/app", "sess-123", "profile-beta")
+	if err != nil {
+		t.Fatalf("maybeReadRustCodexTmuxPlan: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected codex tmux plan to delegate to Rust")
+	}
+	if plan == nil || plan.SessionName != "si-codex-pane-profile-beta" || plan.ResumeCommand != "resume-cmd" {
+		t.Fatalf("unexpected tmux plan %#v", plan)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\ntmux-plan\nprofile-beta\n--format\njson\n--start-dir\n/workspace/app\n--resume-session-id\nsess-123\n--resume-profile\nprofile-beta" {
+		t.Fatalf("unexpected tmux plan args %q", string(argsData))
+	}
+}
+
 func TestBuildRustCodexSpawnPlanArgsIncludesPlannerFlags(t *testing.T) {
 	args := buildRustCodexSpawnPlanArgs(rustCodexSpawnPlanRequest{
 		Name:          "ferma",
