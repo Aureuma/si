@@ -28,6 +28,11 @@ var (
 	warmWeeklySchedulerHealthFn    = warmWeeklySchedulerHealthy
 	launchWarmupCommandAsyncFn     = launchWarmupCommand
 	loggedInProfilesFn             = loggedInProfiles
+	ensureWarmWeeklySchedulerFn    = ensureWarmWeeklyReconcileScheduler
+	setWarmWeeklyDisabledFn        = setWarmWeeklyDisabled
+	writeWarmWeeklyMarkerFn        = writeWarmWeeklyAutostartMarker
+	runWarmWeeklyReconcileFn       = runWarmWeeklyReconcile
+	removeWarmWeeklySchedulerFn    = removeOfeliaWarmContainer
 )
 
 const (
@@ -113,14 +118,14 @@ func cmdWarmupEnable(args []string) {
 		printUsage("usage: si warmup enable [--profile <profile>] [--quiet] [--no-reconcile]")
 		return
 	}
-	if err := ensureWarmWeeklyReconcileScheduler(); err != nil {
+	if err := ensureWarmWeeklySchedulerFn(); err != nil {
 		appendWarmWeeklyLog("error", "warmup_enable_scheduler_failed", "", map[string]interface{}{"error": err.Error()})
 		fatal(err)
 	}
-	if err := setWarmWeeklyDisabled(false); err != nil {
+	if err := setWarmWeeklyDisabledFn(false); err != nil {
 		warnf("warmup enable: failed to clear disabled marker: %v", err)
 	}
-	if err := writeWarmWeeklyAutostartMarker(); err != nil {
+	if err := writeWarmWeeklyMarkerFn(); err != nil {
 		warnf("warmup enable: failed to write marker: %v", err)
 	}
 	if !*quiet {
@@ -137,7 +142,7 @@ func cmdWarmupEnable(args []string) {
 		Prompt:         weeklyWarmPrompt,
 		Trigger:        "enable",
 	}
-	if _, err := runWarmWeeklyReconcile(opts); err != nil {
+	if _, err := runWarmWeeklyReconcileFn(opts); err != nil {
 		appendWarmWeeklyLog("error", "warmup_enable_reconcile_failed", "", map[string]interface{}{"error": err.Error()})
 		fatal(err)
 	}
@@ -153,10 +158,10 @@ func cmdWarmupDisable(args []string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := removeOfeliaWarmContainer(ctx, defaultOfeliaName); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := removeWarmWeeklySchedulerFn(ctx, defaultOfeliaName); err != nil && !errors.Is(err, os.ErrNotExist) {
 		warnf("warmup disable: scheduler remove failed: %v", err)
 	}
-	if err := setWarmWeeklyDisabled(true); err != nil {
+	if err := setWarmWeeklyDisabledFn(true); err != nil {
 		warnf("warmup disable: failed to set disabled marker: %v", err)
 	}
 	if !*quiet {
@@ -188,7 +193,7 @@ func cmdWarmupReconcile(args []string) {
 	if opts.Prompt == "" {
 		opts.Prompt = weeklyWarmPrompt
 	}
-	summary, err := runWarmWeeklyReconcile(opts)
+	summary, err := runWarmWeeklyReconcileFn(opts)
 	if err != nil {
 		fatal(err)
 	}

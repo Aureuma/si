@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -361,6 +362,124 @@ func TestCmdWarmupStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "warmup\nstatus\n--format\njson" {
 		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
+func TestCmdWarmupEnableUsesParsedInputs(t *testing.T) {
+	prevEnsure := ensureWarmWeeklySchedulerFn
+	prevDisabled := setWarmWeeklyDisabledFn
+	prevMarker := writeWarmWeeklyMarkerFn
+	prevRun := runWarmWeeklyReconcileFn
+	t.Cleanup(func() {
+		ensureWarmWeeklySchedulerFn = prevEnsure
+		setWarmWeeklyDisabledFn = prevDisabled
+		writeWarmWeeklyMarkerFn = prevMarker
+		runWarmWeeklyReconcileFn = prevRun
+	})
+
+	ensureCalled := false
+	disabledValues := []bool{}
+	markerCalled := false
+	var gotOpts warmWeeklyReconcileOptions
+	ensureWarmWeeklySchedulerFn = func() error {
+		ensureCalled = true
+		return nil
+	}
+	setWarmWeeklyDisabledFn = func(disabled bool) error {
+		disabledValues = append(disabledValues, disabled)
+		return nil
+	}
+	writeWarmWeeklyMarkerFn = func() error {
+		markerCalled = true
+		return nil
+	}
+	runWarmWeeklyReconcileFn = func(opts warmWeeklyReconcileOptions) (warmWeeklyReconcileSummary, error) {
+		gotOpts = opts
+		return warmWeeklyReconcileSummary{}, nil
+	}
+
+	output := captureOutputForTest(t, func() {
+		cmdWarmupEnable([]string{"--profile", "ferma", "--quiet"})
+	})
+	if strings.TrimSpace(output) != "" {
+		t.Fatalf("expected quiet output, got %q", output)
+	}
+	if !ensureCalled {
+		t.Fatalf("expected scheduler ensure")
+	}
+	if len(disabledValues) != 1 || disabledValues[0] {
+		t.Fatalf("unexpected disabled marker calls: %#v", disabledValues)
+	}
+	if !markerCalled {
+		t.Fatalf("expected autostart marker write")
+	}
+	if len(gotOpts.ProfileKeys) != 1 || gotOpts.ProfileKeys[0] != "ferma" {
+		t.Fatalf("unexpected reconcile opts: %#v", gotOpts)
+	}
+	if !gotOpts.Quiet || gotOpts.Trigger != "enable" || gotOpts.MaxAttempts != 3 || gotOpts.Prompt != weeklyWarmPrompt {
+		t.Fatalf("unexpected reconcile opts: %#v", gotOpts)
+	}
+}
+
+func TestCmdWarmupDisableUsesParsedInputs(t *testing.T) {
+	prevRemove := removeWarmWeeklySchedulerFn
+	prevDisabled := setWarmWeeklyDisabledFn
+	t.Cleanup(func() {
+		removeWarmWeeklySchedulerFn = prevRemove
+		setWarmWeeklyDisabledFn = prevDisabled
+	})
+
+	removeCalled := false
+	removeWarmWeeklySchedulerFn = func(ctx context.Context, name string) error {
+		removeCalled = true
+		if name != defaultOfeliaName {
+			t.Fatalf("unexpected scheduler name %q", name)
+		}
+		return nil
+	}
+	var disabledValues []bool
+	setWarmWeeklyDisabledFn = func(disabled bool) error {
+		disabledValues = append(disabledValues, disabled)
+		return nil
+	}
+
+	output := captureOutputForTest(t, func() {
+		cmdWarmupDisable([]string{"--quiet"})
+	})
+	if strings.TrimSpace(output) != "" {
+		t.Fatalf("expected quiet output, got %q", output)
+	}
+	if !removeCalled {
+		t.Fatalf("expected scheduler removal")
+	}
+	if len(disabledValues) != 1 || !disabledValues[0] {
+		t.Fatalf("unexpected disabled marker calls: %#v", disabledValues)
+	}
+}
+
+func TestCmdWarmupReconcileUsesParsedInputs(t *testing.T) {
+	prevRun := runWarmWeeklyReconcileFn
+	t.Cleanup(func() {
+		runWarmWeeklyReconcileFn = prevRun
+	})
+
+	var gotOpts warmWeeklyReconcileOptions
+	runWarmWeeklyReconcileFn = func(opts warmWeeklyReconcileOptions) (warmWeeklyReconcileSummary, error) {
+		gotOpts = opts
+		return warmWeeklyReconcileSummary{Scanned: 1, Warmed: 1}, nil
+	}
+
+	output := captureOutputForTest(t, func() {
+		cmdWarmupReconcile([]string{"--profile", "ferma", "--force-bootstrap", "--max-attempts", "2", "--prompt", "hello"})
+	})
+	if !strings.Contains(output, "Warmup reconcile:") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	if len(gotOpts.ProfileKeys) != 1 || gotOpts.ProfileKeys[0] != "ferma" {
+		t.Fatalf("unexpected opts: %#v", gotOpts)
+	}
+	if !gotOpts.ForceBootstrap || gotOpts.Quiet || gotOpts.MaxAttempts != 2 || gotOpts.Prompt != "hello" || gotOpts.Trigger != "manual" {
+		t.Fatalf("unexpected opts: %#v", gotOpts)
 	}
 }
 
