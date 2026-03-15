@@ -1555,3 +1555,42 @@ func TestMaybeClearRustFortRuntimeAgentStateDelegates(t *testing.T) {
 		t.Fatalf("unexpected Rust CLI args %q", string(argsData))
 	}
 }
+
+func TestMaybeLoadRustCodexFortBootstrapDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	payload := `{"profile_id":"ferma","agent_id":"si-codex-ferma","session_id":"sess-1","host_url":"http://127.0.0.1:8088","container_host_url":"http://host.docker.internal:8088/","access_token_path":"/tmp/access.token","refresh_token_path":"/tmp/refresh.token","access_token_container_path":"/home/si/.si/access.token","refresh_token_container_path":"/home/si/.si/refresh.token"}`
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' " + shellSingleQuote(payload) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	boot, delegated, err := maybeLoadRustCodexFortBootstrap(
+		"/tmp/session.json",
+		"ferma",
+		"/tmp/access.token",
+		"/tmp/refresh.token",
+		"/home/si/.si/access.token",
+		"/home/si/.si/refresh.token",
+	)
+	if err != nil {
+		t.Fatalf("maybeLoadRustCodexFortBootstrap: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected fort bootstrap view to delegate to Rust")
+	}
+	if boot == nil || boot.AgentID != "si-codex-ferma" || boot.ContainerHostURL != "http://host.docker.internal:8088/" {
+		t.Fatalf("unexpected bootstrap view %#v", boot)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nbootstrap-view\n--path\n/tmp/session.json") {
+		t.Fatalf("unexpected Rust CLI args %q", string(argsData))
+	}
+}

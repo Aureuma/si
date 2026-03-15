@@ -23,9 +23,9 @@ use si_rs_dyad::{
     build_peek_plan as build_dyad_peek_plan, build_spawn_plan as build_dyad_spawn_plan,
 };
 use si_rs_fort::{
-    PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome, RefreshSuccess,
-    SessionState, apply_refresh_outcome_to_persisted_session_state,
-    classify_persisted_session_state, clear_persisted_runtime_agent_state,
+    BootstrapView, PersistedRuntimeAgentState, PersistedSessionState, RefreshOutcome,
+    RefreshSuccess, SessionState, apply_refresh_outcome_to_persisted_session_state,
+    build_bootstrap_view, classify_persisted_session_state, clear_persisted_runtime_agent_state,
     clear_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
     teardown_persisted_session_state,
@@ -769,6 +769,22 @@ enum FortSessionStateCommand {
     Clear {
         #[arg(long)]
         path: PathBuf,
+    },
+    BootstrapView {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long)]
+        access_token_path: String,
+        #[arg(long)]
+        refresh_token_path: String,
+        #[arg(long)]
+        access_token_container_path: String,
+        #[arg(long)]
+        refresh_token_container_path: String,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
     },
     Classify {
         #[arg(long)]
@@ -1835,6 +1851,23 @@ fn main() -> Result<()> {
                     write_fort_session_state(path, &state_json)?
                 }
                 FortSessionStateCommand::Clear { path } => clear_fort_session_state(path)?,
+                FortSessionStateCommand::BootstrapView {
+                    path,
+                    profile_id,
+                    access_token_path,
+                    refresh_token_path,
+                    access_token_container_path,
+                    refresh_token_container_path,
+                    format,
+                } => show_fort_session_bootstrap_view(
+                    path,
+                    profile_id,
+                    &access_token_path,
+                    &refresh_token_path,
+                    &access_token_container_path,
+                    &refresh_token_container_path,
+                    format,
+                )?,
                 FortSessionStateCommand::Classify { path, now_unix, format } => {
                     show_fort_session_state_classification(path, now_unix, format)?
                 }
@@ -2003,6 +2036,33 @@ fn clear_fort_session_state(path: PathBuf) -> Result<()> {
     Ok(())
 }
 
+fn show_fort_session_bootstrap_view(
+    path: PathBuf,
+    profile_id: Option<String>,
+    access_token_path: &str,
+    refresh_token_path: &str,
+    access_token_container_path: &str,
+    refresh_token_container_path: &str,
+    format: OutputFormat,
+) -> Result<()> {
+    let state = load_persisted_session_state(path)?;
+    let view = build_bootstrap_view(
+        &state,
+        profile_id.as_deref(),
+        access_token_path,
+        refresh_token_path,
+        access_token_container_path,
+        refresh_token_container_path,
+    )?;
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => render_fort_bootstrap_view_text(&view),
+    }
+
+    Ok(())
+}
+
 fn show_fort_runtime_agent_state(path: PathBuf, format: OutputFormat) -> Result<()> {
     let state = load_persisted_runtime_agent_state(path)?;
 
@@ -2094,6 +2154,18 @@ fn show_fort_session_state_teardown(
     }
 
     Ok(())
+}
+
+fn render_fort_bootstrap_view_text(view: &BootstrapView) {
+    println!("profile_id={}", view.profile_id);
+    println!("agent_id={}", view.agent_id);
+    println!("session_id={}", view.session_id);
+    println!("host_url={}", view.host_url);
+    println!("container_host_url={}", view.container_host_url);
+    println!("access_token_path={}", view.access_token_path);
+    println!("refresh_token_path={}", view.refresh_token_path);
+    println!("access_token_container_path={}", view.access_token_container_path);
+    println!("refresh_token_container_path={}", view.refresh_token_container_path);
 }
 
 fn build_fort_refresh_outcome(

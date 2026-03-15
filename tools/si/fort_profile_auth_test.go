@@ -705,6 +705,36 @@ func TestLoadCodexFortBootstrapFromProfileState(t *testing.T) {
 	}
 }
 
+func TestLoadCodexFortBootstrapFromProfileStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host_url\":\"http://127.0.0.1:8088\",\"container_host_url\":\"http://host.docker.internal:8088/\",\"access_token_path\":\"/tmp/access.token\",\"refresh_token_path\":\"/tmp/refresh.token\",\"access_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/access.token\",\"refresh_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/refresh.token\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	profile := codexProfile{ID: "alpha"}
+	boot, err := loadCodexFortBootstrapFromProfileState(profile)
+	if err != nil {
+		t.Fatalf("loadCodexFortBootstrapFromProfileState: %v", err)
+	}
+	if boot.AgentID != "si-codex-alpha" || boot.ContainerHostURL != "http://host.docker.internal:8088/" {
+		t.Fatalf("unexpected bootstrap: %+v", boot)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nbootstrap-view\n--path\n") {
+		t.Fatalf("expected bootstrap-view delegation, got %q", string(argsData))
+	}
+}
+
 func TestFortDesiredFileOwnershipFromEnv(t *testing.T) {
 	t.Setenv("SI_HOST_UID", "2222")
 	t.Setenv("SI_HOST_GID", "3333")
