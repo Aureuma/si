@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestRunVersionCommandDefaultsToGoVersion(t *testing.T) {
@@ -426,6 +427,45 @@ func TestMaybeSaveRustFortRuntimeAgentStateDelegatesAndWritesJSON(t *testing.T) 
 	}
 	if !strings.Contains(string(argsData), "\"profile_id\":\"ferma\"") {
 		t.Fatalf("expected marshaled runtime state json in args, got %q", string(argsData))
+	}
+}
+
+func TestMaybeApplyRustFortSessionRefreshOutcomeDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"rfs_existing\",\"access_expires_at\":\"2030-01-01T00:00:00Z\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"resumable\"}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	transition, delegated, err := maybeApplyRustFortSessionRefreshOutcome("/tmp/session.json", fortSessionRefreshResult{
+		AccessExpiresAt: "2030-01-01T00:00:00Z",
+	}, time.Unix(100, 0).UTC())
+	if err != nil {
+		t.Fatalf("maybeApplyRustFortSessionRefreshOutcome: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected fort refresh outcome to delegate to Rust")
+	}
+	if transition.State.AccessExpiresAt != "2030-01-01T00:00:00Z" {
+		t.Fatalf("unexpected transitioned state: %+v", transition)
+	}
+	if transition.Classification.State != "resumable" {
+		t.Fatalf("unexpected transitioned classification: %+v", transition)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nrefresh-outcome\n--path\n/tmp/session.json") {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+	if !strings.Contains(string(argsData), "--access-expires-at-unix\n1893456000") {
+		t.Fatalf("expected access expiry unix arg, got %q", string(argsData))
 	}
 }
 

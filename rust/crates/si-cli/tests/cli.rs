@@ -366,6 +366,53 @@ fn fort_runtime_agent_state_write_persists_normalized_json() {
 }
 
 #[test]
+fn fort_session_state_refresh_outcome_returns_updated_state_and_classification() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("session.json");
+    fs::write(
+        &state_path,
+        r#"{
+  "profile_id": "ferma",
+  "agent_id": "agent-ferma",
+  "session_id": "session-123",
+  "access_expires_at": "1970-01-01T00:01:30Z",
+  "refresh_expires_at": "1970-01-01T00:06:40Z"
+}
+"#,
+    )
+    .expect("write session state");
+    #[cfg(unix)]
+    fs::set_permissions(&state_path, std::os::unix::fs::PermissionsExt::from_mode(0o600))
+        .expect("chmod session state");
+
+    let output = cargo_bin()
+        .args(["fort", "session-state", "refresh-outcome", "--path"])
+        .arg(&state_path)
+        .args([
+            "--outcome",
+            "success",
+            "--now-unix",
+            "100",
+            "--access-expires-at-unix",
+            "500",
+            "--refresh-expires-at-unix",
+            "800",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["state"]["access_expires_at"], "1970-01-01T00:08:20Z");
+    assert_eq!(parsed["state"]["refresh_expires_at"], "1970-01-01T00:13:20Z");
+    assert_eq!(parsed["classification"]["state"], "resumable");
+}
+
+#[test]
 fn vault_trust_lookup_reports_matching_entry() {
     let store_dir = tempdir().expect("tempdir");
     let store_path = store_dir.path().join("trust.json");
