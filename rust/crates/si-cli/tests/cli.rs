@@ -771,6 +771,90 @@ fn dyad_remove_executes_actor_and_critic_docker_rm() {
 }
 
 #[test]
+fn dyad_lifecycle_smoke_works_with_fake_docker() {
+    let workspace = tempdir().expect("tempdir");
+    let configs = tempdir().expect("tempdir");
+    let home = tempdir().expect("tempdir");
+    let script_dir = tempdir().expect("tempdir");
+    let state_path = script_dir.path().join("state.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir .si");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nSTATE='{}'\ncmd=\"$1\"\nshift\ncase \"$cmd\" in\n  run)\n    printf '%s\\n' 'running' > \"$STATE\"\n    printf '%s\\n' 'container-id'\n    ;;\n  ps)\n    state='missing'\n    if [ -f \"$STATE\" ]; then state=$(tr -d '\\n' < \"$STATE\"); fi\n    if [ \"$state\" = 'removed' ] || [ \"$state\" = 'missing' ]; then exit 0; fi\n    actor_state=\"$state\"\n    critic_state=\"$state\"\n    printf '%s\\n' 'si-actor-alpha\t'\"$actor_state\"'\tactor-id\talpha\tios\tactor'\n    printf '%s\\n' 'si-critic-alpha\t'\"$critic_state\"'\tcritic-id\talpha\tios\tcritic'\n    ;;\n  logs)\n    printf '%s\\n' 'critic logs'\n    ;;\n  start)\n    printf '%s\\n' 'running' > \"$STATE\"\n    printf '%s\\n' 'started'\n    ;;\n  stop)\n    printf '%s\\n' 'exited' > \"$STATE\"\n    printf '%s\\n' 'stopped'\n    ;;\n  rm)\n    printf '%s\\n' 'removed' > \"$STATE\"\n    printf '%s\\n' 'removed'\n    ;;\n  *)\n    printf 'unexpected docker command: %s\\n' \"$cmd\" >&2\n    exit 1\n    ;;\nesac\n",
+            state_path.display()
+        ),
+    );
+
+    cargo_bin()
+        .args(["dyad", "spawn-start", "--name", "alpha", "--workspace"])
+        .arg(workspace.path())
+        .args(["--configs"])
+        .arg(configs.path())
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
+
+    let status_output = cargo_bin()
+        .args(["dyad", "status", "alpha", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status: Value = serde_json::from_slice(&status_output).expect("json output");
+    assert_eq!(status["found"], true);
+    assert_eq!(status["actor"]["status"], "running");
+    assert_eq!(status["critic"]["status"], "running");
+
+    let logs_output = cargo_bin()
+        .args(["dyad", "logs", "alpha", "--member", "critic", "--tail", "10", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8(logs_output).expect("utf8 output").contains("critic logs"));
+
+    cargo_bin().args(["dyad", "stop", "alpha", "--docker-bin"]).arg(&docker_bin).assert().success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "exited\n");
+
+    let stopped_status_output = cargo_bin()
+        .args(["dyad", "status", "alpha", "--format", "json", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let stopped_status: Value =
+        serde_json::from_slice(&stopped_status_output).expect("json output");
+    assert_eq!(stopped_status["actor"]["status"], "exited");
+    assert_eq!(stopped_status["critic"]["status"], "exited");
+
+    cargo_bin()
+        .args(["dyad", "start", "alpha", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "running\n");
+
+    cargo_bin()
+        .args(["dyad", "remove", "alpha", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success();
+    assert_eq!(fs::read_to_string(&state_path).expect("state"), "removed\n");
+}
+
+#[test]
 fn dyad_exec_executes_docker_exec_for_selected_member() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
