@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -296,6 +297,52 @@ func TestMaybeApplyRustDyadSpawnPlanMutatesOptionsWhenConfigured(t *testing.T) {
 	}
 	if !strings.Contains(string(argsData), "dyad\nspawn-plan\n--name\nalpha") {
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestRemoveDyadWithCompatibilityDelegatesToRustWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' 'removed'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output, delegated, err := removeDyadWithCompatibility(context.Background(), nil, "alpha")
+	if err != nil {
+		t.Fatalf("removeDyadWithCompatibility: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected removeDyadWithCompatibility to delegate")
+	}
+	if strings.TrimSpace(output) != "removed" {
+		t.Fatalf("unexpected output %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "dyad\nremove\nalpha" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestRemoveDyadWithCompatibilityRequiresClientWithoutRust(t *testing.T) {
+	t.Setenv(siRustCLIBinEnv, "")
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	_, delegated, err := removeDyadWithCompatibility(context.Background(), nil, "alpha")
+	if err == nil {
+		t.Fatalf("expected missing client error")
+	}
+	if delegated {
+		t.Fatalf("did not expect delegation without Rust")
+	}
+	if !strings.Contains(err.Error(), "client required") {
+		t.Fatalf("unexpected error %v", err)
 	}
 }
 
