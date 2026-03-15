@@ -880,7 +880,7 @@ func TestRefreshCodexProfileFortSessionLockedDelegatesRefreshTransitionToRustCLI
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"refresh-outcome\" ]; then\n  printf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_expires_at\":\"2030-01-01T00:00:00Z\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"resumable\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"show\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"refresh-outcome\" ]; then\n  printf '%s\\n' '{\"state\":{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host\":\"" + srv.URL + "\",\"container_host\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_expires_at\":\"2030-01-01T00:00:00Z\",\"refresh_expires_at\":\"2030-02-01T00:00:00Z\"},\"classification\":{\"state\":\"resumable\"}}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"bootstrap-view\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-1\",\"host_url\":\"" + srv.URL + "\",\"container_host_url\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_token_container_path\":\"" + strings.ReplaceAll(paths.AccessTokenContainerPath, "\\", "\\\\") + "\",\"refresh_token_container_path\":\"" + strings.ReplaceAll(paths.RefreshTokenContainerPath, "\\", "\\\\") + "\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
@@ -906,6 +906,91 @@ func TestRefreshCodexProfileFortSessionLockedDelegatesRefreshTransitionToRustCLI
 	}
 	if !strings.Contains(string(argsData), "fort\nsession-state\nwrite\n") {
 		t.Fatalf("expected delegated state write, got %q", string(argsData))
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nbootstrap-view\n") {
+		t.Fatalf("expected delegated bootstrap view, got %q", string(argsData))
+	}
+}
+
+func TestEnsureCodexProfileFortSessionUsesRustBootstrapViewAfterOpenWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+	prevStart := fortRuntimeAgentStartProcess
+	prevAlive := fortRuntimeAgentProcessAlive
+	t.Cleanup(func() {
+		fortRuntimeAgentStartProcess = prevStart
+		fortRuntimeAgentProcessAlive = prevAlive
+	})
+	fortRuntimeAgentStartProcess = func(profile codexProfile, paths fortProfilePaths) (fortProfileRuntimeAgentState, error) {
+		now := time.Now().UTC().Format(time.RFC3339)
+		return fortProfileRuntimeAgentState{ProfileID: profile.ID, PID: 4242, StartedAt: now, UpdatedAt: now}, nil
+	}
+	fortRuntimeAgentProcessAlive = func(state fortProfileRuntimeAgentState, profile codexProfile) bool {
+		return state.PID == 4242
+	}
+
+	tokenFile := filepath.Join(home, ".si", "fort", "bootstrap", "admin.token")
+	if err := os.MkdirAll(filepath.Dir(tokenFile), 0o700); err != nil {
+		t.Fatalf("mkdir bootstrap dir: %v", err)
+	}
+	if err := os.WriteFile(tokenFile, []byte(makeTestJWT(time.Now().Add(30*time.Minute))), 0o600); err != nil {
+		t.Fatalf("write bootstrap token: %v", err)
+	}
+	t.Setenv("FORT_BOOTSTRAP_TOKEN_FILE", tokenFile)
+	t.Setenv("FORT_BOOTSTRAP_REFRESH_TOKEN_FILE", filepath.Join(home, ".si", "fort", "bootstrap", "missing.refresh"))
+
+	profile := codexProfile{ID: "alpha"}
+	paths, err := fortProfileStatePaths(profile)
+	if err != nil {
+		t.Fatalf("fortProfileStatePaths: %v", err)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents":
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/si-codex-alpha/enable":
+			_, _ = w.Write([]byte(`{}`))
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/si-codex-alpha/policy":
+			_, _ = w.Write([]byte(`{"bindings":[{"repo":"repo","env":"prod","ops":["read"]}]}`))
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/auth/session/open":
+			_, _ = w.Write([]byte(`{"session_id":"sess-open","access_token":"access-open","refresh_token":"refresh-open","access_expires_at":"2030-01-01T00:00:00Z","refresh_expires_at":"2030-02-01T00:00:00Z"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	t.Setenv("FORT_HOST", srv.URL)
+	t.Setenv("SI_FORT_CONTAINER_HOST", srv.URL)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"session-state\" ] && [ \"$3\" = \"bootstrap-view\" ]; then\n  printf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"sess-open\",\"host_url\":\"" + srv.URL + "\",\"container_host_url\":\"" + srv.URL + "\",\"access_token_path\":\"" + strings.ReplaceAll(paths.AccessTokenHostPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(paths.RefreshTokenHostPath, "\\", "\\\\") + "\",\"access_token_container_path\":\"" + strings.ReplaceAll(paths.AccessTokenContainerPath, "\\", "\\\\") + "\",\"refresh_token_container_path\":\"" + strings.ReplaceAll(paths.RefreshTokenContainerPath, "\\", "\\\\") + "\"}'\n  exit 0\nfi\nif [ \"$1\" = \"fort\" ] && [ \"$2\" = \"runtime-agent-state\" ] && [ \"$3\" = \"write\" ]; then\n  exit 0\nfi\nexit 1\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	boot, err := ensureCodexProfileFortSession(context.Background(), nil, profile, "")
+	if err != nil {
+		t.Fatalf("ensureCodexProfileFortSession: %v", err)
+	}
+	if boot.SessionID != "sess-open" || boot.ContainerHostURL != srv.URL {
+		t.Fatalf("unexpected bootstrap: %+v", boot)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nwrite\n") {
+		t.Fatalf("expected delegated state write, got %q", string(argsData))
+	}
+	if !strings.Contains(string(argsData), "fort\nsession-state\nbootstrap-view\n") {
+		t.Fatalf("expected delegated bootstrap view, got %q", string(argsData))
 	}
 }
 
