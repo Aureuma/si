@@ -611,7 +611,9 @@ func TestPrepareFortRuntimeAuthUsesRustBootstrapViewForHostResolution(t *testing
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"\",\"host_url\":\"http://127.0.0.1:8088\",\"container_host_url\":\"http://host.docker.internal:8088/\",\"access_token_path\":\"" + strings.ReplaceAll(filepath.Join(profileFortDir, fortProfileAccessTokenFileName), "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(filepath.Join(profileFortDir, fortProfileRefreshTokenFileName), "\\", "\\\\") + "\",\"access_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/access.token\",\"refresh_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/refresh.token\"}'\n"
+	customAccessPath := filepath.Join(dir, "rust-access.token")
+	customRefreshPath := filepath.Join(dir, "rust-refresh.token")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"profile_id\":\"alpha\",\"agent_id\":\"si-codex-alpha\",\"session_id\":\"\",\"host_url\":\"http://127.0.0.1:8088\",\"container_host_url\":\"http://host.docker.internal:8088/\",\"access_token_path\":\"" + strings.ReplaceAll(customAccessPath, "\\", "\\\\") + "\",\"refresh_token_path\":\"" + strings.ReplaceAll(customRefreshPath, "\\", "\\\\") + "\",\"access_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/access.token\",\"refresh_token_container_path\":\"/home/si/.si/codex/profiles/alpha/fort/refresh.token\"}'\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
@@ -623,6 +625,12 @@ func TestPrepareFortRuntimeAuthUsesRustBootstrapViewForHostResolution(t *testing
 	}
 	if got := strings.TrimSpace(os.Getenv("FORT_HOST")); got != "http://host.docker.internal:8088/" {
 		t.Fatalf("unexpected FORT_HOST %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_TOKEN_PATH")); got != customAccessPath {
+		t.Fatalf("unexpected FORT_TOKEN_PATH %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN_PATH")); got != customRefreshPath {
+		t.Fatalf("unexpected FORT_REFRESH_TOKEN_PATH %q", got)
 	}
 	if got := strings.TrimSpace(os.Getenv("FORT_AGENT_ID")); got != "si-codex-alpha" {
 		t.Fatalf("unexpected FORT_AGENT_ID %q", got)
