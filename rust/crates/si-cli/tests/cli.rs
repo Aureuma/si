@@ -173,6 +173,29 @@ fn warmup_status_text_reports_empty_state() {
 }
 
 #[test]
+fn warmup_state_write_persists_normalized_json() {
+    let state_dir = tempdir().expect("tempdir");
+    let state_path = state_dir.path().join("state.json");
+
+    cargo_bin()
+        .args(["warmup", "state", "write", "--path"])
+        .arg(&state_path)
+        .args([
+            "--state-json",
+            r#"{"version":0,"updated_at":" 2030-03-19T12:00:00Z ","profiles":{" ferma ":{"profile_id":" ferma ","last_result":" ready "}}}"#,
+        ])
+        .assert()
+        .success();
+
+    let raw = fs::read_to_string(&state_path).expect("read persisted state");
+    let parsed: Value = serde_json::from_str(&raw).expect("json");
+    assert_eq!(parsed["version"], 3);
+    assert_eq!(parsed["updated_at"], "2030-03-19T12:00:00Z");
+    assert_eq!(parsed["profiles"]["ferma"]["profile_id"], "ferma");
+    assert_eq!(parsed["profiles"]["ferma"]["last_result"], "ready");
+}
+
+#[test]
 fn providers_characteristics_json_matches_expected_shape() {
     let output = cargo_bin()
         .args(["providers", "characteristics", "--provider", "github", "--format", "json"])
