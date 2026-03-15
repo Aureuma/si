@@ -998,6 +998,48 @@ func TestCmdDyadRemoveDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdDyadExecUsesParsedInputs(t *testing.T) {
+	prev := runDyadExecFn
+	t.Cleanup(func() {
+		runDyadExecFn = prev
+	})
+
+	var gotDyad string
+	var gotMember string
+	var gotCmd []string
+	var gotTTY bool
+	runDyadExecFn = func(dyad, member string, cmd []string, tty bool) error {
+		gotDyad = dyad
+		gotMember = member
+		gotCmd = append([]string(nil), cmd...)
+		gotTTY = tty
+		return nil
+	}
+
+	_ = captureOutputForTest(t, func() {
+		cmdDyadExec([]string{"--member", "critic", "--tty", "alpha", "--", "bash", "-lc", "echo hi"})
+	})
+
+	if gotDyad != "alpha" {
+		t.Fatalf("unexpected dyad %q", gotDyad)
+	}
+	if gotMember != "critic" {
+		t.Fatalf("unexpected member %q", gotMember)
+	}
+	if !gotTTY {
+		t.Fatalf("expected tty exec")
+	}
+	wantCmd := []string{"bash", "-lc", "echo hi"}
+	if len(gotCmd) != len(wantCmd) {
+		t.Fatalf("unexpected cmd len=%d want=%d (%v)", len(gotCmd), len(wantCmd), gotCmd)
+	}
+	for i := range wantCmd {
+		if gotCmd[i] != wantCmd[i] {
+			t.Fatalf("unexpected cmd[%d]=%q want %q", i, gotCmd[i], wantCmd[i])
+		}
+	}
+}
+
 func TestDyadDelegatedLifecycleSmoke(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

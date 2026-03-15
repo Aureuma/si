@@ -371,6 +371,7 @@ Progress notes:
 - completed: the shipping Go `respawn` command now has a focused command-level proof that the delegated Rust respawn plan drives ordered teardown targets, volume passthrough, and the follow-up spawn args instead of remaining an unverified advisory path
 - completed: the shipping Go dyad command layer now has a delegated fake-`si-rs` lifecycle smoke covering status, logs, start, stop, restart, remove, and cleanup, giving the compatibility boundary the same end-to-end proof that already exists for the Rust dyad CLI
 - completed: the shipping Go codex and dyad `list` commands now have direct delegated command proofs for the migrated Rust text/json list surfaces, not just helper-level bridge tests
+- completed: the shipping Go `run --no-tmux` path now has a direct delegated command proof for the migrated Rust codex exec surface, and `dyad exec` has a command-level proof for its parsed argument handoff into the migrated exec seam
 
 ### Phase 7: Provider migration
 

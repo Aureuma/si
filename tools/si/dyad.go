@@ -1253,10 +1253,12 @@ func cmdDyadExec(args []string) {
 			cmd = []string{line}
 		}
 	}
-	if err := execInDyad(dyad, memberVal, cmd, *tty); err != nil {
+	if err := runDyadExecFn(dyad, memberVal, cmd, *tty); err != nil {
 		fatal(err)
 	}
 }
+
+var runDyadExecFn = execInDyad
 
 func execInDyad(dyad, member string, cmd []string, tty bool) error {
 	if len(cmd) == 0 {
