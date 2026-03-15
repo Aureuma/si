@@ -641,6 +641,35 @@ func TestBuildDyadStatusResult(t *testing.T) {
 	}
 }
 
+func TestBuildDyadStatusResultWithNamesUsesResolvedNames(t *testing.T) {
+	actorInfo := &types.ContainerJSON{
+		ContainerJSONBase: &types.ContainerJSONBase{
+			State: &types.ContainerState{Status: "running"},
+		},
+	}
+	criticInfo := &types.ContainerJSON{
+		ContainerJSONBase: &types.ContainerJSONBase{
+			State: &types.ContainerState{Status: "exited"},
+		},
+	}
+
+	got := buildDyadStatusResultWithNames(
+		"atlas",
+		"si-dyad-atlas-actor-rust",
+		"1234567890abcdef",
+		actorInfo,
+		"si-dyad-atlas-critic-rust",
+		"fedcba0987654321",
+		criticInfo,
+	)
+	if got.Actor == nil || got.Actor.Name != "si-dyad-atlas-actor-rust" {
+		t.Fatalf("unexpected actor payload: %+v", got.Actor)
+	}
+	if got.Critic == nil || got.Critic.Name != "si-dyad-atlas-critic-rust" {
+		t.Fatalf("unexpected critic payload: %+v", got.Critic)
+	}
+}
+
 func TestResolveDyadContainerNameUsesRustStatusWhenConfigured(t *testing.T) {
 	prev := readRustDyadStatusForLookup
 	t.Cleanup(func() {
