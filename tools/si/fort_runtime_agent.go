@@ -105,6 +105,20 @@ func fortRuntimeAgentStep(ctx context.Context, profile codexProfile, paths fortP
 	if err != nil {
 		return 0, err
 	}
+	if classification, delegated, err := maybeClassifyRustFortSessionState(paths.SessionStateHostPath, time.Now().UTC().Unix()); err != nil {
+		return 0, err
+	} else if delegated {
+		switch classification.State {
+		case "bootstrap_required", "closed":
+			return 0, fmt.Errorf("fort session state requires bootstrap")
+		case "revoked":
+			reason := strings.TrimSpace(classification.Reason)
+			if reason == "" {
+				reason = "revoked"
+			}
+			return 0, fmt.Errorf("fort session state is %s", reason)
+		}
+	}
 	hostURL := strings.TrimSpace(state.Host)
 	if hostURL == "" {
 		return 0, fmt.Errorf("fort host is missing in session state")
