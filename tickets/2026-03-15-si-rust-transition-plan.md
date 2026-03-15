@@ -364,6 +364,7 @@ Progress notes:
 - completed: Go bridge helpers and focused delegation tests for Rust codex spawn-spec payloads
 - completed: Rust `codex spawn-run-args` surface exposing executable docker invocation args for the codex runtime path
 - completed: Rust codex now owns prompt segmentation and report extraction for tmux report captures, and the experimental Go report flow can delegate that parsing while preserving tmux polling, prompt submission, and session lifecycle control
+- completed: Rust codex CLI now has an offline fake-docker lifecycle smoke covering spawn-start, status-read, logs, stop, start, clone, and remove, providing an end-to-end runtime proof for the migrated codex lifecycle surface
 
 ### Phase 7: Provider migration
 
