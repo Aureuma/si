@@ -64,11 +64,16 @@ pub struct ContainerSpec {
     name: Option<String>,
     bind_mounts: Vec<BindMount>,
     volume_mounts: Vec<VolumeMount>,
+    published_ports: Vec<PublishedPort>,
+    labels: Vec<(String, String)>,
     env: Vec<(String, String)>,
     working_dir: Option<PathBuf>,
     command: Vec<String>,
     restart_policy: Option<String>,
     network: Option<String>,
+    user: Option<String>,
+    detach: bool,
+    auto_remove: bool,
 }
 
 impl ContainerSpec {
@@ -96,6 +101,11 @@ impl ContainerSpec {
         self
     }
 
+    pub fn label(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.labels.push((key.into(), value.into()));
+        self
+    }
+
     pub fn workdir(mut self, path: impl Into<PathBuf>) -> Self {
         self.working_dir = Some(path.into());
         self
@@ -120,6 +130,26 @@ impl ContainerSpec {
         self
     }
 
+    pub fn user(mut self, value: impl Into<String>) -> Self {
+        self.user = Some(value.into());
+        self
+    }
+
+    pub fn detach(mut self, value: bool) -> Self {
+        self.detach = value;
+        self
+    }
+
+    pub fn auto_remove(mut self, value: bool) -> Self {
+        self.auto_remove = value;
+        self
+    }
+
+    pub fn published_port(mut self, port: PublishedPort) -> Self {
+        self.published_ports.push(port);
+        self
+    }
+
     pub fn image(&self) -> &str {
         &self.image
     }
@@ -140,6 +170,10 @@ impl ContainerSpec {
         &self.env
     }
 
+    pub fn labels(&self) -> &[(String, String)] {
+        &self.labels
+    }
+
     pub fn working_dir(&self) -> Option<&Path> {
         self.working_dir.as_deref()
     }
@@ -154,6 +188,22 @@ impl ContainerSpec {
 
     pub fn network_ref(&self) -> Option<&str> {
         self.network.as_deref()
+    }
+
+    pub fn user_ref(&self) -> Option<&str> {
+        self.user.as_deref()
+    }
+
+    pub fn published_ports(&self) -> &[PublishedPort] {
+        &self.published_ports
+    }
+
+    pub fn detach_enabled(&self) -> bool {
+        self.detach
+    }
+
+    pub fn auto_remove_enabled(&self) -> bool {
+        self.auto_remove
     }
 
     pub fn validate(&self) -> Result<(), ContainerSpecError> {
@@ -171,6 +221,9 @@ impl ContainerSpec {
         for mount in &self.volume_mounts {
             mount.validate().map_err(ContainerSpecError::VolumeMount)?;
         }
+        for port in &self.published_ports {
+            port.validate().map_err(ContainerSpecError::PublishedPort)?;
+        }
         if let Some(path) = &self.working_dir {
             if !path.is_absolute() {
                 return Err(ContainerSpecError::InvalidWorkingDir { path: path.clone() });
@@ -182,7 +235,13 @@ impl ContainerSpec {
     pub fn docker_run_args(&self) -> Result<Vec<String>, ContainerSpecError> {
         self.validate()?;
 
-        let mut args = vec!["run".to_owned(), "--rm".to_owned()];
+        let mut args = vec!["run".to_owned()];
+        if self.auto_remove {
+            args.push("--rm".to_owned());
+        }
+        if self.detach {
+            args.push("-d".to_owned());
+        }
         if let Some(name) = &self.name {
             args.push("--name".to_owned());
             args.push(name.clone());
@@ -199,9 +258,21 @@ impl ContainerSpec {
             args.push("-w".to_owned());
             args.push(path.display().to_string());
         }
+        if let Some(user) = &self.user {
+            args.push("--user".to_owned());
+            args.push(user.clone());
+        }
+        for (key, value) in &self.labels {
+            args.push("--label".to_owned());
+            args.push(format!("{key}={value}"));
+        }
         for (key, value) in &self.env {
             args.push("-e".to_owned());
             args.push(format!("{key}={value}"));
+        }
+        for port in &self.published_ports {
+            args.push("-p".to_owned());
+            args.push(port.docker_publish_arg().map_err(ContainerSpecError::PublishedPort)?);
         }
         for mount in &self.bind_mounts {
             args.push("--mount".to_owned());
@@ -214,6 +285,48 @@ impl ContainerSpec {
         args.push(self.image.trim().to_owned());
         args.extend(self.command.iter().cloned());
         Ok(args)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedPort {
+    host_ip: String,
+    host_port: String,
+    container_port: u16,
+}
+
+impl PublishedPort {
+    pub fn new(host_port: impl Into<String>, container_port: u16) -> Self {
+        Self { host_ip: "127.0.0.1".to_owned(), host_port: host_port.into(), container_port }
+    }
+
+    pub fn host_ip(mut self, value: impl Into<String>) -> Self {
+        self.host_ip = value.into();
+        self
+    }
+
+    pub fn validate(&self) -> Result<(), PublishedPortError> {
+        if self.host_port.trim().is_empty() {
+            return Err(PublishedPortError::MissingHostPort);
+        }
+        Ok(())
+    }
+
+    pub fn host_ip_ref(&self) -> &str {
+        &self.host_ip
+    }
+
+    pub fn host_port(&self) -> &str {
+        &self.host_port
+    }
+
+    pub fn container_port(&self) -> u16 {
+        self.container_port
+    }
+
+    pub fn docker_publish_arg(&self) -> Result<String, PublishedPortError> {
+        self.validate()?;
+        Ok(format!("{}:{}:{}", self.host_ip.trim(), self.host_port.trim(), self.container_port))
     }
 }
 
@@ -290,6 +403,8 @@ pub enum ContainerSpecError {
     BindMount(#[from] BindMountError),
     #[error(transparent)]
     VolumeMount(#[from] VolumeMountError),
+    #[error(transparent)]
+    PublishedPort(#[from] PublishedPortError),
     #[error("container working directory must be absolute: {path}")]
     InvalidWorkingDir { path: PathBuf },
 }
@@ -300,6 +415,12 @@ pub enum VolumeMountError {
     MissingSource,
     #[error("volume target path must be absolute: {path}")]
     TargetNotAbsolute { path: PathBuf },
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum PublishedPortError {
+    #[error("published host port is required")]
+    MissingHostPort,
 }
 
 pub fn docker_binary_path() -> &'static Path {
@@ -316,10 +437,15 @@ mod tests {
         let temp_dir = tempdir().expect("tempdir");
         let spec = ContainerSpec::new("ghcr.io/aureuma/si:latest")
             .name("si-codex-ferma")
+            .auto_remove(false)
+            .detach(true)
             .restart_policy("unless-stopped")
             .network("si")
             .workdir("/workspace")
+            .user("root")
+            .label("si.component", "codex")
             .env("PROFILE", "ferma")
+            .published_port(PublishedPort::new("3000", 3000))
             .mount(BindMount::new(temp_dir.path(), "/workspace").read_only(true))
             .volume_mount(VolumeMount::new("si-codex-ferma", "/home/si/.codex"))
             .command(["bash", "-lc", "sleep infinity"]);
@@ -327,7 +453,7 @@ mod tests {
         let args = spec.docker_run_args().expect("docker args");
 
         assert_eq!(args[0], "run");
-        assert!(args.contains(&"--rm".to_owned()));
+        assert!(args.contains(&"-d".to_owned()));
         assert!(args.contains(&"--name".to_owned()));
         assert!(args.contains(&"--restart".to_owned()));
         assert!(args.contains(&"unless-stopped".to_owned()));
@@ -335,6 +461,12 @@ mod tests {
         assert!(args.contains(&"si".to_owned()));
         assert!(args.contains(&"-w".to_owned()));
         assert!(args.contains(&"/workspace".to_owned()));
+        assert!(args.contains(&"--user".to_owned()));
+        assert!(args.contains(&"root".to_owned()));
+        assert!(args.contains(&"--label".to_owned()));
+        assert!(args.contains(&"si.component=codex".to_owned()));
+        assert!(args.contains(&"-p".to_owned()));
+        assert!(args.contains(&"127.0.0.1:3000:3000".to_owned()));
         assert!(args.contains(&"si-codex-ferma".to_owned()));
         assert!(args.contains(&"-e".to_owned()));
         assert!(args.contains(&"PROFILE=ferma".to_owned()));
@@ -389,6 +521,13 @@ mod tests {
             VolumeMount::new("   ", "/workspace").docker_mount_arg().expect_err("missing volume");
 
         assert_eq!(err, VolumeMountError::MissingSource);
+    }
+
+    #[test]
+    fn rejects_missing_published_host_port() {
+        let err = PublishedPort::new("   ", 3000).docker_publish_arg().expect_err("missing port");
+
+        assert_eq!(err, PublishedPortError::MissingHostPort);
     }
 
     #[test]
