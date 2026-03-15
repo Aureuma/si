@@ -1199,35 +1199,28 @@ func fortSessionPathsFromEnv() (string, string, string, *codexFortBootstrap) {
 	sessionPath := ""
 	var boot *codexFortBootstrap
 	if profileID != "" && home != "" {
-		base := filepath.Join(home, ".si", "codex", "profiles", profileID, fortProfileStateDirName)
+		profileDir := filepath.Join(home, ".si", "codex", "profiles", profileID)
+		paths, err := fortProfilePathsFromProfileDir(profileDir, false)
+		if err != nil {
+			return defaultTokenPath, defaultRefreshPath, sessionPath, nil
+		}
+		base := paths.FortRootHostPath
 		if defaultTokenPath == "" {
-			defaultTokenPath = filepath.Join(base, fortProfileAccessTokenFileName)
+			defaultTokenPath = paths.AccessTokenHostPath
 		}
 		if defaultRefreshPath == "" {
-			defaultRefreshPath = filepath.Join(base, fortProfileRefreshTokenFileName)
+			defaultRefreshPath = paths.RefreshTokenHostPath
 		}
-		sessionPath = filepath.Join(base, fortProfileSessionStateFileName)
-		if loaded, delegated, err := maybeLoadRustCodexFortBootstrap(
-			sessionPath,
-			profileID,
-			defaultTokenPath,
-			defaultRefreshPath,
-			filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileAccessTokenFileName)),
-			filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileRefreshTokenFileName)),
-		); err == nil && delegated && loaded != nil {
-			boot = loaded
-		} else if loadedState, err := loadFortProfileSessionState(sessionPath); err == nil {
-			boot = &codexFortBootstrap{
-				ProfileID:                 strings.TrimSpace(loadedState.ProfileID),
-				AgentID:                   strings.TrimSpace(loadedState.AgentID),
-				SessionID:                 strings.TrimSpace(loadedState.SessionID),
-				HostURL:                   strings.TrimSpace(loadedState.Host),
-				ContainerHostURL:          strings.TrimSpace(loadedState.ContainerHost),
-				AccessTokenHostPath:       defaultTokenPath,
-				RefreshTokenHostPath:      defaultRefreshPath,
-				AccessTokenContainerPath:  filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileAccessTokenFileName)),
-				RefreshTokenContainerPath: filepath.ToSlash(filepath.Join("/home/si/.si", "codex", "profiles", profileID, fortProfileStateDirName, fortProfileRefreshTokenFileName)),
+		_ = base
+		sessionPath = paths.SessionStateHostPath
+		if loaded, err := loadCodexFortBootstrapFromPaths(profileID, paths); err == nil {
+			if strings.TrimSpace(loaded.AccessTokenHostPath) == "" {
+				loaded.AccessTokenHostPath = defaultTokenPath
 			}
+			if strings.TrimSpace(loaded.RefreshTokenHostPath) == "" {
+				loaded.RefreshTokenHostPath = defaultRefreshPath
+			}
+			boot = &loaded
 		}
 	}
 	return defaultTokenPath, defaultRefreshPath, sessionPath, boot

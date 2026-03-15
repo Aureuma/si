@@ -647,6 +647,56 @@ func TestPrepareFortRuntimeAuthUsesRustBootstrapViewForHostResolution(t *testing
 	}
 }
 
+func TestPrepareFortRuntimeAuthFallbackUsesSharedBootstrapLoader(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("SI_CODEX_PROFILE_ID", "alpha")
+	t.Setenv("SI_FORT_ALLOW_INSECURE_HOST", "1")
+	t.Setenv("FORT_HOST", "")
+	t.Setenv("FORT_AGENT_ID", "")
+	t.Setenv("FORT_PROFILE_ID", "")
+	t.Setenv("FORT_TOKEN_PATH", "")
+	t.Setenv("FORT_REFRESH_TOKEN_PATH", "")
+	t.Setenv(siRustCLIBinEnv, "")
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	profileFortDir := filepath.Join(home, ".si", "codex", "profiles", "alpha", fortProfileStateDirName)
+	if err := os.MkdirAll(profileFortDir, 0o700); err != nil {
+		t.Fatalf("mkdir profile fort dir: %v", err)
+	}
+	sessionPath := filepath.Join(profileFortDir, fortProfileSessionStateFileName)
+	accessPath := filepath.Join(profileFortDir, fortProfileAccessTokenFileName)
+	refreshPath := filepath.Join(profileFortDir, fortProfileRefreshTokenFileName)
+	if err := os.WriteFile(sessionPath, []byte(`{"profile_id":"alpha","agent_id":"si-codex-alpha","session_id":"sess-1","host":"http://127.0.0.1:8088"}`), 0o600); err != nil {
+		t.Fatalf("write session: %v", err)
+	}
+	if err := os.WriteFile(accessPath, []byte("access-token"), 0o600); err != nil {
+		t.Fatalf("write access token: %v", err)
+	}
+	if err := os.WriteFile(refreshPath, []byte("refresh-token"), 0o600); err != nil {
+		t.Fatalf("write refresh token: %v", err)
+	}
+
+	if _, err := prepareFortRuntimeAuth([]string{"get"}); err != nil {
+		t.Fatalf("prepareFortRuntimeAuth: %v", err)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_HOST")); got != "http://host.docker.internal:8088" {
+		t.Fatalf("unexpected FORT_HOST %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_TOKEN_PATH")); got != accessPath {
+		t.Fatalf("unexpected FORT_TOKEN_PATH %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_REFRESH_TOKEN_PATH")); got != refreshPath {
+		t.Fatalf("unexpected FORT_REFRESH_TOKEN_PATH %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_AGENT_ID")); got != "si-codex-alpha" {
+		t.Fatalf("unexpected FORT_AGENT_ID %q", got)
+	}
+	if got := strings.TrimSpace(os.Getenv("FORT_PROFILE_ID")); got != "alpha" {
+		t.Fatalf("unexpected FORT_PROFILE_ID %q", got)
+	}
+}
+
 func TestFortRequireAgentPolicyBindingsRejectsEmpty(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/agents/si-codex-alpha/policy" {
