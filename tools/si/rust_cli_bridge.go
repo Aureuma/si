@@ -492,6 +492,21 @@ func maybeRunRustDyadList(jsonOut bool) (string, bool, error) {
 	return output, true, nil
 }
 
+func maybeRunRustDyadStatus(dyad string, jsonOut bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	format := "text"
+	if jsonOut {
+		format = "json"
+	}
+	output, err := runRustCLIText("dyad", "status", strings.TrimSpace(dyad), "--format", format)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeRunRustWarmupStatus(jsonOut bool) (string, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return "", false, nil

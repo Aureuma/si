@@ -1050,28 +1050,10 @@ func cmdDyadStatus(args []string) {
 		}
 		name = selected
 	}
-	if rustResult, delegated, err := maybeReadRustDyadStatus(name); err != nil {
+	if output, delegated, err := maybeRunRustDyadStatus(name, *jsonOut); err != nil {
 		fatal(err)
 	} else if delegated {
-		result := dyadStatusResult{
-			Dyad:  strings.TrimSpace(rustResult.Dyad),
-			Found: rustResult.Found,
-		}
-		if rustResult.Actor != nil {
-			result.Actor = &dyadContainerStatus{
-				Name:   strings.TrimSpace(rustResult.Actor.Name),
-				ID:     strings.TrimSpace(rustResult.Actor.ID),
-				Status: strings.TrimSpace(rustResult.Actor.Status),
-			}
-		}
-		if rustResult.Critic != nil {
-			result.Critic = &dyadContainerStatus{
-				Name:   strings.TrimSpace(rustResult.Critic.Name),
-				ID:     strings.TrimSpace(rustResult.Critic.ID),
-				Status: strings.TrimSpace(rustResult.Critic.Status),
-			}
-		}
-		renderDyadStatusResult(result, *jsonOut)
+		fmt.Print(output)
 		return
 	}
 	client, err := shared.NewClient()
