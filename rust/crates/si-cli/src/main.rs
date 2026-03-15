@@ -1,6 +1,7 @@
 use anyhow::Result;
+use chrono::TimeZone;
 use clap::{Parser, Subcommand, ValueEnum};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use si_rs_codex::{
     SpawnContainerOptions, SpawnRequest, build_container_spec, build_remove_artifacts,
     build_spawn_plan,
@@ -339,6 +340,15 @@ enum CodexCommand {
         #[arg(long)]
         docker_bin: Option<PathBuf>,
     },
+    StatusRead {
+        name: String,
+        #[arg(long, default_value_t = false)]
+        raw: bool,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+        #[arg(long)]
+        docker_bin: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -512,6 +522,95 @@ struct CodexListEntryView {
     name: String,
     state: String,
     image: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct CodexStatusView {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    raw: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reasoning_effort: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    account_plan: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_left_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_reset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    five_hour_remaining_minutes: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_left_pct: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_reset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    weekly_remaining_minutes: Option<i32>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppServerEnvelope {
+    id: serde_json::Value,
+    #[serde(default)]
+    result: serde_json::Value,
+    error: Option<AppServerError>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppServerError {
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppRateLimitsResponse {
+    #[serde(rename = "rateLimits")]
+    rate_limits: AppRateLimitSnapshot,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppRateLimitSnapshot {
+    primary: Option<AppRateLimitWindow>,
+    secondary: Option<AppRateLimitWindow>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppRateLimitWindow {
+    #[serde(rename = "usedPercent")]
+    used_percent: i32,
+    #[serde(rename = "windowDurationMins")]
+    window_duration_mins: Option<i64>,
+    #[serde(rename = "resetsAt")]
+    resets_at: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppAccountResponse {
+    account: Option<AppAccount>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppAccount {
+    #[serde(rename = "type")]
+    account_type: String,
+    email: String,
+    #[serde(rename = "planType")]
+    plan_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppConfigResponse {
+    config: AppConfig,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppConfig {
+    model: Option<String>,
+    #[serde(rename = "model_reasoning_effort")]
+    model_reasoning_effort: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -754,6 +853,9 @@ fn main() -> Result<()> {
                 command,
             } => run_codex_exec(&name, workdir, interactive, tty, env, &user, docker_bin, command)?,
             CodexCommand::List { format, docker_bin } => run_codex_list(format, docker_bin)?,
+            CodexCommand::StatusRead { name, raw, format, docker_bin } => {
+                run_codex_status_read(&name, raw, format, docker_bin)?
+            }
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -1490,6 +1592,232 @@ fn run_codex_list(format: OutputFormat, docker_bin: Option<PathBuf>) -> Result<(
         }
     }
     Ok(())
+}
+
+fn run_codex_status_read(
+    name: &str,
+    raw: bool,
+    format: OutputFormat,
+    docker_bin: Option<PathBuf>,
+) -> Result<()> {
+    let artifacts = build_remove_artifacts(name)?;
+    let docker_program =
+        docker_bin.unwrap_or_else(|| si_rs_docker::docker_binary_path().to_path_buf());
+    let command = docker_container_exec_command(
+        docker_program.display().to_string(),
+        &ContainerExecSpec::new(artifacts.container_name)
+            .user("si")
+            .interactive(true)
+            .env("HOME", "/home/si")
+            .env("CODEX_HOME", "/home/si/.codex")
+            .env("TERM", "xterm-256color")
+            .command(["codex", "app-server"]),
+    )?;
+    let output = ProcessRunner.run(
+        &command,
+        &RunOptions {
+            stdin: StdinBehavior::Bytes(build_app_server_input()),
+            ..RunOptions::default()
+        },
+    )?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut combined = stdout.trim().to_owned();
+    if !stderr.trim().is_empty() {
+        if !combined.is_empty() {
+            combined.push('\n');
+        }
+        combined.push_str(stderr.trim());
+    }
+    if !output.status.success() {
+        anyhow::bail!(if combined.is_empty() { "docker exec failed".to_owned() } else { combined });
+    }
+    let mut status = parse_app_server_status(&combined)?;
+    if raw {
+        status.raw = Some(combined);
+    }
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&status)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&status)?),
+    }
+    Ok(())
+}
+
+fn build_app_server_input() -> Vec<u8> {
+    let requests = [
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {
+                    "name": "si",
+                    "version": si_rs_core::version::current_version(),
+                }
+            }
+        }),
+        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "account/rateLimits/read", "params": null}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 3, "method": "account/read", "params": {}}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 4, "method": "config/read", "params": {}}),
+    ];
+    let mut payload = Vec::new();
+    for request in requests {
+        payload.extend(serde_json::to_vec(&request).expect("app server request json"));
+        payload.push(b'\n');
+    }
+    payload
+}
+
+fn parse_app_server_status(raw: &str) -> Result<CodexStatusView> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        anyhow::bail!("empty app-server output");
+    }
+    let mut rate_resp: Option<AppRateLimitsResponse> = None;
+    let mut account_resp: Option<AppAccountResponse> = None;
+    let mut config_resp: Option<AppConfigResponse> = None;
+    let mut rate_err: Option<String> = None;
+
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let Ok(envelope) = serde_json::from_str::<AppServerEnvelope>(line) else {
+            continue;
+        };
+        let Some(id) = parse_app_server_id(&envelope.id) else {
+            continue;
+        };
+        if let Some(error) = envelope.error {
+            if id == 2 {
+                let message = error.message.trim();
+                rate_err = Some(if message.is_empty() {
+                    "rate limits request failed".to_owned()
+                } else {
+                    message.to_owned()
+                });
+            }
+            continue;
+        }
+        match id {
+            2 => {
+                if let Ok(parsed) = serde_json::from_value::<AppRateLimitsResponse>(envelope.result)
+                {
+                    rate_resp = Some(parsed);
+                }
+            }
+            3 => {
+                if let Ok(parsed) = serde_json::from_value::<AppAccountResponse>(envelope.result) {
+                    account_resp = Some(parsed);
+                }
+            }
+            4 => {
+                if let Ok(parsed) = serde_json::from_value::<AppConfigResponse>(envelope.result) {
+                    config_resp = Some(parsed);
+                }
+            }
+            _ => {}
+        }
+    }
+    if let Some(rate_err) = rate_err {
+        anyhow::bail!(rate_err);
+    }
+    let Some(rate_resp) = rate_resp else {
+        anyhow::bail!("rate limits missing");
+    };
+    let total_limit_min = std::env::var("CODEX_PLAN_LIMIT_MINUTES")
+        .ok()
+        .and_then(|value| value.trim().parse::<i64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(300);
+    let now = chrono::Local::now();
+    let (five_hour_left_pct, five_hour_remaining_minutes, five_hour_reset) = rate_resp
+        .rate_limits
+        .primary
+        .as_ref()
+        .map(|window| window_usage(window, total_limit_min, now))
+        .unwrap_or((None, None, None));
+    let (weekly_left_pct, weekly_remaining_minutes, weekly_reset) = rate_resp
+        .rate_limits
+        .secondary
+        .as_ref()
+        .map(|window| window_usage(window, 0, now))
+        .unwrap_or((None, None, None));
+
+    Ok(CodexStatusView {
+        source: Some("app-server".to_owned()),
+        raw: None,
+        model: config_resp
+            .as_ref()
+            .and_then(|resp| resp.config.model.clone())
+            .filter(|v| !v.trim().is_empty()),
+        reasoning_effort: config_resp
+            .as_ref()
+            .and_then(|resp| resp.config.model_reasoning_effort.clone())
+            .filter(|v| !v.trim().is_empty()),
+        account_email: account_resp
+            .as_ref()
+            .and_then(|resp| resp.account.as_ref())
+            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
+            .map(|account| account.email.trim().to_owned())
+            .filter(|v| !v.is_empty()),
+        account_plan: account_resp
+            .as_ref()
+            .and_then(|resp| resp.account.as_ref())
+            .filter(|account| account.account_type.eq_ignore_ascii_case("chatgpt"))
+            .map(|account| account.plan_type.trim().to_owned())
+            .filter(|v| !v.is_empty()),
+        five_hour_left_pct,
+        five_hour_reset,
+        five_hour_remaining_minutes,
+        weekly_left_pct,
+        weekly_reset,
+        weekly_remaining_minutes,
+    })
+}
+
+fn parse_app_server_id(value: &serde_json::Value) -> Option<i64> {
+    match value {
+        serde_json::Value::Number(number) => number.as_i64(),
+        serde_json::Value::String(value) => value.trim().parse::<i64>().ok(),
+        _ => None,
+    }
+}
+
+fn window_usage(
+    window: &AppRateLimitWindow,
+    fallback_minutes: i64,
+    now: chrono::DateTime<chrono::Local>,
+) -> (Option<f64>, Option<i32>, Option<String>) {
+    let used = window.used_percent as f64;
+    if !(0.0..=100.0).contains(&used) {
+        return (None, None, None);
+    }
+    let remaining_pct = 100.0 - used;
+    let window_minutes = window.window_duration_mins.unwrap_or(fallback_minutes);
+    let remaining_minutes = window
+        .resets_at
+        .and_then(|timestamp| chrono::Local.timestamp_opt(timestamp, 0).single())
+        .filter(|reset_at| *reset_at > now)
+        .map(|reset_at| ((reset_at - now).num_seconds() as f64 / 60.0).ceil() as i32)
+        .filter(|value| *value > 0)
+        .or_else(|| {
+            if window_minutes > 0 {
+                Some(((window_minutes as f64) * remaining_pct / 100.0).round() as i32)
+            } else {
+                None
+            }
+        });
+    let reset = window
+        .resets_at
+        .and_then(|timestamp| chrono::Local.timestamp_opt(timestamp, 0).single())
+        .map(format_reset_at);
+    (Some(remaining_pct), remaining_minutes, reset)
+}
+
+fn format_reset_at(time: chrono::DateTime<chrono::Local>) -> String {
+    time.format("%b %-d, %Y %-I:%M %p").to_string()
 }
 
 fn default_home_dir() -> PathBuf {

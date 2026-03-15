@@ -134,7 +134,30 @@ func cmdCodexStatus(args []string) {
 		fatal(fmt.Errorf("codex container %s not found", containerName))
 	}
 
-	parsed, raw, err := fetchCodexAppServerStatus(ctx, client, id)
+	var parsed codexStatus
+	var raw string
+	if rustStatus, delegated, rustErr := maybeReadRustCodexStatus(name, *showRaw); rustErr != nil {
+		err = rustErr
+	} else if delegated && rustStatus != nil {
+		parsed = codexStatus{
+			Source:            strings.TrimSpace(rustStatus.Source),
+			Raw:               strings.TrimSpace(rustStatus.Raw),
+			Model:             strings.TrimSpace(rustStatus.Model),
+			ReasoningEffort:   strings.TrimSpace(rustStatus.ReasoningEffort),
+			AccountEmail:      strings.TrimSpace(rustStatus.AccountEmail),
+			AccountPlan:       strings.TrimSpace(rustStatus.AccountPlan),
+			FiveHourLeftPct:   rustStatus.FiveHourLeftPct,
+			FiveHourReset:     strings.TrimSpace(rustStatus.FiveHourReset),
+			FiveHourRemaining: rustStatus.FiveHourRemaining,
+			WeeklyLeftPct:     rustStatus.WeeklyLeftPct,
+			WeeklyReset:       strings.TrimSpace(rustStatus.WeeklyReset),
+			WeeklyRemaining:   rustStatus.WeeklyRemaining,
+		}
+		raw = strings.TrimSpace(rustStatus.Raw)
+		err = nil
+	} else {
+		parsed, raw, err = fetchCodexAppServerStatus(ctx, client, id)
+	}
 	if err != nil {
 		if isAuthFailureError(err) {
 			if hasProfileCandidate {
