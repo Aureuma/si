@@ -228,6 +228,7 @@ Progress notes:
 - completed: experimental Go non-tmux custom codex exec can now delegate Docker exec argument assembly and execution to Rust while interactive shell mode remains on the Go path
 - completed: experimental Go codex `list`/`ps` now delegates Docker container listing to Rust for both text and JSON output
 - completed: experimental Go container-backed codex `status` can now delegate the app-server exec + parse step to Rust while Go retains container lookup, profile fallback, and final output rendering
+- completed: experimental Go `respawn` now delegates deterministic remove-target normalization and ordering to a Rust respawn planner while Go retains interactive profile/container selection and final spawn orchestration
 
 ### Phase 5: Security/runtime migration
 
