@@ -251,6 +251,72 @@ func TestCmdCodexRemoveAllUsesBatchFlow(t *testing.T) {
 	}
 }
 
+func TestCmdCodexSpawnUsesRustPlanBeforeExecution(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	settingsDir := filepath.Join(home, ".si", "codex")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir settings dir: %v", err)
+	}
+	settingsToml := "schema_version = 1\n[codex.profiles.entries.ferma]\nname = \"Ferma\"\nemail = \"ferma@example.com\"\n"
+	if err := os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsToml), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	workspace := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\ncase \"$2\" in\n  remove-plan)\n    printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"slug\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-gh-ferma\"}'\n    ;;\n  spawn-plan)\n    printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"workspace_host\":\"" + filepath.ToSlash(workspace) + "\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"" + filepath.ToSlash(workspace) + "\",\"workdir\":\"" + filepath.ToSlash(workspace) + "\",\"codex_volume\":\"codex-rust\",\"skills_volume\":\"skills-rust\",\"gh_volume\":\"gh-rust\",\"image\":\"image-rust\",\"network_name\":\"si-rust\",\"docker_socket\":true,\"detach\":true,\"clean_slate\":false,\"env\":[\"HOME=/home/si\"]}'\n    ;;\n  spawn-spec)\n    printf '%s\\n' '{\"container_name\":\"si-codex-ferma\",\"image\":\"image-rust\",\"working_dir\":\"" + filepath.ToSlash(workspace) + "\",\"network\":\"si-rust\",\"restart_policy\":\"unless-stopped\",\"command\":[\"bash\",\"-lc\",\"sleep infinity\"],\"env\":[{\"key\":\"HOME\",\"value\":\"/home/si\"}],\"volume_mounts\":[{\"source\":\"codex-rust\",\"target\":\"/home/si/.codex\",\"read_only\":false},{\"source\":\"skills-rust\",\"target\":\"/home/si/.codex/skills\",\"read_only\":false},{\"source\":\"gh-rust\",\"target\":\"/home/si/.config/gh\",\"read_only\":false}],\"bind_mounts\":[]}'\n    ;;\n  *)\n    printf 'unexpected command: %s\\n' \"$2\" >&2\n    exit 1\n    ;;\nesac\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prev := observeCodexSpawnPreparedFn
+	t.Cleanup(func() {
+		observeCodexSpawnPreparedFn = prev
+	})
+	var got codexSpawnPrepared
+	observeCodexSpawnPreparedFn = func(prepared codexSpawnPrepared) (bool, error) {
+		got = prepared
+		return true, nil
+	}
+
+	_ = captureOutputForTest(t, func() {
+		cmdCodexSpawn([]string{"ferma", "--profile", "ferma", "--workspace", workspace, "--image", "old-image", "--network", "old-net"})
+	})
+
+	if got.Name != "ferma" || got.ContainerName != "si-codex-ferma" {
+		t.Fatalf("unexpected prepared spawn: %#v", got)
+	}
+	if got.Image != "image-rust" || got.NetworkName != "si-rust" {
+		t.Fatalf("unexpected prepared spawn: %#v", got)
+	}
+	if got.CodexVolume != "codex-rust" || got.SkillsVolume != "skills-rust" || got.GHVolume != "gh-rust" {
+		t.Fatalf("unexpected prepared spawn: %#v", got)
+	}
+	if got.Workdir != filepath.ToSlash(workspace) || got.DesiredWorkspaceHost != filepath.ToSlash(workspace) {
+		t.Fatalf("unexpected prepared spawn: %#v", got)
+	}
+	if got.ProfileID != "ferma" || !got.DelegatedSpawnPlan || !got.HasRustSpec {
+		t.Fatalf("unexpected prepared spawn: %#v", got)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if !strings.Contains(string(argsData), "codex\nspawn-spec") {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
 func TestCodexDelegatedLifecycleSmoke(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
