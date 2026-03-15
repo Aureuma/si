@@ -35,7 +35,7 @@ func TestCmdCodexStartDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
 	scriptPath := filepath.Join(dir, "si-rs")
-	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '--' >>" + shellSingleQuote(argsPath) + "\nif [ \"$1\" = \"codex\" ] && [ \"$2\" = \"remove-plan\" ]; then\n  printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"slug\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-github-ferma\"}'\nfi\n"
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"action\":\"start\",\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"output\":\"started\"}'\n"
 	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
@@ -43,14 +43,17 @@ func TestCmdCodexStartDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	t.Setenv(siRustCLIBinEnv, scriptPath)
 	t.Setenv(siExperimentalRustCLIEnv, "")
 
-	_ = captureOutputForTest(t, func() {
+	output := captureOutputForTest(t, func() {
 		cmdCodexStart([]string{"ferma"})
 	})
+	if !strings.Contains(output, "started") {
+		t.Fatalf("unexpected output: %q", output)
+	}
 	argsData, err := os.ReadFile(argsPath)
 	if err != nil {
 		t.Fatalf("read args file: %v", err)
 	}
-	if !strings.Contains(string(argsData), "codex\nstart\nferma") {
+	if strings.TrimSpace(string(argsData)) != "codex\nstart\nferma\n--format\njson" {
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }

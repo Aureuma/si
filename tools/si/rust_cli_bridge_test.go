@@ -1812,6 +1812,37 @@ func TestMaybeRunRustCodexRemoveResultDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeRunRustCodexContainerActionResultDelegatesAndParsesJSON(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"action\":\"start\",\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"output\":\"started\"}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	result, delegated, err := maybeRunRustCodexContainerActionResult("start", "ferma")
+	if err != nil {
+		t.Fatalf("maybeRunRustCodexContainerActionResult: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected codex action result to delegate to Rust")
+	}
+	if result == nil || result.ContainerName != "si-codex-ferma" || result.Action != "start" {
+		t.Fatalf("unexpected result %#v", result)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "codex\nstart\nferma\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args %q", string(argsData))
+	}
+}
+
 func TestMaybeClearRustFortSessionStateDelegates(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
