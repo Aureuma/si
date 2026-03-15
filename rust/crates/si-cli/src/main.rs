@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Serialize;
-use si_rs_codex::{SpawnRequest, build_spawn_plan};
+use si_rs_codex::{SpawnContainerOptions, SpawnRequest, build_container_spec, build_spawn_plan};
 use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
 };
@@ -126,6 +126,50 @@ enum CodexCommand {
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
+    SpawnSpec {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        profile_id: Option<String>,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        workdir: Option<String>,
+        #[arg(long)]
+        codex_volume: Option<String>,
+        #[arg(long)]
+        skills_volume: Option<String>,
+        #[arg(long)]
+        gh_volume: Option<String>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        gh_pat: Option<String>,
+        #[arg(long, default_value_t = true)]
+        docker_socket: bool,
+        #[arg(long, default_value_t = true)]
+        detach: bool,
+        #[arg(long, default_value_t = false)]
+        clean_slate: bool,
+        #[arg(long)]
+        image: Option<String>,
+        #[arg(long)]
+        network: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        ssh_auth_sock: Option<PathBuf>,
+        #[arg(long)]
+        vault_env_file: Option<PathBuf>,
+        #[arg(long, default_value_t = true)]
+        include_host_si: bool,
+        #[arg(long = "env")]
+        env: Vec<String>,
+        #[arg(long)]
+        cmd: Option<String>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -247,6 +291,32 @@ struct CodexBindMountView {
     read_only: bool,
 }
 
+#[derive(Debug, Serialize)]
+struct CodexVolumeMountView {
+    source: String,
+    target: String,
+    read_only: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexEnvVarView {
+    key: String,
+    value: String,
+}
+
+#[derive(Debug, Serialize)]
+struct CodexSpawnSpecView {
+    image: String,
+    name: Option<String>,
+    network: Option<String>,
+    restart_policy: Option<String>,
+    working_dir: Option<String>,
+    command: Vec<String>,
+    env: Vec<CodexEnvVarView>,
+    bind_mounts: Vec<CodexBindMountView>,
+    volume_mounts: Vec<CodexVolumeMountView>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -311,6 +381,51 @@ fn main() -> Result<()> {
                 vault_env_file,
                 include_host_si,
                 env,
+                format,
+            )?,
+            CodexCommand::SpawnSpec {
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                cmd,
+                format,
+            } => show_codex_spawn_spec(
+                name,
+                profile_id,
+                workspace,
+                workdir,
+                codex_volume,
+                skills_volume,
+                gh_volume,
+                repo,
+                gh_pat,
+                docker_socket,
+                detach,
+                clean_slate,
+                image,
+                network,
+                home,
+                ssh_auth_sock,
+                vault_env_file,
+                include_host_si,
+                env,
+                cmd,
                 format,
             )?,
         },
@@ -594,6 +709,111 @@ fn show_codex_spawn_plan(
             println!("detach={}", view.detach);
             println!("env={}", view.env.join(","));
             println!("mounts={}", view.mounts.len());
+        }
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_codex_spawn_spec(
+    name: Option<String>,
+    profile_id: Option<String>,
+    workspace: PathBuf,
+    workdir: Option<String>,
+    codex_volume: Option<String>,
+    skills_volume: Option<String>,
+    gh_volume: Option<String>,
+    repo: Option<String>,
+    gh_pat: Option<String>,
+    docker_socket: bool,
+    detach: bool,
+    clean_slate: bool,
+    image: Option<String>,
+    network: Option<String>,
+    home: Option<PathBuf>,
+    ssh_auth_sock: Option<PathBuf>,
+    vault_env_file: Option<PathBuf>,
+    include_host_si: bool,
+    env: Vec<String>,
+    cmd: Option<String>,
+    format: OutputFormat,
+) -> Result<()> {
+    let mut host_ctx = HostMountContext::from_env();
+    if home.is_some() {
+        host_ctx.home_dir = home;
+    }
+    if ssh_auth_sock.is_some() {
+        host_ctx.ssh_auth_sock = ssh_auth_sock;
+    }
+    let plan = build_spawn_plan(
+        &SpawnRequest {
+            name,
+            profile_id,
+            image,
+            network_name: network,
+            workspace_host: workspace,
+            workdir,
+            codex_volume,
+            skills_volume,
+            gh_volume,
+            repo,
+            gh_pat,
+            docker_socket,
+            clean_slate,
+            detach,
+            container_home: None,
+            host_vault_env_file: vault_env_file,
+            include_host_si,
+            additional_env: env,
+        },
+        &host_ctx,
+    )?;
+    let spec = build_container_spec(&plan, &SpawnContainerOptions { command: cmd })?;
+    let view = CodexSpawnSpecView {
+        image: spec.image().to_owned(),
+        name: spec.name_ref().map(str::to_owned),
+        network: spec.network_ref().map(str::to_owned),
+        restart_policy: spec.restart_policy_ref().map(str::to_owned),
+        working_dir: spec.working_dir().map(|path| path.display().to_string()),
+        command: spec.command_args().to_vec(),
+        env: spec
+            .env_vars()
+            .iter()
+            .map(|(key, value)| CodexEnvVarView { key: key.clone(), value: value.clone() })
+            .collect(),
+        bind_mounts: spec
+            .bind_mounts()
+            .iter()
+            .map(|mount| CodexBindMountView {
+                source: mount.source().display().to_string(),
+                target: mount.target().display().to_string(),
+                read_only: mount.is_read_only(),
+            })
+            .collect(),
+        volume_mounts: spec
+            .volume_mounts()
+            .iter()
+            .map(|mount| CodexVolumeMountView {
+                source: mount.source().to_owned(),
+                target: mount.target().display().to_string(),
+                read_only: mount.is_read_only(),
+            })
+            .collect(),
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("image={}", view.image);
+            println!("name={}", view.name.as_deref().unwrap_or("-"));
+            println!("network={}", view.network.as_deref().unwrap_or("-"));
+            println!("restart_policy={}", view.restart_policy.as_deref().unwrap_or("-"));
+            println!("working_dir={}", view.working_dir.as_deref().unwrap_or("-"));
+            println!("command={}", view.command.join(" "));
+            println!("env={}", view.env.len());
+            println!("bind_mounts={}", view.bind_mounts.len());
+            println!("volume_mounts={}", view.volume_mounts.len());
         }
     }
 
