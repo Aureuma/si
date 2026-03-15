@@ -31,6 +31,7 @@ Quick links: [`docs/index.mdx`](docs/index.mdx) · [`docs/CLI_REFERENCE.md`](doc
 ## Repo layout
 
 - `tools/si`: main Go CLI.
+- `rust/`: staged Rust workspace for the gradual CLI rewrite.
 - `tools/si-browser`: browser runtime Docker assets.
 - `tools/si-image`: unified runtime image used by codex and dyad containers.
 - `docs/`: Markdown + Mintlify docs content.
@@ -125,6 +126,14 @@ Run module tests:
 
 ```bash
 ./tools/test.sh
+```
+
+Run the staged Rust workspace checks:
+
+```bash
+cargo fmt --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
 Run installer smoke tests:

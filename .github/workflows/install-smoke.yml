@@ -44,6 +44,36 @@ jobs:
       - name: Run Go workspace tests
         run: ./tools/test.sh
 
+  rust-tests:
+    name: Rust workspace checks (ubuntu)
+    needs: [docs-scope]
+    if: needs.docs-scope.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> .artifacts/cargo-target
+
+      - name: Run Rust format check
+        run: cargo fmt --check
+
+      - name: Run Rust clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
   codex-image-preflight:
     name: Codex image compatibility preflight
     needs: [docs-scope]
