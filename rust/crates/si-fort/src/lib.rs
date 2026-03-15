@@ -40,6 +40,18 @@ pub struct PersistedSessionState {
     pub updated_at: String,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PersistedRuntimeAgentState {
+    pub profile_id: String,
+    pub pid: i32,
+    #[serde(default)]
+    pub command_path: String,
+    #[serde(default)]
+    pub started_at: String,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum SessionState {
     BootstrapRequired,
@@ -181,6 +193,18 @@ impl PersistedSessionState {
     }
 }
 
+impl PersistedRuntimeAgentState {
+    pub fn normalized(&self) -> Self {
+        Self {
+            profile_id: self.profile_id.trim().to_owned(),
+            pid: self.pid,
+            command_path: self.command_path.trim().to_owned(),
+            started_at: self.started_at.trim().to_owned(),
+            updated_at: self.updated_at.trim().to_owned(),
+        }
+    }
+}
+
 pub fn classify_session(snapshot: Option<SessionSnapshot>, now_unix: i64) -> SessionState {
     let Some(snapshot) = snapshot else {
         return SessionState::BootstrapRequired;
@@ -305,6 +329,49 @@ pub fn classify_persisted_session_state(
     now_unix: i64,
 ) -> Result<SessionState, PersistedSessionError> {
     Ok(classify_session(Some(state.to_snapshot()?), now_unix))
+}
+
+pub fn save_persisted_runtime_agent_state(
+    path: impl AsRef<Path>,
+    state: &PersistedRuntimeAgentState,
+) -> Result<(), SessionStateFileError> {
+    let path = clean_state_path(path.as_ref())?;
+    let dir = path.parent().ok_or(SessionStateFileError::MissingPath)?;
+    fs::create_dir_all(dir).map_err(SessionStateFileError::CreateDirectory)?;
+    let raw =
+        serde_json::to_vec_pretty(&state.normalized()).map_err(SessionStateFileError::Serialize)?;
+    let mut raw = raw;
+    raw.push(b'\n');
+
+    let mut tmp = NamedTempFile::new_in(dir).map_err(SessionStateFileError::CreateTemp)?;
+    set_file_mode(tmp.path(), 0o600)?;
+    use std::io::Write as _;
+    tmp.write_all(&raw).map_err(SessionStateFileError::WriteTemp)?;
+    tmp.flush().map_err(SessionStateFileError::WriteTemp)?;
+    tmp.persist(path).map_err(|err| SessionStateFileError::Persist(err.error))?;
+    set_file_mode(path, 0o600)?;
+    Ok(())
+}
+
+pub fn load_persisted_runtime_agent_state(
+    path: impl AsRef<Path>,
+) -> Result<PersistedRuntimeAgentState, SessionStateFileError> {
+    let path = clean_state_path(path.as_ref())?;
+    let metadata = fs::metadata(path).map_err(SessionStateFileError::Stat)?;
+    if !metadata.is_file() {
+        return Err(SessionStateFileError::NotRegularFile);
+    }
+    #[cfg(unix)]
+    {
+        let mode = metadata.permissions().mode() & 0o777;
+        if mode & 0o077 != 0 {
+            return Err(SessionStateFileError::InsecurePermissions(mode));
+        }
+    }
+    let raw = fs::read(path).map_err(SessionStateFileError::Read)?;
+    let state: PersistedRuntimeAgentState =
+        serde_json::from_slice(&raw).map_err(SessionStateFileError::Parse)?;
+    Ok(state.normalized())
 }
 
 pub fn acquire_session_lock(
@@ -455,11 +522,12 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        PersistedSessionError, PersistedSessionState, RefreshOutcome, RefreshSuccess,
-        RevocationReason, SessionSnapshot, SessionState, SessionStateFileError,
+        PersistedRuntimeAgentState, PersistedSessionError, PersistedSessionState, RefreshOutcome,
+        RefreshSuccess, RevocationReason, SessionSnapshot, SessionState, SessionStateFileError,
         SessionTransitionError, acquire_session_lock, apply_refresh_outcome, begin_refresh,
         begin_teardown, classify_persisted_session_state, classify_session, complete_teardown,
-        load_persisted_session_state, save_persisted_session_state, try_acquire_session_lock,
+        load_persisted_runtime_agent_state, load_persisted_session_state,
+        save_persisted_runtime_agent_state, save_persisted_session_state, try_acquire_session_lock,
     };
 
     fn snapshot() -> SessionSnapshot {
@@ -671,5 +739,27 @@ mod tests {
         let second = try_acquire_session_lock(&path).expect("try acquire second lock");
 
         assert!(second.is_none());
+    }
+
+    #[test]
+    fn persisted_runtime_agent_state_round_trip_normalizes_fields() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("runtime-agent.json");
+        let state = PersistedRuntimeAgentState {
+            profile_id: " ferma ".to_owned(),
+            pid: 4242,
+            command_path: " /tmp/si ".to_owned(),
+            started_at: " 2030-01-01T00:00:00Z ".to_owned(),
+            updated_at: " 2030-01-01T00:00:01Z ".to_owned(),
+        };
+
+        save_persisted_runtime_agent_state(&path, &state).expect("save runtime agent state");
+        let loaded = load_persisted_runtime_agent_state(&path).expect("load runtime agent state");
+
+        assert_eq!(loaded.profile_id, "ferma");
+        assert_eq!(loaded.pid, 4242);
+        assert_eq!(loaded.command_path, "/tmp/si");
+        assert_eq!(loaded.started_at, "2030-01-01T00:00:00Z");
+        assert_eq!(loaded.updated_at, "2030-01-01T00:00:01Z");
     }
 }

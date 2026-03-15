@@ -16,7 +16,8 @@ use si_rs_docker::{
     docker_container_exec_command, docker_container_list_command, docker_container_logs_command,
 };
 use si_rs_fort::{
-    PersistedSessionState, SessionState, classify_persisted_session_state,
+    PersistedRuntimeAgentState, PersistedSessionState, SessionState,
+    classify_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state,
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
@@ -391,6 +392,10 @@ enum FortCommand {
         #[command(subcommand)]
         command: FortSessionStateCommand,
     },
+    RuntimeAgentState {
+        #[command(subcommand)]
+        command: FortRuntimeAgentStateCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -406,6 +411,16 @@ enum FortSessionStateCommand {
         path: PathBuf,
         #[arg(long)]
         now_unix: i64,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum FortRuntimeAgentStateCommand {
+    Show {
+        #[arg(long)]
+        path: PathBuf,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
@@ -967,6 +982,11 @@ fn main() -> Result<()> {
                     show_fort_session_state_classification(path, now_unix, format)?
                 }
             },
+            FortCommand::RuntimeAgentState { command } => match command {
+                FortRuntimeAgentStateCommand::Show { path, format } => {
+                    show_fort_runtime_agent_state(path, format)?
+                }
+            },
         },
         Command::Vault { command } => match command {
             VaultCommand::Trust { command } => match command {
@@ -1091,6 +1111,17 @@ fn show_fort_session_state(path: PathBuf, format: OutputFormat) -> Result<()> {
     Ok(())
 }
 
+fn show_fort_runtime_agent_state(path: PathBuf, format: OutputFormat) -> Result<()> {
+    let state = load_persisted_runtime_agent_state(path)?;
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&state)?),
+        OutputFormat::Text => render_fort_runtime_agent_state_text(&state),
+    }
+
+    Ok(())
+}
+
 fn show_fort_session_state_classification(
     path: PathBuf,
     now_unix: i64,
@@ -1157,6 +1188,14 @@ fn render_fort_session_state_text(state: &PersistedSessionState) {
     println!("refresh_token_path={}", render_text_value(&state.refresh_token_path));
     println!("access_expires_at={}", render_text_value(&state.access_expires_at));
     println!("refresh_expires_at={}", render_text_value(&state.refresh_expires_at));
+    println!("updated_at={}", render_text_value(&state.updated_at));
+}
+
+fn render_fort_runtime_agent_state_text(state: &PersistedRuntimeAgentState) {
+    println!("profile_id={}", render_text_value(&state.profile_id));
+    println!("pid={}", state.pid);
+    println!("command_path={}", render_text_value(&state.command_path));
+    println!("started_at={}", render_text_value(&state.started_at));
     println!("updated_at={}", render_text_value(&state.updated_at));
 }
 

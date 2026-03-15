@@ -265,6 +265,7 @@ Progress notes:
 - completed: initial cross-process Fort session mutation lock in Rust with explicit lock acquisition tests and non-blocking contention coverage
 - completed: experimental Go Fort session-state loading can now delegate to Rust `fort session-state show`, shifting a real persisted-state read onto the Rust path behind the compatibility boundary
 - completed: experimental Go Fort session reuse now honors Rust session classification, so revoked persisted state can short-circuit reuse before Go attempts refresh
+- completed: experimental Go Fort runtime-agent state loading can now delegate to Rust `fort runtime-agent-state show`, moving another persisted-state read out of Go before the refresh loop cutover
 - completed: initial `si-vault` crate for persisted trust-store state with translated round-trip, missing-file, and normalized path update/delete coverage from the Go vault trust path
 - completed: experimental Go vault trust enforcement can now delegate trust-store lookup to Rust behind the existing compatibility boundary, with focused bridge and consumer tests
 
