@@ -916,40 +916,9 @@ func cmdDyadRemove(args []string) {
 			printUsage("usage: si dyad remove [--all] <name>")
 			return
 		}
-		client, err := shared.NewClient()
-		if err != nil {
+		if err := runDyadRemoveAllFn(ctx); err != nil {
 			fatal(err)
 		}
-		defer client.Close()
-		containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
-		if err != nil {
-			fatal(err)
-		}
-		rows := buildDyadRows(containers)
-		if len(rows) == 0 {
-			infof("no dyads found")
-			return
-		}
-		names := make([]string, 0, len(rows))
-		for _, row := range rows {
-			if strings.TrimSpace(row.Dyad) != "" {
-				names = append(names, row.Dyad)
-			}
-		}
-		confirmed, ok := confirmYN(fmt.Sprintf("Remove ALL dyads (%d): %s?", len(names), strings.Join(names, ", ")), false)
-		if !ok || !confirmed {
-			infof("canceled")
-			return
-		}
-		removed := 0
-		for _, dyad := range names {
-			if _, _, err := removeDyadWithCompatibility(ctx, client, dyad); err != nil {
-				warnf("remove dyad %s failed: %v", dyad, err)
-				continue
-			}
-			removed++
-		}
-		successf("removed %d dyads", removed)
 		return
 	}
 
@@ -989,6 +958,46 @@ func cmdDyadRemove(args []string) {
 		fatal(err)
 	}
 	successf("dyad %s removed", name)
+}
+
+var runDyadRemoveAllFn = runDyadRemoveAll
+
+func runDyadRemoveAll(ctx context.Context) error {
+	client, err := shared.NewClient()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	containers, err := client.ListContainers(ctx, true, map[string]string{shared.LabelApp: shared.DyadAppLabel})
+	if err != nil {
+		return err
+	}
+	rows := buildDyadRows(containers)
+	if len(rows) == 0 {
+		infof("no dyads found")
+		return nil
+	}
+	names := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if strings.TrimSpace(row.Dyad) != "" {
+			names = append(names, row.Dyad)
+		}
+	}
+	confirmed, ok := confirmYN(fmt.Sprintf("Remove ALL dyads (%d): %s?", len(names), strings.Join(names, ", ")), false)
+	if !ok || !confirmed {
+		infof("canceled")
+		return nil
+	}
+	removed := 0
+	for _, dyad := range names {
+		if _, _, err := removeDyadWithCompatibility(ctx, client, dyad); err != nil {
+			warnf("remove dyad %s failed: %v", dyad, err)
+			continue
+		}
+		removed++
+	}
+	successf("removed %d dyads", removed)
+	return nil
 }
 
 func cmdDyadRecreate(args []string) {

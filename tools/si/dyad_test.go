@@ -1276,6 +1276,27 @@ func TestCmdDyadSpawnUsesRustPlanBeforeExecution(t *testing.T) {
 	}
 }
 
+func TestCmdDyadRemoveAllUsesBatchFlow(t *testing.T) {
+	prev := runDyadRemoveAllFn
+	t.Cleanup(func() {
+		runDyadRemoveAllFn = prev
+	})
+
+	called := false
+	runDyadRemoveAllFn = func(ctx context.Context) error {
+		called = true
+		return nil
+	}
+
+	_ = captureOutputForTest(t, func() {
+		cmdDyadRemove([]string{"--all"})
+	})
+
+	if !called {
+		t.Fatalf("expected batch remove flow")
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)
