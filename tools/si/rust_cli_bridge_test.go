@@ -298,6 +298,37 @@ func TestMaybeLoadRustFortSessionStateDelegatesAndParsesJSON(t *testing.T) {
 	}
 }
 
+func TestMaybeClassifyRustFortSessionStateDelegatesAndParsesVariant(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"Revoked\":{\"snapshot\":{\"profile_id\":\"ferma\"},\"reason\":\"RefreshUnauthorized\"}}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	classification, delegated, err := maybeClassifyRustFortSessionState("/tmp/session.json", 123)
+	if err != nil {
+		t.Fatalf("maybeClassifyRustFortSessionState: %v", err)
+	}
+	if !delegated {
+		t.Fatalf("expected fort session classification to delegate to Rust")
+	}
+	if classification.State != "revoked" || classification.Reason != "RefreshUnauthorized" {
+		t.Fatalf("unexpected classification: %+v", classification)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "fort\nsession-state\nclassify\n--path\n/tmp/session.json\n--now-unix\n123\n--format\njson" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestMaybeRunRustCodexLogsDelegatesAndReturnsOutput(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
