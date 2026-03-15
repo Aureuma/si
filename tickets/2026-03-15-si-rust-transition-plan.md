@@ -260,6 +260,7 @@ Progress notes:
 
 - completed: initial `si-fort` crate with a typed Fort session lifecycle model covering bootstrap-required, resumable, refreshing, revoked, teardown, and closed states
 - completed: transition tests for refresh success, unauthorized refresh revocation, and teardown completion on top of the Rust Fort model
+- completed: strict persisted Fort session-state read/write handling in Rust with atomic writes, permission checks, whitespace normalization, and RFC3339 expiry parsing/classification tests
 
 ### Phase 6: Codex/dyad lifecycle migration
 
