@@ -521,6 +521,26 @@ func maybeApplyRustFortSessionRefreshOutcome(path string, refreshed fortSessionR
 	return &transition, true, nil
 }
 
+func maybeRunRustFortSessionTeardown(path string, now time.Time) (*rustFortSessionClassification, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"fort", "session-state", "teardown",
+		"--path", strings.TrimSpace(path),
+		"--now-unix", strconv.FormatInt(now.UTC().Unix(), 10),
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	var classification rustFortSessionClassification
+	if err := json.Unmarshal(output, &classification); err != nil {
+		return nil, false, fmt.Errorf("decode rust fort teardown classification: %w", err)
+	}
+	return &classification, true, nil
+}
+
 func decodeRustFortSessionClassification(raw []byte) (*rustFortSessionClassification, error) {
 	var decoded any
 	if err := json.Unmarshal(raw, &decoded); err != nil {
