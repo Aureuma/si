@@ -756,6 +756,32 @@ func TestBuildDyadPeekFallbackPlanUsesResolvedNames(t *testing.T) {
 	}
 }
 
+func TestResolveDyadSpawnExistingContainerNamesUsesResolvedNames(t *testing.T) {
+	prev := readRustDyadStatusForLookup
+	t.Cleanup(func() {
+		readRustDyadStatusForLookup = prev
+	})
+	readRustDyadStatusForLookup = func(dyad string) (*rustDyadStatus, bool, error) {
+		return &rustDyadStatus{
+			Dyad: dyad,
+			Actor: &rustDyadContainerStatusRef{
+				Name: "si-dyad-atlas-actor-rust",
+			},
+			Critic: &rustDyadContainerStatusRef{
+				Name: "si-dyad-atlas-critic-rust",
+			},
+		}, true, nil
+	}
+
+	actorName, criticName, err := resolveDyadSpawnExistingContainerNames("atlas")
+	if err != nil {
+		t.Fatalf("resolveDyadSpawnExistingContainerNames: %v", err)
+	}
+	if actorName != "si-dyad-atlas-actor-rust" || criticName != "si-dyad-atlas-critic-rust" {
+		t.Fatalf("unexpected resolved names actor=%q critic=%q", actorName, criticName)
+	}
+}
+
 func TestShortContainerID(t *testing.T) {
 	if got := shortContainerID("1234567890ab"); got != "1234567890ab" {
 		t.Fatalf("unexpected unchanged id: %q", got)
