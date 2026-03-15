@@ -136,6 +136,11 @@ type rustVaultTrustLookup struct {
 	TrustedAt          string `json:"trusted_at,omitempty"`
 }
 
+type rustFortSessionClassification struct {
+	State  string
+	Reason string
+}
+
 func runVersionCommand() error {
 	delegated, err := maybeDispatchRustCLIReadOnly("version")
 	if err != nil {
@@ -396,6 +401,67 @@ func maybeLoadRustFortSessionState(path string) (fortProfileSessionState, bool, 
 		return fortProfileSessionState{}, false, fmt.Errorf("decode rust fort session state: %w", err)
 	}
 	return state, true, nil
+}
+
+func maybeClassifyRustFortSessionState(path string, nowUnix int64) (*rustFortSessionClassification, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return nil, false, nil
+	}
+	output, err := runRustCLIJSON(
+		"fort", "session-state", "classify",
+		"--path", strings.TrimSpace(path),
+		"--now-unix", strconv.FormatInt(nowUnix, 10),
+		"--format", "json",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	classification, err := decodeRustFortSessionClassification(output)
+	if err != nil {
+		return nil, false, err
+	}
+	return classification, true, nil
+}
+
+func decodeRustFortSessionClassification(raw []byte) (*rustFortSessionClassification, error) {
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil, fmt.Errorf("decode rust fort session classification: %w", err)
+	}
+	switch value := decoded.(type) {
+	case string:
+		return &rustFortSessionClassification{State: normalizeRustFortSessionVariant(value)}, nil
+	case map[string]any:
+		for key, inner := range value {
+			out := &rustFortSessionClassification{State: normalizeRustFortSessionVariant(key)}
+			if strings.EqualFold(key, "Revoked") {
+				if innerMap, ok := inner.(map[string]any); ok {
+					out.Reason = strings.TrimSpace(fmt.Sprint(innerMap["reason"]))
+				}
+			}
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("decode rust fort session classification: unexpected payload")
+}
+
+func normalizeRustFortSessionVariant(value string) string {
+	switch strings.TrimSpace(value) {
+	case "BootstrapRequired":
+		return "bootstrap_required"
+	case "Resumable":
+		return "resumable"
+	case "Refreshing":
+		return "refreshing"
+	case "Revoked":
+		return "revoked"
+	case "TeardownPending":
+		return "teardown_pending"
+	case "Closed":
+		return "closed"
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
 }
 
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
