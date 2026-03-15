@@ -279,7 +279,7 @@ fn codex_spawn_spec_json_includes_named_volumes_and_command() {
     let output = cargo_bin()
         .args(["codex", "spawn-spec", "--name", "ferma", "--workspace"])
         .arg(workspace.path())
-        .args(["--cmd", "echo hello"])
+        .args(["--cmd", "echo hello", "--port", "3000:3000"])
         .assert()
         .success()
         .get_output()
@@ -290,10 +290,41 @@ fn codex_spawn_spec_json_includes_named_volumes_and_command() {
     let command = parsed["command"].as_array().expect("command array");
     assert_eq!(command[0], "bash");
     assert_eq!(command[2], "echo hello");
+    assert_eq!(parsed["user"], "root");
+    assert_eq!(parsed["detach"], true);
+    assert_eq!(parsed["auto_remove"], false);
+    let labels = parsed["labels"].as_array().expect("labels array");
+    assert!(labels.iter().any(|label| label["key"] == "si.component" && label["value"] == "codex"));
+    let published_ports = parsed["published_ports"].as_array().expect("published ports");
+    assert_eq!(published_ports[0]["host_ip"], "127.0.0.1");
+    assert_eq!(published_ports[0]["host_port"], "3000");
+    assert_eq!(published_ports[0]["container_port"], 3000);
     let volume_mounts = parsed["volume_mounts"].as_array().expect("volume mounts");
     assert_eq!(volume_mounts.len(), 3);
     assert!(volume_mounts.iter().any(|mount| mount["target"] == "/home/si/.codex"));
     assert_eq!(parsed["restart_policy"], "unless-stopped");
+}
+
+#[test]
+fn codex_spawn_run_args_text_renders_persistent_docker_invocation() {
+    let workspace = tempdir().expect("tempdir");
+    let output = cargo_bin()
+        .args(["codex", "spawn-run-args", "--name", "ferma", "--workspace"])
+        .arg(workspace.path())
+        .args(["--cmd", "echo hello", "--port", "3000:3000", "--format", "text"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("run"));
+    assert!(text.contains("-d"));
+    assert!(text.contains("--user root"));
+    assert!(text.contains("--label si.component=codex"));
+    assert!(text.contains("-p 127.0.0.1:3000:3000"));
+    assert!(text.contains("bash -lc echo hello"));
 }
 
 fn path_string(path: impl AsRef<Path>) -> Value {
