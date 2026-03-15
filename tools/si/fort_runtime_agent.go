@@ -353,6 +353,13 @@ func closeCodexProfileFortSessionLocked(paths fortProfilePaths) error {
 	_ = stopFortRuntimeAgentLocked(paths)
 	state, err := loadFortProfileSessionState(paths.SessionStateHostPath)
 	if err == nil {
+		if classification, delegated, err := maybeRunRustFortSessionTeardown(paths.SessionStateHostPath, time.Now().UTC()); err != nil {
+			return err
+		} else if delegated {
+			if stateValue := strings.TrimSpace(classification.State); stateValue != "" && stateValue != "closed" {
+				return fmt.Errorf("unexpected rust fort teardown classification: %s", stateValue)
+			}
+		}
 		hostURL := strings.TrimSpace(state.Host)
 		if hostURL != "" {
 			if refreshToken, refreshErr := readStrictSecretFile(paths.RefreshTokenHostPath); refreshErr == nil {

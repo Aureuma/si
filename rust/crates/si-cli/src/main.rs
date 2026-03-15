@@ -20,6 +20,7 @@ use si_rs_fort::{
     SessionState, apply_refresh_outcome_to_persisted_session_state,
     classify_persisted_session_state, load_persisted_runtime_agent_state,
     load_persisted_session_state, save_persisted_runtime_agent_state, save_persisted_session_state,
+    teardown_persisted_session_state,
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
@@ -432,6 +433,14 @@ enum FortSessionStateCommand {
         access_expires_at_unix: Option<i64>,
         #[arg(long)]
         refresh_expires_at_unix: Option<i64>,
+        #[arg(long, default_value = "json")]
+        format: OutputFormat,
+    },
+    Teardown {
+        #[arg(long)]
+        path: PathBuf,
+        #[arg(long)]
+        now_unix: i64,
         #[arg(long, default_value = "json")]
         format: OutputFormat,
     },
@@ -1046,6 +1055,9 @@ fn main() -> Result<()> {
                     refresh_expires_at_unix,
                     format,
                 )?,
+                FortSessionStateCommand::Teardown { path, now_unix, format } => {
+                    show_fort_session_state_teardown(path, now_unix, format)?
+                }
             },
             FortCommand::RuntimeAgentState { command } => match command {
                 FortRuntimeAgentStateCommand::Show { path, format } => {
@@ -1243,6 +1255,28 @@ fn show_fort_session_state_refresh_outcome(
             render_fort_session_state_text(&view.state);
             println!("classification.state={}", view.classification.state);
             if let Some(reason) = view.classification.reason {
+                println!("classification.reason={reason}");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn show_fort_session_state_teardown(
+    path: PathBuf,
+    now_unix: i64,
+    format: OutputFormat,
+) -> Result<()> {
+    let state = load_persisted_session_state(path)?;
+    let classification = teardown_persisted_session_state(&state, now_unix)?;
+    let view = fort_session_classification_view(&classification);
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&view)?),
+        OutputFormat::Text => {
+            println!("classification.state={}", view.state);
+            if let Some(reason) = view.reason {
                 println!("classification.reason={reason}");
             }
         }

@@ -369,6 +369,20 @@ pub fn apply_refresh_outcome_to_persisted_session_state(
     Ok(PersistedSessionTransition { state: next, classification })
 }
 
+pub fn teardown_persisted_session_state(
+    state: &PersistedSessionState,
+    now_unix: i64,
+) -> Result<SessionState, PersistedSessionError> {
+    let classified = classify_persisted_session_state(state, now_unix)?;
+    let teardown =
+        begin_teardown(classified).map_err(|_| PersistedSessionError::InvalidRefreshExpiry {
+            value: state.refresh_expires_at.trim().to_owned(),
+        })?;
+    complete_teardown(teardown).map_err(|_| PersistedSessionError::InvalidRefreshExpiry {
+        value: state.refresh_expires_at.trim().to_owned(),
+    })
+}
+
 pub fn save_persisted_runtime_agent_state(
     path: impl AsRef<Path>,
     state: &PersistedRuntimeAgentState,
@@ -575,7 +589,8 @@ mod tests {
         apply_refresh_outcome_to_persisted_session_state, begin_refresh, begin_teardown,
         classify_persisted_session_state, classify_session, complete_teardown,
         load_persisted_runtime_agent_state, load_persisted_session_state,
-        save_persisted_runtime_agent_state, save_persisted_session_state, try_acquire_session_lock,
+        save_persisted_runtime_agent_state, save_persisted_session_state,
+        teardown_persisted_session_state, try_acquire_session_lock,
     };
 
     fn snapshot() -> SessionSnapshot {
@@ -835,6 +850,23 @@ mod tests {
                 }),
                 reason: RevocationReason::RefreshUnauthorized,
             }
+        );
+    }
+
+    #[test]
+    fn teardown_persisted_session_state_transitions_to_closed() {
+        let state = PersistedSessionState {
+            profile_id: "ferma".to_owned(),
+            agent_id: "agent-ferma".to_owned(),
+            session_id: "session-123".to_owned(),
+            access_expires_at: "1970-01-01T00:01:30Z".to_owned(),
+            refresh_expires_at: "1970-01-01T00:06:40Z".to_owned(),
+            ..PersistedSessionState::default()
+        };
+
+        assert_eq!(
+            teardown_persisted_session_state(&state, 100).expect("teardown persisted session"),
+            SessionState::Closed
         );
     }
 
