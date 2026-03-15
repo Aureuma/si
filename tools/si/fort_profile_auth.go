@@ -204,6 +204,20 @@ func ensureUsableCodexProfileFortSession(ctx context.Context, profile codexProfi
 	if err != nil {
 		return codexFortBootstrap{}, err
 	}
+	if classification, delegated, err := maybeClassifyRustFortSessionState(paths.SessionStateHostPath, time.Now().UTC().Unix()); err != nil {
+		return codexFortBootstrap{}, err
+	} else if delegated {
+		switch classification.State {
+		case "bootstrap_required", "closed":
+			return codexFortBootstrap{}, fmt.Errorf("fort session state requires bootstrap")
+		case "revoked":
+			reason := strings.TrimSpace(classification.Reason)
+			if reason == "" {
+				reason = "revoked"
+			}
+			return codexFortBootstrap{}, fmt.Errorf("fort session state is %s", reason)
+		}
+	}
 	accessToken, accessErr := readStrictSecretFile(paths.AccessTokenHostPath)
 	if accessErr == nil {
 		if needsRefresh, _ := fortTokenNeedsRefresh(accessToken); !needsRefresh {
