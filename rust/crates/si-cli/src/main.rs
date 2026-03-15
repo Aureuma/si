@@ -5,6 +5,7 @@ use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
 };
 use si_rs_config::paths::SiPaths;
+use si_rs_config::settings::Settings;
 use std::fmt;
 use std::path::PathBuf;
 
@@ -27,6 +28,10 @@ enum Command {
         #[command(subcommand)]
         command: CommandsCommand,
     },
+    Settings {
+        #[command(subcommand)]
+        command: SettingsCommand,
+    },
     Paths {
         #[command(subcommand)]
         command: PathsCommand,
@@ -36,6 +41,18 @@ enum Command {
 #[derive(Debug, Subcommand)]
 enum CommandsCommand {
     List {
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum SettingsCommand {
+    Show {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -99,6 +116,11 @@ fn main() -> Result<()> {
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
         Command::Commands { command } => match command {
             CommandsCommand::List { format } => show_help(None, format)?,
+        },
+        Command::Settings { command } => match command {
+            SettingsCommand::Show { home, settings_file, format } => {
+                show_settings(home, settings_file, format)?
+            }
         },
         Command::Paths { command } => match command {
             PathsCommand::Show { home, settings_file, format } => {
@@ -166,6 +188,44 @@ fn show_paths(
         }
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(&view)?);
+        }
+    }
+
+    Ok(())
+}
+
+fn show_settings(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+
+    match format {
+        OutputFormat::Text => {
+            println!("schema_version={}", settings.schema_version);
+            println!("paths.root={}", settings.paths.root.as_deref().unwrap_or("(none)"));
+            println!(
+                "paths.settings_file={}",
+                settings.paths.settings_file.as_deref().unwrap_or("(none)")
+            );
+            println!(
+                "paths.codex_profiles_dir={}",
+                settings.paths.codex_profiles_dir.as_deref().unwrap_or("(none)")
+            );
+            println!(
+                "paths.workspace_root={}",
+                settings.paths.workspace_root.as_deref().unwrap_or("(none)")
+            );
+            println!("codex.workspace={}", settings.codex.workspace.as_deref().unwrap_or("(none)"));
+            println!("codex.workdir={}", settings.codex.workdir.as_deref().unwrap_or("(none)"));
+            println!("codex.profile={}", settings.codex.profile.as_deref().unwrap_or("(none)"));
+            println!("dyad.workspace={}", settings.dyad.workspace.as_deref().unwrap_or("(none)"));
+            println!("dyad.configs={}", settings.dyad.configs.as_deref().unwrap_or("(none)"));
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&settings)?);
         }
     }
 
