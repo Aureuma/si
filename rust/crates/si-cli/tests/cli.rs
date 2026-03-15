@@ -1,6 +1,8 @@
 use assert_cmd::Command;
 use serde_json::Value;
 use std::fs;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 use tempfile::tempdir;
 
@@ -346,21 +348,13 @@ fn codex_spawn_start_executes_docker_command_from_generated_spec() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
-    fs::write(
+    write_executable_script(
         &docker_bin,
-        format!(
+        &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'container-id-123'\n",
             args_path.display()
         ),
-    )
-    .expect("write docker script");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&docker_bin, perms).expect("chmod");
-    }
+    );
 
     let output = cargo_bin()
         .args(["codex", "spawn-start", "--name", "ferma", "--workspace"])
@@ -415,21 +409,13 @@ fn codex_start_executes_docker_start_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
-    fs::write(
+    write_executable_script(
         &docker_bin,
-        format!(
+        &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'si-codex-ferma'\n",
             args_path.display()
         ),
-    )
-    .expect("write docker script");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&docker_bin, perms).expect("chmod");
-    }
+    );
 
     let output = cargo_bin()
         .args(["codex", "start", "ferma", "--docker-bin"])
@@ -451,21 +437,13 @@ fn codex_stop_executes_docker_stop_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
-    fs::write(
+    write_executable_script(
         &docker_bin,
-        format!(
+        &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'si-codex-ferma'\n",
             args_path.display()
         ),
-    )
-    .expect("write docker script");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&docker_bin, perms).expect("chmod");
-    }
+    );
 
     let output = cargo_bin()
         .args(["codex", "stop", "ferma", "--docker-bin"])
@@ -487,21 +465,13 @@ fn codex_logs_executes_docker_logs_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
-    fs::write(
+    write_executable_script(
         &docker_bin,
-        format!(
+        &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'log line'\n",
             args_path.display()
         ),
-    )
-    .expect("write docker script");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&docker_bin, perms).expect("chmod");
-    }
+    );
 
     let output = cargo_bin()
         .args(["codex", "logs", "ferma", "--tail", "25", "--docker-bin"])
@@ -523,21 +493,13 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
     let script_dir = tempdir().expect("tempdir");
     let args_path = script_dir.path().join("args.txt");
     let docker_bin = script_dir.path().join("docker");
-    fs::write(
+    write_executable_script(
         &docker_bin,
-        format!(
+        &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'tail line'\n",
             args_path.display()
         ),
-    )
-    .expect("write docker script");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
-        perms.set_mode(0o700);
-        fs::set_permissions(&docker_bin, perms).expect("chmod");
-    }
+    );
 
     let output = cargo_bin()
         .args(["codex", "tail", "ferma", "--tail", "25", "--docker-bin"])
@@ -554,6 +516,70 @@ fn codex_tail_executes_following_docker_logs_for_container_name() {
     assert_eq!(args.lines().collect::<Vec<_>>(), ["logs", "-f", "--tail", "25", "si-codex-ferma"]);
 }
 
+#[test]
+fn codex_clone_executes_docker_exec_for_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    write_executable_script(
+        &docker_bin,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'cloned'\n",
+            args_path.display()
+        ),
+    );
+
+    let output = cargo_bin()
+        .args(["codex", "clone", "ferma", "acme/repo", "--gh-pat", "token-123", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("cloned"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(
+        args.lines().collect::<Vec<_>>(),
+        [
+            "exec",
+            "--user",
+            "si",
+            "-e",
+            "SI_REPO=acme/repo",
+            "-e",
+            "SI_GH_PAT=token-123",
+            "-e",
+            "GH_TOKEN=token-123",
+            "-e",
+            "GITHUB_TOKEN=token-123",
+            "si-codex-ferma",
+            "/usr/local/bin/si-entrypoint",
+            "bash",
+            "-lc",
+            "true",
+        ]
+    );
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
+}
+
+fn write_executable_script(path: &Path, content: &str) {
+    let temp_path = path.with_extension("tmp");
+    let mut file = File::create(&temp_path).expect("create temp script");
+    file.write_all(content.as_bytes()).expect("write temp script");
+    file.sync_all().expect("sync temp script");
+    drop(file);
+    fs::rename(&temp_path, path).expect("rename temp script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(path, perms).expect("chmod");
+    }
 }

@@ -221,6 +221,21 @@ func maybeRunRustCodexLogs(name string, tail string, follow bool) (string, bool,
 	return output, true, nil
 }
 
+func maybeRunRustCodexClone(name string, repo string, ghPAT string) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	args := []string{"codex", "clone", strings.TrimSpace(name), strings.TrimSpace(repo)}
+	if value := strings.TrimSpace(ghPAT); value != "" {
+		args = append(args, "--gh-pat", value)
+	}
+	output, err := runRustCLIText(args...)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
 func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil

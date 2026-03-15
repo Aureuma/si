@@ -460,6 +460,67 @@ pub enum ContainerLogsError {
     MissingTail,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ContainerExecSpec {
+    container_name: String,
+    user: Option<String>,
+    workdir: Option<PathBuf>,
+    env: Vec<(String, String)>,
+    interactive: bool,
+    tty: bool,
+    command: Vec<String>,
+}
+
+impl ContainerExecSpec {
+    pub fn new(container_name: impl Into<String>) -> Self {
+        Self { container_name: container_name.into(), ..Self::default() }
+    }
+
+    pub fn user(mut self, value: impl Into<String>) -> Self {
+        self.user = Some(value.into());
+        self
+    }
+
+    pub fn workdir(mut self, path: impl Into<PathBuf>) -> Self {
+        self.workdir = Some(path.into());
+        self
+    }
+
+    pub fn env(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.env.push((key.into(), value.into()));
+        self
+    }
+
+    pub fn interactive(mut self, value: bool) -> Self {
+        self.interactive = value;
+        self
+    }
+
+    pub fn tty(mut self, value: bool) -> Self {
+        self.tty = value;
+        self
+    }
+
+    pub fn command<I, S>(mut self, values: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.command = values.into_iter().map(Into::into).collect();
+        self
+    }
+}
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ContainerExecError {
+    #[error("container name is required")]
+    MissingContainerName,
+    #[error("exec command is required")]
+    MissingCommand,
+    #[error("workdir path must be absolute: {path}")]
+    InvalidWorkingDir { path: PathBuf },
+}
+
 pub fn docker_binary_path() -> &'static Path {
     Path::new("docker")
 }
@@ -496,6 +557,47 @@ pub fn docker_container_logs_command(
         command = command.arg("-f");
     }
     Ok(command.args(["--tail".to_owned(), tail, container_name]))
+}
+
+pub fn docker_container_exec_command(
+    docker_program: impl Into<String>,
+    spec: &ContainerExecSpec,
+) -> Result<CommandSpec, ContainerExecError> {
+    if spec.container_name.trim().is_empty() {
+        return Err(ContainerExecError::MissingContainerName);
+    }
+    if spec.command.is_empty() {
+        return Err(ContainerExecError::MissingCommand);
+    }
+    if let Some(workdir) = &spec.workdir {
+        if !workdir.is_absolute() {
+            return Err(ContainerExecError::InvalidWorkingDir { path: workdir.clone() });
+        }
+    }
+    let mut command = CommandSpec::new(docker_program).arg("exec");
+    match (spec.interactive, spec.tty) {
+        (true, true) => {
+            command = command.arg("-it");
+        }
+        (true, false) => {
+            command = command.arg("-i");
+        }
+        (false, true) => {
+            command = command.arg("-t");
+        }
+        (false, false) => {}
+    }
+    if let Some(user) = &spec.user {
+        command = command.args(["--user".to_owned(), user.clone()]);
+    }
+    if let Some(workdir) = &spec.workdir {
+        command = command.args(["-w".to_owned(), workdir.display().to_string()]);
+    }
+    for (key, value) in &spec.env {
+        command = command.args(["-e".to_owned(), format!("{key}={value}")]);
+    }
+    command = command.arg(spec.container_name.clone());
+    Ok(command.args(spec.command.clone()))
 }
 
 #[cfg(test)]
@@ -656,5 +758,48 @@ mod tests {
             .expect_err("missing tail");
 
         assert_eq!(err, ContainerLogsError::MissingTail);
+    }
+
+    #[test]
+    fn builds_docker_exec_command() {
+        let command = docker_container_exec_command(
+            "docker",
+            &ContainerExecSpec::new("si-codex-ferma")
+                .user("si")
+                .workdir("/workspace/project")
+                .env("SI_REPO", "acme/repo")
+                .interactive(true)
+                .command(["/usr/local/bin/si-entrypoint", "bash", "-lc", "true"]),
+        )
+        .expect("exec command");
+
+        assert_eq!(command.program(), "docker");
+        assert_eq!(
+            command.args_slice(),
+            [
+                "exec",
+                "-i",
+                "--user",
+                "si",
+                "-w",
+                "/workspace/project",
+                "-e",
+                "SI_REPO=acme/repo",
+                "si-codex-ferma",
+                "/usr/local/bin/si-entrypoint",
+                "bash",
+                "-lc",
+                "true",
+            ]
+        );
+    }
+
+    #[test]
+    fn rejects_missing_command_for_container_exec() {
+        let err =
+            docker_container_exec_command("docker", &ContainerExecSpec::new("si-codex-ferma"))
+                .expect_err("missing command");
+
+        assert_eq!(err, ContainerExecError::MissingCommand);
     }
 }

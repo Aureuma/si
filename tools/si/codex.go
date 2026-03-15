@@ -2300,8 +2300,12 @@ func cmdCodexClone(args []string) {
 		execArgs = append(execArgs, "-e", "GITHUB_TOKEN="+strings.TrimSpace(*ghPat))
 	}
 	execArgs = append(execArgs, containerName, "/usr/local/bin/si-entrypoint", "bash", "-lc", "true")
-	if err := execDockerCLI(execArgs...); err != nil {
+	if _, delegated, err := maybeRunRustCodexClone(name, repo, strings.TrimSpace(*ghPat)); err != nil {
 		fatal(err)
+	} else if !delegated {
+		if err := execDockerCLI(execArgs...); err != nil {
+			fatal(err)
+		}
 	}
 	successf("repo %s cloned in %s", repo, containerName)
 }

@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -169,9 +169,7 @@ impl ProcessRunner {
             StreamBehavior::Inherit => Stdio::inherit(),
         });
 
-        let mut child = command
-            .spawn()
-            .map_err(|source| ProcessError::Spawn { program: spec.program.clone(), source })?;
+        let mut child = spawn_command_with_retry(command, &spec.program)?;
 
         let stdout = spawn_reader(child.stdout.take(), &spec.program, "stdout");
         let stderr = spawn_reader(child.stderr.take(), &spec.program, "stderr");
@@ -181,6 +179,24 @@ impl ProcessRunner {
 
         Ok(CommandOutput { status, stdout, stderr })
     }
+}
+
+fn spawn_command_with_retry(mut command: Command, program: &str) -> Result<Child, ProcessError> {
+    const ETXTBSY_RETRIES: u32 = 5;
+    const ETXTBSY_DELAY: Duration = Duration::from_millis(20);
+
+    for attempt in 0..=ETXTBSY_RETRIES {
+        match command.spawn() {
+            Ok(child) => return Ok(child),
+            Err(source) if source.raw_os_error() == Some(26) && attempt < ETXTBSY_RETRIES => {
+                thread::sleep(ETXTBSY_DELAY);
+            }
+            Err(source) => {
+                return Err(ProcessError::Spawn { program: program.to_owned(), source });
+            }
+        }
+    }
+    unreachable!("spawn retry loop should always return")
 }
 
 fn spawn_reader(
