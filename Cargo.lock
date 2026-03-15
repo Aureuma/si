@@ -629,6 +629,10 @@ dependencies = [
 name = "si-rs-fort"
 version = "0.54.0"
 dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
 ]
 
