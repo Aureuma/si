@@ -256,7 +256,7 @@ type rustVaultTrustLookup struct {
 }
 
 type rustWarmupMarkerState struct {
-	Disabled        bool `json:"disabled"`
+	Disabled         bool `json:"disabled"`
 	AutostartPresent bool `json:"autostart_present"`
 }
 
@@ -486,6 +486,21 @@ func maybeRunRustDyadList(jsonOut bool) (string, bool, error) {
 		format = "json"
 	}
 	output, err := runRustCLIText("dyad", "list", "--format", format)
+	if err != nil {
+		return "", false, err
+	}
+	return output, true, nil
+}
+
+func maybeRunRustWarmupStatus(jsonOut bool) (string, bool, error) {
+	if !shouldUseExperimentalRustCLI() {
+		return "", false, nil
+	}
+	format := "text"
+	if jsonOut {
+		format = "json"
+	}
+	output, err := runRustCLIText("warmup", "status", "--format", format)
 	if err != nil {
 		return "", false, err
 	}

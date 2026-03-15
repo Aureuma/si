@@ -335,6 +335,35 @@ func TestSaveWarmWeeklyStateDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdWarmupStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"version\":3}'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	output := captureOutputForTest(t, func() {
+		cmdWarmupStatus([]string{"--json"})
+	})
+	if !strings.Contains(output, "{\"version\":3}") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "warmup\nstatus\n--format\njson" {
+		t.Fatalf("unexpected rust cli args: %q", string(argsData))
+	}
+}
+
 func TestWarmWeeklyAutostartRequestedUsesRustMarkerStateWhenConfigured(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
