@@ -142,6 +142,12 @@ func cmdCodexStatus(args []string) {
 	if rustStatus, delegated, rustErr := maybeReadRustCodexStatus(name, *showRaw); rustErr != nil {
 		err = rustErr
 	} else if delegated && rustStatus != nil {
+		if output, delegatedOutput, outputErr := maybeRunRustCodexStatus(name, *showRaw, *jsonOut); outputErr == nil && delegatedOutput {
+			if strings.TrimSpace(output) != "" {
+				fmt.Print(output)
+			}
+			return
+		}
 		parsed = codexStatus{
 			Source:            strings.TrimSpace(rustStatus.Source),
 			Raw:               strings.TrimSpace(rustStatus.Raw),
