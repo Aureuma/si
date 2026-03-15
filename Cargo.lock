@@ -578,6 +578,7 @@ dependencies = [
  "si-rs-config",
  "si-rs-core",
  "si-rs-docker",
+ "si-rs-dyad",
  "si-rs-fort",
  "si-rs-process",
  "si-rs-provider-catalog",
@@ -623,6 +624,16 @@ name = "si-rs-docker"
 version = "0.54.0"
 dependencies = [
  "si-rs-process",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "si-rs-dyad"
+version = "0.54.0"
+dependencies = [
+ "si-rs-docker",
+ "si-rs-runtime",
  "tempfile",
  "thiserror",
 ]
