@@ -376,6 +376,7 @@ Progress notes:
 - completed: the shipping Go `report` command now has a command-level happy-path proof that the live report flow consumes the migrated Rust parsing surface while lock, lookup, and tmux orchestration remain on the Go side
 - completed: the shipping Go warmup command layer now has command-level proofs for `enable`, `disable`, `reconcile`, and delegated `status`, so the remaining migrated warmup state/marker surfaces are exercised through the live CLI and not only via helper-level tests
 - completed: the shipping Go `dyad spawn` command now has a command-level proof that the parsed `DyadOptions` flow into execution after the delegated Rust spawn plan has rewritten role/image/runtime fields, instead of leaving live spawn-plan consumption only helper-tested
+- completed: the batch `dyad remove --all` command path now has a direct command-level proof that the live CLI routes into the shared batch teardown flow instead of only leaving batch removal covered implicitly through lower-level helpers
 
 ### Phase 7: Provider migration
 
