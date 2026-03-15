@@ -106,6 +106,12 @@ func cmdCodexStatus(args []string) {
 		listCodexProfiles(*jsonOut, withProfileStatus)
 		return
 	}
+	if output, delegated, err := maybeRunRustCodexStatus(name, *showRaw, *jsonOut); err == nil && delegated {
+		if strings.TrimSpace(output) != "" {
+			fmt.Print(output)
+		}
+		return
+	}
 
 	profileCandidate, hasProfileCandidate := codexProfileByKey(name)
 	containerName, err := resolveCodexContainerName(name)
