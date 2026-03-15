@@ -112,6 +112,27 @@ pub enum SpawnContainerSpecError {
     InvalidForwardPortRange { start: i32, end: i32 },
 }
 
+#[derive(Debug, Error, Eq, PartialEq)]
+pub enum PeekPlanError {
+    #[error("dyad name required")]
+    MissingName,
+    #[error("invalid member {member:?} (expected actor, critic, or both)")]
+    InvalidMember { member: String },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PeekPlan {
+    pub dyad: String,
+    pub member: String,
+    pub actor_container_name: String,
+    pub critic_container_name: String,
+    pub actor_session_name: String,
+    pub critic_session_name: String,
+    pub peek_session_name: String,
+    pub actor_attach_command: String,
+    pub critic_attach_command: String,
+}
+
 pub fn build_spawn_plan(
     request: &SpawnRequest,
     host_ctx: &HostMountContext,
@@ -243,6 +264,43 @@ pub fn dyad_container_name(dyad: &str, member: &str) -> String {
         return String::new();
     }
     format!("si-{member}-{dyad}")
+}
+
+pub fn build_peek_plan(
+    dyad: &str,
+    member: &str,
+    host_session_name: Option<&str>,
+) -> Result<PeekPlan, PeekPlanError> {
+    let dyad = dyad.trim();
+    if dyad.is_empty() {
+        return Err(PeekPlanError::MissingName);
+    }
+    let member = normalize_peek_member(member)?;
+    let suffix = sanitize_tmux_suffix(dyad);
+    let actor_container_name = dyad_container_name(dyad, "actor");
+    let critic_container_name = dyad_container_name(dyad, "critic");
+    let actor_session_name = format!("si-dyad-{suffix}-actor");
+    let critic_session_name = format!("si-dyad-{suffix}-critic");
+    let peek_session_name = host_session_name
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("si-dyad-peek-{suffix}"));
+
+    Ok(PeekPlan {
+        dyad: dyad.to_owned(),
+        member,
+        actor_attach_command: build_peek_attach_command(&actor_container_name, &actor_session_name),
+        critic_attach_command: build_peek_attach_command(
+            &critic_container_name,
+            &critic_session_name,
+        ),
+        actor_container_name,
+        critic_container_name,
+        actor_session_name,
+        critic_session_name,
+        peek_session_name,
+    })
 }
 
 pub fn build_container_specs(
@@ -475,11 +533,46 @@ fn parse_forward_port(raw: &str) -> Result<i32, SpawnContainerSpecError> {
     Ok(value)
 }
 
+fn normalize_peek_member(member: &str) -> Result<String, PeekPlanError> {
+    let member = member.trim().to_ascii_lowercase();
+    let member = if member.is_empty() { "both".to_owned() } else { member };
+    match member.as_str() {
+        "actor" | "critic" | "both" => Ok(member),
+        _ => Err(PeekPlanError::InvalidMember { member }),
+    }
+}
+
+fn sanitize_tmux_suffix(raw: &str) -> String {
+    let raw = raw.trim().to_ascii_lowercase();
+    if raw.is_empty() {
+        return "unknown".to_owned();
+    }
+    let mut out = String::new();
+    for ch in raw.chars() {
+        if ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_' {
+            out.push(ch);
+        }
+    }
+    if out.is_empty() { "unknown".to_owned() } else { out }
+}
+
+fn build_peek_attach_command(container: &str, session: &str) -> String {
+    let container = container.trim();
+    let session = session.trim();
+    if container.is_empty() || session.is_empty() {
+        return "echo missing dyad peek target; sleep 3".to_owned();
+    }
+    format!(
+        "set -e\nwhile ! docker exec {container} tmux has-session -t {session} >/dev/null 2>&1; do\n  sleep 0.2\ndone\nexec docker exec -it {container} tmux attach -t {session}\n"
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_FORWARD_PORTS, DEFAULT_SKILLS_VOLUME, SpawnContainerSpecError, SpawnRequest,
-        build_container_specs, build_spawn_plan, dyad_container_name,
+        DEFAULT_FORWARD_PORTS, DEFAULT_SKILLS_VOLUME, PeekPlanError, SpawnContainerSpecError,
+        SpawnRequest, build_container_specs, build_peek_plan, build_spawn_plan,
+        dyad_container_name,
     };
     use si_rs_runtime::HostMountContext;
     use std::path::Path;
@@ -608,5 +701,39 @@ mod tests {
             err,
             SpawnContainerSpecError::InvalidForwardPortRange { start: 1460, end: 1455 }
         );
+    }
+
+    #[test]
+    fn build_peek_plan_defaults_names_and_attach_commands() {
+        let plan = build_peek_plan("alpha", "both", None).expect("build peek plan");
+
+        assert_eq!(plan.actor_container_name, "si-actor-alpha");
+        assert_eq!(plan.critic_container_name, "si-critic-alpha");
+        assert_eq!(plan.actor_session_name, "si-dyad-alpha-actor");
+        assert_eq!(plan.critic_session_name, "si-dyad-alpha-critic");
+        assert_eq!(plan.peek_session_name, "si-dyad-peek-alpha");
+        assert!(
+            plan.actor_attach_command
+                .contains("docker exec si-actor-alpha tmux has-session -t si-dyad-alpha-actor")
+        );
+        assert!(
+            plan.critic_attach_command
+                .contains("docker exec -it si-critic-alpha tmux attach -t si-dyad-alpha-critic")
+        );
+    }
+
+    #[test]
+    fn build_peek_plan_honors_session_override_and_normalizes_member() {
+        let plan = build_peek_plan("Alpha", "ACTOR", Some("peek-main")).expect("build peek plan");
+
+        assert_eq!(plan.member, "actor");
+        assert_eq!(plan.peek_session_name, "peek-main");
+        assert_eq!(plan.actor_session_name, "si-dyad-alpha-actor");
+    }
+
+    #[test]
+    fn build_peek_plan_rejects_invalid_member() {
+        let err = build_peek_plan("alpha", "observer", None).expect_err("invalid member");
+        assert_eq!(err, PeekPlanError::InvalidMember { member: "observer".to_owned() });
     }
 }

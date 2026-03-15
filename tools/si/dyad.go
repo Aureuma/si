@@ -462,6 +462,28 @@ func cmdDyadPeek(args []string) {
 		fatal(fmt.Errorf("invalid member %q (expected actor, critic, or both)", memberVal))
 	}
 
+	suffix := sanitizeDyadTmuxSuffix(dyad)
+	actorContainer := shared.DyadContainerName(dyad, "actor")
+	criticContainer := shared.DyadContainerName(dyad, "critic")
+	actorSession := fmt.Sprintf("si-dyad-%s-actor", suffix)
+	criticSession := fmt.Sprintf("si-dyad-%s-critic", suffix)
+	peekSession := strings.TrimSpace(*hostSession)
+	actorCmd := dyadPeekAttachCmd(actorContainer, actorSession)
+	criticCmd := dyadPeekAttachCmd(criticContainer, criticSession)
+	if rustPlan, delegated, err := maybeReadRustDyadPeekPlan(dyad, memberVal, peekSession); err != nil {
+		fatal(err)
+	} else if delegated {
+		actorContainer = strings.TrimSpace(rustPlan.ActorContainerName)
+		criticContainer = strings.TrimSpace(rustPlan.CriticContainerName)
+		actorSession = strings.TrimSpace(rustPlan.ActorSessionName)
+		criticSession = strings.TrimSpace(rustPlan.CriticSessionName)
+		peekSession = strings.TrimSpace(rustPlan.PeekSessionName)
+		actorCmd = strings.TrimSpace(rustPlan.ActorAttachCommand)
+		criticCmd = strings.TrimSpace(rustPlan.CriticAttachCommand)
+	} else if peekSession == "" {
+		peekSession = fmt.Sprintf("si-dyad-peek-%s", suffix)
+	}
+
 	client, err := shared.NewClient()
 	if err != nil {
 		fatal(err)
@@ -469,8 +491,6 @@ func cmdDyadPeek(args []string) {
 	defer client.Close()
 	ctx := context.Background()
 
-	actorContainer := shared.DyadContainerName(dyad, "actor")
-	criticContainer := shared.DyadContainerName(dyad, "critic")
 	actorID, _, err := client.ContainerByName(ctx, actorContainer)
 	if err != nil {
 		fatal(err)
@@ -483,21 +503,9 @@ func cmdDyadPeek(args []string) {
 		fatal(fmt.Errorf("dyad not found: %s", dyad))
 	}
 
-	suffix := sanitizeDyadTmuxSuffix(dyad)
-	actorSession := fmt.Sprintf("si-dyad-%s-actor", suffix)
-	criticSession := fmt.Sprintf("si-dyad-%s-critic", suffix)
-
-	peekSession := strings.TrimSpace(*hostSession)
-	if peekSession == "" {
-		peekSession = fmt.Sprintf("si-dyad-peek-%s", suffix)
-	}
-
 	if _, err := exec.LookPath("tmux"); err != nil {
 		fatal(fmt.Errorf("tmux not found in PATH: %w", err))
 	}
-
-	actorCmd := dyadPeekAttachCmd(actorContainer, actorSession)
-	criticCmd := dyadPeekAttachCmd(criticContainer, criticSession)
 
 	// Always create (or replace) the host peek session for predictable behavior.
 	_ = dyadTmuxRun("kill-session", "-t", peekSession)
@@ -869,7 +877,7 @@ func cmdDyadRemove(args []string) {
 		}
 		removed := 0
 		for _, dyad := range names {
-			if err := client.RemoveDyad(ctx, dyad, true); err != nil {
+			if _, _, err := removeDyadWithCompatibility(ctx, client, dyad); err != nil {
 				warnf("remove dyad %s failed: %v", dyad, err)
 				continue
 			}
