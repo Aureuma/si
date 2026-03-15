@@ -316,11 +316,26 @@ pub struct PublishedPort {
     host_ip: String,
     host_port: String,
     container_port: u16,
+    dynamic_host_port: bool,
 }
 
 impl PublishedPort {
     pub fn new(host_port: impl Into<String>, container_port: u16) -> Self {
-        Self { host_ip: "127.0.0.1".to_owned(), host_port: host_port.into(), container_port }
+        Self {
+            host_ip: "127.0.0.1".to_owned(),
+            host_port: host_port.into(),
+            container_port,
+            dynamic_host_port: false,
+        }
+    }
+
+    pub fn dynamic(container_port: u16) -> Self {
+        Self {
+            host_ip: "127.0.0.1".to_owned(),
+            host_port: String::new(),
+            container_port,
+            dynamic_host_port: true,
+        }
     }
 
     pub fn host_ip(mut self, value: impl Into<String>) -> Self {
@@ -329,7 +344,7 @@ impl PublishedPort {
     }
 
     pub fn validate(&self) -> Result<(), PublishedPortError> {
-        if self.host_port.trim().is_empty() {
+        if self.host_port.trim().is_empty() && !self.dynamic_host_port {
             return Err(PublishedPortError::MissingHostPort);
         }
         Ok(())
@@ -732,6 +747,13 @@ mod tests {
         let err = PublishedPort::new("   ", 3000).docker_publish_arg().expect_err("missing port");
 
         assert_eq!(err, PublishedPortError::MissingHostPort);
+    }
+
+    #[test]
+    fn supports_dynamic_published_host_port() {
+        let arg = PublishedPort::dynamic(3000).docker_publish_arg().expect("dynamic publish arg");
+
+        assert_eq!(arg, "127.0.0.1::3000");
     }
 
     #[test]
