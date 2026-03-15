@@ -662,6 +662,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "si-rs-vault"
+version = "0.54.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
