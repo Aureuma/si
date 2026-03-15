@@ -410,6 +410,78 @@ fn codex_remove_plan_json_returns_container_and_volume_names() {
     assert_eq!(parsed["gh_volume"], "si-gh-ferma");
 }
 
+#[test]
+fn codex_start_executes_docker_start_for_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::write(
+        &docker_bin,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'si-codex-ferma'\n",
+            args_path.display()
+        ),
+    )
+    .expect("write docker script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&docker_bin, perms).expect("chmod");
+    }
+
+    let output = cargo_bin()
+        .args(["codex", "start", "ferma", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("si-codex-ferma"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(args.lines().collect::<Vec<_>>(), ["start", "si-codex-ferma"]);
+}
+
+#[test]
+fn codex_stop_executes_docker_stop_for_container_name() {
+    let script_dir = tempdir().expect("tempdir");
+    let args_path = script_dir.path().join("args.txt");
+    let docker_bin = script_dir.path().join("docker");
+    fs::write(
+        &docker_bin,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nprintf '%s\\n' 'si-codex-ferma'\n",
+            args_path.display()
+        ),
+    )
+    .expect("write docker script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker_bin).expect("metadata").permissions();
+        perms.set_mode(0o700);
+        fs::set_permissions(&docker_bin, perms).expect("chmod");
+    }
+
+    let output = cargo_bin()
+        .args(["codex", "stop", "ferma", "--docker-bin"])
+        .arg(&docker_bin)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("si-codex-ferma"));
+    let args = fs::read_to_string(args_path).expect("args file");
+    assert_eq!(args.lines().collect::<Vec<_>>(), ["stop", "si-codex-ferma"]);
+}
+
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
 }

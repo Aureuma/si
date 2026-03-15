@@ -2456,8 +2456,12 @@ func cmdCodexStop(args []string) {
 	}
 	name := args[0]
 	containerName := codexContainerName(name)
-	if err := execDockerCLI("stop", containerName); err != nil {
+	if _, delegated, err := maybeRunRustCodexContainerAction("stop", name); err != nil {
 		fatal(err)
+	} else if !delegated {
+		if err := execDockerCLI("stop", containerName); err != nil {
+			fatal(err)
+		}
 	}
 }
 
@@ -2472,8 +2476,12 @@ func cmdCodexStart(args []string) {
 	}
 	name := args[0]
 	containerName := codexContainerName(name)
-	if err := execDockerCLI("start", containerName); err != nil {
+	if _, delegated, err := maybeRunRustCodexContainerAction("start", name); err != nil {
 		fatal(err)
+	} else if !delegated {
+		if err := execDockerCLI("start", containerName); err != nil {
+			fatal(err)
+		}
 	}
 	client, err := shared.NewClient()
 	if err != nil {
