@@ -225,6 +225,7 @@ Progress notes:
 - completed: experimental Go `start` and `stop` can now delegate the Docker container action to Rust while Go retains post-start inspection, Docker socket setup, and Fort/bootstrap session work
 - completed: experimental Go `logs` and `tail` can now delegate Docker log streaming arguments and execution to Rust while preserving the current Go command surface
 - completed: Rust docker exec command generation now covers non-interactive codex container execution, and experimental Go `clone` delegates that exec path to the Rust CLI
+- completed: experimental Go non-tmux custom codex exec can now delegate Docker exec argument assembly and execution to Rust while interactive shell mode remains on the Go path
 
 ### Phase 5: Security/runtime migration
 
