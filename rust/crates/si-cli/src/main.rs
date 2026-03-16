@@ -72,7 +72,8 @@ use si_rs_provider_oci::{
 use si_rs_provider_openai::{
     OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
     OpenAICurrentContext, OpenAIRuntime, get_model as openai_get_model,
-    list_contexts as list_openai_contexts, list_models as openai_list_models,
+    get_project as openai_get_project, list_contexts as list_openai_contexts,
+    list_models as openai_list_models, list_projects as openai_list_projects,
     render_api_response_text as render_openai_api_response_text,
     render_auth_status_text as render_openai_auth_status_text,
     render_context_list_text as render_openai_context_list_text,
@@ -545,6 +546,10 @@ enum OpenAICommand {
         #[command(subcommand)]
         command: OpenAIModelCommand,
     },
+    Project {
+        #[command(subcommand)]
+        command: OpenAIProjectCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -637,6 +642,63 @@ enum OpenAIModelCommand {
     },
     Get {
         model_id: Option<String>,
+        #[arg(long)]
+        id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIProjectCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        include_archived: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        project_ref: Option<String>,
         #[arg(long)]
         id: Option<String>,
         #[arg(long)]
@@ -2908,6 +2970,63 @@ fn main() -> Result<()> {
                     raw,
                 )?,
             },
+            OpenAICommand::Project { command } => match command {
+                OpenAIProjectCommand::List {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    after,
+                    include_archived,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_project_list(
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    after,
+                    include_archived,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIProjectCommand::Get {
+                    project_ref,
+                    id,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_project_get(
+                    id.or(project_ref),
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
         },
         Command::Oci { command } => match command {
             OciCommand::Context { command } => match command {
@@ -4772,6 +4891,75 @@ fn run_openai_model_get(
         home,
         settings_file,
         |runtime| openai_get_model(&runtime, &id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_list(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    limit: Option<usize>,
+    after: Option<String>,
+    include_archived: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| {
+            openai_list_projects(
+                &runtime,
+                limit,
+                after.as_deref().unwrap_or_default(),
+                include_archived,
+            )
+        },
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_get(
+    id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let id = id.unwrap_or_default();
+    if id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_get_project(&runtime, &id),
     )?;
     print_openai_api_response(response, json, raw)
 }
