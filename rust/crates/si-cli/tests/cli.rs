@@ -369,6 +369,46 @@ owner = "OpsOrg"
 }
 
 #[test]
+fn github_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[github]
+default_account = "core"
+default_auth_mode = "app"
+
+[github.accounts.core]
+owner = "Aureuma"
+api_base_url = "https://ghe.example/api/v3"
+auth_mode = "oauth"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["github", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["owner"], "Aureuma");
+    assert_eq!(parsed["auth_mode"], "oauth");
+    assert_eq!(parsed["base_url"], "https://ghe.example/api/v3");
+    assert_eq!(parsed["source"], "settings.default_account,settings.auth_mode");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

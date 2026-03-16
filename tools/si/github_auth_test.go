@@ -197,3 +197,31 @@ func TestCmdGithubContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }
+
+func TestCmdGithubContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"account_alias\":\"core\",\"owner\":\"Aureuma\",\"auth_mode\":\"oauth\",\"base_url\":\"https://api.github.com\",\"source\":\"settings.default_account\"}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdGithubContextCurrent([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"account_alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ncontext\ncurrent\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}

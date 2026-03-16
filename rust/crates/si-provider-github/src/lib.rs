@@ -1,5 +1,6 @@
 use serde::Serialize;
 use si_rs_config::settings::{GitHubAccountEntry, GitHubSettings};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GitHubContextListEntry {
@@ -9,6 +10,15 @@ pub struct GitHubContextListEntry {
     pub auth_mode: String,
     pub default: String,
     pub api_base_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GitHubCurrentContext {
+    pub account_alias: String,
+    pub owner: String,
+    pub auth_mode: String,
+    pub base_url: String,
+    pub source: String,
 }
 
 pub fn list_contexts(settings: &GitHubSettings) -> Vec<GitHubContextListEntry> {
@@ -22,6 +32,70 @@ pub fn list_contexts(settings: &GitHubSettings) -> Vec<GitHubContextListEntry> {
     }
     rows.sort_by(|left, right| left.alias.cmp(&right.alias));
     rows
+}
+
+pub fn resolve_current_context(
+    settings: &GitHubSettings,
+    env: &BTreeMap<String, String>,
+) -> GitHubCurrentContext {
+    let selected_account = resolve_account_selection(settings, env);
+    let entry = selected_account.as_ref().and_then(|alias| settings.accounts.get(alias));
+
+    let owner = first_non_empty(&[
+        entry.and_then(|item| item.owner.as_deref()),
+        settings.default_owner.as_deref(),
+        env.get("GITHUB_DEFAULT_OWNER").map(String::as_str),
+    ])
+    .to_owned();
+    let base_url = first_non_empty(&[
+        entry.and_then(|item| item.api_base_url.as_deref()),
+        settings.api_base_url.as_deref(),
+        env.get("GITHUB_API_BASE_URL").map(String::as_str),
+        Some("https://api.github.com"),
+    ])
+    .to_owned();
+    let auth_mode = first_non_empty(&[
+        entry.and_then(|item| item.auth_mode.as_deref()),
+        env.get("GITHUB_AUTH_MODE").map(String::as_str),
+        env.get("GITHUB_DEFAULT_AUTH_MODE").map(String::as_str),
+        settings.default_auth_mode.as_deref(),
+        Some("app"),
+    ])
+    .to_owned();
+
+    let mut source = Vec::new();
+    if let Some(alias) = selected_account.as_deref() {
+        if settings.default_account.as_deref().map(str::trim) == Some(alias) {
+            source.push("settings.default_account".to_owned());
+        } else if env
+            .get("GITHUB_DEFAULT_ACCOUNT")
+            .map(|value| value.trim() == alias)
+            .unwrap_or(false)
+        {
+            source.push("env:GITHUB_DEFAULT_ACCOUNT".to_owned());
+        }
+    }
+    if entry.and_then(|item| item.auth_mode.as_deref()).map(str::trim) == Some(auth_mode.as_str()) {
+        source.push("settings.auth_mode".to_owned());
+    } else if env.get("GITHUB_AUTH_MODE").map(|value| value.trim() == auth_mode).unwrap_or(false) {
+        source.push("env:GITHUB_AUTH_MODE".to_owned());
+    } else if env
+        .get("GITHUB_DEFAULT_AUTH_MODE")
+        .map(|value| value.trim() == auth_mode)
+        .unwrap_or(false)
+    {
+        source.push("env:GITHUB_DEFAULT_AUTH_MODE".to_owned());
+    } else if settings.default_auth_mode.as_deref().map(str::trim) == Some(auth_mode.as_str()) {
+        source.push("settings.default_auth_mode".to_owned());
+    }
+
+    GitHubCurrentContext {
+        account_alias: selected_account.unwrap_or_default(),
+        owner,
+        auth_mode,
+        base_url,
+        source: source.join(","),
+    }
 }
 
 fn build_list_entry(
@@ -109,6 +183,23 @@ fn bool_string(value: bool) -> String {
     if value { "true".to_owned() } else { "false".to_owned() }
 }
 
+fn resolve_account_selection(
+    settings: &GitHubSettings,
+    env: &BTreeMap<String, String>,
+) -> Option<String> {
+    let selected = first_non_empty(&[
+        settings.default_account.as_deref(),
+        env.get("GITHUB_DEFAULT_ACCOUNT").map(String::as_str),
+    ]);
+    if !selected.is_empty() {
+        return Some(selected.to_owned());
+    }
+    if settings.accounts.len() == 1 {
+        return settings.accounts.keys().next().cloned();
+    }
+    None
+}
+
 fn or_dash(value: &str) -> &str {
     if value.trim().is_empty() { "-" } else { value }
 }
@@ -117,7 +208,6 @@ fn or_dash(value: &str) -> &str {
 mod tests {
     use super::*;
     use si_rs_config::settings::{GitHubAccountEntry, GitHubSettings};
-    use std::collections::BTreeMap;
 
     #[test]
     fn list_contexts_applies_defaults_and_sorts() {
@@ -158,5 +248,34 @@ mod tests {
     fn render_context_list_text_handles_empty() {
         let text = render_context_list_text(&[]);
         assert_eq!(text, "no github accounts configured in settings\n");
+    }
+
+    #[test]
+    fn resolve_current_context_uses_settings_and_env() {
+        let mut accounts = BTreeMap::new();
+        accounts.insert(
+            "core".to_owned(),
+            GitHubAccountEntry {
+                owner: Some("Aureuma".to_owned()),
+                auth_mode: Some("oauth".to_owned()),
+                api_base_url: Some("https://ghe.example/api/v3".to_owned()),
+                ..GitHubAccountEntry::default()
+            },
+        );
+        let settings = GitHubSettings {
+            default_account: Some("core".to_owned()),
+            default_auth_mode: Some("app".to_owned()),
+            accounts,
+            ..GitHubSettings::default()
+        };
+        let env = BTreeMap::new();
+
+        let resolved = resolve_current_context(&settings, &env);
+        assert_eq!(resolved.account_alias, "core");
+        assert_eq!(resolved.owner, "Aureuma");
+        assert_eq!(resolved.auth_mode, "oauth");
+        assert_eq!(resolved.base_url, "https://ghe.example/api/v3");
+        assert!(resolved.source.contains("settings.default_account"));
+        assert!(resolved.source.contains("settings.auth_mode"));
     }
 }

@@ -32,7 +32,9 @@ use si_rs_fort::{
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
-use si_rs_provider_github::{GitHubContextListEntry, list_contexts, render_context_list_text};
+use si_rs_provider_github::{
+    GitHubContextListEntry, list_contexts, render_context_list_text, resolve_current_context,
+};
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
@@ -149,6 +151,16 @@ enum GitHubCommand {
 #[derive(Debug, Subcommand)]
 enum GitHubContextCommand {
     List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -1084,6 +1096,15 @@ struct GitHubContextListPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct GitHubCurrentContextPayload {
+    account_alias: String,
+    owner: String,
+    auth_mode: String,
+    base_url: String,
+    source: String,
+}
+
+#[derive(Debug, Serialize)]
 struct DyadSpawnPlanView {
     dyad: String,
     role: String,
@@ -1475,6 +1496,10 @@ fn main() -> Result<()> {
                 GitHubContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
                     show_github_context_list(home, settings_file, format)?
+                }
+                GitHubContextCommand::Current { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_github_context_current(home, settings_file, format)?
                 }
             },
         },
@@ -2591,6 +2616,42 @@ fn show_github_context_list(
             println!("{}", serde_json::to_string_pretty(&GitHubContextListPayload { contexts })?)
         }
         OutputFormat::Text => print!("{}", render_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_github_context_current(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let current = resolve_current_context(&settings.github, &env);
+    let payload = GitHubCurrentContextPayload {
+        account_alias: current.account_alias,
+        owner: current.owner,
+        auth_mode: current.auth_mode,
+        base_url: current.base_url,
+        source: current.source,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            println!(
+                "Current github context: account={} owner={} auth={} base={}",
+                or_dash(&payload.account_alias),
+                or_dash(&payload.owner),
+                or_dash(&payload.auth_mode),
+                or_dash(&payload.base_url)
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
     }
     Ok(())
 }
