@@ -767,6 +767,53 @@ func TestRunAppleAppStoreCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.
 	}
 }
 
+func TestRunAppleCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAppleCommand([]string{"music", "search"})
+	if err != nil {
+		t.Fatalf("runAppleCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go apple root path for non-migrated subtree")
+	}
+}
+
+func TestRunAppleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleCommand([]string{"appstore", "auth", "status", "--verify=false", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple root to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-root" {
+		t.Fatalf("expected delegated Rust apple root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\nauth\nstatus\n--verify=false\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple root + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -1563,6 +1610,53 @@ func TestRunGooglePlacesCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "google\nplaces\nauth\nstatus\n--json" {
 		t.Fatalf("expected Rust CLI args to be google places root + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGoogleCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGoogleCommand([]string{"youtube", "search"})
+	if err != nil {
+		t.Fatalf("runGoogleCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google root path for non-migrated subtree")
+	}
+}
+
+func TestRunGoogleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGoogleCommand([]string{"places", "context", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGoogleCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google root to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-root" {
+		t.Fatalf("expected delegated Rust google root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be google root + args, got %q", string(argsData))
 	}
 }
 
