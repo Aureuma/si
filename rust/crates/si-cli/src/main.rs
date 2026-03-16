@@ -64,10 +64,12 @@ use si_rs_provider_cloudflare::{
     verify_auth_status as verify_cloudflare_auth_status,
 };
 use si_rs_provider_gcp::{
-    GCPAuthOverrides, GCPAuthStatus, GCPContextListEntry, GCPCurrentContext,
+    GCPAPIRequest, GCPAPIResponse, GCPAuthOverrides, GCPAuthStatus, GCPContextListEntry,
+    GCPCurrentContext, GCPRuntime,
+    execute_api_request as execute_gcp_api_request,
     list_contexts as list_gcp_contexts, render_context_list_text as render_gcp_context_list_text,
     resolve_auth_status as resolve_gcp_auth_status,
-    resolve_current_context as resolve_gcp_current_context,
+    resolve_current_context as resolve_gcp_current_context, resolve_runtime as resolve_gcp_runtime,
 };
 use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
@@ -1751,6 +1753,66 @@ enum GCPCommand {
         #[command(subcommand)]
         command: GCPContextCommand,
     },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Service {
+        #[command(subcommand)]
+        command: GCPServiceCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        content_type: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1796,6 +1858,112 @@ enum GCPContextCommand {
         settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPServiceCommand {
+    Enable {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long = "name")]
+        service_name: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Disable {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long = "name")]
+        service_name: String,
+        #[arg(long)]
+        check_usage: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long = "name")]
+        service_name: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -9068,6 +9236,149 @@ fn main() -> Result<()> {
                     show_gcp_context_current(home, settings_file, format)?
                 }
             },
+            GCPCommand::Doctor {
+                account,
+                env,
+                project,
+                base_url,
+                access_token,
+                home,
+                settings_file,
+                json,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                run_gcp_doctor(
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    home,
+                    settings_file,
+                    format,
+                )?
+            }
+            GCPCommand::Service { command } => match command {
+                GCPServiceCommand::Enable {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    service_name,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_service_enable(
+                        account, env, project, base_url, access_token, service_name, home,
+                        settings_file, format, raw,
+                    )?
+                }
+                GCPServiceCommand::Disable {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    service_name,
+                    check_usage,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_service_disable(
+                        account, env, project, base_url, access_token, service_name, check_usage,
+                        home, settings_file, format, raw,
+                    )?
+                }
+                GCPServiceCommand::Get {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    service_name,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_service_get(
+                        account, env, project, base_url, access_token, service_name, home,
+                        settings_file, format, raw,
+                    )?
+                }
+                GCPServiceCommand::List {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    limit,
+                    filter,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_service_list(
+                        account, env, project, base_url, access_token, limit, filter, params,
+                        home, settings_file, format, raw,
+                    )?
+                }
+            },
+            GCPCommand::Raw {
+                account,
+                env,
+                project,
+                base_url,
+                access_token,
+                method,
+                path,
+                params,
+                headers,
+                body,
+                json_body,
+                content_type,
+                home,
+                settings_file,
+                json,
+                raw,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                run_gcp_raw(
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    method,
+                    path,
+                    params,
+                    headers,
+                    body,
+                    json_body,
+                    content_type,
+                    home,
+                    settings_file,
+                    format,
+                    raw,
+                )?
+            }
         },
         Command::Google { command } => match command {
             GoogleCommand::Places { command } => match command {
@@ -16184,6 +16495,311 @@ fn show_gcp_auth_status(
         }
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_gcp_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    require_token: bool,
+) -> Result<GCPRuntime> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_gcp_runtime(
+        &settings.gcp,
+        &env,
+        &GCPAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            project_id: project.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            access_token: access_token.unwrap_or_default(),
+        },
+        require_token,
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+fn print_gcp_api_response(response: &GCPAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
+        OutputFormat::Text => {
+            println!("Status: {} {}", response.status_code, response.status);
+            if !response.request_id.trim().is_empty() {
+                println!("Request ID: {}", response.request_id);
+            }
+            if raw && !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            } else if let Some(data) = &response.data {
+                println!("{}", serde_json::to_string_pretty(data)?);
+            } else if !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_gcp_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            anyhow::bail!("invalid key=value argument {:?}", raw);
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("gcp key cannot be empty");
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
+fn preview_secret(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    if trimmed.len() <= 8 {
+        return "***".to_string();
+    }
+    format!("{}***{}", &trimmed[..4], &trimmed[trimmed.len() - 4..])
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_doctor(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_gcp_runtime(
+        account, environment, project, base_url, access_token, home, settings_file, true,
+    )?;
+    let verify = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!(
+                "/v1/projects/{}/services/serviceusage.googleapis.com",
+                runtime.project_id.trim()
+            ),
+            ..GCPAPIRequest::default()
+        },
+    );
+    let request_detail = match &verify {
+        Ok(response) => format!("{} {}", response.status_code, response.status),
+        Err(err) => err.clone(),
+    };
+    let payload = serde_json::json!({
+        "ok": verify.is_ok(),
+        "provider": "gcp_serviceusage",
+        "base_url": runtime.base_url,
+        "account_alias": runtime.account_alias,
+        "environment": runtime.environment,
+        "project_id": runtime.project_id,
+        "checks": [
+            {"name": "project", "ok": !runtime.project_id.trim().is_empty(), "detail": runtime.project_id},
+            {"name": "token", "ok": !runtime.access_token.trim().is_empty(), "detail": preview_secret(&runtime.access_token)},
+            {"name": "request", "ok": verify.is_ok(), "detail": request_detail}
+        ]
+    });
+    match format {
+        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_service_enable(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    service_name: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_runtime(
+        account, environment, project, base_url, access_token, home, settings_file, true,
+    )?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1/projects/{}/services/{}:enable",
+                runtime.project_id.trim(),
+                service_name.trim()
+            ),
+            json_body: Some(serde_json::json!({})),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_service_disable(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    service_name: String,
+    check_usage: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_runtime(
+        account, environment, project, base_url, access_token, home, settings_file, true,
+    )?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1/projects/{}/services/{}:disable",
+                runtime.project_id.trim(),
+                service_name.trim()
+            ),
+            json_body: Some(serde_json::json!({"checkIfServiceHasUsage": check_usage})),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_service_get(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    service_name: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_runtime(
+        account, environment, project, base_url, access_token, home, settings_file, true,
+    )?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!(
+                "/v1/projects/{}/services/{}",
+                runtime.project_id.trim(),
+                service_name.trim()
+            ),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_service_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    limit: Option<usize>,
+    filter: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_runtime(
+        account, environment, project, base_url, access_token, home, settings_file, true,
+    )?;
+    let mut params = parse_gcp_params(params)?;
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.insert("pageSize".to_owned(), limit.to_string());
+    }
+    if let Some(filter) = filter.filter(|value| !value.trim().is_empty()) {
+        params.insert("filter".to_owned(), filter.trim().to_owned());
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v1/projects/{}/services", runtime.project_id.trim()),
+            params,
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_raw(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    method: String,
+    path: String,
+    params: Vec<String>,
+    headers: Vec<String>,
+    body: Option<String>,
+    json_body: Option<String>,
+    content_type: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_runtime(
+        account, environment, project, base_url, access_token, home, settings_file, true,
+    )?;
+    let json_body = match json_body {
+        Some(value) if !value.trim().is_empty() => Some(
+            serde_json::from_str::<Value>(&value)
+                .map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?,
+        ),
+        _ => None,
+    };
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method,
+            path,
+            params: parse_gcp_params(params)?,
+            headers: parse_gcp_params(headers)?,
+            json_body,
+            raw_body: body.unwrap_or_default(),
+            content_type: content_type.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
 }
 
 fn show_google_places_context_list(
