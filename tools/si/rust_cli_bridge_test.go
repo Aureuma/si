@@ -1049,6 +1049,100 @@ func TestRunOpenAIModelGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) 
 	}
 }
 
+func TestRunOpenAIKeyListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIKeyListCommand([]string{"--json", "--limit", "1"})
+	if err != nil {
+		t.Fatalf("runOpenAIKeyListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai key list path by default")
+	}
+}
+
+func TestRunOpenAIKeyListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-key-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIKeyListCommand([]string{"--json", "--limit", "1"})
+		if err != nil {
+			t.Fatalf("runOpenAIKeyListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai key list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-key-list" {
+		t.Fatalf("expected delegated Rust openai key list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nkey\nlist\n--json\n--limit\n1" {
+		t.Fatalf("expected Rust CLI args to be openai key list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunOpenAIKeyGetCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIKeyGetCommand([]string{"key_123"})
+	if err != nil {
+		t.Fatalf("runOpenAIKeyGetCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai key get path by default")
+	}
+}
+
+func TestRunOpenAIKeyGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-key-get'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIKeyGetCommand([]string{"key_123"})
+		if err != nil {
+			t.Fatalf("runOpenAIKeyGetCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai key get to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-key-get" {
+		t.Fatalf("expected delegated Rust openai key get output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nkey\nget\nkey_123" {
+		t.Fatalf("expected Rust CLI args to be openai key get + arg, got %q", string(argsData))
+	}
+}
+
 func TestRunOpenAIProjectListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

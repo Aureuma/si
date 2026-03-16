@@ -342,3 +342,59 @@ func TestCmdOpenAIProjectRateLimitListDelegatesToRustCLIWhenConfigured(t *testin
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }
+
+func TestCmdOpenAIKeyListDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"status_code\":200,\"status\":\"200 OK\",\"request_id\":\"req_123\",\"body\":\"{\\\"data\\\":[]}\",\"data\":{\"data\":[]}}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdOpenAIKeyList([]string{"--json", "--limit", "1", "--order", "desc"})
+	})
+
+	if !strings.Contains(out, "\"status_code\":200") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nkey\nlist\n--json\n--limit\n1\n--order\ndesc" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestCmdOpenAIKeyGetDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'Status: 200 200 OK\\nRequest ID: req_123\\n{\\n  \"id\": \"key_123\"\\n}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdOpenAIKeyGet([]string{"key_123"})
+	})
+
+	if !strings.Contains(out, "Status: 200 200 OK") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nkey\nget\nkey_123" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
