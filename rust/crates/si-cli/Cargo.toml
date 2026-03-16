@@ -38,6 +38,7 @@ si-rs-warmup = { path = "../si-warmup" }
 
 [dev-dependencies]
 assert_cmd.workspace = true
+base64 = "0.22.1"
 serde_json.workspace = true
 tempfile.workspace = true
 

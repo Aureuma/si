@@ -1,3 +1,4 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64_STANDARD};
 use assert_cmd::Command;
 use chrono::Local;
 use serde_json::Value;
@@ -4692,7 +4693,7 @@ fn oci_auth_status_json_reads_local_signature_context() {
         "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nuser=ocid1.user.oc1..example\nfingerprint=aa:bb:cc\nkey_file=keys/oci.pem\nregion=us-phoenix-1\n",
     )
     .expect("write config");
-    fs::write(&key_file, "dummy-private-key").expect("write key");
+    fs::write(&key_file, OCI_TEST_RSA_KEY_PEM).expect("write key");
 
     let output = cargo_bin()
         .args(["oci", "auth", "status"])
@@ -4739,6 +4740,354 @@ fn oci_oracular_tenancy_json_reads_profile_config() {
     assert_eq!(parsed["profile"], "DEFAULT");
     assert_eq!(parsed["config_file"], config_file.to_str().expect("utf8"));
     assert_eq!(parsed["tenancy_ocid"], "ocid1.tenancy.oc1..example");
+}
+
+const OCI_TEST_RSA_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
+MIICdgIBADANBgkqhkiG9w0BAQEFAASCAmAwggJcAgEAAoGBAMHdWNb6AMmJKYK2
+AtBSIA5dld4B22eLwBBeQaqsbqyZj3Wpu4lgs2Hu/PBRIgqN/VT83RRyhLjp1PTL
+9fNTlykVRd3aBOj8QwIWsVS+10a/8GuPx5N4vZlzsiplkIOEwcrpCQs30uNPtJqv
+br2DSoulEAzFiboOri2wsY+MIbKxAgMBAAECgYAn0+mkgMgYn20/xVTep4CecuuP
+KKKCq1tSAYtMHRC/tOycJ7q3hn5T6F1eocx0jqc1Bp4EzWIm+yMdB6oHy2yKUH/f
+N5zX1Hi/pulp5zO6c8ANaHjb48fBiBOTck7FQ9c/uppCleBESdE773zk6fN7XKgm
+z6Y9EegeBYMrAP5DYQJBAOtaAtKsQYKiPoQM6EiskBfO3kpRS7C4WgrJchgArY74
++tBk5s0Bf6ibSxSyNfSZ4gZyyF7kLNDR3CWAxFp9EX8CQQDS34pEuKVSEYz41uiS
+MzM+hQJiszF8M2NPj9IzqT8EmvXIvveK29f6C6nxkzllKB6WyjnB0PcbYqHnCsGv
+G/PPAkBw6m+eShzoIxVhX5v2eixr78mA2H47HEe/EyVVVMXwaY5Ue4SsaQKpj1A3
+bsUqRMZHl7yAonLKAVXg/GW4kHbbAkBkqCXFJepsIUqMYXFEkEIOvsjjuiuN4K2w
+BbPNyyT0ms9l0pow4z3V8oldcew8uAjZ64/kT04U+WDU+1J2tr4LAkEAo2Jr+HY3
+n7bZhk8wZV/UBPJY/hjPoMGweaYAz8Vx4OujBqJhYaVd4XHFSH8cOGiXGsj5IVfE
+ytNZBG2qI/IOCw==
+-----END PRIVATE KEY-----
+"#;
+
+fn write_oci_test_config(home: &tempfile::TempDir, base_url: &str) -> std::path::PathBuf {
+    let config_dir = home.path().join("oci");
+    fs::create_dir_all(&config_dir).expect("mkdir oci config dir");
+    let key_file = config_dir.join("oci.pem");
+    fs::write(&key_file, OCI_TEST_RSA_KEY_PEM).expect("write oci key");
+    let config_file = config_dir.join("config");
+    fs::write(
+        &config_file,
+        "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nuser=ocid1.user.oc1..example\nfingerprint=aa:bb:cc\nkey_file=oci.pem\nregion=local\n",
+    )
+    .expect("write oci config");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir .si");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        format!("schema_version = 1\n\n[oci]\napi_base_url = \"{base_url}\"\n"),
+    )
+    .expect("write settings");
+    config_file
+}
+
+#[test]
+fn oci_oracular_cloud_init_json_renders_base64_payload() {
+    let output = cargo_bin()
+        .args(["oci", "oracular", "cloud-init", "--ssh-port", "7129", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ssh_port"], 7129);
+    let decoded = BASE64_STANDARD
+        .decode(parsed["user_data_b64"].as_str().expect("user_data_b64"))
+        .expect("decode cloud-init");
+    let text = String::from_utf8(decoded).expect("utf8 cloud-init");
+    assert!(text.contains("Port 7129"));
+}
+
+#[test]
+fn oci_identity_availability_domains_json_signs_and_lists() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /20160918/availabilityDomains?compartmentId=ocid1.tenancy.oc1..example HTTP/1.1\r\n"));
+        assert!(request.contains("Signature version=\"1\""));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_ads")], r#"[{"name":"AD-1"}]"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "identity", "availability-domains", "list"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--base-url", &server.base_url])
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_oci_ads");
+    assert_eq!(parsed["list"][0]["name"], "AD-1");
+}
+
+#[test]
+fn oci_identity_compartment_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/compartments HTTP/1.1\r\n"));
+        assert!(request.contains("\"name\":\"prod\""));
+        assert!(request.contains("\"compartmentId\":\"ocid1.compartment.oc1..root\""));
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_compartment")],
+            r#"{"id":"ocid1.compartment.oc1..prod","name":"prod"}"#,
+        )
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "identity", "compartment", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--base-url", &server.base_url, "--parent", "ocid1.compartment.oc1..root", "--name", "prod", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["name"], "prod");
+}
+
+#[test]
+fn oci_compute_image_latest_ubuntu_json_queries_core_api() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("GET /20160918/images?"));
+        assert!(request.contains("operatingSystem=Canonical+Ubuntu"));
+        assert!(request.contains("operatingSystemVersion=24.04"));
+        assert!(request.contains("shape=VM.Standard.A1.Flex"));
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_image")],
+            r#"[{"id":"ocid1.image.oc1..ubuntu","displayName":"Ubuntu 24.04"}]"#,
+        )
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "compute", "image", "latest-ubuntu"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["list"][0]["id"], "ocid1.image.oc1..ubuntu");
+}
+
+#[test]
+fn oci_network_vcn_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/vcns HTTP/1.1\r\n"));
+        assert!(request.contains("\"cidrBlocks\":[\"10.0.0.0/16\"]"));
+        assert!(request.contains("\"displayName\":\"oracular-vcn\""));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_vcn")], r#"{"id":"ocid1.vcn.oc1..vcn"}"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "network", "vcn", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "ocid1.vcn.oc1..vcn");
+}
+
+#[test]
+fn oci_network_internet_gateway_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/internetGateways HTTP/1.1\r\n"));
+        assert!(request.contains("\"vcnId\":\"ocid1.vcn.oc1..vcn\""));
+        assert!(request.contains("\"isEnabled\":true"));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_igw")], r#"{"id":"ocid1.internetgateway.oc1..igw"}"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "network", "internet-gateway", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--vcn-id", "ocid1.vcn.oc1..vcn", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "ocid1.internetgateway.oc1..igw");
+}
+
+#[test]
+fn oci_network_route_table_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/routeTables HTTP/1.1\r\n"));
+        assert!(request.contains("\"networkEntityId\":\"ocid1.internetgateway.oc1..igw\""));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_rt")], r#"{"id":"ocid1.routetable.oc1..rt"}"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "network", "route-table", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--vcn-id", "ocid1.vcn.oc1..vcn", "--target", "ocid1.internetgateway.oc1..igw", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "ocid1.routetable.oc1..rt");
+}
+
+#[test]
+fn oci_network_security_list_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/securityLists HTTP/1.1\r\n"));
+        assert!(request.contains("\"displayName\":\"oracular-sec\""));
+        assert!(request.contains("\"min\":7129"));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_sec")], r#"{"id":"ocid1.securitylist.oc1..sec"}"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "network", "security-list", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8"), "--compartment", "ocid1.compartment.oc1..prod", "--vcn-id", "ocid1.vcn.oc1..vcn", "--ssh-port", "7129", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "ocid1.securitylist.oc1..sec");
+}
+
+#[test]
+fn oci_network_subnet_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/subnets HTTP/1.1\r\n"));
+        assert!(request.contains("\"routeTableId\":\"ocid1.routetable.oc1..rt\""));
+        assert!(request.contains("\"securityListIds\":[\"ocid1.securitylist.oc1..sec\"]"));
+        assert!(request.contains("\"dhcpOptionsId\":\"ocid1.dhcpoptions.oc1..dhcp\""));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_subnet")], r#"{"id":"ocid1.subnet.oc1..sub"}"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "network", "subnet", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args([
+            "--config-file",
+            config_file.to_str().expect("utf8"),
+            "--compartment",
+            "ocid1.compartment.oc1..prod",
+            "--vcn-id",
+            "ocid1.vcn.oc1..vcn",
+            "--route-table-id",
+            "ocid1.routetable.oc1..rt",
+            "--security-list-id",
+            "ocid1.securitylist.oc1..sec",
+            "--dhcp-options-id",
+            "ocid1.dhcpoptions.oc1..dhcp",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "ocid1.subnet.oc1..sub");
+}
+
+#[test]
+fn oci_compute_instance_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /20160918/instances HTTP/1.1\r\n"));
+        assert!(request.contains("\"availabilityDomain\":\"AD-1\""));
+        assert!(request.contains("\"sourceId\":\"ocid1.image.oc1..img\""));
+        assert!(request.contains("\"ssh_authorized_keys\":\"ssh-rsa AAA-test\""));
+        assert!(request.contains("\"user_data\":\"dGVzdA==\""));
+        http_json_response("200 OK", &[("opc-request-id", "req_oci_instance")], r#"{"id":"ocid1.instance.oc1..inst"}"#)
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "compute", "instance", "create"])
+        .args(["--home"])
+        .arg(home.path())
+        .args([
+            "--config-file",
+            config_file.to_str().expect("utf8"),
+            "--compartment",
+            "ocid1.compartment.oc1..prod",
+            "--ad",
+            "AD-1",
+            "--subnet-id",
+            "ocid1.subnet.oc1..sub",
+            "--image-id",
+            "ocid1.image.oc1..img",
+            "--ssh-public-key",
+            "ssh-rsa AAA-test",
+            "--user-data-b64",
+            "dGVzdA==",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "ocid1.instance.oc1..inst");
 }
 
 #[test]
