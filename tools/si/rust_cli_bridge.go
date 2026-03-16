@@ -893,6 +893,12 @@ func runGooglePlacesCommand(args []string) (bool, error) {
 		return runGooglePlacesPhotoCommand(args[1:])
 	case "raw":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "raw"}, args[1:]...)...)
+	case "session":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "session"}, args[1:]...)...)
+	case "types", "type":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "types"}, args[1:]...)...)
+	case "report":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "report"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
