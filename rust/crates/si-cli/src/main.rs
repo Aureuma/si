@@ -364,6 +364,84 @@ enum CloudflareCommand {
         #[arg(long)]
         settings_file: Option<PathBuf>,
     },
+    Analytics {
+        preset: CloudflareAnalyticsPreset,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Report {
+        preset: CloudflareReportPreset,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CloudflareAnalyticsPreset {
+    #[value(name = "http")]
+    Http,
+    #[value(name = "security")]
+    Security,
+    #[value(name = "cache")]
+    Cache,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum CloudflareReportPreset {
+    #[value(name = "traffic-summary")]
+    TrafficSummary,
+    #[value(name = "security-events")]
+    SecurityEvents,
+    #[value(name = "cache-summary")]
+    CacheSummary,
+    #[value(name = "billing-summary")]
+    BillingSummary,
 }
 
 #[derive(Debug, Subcommand)]
@@ -6289,6 +6367,66 @@ fn main() -> Result<()> {
                 json,
                 raw,
                 params,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            )?,
+            CloudflareCommand::Analytics {
+                preset,
+                json,
+                raw,
+                params,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            } => run_cloudflare_analytics(
+                preset,
+                json,
+                raw,
+                params,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            )?,
+            CloudflareCommand::Report {
+                preset,
+                json,
+                raw,
+                from,
+                to,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            } => run_cloudflare_report(
+                preset,
+                json,
+                raw,
+                from,
+                to,
                 account,
                 env,
                 zone_id,
@@ -14098,6 +14236,62 @@ fn parse_cloudflare_key_values(values: Vec<String>) -> std::collections::BTreeMa
     out
 }
 
+#[allow(clippy::too_many_arguments)]
+fn execute_cloudflare_request(
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: CloudflareAPIRequest,
+) -> Result<CloudflareAPIResponse> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_cloudflare_auth_runtime(
+        &settings.cloudflare,
+        &env,
+        &CloudflareAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            zone_id: zone_id.unwrap_or_default(),
+            zone_name: zone.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            account_id: account_id.unwrap_or_default(),
+            api_token: api_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let request = CloudflareAPIRequest {
+        path: resolve_cloudflare_path_template(&request.path, &runtime)?,
+        ..request
+    };
+    execute_cloudflare_api_request(&runtime, &request).map_err(anyhow::Error::msg)
+}
+
+fn resolve_cloudflare_path_template(path: &str, runtime: &CloudflareAuthRuntime) -> Result<String> {
+    let mut resolved = path.trim().to_owned();
+    if resolved.contains("{account_id}") {
+        let account_id = runtime.account_id.trim();
+        if account_id.is_empty() {
+            anyhow::bail!("account id is required");
+        }
+        resolved = resolved.replace("{account_id}", account_id);
+    }
+    if resolved.contains("{zone_id}") {
+        let zone_id = runtime.zone_id.trim();
+        if zone_id.is_empty() {
+            anyhow::bail!("zone id is required");
+        }
+        resolved = resolved.replace("{zone_id}", zone_id);
+    }
+    Ok(resolved)
+}
+
 fn print_cloudflare_api_response(response: &CloudflareAPIResponse, json: bool, raw: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(response)?);
@@ -14128,34 +14322,121 @@ fn run_cloudflare_raw(
     if path.trim().is_empty() {
         anyhow::bail!("path is required");
     }
-    let home = home.unwrap_or_else(default_home_dir);
-    let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
-    let runtime = resolve_cloudflare_auth_runtime(
-        &settings.cloudflare,
-        &env,
-        &CloudflareAuthOverrides {
-            account: account.unwrap_or_default(),
-            environment: environment.unwrap_or_default(),
-            zone_id: zone_id.unwrap_or_default(),
-            zone_name: zone.unwrap_or_default(),
-            base_url: base_url.unwrap_or_default(),
-            account_id: account_id.unwrap_or_default(),
-            api_token: api_token.unwrap_or_default(),
-        },
-    )
-    .map_err(anyhow::Error::msg)?;
-    let response = execute_cloudflare_api_request(
-        &runtime,
-        &CloudflareAPIRequest {
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        CloudflareAPIRequest {
             method,
             path,
             params: parse_cloudflare_key_values(params),
             raw_body: body.unwrap_or_default(),
             ..CloudflareAPIRequest::default()
         },
-    )
-    .map_err(anyhow::Error::msg)?;
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_analytics(
+    preset: CloudflareAnalyticsPreset,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let path = match preset {
+        CloudflareAnalyticsPreset::Http => "/zones/{zone_id}/analytics/dashboard",
+        CloudflareAnalyticsPreset::Security => "/zones/{zone_id}/firewall/events",
+        CloudflareAnalyticsPreset::Cache => "/zones/{zone_id}/analytics/colos",
+    };
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: path.to_owned(),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_report(
+    preset: CloudflareReportPreset,
+    json: bool,
+    raw: bool,
+    from: Option<String>,
+    to: Option<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let (label, path) = match preset {
+        CloudflareReportPreset::TrafficSummary => ("traffic-summary", "/zones/{zone_id}/analytics/dashboard"),
+        CloudflareReportPreset::SecurityEvents => ("security-events", "/zones/{zone_id}/firewall/events"),
+        CloudflareReportPreset::CacheSummary => ("cache-summary", "/zones/{zone_id}/analytics/colos"),
+        CloudflareReportPreset::BillingSummary => (
+            "billing-summary",
+            "/accounts/{account_id}/billing/subscriptions",
+        ),
+    };
+    let mut params = std::collections::BTreeMap::new();
+    if let Some(value) = from.filter(|value| !value.trim().is_empty()) {
+        params.insert("since".to_owned(), value.trim().to_owned());
+    }
+    if let Some(value) = to.filter(|value| !value.trim().is_empty()) {
+        params.insert("until".to_owned(), value.trim().to_owned());
+    }
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: path.to_owned(),
+            params,
+            ..CloudflareAPIRequest::default()
+        },
+    )?;
+    if !json && !raw {
+        println!("Report: {label}");
+    }
     print_cloudflare_api_response(&response, json, raw)
 }
 
