@@ -1,6 +1,11 @@
+use reqwest::blocking::Client;
+use reqwest::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Serialize;
+use serde_json::Value;
 use si_rs_config::settings::{StripeAccountEntry, StripeSettings};
 use std::collections::BTreeMap;
+use std::time::Duration;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct StripeContextListEntry {
@@ -17,6 +22,7 @@ pub struct StripeAuthOverrides {
     pub account: String,
     pub environment: String,
     pub api_key: String,
+    pub base_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -34,6 +40,28 @@ pub struct StripeAuthStatus {
     pub environment: String,
     pub key_source: String,
     pub key_preview: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StripeAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub params: BTreeMap<String, String>,
+    pub raw_body: String,
+    pub idempotency_key: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct StripeAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub idempotency_key: String,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
 }
 
 pub fn list_contexts(settings: &StripeSettings) -> Vec<StripeContextListEntry> {
@@ -123,12 +151,14 @@ pub fn resolve_auth_status(
     })
 }
 
-struct StripeRuntimeContext {
-    account_alias: String,
-    account_id: String,
-    environment: String,
-    api_key: String,
-    key_source: String,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StripeRuntimeContext {
+    pub account_alias: String,
+    pub account_id: String,
+    pub environment: String,
+    pub api_key: String,
+    pub key_source: String,
+    pub base_url: String,
 }
 
 fn resolve_runtime_context(
@@ -149,7 +179,26 @@ fn resolve_runtime_context(
             environment
         ));
     }
-    Ok(StripeRuntimeContext { account_alias: alias, account_id, environment, api_key, key_source })
+    Ok(StripeRuntimeContext {
+        account_alias: alias,
+        account_id,
+        environment,
+        api_key,
+        key_source,
+        base_url: first_non_empty(&[
+            Some(overrides.base_url.as_str()),
+            Some("https://api.stripe.com"),
+        ])
+        .to_owned(),
+    })
+}
+
+pub fn resolve_runtime(
+    settings: &StripeSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &StripeAuthOverrides,
+) -> Result<StripeRuntimeContext, String> {
+    resolve_runtime_context(settings, env, overrides)
 }
 
 fn resolve_account_selection(
@@ -316,6 +365,297 @@ fn preview_secret(secret: &str) -> String {
     }
     let preview: String = trimmed.chars().take(8).collect();
     if trimmed.chars().count() <= 10 { preview } else { format!("{preview}...") }
+}
+
+pub fn execute_api_request(
+    runtime: &StripeRuntimeContext,
+    request: &StripeAPIRequest,
+) -> Result<StripeAPIResponse, String> {
+    let method = if request.method.trim().is_empty() {
+        "GET"
+    } else {
+        request.method.trim()
+    };
+    let (endpoint, body) = build_request_target(
+        &runtime.base_url,
+        &request.path,
+        method,
+        &request.params,
+        &request.raw_body,
+    )?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|err| format!("build stripe http client: {err}"))?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", runtime.api_key.trim()))
+            .map_err(|err| format!("build stripe auth header: {err}"))?,
+    );
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    if !runtime.account_id.trim().is_empty() {
+        headers.insert(
+            "Stripe-Account",
+            HeaderValue::from_str(runtime.account_id.trim())
+                .map_err(|err| format!("build stripe account header: {err}"))?,
+        );
+    }
+    if !request.idempotency_key.trim().is_empty() {
+        headers.insert(
+            "Idempotency-Key",
+            HeaderValue::from_str(request.idempotency_key.trim())
+                .map_err(|err| format!("build stripe idempotency header: {err}"))?,
+        );
+    }
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|err| format!("build stripe http method: {err}"))?;
+    let mut request_builder = client.request(method, endpoint).headers(headers);
+    if let Some(body) = body {
+        request_builder = request_builder
+            .header(CONTENT_TYPE, detect_stripe_content_type(&request.path, &request.raw_body))
+            .body(body);
+    }
+    let response = request_builder
+        .send()
+        .map_err(|err| format!("stripe request failed: {err}"))?;
+    normalize_response(response)
+}
+
+pub fn list_all(
+    runtime: &StripeRuntimeContext,
+    path: &str,
+    params: &BTreeMap<String, String>,
+    limit: usize,
+) -> Result<Vec<Value>, String> {
+    let target_limit = if limit == 0 { 100 } else { limit };
+    let mut out = Vec::new();
+    let mut cursor = String::new();
+    loop {
+        let remaining = target_limit.saturating_sub(out.len());
+        if remaining == 0 {
+            break;
+        }
+        let mut page_params = params.clone();
+        let page_size = remaining.min(100);
+        page_params
+            .entry("limit".to_owned())
+            .or_insert_with(|| page_size.to_string());
+        if !cursor.trim().is_empty() {
+            page_params.insert("starting_after".to_owned(), cursor.clone());
+        }
+        let response = execute_api_request(
+            runtime,
+            &StripeAPIRequest {
+                method: "GET".to_owned(),
+                path: path.to_owned(),
+                params: page_params,
+                ..StripeAPIRequest::default()
+            },
+        )?;
+        let object = response
+            .data
+            .as_ref()
+            .and_then(Value::as_object)
+            .ok_or_else(|| "stripe list response missing json body".to_owned())?;
+        let items = object
+            .get("data")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if items.is_empty() {
+            break;
+        }
+        cursor = items
+            .last()
+            .and_then(Value::as_object)
+            .and_then(|value| value.get("id"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned();
+        out.extend(items);
+        let has_more = object
+            .get("has_more")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !has_more || cursor.is_empty() {
+            break;
+        }
+    }
+    if out.len() > target_limit {
+        out.truncate(target_limit);
+    }
+    Ok(out)
+}
+
+pub fn render_api_response_text(response: &StripeAPIResponse, raw: bool) -> String {
+    if raw {
+        if response.body.trim().is_empty() {
+            return "{}\n".to_owned();
+        }
+        return ensure_trailing_newline(response.body.clone());
+    }
+    let mut out = format!("Stripe API: {} ({})\n", response.status.trim(), response.status_code);
+    if !response.request_id.trim().is_empty() {
+        out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
+    }
+    if !response.idempotency_key.trim().is_empty() {
+        out.push_str(&format!(
+            "Idempotency Key: {}\n",
+            response.idempotency_key.trim()
+        ));
+    }
+    if let Some(data) = &response.data {
+        if let Ok(pretty) = serde_json::to_string_pretty(data) {
+            out.push_str(&pretty);
+            out.push('\n');
+            return out;
+        }
+    }
+    if !response.body.trim().is_empty() {
+        out.push_str(response.body.trim());
+        out.push('\n');
+    }
+    out
+}
+
+fn build_request_target(
+    base_url: &str,
+    path: &str,
+    method: &str,
+    params: &BTreeMap<String, String>,
+    raw_body: &str,
+) -> Result<(String, Option<Vec<u8>>), String> {
+    let method = method.trim().to_ascii_uppercase();
+    let mut path = path.trim().to_owned();
+    if path.is_empty() {
+        return Err("request path is required".to_owned());
+    }
+    if !path.starts_with('/') && !path.starts_with("http://") && !path.starts_with("https://") {
+        path = format!("/{path}");
+    }
+    if matches!(method.as_str(), "GET" | "DELETE") {
+        let mut url = resolve_url(base_url, &path)?;
+        append_query(&mut url, params);
+        return Ok((url.to_string(), None));
+    }
+    let body = if !raw_body.trim().is_empty() {
+        raw_body.trim().as_bytes().to_vec()
+    } else if path.starts_with("/v2/") {
+        let payload = params
+            .iter()
+            .map(|(key, value)| (key.clone(), Value::String(value.clone())))
+            .collect::<serde_json::Map<String, Value>>();
+        serde_json::to_vec(&Value::Object(payload))
+            .map_err(|err| format!("encode stripe request body: {err}"))?
+    } else {
+        let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+        for (key, value) in params {
+            serializer.append_pair(key.trim(), value.trim());
+        }
+        serializer.finish().into_bytes()
+    };
+    Ok((resolve_url(base_url, &path)?.to_string(), Some(body)))
+}
+
+fn resolve_url(base_url: &str, path: &str) -> Result<Url, String> {
+    if path.starts_with("http://") || path.starts_with("https://") {
+        return Url::parse(path).map_err(|err| format!("parse stripe url {:?}: {err}", path));
+    }
+    let base = Url::parse(base_url)
+        .map_err(|err| format!("parse stripe base url {:?}: {err}", base_url))?;
+    base.join(path)
+        .map_err(|err| format!("resolve stripe path {:?}: {err}", path))
+}
+
+fn append_query(url: &mut Url, params: &BTreeMap<String, String>) {
+    if params
+        .iter()
+        .any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty())
+    {
+        let mut pairs = url.query_pairs_mut();
+        for (key, value) in params {
+            let key = key.trim();
+            let value = value.trim();
+            if key.is_empty() || value.is_empty() {
+                continue;
+            }
+            pairs.append_pair(key, value);
+        }
+    }
+}
+
+fn detect_stripe_content_type(path: &str, raw_body: &str) -> &'static str {
+    if path.trim().starts_with("/v2/") {
+        return "application/json";
+    }
+    let raw = raw_body.trim();
+    if raw.starts_with('{') || raw.starts_with('[') {
+        return "application/json";
+    }
+    "application/x-www-form-urlencoded"
+}
+
+fn normalize_response(response: reqwest::blocking::Response) -> Result<StripeAPIResponse, String> {
+    let status = response.status();
+    let status_text = status.to_string();
+    let headers = response.headers().clone();
+    let request_id = headers
+        .get("Request-Id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let idempotency_key = headers
+        .get("Idempotency-Key")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let body = response
+        .text()
+        .map_err(|err| format!("read stripe response body: {err}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "stripe request failed: status={} request_id={} body={}",
+            status.as_u16(),
+            if request_id.is_empty() {
+                "-"
+            } else {
+                request_id.as_str()
+            },
+            body.trim()
+        ));
+    }
+    Ok(StripeAPIResponse {
+        status_code: status.as_u16(),
+        status: status_text,
+        request_id,
+        idempotency_key,
+        headers: normalize_headers(&headers),
+        body: body.trim().to_owned(),
+        data: serde_json::from_str::<Value>(body.trim()).ok(),
+    })
+}
+
+fn normalize_headers(headers: &HeaderMap) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    for (key, value) in headers {
+        out.insert(
+            key.as_str().to_owned(),
+            value.to_str().unwrap_or_default().trim().to_owned(),
+        );
+    }
+    out
+}
+
+fn ensure_trailing_newline(mut value: String) -> String {
+    if !value.ends_with('\n') {
+        value.push('\n');
+    }
+    value
 }
 
 #[cfg(test)]

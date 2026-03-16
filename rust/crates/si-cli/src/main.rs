@@ -160,9 +160,14 @@ use si_rs_provider_openai::{
     verify_auth_status as verify_openai_auth_status,
 };
 use si_rs_provider_stripe::{
-    StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
+    StripeAPIRequest, StripeAPIResponse, StripeAuthOverrides, StripeAuthStatus,
+    StripeContextListEntry, StripeCurrentContext,
+    StripeRuntimeContext, execute_api_request as execute_stripe_api_request,
     list_contexts as list_stripe_contexts,
+    list_all as list_all_stripe_objects,
+    render_api_response_text as render_stripe_api_response_text,
     render_context_list_text as render_stripe_context_list_text,
+    resolve_runtime as resolve_stripe_runtime,
     resolve_auth_status as resolve_stripe_auth_status,
     resolve_current_context as resolve_stripe_current_context,
 };
@@ -2391,6 +2396,69 @@ enum StripeCommand {
         #[command(subcommand)]
         command: StripeContextCommand,
     },
+    Raw {
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        idempotency_key: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Report {
+        preset: StripeReportPreset,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long)]
+        from: Option<String>,
+        #[arg(long)]
+        to: Option<String>,
+        #[arg(long, default_value_t = 100)]
+        limit: usize,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum StripeReportPreset {
+    #[value(name = "revenue-summary")]
+    RevenueSummary,
+    #[value(name = "payment-intent-status")]
+    PaymentIntentStatus,
+    #[value(name = "subscription-churn")]
+    SubscriptionChurn,
+    #[value(name = "balance-overview")]
+    BalanceOverview,
 }
 
 #[derive(Debug, Subcommand)]
@@ -8195,6 +8263,60 @@ fn main() -> Result<()> {
                     show_stripe_context_current(home, settings_file, format)?
                 }
             },
+            StripeCommand::Raw {
+                method,
+                path,
+                body,
+                account,
+                env,
+                api_key,
+                base_url,
+                params,
+                idempotency_key,
+                home,
+                settings_file,
+                json,
+                raw,
+            } => run_stripe_raw(
+                method,
+                path,
+                body,
+                account,
+                env,
+                api_key,
+                base_url,
+                params,
+                idempotency_key,
+                home,
+                settings_file,
+                json,
+                raw,
+            )?,
+            StripeCommand::Report {
+                preset,
+                account,
+                env,
+                api_key,
+                base_url,
+                from,
+                to,
+                limit,
+                home,
+                settings_file,
+                json,
+            } => run_stripe_report(
+                preset,
+                account,
+                env,
+                api_key,
+                base_url,
+                from,
+                to,
+                limit,
+                home,
+                settings_file,
+                json,
+            )?,
         },
         Command::WorkOS { command } => match command {
             WorkOSCommand::Auth { command } => match command {
@@ -14330,6 +14452,322 @@ fn parse_oci_key_values(values: Vec<String>) -> std::collections::BTreeMap<Strin
     out
 }
 
+fn parse_stripe_key_values(values: Vec<String>) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for entry in values {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+            out.insert(key.to_owned(), value.trim().to_owned());
+        }
+    }
+    out
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_stripe_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<StripeRuntimeContext> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_stripe_runtime(
+        &settings.stripe,
+        &env,
+        &StripeAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_stripe_request(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: StripeAPIRequest,
+) -> Result<StripeAPIResponse> {
+    let runtime = load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
+    execute_stripe_api_request(&runtime, &request).map_err(anyhow::Error::msg)
+}
+
+fn print_stripe_api_response(response: &StripeAPIResponse, json: bool, raw: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(response)?);
+    } else {
+        print!("{}", render_stripe_api_response_text(response, raw));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_raw(
+    method: String,
+    path: String,
+    body: Option<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    params: Vec<String>,
+    idempotency_key: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if path.trim().is_empty() {
+        anyhow::bail!("path is required");
+    }
+    let response = execute_stripe_request(
+        account,
+        environment,
+        api_key,
+        base_url,
+        home,
+        settings_file,
+        StripeAPIRequest {
+            method,
+            path,
+            params: parse_stripe_key_values(params),
+            raw_body: body.unwrap_or_default(),
+            idempotency_key: idempotency_key.unwrap_or_default(),
+        },
+    )?;
+    print_stripe_api_response(&response, json, raw)
+}
+
+fn parse_stripe_report_time(raw: Option<String>) -> Result<Option<i64>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if let Ok(seconds) = trimmed.parse::<i64>() {
+        return Ok(Some(seconds));
+    }
+    let parsed = chrono::DateTime::parse_from_rfc3339(trimmed)
+        .map_err(|_| anyhow::anyhow!("invalid time {trimmed:?} (use unix seconds or RFC3339)"))?;
+    Ok(Some(parsed.timestamp()))
+}
+
+fn add_stripe_created_range(
+    params: &mut std::collections::BTreeMap<String, String>,
+    from: Option<i64>,
+    to: Option<i64>,
+) {
+    if let Some(from) = from {
+        params.insert("created[gte]".to_owned(), from.to_string());
+    }
+    if let Some(to) = to {
+        params.insert("created[lte]".to_owned(), to.to_string());
+    }
+}
+
+fn read_stripe_int_like(value: &Value) -> Option<i64> {
+    value
+        .as_i64()
+        .or_else(|| value.as_u64().and_then(|value| i64::try_from(value).ok()))
+        .or_else(|| value.as_str().and_then(|value| value.parse::<i64>().ok()))
+}
+
+fn sum_stripe_balance_amounts(value: Option<&Value>) -> i64 {
+    value
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter_map(|item| item.get("amount"))
+        .filter_map(read_stripe_int_like)
+        .sum()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_report(
+    preset: StripeReportPreset,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    from: Option<String>,
+    to: Option<String>,
+    limit: usize,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let runtime = load_stripe_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let from = parse_stripe_report_time(from)?;
+    let to = parse_stripe_report_time(to)?;
+    let report = match preset {
+        StripeReportPreset::RevenueSummary => {
+            let mut params = std::collections::BTreeMap::from([("type".to_owned(), "charge".to_owned())]);
+            add_stripe_created_range(&mut params, from, to);
+            let items = list_all_stripe_objects(&runtime, "/v1/balance_transactions", &params, limit)
+                .map_err(anyhow::Error::msg)?;
+            let mut amount = 0i64;
+            let mut fee = 0i64;
+            let mut currency = String::new();
+            for item in &items {
+                if let Some(object) = item.as_object() {
+                    if let Some(value) = object.get("amount").and_then(read_stripe_int_like) {
+                        amount += value;
+                    }
+                    if let Some(value) = object.get("fee").and_then(read_stripe_int_like) {
+                        fee += value;
+                    }
+                    if currency.is_empty() {
+                        currency = object
+                            .get("currency")
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .trim()
+                            .to_ascii_uppercase();
+                    }
+                }
+            }
+            serde_json::json!({
+                "transactions": items.len(),
+                "gross_amount": amount,
+                "fees": fee,
+                "net_amount": amount - fee,
+                "currency": if currency.is_empty() { "-" } else { currency.as_str() },
+            })
+        }
+        StripeReportPreset::PaymentIntentStatus => {
+            let mut params = std::collections::BTreeMap::new();
+            add_stripe_created_range(&mut params, from, to);
+            let items = list_all_stripe_objects(&runtime, "/v1/payment_intents", &params, limit)
+                .map_err(anyhow::Error::msg)?;
+            let mut counts = std::collections::BTreeMap::new();
+            for item in &items {
+                let status = item
+                    .as_object()
+                    .and_then(|item| item.get("status"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown")
+                    .trim()
+                    .to_owned();
+                *counts.entry(if status.is_empty() { "unknown".to_owned() } else { status }).or_insert(0usize) += 1;
+            }
+            serde_json::json!({
+                "total": items.len(),
+                "status_counts": counts,
+                "sampled_records": limit,
+            })
+        }
+        StripeReportPreset::SubscriptionChurn => {
+            let mut params = std::collections::BTreeMap::new();
+            add_stripe_created_range(&mut params, from, to);
+            let items = list_all_stripe_objects(&runtime, "/v1/subscriptions", &params, limit)
+                .map_err(anyhow::Error::msg)?;
+            let mut canceled = 0usize;
+            let mut active = 0usize;
+            let mut past_due = 0usize;
+            for item in &items {
+                match item
+                    .as_object()
+                    .and_then(|item| item.get("status"))
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim()
+                {
+                    "canceled" => canceled += 1,
+                    "active" | "trialing" => active += 1,
+                    "past_due" | "unpaid" => past_due += 1,
+                    _ => {}
+                }
+            }
+            let total = items.len();
+            let churn_pct = if total == 0 {
+                0.0
+            } else {
+                (canceled as f64 / total as f64) * 100.0
+            };
+            serde_json::json!({
+                "total": total,
+                "canceled": canceled,
+                "active": active,
+                "past_due": past_due,
+                "churn_pct": format!("{churn_pct:.2}"),
+                "sampled_max": limit,
+            })
+        }
+        StripeReportPreset::BalanceOverview => {
+            let balance = execute_stripe_api_request(
+                &runtime,
+                &StripeAPIRequest {
+                    method: "GET".to_owned(),
+                    path: "/v1/balance".to_owned(),
+                    ..StripeAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            let payouts = list_all_stripe_objects(
+                &runtime,
+                "/v1/payouts",
+                &std::collections::BTreeMap::new(),
+                limit,
+            )
+            .map_err(anyhow::Error::msg)?;
+            let balance_data = balance.data.as_ref().and_then(Value::as_object);
+            serde_json::json!({
+                "available_amount": sum_stripe_balance_amounts(balance_data.and_then(|data| data.get("available"))),
+                "pending_amount": sum_stripe_balance_amounts(balance_data.and_then(|data| data.get("pending"))),
+                "recent_payouts": payouts.len(),
+            })
+        }
+    };
+    let payload = serde_json::json!({
+        "preset": match preset {
+            StripeReportPreset::RevenueSummary => "revenue-summary",
+            StripeReportPreset::PaymentIntentStatus => "payment-intent-status",
+            StripeReportPreset::SubscriptionChurn => "subscription-churn",
+            StripeReportPreset::BalanceOverview => "balance-overview",
+        },
+        "context": {
+            "account_alias": runtime.account_alias,
+            "account_id": runtime.account_id,
+            "environment": runtime.environment,
+        },
+        "report": report,
+    });
+    if json {
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("Report: {}", payload["preset"].as_str().unwrap_or_default());
+        println!("{}", serde_json::to_string_pretty(&payload["report"])?);
+    }
+    Ok(())
+}
+
 fn parse_cloudflare_key_values(values: Vec<String>) -> std::collections::BTreeMap<String, String> {
     let mut out = std::collections::BTreeMap::new();
     for entry in values {
@@ -14980,6 +15418,7 @@ fn show_stripe_auth_status(
                 account: account.unwrap_or_default(),
                 environment: environment.unwrap_or_default(),
                 api_key: api_key.unwrap_or_default(),
+                base_url: String::new(),
             },
         )
         .map_err(anyhow::Error::msg)?,
