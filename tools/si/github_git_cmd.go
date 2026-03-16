@@ -18,6 +18,13 @@ import (
 )
 
 func cmdGithubGit(args []string) {
+	delegated, err := runGitHubGitCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github git <credential|setup|remote-auth|clone-auth>")
 	if !routedOK {
 		return
@@ -38,6 +45,13 @@ func cmdGithubGit(args []string) {
 }
 
 func cmdGithubGitCredential(args []string) {
+	delegated, err := runGitHubGitCredentialCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	op := "get"
 	if len(args) > 0 && !strings.HasPrefix(strings.TrimSpace(args[0]), "-") {
 		value := strings.ToLower(strings.TrimSpace(args[0]))
