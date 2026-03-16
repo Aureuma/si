@@ -382,6 +382,7 @@ Progress notes:
 - completed: the shipping Go `spawn` command now has a direct command-level proof that delegated Rust remove-plan/spawn-plan/spawn-spec rewriting reaches the prepared execution boundary before Fort and Docker orchestration begin
 - completed: the shipping Go `dyad recreate` command now has a direct command-level proof that it preserves the delegated teardown path and then re-enters the live spawn flow with the parsed CLI args intact
 - completed: the shipping Go `run --tmux` path now has a direct command-level proof that parsed container selection reaches the attached tmux execution boundary before the interactive attach/runtime tail begins
+- completed: the shipping Go codex command layer now has a delegated multi-profile spawn/remove/respawn matrix, so profile-specific Rust rewrite behavior is exercised across more than one profile instead of only in single-profile happy paths
 
 ### Phase 7: Provider migration
 
