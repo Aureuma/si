@@ -2063,6 +2063,91 @@ fn openai_codex_usage_json_defaults_codex_model() {
 }
 
 #[test]
+fn openai_monitor_usage_json_defaults_to_completions() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/organization/usage/completions?start_time="));
+        assert!(request.contains("&limit=1"));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_monitor_usage")],
+            r#"{"data":[{"object":"bucket","results":[{"input_tokens":11}]}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "monitor",
+            "usage",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--limit",
+            "1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_monitor_usage");
+    assert_eq!(parsed["data"]["data"][0]["object"], "bucket");
+    server.join();
+}
+
+#[test]
+fn openai_monitor_limits_json_fetches_project_rate_limits() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /v1/organization/projects/proj_123/rate_limits?limit=1 HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_monitor_limits")],
+            r#"{"data":[{"id":"rl_456","max_requests_per_1_minute":120}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "monitor",
+            "limits",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--project-id",
+            "proj_123",
+            "--limit",
+            "1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_monitor_limits");
+    assert_eq!(parsed["data"]["data"][0]["id"], "rl_456");
+    server.join();
+}
+
+#[test]
 fn oci_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
