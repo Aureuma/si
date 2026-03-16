@@ -1136,6 +1136,13 @@ func cmdOCIOracularCloudInit(args []string) {
 }
 
 func cmdOCIOracularTenancy(args []string) {
+	delegated, err := runOCIOracularTenancyCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("oci oracular tenancy", flag.ExitOnError)
 	flags := bindOCICommonFlags(fs)

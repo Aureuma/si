@@ -526,6 +526,10 @@ func runOCIAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"auth", "status"}, args...)...)
 }
 
+func runOCIOracularTenancyCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("oci", append([]string{"oracular", "tenancy"}, args...)...)
+}
+
 func ociAuthStatusVerifyEnabled(args []string) bool {
 	verify := true
 	for idx := 0; idx < len(args); idx++ {
