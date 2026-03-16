@@ -652,6 +652,8 @@ func runAppleAppStoreCommand(args []string) (bool, error) {
 		return runAppleAppStoreAuthCommand(args[1:])
 	case "context":
 		return runAppleAppStoreContextCommand(args[1:])
+	case "doctor":
+		return runAppleAppStoreDoctorCommand(args[1:])
 	case "app", "apps":
 		return runAppleAppStoreAppCommand(args[1:])
 	case "listing", "listings", "metadata":
@@ -694,9 +696,6 @@ func runAppleAppStoreAuthCommand(args []string) (bool, error) {
 }
 
 func runAppleAppStoreAuthStatusCommand(args []string) (bool, error) {
-	if appleAppStoreAuthStatusVerifyEnabled(args) {
-		return false, nil
-	}
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "auth", "status"}, args...)...)
 }
 
@@ -714,6 +713,13 @@ func runAppleAppStoreRawCommand(args []string) (bool, error) {
 
 func runAppleAppStoreApplyCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "apply"}, args...)...)
+}
+
+func runAppleAppStoreDoctorCommand(args []string) (bool, error) {
+	if appleAppStoreDoctorPublicEnabled(args) {
+		return false, nil
+	}
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "doctor"}, args...)...)
 }
 
 func appleAppStoreAuthStatusVerifyEnabled(args []string) bool {
@@ -739,6 +745,25 @@ func appleAppStoreAuthStatusVerifyEnabled(args []string) bool {
 		}
 	}
 	return verify
+}
+
+func appleAppStoreDoctorPublicEnabled(args []string) bool {
+	public := false
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--public":
+			public = true
+		case arg == "--public=false", arg == "--public=0":
+			public = false
+		case arg == "--public=true", arg == "--public=1":
+			public = true
+		case strings.HasPrefix(arg, "--public="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--public="))
+			public = value != "false" && value != "0"
+		}
+	}
+	return public
 }
 
 func runAWSContextListCommand(args []string) (bool, error) {
