@@ -1038,6 +1038,130 @@ session_token_env = "CORE_AWS_SESSION_TOKEN"
 }
 
 #[test]
+fn gcp_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[gcp]
+default_account = "core"
+
+[gcp.accounts.core]
+project_id = "proj_core"
+access_token_env = "CORE_GCP_ACCESS_TOKEN"
+
+[gcp.accounts.ops]
+project_id_env = "OPS_GCP_PROJECT"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["gcp", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["project_id"], "proj_core");
+    assert_eq!(contexts[0]["token_env"], "CORE_GCP_ACCESS_TOKEN");
+    assert_eq!(contexts[1]["alias"], "ops");
+    assert_eq!(contexts[1]["project_id_env"], "OPS_GCP_PROJECT");
+}
+
+#[test]
+fn gcp_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[gcp]
+default_account = "core"
+default_env = "prod"
+
+[gcp.accounts.core]
+project_id_env = "CORE_PROJECT"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_PROJECT", "proj_core")
+        .args(["gcp", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["environment"], "prod");
+    assert_eq!(parsed["project_id"], "proj_core");
+    assert_eq!(parsed["base_url"], "https://serviceusage.googleapis.com");
+    assert_eq!(parsed["source"], "env:CORE_PROJECT");
+}
+
+#[test]
+fn gcp_auth_status_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[gcp]
+default_account = "core"
+default_env = "staging"
+
+[gcp.accounts.core]
+project_id_env = "CORE_PROJECT"
+access_token_env = "CORE_TOKEN"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_PROJECT", "proj_core")
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "auth", "status", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["environment"], "staging");
+    assert_eq!(parsed["project_id"], "proj_core");
+    assert_eq!(parsed["base_url"], "https://serviceusage.googleapis.com");
+    assert_eq!(parsed["source"], "env:CORE_PROJECT,env:CORE_TOKEN");
+    assert_eq!(parsed["token_preview"], "ya2*************xyz");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

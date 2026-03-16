@@ -391,6 +391,18 @@ func runAWSAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth", "status"}, args...)...)
 }
 
+func runGCPContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"context", "list"}, args...)...)
+}
+
+func runGCPContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"context", "current"}, args...)...)
+}
+
+func runGCPAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"auth", "status"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }

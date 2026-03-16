@@ -17,6 +17,8 @@ pub struct Settings {
     #[serde(default)]
     pub aws: AWSSettings,
     #[serde(default)]
+    pub gcp: GCPSettings,
+    #[serde(default)]
     pub cloudflare: CloudflareSettings,
     #[serde(default)]
     pub apple: AppleSettings,
@@ -75,6 +77,7 @@ impl Settings {
             codex: CodexSettings::default(),
             stripe: StripeSettings::default(),
             aws: AWSSettings::default(),
+            gcp: GCPSettings::default(),
             cloudflare: CloudflareSettings::default(),
             apple: AppleSettings::default(),
             github: GitHubSettings::default(),
@@ -125,6 +128,7 @@ impl Settings {
                 self.codex = payload.codex;
                 self.stripe = payload.stripe;
                 self.aws = payload.aws;
+                self.gcp = payload.gcp;
                 self.cloudflare = payload.cloudflare;
                 self.apple = payload.apple;
                 self.github = payload.github;
@@ -169,6 +173,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.profile);
         self.stripe.normalize();
         self.aws.normalize();
+        self.gcp.normalize();
         self.cloudflare.normalize();
         self.apple.normalize();
         self.github.normalize();
@@ -193,6 +198,8 @@ struct CoreSettingsModule {
     pub stripe: StripeSettings,
     #[serde(default)]
     pub aws: AWSSettings,
+    #[serde(default)]
+    pub gcp: GCPSettings,
     #[serde(default)]
     pub cloudflare: CloudflareSettings,
     #[serde(default)]
@@ -357,6 +364,58 @@ impl AWSAccountEntry {
         normalize_option_string(&mut self.access_key_id_env);
         normalize_option_string(&mut self.secret_access_key_env);
         normalize_option_string(&mut self.session_token_env);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GCPSettings {
+    pub default_account: Option<String>,
+    pub default_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, GCPAccountEntry>,
+}
+
+impl GCPSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GCPAccountEntry {
+    pub name: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub project_id: Option<String>,
+    pub project_id_env: Option<String>,
+    pub access_token_env: Option<String>,
+    pub api_key_env: Option<String>,
+    pub api_base_url: Option<String>,
+}
+
+impl GCPAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.project_id);
+        normalize_option_string(&mut self.project_id_env);
+        normalize_option_string(&mut self.access_token_env);
+        normalize_option_string(&mut self.api_key_env);
+        normalize_option_string(&mut self.api_base_url);
     }
 }
 
