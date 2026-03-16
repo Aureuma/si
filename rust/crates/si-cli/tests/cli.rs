@@ -831,6 +831,313 @@ fn github_project_items_json_fetches_from_graphql_with_oauth() {
 }
 
 #[test]
+fn github_project_update_json_mutates_via_graphql_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        assert!(request.contains("updateProjectV2"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_update")],
+            r#"{"data":{"updateProjectV2":{"projectV2":{"id":"PVT_123","number":7,"title":"Roadmap 2","shortDescription":"Updated plan","readme":"none","public":true,"closed":false,"url":"https://github.com/orgs/Aureuma/projects/7","updatedAt":"2026-03-16T00:00:00Z"}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "update",
+            "PVT_123",
+            "--title",
+            "Roadmap 2",
+            "--description",
+            "Updated plan",
+            "--public",
+            "true",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["project"]["title"], "Roadmap 2");
+    assert_eq!(parsed["project"]["public"], true);
+    server.join();
+}
+
+#[test]
+fn github_project_item_add_json_resolves_issue_and_mutates() {
+    let server = start_http_server(2, |request| {
+        if request.starts_with("GET /repos/Aureuma/si/issues/42 HTTP/1.1\r\n") {
+            return http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_issue_node")],
+                r#"{"id":42,"node_id":"I_kwDOAAABcd","title":"Port project reads"}"#,
+            );
+        }
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("addProjectV2ItemById"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_item_add")],
+            r#"{"data":{"addProjectV2ItemById":{"item":{"id":"PVTI_1","type":"ISSUE"}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "item-add",
+            "PVT_123",
+            "--repo",
+            "Aureuma/si",
+            "--issue",
+            "42",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["content_id"], "I_kwDOAAABcd");
+    assert_eq!(parsed["item"]["id"], "PVTI_1");
+    server.join();
+}
+
+#[test]
+fn github_project_item_set_json_resolves_field_name_and_mutates() {
+    let server = start_http_server(2, |request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        if request.contains("fields(first:$first)") {
+            return http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_project_fields_lookup")],
+                r#"{"data":{"node":{"id":"PVT_123","fields":{"nodes":[{"id":"PVTF_1","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"opt_1","name":"Todo"},{"id":"opt_2","name":"Done"}]}]}}}}"#,
+            );
+        }
+        assert!(request.contains("updateProjectV2ItemFieldValue"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_item_set")],
+            r#"{"data":{"updateProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_1"}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "item-set",
+            "PVT_123",
+            "PVTI_1",
+            "--field",
+            "Status",
+            "--single-select",
+            "Todo",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["field_id"], "PVTF_1");
+    assert_eq!(parsed["value"]["singleSelectOptionId"], "opt_1");
+    assert_eq!(parsed["project_item"]["id"], "PVTI_1");
+    server.join();
+}
+
+#[test]
+fn github_project_item_clear_json_resolves_field_name_and_mutates() {
+    let server = start_http_server(2, |request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        if request.contains("fields(first:$first)") {
+            return http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_project_fields_lookup_clear")],
+                r#"{"data":{"node":{"id":"PVT_123","fields":{"nodes":[{"id":"PVTF_1","name":"Status","dataType":"TEXT"}]}}}}"#,
+            );
+        }
+        assert!(request.contains("clearProjectV2ItemFieldValue"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_item_clear")],
+            r#"{"data":{"clearProjectV2ItemFieldValue":{"projectV2Item":{"id":"PVTI_1"}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "item-clear",
+            "PVT_123",
+            "PVTI_1",
+            "--field",
+            "Status",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["field_id"], "PVTF_1");
+    assert_eq!(parsed["project_item"]["id"], "PVTI_1");
+    server.join();
+}
+
+#[test]
+fn github_project_item_archive_json_mutates_via_graphql() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("archiveProjectV2Item"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_item_archive")],
+            r#"{"data":{"archiveProjectV2Item":{"item":{"id":"PVTI_1","isArchived":true}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "item-archive",
+            "PVT_123",
+            "PVTI_1",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["item"]["isArchived"], true);
+    server.join();
+}
+
+#[test]
+fn github_project_item_unarchive_json_mutates_via_graphql() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("unarchiveProjectV2Item"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_item_unarchive")],
+            r#"{"data":{"unarchiveProjectV2Item":{"item":{"id":"PVTI_1","isArchived":false}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "item-unarchive",
+            "PVT_123",
+            "PVTI_1",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["item"]["isArchived"], false);
+    server.join();
+}
+
+#[test]
+fn github_project_item_delete_json_mutates_via_graphql() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("deleteProjectV2Item"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_item_delete")],
+            r#"{"data":{"deleteProjectV2Item":{"deletedItemId":"PVTI_1"}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "item-delete",
+            "PVT_123",
+            "PVTI_1",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project_id"], "PVT_123");
+    assert_eq!(parsed["deleted_item_id"], "PVTI_1");
+    server.join();
+}
+
+#[test]
 fn github_workflow_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /repos/Aureuma/si/actions/workflows HTTP/1.1\r\n"));

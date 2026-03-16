@@ -1175,6 +1175,34 @@ func runGitHubProjectItemsCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "items"}, args...)...)
 }
 
+func runGitHubProjectUpdateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "update"}, args...)...)
+}
+
+func runGitHubProjectItemAddCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-add"}, args...)...)
+}
+
+func runGitHubProjectItemSetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-set"}, args...)...)
+}
+
+func runGitHubProjectItemClearCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-clear"}, args...)...)
+}
+
+func runGitHubProjectItemArchiveCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-archive"}, args...)...)
+}
+
+func runGitHubProjectItemUnarchiveCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-unarchive"}, args...)...)
+}
+
+func runGitHubProjectItemDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"project", "item-delete"}, args...)...)
+}
+
 func runGitHubProjectCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1188,6 +1216,20 @@ func runGitHubProjectCommand(args []string) (bool, error) {
 		return runGitHubProjectFieldsCommand(args[1:])
 	case "items":
 		return runGitHubProjectItemsCommand(args[1:])
+	case "update":
+		return runGitHubProjectUpdateCommand(args[1:])
+	case "item-add":
+		return runGitHubProjectItemAddCommand(args[1:])
+	case "item-set":
+		return runGitHubProjectItemSetCommand(args[1:])
+	case "item-clear":
+		return runGitHubProjectItemClearCommand(args[1:])
+	case "item-archive":
+		return runGitHubProjectItemArchiveCommand(args[1:])
+	case "item-unarchive":
+		return runGitHubProjectItemUnarchiveCommand(args[1:])
+	case "item-delete":
+		return runGitHubProjectItemDeleteCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -2260,7 +2302,7 @@ func normalizeRustFortSessionVariant(value string) string {
 	}
 }
 
-func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
+func maybeDispatchRustCLICompat(command string, args ...string) (bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return false, nil
 	}
@@ -2275,6 +2317,10 @@ func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) 
 		return false, fmt.Errorf("run rust si cli %q: %w", command, err)
 	}
 	return true, nil
+}
+
+func maybeDispatchRustCLIReadOnly(command string, args ...string) (bool, error) {
+	return maybeDispatchRustCLICompat(command, args...)
 }
 
 func runRustCLIJSON(args ...string) ([]byte, error) {

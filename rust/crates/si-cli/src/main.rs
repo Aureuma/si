@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::TimeZone;
+use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,6 +63,10 @@ use si_rs_provider_gcp::{
 };
 use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
+    add_project_item as github_add_project_item,
+    archive_project_item as github_archive_project_item,
+    clear_project_item_field_value as github_clear_project_item_field_value,
+    delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
     get_pull_request as github_get_pull_request, get_release as github_get_release,
@@ -80,6 +84,9 @@ use si_rs_provider_github::{
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
     get_workflow_run as github_get_workflow_run,
+    unarchive_project_item as github_unarchive_project_item,
+    update_project as github_update_project,
+    update_project_item_field_value as github_update_project_item_field_value,
 };
 use si_rs_provider_google::{
     GooglePlacesAuthStatus, GooglePlacesContextListEntry, GooglePlacesCurrentContext,
@@ -1965,6 +1972,244 @@ enum GitHubProjectCommand {
         limit: usize,
         #[arg(long)]
         include_archived: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Update {
+        project_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        readme: Option<String>,
+        #[arg(long)]
+        public: Option<String>,
+        #[arg(long)]
+        closed: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(name = "item-add")]
+    ItemAdd {
+        project_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        content_id: Option<String>,
+        #[arg(long)]
+        repo: Option<String>,
+        #[arg(long)]
+        issue: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(name = "item-set")]
+    ItemSet {
+        project_ref: Option<String>,
+        item_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        field_id: Option<String>,
+        #[arg(long = "field")]
+        field_name: Option<String>,
+        #[arg(long)]
+        text: Option<String>,
+        #[arg(long)]
+        number: Option<String>,
+        #[arg(long)]
+        date: Option<String>,
+        #[arg(long)]
+        single_select_option_id: Option<String>,
+        #[arg(long)]
+        single_select: Option<String>,
+        #[arg(long)]
+        iteration_id: Option<String>,
+        #[arg(long)]
+        iteration: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(name = "item-clear")]
+    ItemClear {
+        project_ref: Option<String>,
+        item_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        field_id: Option<String>,
+        #[arg(long = "field")]
+        field_name: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(name = "item-archive")]
+    ItemArchive {
+        project_ref: Option<String>,
+        item_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(name = "item-unarchive")]
+    ItemUnarchive {
+        project_ref: Option<String>,
+        item_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(name = "item-delete")]
+    ItemDelete {
+        project_ref: Option<String>,
+        item_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -5310,6 +5555,257 @@ fn main() -> Result<()> {
                     installation_id,
                     limit,
                     include_archived,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::Update {
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    title,
+                    description,
+                    readme,
+                    public,
+                    closed,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_update(
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    title,
+                    description,
+                    readme,
+                    public,
+                    closed,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::ItemAdd {
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    content_id,
+                    repo,
+                    issue,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_item_add(
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    content_id,
+                    repo,
+                    issue,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::ItemSet {
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    field_id,
+                    field_name,
+                    text,
+                    number,
+                    date,
+                    single_select_option_id,
+                    single_select,
+                    iteration_id,
+                    iteration,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_item_set(
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    field_id,
+                    field_name,
+                    text,
+                    number,
+                    date,
+                    single_select_option_id,
+                    single_select,
+                    iteration_id,
+                    iteration,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::ItemClear {
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    field_id,
+                    field_name,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_item_clear(
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    field_id,
+                    field_name,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::ItemArchive {
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_item_archive(
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::ItemUnarchive {
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_item_unarchive(
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::ItemDelete {
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_item_delete(
+                    project_ref,
+                    item_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
                     home,
                     settings_file,
                     json,
@@ -9170,6 +9666,256 @@ fn summarize_github_project_item(item: &Value) -> String {
     format!("{title} [{item_type}, {archived}] {item_id}")
 }
 
+#[derive(Clone, Debug, Default)]
+struct GitHubProjectFieldOption {
+    id: String,
+    name: String,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GitHubProjectIteration {
+    id: String,
+    title: String,
+    start_date: String,
+}
+
+#[derive(Clone, Debug, Default)]
+struct GitHubProjectFieldDescriptor {
+    id: String,
+    name: String,
+    options: Vec<GitHubProjectFieldOption>,
+    iterations: Vec<GitHubProjectIteration>,
+}
+
+fn parse_github_project_optional_bool_flag(
+    flag_name: &str,
+    value: Option<String>,
+) -> Result<Option<bool>> {
+    let Some(value) = value.map(|raw| raw.trim().to_owned()).filter(|raw| !raw.is_empty()) else {
+        return Ok(None);
+    };
+    value
+        .parse::<bool>()
+        .map(Some)
+        .map_err(|_| anyhow::Error::msg(format!("{flag_name} must be true or false")))
+}
+
+fn resolve_github_project_identity(
+    runtime: &si_rs_provider_github::GitHubRuntime,
+    owner: Option<String>,
+    project_ref: Option<String>,
+) -> Result<(String, String)> {
+    let reference = parse_github_project_ref(project_ref.as_deref().unwrap_or_default())?;
+    let mut organization = reference.organization.clone();
+    if organization.trim().is_empty() {
+        organization = owner.unwrap_or_else(|| runtime.owner.clone());
+    }
+    let project_id = if !reference.project_id.trim().is_empty() {
+        reference.project_id
+    } else {
+        if organization.trim().is_empty() {
+            return Err(anyhow::Error::msg(format!(
+                "organization is required to resolve project number {}",
+                reference.number
+            )));
+        }
+        github_resolve_project_id(runtime, &organization, reference.number)
+            .map_err(anyhow::Error::msg)?
+    };
+    Ok((project_id, organization))
+}
+
+fn load_github_project_field_descriptors(
+    runtime: &si_rs_provider_github::GitHubRuntime,
+    project_id: &str,
+) -> Result<Vec<GitHubProjectFieldDescriptor>> {
+    let response =
+        github_list_project_fields(runtime, project_id, 100).map_err(anyhow::Error::msg)?;
+    let fields = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("node"))
+        .and_then(|project| project.get("fields"))
+        .and_then(|fields| fields.get("nodes"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut out = Vec::with_capacity(fields.len());
+    for field in fields {
+        let mut descriptor = GitHubProjectFieldDescriptor {
+            id: field
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .unwrap_or_default()
+                .to_owned(),
+            name: field
+                .get("name")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .unwrap_or_default()
+                .to_owned(),
+            options: Vec::new(),
+            iterations: Vec::new(),
+        };
+        if let Some(options) = field.get("options").and_then(Value::as_array) {
+            for option in options {
+                descriptor.options.push(GitHubProjectFieldOption {
+                    id: option
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    name: option
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .to_owned(),
+                });
+            }
+        }
+        if let Some(iterations) = field
+            .get("configuration")
+            .and_then(|config| config.get("iterations"))
+            .and_then(Value::as_array)
+        {
+            for iteration in iterations {
+                descriptor.iterations.push(GitHubProjectIteration {
+                    id: iteration
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    title: iteration
+                        .get("title")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    start_date: iteration
+                        .get("startDate")
+                        .and_then(Value::as_str)
+                        .map(str::trim)
+                        .unwrap_or_default()
+                        .to_owned(),
+                });
+            }
+        }
+        if !descriptor.id.is_empty() {
+            out.push(descriptor);
+        }
+    }
+    Ok(out)
+}
+
+fn find_github_project_field_descriptor(
+    fields: &[GitHubProjectFieldDescriptor],
+    name: &str,
+) -> Option<GitHubProjectFieldDescriptor> {
+    let target = name.trim();
+    fields
+        .iter()
+        .find(|field| field.name.trim().eq_ignore_ascii_case(target))
+        .cloned()
+}
+
+fn find_github_project_field_descriptor_by_id(
+    fields: &[GitHubProjectFieldDescriptor],
+    field_id: &str,
+) -> Option<GitHubProjectFieldDescriptor> {
+    let target = field_id.trim();
+    fields.iter().find(|field| field.id.trim() == target).cloned()
+}
+
+fn resolve_github_project_single_select_option_id(
+    field: &GitHubProjectFieldDescriptor,
+    option_name: &str,
+) -> Result<String> {
+    if field.options.is_empty() {
+        return Err(anyhow::Error::msg(format!(
+            "field {:?} has no single-select options",
+            field.name
+        )));
+    }
+    let target = option_name.trim();
+    if target.is_empty() {
+        return Err(anyhow::Error::msg("single-select option name is required"));
+    }
+    field
+        .options
+        .iter()
+        .find(|option| option.name.trim().eq_ignore_ascii_case(target))
+        .map(|option| option.id.clone())
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow::Error::msg(format!(
+                "single-select option {:?} not found on field {:?}",
+                option_name, field.name
+            ))
+        })
+}
+
+fn resolve_github_project_iteration_id(
+    field: &GitHubProjectFieldDescriptor,
+    iteration: &str,
+) -> Result<String> {
+    if field.iterations.is_empty() {
+        return Err(anyhow::Error::msg(format!(
+            "field {:?} has no iterations",
+            field.name
+        )));
+    }
+    let target = iteration.trim();
+    if target.is_empty() {
+        return Err(anyhow::Error::msg("iteration name is required"));
+    }
+    if target == "@current" {
+        let today = Utc::now().date_naive();
+        let mut chosen: Option<(chrono::NaiveDate, String)> = None;
+        for candidate in &field.iterations {
+            let Ok(start) =
+                chrono::NaiveDate::parse_from_str(candidate.start_date.trim(), "%Y-%m-%d")
+            else {
+                continue;
+            };
+            if start > today {
+                continue;
+            }
+            if chosen
+                .as_ref()
+                .map(|(current, _)| start > *current)
+                .unwrap_or(true)
+            {
+                chosen = Some((start, candidate.id.clone()));
+            }
+        }
+        return chosen
+            .map(|(_, id)| id)
+            .ok_or_else(|| anyhow::Error::msg(format!(
+                "unable to resolve @current iteration for field {:?}",
+                field.name
+            )));
+    }
+    field
+        .iterations
+        .iter()
+        .find(|candidate| {
+            candidate.id.trim() == target
+                || candidate.title.trim().eq_ignore_ascii_case(target)
+                || candidate.start_date.trim() == target
+        })
+        .map(|candidate| candidate.id.clone())
+        .ok_or_else(|| {
+            anyhow::Error::msg(format!(
+                "iteration {:?} not found on field {:?}",
+                iteration, field.name
+            ))
+        })
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_github_project_list(
     organization_ref: Option<String>,
@@ -9272,23 +10018,7 @@ fn run_github_project_get(
         home,
         settings_file,
     )?;
-    let reference = parse_github_project_ref(project_ref.as_deref().unwrap_or_default())?;
-    let mut organization = reference.organization.clone();
-    if organization.trim().is_empty() {
-        organization = owner.unwrap_or_else(|| runtime.owner.clone());
-    }
-    let project_id = if !reference.project_id.trim().is_empty() {
-        reference.project_id
-    } else {
-        if organization.trim().is_empty() {
-            return Err(anyhow::Error::msg(format!(
-                "organization is required to resolve project number {}",
-                reference.number
-            )));
-        }
-        github_resolve_project_id(&runtime, &organization, reference.number)
-            .map_err(anyhow::Error::msg)?
-    };
+    let (project_id, organization) = resolve_github_project_identity(&runtime, owner, project_ref)?;
     let response = github_get_project(&runtime, &project_id).map_err(anyhow::Error::msg)?;
     let project = response
         .data
@@ -9348,23 +10078,7 @@ fn run_github_project_fields(
         home,
         settings_file,
     )?;
-    let reference = parse_github_project_ref(project_ref.as_deref().unwrap_or_default())?;
-    let mut organization = reference.organization.clone();
-    if organization.trim().is_empty() {
-        organization = owner.unwrap_or_else(|| runtime.owner.clone());
-    }
-    let project_id = if !reference.project_id.trim().is_empty() {
-        reference.project_id
-    } else {
-        if organization.trim().is_empty() {
-            return Err(anyhow::Error::msg(format!(
-                "organization is required to resolve project number {}",
-                reference.number
-            )));
-        }
-        github_resolve_project_id(&runtime, &organization, reference.number)
-            .map_err(anyhow::Error::msg)?
-    };
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
     let response =
         github_list_project_fields(&runtime, &project_id, limit).map_err(anyhow::Error::msg)?;
     let fields = response
@@ -9478,6 +10192,649 @@ fn run_github_project_items(
     for item in &items {
         println!("  {}", summarize_github_project_item(item));
     }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_update(
+    project_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    title: Option<String>,
+    description: Option<String>,
+    readme: Option<String>,
+    public: Option<String>,
+    closed: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+    let public_value = parse_github_project_optional_bool_flag("--public", public)?;
+    let closed_value = parse_github_project_optional_bool_flag("--closed", closed)?;
+    let title = title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let description =
+        description.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let readme = readme.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    if title.is_none()
+        && description.is_none()
+        && readme.is_none()
+        && public_value.is_none()
+        && closed_value.is_none()
+    {
+        return Err(anyhow::Error::msg("at least one field update is required"));
+    }
+
+    let mut input = serde_json::Map::new();
+    input.insert("projectId".to_owned(), Value::String(project_id.clone()));
+    if let Some(title) = title {
+        input.insert("title".to_owned(), Value::String(title));
+    }
+    if let Some(description) = description {
+        input.insert("shortDescription".to_owned(), Value::String(description));
+    }
+    if let Some(readme) = readme {
+        input.insert("readme".to_owned(), Value::String(readme));
+    }
+    if let Some(public) = public_value {
+        input.insert("public".to_owned(), Value::Bool(public));
+    }
+    if let Some(closed) = closed_value {
+        input.insert("closed".to_owned(), Value::Bool(closed));
+    }
+
+    let response =
+        github_update_project(&runtime, Value::Object(input)).map_err(anyhow::Error::msg)?;
+    let project = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("updateProjectV2"))
+        .and_then(|result| result.get("projectV2"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if project.is_null() {
+        return Err(anyhow::Error::msg("project update returned empty result"));
+    }
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "project": project,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!("{}", serde_json::to_string_pretty(&project)?);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_item_add(
+    project_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    content_id: Option<String>,
+    repo: Option<String>,
+    issue: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+    let mut selected_content_id =
+        content_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    if selected_content_id.is_none() {
+        let repo = repo
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow::Error::msg("either --content-id or --repo + --issue is required"))?;
+        let issue = issue
+            .filter(|value| *value > 0)
+            .ok_or_else(|| anyhow::Error::msg("either --content-id or --repo + --issue is required"))?;
+        let (repo_owner, repo_name) = parse_github_owner_repo(&repo, &runtime.owner)?;
+        let issue_response =
+            github_get_issue(&runtime, &repo_owner, &repo_name, issue).map_err(anyhow::Error::msg)?;
+        selected_content_id = issue_response
+            .data
+            .as_ref()
+            .and_then(|data| data.get("node_id"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        if selected_content_id.is_none() {
+            return Err(anyhow::Error::msg(format!("issue not found: {}#{}", repo, issue)));
+        }
+    }
+    let selected_content_id = selected_content_id.unwrap_or_default();
+    let response = github_add_project_item(&runtime, &project_id, &selected_content_id)
+        .map_err(anyhow::Error::msg)?;
+    let item = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("addProjectV2ItemById"))
+        .and_then(|result| result.get("item"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "content_id": selected_content_id,
+                "item": item,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!(
+        "Added project item: {}",
+        item.get("id").and_then(Value::as_str).map(str::trim).unwrap_or("-")
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_item_set(
+    project_ref: Option<String>,
+    item_id: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    field_id: Option<String>,
+    field_name: Option<String>,
+    text: Option<String>,
+    number: Option<String>,
+    date: Option<String>,
+    single_select_option_id: Option<String>,
+    single_select: Option<String>,
+    iteration_id: Option<String>,
+    iteration: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let item_id = item_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("item id is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+
+    let mut selected_field_id =
+        field_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let selected_field_name =
+        field_name.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let mut selected_single_select_option_id = single_select_option_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    let selected_single_select_name =
+        single_select.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let mut selected_iteration_id =
+        iteration_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let selected_iteration_name =
+        iteration.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+
+    let needs_field_lookup = selected_field_id.is_none()
+        || (selected_single_select_option_id.is_none() && selected_single_select_name.is_some())
+        || (selected_iteration_id.is_none() && selected_iteration_name.is_some());
+    let field_descriptors = if needs_field_lookup {
+        load_github_project_field_descriptors(&runtime, &project_id)?
+    } else {
+        Vec::new()
+    };
+
+    let mut selected_field_descriptor = GitHubProjectFieldDescriptor::default();
+    if selected_field_id.is_none() {
+        let field_name = selected_field_name
+            .clone()
+            .ok_or_else(|| anyhow::Error::msg("either --field-id or --field is required"))?;
+        let descriptor = find_github_project_field_descriptor(&field_descriptors, &field_name)
+            .ok_or_else(|| anyhow::Error::msg(format!("project field not found: {field_name}")))?;
+        selected_field_id = Some(descriptor.id.clone());
+        selected_field_descriptor = descriptor;
+    } else if !field_descriptors.is_empty() {
+        if let Some(descriptor) = find_github_project_field_descriptor_by_id(
+            &field_descriptors,
+            selected_field_id.as_deref().unwrap_or_default(),
+        ) {
+            selected_field_descriptor = descriptor;
+        }
+    }
+
+    let mut value = serde_json::Map::new();
+    let mut value_count = 0;
+    if let Some(text) = text.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        value.insert("text".to_owned(), Value::String(text));
+        value_count += 1;
+    }
+    if let Some(number) = number.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        let parsed = number
+            .parse::<f64>()
+            .map_err(|err| anyhow::Error::msg(format!("invalid --number value: {err}")))?;
+        let parsed = serde_json::Number::from_f64(parsed)
+            .ok_or_else(|| anyhow::Error::msg("invalid --number value"))?;
+        value.insert("number".to_owned(), Value::Number(parsed));
+        value_count += 1;
+    }
+    if let Some(date) = date.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+            .map_err(|_| anyhow::Error::msg(format!("invalid --date value {:?} (expected YYYY-MM-DD)", date)))?;
+        value.insert("date".to_owned(), Value::String(date));
+        value_count += 1;
+    }
+    if selected_single_select_option_id.is_none() {
+        if let Some(name) = selected_single_select_name {
+            selected_single_select_option_id =
+                Some(resolve_github_project_single_select_option_id(&selected_field_descriptor, &name)?);
+        }
+    }
+    if let Some(option_id) = selected_single_select_option_id {
+        value.insert("singleSelectOptionId".to_owned(), Value::String(option_id));
+        value_count += 1;
+    }
+    if selected_iteration_id.is_none() {
+        if let Some(iteration_name) = selected_iteration_name {
+            selected_iteration_id =
+                Some(resolve_github_project_iteration_id(&selected_field_descriptor, &iteration_name)?);
+        }
+    }
+    if let Some(iteration_id) = selected_iteration_id {
+        value.insert("iterationId".to_owned(), Value::String(iteration_id));
+        value_count += 1;
+    }
+    if value_count != 1 {
+        return Err(anyhow::Error::msg("exactly one field value must be provided"));
+    }
+    let selected_field_id = selected_field_id.unwrap_or_default();
+    let response = github_update_project_item_field_value(
+        &runtime,
+        &project_id,
+        &item_id,
+        &selected_field_id,
+        Value::Object(value.clone()),
+    )
+    .map_err(anyhow::Error::msg)?;
+    let project_item = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("updateProjectV2ItemFieldValue"))
+        .and_then(|result| result.get("projectV2Item"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "item_id": item_id,
+                "field_id": selected_field_id,
+                "value": Value::Object(value),
+                "project_item": project_item,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!(
+        "Updated project item: {}",
+        project_item.get("id").and_then(Value::as_str).map(str::trim).unwrap_or("-")
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_item_clear(
+    project_ref: Option<String>,
+    item_id: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    field_id: Option<String>,
+    field_name: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let item_id = item_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("item id is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+    let selected_field_id = if let Some(field_id) =
+        field_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        field_id
+    } else {
+        let field_name = field_name
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| anyhow::Error::msg("either --field-id or --field is required"))?;
+        let field_descriptors = load_github_project_field_descriptors(&runtime, &project_id)?;
+        find_github_project_field_descriptor(&field_descriptors, &field_name)
+            .map(|descriptor| descriptor.id)
+            .ok_or_else(|| anyhow::Error::msg(format!("project field not found: {field_name}")))?
+    };
+    let response = github_clear_project_item_field_value(
+        &runtime,
+        &project_id,
+        &item_id,
+        &selected_field_id,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let project_item = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("clearProjectV2ItemFieldValue"))
+        .and_then(|result| result.get("projectV2Item"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "item_id": item_id,
+                "field_id": selected_field_id,
+                "project_item": project_item,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!(
+        "Cleared project item field: {}",
+        project_item.get("id").and_then(Value::as_str).map(str::trim).unwrap_or("-")
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_item_archive(
+    project_ref: Option<String>,
+    item_id: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let item_id = item_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("item id is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+    let response =
+        github_archive_project_item(&runtime, &project_id, &item_id).map_err(anyhow::Error::msg)?;
+    let item = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("archiveProjectV2Item"))
+        .and_then(|result| result.get("item"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "item_id": item_id,
+                "item": item,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!(
+        "Archived project item: {}",
+        item.get("id").and_then(Value::as_str).map(str::trim).unwrap_or("-")
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_item_unarchive(
+    project_ref: Option<String>,
+    item_id: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let item_id = item_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("item id is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+    let response = github_unarchive_project_item(&runtime, &project_id, &item_id)
+        .map_err(anyhow::Error::msg)?;
+    let item = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("unarchiveProjectV2Item"))
+        .and_then(|result| result.get("item"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "item_id": item_id,
+                "item": item,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!(
+        "Unarchived project item: {}",
+        item.get("id").and_then(Value::as_str).map(str::trim).unwrap_or("-")
+    );
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_item_delete(
+    project_ref: Option<String>,
+    item_id: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let item_id = item_id
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("item id is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (project_id, _) = resolve_github_project_identity(&runtime, owner, project_ref)?;
+    let response =
+        github_delete_project_item(&runtime, &project_id, &item_id).map_err(anyhow::Error::msg)?;
+    let deleted_item_id = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("deleteProjectV2Item"))
+        .and_then(|result| result.get("deletedItemId"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_owned();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "item_id": item_id,
+                "deleted_item_id": deleted_item_id,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!(
+        "Deleted project item: {}",
+        if deleted_item_id.is_empty() {
+            "-"
+        } else {
+            &deleted_item_id
+        }
+    );
     Ok(())
 }
 
