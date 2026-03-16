@@ -678,6 +678,168 @@ fn github_repo_get_json_fetches_repo_with_oauth() {
 }
 
 #[test]
+fn github_repo_create_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /orgs/Aureuma/repos HTTP/1.1\r\n"));
+        assert!(request.contains("\"name\":\"si-rs\""));
+        assert!(request.contains("\"private\":true"));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_repo_create")],
+            r#"{"id":202,"full_name":"Aureuma/si-rs","private":true}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "repo",
+            "create",
+            "si-rs",
+            "--owner",
+            "Aureuma",
+            "--param",
+            "private=true",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_repo_create");
+    assert_eq!(parsed["data"]["full_name"], "Aureuma/si-rs");
+    server.join();
+}
+
+#[test]
+fn github_repo_update_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /repos/Aureuma/si HTTP/1.1\r\n"));
+        assert!(request.contains("\"homepage\":\"https://example.com\""));
+        assert!(request.contains("\"has_issues\":false"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_repo_update")],
+            r#"{"id":101,"full_name":"Aureuma/si","homepage":"https://example.com","has_issues":false}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "repo",
+            "update",
+            "Aureuma/si",
+            "--param",
+            "homepage=https://example.com",
+            "--param",
+            "has_issues=false",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_repo_update");
+    assert_eq!(parsed["data"]["homepage"], "https://example.com");
+    server.join();
+}
+
+#[test]
+fn github_repo_archive_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /repos/Aureuma/si HTTP/1.1\r\n"));
+        assert!(request.contains("\"archived\":true"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_repo_archive")],
+            r#"{"id":101,"full_name":"Aureuma/si","archived":true}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "repo",
+            "archive",
+            "Aureuma/si",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_repo_archive");
+    assert_eq!(parsed["data"]["archived"], true);
+    server.join();
+}
+
+#[test]
+fn github_repo_delete_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /repos/Aureuma/si HTTP/1.1\r\n"));
+        http_json_response(
+            "204 No Content",
+            &[("x-github-request-id", "req_gh_repo_delete")],
+            "",
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "repo",
+            "delete",
+            "Aureuma/si",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
+    assert_eq!(parsed["request_id"], "req_gh_repo_delete");
+    server.join();
+}
+
+#[test]
 fn github_project_list_json_fetches_from_graphql_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
