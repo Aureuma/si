@@ -871,6 +871,164 @@ fn github_workflow_run_get_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_issue_list_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/issues?page=1&per_page=100&state=open HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_issue_list")],
+            r#"[{"number":12,"title":"Investigate"}]"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "issue",
+            "list",
+            "Aureuma/si",
+            "--param",
+            "state=open",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_issue_list");
+    assert_eq!(parsed["list"][0]["number"], 12);
+    server.join();
+}
+
+#[test]
+fn github_issue_get_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/issues/12 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_issue_get")],
+            r#"{"number":12,"title":"Investigate"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "issue",
+            "get",
+            "Aureuma/si",
+            "12",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_issue_get");
+    assert_eq!(parsed["data"]["title"], "Investigate");
+    server.join();
+}
+
+#[test]
+fn github_pr_list_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/pulls?page=1&per_page=100&state=open HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_pr_list")],
+            r#"[{"number":34,"title":"Refactor Rust bridge"}]"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "pr",
+            "list",
+            "Aureuma/si",
+            "--param",
+            "state=open",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_pr_list");
+    assert_eq!(parsed["list"][0]["number"], 34);
+    server.join();
+}
+
+#[test]
+fn github_pr_get_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/pulls/34 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_pr_get")],
+            r#"{"number":34,"title":"Refactor Rust bridge"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "pr",
+            "get",
+            "Aureuma/si",
+            "34",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_pr_get");
+    assert_eq!(parsed["data"]["title"], "Refactor Rust bridge");
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

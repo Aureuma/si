@@ -13,6 +13,13 @@ import (
 )
 
 func cmdGithubIssue(args []string) {
+	delegated, err := runGitHubIssueCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github issue <list|get|create|comment|close|reopen> ...")
 	if !routedOK {
 		return
@@ -37,6 +44,13 @@ func cmdGithubIssue(args []string) {
 }
 
 func cmdGithubIssueList(args []string) {
+	delegated, err := runGitHubIssueListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github issue list", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -75,6 +89,13 @@ func cmdGithubIssueList(args []string) {
 }
 
 func cmdGithubIssueGet(args []string) {
+	delegated, err := runGitHubIssueGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github issue get", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
