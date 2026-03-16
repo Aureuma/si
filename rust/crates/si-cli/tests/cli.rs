@@ -4717,6 +4717,41 @@ fn oci_auth_status_json_reads_local_signature_context() {
 }
 
 #[test]
+fn oci_auth_status_json_verifies_with_identity_probe() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /20160918/availabilityDomains?compartmentId=ocid1.tenancy.oc1..example HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("Signature version=\"1\""));
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_verify")],
+            r#"[{"name":"AD-1"}]"#,
+        )
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "auth", "status"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["verify_status"], 200);
+    assert_eq!(parsed["verify"][0]["name"], "AD-1");
+}
+
+#[test]
 fn oci_oracular_tenancy_json_reads_profile_config() {
     let config_dir = tempdir().expect("tempdir");
     let config_file = config_dir.path().join("config");
@@ -5088,6 +5123,47 @@ fn oci_compute_instance_create_json_posts_payload() {
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["data"]["id"], "ocid1.instance.oc1..inst");
+}
+
+#[test]
+fn oci_raw_json_supports_auth_none_and_query_headers() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /20160918/vcns?limit=2 HTTP/1.1\r\n"));
+        assert!(request.contains("x-test: alpha") || request.contains("X-Test: alpha"));
+        assert!(!request.contains("Signature version=\"1\""));
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_raw")],
+            r#"{"items":[{"id":"ocid1.vcn.oc1..example"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["oci", "raw"])
+        .args([
+            "--auth",
+            "none",
+            "--base-url",
+            &server.base_url,
+            "--path",
+            "/20160918/vcns",
+            "--param",
+            "limit=2",
+            "--header",
+            "x-test=alpha",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_oci_raw");
+    assert_eq!(parsed["data"]["items"][0]["id"], "ocid1.vcn.oc1..example");
 }
 
 #[test]

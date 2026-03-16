@@ -942,9 +942,6 @@ func runOCIAuthCommand(args []string) (bool, error) {
 }
 
 func runOCIAuthStatusCommand(args []string) (bool, error) {
-	if ociAuthStatusVerifyEnabled(args) {
-		return false, nil
-	}
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"auth", "status"}, args...)...)
 }
 
@@ -999,6 +996,10 @@ func runOCIComputeCommand(args []string) (bool, error) {
 	}
 }
 
+func runOCIRawCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("oci", append([]string{"raw"}, args...)...)
+}
+
 func runOCICommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1014,6 +1015,8 @@ func runOCICommand(args []string) (bool, error) {
 		return runOCINetworkCommand(args[1:])
 	case "compute":
 		return runOCIComputeCommand(args[1:])
+	case "raw":
+		return runOCIRawCommand(args[1:])
 	case "oracular":
 		return runOCIOracularCommand(args[1:])
 	default:
@@ -1023,31 +1026,6 @@ func runOCICommand(args []string) (bool, error) {
 
 func runOCIOracularTenancyCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"oracular", "tenancy"}, args...)...)
-}
-
-func ociAuthStatusVerifyEnabled(args []string) bool {
-	verify := true
-	for idx := 0; idx < len(args); idx++ {
-		arg := strings.TrimSpace(args[idx])
-		switch {
-		case arg == "--verify":
-			if idx+1 < len(args) {
-				next := strings.TrimSpace(args[idx+1])
-				if next == "false" || next == "0" {
-					verify = false
-					idx++
-				}
-			}
-		case arg == "--verify=false", arg == "--verify=0":
-			verify = false
-		case arg == "--verify=true", arg == "--verify=1":
-			verify = true
-		case strings.HasPrefix(arg, "--verify="):
-			value := strings.TrimSpace(strings.TrimPrefix(arg, "--verify="))
-			verify = value != "false" && value != "0"
-		}
-	}
-	return verify
 }
 
 func runStripeContextListCommand(args []string) (bool, error) {

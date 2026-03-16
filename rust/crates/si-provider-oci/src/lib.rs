@@ -322,7 +322,17 @@ pub fn execute_api_request(
     overrides: &OCIAuthOverrides,
     request: &OCIAPIRequest,
 ) -> Result<OCIAPIResponse, String> {
-    let runtime = resolve_runtime(settings, env_map, overrides, true)?;
+    execute_api_request_with_auth(settings, env_map, overrides, request, true)
+}
+
+pub fn execute_api_request_with_auth(
+    settings: &OCISettings,
+    env_map: &BTreeMap<String, String>,
+    overrides: &OCIAuthOverrides,
+    request: &OCIAPIRequest,
+    require_auth: bool,
+) -> Result<OCIAPIResponse, String> {
+    let runtime = resolve_runtime(settings, env_map, overrides, require_auth)?;
     let method = request.method.trim().to_uppercase();
     let method = if method.is_empty() { "GET".to_owned() } else { method };
     let service_base_url = match request.service {

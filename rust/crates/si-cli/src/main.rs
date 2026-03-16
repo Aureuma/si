@@ -123,6 +123,7 @@ use si_rs_provider_oci::{
     OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
     build_oracular_cloud_init_user_data as build_oci_oracular_cloud_init_user_data,
     execute_api_request as execute_oci_api_request,
+    execute_api_request_with_auth as execute_oci_api_request_with_auth,
     list_contexts as list_oci_contexts, render_context_list_text as render_oci_context_list_text,
     resolve_auth_status as resolve_oci_auth_status,
     resolve_current_context as resolve_oci_current_context,
@@ -1583,6 +1584,44 @@ enum OciCommand {
     Compute {
         #[command(subcommand)]
         command: OciComputeCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long, default_value = "core")]
+        service: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Oracular {
         #[command(subcommand)]
@@ -7589,6 +7628,47 @@ fn main() -> Result<()> {
                     }
                 },
             },
+            OciCommand::Raw {
+                account,
+                profile,
+                config_file,
+                region,
+                base_url,
+                auth,
+                method,
+                path,
+                body,
+                json_body,
+                service,
+                params,
+                headers,
+                home,
+                settings_file,
+                json,
+                raw,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                run_oci_raw(
+                    account,
+                    profile,
+                    config_file,
+                    region,
+                    base_url,
+                    auth,
+                    method,
+                    path,
+                    body,
+                    json_body,
+                    service,
+                    params,
+                    headers,
+                    home,
+                    settings_file,
+                    format,
+                    raw,
+                )?
+            }
             OciCommand::Context { command } => match command {
                 OciContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -12665,45 +12745,100 @@ fn show_oci_auth_status(
         if value.trim().is_empty() { "-" } else { value }
     }
 
-    if verify {
-        return Err(anyhow::anyhow!(
-            "oci auth verification is not yet implemented in Rust; rerun with --verify=false or use the Go fallback"
-        ));
-    }
-
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;
     let env = std::env::vars().collect();
+    let account_value = account.clone().unwrap_or_default();
+    let profile_value = profile.clone().unwrap_or_default();
+    let config_file_value = config_file.clone().unwrap_or_default();
+    let region_value = region.clone().unwrap_or_default();
+    let base_url_value = base_url.clone().unwrap_or_default();
+    let auth_value = auth.clone().unwrap_or_default();
     let payload = OCIAuthStatusPayload::from(
         resolve_oci_auth_status(
             &settings.oci,
             &env,
             &OCIAuthOverrides {
-                account: account.unwrap_or_default(),
-                profile: profile.unwrap_or_default(),
-                config_file: config_file.unwrap_or_default(),
-                region: region.unwrap_or_default(),
-                base_url: base_url.unwrap_or_default(),
-                auth_style: auth.unwrap_or_default(),
+                account: account_value.clone(),
+                profile: profile_value.clone(),
+                config_file: config_file_value.clone(),
+                region: region_value.clone(),
+                base_url: base_url_value.clone(),
+                auth_style: auth_value.clone(),
             },
         )
         .map_err(anyhow::Error::msg)?,
     );
+    let mut verify_result: Option<OCIAPIResponse> = None;
+    let mut verify_error: Option<String> = None;
+    if verify {
+        match execute_oci_api_request(
+            &settings.oci,
+            &env,
+            &OCIAuthOverrides {
+                account: account_value,
+                profile: profile_value,
+                config_file: config_file_value,
+                region: region_value,
+                base_url: base_url_value,
+                auth_style: auth_value,
+            },
+            &OCIAPIRequest {
+                path: maybe_absolute_oci_identity_path(&base_url, "/20160918/availabilityDomains"),
+                params: std::collections::BTreeMap::from([(
+                    "compartmentId".to_owned(),
+                    payload.tenancy_ocid.clone(),
+                )]),
+                service: OCIAPIService::Identity,
+                ..OCIAPIRequest::default()
+            },
+        ) {
+            Ok(response) => verify_result = Some(response),
+            Err(err) => verify_error = Some(err),
+        }
+    }
     match format {
-        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Json => {
+            let mut json_payload = serde_json::to_value(&payload)?;
+            if let Some(map) = json_payload.as_object_mut() {
+                if let Some(response) = &verify_result {
+                    map.insert("verify_status".to_owned(), serde_json::json!(response.status_code));
+                    if let Some(data) = &response.data {
+                        map.insert("verify".to_owned(), data.clone());
+                    } else if let Some(list) = &response.list {
+                        map.insert("verify".to_owned(), Value::Array(list.clone()));
+                    }
+                }
+                if let Some(err) = &verify_error {
+                    map.insert("verify_error".to_owned(), Value::String(err.clone()));
+                    map.insert("status".to_owned(), Value::String("error".to_owned()));
+                }
+            }
+            println!("{}", serde_json::to_string_pretty(&json_payload)?);
+        }
         OutputFormat::Text => {
+            if verify_error.is_some() {
+                println!("OCI auth: error");
+            } else {
+                println!("OCI auth: {}", payload.status);
+            }
             let account = if payload.account_alias.trim().is_empty() {
                 "(default)"
             } else {
                 payload.account_alias.as_str()
             };
-            println!("OCI auth: {}", payload.status);
             println!(
                 "Context: account={} profile={} region={} auth={} base={}",
                 account, payload.profile, payload.region, payload.auth_style, payload.base_url
             );
             println!("Source: {}", or_dash(&payload.source));
+            if let Some(err) = &verify_error {
+                println!("OCI error: {}", err);
+            }
         }
+    }
+    if let Some(err) = verify_error {
+        return Err(anyhow::anyhow!(err));
     }
     Ok(())
 }
@@ -13484,6 +13619,92 @@ fn run_oci_compute_instance_create(
         format,
         raw,
     )
+}
+
+fn parse_oci_key_values(values: Vec<String>) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for entry in values {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+            out.insert(key.to_owned(), value.trim().to_owned());
+        }
+    }
+    out
+}
+
+fn parse_oci_raw_service(value: &str) -> Result<OCIAPIService> {
+    match value.trim().to_lowercase().as_str() {
+        "" | "core" => Ok(OCIAPIService::Core),
+        "identity" | "iam" => Ok(OCIAPIService::Identity),
+        other => Err(anyhow::anyhow!(
+            "unsupported oci raw service {other:?} (expected core|identity)"
+        )),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_raw(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    method: String,
+    path: String,
+    body: Option<String>,
+    json_body: Option<String>,
+    service: String,
+    params: Vec<String>,
+    headers: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if path.trim().is_empty() {
+        anyhow::bail!("path is required");
+    }
+    let payload = if let Some(json_body) = json_body {
+        Some(serde_json::from_str(json_body.trim())?)
+    } else {
+        None
+    };
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let auth_style = auth.clone().unwrap_or_default();
+    let response = execute_oci_api_request_with_auth(
+        &settings.oci,
+        &env,
+        &OCIAuthOverrides {
+            account: account.unwrap_or_default(),
+            profile: profile.unwrap_or_default(),
+            config_file: config_file.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            auth_style: auth_style.clone(),
+        },
+        &OCIAPIRequest {
+            method,
+            path,
+            params: parse_oci_key_values(params),
+            headers: parse_oci_key_values(headers),
+            raw_body: body.unwrap_or_default(),
+            json_body: payload,
+            service: parse_oci_raw_service(&service)?,
+        },
+        auth_style.trim().to_lowercase() != "none",
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_oci_api_response(&response, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
