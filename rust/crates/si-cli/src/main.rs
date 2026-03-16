@@ -1569,6 +1569,30 @@ enum OciCommand {
         #[command(subcommand)]
         command: OciAuthCommand,
     },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        public: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Context {
         #[command(subcommand)]
         command: OciContextCommand,
@@ -5597,6 +5621,24 @@ struct OCIOracularCloudInitPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct DoctorCheckPayload {
+    name: String,
+    ok: bool,
+    detail: String,
+}
+
+#[derive(Debug, Serialize)]
+struct OCIDoctorPayload {
+    ok: bool,
+    provider: String,
+    base_url: String,
+    profile: String,
+    region: String,
+    tenancy_ocid: String,
+    checks: Vec<DoctorCheckPayload>,
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -7215,6 +7257,33 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            OciCommand::Doctor {
+                account,
+                profile,
+                config_file,
+                region,
+                base_url,
+                auth,
+                public,
+                home,
+                settings_file,
+                json,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                show_oci_doctor(
+                    account,
+                    profile,
+                    config_file,
+                    region,
+                    base_url,
+                    auth,
+                    public,
+                    home,
+                    settings_file,
+                    format,
+                )?
+            }
             OciCommand::Oracular { command } => match command {
                 OciOracularCommand::CloudInit { ssh_port, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -12839,6 +12908,136 @@ fn show_oci_auth_status(
     }
     if let Some(err) = verify_error {
         return Err(anyhow::anyhow!(err));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_oci_doctor(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    public: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    if public {
+        anyhow::bail!("oci doctor --public is not yet implemented in Rust; use the Go fallback");
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let account_value = account.unwrap_or_default();
+    let profile_value = profile.unwrap_or_default();
+    let config_file_value = config_file.unwrap_or_default();
+    let region_value = region.unwrap_or_default();
+    let base_url_value = base_url.unwrap_or_default();
+    let auth_value = auth.unwrap_or_default();
+    let auth_status = resolve_oci_auth_status(
+        &settings.oci,
+        &env,
+        &OCIAuthOverrides {
+            account: account_value.clone(),
+            profile: profile_value.clone(),
+            config_file: config_file_value.clone(),
+            region: region_value.clone(),
+            base_url: base_url_value.clone(),
+            auth_style: auth_value.clone(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let verify = execute_oci_api_request(
+        &settings.oci,
+        &env,
+        &OCIAuthOverrides {
+            account: account_value,
+            profile: profile_value,
+            config_file: config_file_value,
+            region: region_value,
+            base_url: base_url_value.clone(),
+            auth_style: auth_value,
+        },
+        &OCIAPIRequest {
+            path: maybe_absolute_oci_identity_path(&Some(base_url_value), "/20160918/availabilityDomains"),
+            params: std::collections::BTreeMap::from([(
+                "compartmentId".to_owned(),
+                auth_status.tenancy_ocid.clone(),
+            )]),
+            service: OCIAPIService::Identity,
+            ..OCIAPIRequest::default()
+        },
+    );
+    let verify_error = verify.as_ref().err().cloned();
+    let checks = vec![
+        DoctorCheckPayload {
+            name: "profile".to_owned(),
+            ok: !auth_status.profile.trim().is_empty(),
+            detail: auth_status.profile.clone(),
+        },
+        DoctorCheckPayload {
+            name: "region".to_owned(),
+            ok: !auth_status.region.trim().is_empty(),
+            detail: auth_status.region.clone(),
+        },
+        DoctorCheckPayload {
+            name: "tenancy".to_owned(),
+            ok: !auth_status.tenancy_ocid.trim().is_empty(),
+            detail: if auth_status.tenancy_ocid.trim().is_empty() {
+                "-".to_owned()
+            } else {
+                auth_status.tenancy_ocid.clone()
+            },
+        },
+        DoctorCheckPayload {
+            name: "request".to_owned(),
+            ok: verify_error.is_none(),
+            detail: verify_error.clone().unwrap_or_else(|| "ok".to_owned()),
+        },
+    ];
+    let ok = checks.iter().all(|check| check.ok);
+    let payload = OCIDoctorPayload {
+        ok,
+        provider: "oci_core".to_owned(),
+        base_url: auth_status.base_url.clone(),
+        profile: auth_status.profile.clone(),
+        region: auth_status.region.clone(),
+        tenancy_ocid: auth_status.tenancy_ocid.clone(),
+        checks,
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            println!("OCI doctor: {}", if ok { "ok" } else { "issues found" });
+            println!(
+                "Context: account={} profile={} region={} auth={} base={}",
+                if auth_status.account_alias.trim().is_empty() {
+                    "(default)"
+                } else {
+                    auth_status.account_alias.as_str()
+                },
+                auth_status.profile,
+                auth_status.region,
+                auth_status.auth_style,
+                auth_status.base_url
+            );
+            for check in &payload.checks {
+                println!(
+                    "  {}  {}  {}",
+                    if check.ok { "OK" } else { "ERR" },
+                    check.name,
+                    check.detail.trim()
+                );
+            }
+        }
+    }
+    if !ok {
+        anyhow::bail!(verify_error.unwrap_or_else(|| "oci doctor failed".to_owned()));
     }
     Ok(())
 }
