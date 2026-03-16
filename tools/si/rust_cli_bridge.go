@@ -363,6 +363,18 @@ func runProvidersCharacteristicsCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("providers", append([]string{"characteristics"}, args...)...)
 }
 
+func runStripeContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
+}
+
+func runStripeContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "current"}, args...)...)
+}
+
+func runStripeAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"auth", "status"}, args...)...)
+}
+
 func runGitHubContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"context", "list"}, args...)...)
 }

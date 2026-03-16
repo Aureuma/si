@@ -129,6 +129,14 @@ func cmdStripeAuth(args []string) {
 }
 
 func cmdStripeAuthStatus(args []string) {
+	delegated, err := runStripeAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("stripe auth status", flag.ExitOnError)
 	account := fs.String("account", "", "account alias or acct_ id")
 	env := fs.String("env", "", "environment (live|sandbox)")
@@ -272,6 +280,14 @@ func cmdStripeContext(args []string) {
 }
 
 func cmdStripeContextList(args []string) {
+	delegated, err := runStripeContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("stripe context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
@@ -329,6 +345,14 @@ func cmdStripeContextList(args []string) {
 }
 
 func cmdStripeContextCurrent(args []string) {
+	delegated, err := runStripeContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("stripe context current", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
