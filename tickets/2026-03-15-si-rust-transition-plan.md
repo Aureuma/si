@@ -425,6 +425,7 @@ Progress notes:
 - completed: initial `si-rs-provider-google` crate now owns Google Places `context list`, `context current`, and local `auth status` runtime resolution/rendering, extending Phase 7 into the broader Google provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
 - completed: initial `si-rs-provider-openai` crate now owns OpenAI `context list` and `context current` local runtime resolution/rendering, starting the higher-surface OpenAI/OCI tier behind the Rust compatibility boundary while leaving verification-heavy `auth status` on the Go path for now
 - completed: initial `si-rs-provider-oci` crate now owns OCI `context list` and `context current` local runtime resolution/rendering, extending the higher-surface OpenAI/OCI tier behind the Rust compatibility boundary while leaving verification-heavy `auth status` on the Go path for now
+- completed: the OpenAI provider slice now also owns read-only `model list` and `model get` API execution on top of Rust-resolved auth/context headers, extending Phase 7 into the first higher-surface networked OpenAI operation while broader project/key/admin flows stay on the Go path
 
 ### Phase 8: Release/install migration
 
