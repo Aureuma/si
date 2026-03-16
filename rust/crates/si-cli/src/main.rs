@@ -43,6 +43,13 @@ use si_rs_provider_stripe::{
     resolve_auth_status as resolve_stripe_auth_status,
     resolve_current_context as resolve_stripe_current_context,
 };
+use si_rs_provider_workos::{
+    WorkOSAuthOverrides, WorkOSAuthStatus, WorkOSContextListEntry, WorkOSCurrentContext,
+    list_contexts as list_workos_contexts,
+    render_context_list_text as render_workos_context_list_text,
+    resolve_auth_status as resolve_workos_auth_status,
+    resolve_current_context as resolve_workos_current_context,
+};
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
@@ -87,6 +94,11 @@ enum Command {
     Stripe {
         #[command(subcommand)]
         command: StripeCommand,
+    },
+    #[command(name = "workos")]
+    WorkOS {
+        #[command(subcommand)]
+        command: WorkOSCommand,
     },
     #[command(name = "github")]
     GitHub {
@@ -186,6 +198,68 @@ enum StripeAuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum StripeContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkOSCommand {
+    Auth {
+        #[command(subcommand)]
+        command: WorkOSAuthCommand,
+    },
+    Context {
+        #[command(subcommand)]
+        command: WorkOSContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkOSAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkOSContextCommand {
     List {
         #[arg(long)]
         home: Option<PathBuf>,
@@ -1238,6 +1312,59 @@ impl From<StripeAuthStatus> for StripeAuthStatusPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct WorkOSContextListPayload {
+    contexts: Vec<WorkOSContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct WorkOSCurrentContextPayload {
+    account_alias: String,
+    environment: String,
+    base_url: String,
+    organization_id: String,
+    client_id: String,
+    source: String,
+}
+
+impl From<WorkOSCurrentContext> for WorkOSCurrentContextPayload {
+    fn from(value: WorkOSCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            environment: value.environment,
+            base_url: value.base_url,
+            organization_id: value.organization_id,
+            client_id: value.client_id,
+            source: value.source,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct WorkOSAuthStatusPayload {
+    account_alias: String,
+    environment: String,
+    organization_id: String,
+    client_id: String,
+    source: String,
+    base_url: String,
+    key_preview: String,
+}
+
+impl From<WorkOSAuthStatus> for WorkOSAuthStatusPayload {
+    fn from(value: WorkOSAuthStatus) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            environment: value.environment,
+            organization_id: value.organization_id,
+            client_id: value.client_id,
+            source: value.source,
+            base_url: value.base_url,
+            key_preview: value.key_preview,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct GitHubContextListPayload {
     contexts: Vec<GitHubContextListEntry>,
 }
@@ -1684,6 +1811,45 @@ fn main() -> Result<()> {
                 StripeContextCommand::Current { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
                     show_stripe_context_current(home, settings_file, format)?
+                }
+            },
+        },
+        Command::WorkOS { command } => match command {
+            WorkOSCommand::Auth { command } => match command {
+                WorkOSAuthCommand::Status {
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_workos_auth_status(
+                        account,
+                        env,
+                        api_key,
+                        client_id,
+                        org_id,
+                        base_url,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
+            WorkOSCommand::Context { command } => match command {
+                WorkOSContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_workos_context_list(home, settings_file, format)?
+                }
+                WorkOSContextCommand::Current { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_workos_context_current(home, settings_file, format)?
                 }
             },
         },
@@ -2943,6 +3109,116 @@ fn show_stripe_auth_status(
             );
             println!("Key source: {}", or_dash(&payload.key_source));
             println!("Key preview: {}", or_dash(&payload.key_preview));
+        }
+    }
+    Ok(())
+}
+
+fn show_workos_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_workos_contexts(&settings.workos);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&WorkOSContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_workos_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_workos_context_current(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = WorkOSCurrentContextPayload::from(
+        resolve_workos_current_context(&settings.workos, &env).map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current workos context: account={} env={} org={} client_id={}",
+                account,
+                payload.environment,
+                or_dash(&payload.organization_id),
+                or_dash(&payload.client_id)
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_workos_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = WorkOSAuthStatusPayload::from(
+        resolve_workos_auth_status(
+            &settings.workos,
+            &env,
+            &WorkOSAuthOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                api_key: api_key.unwrap_or_default(),
+                client_id: client_id.unwrap_or_default(),
+                organization_id: organization_id.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("WorkOS auth: ready");
+            println!(
+                "Context: account={} env={} org={} client_id={}",
+                account,
+                payload.environment,
+                or_dash(&payload.organization_id),
+                or_dash(&payload.client_id)
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Token preview: {}", or_dash(&payload.key_preview));
         }
     }
     Ok(())

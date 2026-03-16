@@ -375,6 +375,18 @@ func runStripeAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"auth", "status"}, args...)...)
 }
 
+func runWorkOSContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("workos", append([]string{"context", "list"}, args...)...)
+}
+
+func runWorkOSContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("workos", append([]string{"context", "current"}, args...)...)
+}
+
+func runWorkOSAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("workos", append([]string{"auth", "status"}, args...)...)
+}
+
 func runGitHubContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"context", "list"}, args...)...)
 }
