@@ -2890,6 +2890,93 @@ default_env = "sandbox"
 }
 
 #[test]
+fn stripe_raw_json_fetches_from_api() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/products?limit=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        assert!(request.contains("stripe-account: acct_123\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_raw")],
+            r#"{"object":"list","data":[{"id":"prod_123","name":"Core"}],"has_more":false}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "raw"])
+        .args([
+            "--account",
+            "acct_123",
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--path",
+            "/v1/products",
+            "--param",
+            "limit=1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_stripe_raw");
+    assert_eq!(parsed["data"]["data"][0]["id"], "prod_123");
+    server.join();
+}
+
+#[test]
+fn stripe_report_revenue_summary_json_aggregates_transactions() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/balance_transactions?"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        assert!(request.contains("type=charge"));
+        assert!(request.contains("created%5Bgte%5D=1704067200"));
+        assert!(request.contains("created%5Blte%5D=1704153600"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_report")],
+            r#"{"object":"list","data":[{"id":"txn_1","amount":1000,"fee":100,"currency":"usd"},{"id":"txn_2","amount":500,"fee":50,"currency":"usd"}],"has_more":false}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "report", "revenue-summary"])
+        .args([
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--from",
+            "2024-01-01T00:00:00Z",
+            "--to",
+            "2024-01-02T00:00:00Z",
+            "--limit",
+            "10",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["preset"], "revenue-summary");
+    assert_eq!(parsed["report"]["transactions"], 2);
+    assert_eq!(parsed["report"]["gross_amount"], 1500);
+    assert_eq!(parsed["report"]["fees"], 150);
+    assert_eq!(parsed["report"]["net_amount"], 1350);
+    assert_eq!(parsed["report"]["currency"], "USD");
+    server.join();
+}
+
+#[test]
 fn workos_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
