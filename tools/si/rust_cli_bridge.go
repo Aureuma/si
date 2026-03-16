@@ -1085,6 +1085,22 @@ func runGitHubBranchGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"branch", "get"}, args...)...)
 }
 
+func runGitHubBranchCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"branch", "create"}, args...)...)
+}
+
+func runGitHubBranchDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"branch", "delete"}, args...)...)
+}
+
+func runGitHubBranchProtectCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"branch", "protect"}, args...)...)
+}
+
+func runGitHubBranchUnprotectCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"branch", "unprotect"}, args...)...)
+}
+
 func runGitHubBranchCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1094,6 +1110,14 @@ func runGitHubBranchCommand(args []string) (bool, error) {
 		return runGitHubBranchListCommand(args[1:])
 	case "get":
 		return runGitHubBranchGetCommand(args[1:])
+	case "create":
+		return runGitHubBranchCreateCommand(args[1:])
+	case "delete":
+		return runGitHubBranchDeleteCommand(args[1:])
+	case "protect":
+		return runGitHubBranchProtectCommand(args[1:])
+	case "unprotect":
+		return runGitHubBranchUnprotectCommand(args[1:])
 	default:
 		return false, nil
 	}
