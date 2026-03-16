@@ -472,6 +472,7 @@ Progress notes:
 - completed: Stripe, WorkOS, and Cloudflare now follow the same pattern too, with provider-root plus `auth` and `context` wrapper layers short-circuiting directly into Rust for their already-migrated read-only paths while broader resource and mutation families remain on the Go side
 - completed: the Cloudflare provider slice now also owns the `raw` escape hatch, with Rust-owned auth/runtime resolution, direct API transport, and Go wrapper delegation so the first broader Cloudflare operational command no longer depends on the Go path
 - completed: the Cloudflare provider slice now also owns the read-only `analytics` and `report` operational surfaces, reusing the migrated Rust transport plus Go wrapper delegation so the next broader Cloudflare runtime reads no longer stay only on the Go path
+- completed: the Cloudflare provider slice now also owns `smoke`, reusing the migrated Rust transport for the multi-endpoint read-only health matrix plus Go wrapper delegation so the next operational readiness surface no longer depends on the Go path
 - completed: the top-level `apple` and `google` roots now also short-circuit directly into Rust when routing into the already-migrated `appstore` and `places` subtrees, removing the last obvious outer wrapper layer above those provider families while leaving other Apple/Google surfaces on the Go side
 
 ### Phase 8: Release/install migration

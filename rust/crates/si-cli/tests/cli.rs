@@ -3283,6 +3283,71 @@ fn cloudflare_report_billing_summary_json_fetches_account_endpoint() {
 }
 
 #[test]
+fn cloudflare_smoke_json_runs_public_checks_and_skips_account_scoped_ones() {
+    let call_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let calls = std::sync::Arc::clone(&call_count);
+    let server = start_http_server(3, move |request| {
+        let call = calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /user/tokens/verify HTTP/1.1\r\n"));
+                assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("cf-ray", "req_cf_smoke_verify")],
+                    r#"{"success":true,"result":{"id":"verify_123"}}"#,
+                )
+            }
+            1 => {
+                assert!(request.starts_with("GET /accounts HTTP/1.1\r\n"));
+                assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("cf-ray", "req_cf_smoke_accounts")],
+                    r#"{"success":true,"result":[{"id":"acc_1"}]}"#,
+                )
+            }
+            2 => {
+                assert!(request.starts_with("GET /zones?per_page=1 HTTP/1.1\r\n"));
+                assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("cf-ray", "req_cf_smoke_zones")],
+                    r#"{"success":true,"result":[{"id":"zone_123"}]}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "smoke"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["summary"]["pass"], 3);
+    assert_eq!(parsed["summary"]["fail"], 0);
+    assert_eq!(parsed["summary"]["skip"], 11);
+    let checks = parsed["checks"].as_array().expect("checks array");
+    assert_eq!(checks.len(), 14);
+    assert_eq!(checks[0]["name"], "token_verify");
+    assert_eq!(checks[0]["ok"], true);
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
