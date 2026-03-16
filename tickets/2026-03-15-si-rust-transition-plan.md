@@ -422,6 +422,7 @@ Progress notes:
 - completed: initial `si-rs-provider-apple` crate now owns Apple App Store `context list` and `context current` local runtime resolution/rendering, extending Phase 7 into the next provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
 - completed: initial `si-rs-provider-aws` crate now owns AWS `context list`, `context current`, and local `auth status` runtime resolution/rendering, extending Phase 7 into the cloud-provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
 - completed: initial `si-rs-provider-gcp` crate now owns GCP `context list`, `context current`, and local `auth status` runtime resolution/rendering, extending Phase 7 further into the cloud-provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
+- completed: initial `si-rs-provider-google` crate now owns Google Places `context list`, `context current`, and local `auth status` runtime resolution/rendering, extending Phase 7 into the broader Google provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
 
 ### Phase 8: Release/install migration
 

@@ -59,6 +59,11 @@ use si_rs_provider_github::{
     GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry, list_contexts,
     render_context_list_text, resolve_auth_status, resolve_current_context,
 };
+use si_rs_provider_google::{
+    GooglePlacesAuthStatus, GooglePlacesContextListEntry, GooglePlacesCurrentContext,
+    GooglePlacesOverrides, list_places_contexts, render_places_context_list_text,
+    resolve_places_auth_status, resolve_places_current_context,
+};
 use si_rs_provider_stripe::{
     StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
     list_contexts as list_stripe_contexts,
@@ -130,6 +135,10 @@ enum Command {
     Gcp {
         #[command(subcommand)]
         command: GCPCommand,
+    },
+    Google {
+        #[command(subcommand)]
+        command: GoogleCommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -400,6 +409,92 @@ enum GCPContextCommand {
         format: OutputFormat,
     },
     Current {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleCommand {
+    Places {
+        #[command(subcommand)]
+        command: GooglePlacesCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesCommand {
+    Auth {
+        #[command(subcommand)]
+        command: GooglePlacesAuthCommand,
+    },
+    Context {
+        #[command(subcommand)]
+        command: GooglePlacesContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -1674,6 +1769,63 @@ impl From<GCPAuthStatus> for GCPAuthStatusPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct GooglePlacesContextListPayload {
+    contexts: Vec<GooglePlacesContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct GooglePlacesCurrentContextPayload {
+    account_alias: String,
+    project_id: String,
+    environment: String,
+    language_code: String,
+    region_code: String,
+    source: String,
+    base_url: String,
+}
+
+impl From<GooglePlacesCurrentContext> for GooglePlacesCurrentContextPayload {
+    fn from(value: GooglePlacesCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            project_id: value.project_id,
+            environment: value.environment,
+            language_code: value.language_code,
+            region_code: value.region_code,
+            source: value.source,
+            base_url: value.base_url,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct GooglePlacesAuthStatusPayload {
+    account_alias: String,
+    project_id: String,
+    environment: String,
+    language_code: String,
+    region_code: String,
+    source: String,
+    key_preview: String,
+    base_url: String,
+}
+
+impl From<GooglePlacesAuthStatus> for GooglePlacesAuthStatusPayload {
+    fn from(value: GooglePlacesAuthStatus) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            project_id: value.project_id,
+            environment: value.environment,
+            language_code: value.language_code,
+            region_code: value.region_code,
+            source: value.source,
+            key_preview: value.key_preview,
+            base_url: value.base_url,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -2316,6 +2468,72 @@ fn main() -> Result<()> {
                     let format = if json { OutputFormat::Json } else { format };
                     show_gcp_context_current(home, settings_file, format)?
                 }
+            },
+        },
+        Command::Google { command } => match command {
+            GoogleCommand::Places { command } => match command {
+                GooglePlacesCommand::Auth { command } => match command {
+                    GooglePlacesAuthCommand::Status {
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_google_places_auth_status(
+                            account,
+                            env,
+                            api_key,
+                            base_url,
+                            project_id,
+                            language,
+                            region,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
+                GooglePlacesCommand::Context { command } => match command {
+                    GooglePlacesContextCommand::List { home, settings_file, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_google_places_context_list(home, settings_file, format)?
+                    }
+                    GooglePlacesContextCommand::Current {
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_google_places_context_current(
+                            account,
+                            env,
+                            api_key,
+                            base_url,
+                            project_id,
+                            language,
+                            region,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
             },
         },
         Command::Stripe { command } => match command {
@@ -3840,6 +4058,144 @@ fn show_gcp_auth_status(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Token preview: {}", or_dash(&payload.token_preview));
+        }
+    }
+    Ok(())
+}
+
+fn show_google_places_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_places_contexts(&settings.google);
+    match format {
+        OutputFormat::Json => println!(
+            "{}",
+            serde_json::to_string_pretty(&GooglePlacesContextListPayload { contexts })?
+        ),
+        OutputFormat::Text => print!("{}", render_places_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_google_places_context_current(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = GooglePlacesCurrentContextPayload::from(
+        resolve_places_current_context(
+            &settings.google,
+            &env,
+            &GooglePlacesOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                api_key: api_key.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                project_id: project_id.unwrap_or_default(),
+                language: language.unwrap_or_default(),
+                region: region.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current google places context: account={} env={} project={} language={} region={} base={}",
+                account,
+                payload.environment,
+                or_dash(&payload.project_id),
+                or_dash(&payload.language_code),
+                or_dash(&payload.region_code),
+                payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_google_places_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = GooglePlacesAuthStatusPayload::from(
+        resolve_places_auth_status(
+            &settings.google,
+            &env,
+            &GooglePlacesOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                api_key: api_key.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                project_id: project_id.unwrap_or_default(),
+                language: language.unwrap_or_default(),
+                region: region.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("Google Places auth: ready");
+            println!(
+                "Context: account={} env={} project={} language={} region={} base={}",
+                account,
+                payload.environment,
+                or_dash(&payload.project_id),
+                or_dash(&payload.language_code),
+                or_dash(&payload.region_code),
+                payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Key preview: {}", or_dash(&payload.key_preview));
         }
     }
     Ok(())

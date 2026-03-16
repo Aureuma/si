@@ -673,6 +673,147 @@ func TestRunGCPAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGooglePlacesContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places context list path by default")
+	}
+}
+
+func TestRunGooglePlacesContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-list" {
+		t.Fatalf("expected delegated Rust google places context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlacesContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places context current path by default")
+	}
+}
+
+func TestRunGooglePlacesContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-current" {
+		t.Fatalf("expected delegated Rust google places context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places context current + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlacesAuthStatusCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesAuthStatusCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesAuthStatusCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places auth status path by default")
+	}
+}
+
+func TestRunGooglePlacesAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesAuthStatusCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesAuthStatusCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places auth status to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-auth" {
+		t.Fatalf("expected delegated Rust google places auth status output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places auth status + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
