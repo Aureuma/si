@@ -825,6 +825,63 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobDelete(t *testing.T) {
 	}
 }
 
+func TestRunCloudflareCommandDelegatesToRustCLIForResourceFamilies(t *testing.T) {
+	cases := []struct {
+		name     string
+		args     []string
+		expected string
+	}{
+		{name: "zone list", args: []string{"zone", "list", "--json"}, expected: "cloudflare\nzone\nlist\n--json"},
+		{name: "dns create", args: []string{"dns", "create", "--param", "type=A", "--json"}, expected: "cloudflare\ndns\ncreate\n--param\ntype=A\n--json"},
+		{name: "email rule get", args: []string{"email", "rule", "get", "rule_123", "--json"}, expected: "cloudflare\nemail\nrule\nget\nrule_123\n--json"},
+		{name: "email address delete", args: []string{"email", "address", "delete", "addr_123", "--force", "--json"}, expected: "cloudflare\nemail\naddress\ndelete\naddr_123\n--force\n--json"},
+		{name: "token update", args: []string{"token", "update", "tok_123", "--param", "name=core", "--json"}, expected: "cloudflare\ntoken\nupdate\ntok_123\n--param\nname=core\n--json"},
+		{name: "ruleset list", args: []string{"ruleset", "list", "--json"}, expected: "cloudflare\nruleset\nlist\n--json"},
+		{name: "firewall get", args: []string{"firewall", "get", "fw_123", "--json"}, expected: "cloudflare\nfirewall\nget\nfw_123\n--json"},
+		{name: "ratelimit create", args: []string{"ratelimit", "create", "--param", "threshold=10", "--json"}, expected: "cloudflare\nratelimit\ncreate\n--param\nthreshold=10\n--json"},
+		{name: "workers script update", args: []string{"workers", "script", "update", "script_123", "--param", "name=core", "--json"}, expected: "cloudflare\nworkers\nscript\nupdate\nscript_123\n--param\nname=core\n--json"},
+		{name: "workers route delete", args: []string{"workers", "route", "delete", "route_123", "--force", "--json"}, expected: "cloudflare\nworkers\nroute\ndelete\nroute_123\n--force\n--json"},
+		{name: "pages project create", args: []string{"pages", "project", "create", "--param", "name=docs", "--json"}, expected: "cloudflare\npages\nproject\ncreate\n--param\nname=docs\n--json"},
+		{name: "queue list", args: []string{"queue", "list", "--json"}, expected: "cloudflare\nqueue\nlist\n--json"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			argsPath := filepath.Join(dir, "args.txt")
+			scriptPath := filepath.Join(dir, "si-rs")
+			script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-resource'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+			if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+				t.Fatalf("write script: %v", err)
+			}
+
+			t.Setenv(siRustCLIBinEnv, scriptPath)
+			t.Setenv(siExperimentalRustCLIEnv, "")
+
+			out := captureOutputForTest(t, func() {
+				delegated, err := runCloudflareCommand(tc.args)
+				if err != nil {
+					t.Fatalf("runCloudflareCommand: %v", err)
+				}
+				if !delegated {
+					t.Fatalf("expected cloudflare resource family to delegate to Rust")
+				}
+			})
+
+			if strings.TrimSpace(out) != "rust-cloudflare-resource" {
+				t.Fatalf("expected delegated Rust cloudflare resource output, got %q", out)
+			}
+			argsData, err := os.ReadFile(argsPath)
+			if err != nil {
+				t.Fatalf("read args file: %v", err)
+			}
+			if strings.TrimSpace(string(argsData)) != tc.expected {
+				t.Fatalf("expected Rust CLI args %q, got %q", tc.expected, string(argsData))
+			}
+		})
+	}
+}
+
 func TestRunAppleAppStoreContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
