@@ -435,6 +435,14 @@ func runOpenAIModelGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"model", "get"}, args...)...)
 }
 
+func runOpenAIProjectListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "list"}, args...)...)
+}
+
+func runOpenAIProjectGetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "get"}, args...)...)
+}
+
 func runOCIContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "list"}, args...)...)
 }

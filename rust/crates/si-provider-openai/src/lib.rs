@@ -43,6 +43,7 @@ pub struct OpenAIRuntime {
     pub account_alias: String,
     pub base_url: String,
     pub api_key: String,
+    pub admin_api_key: String,
     pub organization_id: String,
     pub project_id: String,
     pub source: String,
@@ -172,6 +173,7 @@ pub fn resolve_runtime(
     let (api_key, api_key_source) = resolve_api_key(&alias, &account, env, &overrides.api_key);
     let (admin_key, admin_source) =
         resolve_admin_api_key(&alias, &account, env, &overrides.admin_api_key);
+    let admin_key_set = !admin_key.trim().is_empty();
     let auth_token = if api_key.trim().is_empty() {
         if admin_key.trim().is_empty() {
             let prefix = account_env_prefix(&alias, &account);
@@ -192,10 +194,11 @@ pub fn resolve_runtime(
         account_alias: alias,
         base_url,
         api_key: auth_token,
+        admin_api_key: admin_key,
         organization_id: org_id,
         project_id,
         source: join_sources(&[api_key_source, admin_source, org_source, project_source]),
-        admin_key_set: !admin_key.trim().is_empty(),
+        admin_key_set,
     })
 }
 
@@ -434,7 +437,7 @@ pub fn list_models(
     if let Some(limit) = limit.filter(|value| *value > 0) {
         params.push(("limit", limit.to_string()));
     }
-    openai_get(runtime, "/v1/models", &params)
+    openai_get(runtime, "/v1/models", &params, false)
 }
 
 pub fn get_model(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIResponse, String> {
@@ -443,7 +446,35 @@ pub fn get_model(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIResponse,
         return Err("model id is required".to_owned());
     }
     let escaped = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
-    openai_get(runtime, &format!("/v1/models/{escaped}"), &[])
+    openai_get(runtime, &format!("/v1/models/{escaped}"), &[], false)
+}
+
+pub fn list_projects(
+    runtime: &OpenAIRuntime,
+    limit: Option<usize>,
+    after: &str,
+    include_archived: bool,
+) -> Result<OpenAIAPIResponse, String> {
+    let mut params = Vec::new();
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.push(("limit", limit.to_string()));
+    }
+    if !after.trim().is_empty() {
+        params.push(("after", after.trim().to_owned()));
+    }
+    if include_archived {
+        params.push(("include_archived", "true".to_owned()));
+    }
+    openai_get(runtime, "/v1/organization/projects", &params, true)
+}
+
+pub fn get_project(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIResponse, String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let escaped = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
+    openai_get(runtime, &format!("/v1/organization/projects/{escaped}"), &[], true)
 }
 
 pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> String {
@@ -529,6 +560,7 @@ fn openai_get(
     runtime: &OpenAIRuntime,
     path: &str,
     params: &[(&str, String)],
+    use_admin_key: bool,
 ) -> Result<OpenAIAPIResponse, String> {
     let url = resolve_url(&runtime.base_url, path, params)?;
     let client = Client::builder()
@@ -536,7 +568,16 @@ fn openai_get(
         .build()
         .map_err(|err| format!("build openai http client: {err}"))?;
     let mut headers = HeaderMap::new();
-    let auth_value = HeaderValue::from_str(&format!("Bearer {}", runtime.api_key.trim()))
+    let token = if use_admin_key {
+        let value = runtime.admin_api_key.trim();
+        if value.is_empty() {
+            return Err("admin api key is required for this command".to_owned());
+        }
+        value
+    } else {
+        runtime.api_key.trim()
+    };
+    let auth_value = HeaderValue::from_str(&format!("Bearer {token}"))
         .map_err(|err| format!("build openai auth header: {err}"))?;
     headers.insert(AUTHORIZATION, auth_value);
     if !runtime.organization_id.trim().is_empty() {
