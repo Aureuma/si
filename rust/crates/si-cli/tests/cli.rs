@@ -1774,6 +1774,53 @@ fn openai_project_service_account_get_text_formats_response() {
 }
 
 #[test]
+fn openai_project_rate_limit_list_json_fetches_from_api_with_admin_key() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /v1/organization/projects/proj_123/rate_limits?limit=1&after=cursor HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rate_limits")],
+            r#"{"data":[{"id":"rl_123","max_requests_per_1_minute":60}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "project",
+            "rate-limit",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--project-id",
+            "proj_123",
+            "--limit",
+            "1",
+            "--after",
+            "cursor",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_rate_limits");
+    assert_eq!(parsed["data"]["data"][0]["id"], "rl_123");
+    server.join();
+}
+
+#[test]
 fn oci_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
