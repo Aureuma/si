@@ -49,6 +49,12 @@ use si_rs_provider_cloudflare::{
     render_context_list_text as render_cloudflare_context_list_text,
     resolve_current_context as resolve_cloudflare_current_context,
 };
+use si_rs_provider_gcp::{
+    GCPAuthOverrides, GCPAuthStatus, GCPContextListEntry, GCPCurrentContext,
+    list_contexts as list_gcp_contexts, render_context_list_text as render_gcp_context_list_text,
+    resolve_auth_status as resolve_gcp_auth_status,
+    resolve_current_context as resolve_gcp_current_context,
+};
 use si_rs_provider_github::{
     GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry, list_contexts,
     render_context_list_text, resolve_auth_status, resolve_current_context,
@@ -119,6 +125,11 @@ enum Command {
     Aws {
         #[command(subcommand)]
         command: AWSCommand,
+    },
+    #[command(name = "gcp")]
+    Gcp {
+        #[command(subcommand)]
+        command: GCPCommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -318,6 +329,66 @@ enum AWSAuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum AWSContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPCommand {
+    Auth {
+        #[command(subcommand)]
+        command: GCPAuthCommand,
+    },
+    Context {
+        #[command(subcommand)]
+        command: GCPContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPContextCommand {
     List {
         #[arg(long)]
         home: Option<PathBuf>,
@@ -1554,6 +1625,55 @@ impl From<AWSAuthStatus> for AWSAuthStatusPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct GCPContextListPayload {
+    contexts: Vec<GCPContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct GCPCurrentContextPayload {
+    account_alias: String,
+    environment: String,
+    project_id: String,
+    base_url: String,
+    source: String,
+}
+
+impl From<GCPCurrentContext> for GCPCurrentContextPayload {
+    fn from(value: GCPCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            environment: value.environment,
+            project_id: value.project_id,
+            base_url: value.base_url,
+            source: value.source,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct GCPAuthStatusPayload {
+    account_alias: String,
+    environment: String,
+    project_id: String,
+    base_url: String,
+    source: String,
+    token_preview: String,
+}
+
+impl From<GCPAuthStatus> for GCPAuthStatusPayload {
+    fn from(value: GCPAuthStatus) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            environment: value.environment,
+            project_id: value.project_id,
+            base_url: value.base_url,
+            source: value.source,
+            token_preview: value.token_preview,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -2158,6 +2278,43 @@ fn main() -> Result<()> {
                 AWSContextCommand::Current { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
                     show_aws_context_current(home, settings_file, format)?
+                }
+            },
+        },
+        Command::Gcp { command } => match command {
+            GCPCommand::Auth { command } => match command {
+                GCPAuthCommand::Status {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_gcp_auth_status(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
+            GCPCommand::Context { command } => match command {
+                GCPContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_gcp_context_list(home, settings_file, format)?
+                }
+                GCPContextCommand::Current { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_gcp_context_current(home, settings_file, format)?
                 }
             },
         },
@@ -3581,6 +3738,108 @@ fn show_aws_auth_status(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Access key: {}", or_dash(&payload.access_key));
+        }
+    }
+    Ok(())
+}
+
+fn show_gcp_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_gcp_contexts(&settings.gcp);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&GCPContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_gcp_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_gcp_context_current(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = GCPCurrentContextPayload::from(
+        resolve_gcp_current_context(&settings.gcp, &env).map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current gcp context: account={} env={} project={} base={}",
+                account, payload.environment, payload.project_id, payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_gcp_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = GCPAuthStatusPayload::from(
+        resolve_gcp_auth_status(
+            &settings.gcp,
+            &env,
+            &GCPAuthOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                project_id: project.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                access_token: access_token.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("GCP auth: ready");
+            println!(
+                "Context: account={} env={} project={} base={}",
+                account, payload.environment, payload.project_id, payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Token preview: {}", or_dash(&payload.token_preview));
         }
     }
     Ok(())

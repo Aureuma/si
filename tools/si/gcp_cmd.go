@@ -142,6 +142,13 @@ func cmdGCPAuth(args []string) {
 }
 
 func cmdGCPAuthStatus(args []string) {
+	delegated, err := runGCPAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("gcp auth status", flag.ExitOnError)
 	flags := bindGCPCommonFlags(fs)
@@ -224,6 +231,13 @@ func cmdGCPContext(args []string) {
 }
 
 func cmdGCPContextList(args []string) {
+	delegated, err := runGCPContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("gcp context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
@@ -284,6 +298,13 @@ func cmdGCPContextList(args []string) {
 }
 
 func cmdGCPContextCurrent(args []string) {
+	delegated, err := runGCPContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("gcp context current", flag.ExitOnError)
 	flags := bindGCPCommonFlags(fs)
