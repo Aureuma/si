@@ -833,11 +833,15 @@ func runGCPCommand(args []string) (bool, error) {
 		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"iam"}, args[1:]...)...)
 	case "gemini", "generativelanguage":
 		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"gemini"}, args[1:]...)...)
+	case "vertex":
+		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"vertex"}, args[1:]...)...)
 	case "ai":
 		if len(args) > 1 {
 			switch strings.ToLower(strings.TrimSpace(args[1])) {
 			case "gemini", "generativelanguage":
 				return maybeDispatchRustCLIReadOnly("gcp", append([]string{"gemini"}, args[2:]...)...)
+			case "vertex":
+				return maybeDispatchRustCLIReadOnly("gcp", append([]string{"vertex"}, args[2:]...)...)
 			}
 		}
 		return false, nil

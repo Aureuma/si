@@ -2,7 +2,7 @@ use anyhow::Result;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use chrono::{TimeZone, Utc};
-use clap::{ArgAction, Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use si_rs_codex::{
@@ -1791,6 +1791,10 @@ enum GCPCommand {
         #[command(subcommand)]
         command: GCPGeminiCommand,
     },
+    Vertex {
+        #[command(subcommand)]
+        command: GCPVertexCommand,
+    },
     Raw {
         #[arg(long)]
         account: Option<String>,
@@ -2731,6 +2735,138 @@ enum GCPGeminiImageCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+}
+
+#[derive(Debug, Args, Clone)]
+struct GCPVertexCommonArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long)]
+    project: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    location: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPVertexCommand {
+    #[command(alias = "models")]
+    Model {
+        #[command(subcommand)]
+        command: GCPVertexModelCommand,
+    },
+    #[command(alias = "endpoints")]
+    Endpoint {
+        #[command(subcommand)]
+        command: GCPVertexEndpointCommand,
+    },
+    #[command(alias = "batch-prediction", alias = "batch-prediction-job", alias = "batch-prediction-jobs")]
+    Batch {
+        #[command(subcommand)]
+        command: GCPVertexBatchCommand,
+    },
+    #[command(alias = "pipeline-job", alias = "pipeline-jobs")]
+    Pipeline {
+        #[command(subcommand)]
+        command: GCPVertexPipelineCommand,
+    },
+    #[command(alias = "operations")]
+    Operation {
+        #[command(subcommand)]
+        command: GCPVertexOperationCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        location: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPVertexModelCommand {
+    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
+    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPVertexEndpointCommand {
+    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
+    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Create { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    Predict { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] endpoint: Option<String>, resource: Option<String>, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long)] instances_json: Option<String>, #[arg(long = "param")] params: Vec<String> },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPVertexBatchCommand {
+    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
+    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Create { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Cancel { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPVertexPipelineCommand {
+    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
+    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Create { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] body: Option<String>, #[arg(long)] json_body: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Cancel { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPVertexOperationCommand {
+    List { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] limit: Option<usize>, #[arg(long = "param")] params: Vec<String> },
+    Get { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long = "param")] params: Vec<String> },
+    Cancel { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
+    Delete { #[command(flatten)] common: GCPVertexCommonArgs, #[arg(long)] name: Option<String>, resource: Option<String>, #[arg(long)] force: bool },
 }
 
 #[derive(Debug, Subcommand)]
@@ -10959,6 +11095,106 @@ fn main() -> Result<()> {
                         account, env, project, base_url, access_token, api_key, method, path,
                         params, headers, body, json_body, home, settings_file, format, raw,
                     )?
+                }
+            },
+            GCPCommand::Vertex { command } => match command {
+                GCPVertexCommand::Model { command } => match command {
+                    GCPVertexModelCommand::List { common, limit, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "models", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexModelCommand::Get { common, name, resource, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "models", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                },
+                GCPVertexCommand::Endpoint { command } => match command {
+                    GCPVertexEndpointCommand::List { common, limit, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexEndpointCommand::Get { common, name, resource, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexEndpointCommand::Create { common, body, json_body, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_create(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", body, json_body, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexEndpointCommand::Delete { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "endpoints", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexEndpointCommand::Predict { common, endpoint, resource, body, json_body, instances_json, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_predict(common.account, common.env, common.project, common.base_url, common.access_token, common.location, endpoint.or(resource), body, json_body, instances_json, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                },
+                GCPVertexCommand::Batch { command } => match command {
+                    GCPVertexBatchCommand::List { common, limit, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexBatchCommand::Get { common, name, resource, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexBatchCommand::Create { common, body, json_body, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_create(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", body, json_body, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexBatchCommand::Cancel { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", name.or(resource), force, true, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexBatchCommand::Delete { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "batchPredictionJobs", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                    }
+                },
+                GCPVertexCommand::Pipeline { command } => match command {
+                    GCPVertexPipelineCommand::List { common, limit, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexPipelineCommand::Get { common, name, resource, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexPipelineCommand::Create { common, body, json_body, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_create(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", body, json_body, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexPipelineCommand::Cancel { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", name.or(resource), force, true, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexPipelineCommand::Delete { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "pipelineJobs", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                    }
+                },
+                GCPVertexCommand::Operation { command } => match command {
+                    GCPVertexOperationCommand::List { common, limit, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", None, limit, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexOperationCommand::Get { common, name, resource, params } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_list(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", name.or(resource), None, params, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexOperationCommand::Cancel { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", name.or(resource), force, true, common.home, common.settings_file, format, common.raw)?
+                    }
+                    GCPVertexOperationCommand::Delete { common, name, resource, force } => {
+                        let format = if common.json { OutputFormat::Json } else { common.format };
+                        run_gcp_vertex_delete_or_cancel(common.account, common.env, common.project, common.base_url, common.access_token, common.location, "operations", name.or(resource), force, false, common.home, common.settings_file, format, common.raw)?
+                    }
+                },
+                GCPVertexCommand::Raw { account, env, project, base_url, access_token, location, method, path, params, headers, body, json_body, home, settings_file, json, raw, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_vertex_raw(account, env, project, base_url, access_token, location, method, path, params, headers, body, json_body, home, settings_file, format, raw)?
                 }
             },
             GCPCommand::Raw {
@@ -19917,6 +20153,334 @@ fn run_gcp_gemini_raw(
             content_type: "application/json".to_owned(),
         },
     )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+fn resolve_gcp_vertex_location(location: Option<String>) -> String {
+    location
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| std::env::var("GCP_VERTEX_LOCATION").ok())
+        .or_else(|| std::env::var("GOOGLE_CLOUD_LOCATION").ok())
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "us-central1".to_owned())
+}
+
+fn normalize_gcp_vertex_resource_name(
+    project_id: &str,
+    location: &str,
+    collection: &str,
+    value: &str,
+) -> String {
+    let value = value.trim();
+    if value.starts_with("projects/") {
+        value.trim_matches('/').to_owned()
+    } else {
+        format!(
+            "projects/{}/locations/{}/{}/{}",
+            project_id.trim(),
+            location.trim(),
+            collection.trim_matches('/'),
+            value.trim_matches('/'),
+        )
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_gcp_vertex_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<(GCPRuntime, String)> {
+    let location = resolve_gcp_vertex_location(location);
+    let base_url = Some(
+        base_url
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| format!("https://{}-aiplatform.googleapis.com", location)),
+    );
+    let runtime = load_gcp_runtime(
+        account,
+        environment,
+        project,
+        base_url,
+        access_token,
+        home,
+        settings_file,
+        true,
+    )?;
+    Ok((runtime, location))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_vertex_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    collection: &str,
+    resource: Option<String>,
+    limit: Option<usize>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, location) = load_gcp_vertex_runtime(
+        account, environment, project, base_url, access_token, location, home, settings_file,
+    )?;
+    let mut params = parse_gcp_params(params)?;
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.insert("pageSize".to_owned(), limit.to_string());
+    }
+    let path = if let Some(resource) = resource.filter(|value| !value.trim().is_empty()) {
+        format!(
+            "/v1/{}",
+            normalize_gcp_vertex_resource_name(&runtime.project_id, &location, collection, &resource)
+        )
+    } else {
+        format!(
+            "/v1/projects/{}/locations/{}/{}",
+            runtime.project_id.trim(),
+            location.trim(),
+            collection
+        )
+    };
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path,
+            params,
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_vertex_create(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    collection: &str,
+    body: Option<String>,
+    json_body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, location) = load_gcp_vertex_runtime(
+        account, environment, project, base_url, access_token, location, home, settings_file,
+    )?;
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1/projects/{}/locations/{}/{}",
+                runtime.project_id.trim(),
+                location.trim(),
+                collection
+            ),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else if let Some(json_body) = parse_gcp_json_body_required(json_body, "--json-body")? {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1/projects/{}/locations/{}/{}",
+                runtime.project_id.trim(),
+                location.trim(),
+                collection
+            ),
+            json_body: Some(json_body),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let payload = parse_gcp_json_body_params(params)?;
+        if payload.is_empty() {
+            anyhow::bail!("provide --json-body, --body, or at least one --param");
+        }
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1/projects/{}/locations/{}/{}",
+                runtime.project_id.trim(),
+                location.trim(),
+                collection
+            ),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_vertex_delete_or_cancel(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    collection: &str,
+    resource: Option<String>,
+    force: bool,
+    cancel: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("--force is required");
+    }
+    let (runtime, location) = load_gcp_vertex_runtime(
+        account, environment, project, base_url, access_token, location, home, settings_file,
+    )?;
+    let resource = resource.unwrap_or_default();
+    if resource.trim().is_empty() {
+        anyhow::bail!("resource name/id is required");
+    }
+    let resource_name =
+        normalize_gcp_vertex_resource_name(&runtime.project_id, &location, collection, &resource);
+    let request = if cancel {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{resource_name}:cancel"),
+            json_body: Some(serde_json::json!({})),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        GCPAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/v1/{resource_name}"),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_vertex_predict(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    endpoint: Option<String>,
+    body: Option<String>,
+    json_body: Option<String>,
+    instances_json: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, location) = load_gcp_vertex_runtime(
+        account, environment, project, base_url, access_token, location, home, settings_file,
+    )?;
+    let endpoint = endpoint.unwrap_or_default();
+    if endpoint.trim().is_empty() {
+        anyhow::bail!("endpoint name/id is required");
+    }
+    let endpoint_name =
+        normalize_gcp_vertex_resource_name(&runtime.project_id, &location, "endpoints", &endpoint);
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{endpoint_name}:predict"),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else if let Some(json_body) = parse_gcp_json_body_required(json_body, "--json-body")? {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{endpoint_name}:predict"),
+            json_body: Some(json_body),
+            ..GCPAPIRequest::default()
+        }
+    } else if let Some(instances_json) = instances_json.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{endpoint_name}:predict"),
+            json_body: Some(serde_json::json!({
+                "instances": parse_gcp_json_value(&instances_json, "--instances-json")?
+            })),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let payload = parse_gcp_json_body_params(params)?;
+        if payload.is_empty() {
+            anyhow::bail!("provide --instances-json, --json-body, --body, or --param");
+        }
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{endpoint_name}:predict"),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_vertex_raw(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    location: Option<String>,
+    method: String,
+    path: String,
+    params: Vec<String>,
+    headers: Vec<String>,
+    body: Option<String>,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, _) = load_gcp_vertex_runtime(
+        account, environment, project, base_url, access_token, location, home, settings_file,
+    )?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method,
+            path,
+            params: parse_gcp_params(params)?,
+            headers: parse_gcp_params(headers)?,
+            json_body: parse_gcp_json_body_required(json_body, "--json-body")?,
+            raw_body: body.unwrap_or_default(),
+            content_type: "application/json".to_owned(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
     print_gcp_api_response(&response, format, raw)
 }
 
