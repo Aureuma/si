@@ -2029,6 +2029,121 @@ func TestRunGCPCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGCPDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGCPDoctorCommand([]string{"--public", "--json"})
+	if err != nil {
+		t.Fatalf("runGCPDoctorCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go gcp doctor path for --public")
+	}
+}
+
+func TestRunGCPDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-doctor'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPDoctorCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGCPDoctorCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-doctor" {
+		t.Fatalf("expected delegated Rust gcp doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp doctor + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGCPCommandDelegatesToRustCLIForService(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-service'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"service", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp service to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-service" {
+		t.Fatalf("expected delegated Rust gcp service output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\nservice\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp service + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGCPCommandDelegatesToRustCLIForRaw(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-raw'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"raw", "--method", "GET", "--path", "/v1/projects/p/services/x", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp raw to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-raw" {
+		t.Fatalf("expected delegated Rust gcp raw output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\nraw\n--method\nGET\n--path\n/v1/projects/p/services/x\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp raw + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGooglePlacesContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

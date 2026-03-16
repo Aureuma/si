@@ -4830,6 +4830,150 @@ access_token_env = "CORE_TOKEN"
 }
 
 #[test]
+fn gcp_doctor_json_verifies_request() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/projects/proj_core/services/serviceusage.googleapis.com HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer ya29.token-core-xyz\r\n"));
+        http_json_response("200 OK", &[("x-request-id", "req_gcp_doctor")], r#"{"state":"ENABLED"}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "doctor", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    server.join();
+}
+
+#[test]
+fn gcp_service_list_json_fetches_services() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/projects/proj_core/services?"));
+        assert!(request.contains("pageSize=2"));
+        assert!(request.contains("filter=state%3AENABLED"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_list")],
+            r#"{"services":[{"config":{"name":"aiplatform.googleapis.com"}}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "service", "list", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--limit", "2", "--filter", "state:ENABLED", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gcp_list");
+    assert_eq!(parsed["data"]["services"][0]["config"]["name"], "aiplatform.googleapis.com");
+    server.join();
+}
+
+#[test]
+fn gcp_service_enable_json_posts_operation() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/projects/proj_core/services/aiplatform.googleapis.com:enable HTTP/1.1\r\n"));
+        assert!(request.contains("\r\n\r\n{}"));
+        http_json_response("200 OK", &[], r#"{"name":"operations/op_123"}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "service", "enable", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--name", "aiplatform.googleapis.com", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["name"], "operations/op_123");
+    server.join();
+}
+
+#[test]
+fn gcp_raw_json_fetches_with_headers_and_query_params() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/projects/proj_core/services/serviceusage.googleapis.com?view=full HTTP/1.1\r\n"));
+        assert!(request.contains("x-custom: yes\r\n"));
+        http_json_response("200 OK", &[("x-request-id", "req_gcp_raw")], r#"{"state":"ENABLED"}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "raw", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--method",
+            "GET",
+            "--path",
+            "/v1/projects/proj_core/services/serviceusage.googleapis.com",
+            "--param",
+            "view=full",
+            "--header",
+            "x-custom=yes",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gcp_raw");
+    assert_eq!(parsed["data"]["state"], "ENABLED");
+    server.join();
+}
+
+#[test]
 fn google_places_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
