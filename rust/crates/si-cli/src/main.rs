@@ -34,11 +34,14 @@ use si_rs_fort::{
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_apple::{
-    AppleAppStoreAuthOverrides, AppleAppStoreAuthStatus, AppleAppStoreContextListEntry,
-    AppleAppStoreCurrentContext, list_appstore_contexts,
+    AppleAppStoreAPIResponse, AppleAppStoreAuthOverrides, AppleAppStoreAuthStatus,
+    AppleAppStoreContextListEntry, AppleAppStoreCurrentContext, AppleAppStoreRuntime,
+    list_appstore_contexts,
     render_appstore_context_list_text,
+    resolve_runtime as resolve_apple_appstore_runtime,
     resolve_auth_status as resolve_apple_appstore_auth_status,
     resolve_current_context as resolve_apple_appstore_current_context,
+    run_api_request as run_apple_appstore_api_request,
 };
 use si_rs_provider_aws::{
     AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry, AWSCurrentContext,
@@ -1268,6 +1271,312 @@ enum AppleAppStoreCommand {
     Context {
         #[command(subcommand)]
         command: AppleAppStoreContextCommand,
+    },
+    App {
+        #[command(subcommand)]
+        command: AppleAppStoreAppCommand,
+    },
+    Listing {
+        #[command(subcommand)]
+        command: AppleAppStoreListingCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        content_type: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Apply {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long, default_value = "appstore")]
+        metadata_dir: PathBuf,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        create_version: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AppleAppStoreAppCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        app_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        bundle_name: Option<String>,
+        #[arg(long)]
+        app_name: Option<String>,
+        #[arg(long)]
+        sku: Option<String>,
+        #[arg(long)]
+        primary_locale: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        skip_bundle_create: bool,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        allow_partial: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AppleAppStoreListingCommand {
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Update {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        create_version: bool,
+        #[arg(long)]
+        app_info_body: Option<String>,
+        #[arg(long)]
+        version_body: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        subtitle: Option<String>,
+        #[arg(long)]
+        privacy_policy_url: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        keywords: Option<String>,
+        #[arg(long)]
+        marketing_url: Option<String>,
+        #[arg(long)]
+        promotional_text: Option<String>,
+        #[arg(long)]
+        support_url: Option<String>,
+        #[arg(long)]
+        whats_new: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -7965,6 +8274,183 @@ fn main() -> Result<()> {
                         show_apple_appstore_context_current(home, settings_file, format)?
                     }
                 },
+                AppleAppStoreCommand::App { command } => match command {
+                    AppleAppStoreAppCommand::List {
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        limit,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_apple_appstore_app_list(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, limit, home, settings_file, format, raw)?
+                    }
+                    AppleAppStoreAppCommand::Get {
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        app_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_apple_appstore_app_get(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, app_id, home, settings_file, format, raw)?
+                    }
+                    AppleAppStoreAppCommand::Create {
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        bundle_name,
+                        app_name,
+                        sku,
+                        primary_locale,
+                        skip_bundle_create,
+                        allow_partial,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_apple_appstore_app_create(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, bundle_name, app_name, sku, primary_locale, skip_bundle_create, allow_partial, home, settings_file, format)?
+                    }
+                },
+                AppleAppStoreCommand::Listing { command } => match command {
+                    AppleAppStoreListingCommand::Get {
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        version,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_apple_appstore_listing_get(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, version, home, settings_file, format)?
+                    }
+                    AppleAppStoreListingCommand::Update {
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        version,
+                        create_version,
+                        app_info_body,
+                        version_body,
+                        name,
+                        subtitle,
+                        privacy_policy_url,
+                        description,
+                        keywords,
+                        marketing_url,
+                        promotional_text,
+                        support_url,
+                        whats_new,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_apple_appstore_listing_update(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, version, create_version, app_info_body, version_body, name, subtitle, privacy_policy_url, description, keywords, marketing_url, promotional_text, support_url, whats_new, home, settings_file, format)?
+                    }
+                },
+                AppleAppStoreCommand::Raw {
+                    account,
+                    env,
+                    bundle_id,
+                    locale,
+                    platform,
+                    issuer_id,
+                    key_id,
+                    private_key,
+                    private_key_file,
+                    project_id,
+                    base_url,
+                    method,
+                    path,
+                    body,
+                    content_type,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_apple_appstore_raw(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, method, path, body, content_type, params, home, settings_file, format, raw)?
+                }
+                AppleAppStoreCommand::Apply {
+                    account,
+                    env,
+                    bundle_id,
+                    locale,
+                    platform,
+                    issuer_id,
+                    key_id,
+                    private_key,
+                    private_key_file,
+                    project_id,
+                    base_url,
+                    metadata_dir,
+                    version,
+                    create_version,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_apple_appstore_apply(account, env, bundle_id, locale, platform, issuer_id, key_id, private_key, private_key_file, project_id, base_url, metadata_dir, version, create_version, home, settings_file, format)?
+                }
             },
         },
         Command::Aws { command } => match command {
@@ -13229,6 +13715,1170 @@ fn show_apple_appstore_context_current(
         }
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_apple_appstore_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<AppleAppStoreRuntime> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_apple_appstore_runtime(
+        &settings.apple,
+        &env,
+        &AppleAppStoreAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            bundle_id: bundle_id.unwrap_or_default(),
+            locale: locale.unwrap_or_default(),
+            platform: platform.unwrap_or_default(),
+            issuer_id: issuer_id.unwrap_or_default(),
+            key_id: key_id.unwrap_or_default(),
+            private_key: private_key.unwrap_or_default(),
+            private_key_file: private_key_file.unwrap_or_default(),
+            project_id: project_id.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+fn print_apple_appstore_api_response(
+    response: &AppleAppStoreAPIResponse,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
+        OutputFormat::Text => {
+            println!("Status: {} {}", response.status_code, response.status);
+            if !response.request_id.trim().is_empty() {
+                println!("Request ID: {}", response.request_id);
+            }
+            if raw && !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            } else if let Some(data) = &response.data {
+                println!("{}", serde_json::to_string_pretty(data)?);
+            } else if !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn print_apple_json_value(value: &Value, format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Json | OutputFormat::Text => {
+            println!("{}", serde_json::to_string_pretty(value)?);
+        }
+    }
+    Ok(())
+}
+
+fn parse_apple_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            return Err(anyhow::anyhow!(
+                "invalid --param {raw:?} (expected key=value)"
+            ));
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(anyhow::anyhow!("apple appstore --param key cannot be empty"));
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
+fn parse_apple_body_argument(raw: Option<String>) -> Result<Option<String>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    if let Some(path) = raw.strip_prefix('@') {
+        return Ok(Some(fs::read_to_string(path.trim())?));
+    }
+    Ok(Some(raw.to_owned()))
+}
+
+fn parse_apple_json_body_argument(raw: Option<String>) -> Result<serde_json::Map<String, Value>> {
+    let Some(raw) = parse_apple_body_argument(raw)? else {
+        return Ok(serde_json::Map::new());
+    };
+    let value = serde_json::from_str::<Value>(&raw)
+        .map_err(|err| anyhow::anyhow!("invalid json body: {err}"))?;
+    let Value::Object(map) = value else {
+        return Err(anyhow::anyhow!("invalid json body: expected object"));
+    };
+    Ok(map)
+}
+
+fn apple_any_string(value: &Value) -> String {
+    match value {
+        Value::Null => String::new(),
+        Value::String(text) => text.clone(),
+        other => serde_json::to_string(other).unwrap_or_default(),
+    }
+}
+
+fn apple_first_data_object(response: &AppleAppStoreAPIResponse) -> Option<serde_json::Map<String, Value>> {
+    let Value::Object(root) = response.data.as_ref()? else {
+        return None;
+    };
+    match root.get("data") {
+        Some(Value::Object(obj)) => Some(obj.clone()),
+        Some(Value::Array(items)) => items.iter().find_map(|item| match item {
+            Value::Object(obj) => Some(obj.clone()),
+            _ => None,
+        }),
+        _ => None,
+    }
+}
+
+fn apple_find_app_by_bundle_id(
+    runtime: &AppleAppStoreRuntime,
+    bundle_id: &str,
+) -> Result<Option<serde_json::Map<String, Value>>> {
+    let mut params = BTreeMap::new();
+    params.insert("filter[bundleId]".to_owned(), bundle_id.trim().to_owned());
+    params.insert("limit".to_owned(), "1".to_owned());
+    let response = run_apple_appstore_api_request(
+        runtime,
+        "GET",
+        "/v1/apps",
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok(apple_first_data_object(&response))
+}
+
+fn apple_find_bundle_id_resource(
+    runtime: &AppleAppStoreRuntime,
+    identifier: &str,
+) -> Result<Option<serde_json::Map<String, Value>>> {
+    let mut params = BTreeMap::new();
+    params.insert("filter[identifier]".to_owned(), identifier.trim().to_owned());
+    params.insert("limit".to_owned(), "1".to_owned());
+    let response = run_apple_appstore_api_request(
+        runtime,
+        "GET",
+        "/v1/bundleIds",
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok(apple_first_data_object(&response))
+}
+
+fn apple_resolve_app_info_id(runtime: &AppleAppStoreRuntime, app_id: &str) -> Result<String> {
+    let mut params = BTreeMap::new();
+    params.insert("limit".to_owned(), "1".to_owned());
+    let response = run_apple_appstore_api_request(
+        runtime,
+        "GET",
+        &format!("/v1/apps/{app_id}/appInfos"),
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let Some(resource) = apple_first_data_object(&response) else {
+        return Err(anyhow::anyhow!("app info not found for app {app_id}"));
+    };
+    Ok(resource
+        .get("id")
+        .map(apple_any_string)
+        .unwrap_or_default()
+        .trim()
+        .to_owned())
+}
+
+fn apple_find_app_info_localization(
+    runtime: &AppleAppStoreRuntime,
+    app_info_id: &str,
+    locale: &str,
+) -> Result<Option<serde_json::Map<String, Value>>> {
+    let mut params = BTreeMap::new();
+    params.insert("filter[locale]".to_owned(), locale.trim().to_owned());
+    params.insert("limit".to_owned(), "1".to_owned());
+    let response = run_apple_appstore_api_request(
+        runtime,
+        "GET",
+        &format!("/v1/appInfos/{app_info_id}/appInfoLocalizations"),
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok(apple_first_data_object(&response))
+}
+
+fn apple_find_app_store_version_localization(
+    runtime: &AppleAppStoreRuntime,
+    version_id: &str,
+    locale: &str,
+) -> Result<Option<serde_json::Map<String, Value>>> {
+    let mut params = BTreeMap::new();
+    params.insert("filter[locale]".to_owned(), locale.trim().to_owned());
+    params.insert("limit".to_owned(), "1".to_owned());
+    let response = run_apple_appstore_api_request(
+        runtime,
+        "GET",
+        &format!("/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations"),
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    Ok(apple_first_data_object(&response))
+}
+
+fn apple_resolve_app_store_version_id(
+    runtime: &AppleAppStoreRuntime,
+    app_id: &str,
+    platform: &str,
+    version_string: &str,
+    create_if_missing: bool,
+) -> Result<String> {
+    let mut params = BTreeMap::new();
+    params.insert("limit".to_owned(), "1".to_owned());
+    params.insert("filter[platform]".to_owned(), platform.trim().to_owned());
+    if !version_string.trim().is_empty() {
+        params.insert(
+            "filter[versionString]".to_owned(),
+            version_string.trim().to_owned(),
+        );
+    }
+    let response = run_apple_appstore_api_request(
+        runtime,
+        "GET",
+        &format!("/v1/apps/{app_id}/appStoreVersions"),
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    if let Some(resource) = apple_first_data_object(&response) {
+        return Ok(resource
+            .get("id")
+            .map(apple_any_string)
+            .unwrap_or_default()
+            .trim()
+            .to_owned());
+    }
+    if !create_if_missing || version_string.trim().is_empty() {
+        if version_string.trim().is_empty() {
+            return Err(anyhow::anyhow!(
+                "app store version not found; provide --version and --create-version"
+            ));
+        }
+        return Err(anyhow::anyhow!(
+            "app store version {} not found (set --create-version to create)",
+            version_string.trim()
+        ));
+    }
+    let payload = serde_json::json!({
+        "data": {
+            "type": "appStoreVersions",
+            "attributes": {
+                "platform": platform.trim(),
+                "versionString": version_string.trim(),
+            },
+            "relationships": {
+                "app": {
+                    "data": {"type": "apps", "id": app_id}
+                }
+            }
+        }
+    });
+    let created = run_apple_appstore_api_request(
+        runtime,
+        "POST",
+        "/v1/appStoreVersions",
+        &BTreeMap::new(),
+        Some(payload),
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let Some(resource) = apple_first_data_object(&created) else {
+        return Err(anyhow::anyhow!("create app store version returned empty resource"));
+    };
+    Ok(resource
+        .get("id")
+        .map(apple_any_string)
+        .unwrap_or_default()
+        .trim()
+        .to_owned())
+}
+
+fn apple_apply_listing_mutation(
+    runtime: &AppleAppStoreRuntime,
+    bundle_id: &str,
+    locale: &str,
+    version_string: &str,
+    create_version: bool,
+    platform: &str,
+    app_info_attrs: serde_json::Map<String, Value>,
+    version_attrs: serde_json::Map<String, Value>,
+) -> Result<Value> {
+    let Some(app_resource) = apple_find_app_by_bundle_id(runtime, bundle_id)? else {
+        return Err(anyhow::anyhow!("app not found for bundle id {bundle_id}"));
+    };
+    let app_id = app_resource
+        .get("id")
+        .map(apple_any_string)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let mut summary = serde_json::Map::new();
+    summary.insert("bundle_id".to_owned(), Value::String(bundle_id.to_owned()));
+    summary.insert("app_id".to_owned(), Value::String(app_id.clone()));
+    summary.insert("locale".to_owned(), Value::String(locale.to_owned()));
+    summary.insert("version".to_owned(), Value::String(version_string.to_owned()));
+    summary.insert("app_info_updated".to_owned(), Value::Bool(false));
+    summary.insert("version_info_updated".to_owned(), Value::Bool(false));
+
+    if !app_info_attrs.is_empty() {
+        let app_info_id = apple_resolve_app_info_id(runtime, &app_id)?;
+        if let Some(localized) = apple_find_app_info_localization(runtime, &app_info_id, locale)? {
+            let loc_id = localized.get("id").map(apple_any_string).unwrap_or_default();
+            let payload = serde_json::json!({
+                "data": {
+                    "id": loc_id,
+                    "type": "appInfoLocalizations",
+                    "attributes": Value::Object(app_info_attrs.clone()),
+                }
+            });
+            run_apple_appstore_api_request(
+                runtime,
+                "PATCH",
+                &format!("/v1/appInfoLocalizations/{loc_id}"),
+                &BTreeMap::new(),
+                Some(payload),
+                None,
+                None,
+            )
+            .map_err(anyhow::Error::msg)?;
+        } else {
+            let mut attributes = app_info_attrs.clone();
+            attributes.insert("locale".to_owned(), Value::String(locale.to_owned()));
+            let payload = serde_json::json!({
+                "data": {
+                    "type": "appInfoLocalizations",
+                    "attributes": Value::Object(attributes),
+                    "relationships": {
+                        "appInfo": {"data": {"type": "appInfos", "id": app_info_id}}
+                    }
+                }
+            });
+            run_apple_appstore_api_request(
+                runtime,
+                "POST",
+                "/v1/appInfoLocalizations",
+                &BTreeMap::new(),
+                Some(payload),
+                None,
+                None,
+            )
+            .map_err(anyhow::Error::msg)?;
+        }
+        summary.insert("app_info_updated".to_owned(), Value::Bool(true));
+    }
+
+    if !version_attrs.is_empty() || !version_string.trim().is_empty() {
+        let version_id = apple_resolve_app_store_version_id(
+            runtime,
+            &app_id,
+            platform,
+            version_string,
+            create_version,
+        )?;
+        if !version_id.trim().is_empty() && !version_attrs.is_empty() {
+            if let Some(localized) =
+                apple_find_app_store_version_localization(runtime, &version_id, locale)?
+            {
+                let loc_id = localized.get("id").map(apple_any_string).unwrap_or_default();
+                let payload = serde_json::json!({
+                    "data": {
+                        "id": loc_id,
+                        "type": "appStoreVersionLocalizations",
+                        "attributes": Value::Object(version_attrs.clone()),
+                    }
+                });
+                run_apple_appstore_api_request(
+                    runtime,
+                    "PATCH",
+                    &format!("/v1/appStoreVersionLocalizations/{loc_id}"),
+                    &BTreeMap::new(),
+                    Some(payload),
+                    None,
+                    None,
+                )
+                .map_err(anyhow::Error::msg)?;
+            } else {
+                let mut attributes = version_attrs.clone();
+                attributes.insert("locale".to_owned(), Value::String(locale.to_owned()));
+                let payload = serde_json::json!({
+                    "data": {
+                        "type": "appStoreVersionLocalizations",
+                        "attributes": Value::Object(attributes),
+                        "relationships": {
+                            "appStoreVersion": {"data": {"type": "appStoreVersions", "id": version_id}}
+                        }
+                    }
+                });
+                run_apple_appstore_api_request(
+                    runtime,
+                    "POST",
+                    "/v1/appStoreVersionLocalizations",
+                    &BTreeMap::new(),
+                    Some(payload),
+                    None,
+                    None,
+                )
+                .map_err(anyhow::Error::msg)?;
+            }
+            summary.insert("version_info_updated".to_owned(), Value::Bool(true));
+            summary.insert("version_id".to_owned(), Value::String(version_id));
+        }
+    }
+
+    Ok(Value::Object(summary))
+}
+
+fn load_apple_appstore_metadata_bundle(
+    metadata_dir: &Path,
+) -> Result<(
+    BTreeMap<String, serde_json::Map<String, Value>>,
+    BTreeMap<String, serde_json::Map<String, Value>>,
+    Option<serde_json::Map<String, Value>>,
+)> {
+    let mut app_info = BTreeMap::new();
+    let mut version_info = BTreeMap::new();
+    let root = if metadata_dir.as_os_str().is_empty() {
+        PathBuf::from("appstore")
+    } else {
+        metadata_dir.to_path_buf()
+    };
+    if !root.exists() {
+        return Ok((app_info, version_info, None));
+    }
+    if !root.is_dir() {
+        return Err(anyhow::anyhow!(
+            "metadata dir is not a directory: {}",
+            root.display()
+        ));
+    }
+    for (folder, target) in [("app-info", &mut app_info), ("version", &mut version_info)] {
+        let dir_path = root.join(folder);
+        if !dir_path.is_dir() {
+            continue;
+        }
+        for entry in fs::read_dir(&dir_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            if path.extension().and_then(|ext| ext.to_str()).unwrap_or_default().to_ascii_lowercase()
+                != "json"
+            {
+                continue;
+            }
+            let raw = fs::read_to_string(&path)?;
+            let value = serde_json::from_str::<Value>(&raw)
+                .map_err(|err| anyhow::anyhow!("parse {}: {err}", path.display()))?;
+            let Value::Object(mut payload) = value else {
+                return Err(anyhow::anyhow!(
+                    "parse {}: expected object payload",
+                    path.display()
+                ));
+            };
+            let locale = payload
+                .remove("locale")
+                .as_ref()
+                .map(apple_any_string)
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| {
+                    path.file_stem()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or_default()
+                        .trim()
+                        .to_owned()
+                });
+            target.insert(locale, payload);
+        }
+    }
+    let version_meta = {
+        let path = root.join("version.json");
+        if path.is_file() {
+            let raw = fs::read_to_string(&path)?;
+            let value = serde_json::from_str::<Value>(&raw)
+                .map_err(|err| anyhow::anyhow!("parse {}: {err}", path.display()))?;
+            match value {
+                Value::Object(payload) => Some(payload),
+                _ => {
+                    return Err(anyhow::anyhow!(
+                        "parse {}: expected object payload",
+                        path.display()
+                    ));
+                }
+            }
+        } else {
+            None
+        }
+    };
+    Ok((app_info, version_info, version_meta))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_app_list(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    limit: usize,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("limit".to_owned(), limit.to_string());
+    }
+    if !runtime.bundle_id.trim().is_empty() {
+        params.insert("filter[bundleId]".to_owned(), runtime.bundle_id.clone());
+    }
+    let response = run_apple_appstore_api_request(
+        &runtime,
+        "GET",
+        "/v1/apps",
+        &params,
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_apple_appstore_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_app_get(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    app_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let resolved_app_id = if let Some(app_id) = app_id.filter(|value| !value.trim().is_empty()) {
+        app_id.trim().to_owned()
+    } else {
+        let bundle_id = runtime.bundle_id.trim();
+        if bundle_id.is_empty() {
+            return Err(anyhow::anyhow!("--app-id or --bundle-id is required"));
+        }
+        let Some(app) = apple_find_app_by_bundle_id(&runtime, bundle_id)? else {
+            return Err(anyhow::anyhow!("app not found for bundle id {bundle_id}"));
+        };
+        app.get("id").map(apple_any_string).unwrap_or_default()
+    };
+    let response = run_apple_appstore_api_request(
+        &runtime,
+        "GET",
+        &format!("/v1/apps/{}", resolved_app_id.trim()),
+        &BTreeMap::new(),
+        None,
+        None,
+        None,
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_apple_appstore_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_app_create(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    bundle_name: Option<String>,
+    app_name: Option<String>,
+    sku: Option<String>,
+    primary_locale: Option<String>,
+    skip_bundle_create: bool,
+    allow_partial: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let bundle_id = runtime.bundle_id.trim();
+    if bundle_id.is_empty() {
+        return Err(anyhow::anyhow!("--bundle-id is required"));
+    }
+    let platform = if runtime.platform.trim().is_empty() {
+        "IOS".to_owned()
+    } else {
+        runtime.platform.clone()
+    };
+    let mut bundle_resource = apple_find_bundle_id_resource(&runtime, bundle_id)?;
+    let mut bundle_created = false;
+    if bundle_resource.is_none() {
+        if skip_bundle_create {
+            return Err(anyhow::anyhow!(
+                "bundle id {bundle_id} not found and --skip-bundle-create is set"
+            ));
+        }
+        let payload = serde_json::json!({
+            "data": {
+                "type": "bundleIds",
+                "attributes": {
+                    "identifier": bundle_id,
+                    "name": bundle_name.as_deref().unwrap_or(bundle_id).trim(),
+                },
+                "relationships": {
+                    "platform": {"data": {"type": "bundleIdPlatforms", "id": platform}}
+                }
+            }
+        });
+        let response = run_apple_appstore_api_request(
+            &runtime,
+            "POST",
+            "/v1/bundleIds",
+            &BTreeMap::new(),
+            Some(payload),
+            None,
+            None,
+        )
+        .map_err(anyhow::Error::msg)?;
+        bundle_created = true;
+        bundle_resource = apple_first_data_object(&response);
+    }
+    let mut result = serde_json::json!({
+        "bundle_id": bundle_id,
+        "bundle_created": bundle_created,
+        "bundle_resource_id": "",
+        "app_created": false,
+        "app_id": "",
+    });
+    if let Some(resource) = &bundle_resource {
+        result["bundle_resource_id"] = Value::String(
+            resource.get("id").map(apple_any_string).unwrap_or_default(),
+        );
+    }
+    let app_resource = apple_find_app_by_bundle_id(&runtime, bundle_id)?;
+    if let Some(resource) = &app_resource {
+        result["app_id"] =
+            Value::String(resource.get("id").map(apple_any_string).unwrap_or_default());
+    }
+    if app_resource.is_none()
+        && app_name.as_deref().map(str::trim).filter(|value| !value.is_empty()).is_some()
+    {
+        let Some(sku) = sku.as_deref().map(str::trim).filter(|value| !value.is_empty()) else {
+            return Err(anyhow::anyhow!("--sku is required when --app-name is provided"));
+        };
+        let primary_locale = primary_locale
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| runtime.locale.clone());
+        let bundle_resource_id = result["bundle_resource_id"].as_str().unwrap_or_default();
+        if bundle_resource_id.trim().is_empty() {
+            return Err(anyhow::anyhow!(
+                "bundle resource id not resolved for {bundle_id}"
+            ));
+        }
+        let payload = serde_json::json!({
+            "data": {
+                "type": "apps",
+                "attributes": {
+                    "name": app_name.as_deref().unwrap_or_default().trim(),
+                    "sku": sku,
+                    "primaryLocale": primary_locale,
+                },
+                "relationships": {
+                    "bundleId": {"data": {"type": "bundleIds", "id": bundle_resource_id}}
+                }
+            }
+        });
+        match run_apple_appstore_api_request(
+            &runtime,
+            "POST",
+            "/v1/apps",
+            &BTreeMap::new(),
+            Some(payload),
+            None,
+            None,
+        ) {
+            Ok(response) => {
+                if let Some(created) = apple_first_data_object(&response) {
+                    result["app_created"] = Value::Bool(true);
+                    result["app_id"] =
+                        Value::String(created.get("id").map(apple_any_string).unwrap_or_default());
+                }
+            }
+            Err(err) if allow_partial => {
+                result["app_create_error"] = Value::String(err);
+            }
+            Err(err) => return Err(anyhow::Error::msg(err)),
+        }
+    }
+    print_apple_json_value(&result, format)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_listing_get(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    version: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let bundle_id = runtime.bundle_id.trim();
+    if bundle_id.is_empty() {
+        return Err(anyhow::anyhow!(
+            "bundle id is required (--bundle-id or configured default_bundle_id)"
+        ));
+    }
+    let locale = if runtime.locale.trim().is_empty() {
+        "en-US".to_owned()
+    } else {
+        runtime.locale.clone()
+    };
+    let Some(app_resource) = apple_find_app_by_bundle_id(&runtime, bundle_id)? else {
+        return Err(anyhow::anyhow!("app not found for bundle id {bundle_id}"));
+    };
+    let app_id = app_resource.get("id").map(apple_any_string).unwrap_or_default();
+    let app_info_id = apple_resolve_app_info_id(&runtime, &app_id)?;
+    let app_info_loc = apple_find_app_info_localization(&runtime, &app_info_id, &locale)?;
+    let version_loc = if let Some(version_string) =
+        version.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        let version_id = apple_resolve_app_store_version_id(
+            &runtime,
+            &app_id,
+            &runtime.platform,
+            version_string,
+            false,
+        )?;
+        if version_id.trim().is_empty() {
+            None
+        } else {
+            apple_find_app_store_version_localization(&runtime, &version_id, &locale)?
+        }
+    } else {
+        None
+    };
+    let payload = serde_json::json!({
+        "bundle_id": bundle_id,
+        "app_id": app_id,
+        "locale": locale,
+        "app_info_localization": app_info_loc,
+        "version_localization": version_loc,
+    });
+    print_apple_json_value(&payload, format)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_listing_update(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    version: Option<String>,
+    create_version: bool,
+    app_info_body: Option<String>,
+    version_body: Option<String>,
+    name: Option<String>,
+    subtitle: Option<String>,
+    privacy_policy_url: Option<String>,
+    description: Option<String>,
+    keywords: Option<String>,
+    marketing_url: Option<String>,
+    promotional_text: Option<String>,
+    support_url: Option<String>,
+    whats_new: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let bundle_id = runtime.bundle_id.trim();
+    if bundle_id.is_empty() {
+        return Err(anyhow::anyhow!(
+            "bundle id is required (--bundle-id or configured default_bundle_id)"
+        ));
+    }
+    let locale = if runtime.locale.trim().is_empty() {
+        "en-US".to_owned()
+    } else {
+        runtime.locale.clone()
+    };
+    let mut app_info_attrs = parse_apple_json_body_argument(app_info_body)?;
+    let mut version_attrs = parse_apple_json_body_argument(version_body)?;
+    if let Some(value) = name.filter(|value| !value.trim().is_empty()) {
+        app_info_attrs.insert("name".to_owned(), Value::String(value.trim().to_owned()));
+    }
+    if let Some(value) = subtitle.filter(|value| !value.trim().is_empty()) {
+        app_info_attrs.insert("subtitle".to_owned(), Value::String(value.trim().to_owned()));
+    }
+    if let Some(value) = privacy_policy_url.filter(|value| !value.trim().is_empty()) {
+        app_info_attrs.insert(
+            "privacyPolicyUrl".to_owned(),
+            Value::String(value.trim().to_owned()),
+        );
+    }
+    if let Some(value) = description.filter(|value| !value.trim().is_empty()) {
+        version_attrs.insert("description".to_owned(), Value::String(value.trim().to_owned()));
+    }
+    if let Some(value) = keywords.filter(|value| !value.trim().is_empty()) {
+        version_attrs.insert("keywords".to_owned(), Value::String(value.trim().to_owned()));
+    }
+    if let Some(value) = marketing_url.filter(|value| !value.trim().is_empty()) {
+        version_attrs.insert(
+            "marketingUrl".to_owned(),
+            Value::String(value.trim().to_owned()),
+        );
+    }
+    if let Some(value) = promotional_text.filter(|value| !value.trim().is_empty()) {
+        version_attrs.insert(
+            "promotionalText".to_owned(),
+            Value::String(value.trim().to_owned()),
+        );
+    }
+    if let Some(value) = support_url.filter(|value| !value.trim().is_empty()) {
+        version_attrs.insert("supportUrl".to_owned(), Value::String(value.trim().to_owned()));
+    }
+    if let Some(value) = whats_new.filter(|value| !value.trim().is_empty()) {
+        version_attrs.insert("whatsNew".to_owned(), Value::String(value.trim().to_owned()));
+    }
+    if app_info_attrs.is_empty() && version_attrs.is_empty() {
+        return Err(anyhow::anyhow!("no listing fields provided"));
+    }
+    let summary = apple_apply_listing_mutation(
+        &runtime,
+        bundle_id,
+        &locale,
+        version.as_deref().unwrap_or_default().trim(),
+        create_version,
+        &runtime.platform,
+        app_info_attrs,
+        version_attrs,
+    )?;
+    print_apple_json_value(&summary, format)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_raw(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    method: String,
+    path: Option<String>,
+    body: Option<String>,
+    content_type: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let path = path
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::anyhow!("apple appstore raw path is required"))?;
+    let response = run_apple_appstore_api_request(
+        &runtime,
+        &method,
+        &path,
+        &parse_apple_params(params)?,
+        None,
+        parse_apple_body_argument(body)?,
+        content_type.as_deref(),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_apple_appstore_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_apple_appstore_apply(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    metadata_dir: PathBuf,
+    version: Option<String>,
+    mut create_version: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let bundle_id = runtime.bundle_id.trim();
+    if bundle_id.is_empty() {
+        return Err(anyhow::anyhow!(
+            "bundle id is required (--bundle-id or configured default_bundle_id)"
+        ));
+    }
+    let (app_info_by_locale, version_by_locale, version_meta) =
+        load_apple_appstore_metadata_bundle(&metadata_dir)?;
+    if app_info_by_locale.is_empty() && version_by_locale.is_empty() {
+        return Err(anyhow::anyhow!(
+            "no listing metadata found in {}",
+            metadata_dir.display()
+        ));
+    }
+    let mut version_string = version.unwrap_or_default();
+    if version_string.trim().is_empty() {
+        if let Some(meta) = &version_meta {
+            if let Some(value) = meta.get("version") {
+                version_string = apple_any_string(value);
+            }
+        }
+    }
+    if !create_version {
+        if let Some(meta) = &version_meta {
+            create_version = meta
+                .get("create_version")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+        }
+    }
+    let mut locales = BTreeMap::new();
+    for locale in app_info_by_locale.keys() {
+        locales.insert(locale.clone(), ());
+    }
+    for locale in version_by_locale.keys() {
+        locales.insert(locale.clone(), ());
+    }
+    let mut results = Vec::new();
+    let mut app_info_updated = 0_i64;
+    let mut version_info_updated = 0_i64;
+    for locale in locales.keys() {
+        let result = apple_apply_listing_mutation(
+            &runtime,
+            bundle_id,
+            locale,
+            version_string.trim(),
+            create_version,
+            &runtime.platform,
+            app_info_by_locale.get(locale).cloned().unwrap_or_default(),
+            version_by_locale.get(locale).cloned().unwrap_or_default(),
+        )?;
+        if result
+            .get("app_info_updated")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            app_info_updated += 1;
+        }
+        if result
+            .get("version_info_updated")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+        {
+            version_info_updated += 1;
+        }
+        results.push(result);
+    }
+    let summary = serde_json::json!({
+        "bundle_id": bundle_id,
+        "version": version_string.trim(),
+        "locales_applied": results.len(),
+        "app_info_updated": app_info_updated,
+        "version_info_updated": version_info_updated,
+        "results": results,
+    });
+    print_apple_json_value(&summary, format)
 }
 
 fn show_aws_context_list(

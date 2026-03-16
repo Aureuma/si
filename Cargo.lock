@@ -1767,8 +1767,12 @@ dependencies = [
 name = "si-rs-provider-apple"
 version = "0.54.0"
 dependencies = [
+ "jsonwebtoken",
+ "reqwest",
  "serde",
+ "serde_json",
  "si-rs-config",
+ "url",
 ]
 
 [[package]]
