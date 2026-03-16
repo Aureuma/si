@@ -14,6 +14,13 @@ import (
 )
 
 func cmdGithubWorkflow(args []string) {
+	delegated, err := runGitHubWorkflowCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github workflow <list|run|runs|logs|watch> ...")
 	if !routedOK {
 		return
@@ -36,6 +43,13 @@ func cmdGithubWorkflow(args []string) {
 }
 
 func cmdGithubWorkflowList(args []string) {
+	delegated, err := runGitHubWorkflowListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github workflow list", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -145,6 +159,13 @@ func cmdGithubWorkflowRun(args []string) {
 }
 
 func cmdGithubWorkflowRuns(args []string) {
+	delegated, err := runGitHubWorkflowRunsCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github workflow runs", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -207,6 +228,15 @@ func cmdGithubWorkflowRunRerun(args []string) {
 }
 
 func cmdGithubWorkflowRunAction(args []string, action string) {
+	if action == "get" {
+		delegated, err := runGitHubWorkflowRunGetCommand(args)
+		if err != nil {
+			fatal(err)
+		}
+		if delegated {
+			return
+		}
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github workflow run action", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
