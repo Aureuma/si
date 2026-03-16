@@ -1182,6 +1182,13 @@ func cmdOpenAIProjectServiceAccount(args []string) {
 }
 
 func cmdOpenAIProjectServiceAccountList(args []string) {
+	delegated, err := runOpenAIProjectServiceAccountListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai project service-account list", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
@@ -1246,6 +1253,13 @@ func cmdOpenAIProjectServiceAccountCreate(args []string) {
 }
 
 func cmdOpenAIProjectServiceAccountGet(args []string) {
+	delegated, err := runOpenAIProjectServiceAccountGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai project service-account get", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)

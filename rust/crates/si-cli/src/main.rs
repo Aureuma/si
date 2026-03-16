@@ -73,8 +73,11 @@ use si_rs_provider_openai::{
     OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
     OpenAICurrentContext, OpenAIRuntime, get_model as openai_get_model,
     get_project as openai_get_project, get_project_api_key as openai_get_project_api_key,
+    get_project_service_account as openai_get_project_service_account,
     list_contexts as list_openai_contexts, list_models as openai_list_models,
-    list_project_api_keys as openai_list_project_api_keys, list_projects as openai_list_projects,
+    list_project_api_keys as openai_list_project_api_keys,
+    list_project_service_accounts as openai_list_project_service_accounts,
+    list_projects as openai_list_projects,
     render_api_response_text as render_openai_api_response_text,
     render_auth_status_text as render_openai_auth_status_text,
     render_context_list_text as render_openai_context_list_text,
@@ -727,6 +730,10 @@ enum OpenAIProjectCommand {
         #[command(subcommand)]
         command: OpenAIProjectAPIKeyCommand,
     },
+    ServiceAccount {
+        #[command(subcommand)]
+        command: OpenAIProjectServiceAccountCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -761,6 +768,61 @@ enum OpenAIProjectAPIKeyCommand {
         key_ref: Option<String>,
         #[arg(long)]
         key_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIProjectServiceAccountCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        service_account_ref: Option<String>,
+        #[arg(long)]
+        service_account_id: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -3141,6 +3203,61 @@ fn main() -> Result<()> {
                         raw,
                     )?,
                 },
+                OpenAIProjectCommand::ServiceAccount { command } => match command {
+                    OpenAIProjectServiceAccountCommand::List {
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        limit,
+                        after,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_openai_project_service_account_list(
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        limit,
+                        after,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    OpenAIProjectServiceAccountCommand::Get {
+                        service_account_ref,
+                        service_account_id,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_openai_project_service_account_get(
+                        service_account_id.or(service_account_ref),
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                },
             },
         },
         Command::Oci { command } => match command {
@@ -5151,6 +5268,82 @@ fn run_openai_project_api_key_get(
         home,
         settings_file,
         |runtime| openai_get_project_api_key(&runtime, &project_id, &key_id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_service_account_list(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    limit: Option<usize>,
+    after: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let project_id = project_id.unwrap_or_default();
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        Some(project_id.clone()),
+        home,
+        settings_file,
+        |runtime| {
+            openai_list_project_service_accounts(
+                &runtime,
+                &project_id,
+                limit,
+                after.as_deref().unwrap_or_default(),
+            )
+        },
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_service_account_get(
+    service_account_id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let project_id = project_id.unwrap_or_default();
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let service_account_id = service_account_id.unwrap_or_default();
+    if service_account_id.trim().is_empty() {
+        anyhow::bail!("service account id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        Some(project_id.clone()),
+        home,
+        settings_file,
+        |runtime| openai_get_project_service_account(&runtime, &project_id, &service_account_id),
     )?;
     print_openai_api_response(response, json, raw)
 }
