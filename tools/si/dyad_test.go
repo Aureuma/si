@@ -1122,6 +1122,134 @@ func TestDyadDelegatedLifecycleSmoke(t *testing.T) {
 	}
 }
 
+func TestDyadDelegatedFullLifecycleSmoke(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '--' >>" + shellSingleQuote(argsPath) + "\ncase \"$2\" in\n  spawn-plan)\n    printf '%s\\n' '{\"name\":\"alpha\",\"role\":\"research\",\"workspace_host\":\"/tmp/workspace\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"/tmp/workspace\",\"configs_host\":\"/tmp/configs\",\"codex_volume\":\"codex-alpha-rust\",\"skills_volume\":\"skills-alpha-rust\",\"network_name\":\"si-alpha-rust\",\"forward_ports\":\"1555-1556\",\"docker_socket\":true,\"actor\":{\"name\":\"si-dyad-alpha-actor\",\"image\":\"actor-alpha-rust\"},\"critic\":{\"name\":\"si-dyad-alpha-critic\",\"image\":\"critic-alpha-rust\"}}'\n    ;;\n  spawn-start)\n    ;;\n  status)\n    printf '%s\\n' '{\"dyad\":\"alpha\",\"found\":true,\"actor\":{\"name\":\"si-dyad-alpha-actor\",\"status\":\"running\"},\"critic\":{\"name\":\"si-dyad-alpha-critic\",\"status\":\"running\"}}'\n    ;;\n  logs)\n    printf '%s\\n' '{\"dyad\":\"alpha\",\"member\":\"actor\",\"tail\":25,\"logs\":\"actor logs\\n\"}'\n    ;;\n  stop)\n    printf '%s\\n' 'stopped'\n    ;;\n  start)\n    printf '%s\\n' 'started'\n    ;;\n  remove)\n    printf '%s\\n' 'removed'\n    ;;\n  *)\n    printf 'unexpected command: %s\\n' \"$2\" >&2\n    exit 1\n    ;;\nesac\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prevClient := newDyadClientFn
+	prevLookup := dyadContainerByNameFn
+	prevEnsure := ensureDyadFn
+	prevMaybeStart := maybeStartRustDyadSpawnFn
+	prevEnsureHome := ensureDyadContainerSiHomeOwnershipFn
+	prevSeedProfile := seedDyadProfileAuthFn
+	prevHostGit := hostGitIdentityFn
+	prevSeedGit := seedGitIdentityFn
+	t.Cleanup(func() {
+		newDyadClientFn = prevClient
+		dyadContainerByNameFn = prevLookup
+		ensureDyadFn = prevEnsure
+		maybeStartRustDyadSpawnFn = prevMaybeStart
+		ensureDyadContainerSiHomeOwnershipFn = prevEnsureHome
+		seedDyadProfileAuthFn = prevSeedProfile
+		hostGitIdentityFn = prevHostGit
+		seedGitIdentityFn = prevSeedGit
+	})
+
+	newDyadClientFn = func() (*shared.Client, error) {
+		return &shared.Client{}, nil
+	}
+	spawnStarted := false
+	maybeStartRustDyadSpawnFn = func(request rustDyadSpawnPlanRequest) (bool, error) {
+		spawnStarted = true
+		return maybeStartRustDyadSpawn(request)
+	}
+	dyadContainerByNameFn = func(client *shared.Client, ctx context.Context, name string) (string, *types.ContainerJSON, error) {
+		if !spawnStarted {
+			return "", nil, nil
+		}
+		switch name {
+		case "si-dyad-alpha-actor":
+			return "actor-id", nil, nil
+		case "si-dyad-alpha-critic":
+			return "critic-id", nil, nil
+		default:
+			return "", nil, nil
+		}
+	}
+	ensureDyadFn = func(client *shared.Client, ctx context.Context, opts shared.DyadOptions) (string, string, error) {
+		t.Fatalf("did not expect Go EnsureDyad fallback")
+		return "", "", nil
+	}
+	var ownership []string
+	ensureDyadContainerSiHomeOwnershipFn = func(ctx context.Context, client *shared.Client, containerID string) {
+		ownership = append(ownership, containerID)
+	}
+	seedDyadProfileAuthFn = func(context.Context, *shared.Client, string, codexProfile) {
+		t.Fatalf("did not expect profile auth seeding without profile")
+	}
+	hostGitIdentityFn = func() (gitIdentity, bool) { return gitIdentity{}, false }
+	seedGitIdentityFn = func(context.Context, *shared.Client, string, string, string, gitIdentity) {}
+
+	spawnOutput := captureOutputForTest(t, func() {
+		cmdDyadSpawn([]string{"alpha", "--skip-auth"})
+	})
+	if !strings.Contains(spawnOutput, "dyad alpha ready (role=research)") {
+		t.Fatalf("unexpected spawn output: %q", spawnOutput)
+	}
+	if strings.Join(ownership, "\n") != "actor-id\ncritic-id" {
+		t.Fatalf("unexpected ownership calls: %v", ownership)
+	}
+
+	statusOutput := captureOutputForTest(t, func() {
+		cmdDyadStatus([]string{"--json", "alpha"})
+	})
+	if !strings.Contains(statusOutput, "\"dyad\":\"alpha\"") {
+		t.Fatalf("unexpected status output: %q", statusOutput)
+	}
+	logsOutput := captureOutputForTest(t, func() {
+		cmdDyadLogs([]string{"--json", "--member", "actor", "--tail", "25", "alpha"})
+	})
+	if !strings.Contains(logsOutput, "\"logs\":\"actor logs\\n\"") {
+		t.Fatalf("unexpected logs output: %q", logsOutput)
+	}
+	stopOutput := captureOutputForTest(t, func() {
+		cmdDyadStop([]string{"alpha"})
+	})
+	if !strings.Contains(stopOutput, "dyad alpha stopped") {
+		t.Fatalf("unexpected stop output: %q", stopOutput)
+	}
+	startOutput := captureOutputForTest(t, func() {
+		cmdDyadStart([]string{"alpha"})
+	})
+	if !strings.Contains(startOutput, "dyad alpha started") {
+		t.Fatalf("unexpected start output: %q", startOutput)
+	}
+	removeOutput := captureOutputForTest(t, func() {
+		cmdDyadRemove([]string{"alpha"})
+	})
+	if !strings.Contains(removeOutput, "dyad alpha removed") {
+		t.Fatalf("unexpected remove output: %q", removeOutput)
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := string(argsData)
+	for _, expected := range []string{
+		"dyad\nspawn-start\n--name\nalpha",
+		"dyad\nstatus\nalpha\n--format\njson",
+		"dyad\nlogs\nalpha\n--member\nactor\n--tail\n25\n--format\njson",
+		"dyad\nstop\nalpha",
+		"dyad\nstart\nalpha",
+		"dyad\nremove\nalpha",
+	} {
+		if !strings.Contains(argsText, expected) {
+			t.Fatalf("expected delegated args %q in %q", expected, argsText)
+		}
+	}
+}
+
 func TestCmdDyadPeekDelegatesPlanToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

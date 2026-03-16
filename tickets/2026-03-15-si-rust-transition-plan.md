@@ -91,7 +91,7 @@ Planned follow-on crates:
 | 3. Read-only command migration | in_progress | safe informational surfaces start moving to Rust | `version`, `help`, `providers health`, config inspection, diagnostics | CLI snapshots, golden stdout/exit code parity, smoke tests in CI |
 | 4. Runtime substrate migration | in_progress | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
 | 5. Security/runtime migration | in_progress | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
-| 6. Codex/dyad lifecycle migration | in_progress | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
+| 6. Codex/dyad lifecycle migration | completed | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
 | 7. Provider migration | planned | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
 | 8. Release/install migration | planned | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
 | 9. Primary binary cutover | planned | Rust binary becomes default `si` | Go compatibility shell, packaging switch, release notes, rollback plan | full CI green, release candidate soak, Homebrew/npm/manual install verification |
@@ -305,7 +305,7 @@ Progress notes:
 
 ### Phase 6: Codex/dyad lifecycle migration
 
-Status: in_progress
+Status: completed
 
 Implementation:
 
@@ -384,6 +384,7 @@ Progress notes:
 - completed: the shipping Go `dyad recreate` command now has a direct command-level proof that it preserves the delegated teardown path and then re-enters the live spawn flow with the parsed CLI args intact
 - completed: the shipping Go `run --tmux` path now has a direct command-level proof that parsed container selection reaches the attached tmux execution boundary before the interactive attach/runtime tail begins
 - completed: the shipping Go codex command layer now has a delegated multi-profile spawn/remove/respawn matrix, so profile-specific Rust rewrite behavior is exercised across more than one profile instead of only in single-profile happy paths
+- completed: the shipping Go dyad command layer now has a delegated full-lifecycle smoke that starts with Rust `spawn-start` and then runs through `status`, `logs`, `stop`, `start`, and `remove`, satisfying the Phase 6 exit criterion that at least one lifecycle is replaceable end to end through the Rust runtime boundary
 
 ### Phase 7: Provider migration
 
