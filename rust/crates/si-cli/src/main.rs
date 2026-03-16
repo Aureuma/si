@@ -119,7 +119,10 @@ use si_rs_provider_google::{
     resolve_places_auth_status, resolve_places_current_context,
 };
 use si_rs_provider_oci::{
-    OCIAuthOverrides, OCIAuthStatus, OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
+    OCIAPIRequest, OCIAPIResponse, OCIAPIService, OCIAuthOverrides, OCIAuthStatus,
+    OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
+    build_oracular_cloud_init_user_data as build_oci_oracular_cloud_init_user_data,
+    execute_api_request as execute_oci_api_request,
     list_contexts as list_oci_contexts, render_context_list_text as render_oci_context_list_text,
     resolve_auth_status as resolve_oci_auth_status,
     resolve_current_context as resolve_oci_current_context,
@@ -1569,6 +1572,18 @@ enum OciCommand {
         #[command(subcommand)]
         command: OciContextCommand,
     },
+    Identity {
+        #[command(subcommand)]
+        command: OciIdentityCommand,
+    },
+    Network {
+        #[command(subcommand)]
+        command: OciNetworkCommand,
+    },
+    Compute {
+        #[command(subcommand)]
+        command: OciComputeCommand,
+    },
     Oracular {
         #[command(subcommand)]
         command: OciOracularCommand,
@@ -1605,6 +1620,14 @@ enum OciAuthCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciOracularCommand {
+    CloudInit {
+        #[arg(long, default_value_t = 7129)]
+        ssh_port: u16,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Tenancy {
         #[arg(long)]
         profile: Option<String>,
@@ -1616,6 +1639,432 @@ enum OciOracularCommand {
         settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciIdentityCommand {
+    AvailabilityDomains {
+        #[command(subcommand)]
+        command: OciIdentityAvailabilityDomainsCommand,
+    },
+    Compartment {
+        #[command(subcommand)]
+        command: OciIdentityCompartmentCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciIdentityAvailabilityDomainsCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        tenancy: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciIdentityCompartmentCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        parent: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciNetworkCommand {
+    Vcn {
+        #[command(subcommand)]
+        command: OciNetworkVCNCommand,
+    },
+    InternetGateway {
+        #[command(subcommand)]
+        command: OciNetworkInternetGatewayCommand,
+    },
+    RouteTable {
+        #[command(subcommand)]
+        command: OciNetworkRouteTableCommand,
+    },
+    SecurityList {
+        #[command(subcommand)]
+        command: OciNetworkSecurityListCommand,
+    },
+    Subnet {
+        #[command(subcommand)]
+        command: OciNetworkSubnetCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciNetworkVCNCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long, default_value = "10.0.0.0/16")]
+        cidr: String,
+        #[arg(long, default_value = "oracular-vcn")]
+        display_name: String,
+        #[arg(long, default_value = "oracularvcn")]
+        dns_label: String,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciNetworkInternetGatewayCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long, default_value = "oracular-igw")]
+        display_name: String,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        enabled: bool,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciNetworkRouteTableCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long)]
+        target: Option<String>,
+        #[arg(long, default_value = "oracular-rt")]
+        display_name: String,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciNetworkSecurityListCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long, default_value_t = 22)]
+        ssh_port: u16,
+        #[arg(long, default_value = "oracular-sec")]
+        display_name: String,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciNetworkSubnetCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        vcn_id: Option<String>,
+        #[arg(long)]
+        route_table_id: Option<String>,
+        #[arg(long)]
+        security_list_id: Option<String>,
+        #[arg(long)]
+        dhcp_options_id: Option<String>,
+        #[arg(long, default_value = "10.0.1.0/24")]
+        cidr: String,
+        #[arg(long, default_value = "oracular-subnet")]
+        display_name: String,
+        #[arg(long, default_value = "oracularsub")]
+        dns_label: String,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        public_ip: bool,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciComputeCommand {
+    AvailabilityDomains {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        tenancy: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Image {
+        #[command(subcommand)]
+        command: OciComputeImageCommand,
+    },
+    Instance {
+        #[command(subcommand)]
+        command: OciComputeInstanceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciComputeImageCommand {
+    LatestUbuntu {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        tenancy: Option<String>,
+        #[arg(long, default_value = "VM.Standard.A1.Flex")]
+        shape: String,
+        #[arg(long, default_value = "24.04")]
+        os_version: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciComputeInstanceCommand {
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long)]
+        compartment: Option<String>,
+        #[arg(long)]
+        ad: Option<String>,
+        #[arg(long)]
+        subnet_id: Option<String>,
+        #[arg(long, default_value = "oracular-vps")]
+        display_name: String,
+        #[arg(long, default_value = "VM.Standard.A1.Flex")]
+        shape: String,
+        #[arg(long, default_value_t = 4)]
+        ocpus: u16,
+        #[arg(long, default_value_t = 20)]
+        memory_gb: u16,
+        #[arg(long)]
+        image_id: Option<String>,
+        #[arg(long, default_value_t = 150)]
+        boot_volume_gb: u16,
+        #[arg(long)]
+        ssh_public_key: Option<String>,
+        #[arg(long)]
+        user_data_b64: Option<String>,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        assign_public_ip: bool,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -5103,6 +5552,12 @@ struct OCIOracularTenancyPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct OCIOracularCloudInitPayload {
+    ssh_port: u16,
+    user_data_b64: String,
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -6722,6 +7177,10 @@ fn main() -> Result<()> {
                 }
             },
             OciCommand::Oracular { command } => match command {
+                OciOracularCommand::CloudInit { ssh_port, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_oci_oracular_cloud_init(ssh_port, format)?
+                }
                 OciOracularCommand::Tenancy {
                     profile,
                     config_file,
@@ -6733,6 +7192,402 @@ fn main() -> Result<()> {
                     let format = if json { OutputFormat::Json } else { format };
                     show_oci_oracular_tenancy(profile, config_file, home, settings_file, format)?
                 }
+            },
+            OciCommand::Identity { command } => match command {
+                OciIdentityCommand::AvailabilityDomains { command } => match command {
+                    OciIdentityAvailabilityDomainsCommand::List {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        tenancy,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_identity_availability_domains_list(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            tenancy,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                OciIdentityCommand::Compartment { command } => match command {
+                    OciIdentityCompartmentCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        parent,
+                        name,
+                        description,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_identity_compartment_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            parent,
+                            name,
+                            description,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+            },
+            OciCommand::Network { command } => match command {
+                OciNetworkCommand::Vcn { command } => match command {
+                    OciNetworkVCNCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        cidr,
+                        display_name,
+                        dns_label,
+                        json_body,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_vcn_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            cidr,
+                            display_name,
+                            dns_label,
+                            json_body,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                OciNetworkCommand::InternetGateway { command } => match command {
+                    OciNetworkInternetGatewayCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        display_name,
+                        enabled,
+                        json_body,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_internet_gateway_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            display_name,
+                            enabled,
+                            json_body,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                OciNetworkCommand::RouteTable { command } => match command {
+                    OciNetworkRouteTableCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        target,
+                        display_name,
+                        json_body,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_route_table_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            target,
+                            display_name,
+                            json_body,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                OciNetworkCommand::SecurityList { command } => match command {
+                    OciNetworkSecurityListCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        ssh_port,
+                        display_name,
+                        json_body,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_security_list_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            ssh_port,
+                            display_name,
+                            json_body,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                OciNetworkCommand::Subnet { command } => match command {
+                    OciNetworkSubnetCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        vcn_id,
+                        route_table_id,
+                        security_list_id,
+                        dhcp_options_id,
+                        cidr,
+                        display_name,
+                        dns_label,
+                        public_ip,
+                        json_body,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_network_subnet_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            vcn_id,
+                            route_table_id,
+                            security_list_id,
+                            dhcp_options_id,
+                            cidr,
+                            display_name,
+                            dns_label,
+                            public_ip,
+                            json_body,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+            },
+            OciCommand::Compute { command } => match command {
+                OciComputeCommand::AvailabilityDomains {
+                    account,
+                    profile,
+                    config_file,
+                    region,
+                    base_url,
+                    auth,
+                    tenancy,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_oci_identity_availability_domains_list(
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        tenancy,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                OciComputeCommand::Image { command } => match command {
+                    OciComputeImageCommand::LatestUbuntu {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        tenancy,
+                        shape,
+                        os_version,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_compute_image_latest_ubuntu(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            tenancy,
+                            shape,
+                            os_version,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                OciComputeCommand::Instance { command } => match command {
+                    OciComputeInstanceCommand::Create {
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        compartment,
+                        ad,
+                        subnet_id,
+                        display_name,
+                        shape,
+                        ocpus,
+                        memory_gb,
+                        image_id,
+                        boot_volume_gb,
+                        ssh_public_key,
+                        user_data_b64,
+                        assign_public_ip,
+                        json_body,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_oci_compute_instance_create(
+                            account,
+                            profile,
+                            config_file,
+                            region,
+                            base_url,
+                            auth,
+                            compartment,
+                            ad,
+                            subnet_id,
+                            display_name,
+                            shape,
+                            ocpus,
+                            memory_gb,
+                            image_id,
+                            boot_volume_gb,
+                            ssh_public_key,
+                            user_data_b64,
+                            assign_public_ip,
+                            json_body,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
             },
             OciCommand::Context { command } => match command {
                 OciContextCommand::List { home, settings_file, json, format } => {
@@ -11896,6 +12751,16 @@ fn show_oci_oracular_tenancy(
     Ok(())
 }
 
+fn show_oci_oracular_cloud_init(ssh_port: u16, format: OutputFormat) -> Result<()> {
+    let user_data_b64 = build_oci_oracular_cloud_init_user_data(ssh_port).map_err(anyhow::Error::msg)?;
+    let payload = OCIOracularCloudInitPayload { ssh_port, user_data_b64 };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", payload.user_data_b64),
+    }
+    Ok(())
+}
+
 fn show_oci_context_list(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
@@ -11964,6 +12829,661 @@ fn show_oci_context_current(
         }
     }
     Ok(())
+}
+
+fn print_oci_api_response(payload: &OCIAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
+    fn oci_value_string(value: &Value) -> String {
+        match value {
+            Value::Null => String::new(),
+            Value::Bool(value) => value.to_string(),
+            Value::Number(value) => value.to_string(),
+            Value::String(value) => value.clone(),
+            _ => serde_json::to_string(value).unwrap_or_default(),
+        }
+    }
+
+    if raw {
+        println!("{}", payload.body);
+        return Ok(());
+    }
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(payload)?),
+        OutputFormat::Text => {
+            println!("Status: {} {}", payload.status_code, payload.status);
+            if !payload.request_id.trim().is_empty() {
+                println!("Request ID: {}", payload.request_id.trim());
+            }
+            if let Some(list) = &payload.list {
+                println!("Items: {}", list.len());
+                for item in list.iter().take(20) {
+                    let id = item
+                        .get("id")
+                        .or_else(|| item.get("name"))
+                        .map(oci_value_string)
+                        .unwrap_or_else(|| "-".to_owned());
+                    let display = item
+                        .get("displayName")
+                        .or_else(|| item.get("name"))
+                        .map(oci_value_string)
+                        .unwrap_or_else(|| "-".to_owned());
+                    println!("  {}  {}", id, display);
+                }
+                if list.len() > 20 {
+                    println!("  ... {} more", list.len() - 20);
+                }
+            } else if let Some(data) = &payload.data {
+                println!("{}", serde_json::to_string_pretty(data)?);
+            } else if !payload.body.trim().is_empty() {
+                println!("{}", payload.body.trim());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_oci_api_command(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: OCIAPIRequest,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = execute_oci_api_request(
+        &settings.oci,
+        &env,
+        &OCIAuthOverrides {
+            account: account.unwrap_or_default(),
+            profile: profile.unwrap_or_default(),
+            config_file: config_file.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            auth_style: auth.unwrap_or_default(),
+        },
+        &request,
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_oci_api_response(&payload, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_oci_default_tenancy(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<String> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = resolve_oci_auth_status(
+        &settings.oci,
+        &env,
+        &OCIAuthOverrides {
+            account: account.unwrap_or_default(),
+            profile: profile.unwrap_or_default(),
+            config_file: config_file.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            auth_style: auth.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    if payload.tenancy_ocid.trim().is_empty() {
+        Err(anyhow::anyhow!("tenancy ocid is required"))
+    } else {
+        Ok(payload.tenancy_ocid)
+    }
+}
+
+fn parse_oci_json_object_override(raw: Option<String>, fallback: Value) -> Result<Value> {
+    if let Some(raw) = raw {
+        return serde_json::from_str(raw.trim()).map_err(anyhow::Error::from);
+    }
+    Ok(fallback)
+}
+
+fn maybe_absolute_oci_identity_path(base_url: &Option<String>, path: &str) -> String {
+    if let Some(base_url) = base_url {
+        let trimmed = base_url.trim().trim_end_matches('/');
+        if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+            return format!("{trimmed}{path}");
+        }
+    }
+    path.to_owned()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_identity_availability_domains_list(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    tenancy: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment_id = tenancy.unwrap_or_default();
+    let compartment_id = if compartment_id.trim().is_empty() {
+        resolve_oci_default_tenancy(
+            account.clone(),
+            profile.clone(),
+            config_file.clone(),
+            region.clone(),
+            base_url.clone(),
+            auth.clone(),
+            home.clone(),
+            settings_file.clone(),
+        )?
+    } else {
+        compartment_id
+    };
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url.clone(),
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            path: maybe_absolute_oci_identity_path(&base_url, "/20160918/availabilityDomains"),
+            params: std::collections::BTreeMap::from([("compartmentId".to_owned(), compartment_id)]),
+            service: OCIAPIService::Identity,
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_identity_compartment_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    parent: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let parent = parent.ok_or_else(|| anyhow::anyhow!("parent compartment ocid is required"))?;
+    let name = name.ok_or_else(|| anyhow::anyhow!("compartment name is required"))?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url.clone(),
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: maybe_absolute_oci_identity_path(&base_url, "/20160918/compartments"),
+            json_body: Some(serde_json::json!({
+                "compartmentId": parent,
+                "name": name,
+                "description": description.unwrap_or_else(|| "Managed by si".to_owned()),
+            })),
+            service: OCIAPIService::Identity,
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_vcn_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    cidr: String,
+    display_name: String,
+    dns_label: String,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let body = parse_oci_json_object_override(
+        json_body,
+        serde_json::json!({
+            "cidrBlocks": [cidr],
+            "compartmentId": compartment,
+            "displayName": display_name,
+            "dnsLabel": dns_label,
+        }),
+    )?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: "/20160918/vcns".to_owned(),
+            json_body: Some(body),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_internet_gateway_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    display_name: String,
+    enabled: bool,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let vcn_id = vcn_id.ok_or_else(|| anyhow::anyhow!("vcn id is required"))?;
+    let body = parse_oci_json_object_override(
+        json_body,
+        serde_json::json!({
+            "compartmentId": compartment,
+            "vcnId": vcn_id,
+            "displayName": display_name,
+            "isEnabled": enabled,
+        }),
+    )?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: "/20160918/internetGateways".to_owned(),
+            json_body: Some(body),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_route_table_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    target: Option<String>,
+    display_name: String,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let vcn_id = vcn_id.ok_or_else(|| anyhow::anyhow!("vcn id is required"))?;
+    let target = target.ok_or_else(|| anyhow::anyhow!("target network entity id is required"))?;
+    let body = parse_oci_json_object_override(
+        json_body,
+        serde_json::json!({
+            "compartmentId": compartment,
+            "vcnId": vcn_id,
+            "displayName": display_name,
+            "routeRules": [{
+                "destination": "0.0.0.0/0",
+                "destinationType": "CIDR_BLOCK",
+                "networkEntityId": target,
+            }],
+        }),
+    )?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: "/20160918/routeTables".to_owned(),
+            json_body: Some(body),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_security_list_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    ssh_port: u16,
+    display_name: String,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let vcn_id = vcn_id.ok_or_else(|| anyhow::anyhow!("vcn id is required"))?;
+    let body = parse_oci_json_object_override(
+        json_body,
+        serde_json::json!({
+            "compartmentId": compartment,
+            "vcnId": vcn_id,
+            "displayName": display_name,
+            "egressSecurityRules": [{
+                "destination": "0.0.0.0/0",
+                "destinationType": "CIDR_BLOCK",
+                "protocol": "all",
+            }],
+            "ingressSecurityRules": [
+                {
+                    "description": "SSH",
+                    "protocol": "6",
+                    "source": "0.0.0.0/0",
+                    "sourceType": "CIDR_BLOCK",
+                    "tcpOptions": {"min": ssh_port, "max": ssh_port},
+                },
+                {
+                    "description": "HTTP",
+                    "protocol": "6",
+                    "source": "0.0.0.0/0",
+                    "sourceType": "CIDR_BLOCK",
+                    "tcpOptions": {"min": 80, "max": 80},
+                },
+                {
+                    "description": "HTTPS",
+                    "protocol": "6",
+                    "source": "0.0.0.0/0",
+                    "sourceType": "CIDR_BLOCK",
+                    "tcpOptions": {"min": 443, "max": 443},
+                }
+            ],
+        }),
+    )?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: "/20160918/securityLists".to_owned(),
+            json_body: Some(body),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_network_subnet_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    vcn_id: Option<String>,
+    route_table_id: Option<String>,
+    security_list_id: Option<String>,
+    dhcp_options_id: Option<String>,
+    cidr: String,
+    display_name: String,
+    dns_label: String,
+    public_ip: bool,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let vcn_id = vcn_id.ok_or_else(|| anyhow::anyhow!("vcn id is required"))?;
+    let route_table_id = route_table_id.ok_or_else(|| anyhow::anyhow!("route table id is required"))?;
+    let security_list_id =
+        security_list_id.ok_or_else(|| anyhow::anyhow!("security list id is required"))?;
+    let dhcp_options_id =
+        dhcp_options_id.ok_or_else(|| anyhow::anyhow!("dhcp options id is required"))?;
+    let body = parse_oci_json_object_override(
+        json_body,
+        serde_json::json!({
+            "cidrBlock": cidr,
+            "compartmentId": compartment,
+            "vcnId": vcn_id,
+            "displayName": display_name,
+            "dnsLabel": dns_label,
+            "prohibitPublicIpOnVnic": !public_ip,
+            "routeTableId": route_table_id,
+            "securityListIds": [security_list_id],
+            "dhcpOptionsId": dhcp_options_id,
+        }),
+    )?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: "/20160918/subnets".to_owned(),
+            json_body: Some(body),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_compute_image_latest_ubuntu(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    tenancy: Option<String>,
+    shape: String,
+    os_version: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment_id = tenancy.unwrap_or_default();
+    let compartment_id = if compartment_id.trim().is_empty() {
+        resolve_oci_default_tenancy(
+            account.clone(),
+            profile.clone(),
+            config_file.clone(),
+            region.clone(),
+            base_url.clone(),
+            auth.clone(),
+            home.clone(),
+            settings_file.clone(),
+        )?
+    } else {
+        compartment_id
+    };
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            path: "/20160918/images".to_owned(),
+            params: std::collections::BTreeMap::from([
+                ("compartmentId".to_owned(), compartment_id),
+                ("operatingSystem".to_owned(), "Canonical Ubuntu".to_owned()),
+                ("operatingSystemVersion".to_owned(), os_version),
+                ("shape".to_owned(), shape),
+                ("sortBy".to_owned(), "TIMECREATED".to_owned()),
+                ("sortOrder".to_owned(), "DESC".to_owned()),
+            ]),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_oci_compute_instance_create(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    compartment: Option<String>,
+    ad: Option<String>,
+    subnet_id: Option<String>,
+    display_name: String,
+    shape: String,
+    ocpus: u16,
+    memory_gb: u16,
+    image_id: Option<String>,
+    boot_volume_gb: u16,
+    ssh_public_key: Option<String>,
+    user_data_b64: Option<String>,
+    assign_public_ip: bool,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let compartment = compartment.ok_or_else(|| anyhow::anyhow!("compartment ocid is required"))?;
+    let ad = ad.ok_or_else(|| anyhow::anyhow!("availability domain is required"))?;
+    let subnet_id = subnet_id.ok_or_else(|| anyhow::anyhow!("subnet id is required"))?;
+    let image_id = image_id.ok_or_else(|| anyhow::anyhow!("image id is required"))?;
+    let mut body = serde_json::json!({
+        "availabilityDomain": ad,
+        "compartmentId": compartment,
+        "displayName": display_name,
+        "shape": shape,
+        "shapeConfig": {
+            "ocpus": ocpus,
+            "memoryInGBs": memory_gb,
+        },
+        "sourceDetails": {
+            "sourceType": "image",
+            "sourceId": image_id,
+            "bootVolumeSizeInGBs": boot_volume_gb,
+        },
+        "createVnicDetails": {
+            "assignPublicIp": assign_public_ip,
+            "displayName": "oracular-vnic",
+            "subnetId": subnet_id,
+        },
+    });
+    if ssh_public_key.is_some() || user_data_b64.is_some() {
+        body["metadata"] = serde_json::json!({});
+        if let Some(ssh_public_key) = ssh_public_key {
+            body["metadata"]["ssh_authorized_keys"] = Value::String(ssh_public_key);
+        }
+        if let Some(user_data_b64) = user_data_b64 {
+            body["metadata"]["user_data"] = Value::String(user_data_b64);
+        }
+    }
+    let body = parse_oci_json_object_override(json_body, body)?;
+    execute_oci_api_command(
+        account,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth,
+        home,
+        settings_file,
+        OCIAPIRequest {
+            method: "POST".to_owned(),
+            path: "/20160918/instances".to_owned(),
+            json_body: Some(body),
+            ..OCIAPIRequest::default()
+        },
+        format,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

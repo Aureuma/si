@@ -3388,7 +3388,7 @@ func TestRunOCICommandDefaultsToGoForUnmigratedSubtree(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
-	delegated, err := runOCICommand([]string{"identity", "compartment", "list", "--json"})
+	delegated, err := runOCICommand([]string{"doctor", "--json"})
 	if err != nil {
 		t.Fatalf("runOCICommand: %v", err)
 	}
@@ -3431,16 +3431,207 @@ func TestRunOCICommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 }
 
-func TestRunOCIOracularCommandDefaultsToGoForCloudInit(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOCIOracularCommand([]string{"cloud-init", "--json"})
-	if err != nil {
-		t.Fatalf("runOCIOracularCommand: %v", err)
+func TestRunOCIOracularCloudInitDelegatesToRust(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-oracular-cloud-init'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go oci oracular path for cloud-init")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCIOracularCommand([]string{"cloud-init", "--json"})
+		if err != nil {
+			t.Fatalf("runOCIOracularCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci oracular cloud-init to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-oracular-cloud-init" {
+		t.Fatalf("expected delegated Rust oci oracular cloud-init output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\noracular\ncloud-init\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci oracular cloud-init + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCIIdentityAvailabilityDomainsDelegatesToRust(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-identity-ads'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCICommand([]string{"identity", "availability-domains", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runOCICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci identity availability-domains to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-identity-ads" {
+		t.Fatalf("expected delegated Rust oci identity availability-domains output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\nidentity\navailability-domains\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci identity availability-domains + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCIIdentityCompartmentCreateDelegatesToRust(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-identity-compartment'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCICommand([]string{"identity", "compartment", "create", "--parent", "ocid1.compartment.oc1..root", "--name", "prod", "--json"})
+		if err != nil {
+			t.Fatalf("runOCICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci identity compartment create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-identity-compartment" {
+		t.Fatalf("expected delegated Rust oci identity compartment output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\nidentity\ncompartment\ncreate\n--parent\nocid1.compartment.oc1..root\n--name\nprod\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci identity compartment create + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCINetworkVcnCreateDelegatesToRust(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-network-vcn'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCICommand([]string{"network", "vcn", "create", "--compartment", "ocid1.compartment.oc1..prod", "--json"})
+		if err != nil {
+			t.Fatalf("runOCICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci network vcn create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-network-vcn" {
+		t.Fatalf("expected delegated Rust oci network vcn output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\nnetwork\nvcn\ncreate\n--compartment\nocid1.compartment.oc1..prod\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci network vcn create + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCIComputeImageLatestUbuntuDelegatesToRust(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-image'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCICommand([]string{"compute", "image", "latest-ubuntu", "--json"})
+		if err != nil {
+			t.Fatalf("runOCICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci compute image latest-ubuntu to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-image" {
+		t.Fatalf("expected delegated Rust oci compute image output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\ncompute\nimage\nlatest-ubuntu\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci compute image latest-ubuntu + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCIComputeInstanceCreateDelegatesToRust(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-instance'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCICommand([]string{"compute", "instance", "create", "--compartment", "ocid1.compartment.oc1..prod", "--ad", "AD-1", "--subnet-id", "ocid1.subnet.oc1..sub", "--image-id", "ocid1.image.oc1..img", "--json"})
+		if err != nil {
+			t.Fatalf("runOCICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci compute instance create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-instance" {
+		t.Fatalf("expected delegated Rust oci compute instance output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\ncompute\ninstance\ncreate\n--compartment\nocid1.compartment.oc1..prod\n--ad\nAD-1\n--subnet-id\nocid1.subnet.oc1..sub\n--image-id\nocid1.image.oc1..img\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci compute instance create + args, got %q", string(argsData))
 	}
 }
 
