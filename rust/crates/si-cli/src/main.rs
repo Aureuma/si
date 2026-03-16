@@ -2451,6 +2451,10 @@ enum StripeCommand {
         #[command(subcommand)]
         command: StripeObjectCommand,
     },
+    Sync {
+        #[command(subcommand)]
+        command: StripeSyncModeCommand,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -2511,6 +2515,133 @@ enum StripeObjectCommand {
         json: bool,
         #[arg(long)]
         raw: bool,
+    },
+    Create {
+        object: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        idempotency_key: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Update {
+        object: String,
+        id: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        idempotency_key: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        object: String,
+        id: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        idempotency_key: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum StripeSyncModeCommand {
+    LiveToSandbox {
+        #[command(subcommand)]
+        command: StripeSyncActionCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum StripeSyncActionCommand {
+    Plan {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        live_api_key: Option<String>,
+        #[arg(long)]
+        sandbox_api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long = "only")]
+        only: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    Apply {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        live_api_key: Option<String>,
+        #[arg(long)]
+        sandbox_api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long = "only")]
+        only: Vec<String>,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        idempotency_key: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
     },
 }
 
@@ -8421,6 +8552,135 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+                StripeObjectCommand::Create {
+                    object,
+                    params,
+                    idempotency_key,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_stripe_object_create(
+                    object,
+                    params,
+                    idempotency_key,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                StripeObjectCommand::Update {
+                    object,
+                    id,
+                    params,
+                    idempotency_key,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_stripe_object_update(
+                    object,
+                    id,
+                    params,
+                    idempotency_key,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                StripeObjectCommand::Delete {
+                    object,
+                    id,
+                    params,
+                    force,
+                    idempotency_key,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_stripe_object_delete(
+                    object,
+                    id,
+                    params,
+                    force,
+                    idempotency_key,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
+            StripeCommand::Sync { command } => match command {
+                StripeSyncModeCommand::LiveToSandbox { command } => match command {
+                    StripeSyncActionCommand::Plan {
+                        account,
+                        live_api_key,
+                        sandbox_api_key,
+                        base_url,
+                        only,
+                        home,
+                        settings_file,
+                        json,
+                    } => run_stripe_sync_plan(
+                        account,
+                        live_api_key,
+                        sandbox_api_key,
+                        base_url,
+                        only,
+                        home,
+                        settings_file,
+                        json,
+                    )?,
+                    StripeSyncActionCommand::Apply {
+                        account,
+                        live_api_key,
+                        sandbox_api_key,
+                        base_url,
+                        only,
+                        dry_run,
+                        force,
+                        json,
+                        idempotency_key,
+                        home,
+                        settings_file,
+                    } => run_stripe_sync_apply(
+                        account,
+                        live_api_key,
+                        sandbox_api_key,
+                        base_url,
+                        only,
+                        dry_run,
+                        force,
+                        json,
+                        idempotency_key,
+                        home,
+                        settings_file,
+                    )?,
+                },
             },
         },
         Command::WorkOS { command } => match command {
@@ -14711,31 +14971,677 @@ struct StripeObjectSpec {
     name: &'static str,
     list_path: &'static str,
     resource_path: &'static str,
+    supports_create: bool,
+    supports_update: bool,
+    supports_delete: bool,
+    delete_hint: Option<&'static str>,
 }
 
 fn resolve_stripe_object_spec(name: &str) -> Result<StripeObjectSpec> {
     let normalized = name.trim().to_ascii_lowercase().replace('-', "_");
     let spec = match normalized.as_str() {
-        "product" | "products" => StripeObjectSpec { name: "product", list_path: "/v1/products", resource_path: "/v1/products/%s" },
-        "price" | "prices" => StripeObjectSpec { name: "price", list_path: "/v1/prices", resource_path: "/v1/prices/%s" },
-        "coupon" | "coupons" => StripeObjectSpec { name: "coupon", list_path: "/v1/coupons", resource_path: "/v1/coupons/%s" },
-        "promotion_code" | "promotion_codes" | "promotion-codes" => StripeObjectSpec { name: "promotion_code", list_path: "/v1/promotion_codes", resource_path: "/v1/promotion_codes/%s" },
-        "tax_rate" | "tax_rates" | "tax-rates" => StripeObjectSpec { name: "tax_rate", list_path: "/v1/tax_rates", resource_path: "/v1/tax_rates/%s" },
-        "shipping_rate" | "shipping_rates" | "shipping-rates" => StripeObjectSpec { name: "shipping_rate", list_path: "/v1/shipping_rates", resource_path: "/v1/shipping_rates/%s" },
-        "customer" | "customers" => StripeObjectSpec { name: "customer", list_path: "/v1/customers", resource_path: "/v1/customers/%s" },
-        "payment_intent" | "payment_intents" | "payment-intents" => StripeObjectSpec { name: "payment_intent", list_path: "/v1/payment_intents", resource_path: "/v1/payment_intents/%s" },
-        "subscription" | "subscriptions" => StripeObjectSpec { name: "subscription", list_path: "/v1/subscriptions", resource_path: "/v1/subscriptions/%s" },
-        "invoice" | "invoices" => StripeObjectSpec { name: "invoice", list_path: "/v1/invoices", resource_path: "/v1/invoices/%s" },
-        "refund" | "refunds" => StripeObjectSpec { name: "refund", list_path: "/v1/refunds", resource_path: "/v1/refunds/%s" },
-        "charge" | "charges" => StripeObjectSpec { name: "charge", list_path: "/v1/charges", resource_path: "/v1/charges/%s" },
-        "account" | "accounts" => StripeObjectSpec { name: "account", list_path: "/v1/accounts", resource_path: "/v1/accounts/%s" },
-        "organization" | "organizations" => StripeObjectSpec { name: "organization", list_path: "/v1/organizations", resource_path: "/v1/organizations/%s" },
-        "balance_transaction" | "balance_transactions" | "balance-transactions" => StripeObjectSpec { name: "balance_transaction", list_path: "/v1/balance_transactions", resource_path: "/v1/balance_transactions/%s" },
-        "payout" | "payouts" => StripeObjectSpec { name: "payout", list_path: "/v1/payouts", resource_path: "/v1/payouts/%s" },
-        "payment_method" | "payment_methods" | "payment-methods" => StripeObjectSpec { name: "payment_method", list_path: "/v1/payment_methods", resource_path: "/v1/payment_methods/%s" },
+        "product" | "products" => StripeObjectSpec { name: "product", list_path: "/v1/products", resource_path: "/v1/products/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
+        "price" | "prices" => StripeObjectSpec { name: "price", list_path: "/v1/prices", resource_path: "/v1/prices/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: Some("Stripe prices are archived by updating `active=false`.") },
+        "coupon" | "coupons" => StripeObjectSpec { name: "coupon", list_path: "/v1/coupons", resource_path: "/v1/coupons/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
+        "promotion_code" | "promotion_codes" | "promotion-codes" => StripeObjectSpec { name: "promotion_code", list_path: "/v1/promotion_codes", resource_path: "/v1/promotion_codes/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "tax_rate" | "tax_rates" | "tax-rates" => StripeObjectSpec { name: "tax_rate", list_path: "/v1/tax_rates", resource_path: "/v1/tax_rates/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "shipping_rate" | "shipping_rates" | "shipping-rates" => StripeObjectSpec { name: "shipping_rate", list_path: "/v1/shipping_rates", resource_path: "/v1/shipping_rates/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "customer" | "customers" => StripeObjectSpec { name: "customer", list_path: "/v1/customers", resource_path: "/v1/customers/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
+        "payment_intent" | "payment_intents" | "payment-intents" => StripeObjectSpec { name: "payment_intent", list_path: "/v1/payment_intents", resource_path: "/v1/payment_intents/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "subscription" | "subscriptions" => StripeObjectSpec { name: "subscription", list_path: "/v1/subscriptions", resource_path: "/v1/subscriptions/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
+        "invoice" | "invoices" => StripeObjectSpec { name: "invoice", list_path: "/v1/invoices", resource_path: "/v1/invoices/%s", supports_create: true, supports_update: true, supports_delete: true, delete_hint: None },
+        "refund" | "refunds" => StripeObjectSpec { name: "refund", list_path: "/v1/refunds", resource_path: "/v1/refunds/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "charge" | "charges" => StripeObjectSpec { name: "charge", list_path: "/v1/charges", resource_path: "/v1/charges/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "account" | "accounts" => StripeObjectSpec { name: "account", list_path: "/v1/accounts", resource_path: "/v1/accounts/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "organization" | "organizations" => StripeObjectSpec { name: "organization", list_path: "/v1/organizations", resource_path: "/v1/organizations/%s", supports_create: false, supports_update: false, supports_delete: false, delete_hint: None },
+        "balance_transaction" | "balance_transactions" | "balance-transactions" => StripeObjectSpec { name: "balance_transaction", list_path: "/v1/balance_transactions", resource_path: "/v1/balance_transactions/%s", supports_create: false, supports_update: false, supports_delete: false, delete_hint: None },
+        "payout" | "payouts" => StripeObjectSpec { name: "payout", list_path: "/v1/payouts", resource_path: "/v1/payouts/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
+        "payment_method" | "payment_methods" | "payment-methods" => StripeObjectSpec { name: "payment_method", list_path: "/v1/payment_methods", resource_path: "/v1/payment_methods/%s", supports_create: true, supports_update: true, supports_delete: false, delete_hint: None },
         _ => anyhow::bail!("unknown object {name:?}"),
     };
     Ok(spec)
+}
+
+fn require_stripe_object_operation(spec: &StripeObjectSpec, operation: &str) -> Result<()> {
+    let supported = match operation {
+        "create" => spec.supports_create,
+        "update" => spec.supports_update,
+        "delete" => spec.supports_delete,
+        _ => true,
+    };
+    if supported {
+        return Ok(());
+    }
+    let mut message = format!("{} does not support {}.{operation}", spec.name, spec.name);
+    if operation == "delete" {
+        if let Some(hint) = spec.delete_hint {
+            message.push(' ');
+            message.push_str(hint);
+        }
+    }
+    anyhow::bail!(message);
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum StripeSyncFamily {
+    Products,
+    Prices,
+    Coupons,
+    PromotionCodes,
+    TaxRates,
+    ShippingRates,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum StripeSyncActionType {
+    Create,
+    Update,
+    Archive,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct StripeSyncAction {
+    family: StripeSyncFamily,
+    action: StripeSyncActionType,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    live_id: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    sandbox_id: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    reason: String,
+    #[serde(skip_serializing_if = "stripe_sync_value_is_empty")]
+    payload: Value,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct StripeSyncPlan {
+    generated_at: String,
+    families: Vec<StripeSyncFamily>,
+    actions: Vec<StripeSyncAction>,
+    summary: std::collections::BTreeMap<String, usize>,
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    mappings: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+struct StripeSyncApplyResult {
+    applied: usize,
+    skipped: usize,
+    failures: usize,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    errors: Vec<String>,
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    mappings: std::collections::BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    completed: Vec<StripeSyncAction>,
+}
+
+fn stripe_sync_value_is_empty(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::Object(map) => map.is_empty(),
+        _ => false,
+    }
+}
+
+fn parse_stripe_sync_families(raw: Vec<String>) -> Result<Vec<StripeSyncFamily>> {
+    if raw.is_empty() {
+        return Ok(vec![
+            StripeSyncFamily::Products,
+            StripeSyncFamily::Prices,
+            StripeSyncFamily::Coupons,
+            StripeSyncFamily::PromotionCodes,
+            StripeSyncFamily::TaxRates,
+            StripeSyncFamily::ShippingRates,
+        ]);
+    }
+
+    let mut families = std::collections::BTreeSet::new();
+    for token in raw {
+        for part in token.split(',') {
+            let normalized = part.trim().to_ascii_lowercase().replace('-', "_");
+            if normalized.is_empty() {
+                continue;
+            }
+            let family = match normalized.as_str() {
+                "products" => StripeSyncFamily::Products,
+                "prices" => StripeSyncFamily::Prices,
+                "coupons" => StripeSyncFamily::Coupons,
+                "promotion_codes" => StripeSyncFamily::PromotionCodes,
+                "tax_rates" => StripeSyncFamily::TaxRates,
+                "shipping_rates" => StripeSyncFamily::ShippingRates,
+                _ => anyhow::bail!("unsupported sync family {:?}", part.trim()),
+            };
+            families.insert(family);
+        }
+    }
+    Ok(families.into_iter().collect())
+}
+
+fn stripe_sync_family_name(family: StripeSyncFamily) -> &'static str {
+    match family {
+        StripeSyncFamily::Products => "products",
+        StripeSyncFamily::Prices => "prices",
+        StripeSyncFamily::Coupons => "coupons",
+        StripeSyncFamily::PromotionCodes => "promotion_codes",
+        StripeSyncFamily::TaxRates => "tax_rates",
+        StripeSyncFamily::ShippingRates => "shipping_rates",
+    }
+}
+
+fn stripe_sync_family_object_name(family: StripeSyncFamily) -> &'static str {
+    match family {
+        StripeSyncFamily::Products => "product",
+        StripeSyncFamily::Prices => "price",
+        StripeSyncFamily::Coupons => "coupon",
+        StripeSyncFamily::PromotionCodes => "promotion_code",
+        StripeSyncFamily::TaxRates => "tax_rate",
+        StripeSyncFamily::ShippingRates => "shipping_rate",
+    }
+}
+
+fn stripe_sync_list_path(
+    family: StripeSyncFamily,
+) -> (&'static str, std::collections::BTreeMap<String, String>) {
+    let path = match family {
+        StripeSyncFamily::Products => "/v1/products",
+        StripeSyncFamily::Prices => "/v1/prices",
+        StripeSyncFamily::Coupons => "/v1/coupons",
+        StripeSyncFamily::PromotionCodes => "/v1/promotion_codes",
+        StripeSyncFamily::TaxRates => "/v1/tax_rates",
+        StripeSyncFamily::ShippingRates => "/v1/shipping_rates",
+    };
+    (
+        path,
+        std::collections::BTreeMap::from([(String::from("limit"), String::from("100"))]),
+    )
+}
+
+fn stripe_value_string(item: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
+    item.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn stripe_live_id_from_metadata(item: &serde_json::Map<String, Value>) -> String {
+    item.get("metadata")
+        .and_then(Value::as_object)
+        .and_then(|metadata| stripe_value_string(metadata, "si_live_id"))
+        .unwrap_or_default()
+}
+
+fn stripe_copy_string_fields(
+    dst: &mut serde_json::Map<String, Value>,
+    src: &serde_json::Map<String, Value>,
+    keys: &[&str],
+) {
+    for key in keys {
+        if let Some(value) = src
+            .get(*key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            dst.insert((*key).to_owned(), Value::String(value.to_owned()));
+        }
+    }
+}
+
+fn stripe_copy_bool_field(
+    dst: &mut serde_json::Map<String, Value>,
+    src: &serde_json::Map<String, Value>,
+    key: &str,
+) {
+    if let Some(value) = src.get(key).and_then(Value::as_bool) {
+        dst.insert(key.to_owned(), Value::Bool(value));
+    }
+}
+
+fn stripe_copy_number_field(
+    dst: &mut serde_json::Map<String, Value>,
+    src: &serde_json::Map<String, Value>,
+    key: &str,
+) {
+    if let Some(value) = src.get(key) {
+        match value {
+            Value::Number(number) => {
+                dst.insert(key.to_owned(), Value::Number(number.clone()));
+            }
+            Value::String(raw) => {
+                if let Ok(parsed) = raw.trim().parse::<i64>() {
+                    dst.insert(key.to_owned(), Value::Number(parsed.into()));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn stripe_copy_nested(
+    dst: &mut serde_json::Map<String, Value>,
+    src: &serde_json::Map<String, Value>,
+    key: &str,
+) {
+    if let Some(value) = src.get(key).and_then(Value::as_object) {
+        if !value.is_empty() {
+            dst.insert(key.to_owned(), Value::Object(value.clone()));
+        }
+    }
+}
+
+fn stripe_copy_string_field_mapped(
+    dst: &mut serde_json::Map<String, Value>,
+    src: &serde_json::Map<String, Value>,
+    key: &str,
+    mappings: &std::collections::BTreeMap<String, String>,
+) {
+    if let Some(value) = src
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(mapped) = mappings.get(value).map(String::as_str).map(str::trim) {
+            if !mapped.is_empty() {
+                dst.insert(key.to_owned(), Value::String(mapped.to_owned()));
+                return;
+            }
+        }
+        dst.insert(key.to_owned(), Value::String(value.to_owned()));
+    }
+}
+
+fn stripe_copy_metadata_with_live_id(
+    dst: &mut serde_json::Map<String, Value>,
+    src: &serde_json::Map<String, Value>,
+) {
+    let mut metadata = src
+        .get("metadata")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(live_id) = stripe_value_string(src, "id") {
+        metadata.insert("si_live_id".to_owned(), Value::String(live_id));
+    }
+    if !metadata.is_empty() {
+        dst.insert("metadata".to_owned(), Value::Object(metadata));
+    }
+}
+
+fn stripe_payload_for_sync_family(
+    family: StripeSyncFamily,
+    item: &serde_json::Map<String, Value>,
+    mappings: &std::collections::BTreeMap<String, String>,
+) -> Value {
+    let mut out = serde_json::Map::new();
+    match family {
+        StripeSyncFamily::Products => {
+            stripe_copy_string_fields(
+                &mut out,
+                item,
+                &["name", "description", "unit_label", "tax_code"],
+            );
+            stripe_copy_bool_field(&mut out, item, "active");
+            stripe_copy_bool_field(&mut out, item, "shippable");
+            stripe_copy_metadata_with_live_id(&mut out, item);
+        }
+        StripeSyncFamily::Prices => {
+            stripe_copy_string_fields(&mut out, item, &["currency", "nickname", "lookup_key"]);
+            stripe_copy_bool_field(&mut out, item, "active");
+            stripe_copy_number_field(&mut out, item, "unit_amount");
+            stripe_copy_string_field_mapped(&mut out, item, "product", mappings);
+            stripe_copy_nested(&mut out, item, "recurring");
+            stripe_copy_metadata_with_live_id(&mut out, item);
+        }
+        StripeSyncFamily::Coupons => {
+            stripe_copy_string_fields(&mut out, item, &["name", "duration", "currency"]);
+            stripe_copy_number_field(&mut out, item, "amount_off");
+            stripe_copy_number_field(&mut out, item, "percent_off");
+            stripe_copy_nested(&mut out, item, "applies_to");
+            stripe_copy_metadata_with_live_id(&mut out, item);
+        }
+        StripeSyncFamily::PromotionCodes => {
+            stripe_copy_string_fields(&mut out, item, &["code"]);
+            stripe_copy_bool_field(&mut out, item, "active");
+            stripe_copy_nested(&mut out, item, "restrictions");
+            stripe_copy_string_field_mapped(&mut out, item, "coupon", mappings);
+            stripe_copy_metadata_with_live_id(&mut out, item);
+        }
+        StripeSyncFamily::TaxRates => {
+            stripe_copy_string_fields(
+                &mut out,
+                item,
+                &[
+                    "display_name",
+                    "description",
+                    "jurisdiction",
+                    "country",
+                    "state",
+                    "tax_type",
+                ],
+            );
+            stripe_copy_bool_field(&mut out, item, "inclusive");
+            stripe_copy_bool_field(&mut out, item, "active");
+            stripe_copy_number_field(&mut out, item, "percentage");
+            stripe_copy_metadata_with_live_id(&mut out, item);
+        }
+        StripeSyncFamily::ShippingRates => {
+            stripe_copy_string_fields(&mut out, item, &["display_name", "tax_behavior", "type"]);
+            stripe_copy_bool_field(&mut out, item, "active");
+            stripe_copy_nested(&mut out, item, "fixed_amount");
+            stripe_copy_nested(&mut out, item, "delivery_estimate");
+            stripe_copy_metadata_with_live_id(&mut out, item);
+        }
+    }
+    Value::Object(out)
+}
+
+fn list_stripe_sync_family(
+    runtime: &StripeRuntimeContext,
+    family: StripeSyncFamily,
+) -> Result<Vec<Value>> {
+    let (path, params) = stripe_sync_list_path(family);
+    list_all_stripe_objects(runtime, path, &params, usize::MAX).map_err(anyhow::Error::msg)
+}
+
+fn plan_stripe_sync_family(
+    family: StripeSyncFamily,
+    live_items: &[Value],
+    sandbox_items: &[Value],
+) -> (Vec<StripeSyncAction>, std::collections::BTreeMap<String, String>) {
+    let mut actions = Vec::new();
+    let mut mappings = std::collections::BTreeMap::new();
+    let mut sandbox_by_live =
+        std::collections::BTreeMap::<String, serde_json::Map<String, Value>>::new();
+
+    for sandbox in sandbox_items.iter().filter_map(Value::as_object) {
+        let live_id = stripe_live_id_from_metadata(sandbox);
+        if !live_id.is_empty() {
+            sandbox_by_live.insert(live_id, sandbox.clone());
+        }
+    }
+
+    let mut live_ids = std::collections::BTreeSet::new();
+    for live_item in live_items.iter().filter_map(Value::as_object) {
+        let live_id = stripe_value_string(live_item, "id").unwrap_or_default();
+        if live_id.is_empty() {
+            continue;
+        }
+        live_ids.insert(live_id.clone());
+        let payload =
+            stripe_payload_for_sync_family(family, live_item, &std::collections::BTreeMap::new());
+        let Some(matched) = sandbox_by_live.get(&live_id) else {
+            actions.push(StripeSyncAction {
+                family,
+                action: StripeSyncActionType::Create,
+                live_id,
+                sandbox_id: String::new(),
+                reason: "missing in sandbox".to_owned(),
+                payload,
+            });
+            continue;
+        };
+
+        let sandbox_id = stripe_value_string(matched, "id").unwrap_or_default();
+        if !sandbox_id.is_empty() {
+            mappings.insert(live_id.clone(), sandbox_id.clone());
+        }
+        let expected = stripe_payload_for_sync_family(family, live_item, &mappings);
+        let current = stripe_payload_for_sync_family(
+            family,
+            matched,
+            &std::collections::BTreeMap::new(),
+        );
+        if expected != current {
+            actions.push(StripeSyncAction {
+                family,
+                action: StripeSyncActionType::Update,
+                live_id,
+                sandbox_id,
+                reason: "drift detected".to_owned(),
+                payload: expected,
+            });
+        }
+    }
+
+    for sandbox in sandbox_items.iter().filter_map(Value::as_object) {
+        let live_id = stripe_live_id_from_metadata(sandbox);
+        if live_id.is_empty() || live_ids.contains(&live_id) {
+            continue;
+        }
+        actions.push(StripeSyncAction {
+            family,
+            action: StripeSyncActionType::Archive,
+            live_id,
+            sandbox_id: stripe_value_string(sandbox, "id").unwrap_or_default(),
+            reason: "orphaned in sandbox".to_owned(),
+            payload: serde_json::json!({"active": false}),
+        });
+    }
+
+    actions.sort_by(|left, right| {
+        left.action
+            .cmp(&right.action)
+            .then(left.family.cmp(&right.family))
+            .then(left.live_id.cmp(&right.live_id))
+    });
+    (actions, mappings)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_stripe_sync_plan(
+    account: Option<String>,
+    live_api_key: Option<String>,
+    sandbox_api_key: Option<String>,
+    base_url: Option<String>,
+    only: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<(StripeSyncPlan, StripeRuntimeContext, StripeRuntimeContext)> {
+    let families = parse_stripe_sync_families(only)?;
+    let live_runtime = load_stripe_runtime(
+        account.clone(),
+        Some("live".to_owned()),
+        live_api_key,
+        base_url.clone(),
+        home.clone(),
+        settings_file.clone(),
+    )?;
+    let sandbox_runtime = load_stripe_runtime(
+        account,
+        Some("sandbox".to_owned()),
+        sandbox_api_key,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let mut actions = Vec::new();
+    let mut mappings = std::collections::BTreeMap::new();
+    let mut summary = std::collections::BTreeMap::new();
+
+    for family in &families {
+        let live_items = list_stripe_sync_family(&live_runtime, *family)?;
+        let sandbox_items = list_stripe_sync_family(&sandbox_runtime, *family)?;
+        let (family_actions, family_mappings) =
+            plan_stripe_sync_family(*family, &live_items, &sandbox_items);
+        for (key, value) in family_mappings {
+            mappings.insert(key, value);
+        }
+        actions.extend(family_actions);
+    }
+    for action in &actions {
+        *summary
+            .entry(stripe_sync_action_name(action.action).to_owned())
+            .or_insert(0) += 1;
+    }
+    Ok((
+        StripeSyncPlan {
+            generated_at: chrono::Utc::now().to_rfc3339(),
+            families,
+            actions,
+            summary,
+            mappings,
+        },
+        live_runtime,
+        sandbox_runtime,
+    ))
+}
+
+fn stripe_sync_action_name(action: StripeSyncActionType) -> &'static str {
+    match action {
+        StripeSyncActionType::Create => "create",
+        StripeSyncActionType::Update => "update",
+        StripeSyncActionType::Archive => "archive",
+    }
+}
+
+fn flatten_stripe_sync_value(
+    out: &mut std::collections::BTreeMap<String, String>,
+    key: &str,
+    value: &Value,
+) {
+    match value {
+        Value::Null => {}
+        Value::String(string) => {
+            out.insert(key.to_owned(), string.clone());
+        }
+        Value::Bool(value) => {
+            out.insert(key.to_owned(), if *value { "true" } else { "false" }.to_owned());
+        }
+        Value::Number(number) => {
+            out.insert(key.to_owned(), number.to_string());
+        }
+        Value::Object(map) => {
+            for (child_key, child_value) in map {
+                flatten_stripe_sync_value(out, &format!("{key}[{child_key}]"), child_value);
+            }
+        }
+        Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                flatten_stripe_sync_value(out, &format!("{key}[{index}]"), item);
+            }
+        }
+    }
+}
+
+fn flatten_stripe_sync_payload(payload: &Value) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    if let Value::Object(map) = payload {
+        for (key, value) in map {
+            flatten_stripe_sync_value(&mut out, key, value);
+        }
+    }
+    out
+}
+
+fn apply_stripe_sync_action(
+    runtime: &StripeRuntimeContext,
+    action: &StripeSyncAction,
+    mappings: &mut std::collections::BTreeMap<String, String>,
+    idempotency_key: &str,
+) -> Result<()> {
+    let object = stripe_sync_family_object_name(action.family);
+    let spec = resolve_stripe_object_spec(object)?;
+    match action.action {
+        StripeSyncActionType::Create => {
+            let response = execute_stripe_api_request(
+                runtime,
+                &StripeAPIRequest {
+                    method: "POST".to_owned(),
+                    path: spec.list_path.to_owned(),
+                    params: flatten_stripe_sync_payload(&action.payload),
+                    idempotency_key: idempotency_key.to_owned(),
+                    ..StripeAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            if let Some(created_id) = response
+                .data
+                .as_ref()
+                .and_then(Value::as_object)
+                .and_then(|data| stripe_value_string(data, "id"))
+            {
+                if !action.live_id.trim().is_empty() {
+                    mappings.insert(action.live_id.clone(), created_id);
+                }
+            }
+            Ok(())
+        }
+        StripeSyncActionType::Update => {
+            let target = if !action.sandbox_id.trim().is_empty() {
+                action.sandbox_id.trim().to_owned()
+            } else {
+                mappings
+                    .get(action.live_id.trim())
+                    .map(String::to_owned)
+                    .unwrap_or_default()
+            };
+            if target.trim().is_empty() {
+                anyhow::bail!("missing sandbox id for update");
+            }
+            execute_stripe_api_request(
+                runtime,
+                &StripeAPIRequest {
+                    method: "POST".to_owned(),
+                    path: spec.resource_path.replacen("%s", target.trim(), 1),
+                    params: flatten_stripe_sync_payload(&action.payload),
+                    idempotency_key: idempotency_key.to_owned(),
+                    ..StripeAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            Ok(())
+        }
+        StripeSyncActionType::Archive => {
+            if action.sandbox_id.trim().is_empty() {
+                anyhow::bail!("missing sandbox id for archive");
+            }
+            execute_stripe_api_request(
+                runtime,
+                &StripeAPIRequest {
+                    method: "POST".to_owned(),
+                    path: spec.resource_path.replacen("%s", action.sandbox_id.trim(), 1),
+                    params: std::collections::BTreeMap::from([(
+                        "active".to_owned(),
+                        "false".to_owned(),
+                    )]),
+                    idempotency_key: idempotency_key.to_owned(),
+                    ..StripeAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            Ok(())
+        }
+    }
+}
+
+fn infer_stripe_object_label(item: &serde_json::Map<String, Value>) -> String {
+    for key in ["name", "description", "email", "code", "nickname"] {
+        if let Some(value) = item
+            .get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            return value.to_owned();
+        }
+    }
+    if let Some(unit_amount) = item.get("unit_amount").and_then(Value::as_i64) {
+        let currency = item
+            .get("currency")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_ascii_uppercase();
+        if !currency.is_empty() {
+            return format!("{unit_amount} {currency}");
+        }
+    }
+    "-".to_owned()
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -14941,12 +15847,7 @@ fn run_stripe_object_list(
     for item in items {
         if let Some(obj) = item.as_object() {
             let id = obj.get("id").and_then(Value::as_str).unwrap_or("-");
-            let name = obj
-                .get("name")
-                .or_else(|| obj.get("description"))
-                .or_else(|| obj.get("email"))
-                .and_then(Value::as_str)
-                .unwrap_or("-");
+            let name = infer_stripe_object_label(obj);
             println!("  {id} {name}");
         }
     }
@@ -14984,6 +15885,254 @@ fn run_stripe_object_get(
         },
     )?;
     print_stripe_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_object_create(
+    object: String,
+    params: Vec<String>,
+    idempotency_key: Option<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let spec = resolve_stripe_object_spec(&object)?;
+    require_stripe_object_operation(&spec, "create")?;
+    let response = execute_stripe_request(
+        account,
+        environment,
+        api_key,
+        base_url,
+        home,
+        settings_file,
+        StripeAPIRequest {
+            method: "POST".to_owned(),
+            path: spec.list_path.to_owned(),
+            params: parse_stripe_key_values(params),
+            idempotency_key: idempotency_key.unwrap_or_default(),
+            ..StripeAPIRequest::default()
+        },
+    )?;
+    print_stripe_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_object_update(
+    object: String,
+    id: String,
+    params: Vec<String>,
+    idempotency_key: Option<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let spec = resolve_stripe_object_spec(&object)?;
+    require_stripe_object_operation(&spec, "update")?;
+    let trimmed_id = id.trim();
+    if trimmed_id.is_empty() {
+        anyhow::bail!("id is required for {} update", spec.name);
+    }
+    let response = execute_stripe_request(
+        account,
+        environment,
+        api_key,
+        base_url,
+        home,
+        settings_file,
+        StripeAPIRequest {
+            method: "POST".to_owned(),
+            path: spec.resource_path.replacen("%s", trimmed_id, 1),
+            params: parse_stripe_key_values(params),
+            idempotency_key: idempotency_key.unwrap_or_default(),
+            ..StripeAPIRequest::default()
+        },
+    )?;
+    print_stripe_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_object_delete(
+    object: String,
+    id: String,
+    params: Vec<String>,
+    force: bool,
+    idempotency_key: Option<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let spec = resolve_stripe_object_spec(&object)?;
+    require_stripe_object_operation(&spec, "delete")?;
+    if !force {
+        anyhow::bail!("delete {} requires --force", spec.name);
+    }
+    let trimmed_id = id.trim();
+    if trimmed_id.is_empty() {
+        anyhow::bail!("id is required for {} delete", spec.name);
+    }
+    let response = execute_stripe_request(
+        account,
+        environment,
+        api_key,
+        base_url,
+        home,
+        settings_file,
+        StripeAPIRequest {
+            method: "DELETE".to_owned(),
+            path: spec.resource_path.replacen("%s", trimmed_id, 1),
+            params: parse_stripe_key_values(params),
+            idempotency_key: idempotency_key.unwrap_or_default(),
+            ..StripeAPIRequest::default()
+        },
+    )?;
+    print_stripe_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_sync_plan(
+    account: Option<String>,
+    live_api_key: Option<String>,
+    sandbox_api_key: Option<String>,
+    base_url: Option<String>,
+    only: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let (plan, live_runtime, sandbox_runtime) = build_stripe_sync_plan(
+        account,
+        live_api_key,
+        sandbox_api_key,
+        base_url,
+        only,
+        home,
+        settings_file,
+    )?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&plan)?);
+    } else {
+        println!(
+            "Sync plan: {} action(s) live={} sandbox={}",
+            plan.actions.len(),
+            live_runtime.account_alias,
+            sandbox_runtime.account_alias
+        );
+        for action in &plan.actions {
+            println!(
+                "  {} {} live={} sandbox={} {}",
+                stripe_sync_family_name(action.family),
+                stripe_sync_action_name(action.action),
+                if action.live_id.is_empty() {
+                    "-"
+                } else {
+                    action.live_id.as_str()
+                },
+                if action.sandbox_id.is_empty() {
+                    "-"
+                } else {
+                    action.sandbox_id.as_str()
+                },
+                action.reason
+            );
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_sync_apply(
+    account: Option<String>,
+    live_api_key: Option<String>,
+    sandbox_api_key: Option<String>,
+    base_url: Option<String>,
+    only: Vec<String>,
+    dry_run: bool,
+    force: bool,
+    json: bool,
+    idempotency_key: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force && !dry_run {
+        anyhow::bail!("stripe sync apply requires --force");
+    }
+    let (plan, _live_runtime, sandbox_runtime) = build_stripe_sync_plan(
+        account,
+        live_api_key,
+        sandbox_api_key,
+        base_url,
+        only,
+        home,
+        settings_file,
+    )?;
+    let mut result = StripeSyncApplyResult {
+        applied: 0,
+        skipped: 0,
+        failures: 0,
+        errors: Vec::new(),
+        mappings: plan.mappings.clone(),
+        completed: Vec::new(),
+    };
+    let idempotency_key = idempotency_key.unwrap_or_default();
+
+    for action in &plan.actions {
+        if action.action == StripeSyncActionType::Archive && action.sandbox_id.trim().is_empty() {
+            result.skipped += 1;
+            continue;
+        }
+        if dry_run {
+            result.skipped += 1;
+            result.completed.push(action.clone());
+            continue;
+        }
+        if let Err(err) = apply_stripe_sync_action(
+            &sandbox_runtime,
+            action,
+            &mut result.mappings,
+            idempotency_key.trim(),
+        ) {
+            result.failures += 1;
+            result.errors.push(format!(
+                "{} {}: {err}",
+                stripe_sync_family_name(action.family),
+                stripe_sync_action_name(action.action)
+            ));
+            continue;
+        }
+        result.applied += 1;
+        result.completed.push(action.clone());
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else if dry_run {
+        println!("dry-run complete: skipped={}", result.skipped);
+    } else {
+        println!(
+            "sync apply complete: applied={} skipped={}",
+            result.applied, result.skipped
+        );
+    }
+
+    if result.failures > 0 {
+        anyhow::bail!("sync apply completed with {} failure(s)", result.failures);
+    }
+    Ok(())
 }
 
 fn parse_cloudflare_key_values(values: Vec<String>) -> std::collections::BTreeMap<String, String> {

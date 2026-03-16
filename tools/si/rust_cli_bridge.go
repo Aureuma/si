@@ -1135,6 +1135,29 @@ func runStripeObjectCommand(args []string) (bool, error) {
 		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"object", "list"}, args[1:]...)...)
 	case "get":
 		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"object", "get"}, args[1:]...)...)
+	case "create":
+		return maybeDispatchRustCLICompat("stripe", append([]string{"object", "create"}, args[1:]...)...)
+	case "update":
+		return maybeDispatchRustCLICompat("stripe", append([]string{"object", "update"}, args[1:]...)...)
+	case "delete":
+		return maybeDispatchRustCLICompat("stripe", append([]string{"object", "delete"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runStripeSyncCommand(args []string) (bool, error) {
+	if len(args) < 2 {
+		return false, nil
+	}
+	if strings.ToLower(strings.TrimSpace(args[0])) != "live-to-sandbox" {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[1])) {
+	case "plan":
+		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"sync", "live-to-sandbox", "plan"}, args[2:]...)...)
+	case "apply":
+		return maybeDispatchRustCLICompat("stripe", append([]string{"sync", "live-to-sandbox", "apply"}, args[2:]...)...)
 	default:
 		return false, nil
 	}
@@ -1167,6 +1190,8 @@ func runStripeCommand(args []string) (bool, error) {
 		return runStripeReportCommand(args[1:])
 	case "object":
 		return runStripeObjectCommand(args[1:])
+	case "sync":
+		return runStripeSyncCommand(args[1:])
 	default:
 		return false, nil
 	}

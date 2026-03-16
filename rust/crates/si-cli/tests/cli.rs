@@ -3047,6 +3047,223 @@ fn stripe_object_get_json_fetches_single_object() {
 }
 
 #[test]
+fn stripe_object_create_json_posts_object() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/products HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        assert!(request.contains("idempotency-key: idem_123\r\n"));
+        assert!(request.contains("\r\n\r\nname=Core"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_object_create")],
+            r#"{"id":"prod_789","name":"Core"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "object", "create", "product"])
+        .args([
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--param",
+            "name=Core",
+            "--idempotency-key",
+            "idem_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_stripe_object_create");
+    assert_eq!(parsed["data"]["id"], "prod_789");
+    server.join();
+}
+
+#[test]
+fn stripe_object_update_json_posts_object() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/products/prod_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        assert!(request.contains("idempotency-key: idem_456\r\n"));
+        assert!(request.contains("\r\n\r\nname=Core+2"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_object_update")],
+            r#"{"id":"prod_123","name":"Core 2"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "object", "update", "product", "prod_123"])
+        .args([
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--param",
+            "name=Core 2",
+            "--idempotency-key",
+            "idem_456",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_stripe_object_update");
+    assert_eq!(parsed["data"]["name"], "Core 2");
+    server.join();
+}
+
+#[test]
+fn stripe_object_delete_json_deletes_object() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /v1/products/prod_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        assert!(request.contains("idempotency-key: idem_789\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_object_delete")],
+            r#"{"id":"prod_123","deleted":true}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "object", "delete", "product", "prod_123"])
+        .args([
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--force",
+            "--idempotency-key",
+            "idem_789",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_stripe_object_delete");
+    assert_eq!(parsed["data"]["deleted"], true);
+    server.join();
+}
+
+#[test]
+fn stripe_sync_plan_json_detects_missing_sandbox_product() {
+    let server = start_http_server(2, move |request| {
+        if request.contains("authorization: Bearer sk_live\r\n") {
+            return http_json_response(
+                "200 OK",
+                &[("Request-Id", "req_stripe_sync_live")],
+                r#"{"object":"list","data":[{"id":"prod_live","name":"Core","active":true}],"has_more":false}"#,
+            );
+        }
+        assert!(request.contains("authorization: Bearer sk_sandbox\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_sync_sandbox")],
+            r#"{"object":"list","data":[],"has_more":false}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "sync", "live-to-sandbox", "plan"])
+        .args([
+            "--live-api-key",
+            "sk_live",
+            "--sandbox-api-key",
+            "sk_sandbox",
+            "--base-url",
+            &server.base_url,
+            "--only",
+            "products",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["families"][0], "products");
+    assert_eq!(parsed["summary"]["create"], 1);
+    assert_eq!(parsed["actions"][0]["action"], "create");
+    assert_eq!(parsed["actions"][0]["live_id"], "prod_live");
+    server.join();
+}
+
+#[test]
+fn stripe_sync_apply_json_creates_missing_sandbox_product() {
+    let server = start_http_server(3, move |request| {
+        if request.starts_with("POST /v1/products HTTP/1.1\r\n") {
+            assert!(request.contains("authorization: Bearer sk_sandbox\r\n"));
+            assert!(request.contains("idempotency-key: idem_sync\r\n"));
+            assert!(request.contains("metadata%5Bsi_live_id%5D=prod_live"));
+            return http_json_response(
+                "200 OK",
+                &[("Request-Id", "req_stripe_sync_apply")],
+                r#"{"id":"prod_sandbox","name":"Core"}"#,
+            );
+        }
+        if request.contains("authorization: Bearer sk_live\r\n") {
+            return http_json_response(
+                "200 OK",
+                &[("Request-Id", "req_stripe_sync_apply_live")],
+                r#"{"object":"list","data":[{"id":"prod_live","name":"Core","active":true}],"has_more":false}"#,
+            );
+        }
+        assert!(request.contains("authorization: Bearer sk_sandbox\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_sync_apply_sandbox")],
+            r#"{"object":"list","data":[],"has_more":false}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "sync", "live-to-sandbox", "apply"])
+        .args([
+            "--live-api-key",
+            "sk_live",
+            "--sandbox-api-key",
+            "sk_sandbox",
+            "--base-url",
+            &server.base_url,
+            "--only",
+            "products",
+            "--force",
+            "--idempotency-key",
+            "idem_sync",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["applied"], 1);
+    assert_eq!(parsed["failures"], 0);
+    assert_eq!(parsed["mappings"]["prod_live"], "prod_sandbox");
+    server.join();
+}
+
+#[test]
 fn workos_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
