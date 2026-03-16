@@ -88,6 +88,13 @@ func (e *awsAPIErrorDetails) Error() string {
 }
 
 func cmdAWS(args []string) {
+	delegated, err := runAWSCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, awsUsageText)
 	if !routedOK {
 		return
