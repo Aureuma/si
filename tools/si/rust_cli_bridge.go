@@ -753,6 +753,14 @@ func runOpenAIKeyGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"key", "get"}, args...)...)
 }
 
+func runOpenAIKeyCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"key", "create"}, args...)...)
+}
+
+func runOpenAIKeyDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"key", "delete"}, args...)...)
+}
+
 func runOpenAIKeyCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -762,6 +770,10 @@ func runOpenAIKeyCommand(args []string) (bool, error) {
 		return runOpenAIKeyListCommand(args[1:])
 	case "get", "retrieve":
 		return runOpenAIKeyGetCommand(args[1:])
+	case "create":
+		return runOpenAIKeyCreateCommand(args[1:])
+	case "delete", "remove", "rm":
+		return runOpenAIKeyDeleteCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -775,12 +787,28 @@ func runOpenAIProjectGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "get"}, args...)...)
 }
 
+func runOpenAIProjectCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "create"}, args...)...)
+}
+
+func runOpenAIProjectUpdateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "update"}, args...)...)
+}
+
+func runOpenAIProjectArchiveCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "archive"}, args...)...)
+}
+
 func runOpenAIProjectAPIKeyListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "api-key", "list"}, args...)...)
 }
 
 func runOpenAIProjectAPIKeyGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "api-key", "get"}, args...)...)
+}
+
+func runOpenAIProjectAPIKeyDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "api-key", "delete"}, args...)...)
 }
 
 func runOpenAIProjectServiceAccountListCommand(args []string) (bool, error) {
@@ -791,8 +819,20 @@ func runOpenAIProjectServiceAccountGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "service-account", "get"}, args...)...)
 }
 
+func runOpenAIProjectServiceAccountCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "service-account", "create"}, args...)...)
+}
+
+func runOpenAIProjectServiceAccountDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "service-account", "delete"}, args...)...)
+}
+
 func runOpenAIProjectRateLimitListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "rate-limit", "list"}, args...)...)
+}
+
+func runOpenAIProjectRateLimitUpdateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"project", "rate-limit", "update"}, args...)...)
 }
 
 func runOpenAIProjectRateLimitCommand(args []string) (bool, error) {
@@ -802,6 +842,8 @@ func runOpenAIProjectRateLimitCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		return runOpenAIProjectRateLimitListCommand(args[1:])
+	case "update", "set":
+		return runOpenAIProjectRateLimitUpdateCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -816,6 +858,8 @@ func runOpenAIProjectAPIKeyCommand(args []string) (bool, error) {
 		return runOpenAIProjectAPIKeyListCommand(args[1:])
 	case "get", "retrieve":
 		return runOpenAIProjectAPIKeyGetCommand(args[1:])
+	case "delete", "remove", "rm":
+		return runOpenAIProjectAPIKeyDeleteCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -830,6 +874,10 @@ func runOpenAIProjectServiceAccountCommand(args []string) (bool, error) {
 		return runOpenAIProjectServiceAccountListCommand(args[1:])
 	case "get", "retrieve":
 		return runOpenAIProjectServiceAccountGetCommand(args[1:])
+	case "create":
+		return runOpenAIProjectServiceAccountCreateCommand(args[1:])
+	case "delete", "remove", "rm":
+		return runOpenAIProjectServiceAccountDeleteCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -844,6 +892,12 @@ func runOpenAIProjectCommand(args []string) (bool, error) {
 		return runOpenAIProjectListCommand(args[1:])
 	case "get", "retrieve":
 		return runOpenAIProjectGetCommand(args[1:])
+	case "create":
+		return runOpenAIProjectCreateCommand(args[1:])
+	case "update", "modify":
+		return runOpenAIProjectUpdateCommand(args[1:])
+	case "archive":
+		return runOpenAIProjectArchiveCommand(args[1:])
 	case "rate-limit", "rate-limits":
 		return runOpenAIProjectRateLimitCommand(args[1:])
 	case "api-key", "api-keys":

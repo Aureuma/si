@@ -3942,6 +3942,52 @@ fn openai_project_get_text_formats_response() {
 }
 
 #[test]
+fn openai_project_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/organization/projects HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        assert!(request.contains(r#""name":"Core""#));
+        assert!(request.contains(r#""geography":"eu""#));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_project_create")],
+            r#"{"id":"proj_123","name":"Core"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai", "project", "create", "--base-url", &server.base_url, "--api-key", "sk-test",
+            "--admin-api-key", "sk-admin", "--name", "Core", "--geography", "eu", "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_project_create");
+    assert_eq!(parsed["data"]["id"], "proj_123");
+    server.join();
+}
+
+#[test]
+fn openai_project_archive_requires_force() {
+    let stderr = cargo_bin()
+        .args([
+            "openai", "project", "archive", "proj_123", "--base-url", "https://api.example.test",
+            "--api-key", "sk-test", "--admin-api-key", "sk-admin",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    assert!(String::from_utf8_lossy(&stderr).contains("requires --force"));
+}
+
+#[test]
 fn openai_project_api_key_list_json_fetches_from_api_with_admin_key() {
     let server =
         start_one_shot_http_server(|request| {
@@ -4028,6 +4074,40 @@ fn openai_project_api_key_get_text_formats_response() {
     assert!(rendered.contains("Status: 200 200 OK"));
     assert!(rendered.contains("Request ID: req_key"));
     assert!(rendered.contains("\"id\": \"key_123\""));
+    server.join();
+}
+
+#[test]
+fn openai_project_api_key_delete_json_deletes_with_force() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(
+            request.starts_with(
+                "DELETE /v1/organization/projects/proj_123/api_keys/key_123 HTTP/1.1\r\n"
+            )
+        );
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_key_delete")],
+            r#"{"id":"key_123","deleted":true}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai", "project", "api-key", "delete", "key_123", "--base-url", &server.base_url,
+            "--api-key", "sk-test", "--admin-api-key", "sk-admin", "--project-id", "proj_123",
+            "--force", "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_key_delete");
+    assert_eq!(parsed["data"]["deleted"], true);
     server.join();
 }
 
@@ -4120,6 +4200,38 @@ fn openai_project_service_account_get_text_formats_response() {
 }
 
 #[test]
+fn openai_project_service_account_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /v1/organization/projects/proj_123/service_accounts HTTP/1.1\r\n"
+        ));
+        assert!(request.contains(r#"{"name":"Deploy"}"#));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_service_account_create")],
+            r#"{"id":"sa_123","name":"Deploy"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai", "project", "service-account", "create", "--base-url", &server.base_url,
+            "--api-key", "sk-test", "--admin-api-key", "sk-admin", "--project-id", "proj_123",
+            "--name", "Deploy", "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_service_account_create");
+    assert_eq!(parsed["data"]["id"], "sa_123");
+    server.join();
+}
+
+#[test]
 fn openai_project_rate_limit_list_json_fetches_from_api_with_admin_key() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with(
@@ -4163,6 +4275,38 @@ fn openai_project_rate_limit_list_json_fetches_from_api_with_admin_key() {
     assert_eq!(parsed["status_code"], 200);
     assert_eq!(parsed["request_id"], "req_rate_limits");
     assert_eq!(parsed["data"]["data"][0]["id"], "rl_123");
+    server.join();
+}
+
+#[test]
+fn openai_project_rate_limit_update_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /v1/organization/projects/proj_123/rate_limits/rl_123 HTTP/1.1\r\n"
+        ));
+        assert!(request.contains(r#"{"max_requests_per_1_minute":42}"#));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_rate_limit_update")],
+            r#"{"id":"rl_123","max_requests_per_1_minute":42}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai", "project", "rate-limit", "update", "--base-url", &server.base_url,
+            "--api-key", "sk-test", "--admin-api-key", "sk-admin", "--project-id", "proj_123",
+            "--rate-limit-id", "rl_123", "--max-requests-per-1-minute", "42", "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_rate_limit_update");
+    assert_eq!(parsed["data"]["max_requests_per_1_minute"], 42);
     server.join();
 }
 
@@ -4249,6 +4393,50 @@ fn openai_key_get_text_formats_response() {
     assert!(rendered.contains("Request ID: req_admin_key"));
     assert!(rendered.contains("\"id\": \"adminkey_123\""));
     server.join();
+}
+
+#[test]
+fn openai_key_create_json_posts_payload() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/organization/admin_api_keys HTTP/1.1\r\n"));
+        assert!(request.contains(r#"{"name":"Core"}"#));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_admin_key_create")],
+            r#"{"id":"adminkey_123","name":"Core"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai", "key", "create", "--base-url", &server.base_url, "--api-key", "sk-test",
+            "--admin-api-key", "sk-admin", "--name", "Core", "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_admin_key_create");
+    assert_eq!(parsed["data"]["id"], "adminkey_123");
+    server.join();
+}
+
+#[test]
+fn openai_key_delete_requires_force() {
+    let stderr = cargo_bin()
+        .args([
+            "openai", "key", "delete", "adminkey_123", "--base-url", "https://api.example.test",
+            "--api-key", "sk-test", "--admin-api-key", "sk-admin",
+        ])
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    assert!(String::from_utf8_lossy(&stderr).contains("requires --force"));
 }
 
 #[test]
