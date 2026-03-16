@@ -953,8 +953,47 @@ func runOCIOracularCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "cloud-init", "cloudinit":
+		return maybeDispatchRustCLIReadOnly("oci", append([]string{"oracular", "cloud-init"}, args[1:]...)...)
 	case "tenancy":
 		return runOCIOracularTenancyCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runOCIIdentityCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "availability-domains", "ads":
+		return maybeDispatchRustCLIReadOnly("oci", append([]string{"identity", "availability-domains"}, args[1:]...)...)
+	case "compartment", "compartments":
+		return maybeDispatchRustCLICompat("oci", append([]string{"identity", "compartment"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runOCINetworkCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	return maybeDispatchRustCLICompat("oci", append([]string{"network"}, args...)...)
+}
+
+func runOCIComputeCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "availability-domains", "ads":
+		return maybeDispatchRustCLIReadOnly("oci", append([]string{"compute", "availability-domains"}, args[1:]...)...)
+	case "image", "images":
+		return maybeDispatchRustCLIReadOnly("oci", append([]string{"compute", "image"}, args[1:]...)...)
+	case "instance", "instances":
+		return maybeDispatchRustCLICompat("oci", append([]string{"compute", "instance"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
@@ -969,6 +1008,12 @@ func runOCICommand(args []string) (bool, error) {
 		return runOCIAuthCommand(args[1:])
 	case "context":
 		return runOCIContextCommand(args[1:])
+	case "identity":
+		return runOCIIdentityCommand(args[1:])
+	case "network":
+		return runOCINetworkCommand(args[1:])
+	case "compute":
+		return runOCIComputeCommand(args[1:])
 	case "oracular":
 		return runOCIOracularCommand(args[1:])
 	default:
