@@ -728,6 +728,7 @@ dependencies = [
  "si-rs-provider-aws",
  "si-rs-provider-catalog",
  "si-rs-provider-cloudflare",
+ "si-rs-provider-gcp",
  "si-rs-provider-github",
  "si-rs-provider-stripe",
  "si-rs-provider-workos",
@@ -834,6 +835,14 @@ dependencies = [
 
 [[package]]
 name = "si-rs-provider-cloudflare"
+version = "0.54.0"
+dependencies = [
+ "serde",
+ "si-rs-config",
+]
+
+[[package]]
+name = "si-rs-provider-gcp"
 version = "0.54.0"
 dependencies = [
  "serde",
