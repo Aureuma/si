@@ -2076,6 +2076,40 @@ func TestRunGCPDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGCPCommandDelegatesToRustCLIForAPIKey(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-apikey'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"apikey", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp apikey to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-apikey" {
+		t.Fatalf("expected delegated Rust gcp apikey output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\napikey\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp apikey + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPCommandDelegatesToRustCLIForService(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
