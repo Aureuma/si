@@ -1193,6 +1193,10 @@ func runGitHubWorkflowRunGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "run", "get"}, args...)...)
 }
 
+func runGitHubWorkflowLogsCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "logs"}, args...)...)
+}
+
 func runGitHubWorkflowRunCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1216,6 +1220,8 @@ func runGitHubWorkflowCommand(args []string) (bool, error) {
 		return runGitHubWorkflowRunsCommand(args[1:])
 	case "run":
 		return runGitHubWorkflowRunCommand(args[1:])
+	case "logs":
+		return runGitHubWorkflowLogsCommand(args[1:])
 	default:
 		return false, nil
 	}
