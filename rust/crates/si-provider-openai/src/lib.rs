@@ -522,6 +522,58 @@ pub fn get_project_api_key(
     )
 }
 
+pub fn list_project_service_accounts(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    limit: Option<usize>,
+    after: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let mut params = Vec::new();
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.push(("limit", limit.to_string()));
+    }
+    if !after.trim().is_empty() {
+        params.push(("after", after.trim().to_owned()));
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    openai_get(
+        runtime,
+        &format!("/v1/organization/projects/{project_id}/service_accounts"),
+        &params,
+        true,
+    )
+}
+
+pub fn get_project_service_account(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    service_account_id: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let service_account_id = service_account_id.trim();
+    if service_account_id.is_empty() {
+        return Err("service account id is required".to_owned());
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    let service_account_id =
+        url::form_urlencoded::byte_serialize(service_account_id.as_bytes()).collect::<String>();
+    openai_get(
+        runtime,
+        &format!("/v1/organization/projects/{project_id}/service_accounts/{service_account_id}"),
+        &[],
+        true,
+    )
+}
+
 pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> String {
     if raw {
         if response.body.trim().is_empty() {

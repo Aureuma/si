@@ -429,6 +429,7 @@ Progress notes:
 - completed: the OpenAI provider slice now owns API-mode `auth status` verification too, so Rust covers both local context resolution and the standard OpenAI readiness probe while Codex-profile auth status remains on the Go path
 - completed: the OpenAI provider slice now owns read-only admin-key `project list` and `project get` execution too, extending Phase 7 deeper into the OpenAI organization API while create/update/archive and nested project-admin flows remain on the Go path
 - completed: the OpenAI provider slice now owns read-only project `api-key list` and `api-key get` execution too, extending Phase 7 deeper into OpenAI project-admin retrieval flows while delete/create/mutation paths remain on the Go path
+- completed: the OpenAI provider slice now owns read-only project `service-account list` and `service-account get` execution too, extending Phase 7 through the remaining project-admin retrieval flows while creation/deletion and broader mutation paths remain on the Go path
 
 ### Phase 8: Release/install migration
 
