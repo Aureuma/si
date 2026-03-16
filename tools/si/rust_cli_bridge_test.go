@@ -5247,6 +5247,142 @@ func TestRunGitHubIssueCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	}
 }
 
+func TestRunGitHubIssueCreateCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-issue-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubIssueCreateCommand([]string{"Aureuma/si", "--title", "Rust issue", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubIssueCreateCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github issue create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-issue-create" {
+		t.Fatalf("expected delegated Rust github issue create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nissue\ncreate\nAureuma/si\n--title\nRust issue\n--json" {
+		t.Fatalf("expected Rust CLI args to be github issue create + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubIssueCommentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-issue-comment'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubIssueCommentCommand([]string{"Aureuma/si", "77", "--body", "looks good", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubIssueCommentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github issue comment to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-issue-comment" {
+		t.Fatalf("expected delegated Rust github issue comment output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nissue\ncomment\nAureuma/si\n77\n--body\nlooks good\n--json" {
+		t.Fatalf("expected Rust CLI args to be github issue comment + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubIssueCloseCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-issue-close'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubIssueCloseCommand([]string{"Aureuma/si", "77", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubIssueCloseCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github issue close to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-issue-close" {
+		t.Fatalf("expected delegated Rust github issue close output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nissue\nclose\nAureuma/si\n77\n--json" {
+		t.Fatalf("expected Rust CLI args to be github issue close + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubIssueReopenCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-issue-reopen'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubIssueReopenCommand([]string{"Aureuma/si", "77", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubIssueReopenCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github issue reopen to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-issue-reopen" {
+		t.Fatalf("expected delegated Rust github issue reopen output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nissue\nreopen\nAureuma/si\n77\n--json" {
+		t.Fatalf("expected Rust CLI args to be github issue reopen + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubBranchCommandDefaultsToGoForMutationPath(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

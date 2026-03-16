@@ -66,6 +66,8 @@ use si_rs_provider_github::{
     add_project_item as github_add_project_item,
     archive_project_item as github_archive_project_item,
     clear_project_item_field_value as github_clear_project_item_field_value,
+    comment_issue as github_comment_issue,
+    create_issue as github_create_issue,
     delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
@@ -83,6 +85,7 @@ use si_rs_provider_github::{
     resolve_access_token as github_resolve_access_token,
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
+    set_issue_state as github_set_issue_state,
     get_workflow_run as github_get_workflow_run,
     unarchive_project_item as github_unarchive_project_item,
     update_project as github_update_project,
@@ -2381,6 +2384,125 @@ enum GitHubIssueCommand {
         raw: bool,
     },
     Get {
+        repo_ref: Option<String>,
+        number: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Comment {
+        repo_ref: Option<String>,
+        number: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Close {
+        repo_ref: Option<String>,
+        number: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Reopen {
         repo_ref: Option<String>,
         number: Option<i64>,
         #[arg(long)]
@@ -5872,6 +5994,138 @@ fn main() -> Result<()> {
                     app_id,
                     app_key,
                     installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubIssueCommand::Create {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    title,
+                    body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_issue_create(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    title,
+                    body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubIssueCommand::Comment {
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    body,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_issue_comment(
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    body,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubIssueCommand::Close {
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_issue_set_state(
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    "closed",
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubIssueCommand::Reopen {
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_issue_set_state(
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    "open",
                     home,
                     settings_file,
                     json,
@@ -11309,6 +11563,139 @@ fn run_github_issue_get(
     let number = number.ok_or_else(|| anyhow::Error::msg("issue number is required"))?;
     let response =
         github_get_issue(&runtime, &repo_owner, &repo_name, number).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_issue_create(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    title: Option<String>,
+    body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let title = title
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--title is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let mut payload = parse_github_params(params)?;
+    payload.insert("title".to_owned(), title);
+    if let Some(body) = body.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        payload.insert("body".to_owned(), body);
+    }
+    let payload = Value::Object(
+        payload
+            .into_iter()
+            .map(|(key, value)| (key, Value::String(value)))
+            .collect(),
+    );
+    let response =
+        github_create_issue(&runtime, &repo_owner, &repo_name, payload).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_issue_comment(
+    repo_ref: Option<String>,
+    number: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let body = body
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--body is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let number = number.ok_or_else(|| anyhow::Error::msg("issue number is required"))?;
+    let response = github_comment_issue(&runtime, &repo_owner, &repo_name, number, &body)
+        .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_issue_set_state(
+    repo_ref: Option<String>,
+    number: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    state: &str,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let number = number.ok_or_else(|| anyhow::Error::msg("issue number is required"))?;
+    let response = github_set_issue_state(&runtime, &repo_owner, &repo_name, number, state)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
