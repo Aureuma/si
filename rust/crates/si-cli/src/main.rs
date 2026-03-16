@@ -444,6 +444,40 @@ enum CloudflareCommand {
         #[arg(long)]
         settings_file: Option<PathBuf>,
     },
+    Logs {
+        #[command(subcommand)]
+        command: CloudflareLogsCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareLogsCommand {
+    Received {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -6486,6 +6520,35 @@ fn main() -> Result<()> {
                 home,
                 settings_file,
             )?,
+            CloudflareCommand::Logs { command } => match command {
+                CloudflareLogsCommand::Received {
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                } => run_cloudflare_logs_received(
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+            },
             CloudflareCommand::Context { command } => match command {
                 CloudflareContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -14694,6 +14757,41 @@ fn run_cloudflare_smoke(
         anyhow::bail!("cloudflare smoke checks failed");
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_logs_received(
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: "/zones/{zone_id}/logs/received".to_owned(),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
 }
 
 fn parse_oci_raw_service(value: &str) -> Result<OCIAPIService> {
