@@ -2021,6 +2021,48 @@ fn openai_usage_completions_json_fetches_from_api_with_admin_key() {
 }
 
 #[test]
+fn openai_codex_usage_json_defaults_codex_model() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/organization/usage/completions?start_time="));
+        assert!(request.contains("&limit=1"));
+        assert!(request.contains("&models=gpt-5-codex"));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_codex_usage")],
+            r#"{"data":[{"object":"bucket","results":[{"input_tokens":7}]}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "codex",
+            "usage",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--limit",
+            "1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_codex_usage");
+    assert_eq!(parsed["data"]["data"][0]["object"], "bucket");
+    server.join();
+}
+
+#[test]
 fn oci_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

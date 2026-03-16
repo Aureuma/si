@@ -1504,6 +1504,13 @@ func cmdOpenAICodex(args []string) {
 }
 
 func cmdOpenAICodexUsage(args []string) {
+	delegated, err := runOpenAICodexUsageCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai codex usage", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)

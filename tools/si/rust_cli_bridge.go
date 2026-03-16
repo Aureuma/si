@@ -475,6 +475,10 @@ func runOpenAIUsageMetricCommand(metric string, args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"usage", metric}, args...)...)
 }
 
+func runOpenAICodexUsageCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"codex", "usage"}, args...)...)
+}
+
 func runOpenAIKeyListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"key", "list"}, args...)...)
 }

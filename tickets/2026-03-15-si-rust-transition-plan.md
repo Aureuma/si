@@ -436,6 +436,7 @@ Progress notes:
 - completed: the OpenAI provider slice now owns read-only project `rate-limit list` execution too, extending Phase 7 across the remaining OpenAI project-admin listing surfaces while update/mutation flows remain on the Go path
 - completed: the OpenAI provider slice now owns read-only top-level admin `key list` and `key get` execution too, extending Phase 7 across the remaining non-mutating OpenAI admin-key retrieval surfaces while create/delete and broader mutation paths remain on the Go path
 - completed: the OpenAI provider slice now owns read-only `usage <metric>` execution too, extending Phase 7 across the shared OpenAI usage/monitoring retrieval surface while mutation paths and broader raw/admin write flows remain on the Go path
+- completed: the OpenAI provider slice now also owns read-only `codex usage`, reusing the migrated completions-usage path with Codex-default model filtering so another live OpenAI monitoring surface no longer stays only on the Go wrapper path
 
 ### Phase 8: Release/install migration
 
