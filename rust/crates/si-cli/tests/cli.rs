@@ -4974,6 +4974,229 @@ fn gcp_raw_json_fetches_with_headers_and_query_params() {
 }
 
 #[test]
+fn gcp_apikey_list_json_fetches_keys() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v2/projects/proj_core/locations/global/keys?"));
+        assert!(request.contains("pageSize=3"));
+        assert!(request.contains("showDeleted=true"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_apikey_list")],
+            r#"{"keys":[{"name":"projects/proj_core/locations/global/keys/key1"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "apikey", "list", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--limit",
+            "3",
+            "--show-deleted",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gcp_apikey_list");
+    assert_eq!(
+        parsed["data"]["keys"][0]["name"],
+        "projects/proj_core/locations/global/keys/key1"
+    );
+    server.join();
+}
+
+#[test]
+fn gcp_apikey_get_json_expands_key_id() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /v2/projects/proj_core/locations/global/keys/key1 HTTP/1.1\r\n"
+        ));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_apikey_get")],
+            r#"{"name":"projects/proj_core/locations/global/keys/key1"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "apikey", "get", "key1", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(
+        parsed["data"]["name"],
+        "projects/proj_core/locations/global/keys/key1"
+    );
+    server.join();
+}
+
+#[test]
+fn gcp_apikey_create_json_posts_payload() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /v2/projects/proj_core/locations/global/keys HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("\"displayName\":\"Primary key\""));
+        assert!(request.contains("\"apiTargets\""));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_apikey_create")],
+            r#"{"name":"operations/create-key"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "apikey", "create", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--display-name",
+            "Primary key",
+            "--restrictions-json",
+            "{\"apiTargets\":[{\"service\":\"translate.googleapis.com\"}]}",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gcp_apikey_create");
+    server.join();
+}
+
+#[test]
+fn gcp_apikey_lookup_json_queries_key_string() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v2/keys:lookupKey?"));
+        assert!(request.contains("keyString=AIzaLookup"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_apikey_lookup")],
+            r#"{"parent":"projects/proj_core/locations/global/keys/key1"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "apikey", "lookup", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--key-string",
+            "AIzaLookup",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(
+        parsed["data"]["parent"],
+        "projects/proj_core/locations/global/keys/key1"
+    );
+    server.join();
+}
+
+#[test]
+fn gcp_apikey_delete_json_requires_force_and_deletes() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "DELETE /v2/projects/proj_core/locations/global/keys/key1 HTTP/1.1\r\n"
+        ));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_apikey_delete")],
+            r#"{"done":true}"#,
+        )
+    });
+
+    cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "apikey", "delete", "key1", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .failure();
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "apikey", "delete", "key1", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--force", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gcp_apikey_delete");
+    server.join();
+}
+
+#[test]
 fn google_places_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

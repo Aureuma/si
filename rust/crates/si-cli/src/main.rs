@@ -1777,6 +1777,10 @@ enum GCPCommand {
         #[command(subcommand)]
         command: GCPServiceCommand,
     },
+    Apikey {
+        #[command(subcommand)]
+        command: GCPAPIKeyCommand,
+    },
     Raw {
         #[arg(long)]
         account: Option<String>,
@@ -1858,6 +1862,206 @@ enum GCPContextCommand {
         settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPAPIKeyCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        show_deleted: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        display_name: Option<String>,
+        #[arg(long)]
+        restrictions_json: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Update {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        display_name: Option<String>,
+        #[arg(long)]
+        restrictions_json: Option<String>,
+        #[arg(long)]
+        update_mask: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Lookup {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        key_string: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Undelete {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -9340,6 +9544,207 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            GCPCommand::Apikey { command } => match command {
+                GCPAPIKeyCommand::List {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    limit,
+                    show_deleted,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_list(
+                        account, env, project, base_url, access_token, limit, show_deleted,
+                        params, home, settings_file, format, raw,
+                    )?
+                }
+                GCPAPIKeyCommand::Get {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    name,
+                    resource,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_get(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name.or(resource),
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GCPAPIKeyCommand::Create {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    display_name,
+                    restrictions_json,
+                    body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_create(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        display_name,
+                        restrictions_json,
+                        body,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GCPAPIKeyCommand::Update {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    name,
+                    resource,
+                    display_name,
+                    restrictions_json,
+                    update_mask,
+                    body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_update(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name.or(resource),
+                        display_name,
+                        restrictions_json,
+                        update_mask,
+                        body,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GCPAPIKeyCommand::Delete {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    name,
+                    resource,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_delete(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name.or(resource),
+                        force,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GCPAPIKeyCommand::Lookup {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    key_string,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_lookup(
+                        account, env, project, base_url, access_token, key_string, home,
+                        settings_file, format, raw,
+                    )?
+                }
+                GCPAPIKeyCommand::Undelete {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    name,
+                    resource,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_apikey_undelete(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name.or(resource),
+                        force,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+            },
             GCPCommand::Raw {
                 account,
                 env,
@@ -16796,6 +17201,368 @@ fn run_gcp_raw(
             json_body,
             raw_body: body.unwrap_or_default(),
             content_type: content_type.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+fn gcp_apikey_base_url(base_url: Option<String>) -> Option<String> {
+    Some(
+        base_url
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "https://apikeys.googleapis.com".to_owned()),
+    )
+}
+
+fn normalize_gcp_apikey_name(project_id: &str, value: &str) -> Result<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        anyhow::bail!("api key name is required");
+    }
+    if value.starts_with("projects/") {
+        return Ok(value.trim_matches('/').to_owned());
+    }
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required to expand key id");
+    }
+    Ok(format!(
+        "projects/{}/locations/global/keys/{}",
+        project_id.trim(),
+        value.trim_matches('/'),
+    ))
+}
+
+fn parse_gcp_json_value(raw: &str, flag_name: &str) -> Result<Value> {
+    serde_json::from_str::<Value>(raw).map_err(|err| anyhow::anyhow!("invalid {flag_name}: {err}"))
+}
+
+fn parse_gcp_json_body_params(params: Vec<String>) -> Result<serde_json::Map<String, Value>> {
+    let mut out = serde_json::Map::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            anyhow::bail!("invalid key=value argument {:?}", raw);
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("gcp key cannot be empty");
+        }
+        let value = value.trim();
+        let parsed =
+            serde_json::from_str::<Value>(value).unwrap_or_else(|_| Value::String(value.to_owned()));
+        out.insert(key.to_owned(), parsed);
+    }
+    Ok(out)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_gcp_apikey_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GCPRuntime> {
+    load_gcp_runtime(
+        account,
+        environment,
+        project,
+        gcp_apikey_base_url(base_url),
+        access_token,
+        home,
+        settings_file,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    limit: Option<usize>,
+    show_deleted: bool,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let mut params = parse_gcp_params(params)?;
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.insert("pageSize".to_owned(), limit.to_string());
+    }
+    if show_deleted {
+        params.insert("showDeleted".to_owned(), "true".to_owned());
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v2/projects/{}/locations/global/keys", runtime.project_id.trim()),
+            params,
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_get(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource_name =
+        normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v2/{resource_name}"),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_create(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    display_name: Option<String>,
+    restrictions_json: Option<String>,
+    body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v2/projects/{}/locations/global/keys", runtime.project_id.trim()),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let mut payload = parse_gcp_json_body_params(params)?;
+        if let Some(display_name) = display_name.filter(|value| !value.trim().is_empty()) {
+            payload.insert("displayName".to_owned(), Value::String(display_name.trim().to_owned()));
+        }
+        if let Some(restrictions_json) = restrictions_json.filter(|value| !value.trim().is_empty()) {
+            payload.insert(
+                "restrictions".to_owned(),
+                parse_gcp_json_value(&restrictions_json, "--restrictions-json")?,
+            );
+        }
+        if payload
+            .get("displayName")
+            .and_then(|value| value.as_str())
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+        {
+            anyhow::bail!("--display-name is required");
+        }
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v2/projects/{}/locations/global/keys", runtime.project_id.trim()),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_update(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    display_name: Option<String>,
+    restrictions_json: Option<String>,
+    update_mask: Option<String>,
+    body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource_name =
+        normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
+    let mut query = BTreeMap::new();
+    let mut mask = update_mask.unwrap_or_default().trim().to_owned();
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "PATCH".to_owned(),
+            path: format!("/v2/{resource_name}"),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let mut payload = parse_gcp_json_body_params(params)?;
+        if let Some(display_name) = display_name.filter(|value| !value.trim().is_empty()) {
+            payload.insert("displayName".to_owned(), Value::String(display_name.trim().to_owned()));
+            if mask.is_empty() {
+                mask = "displayName".to_owned();
+            }
+        }
+        if let Some(restrictions_json) = restrictions_json.filter(|value| !value.trim().is_empty()) {
+            payload.insert(
+                "restrictions".to_owned(),
+                parse_gcp_json_value(&restrictions_json, "--restrictions-json")?,
+            );
+            if mask.is_empty() {
+                mask = "restrictions".to_owned();
+            }
+        }
+        if payload.is_empty() {
+            anyhow::bail!("at least one update field is required");
+        }
+        GCPAPIRequest {
+            method: "PATCH".to_owned(),
+            path: format!("/v2/{resource_name}"),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    if !mask.is_empty() {
+        query.insert("updateMask".to_owned(), mask);
+    }
+    let request = GCPAPIRequest { params: query, ..request };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_delete(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("--force is required");
+    }
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource_name =
+        normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/v2/{resource_name}"),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_lookup(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    key_string: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: "/v2/keys:lookupKey".to_owned(),
+            params: BTreeMap::from([("keyString".to_owned(), key_string.trim().to_owned())]),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_apikey_undelete(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("--force is required");
+    }
+    let runtime = load_gcp_apikey_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource_name =
+        normalize_gcp_apikey_name(&runtime.project_id, name.as_deref().unwrap_or_default())?;
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v2/{resource_name}:undelete"),
+            json_body: Some(serde_json::json!({})),
+            ..GCPAPIRequest::default()
         },
     )
     .map_err(anyhow::Error::msg)?;
