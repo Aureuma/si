@@ -3348,6 +3348,44 @@ fn cloudflare_smoke_json_runs_public_checks_and_skips_account_scoped_ones() {
 }
 
 #[test]
+fn cloudflare_logs_received_json_fetches_zone_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones/zone_123/logs/received?count=10 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_logs")],
+            r#"{"success":true,"result":{"url":"https://example.com/logs.gz"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "logs", "received"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "count=10",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_cloudflare_logs");
+    assert_eq!(parsed["data"]["url"], "https://example.com/logs.gz");
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
