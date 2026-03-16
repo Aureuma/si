@@ -1137,6 +1137,28 @@ func runGitHubRepoCommand(args []string) (bool, error) {
 	}
 }
 
+func runGitHubProjectListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "list"}, args...)...)
+}
+
+func runGitHubProjectGetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "get"}, args...)...)
+}
+
+func runGitHubProjectCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runGitHubProjectListCommand(args[1:])
+	case "get":
+		return runGitHubProjectGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGitHubCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1146,6 +1168,8 @@ func runGitHubCommand(args []string) (bool, error) {
 		return runGitHubAuthCommand(args[1:])
 	case "context":
 		return runGitHubContextCommand(args[1:])
+	case "project":
+		return runGitHubProjectCommand(args[1:])
 	case "repo":
 		return runGitHubRepoCommand(args[1:])
 	case "release":

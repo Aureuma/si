@@ -15,6 +15,13 @@ import (
 )
 
 func cmdGithubProject(args []string) {
+	delegated, err := runGitHubProjectCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github project <list|get|update|fields|items|item-add|item-set|item-clear|item-archive|item-unarchive|item-delete> ...")
 	if !routedOK {
 		return
@@ -77,6 +84,13 @@ func (o *githubProjectAuthInputs) runtimeClient() (githubRuntimeContext, githubB
 }
 
 func cmdGithubProjectList(args []string) {
+	delegated, err := runGitHubProjectListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github project list", flag.ExitOnError)
 	auth := addGithubProjectAuthFlags(fs)
@@ -150,6 +164,13 @@ query($org:String!,$first:Int!){
 }
 
 func cmdGithubProjectGet(args []string) {
+	delegated, err := runGitHubProjectGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github project get", flag.ExitOnError)
 	auth := addGithubProjectAuthFlags(fs)

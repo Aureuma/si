@@ -63,10 +63,11 @@ use si_rs_provider_gcp::{
 };
 use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
-    get_release as github_get_release, get_repo as github_get_repo, list_contexts,
+    get_project as github_get_project, get_release as github_get_release,
+    get_repo as github_get_repo, list_contexts, list_projects as github_list_projects,
     list_releases as github_list_releases, list_repos as github_list_repos,
     render_context_list_text, resolve_auth_status, resolve_current_context,
-    resolve_runtime as resolve_github_runtime,
+    resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
 };
 use si_rs_provider_google::{
     GooglePlacesAuthStatus, GooglePlacesContextListEntry, GooglePlacesCurrentContext,
@@ -1464,6 +1465,10 @@ enum GitHubCommand {
         #[command(subcommand)]
         command: GitHubContextCommand,
     },
+    Project {
+        #[command(subcommand)]
+        command: GitHubProjectCommand,
+    },
     Repo {
         #[command(subcommand)]
         command: GitHubRepoCommand,
@@ -1626,6 +1631,66 @@ enum GitHubRepoCommand {
     },
     Get {
         repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubProjectCommand {
+    List {
+        organization_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value_t = 30)]
+        limit: usize,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        project_ref: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -4451,6 +4516,68 @@ fn main() -> Result<()> {
                     let format = if json { OutputFormat::Json } else { format };
                     show_github_context_current(home, settings_file, format)?
                 }
+            },
+            GitHubCommand::Project { command } => match command {
+                GitHubProjectCommand::List {
+                    organization_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    limit,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_list(
+                    organization_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    limit,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::Get {
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_get(
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
             GitHubCommand::Repo { command } => match command {
                 GitHubRepoCommand::List {
@@ -7777,6 +7904,240 @@ fn summarize_github_item(item: &Value) -> String {
         return name.to_owned();
     }
     serde_json::to_string(item).unwrap_or_else(|_| "{}".to_owned())
+}
+
+#[derive(Debug, Clone)]
+struct GitHubProjectRef {
+    project_id: String,
+    organization: String,
+    number: i64,
+}
+
+fn parse_github_project_ref(raw: &str) -> Result<GitHubProjectRef> {
+    let value = raw.trim();
+    if value.is_empty() {
+        return Err(anyhow::Error::msg("project reference is required"));
+    }
+    if value.starts_with("http://") || value.starts_with("https://") {
+        let marker = "/orgs/";
+        if let Some(idx) = value.find(marker) {
+            let tail = &value[idx + marker.len()..];
+            let parts = tail.split('/').collect::<Vec<_>>();
+            if parts.len() >= 3 && parts[1].eq_ignore_ascii_case("projects") {
+                return Ok(GitHubProjectRef {
+                    project_id: String::new(),
+                    organization: parts[0].trim().to_owned(),
+                    number: parts[2]
+                        .trim()
+                        .parse::<i64>()
+                        .map_err(|_| anyhow::Error::msg("project number must be an integer"))?,
+                });
+            }
+        }
+        return Err(anyhow::Error::msg(format!(
+            "unsupported project url format: {value}"
+        )));
+    }
+    if let Ok(number) = value.parse::<i64>() {
+        return Ok(GitHubProjectRef {
+            project_id: String::new(),
+            organization: String::new(),
+            number,
+        });
+    }
+    if let Some((organization, number)) = value.split_once('/') {
+        if let Ok(parsed) = number.trim().parse::<i64>() {
+            let organization = organization.trim();
+            if !organization.is_empty() {
+                return Ok(GitHubProjectRef {
+                    project_id: String::new(),
+                    organization: organization.to_owned(),
+                    number: parsed,
+                });
+            }
+        }
+    }
+    Ok(GitHubProjectRef {
+        project_id: value.to_owned(),
+        organization: String::new(),
+        number: 0,
+    })
+}
+
+fn summarize_github_project(project: &Value) -> String {
+    let number = project.get("number").and_then(Value::as_i64).unwrap_or_default();
+    let title = project
+        .get("title")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("(untitled)");
+    let project_id = project
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("-");
+    let public_text = if project.get("public").and_then(Value::as_bool).unwrap_or(false) {
+        "public"
+    } else {
+        "private"
+    };
+    let closed_text = if project.get("closed").and_then(Value::as_bool).unwrap_or(false) {
+        "closed"
+    } else {
+        "open"
+    };
+    if let Some(url) = project.get("url").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+        return format!("#{number} {title} [{public_text}, {closed_text}] {project_id} ({url})");
+    }
+    format!("#{number} {title} [{public_text}, {closed_text}] {project_id}")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_list(
+    organization_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    limit: usize,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if limit == 0 {
+        return Err(anyhow::Error::msg("--limit must be greater than 0"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let organization = organization_ref
+        .filter(|value| !value.trim().is_empty())
+        .or(owner)
+        .unwrap_or_else(|| runtime.owner.clone());
+    if organization.trim().is_empty() {
+        return Err(anyhow::Error::msg(
+            "organization owner is required (use positional org, --owner, or context owner)",
+        ));
+    }
+    let response =
+        github_list_projects(&runtime, &organization, limit).map_err(anyhow::Error::msg)?;
+    let projects = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("organization"))
+        .and_then(|organization| organization.get("projectsV2"))
+        .and_then(|projects| projects.get("nodes"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "organization": organization,
+                "count": projects.len(),
+                "projects": projects,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!("Project list: {} ({})", organization, projects.len());
+    for project in &projects {
+        println!("  {}", summarize_github_project(project));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_get(
+    project_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let reference = parse_github_project_ref(project_ref.as_deref().unwrap_or_default())?;
+    let mut organization = reference.organization.clone();
+    if organization.trim().is_empty() {
+        organization = owner.unwrap_or_else(|| runtime.owner.clone());
+    }
+    let project_id = if !reference.project_id.trim().is_empty() {
+        reference.project_id
+    } else {
+        if organization.trim().is_empty() {
+            return Err(anyhow::Error::msg(format!(
+                "organization is required to resolve project number {}",
+                reference.number
+            )));
+        }
+        github_resolve_project_id(&runtime, &organization, reference.number)
+            .map_err(anyhow::Error::msg)?
+    };
+    let response = github_get_project(&runtime, &project_id).map_err(anyhow::Error::msg)?;
+    let project = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("node"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    if project.is_null() {
+        return Err(anyhow::Error::msg("project not found"));
+    }
+    if json {
+        let mut payload = serde_json::Map::new();
+        payload.insert("project".to_owned(), project);
+        if !organization.trim().is_empty() {
+            payload.insert("organization".to_owned(), Value::String(organization));
+        }
+        println!("{}", serde_json::to_string_pretty(&Value::Object(payload))?);
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!("{}", serde_json::to_string_pretty(&project)?);
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
