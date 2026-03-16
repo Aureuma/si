@@ -1660,16 +1660,37 @@ func TestRunGoogleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 }
 
-func TestRunOpenAICommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOpenAICommand([]string{"project", "create", "--json"})
-	if err != nil {
-		t.Fatalf("runOpenAICommand: %v", err)
+func TestRunOpenAICommandDelegatesToRustCLIForMutationPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-root-mutation'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go openai root path for mutation subtree")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAICommand([]string{"project", "create", "--name", "Core", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai root to delegate mutation subtree to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-root-mutation" {
+		t.Fatalf("expected delegated Rust openai root mutation output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\ncreate\n--name\nCore\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai root mutation + args, got %q", string(argsData))
 	}
 }
 
@@ -1754,16 +1775,37 @@ func TestRunOpenAIAuthCommandDelegatesToRustCLIForAPIStatus(t *testing.T) {
 	}
 }
 
-func TestRunOpenAIProjectCommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOpenAIProjectCommand([]string{"create", "--json"})
-	if err != nil {
-		t.Fatalf("runOpenAIProjectCommand: %v", err)
+func TestRunOpenAIProjectCommandDelegatesToRustCLIForCreate(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-project-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go openai project path for create")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIProjectCommand([]string{"create", "--name", "Core", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIProjectCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai project create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-project-create" {
+		t.Fatalf("expected delegated Rust openai project create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\ncreate\n--name\nCore\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai project create + args, got %q", string(argsData))
 	}
 }
 
@@ -1801,16 +1843,37 @@ func TestRunOpenAIProjectCommandDelegatesToRustCLIForList(t *testing.T) {
 	}
 }
 
-func TestRunOpenAIProjectRateLimitCommandDefaultsToGoForUpdate(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOpenAIProjectRateLimitCommand([]string{"update", "--json"})
-	if err != nil {
-		t.Fatalf("runOpenAIProjectRateLimitCommand: %v", err)
+func TestRunOpenAIProjectRateLimitCommandDelegatesToRustCLIForUpdate(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-project-rate-limit-update'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go openai project rate-limit path for update")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIProjectRateLimitCommand([]string{"update", "--project-id", "proj_123", "--rate-limit-id", "rl_123", "--max-requests-per-1-minute", "42", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIProjectRateLimitCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai project rate-limit update to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-project-rate-limit-update" {
+		t.Fatalf("expected delegated Rust openai project rate-limit update output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\nrate-limit\nupdate\n--project-id\nproj_123\n--rate-limit-id\nrl_123\n--max-requests-per-1-minute\n42\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai project rate-limit update + args, got %q", string(argsData))
 	}
 }
 
@@ -1848,16 +1911,37 @@ func TestRunOpenAIProjectRateLimitCommandDelegatesToRustCLIForList(t *testing.T)
 	}
 }
 
-func TestRunOpenAIProjectAPIKeyCommandDefaultsToGoForDelete(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOpenAIProjectAPIKeyCommand([]string{"delete", "--json"})
-	if err != nil {
-		t.Fatalf("runOpenAIProjectAPIKeyCommand: %v", err)
+func TestRunOpenAIProjectAPIKeyCommandDelegatesToRustCLIForDelete(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-project-api-key-delete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go openai project api-key path for delete")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIProjectAPIKeyCommand([]string{"delete", "--project-id", "proj_123", "key_123", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIProjectAPIKeyCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai project api-key delete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-project-api-key-delete" {
+		t.Fatalf("expected delegated Rust openai project api-key delete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\napi-key\ndelete\n--project-id\nproj_123\nkey_123\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai project api-key delete + args, got %q", string(argsData))
 	}
 }
 
@@ -1895,16 +1979,37 @@ func TestRunOpenAIProjectAPIKeyCommandDelegatesToRustCLIForList(t *testing.T) {
 	}
 }
 
-func TestRunOpenAIProjectServiceAccountCommandDefaultsToGoForCreate(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOpenAIProjectServiceAccountCommand([]string{"create", "--json"})
-	if err != nil {
-		t.Fatalf("runOpenAIProjectServiceAccountCommand: %v", err)
+func TestRunOpenAIProjectServiceAccountCommandDelegatesToRustCLIForCreate(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-project-service-account-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go openai project service-account path for create")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIProjectServiceAccountCommand([]string{"create", "--project-id", "proj_123", "--name", "Deploy", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIProjectServiceAccountCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai project service-account create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-project-service-account-create" {
+		t.Fatalf("expected delegated Rust openai project service-account create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\nservice-account\ncreate\n--project-id\nproj_123\n--name\nDeploy\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai project service-account create + args, got %q", string(argsData))
 	}
 }
 
@@ -1942,16 +2047,37 @@ func TestRunOpenAIProjectServiceAccountCommandDelegatesToRustCLIForList(t *testi
 	}
 }
 
-func TestRunOpenAIKeyCommandDefaultsToGoForCreate(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runOpenAIKeyCommand([]string{"create", "--json"})
-	if err != nil {
-		t.Fatalf("runOpenAIKeyCommand: %v", err)
+func TestRunOpenAIKeyCommandDelegatesToRustCLIForCreate(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-key-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
 	}
-	if delegated {
-		t.Fatalf("expected Go openai key path for create")
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIKeyCommand([]string{"create", "--name", "Core", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIKeyCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai key create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-key-create" {
+		t.Fatalf("expected delegated Rust openai key create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nkey\ncreate\n--name\nCore\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai key create + args, got %q", string(argsData))
 	}
 }
 

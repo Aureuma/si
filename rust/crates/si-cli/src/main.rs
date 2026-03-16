@@ -126,7 +126,14 @@ use si_rs_provider_oci::{
 };
 use si_rs_provider_openai::{
     OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
-    OpenAICurrentContext, OpenAIRuntime, get_admin_api_key as openai_get_admin_api_key,
+    OpenAICurrentContext, OpenAIRuntime, archive_project as openai_archive_project,
+    create_admin_api_key as openai_create_admin_api_key,
+    create_project as openai_create_project,
+    create_project_service_account as openai_create_project_service_account,
+    delete_admin_api_key as openai_delete_admin_api_key,
+    delete_project_api_key as openai_delete_project_api_key,
+    delete_project_service_account as openai_delete_project_service_account,
+    get_admin_api_key as openai_get_admin_api_key,
     get_model as openai_get_model, get_project as openai_get_project,
     get_project_api_key as openai_get_project_api_key,
     get_project_service_account as openai_get_project_service_account,
@@ -140,7 +147,9 @@ use si_rs_provider_openai::{
     render_auth_status_text as render_openai_auth_status_text,
     render_context_list_text as render_openai_context_list_text,
     resolve_current_context as resolve_openai_current_context,
-    resolve_runtime as resolve_openai_runtime, verify_auth_status as verify_openai_auth_status,
+    resolve_runtime as resolve_openai_runtime, update_project as openai_update_project,
+    update_project_rate_limit as openai_update_project_rate_limit,
+    verify_auth_status as verify_openai_auth_status,
 };
 use si_rs_provider_stripe::{
     StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
@@ -1072,6 +1081,61 @@ enum OpenAIKeyCommand {
         #[arg(long)]
         raw: bool,
     },
+    Create {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        key_ref: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1120,6 +1184,94 @@ enum OpenAIProjectCommand {
         org_id: Option<String>,
         #[arg(long)]
         project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        geography: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Update {
+        project_ref: Option<String>,
+        #[arg(long)]
+        id: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Archive {
+        project_ref: Option<String>,
+        #[arg(long)]
+        id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        force: bool,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -1196,6 +1348,33 @@ enum OpenAIProjectAPIKeyCommand {
         #[arg(long)]
         raw: bool,
     },
+    Delete {
+        key_ref: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1251,6 +1430,61 @@ enum OpenAIProjectServiceAccountCommand {
         #[arg(long)]
         raw: bool,
     },
+    Create {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        service_account_ref: Option<String>,
+        #[arg(long)]
+        service_account_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1274,6 +1508,46 @@ enum OpenAIProjectRateLimitCommand {
         after: Option<String>,
         #[arg(long)]
         before: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Update {
+        #[arg(long)]
+        rate_limit_id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        max_requests_per_1_minute: Option<i64>,
+        #[arg(long)]
+        max_requests_per_1_day: Option<i64>,
+        #[arg(long)]
+        max_tokens_per_1_minute: Option<i64>,
+        #[arg(long)]
+        max_images_per_1_minute: Option<i64>,
+        #[arg(long)]
+        max_audio_megabytes_per_1_minute: Option<i64>,
+        #[arg(long)]
+        batch_1_day_max_input_tokens: Option<i64>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -5943,6 +6217,63 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+                OpenAIKeyCommand::Create {
+                    name,
+                    body,
+                    body_file,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_key_create(
+                    name,
+                    body,
+                    body_file,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIKeyCommand::Delete {
+                    key_ref,
+                    key_id,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_key_delete(
+                    key_id.or(key_ref),
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
             OpenAICommand::Project { command } => match command {
                 OpenAIProjectCommand::List {
@@ -6000,6 +6331,97 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+                OpenAIProjectCommand::Create {
+                    name,
+                    geography,
+                    body,
+                    body_file,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_project_create(
+                    name,
+                    geography,
+                    body,
+                    body_file,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIProjectCommand::Update {
+                    project_ref,
+                    id,
+                    name,
+                    body,
+                    body_file,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_project_update(
+                    id.or(project_ref),
+                    name,
+                    body,
+                    body_file,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIProjectCommand::Archive {
+                    project_ref,
+                    id,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_project_archive(
+                    id.or(project_ref),
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
                 OpenAIProjectCommand::ApiKey { command } => match command {
                     OpenAIProjectAPIKeyCommand::List {
                         account,
@@ -6049,6 +6471,34 @@ fn main() -> Result<()> {
                         admin_api_key,
                         org_id,
                         project_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    OpenAIProjectAPIKeyCommand::Delete {
+                        key_ref,
+                        key_id,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_openai_project_api_key_delete(
+                        key_id.or(key_ref),
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        force,
                         home,
                         settings_file,
                         json,
@@ -6109,6 +6559,63 @@ fn main() -> Result<()> {
                         json,
                         raw,
                     )?,
+                    OpenAIProjectServiceAccountCommand::Create {
+                        name,
+                        body,
+                        body_file,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_openai_project_service_account_create(
+                        name,
+                        body,
+                        body_file,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    OpenAIProjectServiceAccountCommand::Delete {
+                        service_account_ref,
+                        service_account_id,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_openai_project_service_account_delete(
+                        service_account_id.or(service_account_ref),
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
                 },
                 OpenAIProjectCommand::RateLimit { command } => match command {
                     OpenAIProjectRateLimitCommand::List {
@@ -6135,6 +6642,47 @@ fn main() -> Result<()> {
                         limit,
                         after,
                         before,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    OpenAIProjectRateLimitCommand::Update {
+                        rate_limit_id,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        body,
+                        body_file,
+                        max_requests_per_1_minute,
+                        max_requests_per_1_day,
+                        max_tokens_per_1_minute,
+                        max_images_per_1_minute,
+                        max_audio_megabytes_per_1_minute,
+                        batch_1_day_max_input_tokens,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_openai_project_rate_limit_update(
+                        rate_limit_id,
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        body,
+                        body_file,
+                        max_requests_per_1_minute,
+                        max_requests_per_1_day,
+                        max_tokens_per_1_minute,
+                        max_images_per_1_minute,
+                        max_audio_megabytes_per_1_minute,
+                        batch_1_day_max_input_tokens,
                         home,
                         settings_file,
                         json,
@@ -10525,6 +11073,82 @@ fn run_openai_key_get(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_openai_key_create(
+    name: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let payload = resolve_openai_json_payload(
+        body,
+        body_file,
+        if let Some(name) = name.filter(|value| !value.trim().is_empty()) {
+            Some(serde_json::json!({ "name": name.trim() }))
+        } else {
+            None
+        },
+        "--name or --body/--body-file is required",
+    )?;
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_create_admin_api_key(&runtime, &payload),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_key_delete(
+    key_id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("openai admin api key deletion requires --force");
+    }
+    let key_id = key_id.unwrap_or_default();
+    if key_id.trim().is_empty() {
+        anyhow::bail!("key id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_delete_admin_api_key(&runtime, &key_id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_openai_project_list(
     account: Option<String>,
     base_url: Option<String>,
@@ -10589,6 +11213,133 @@ fn run_openai_project_get(
         home,
         settings_file,
         |runtime| openai_get_project(&runtime, &id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_create(
+    name: Option<String>,
+    geography: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let payload = resolve_openai_json_payload(
+        body,
+        body_file,
+        if let Some(name) = name.filter(|value| !value.trim().is_empty()) {
+            let mut payload = serde_json::Map::new();
+            payload.insert("name".to_owned(), Value::String(name.trim().to_owned()));
+            if let Some(geography) = geography.filter(|value| !value.trim().is_empty()) {
+                payload.insert(
+                    "geography".to_owned(),
+                    Value::String(geography.trim().to_owned()),
+                );
+            }
+            Some(Value::Object(payload))
+        } else {
+            None
+        },
+        "--name or --body/--body-file is required",
+    )?;
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_create_project(&runtime, &payload),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_update(
+    id: Option<String>,
+    name: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let id = id.unwrap_or_default();
+    if id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let payload = resolve_openai_json_payload(
+        body,
+        body_file,
+        name.filter(|value| !value.trim().is_empty())
+            .map(|value| serde_json::json!({ "name": value.trim() })),
+        "--name or --body/--body-file is required",
+    )?;
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_update_project(&runtime, &id, &payload),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_archive(
+    id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("openai project archive requires --force");
+    }
+    let id = id.unwrap_or_default();
+    if id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_archive_project(&runtime, &id),
     )?;
     print_openai_api_response(response, json, raw)
 }
@@ -10670,6 +11421,46 @@ fn run_openai_project_api_key_get(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_openai_project_api_key_delete(
+    key_id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("openai project api key deletion requires --force");
+    }
+    let project_id = project_id.unwrap_or_default();
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let key_id = key_id.unwrap_or_default();
+    if key_id.trim().is_empty() {
+        anyhow::bail!("key id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        Some(project_id.clone()),
+        home,
+        settings_file,
+        |runtime| openai_delete_project_api_key(&runtime, &project_id, &key_id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_openai_project_service_account_list(
     account: Option<String>,
     base_url: Option<String>,
@@ -10746,6 +11537,87 @@ fn run_openai_project_service_account_get(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_openai_project_service_account_create(
+    name: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let project_id = project_id.unwrap_or_default();
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let payload = resolve_openai_json_payload(
+        body,
+        body_file,
+        name.filter(|value| !value.trim().is_empty())
+            .map(|value| serde_json::json!({ "name": value.trim() })),
+        "--name or --body/--body-file is required",
+    )?;
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        Some(project_id.clone()),
+        home,
+        settings_file,
+        |runtime| openai_create_project_service_account(&runtime, &project_id, &payload),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_project_service_account_delete(
+    service_account_id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("openai service account deletion requires --force");
+    }
+    let project_id = project_id.unwrap_or_default();
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let service_account_id = service_account_id.unwrap_or_default();
+    if service_account_id.trim().is_empty() {
+        anyhow::bail!("service account id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        Some(project_id.clone()),
+        home,
+        settings_file,
+        |runtime| openai_delete_project_service_account(&runtime, &project_id, &service_account_id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_openai_project_rate_limit_list(
     account: Option<String>,
     base_url: Option<String>,
@@ -10788,6 +11660,71 @@ fn run_openai_project_rate_limit_list(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_openai_project_rate_limit_update(
+    rate_limit_id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    max_requests_per_1_minute: Option<i64>,
+    max_requests_per_1_day: Option<i64>,
+    max_tokens_per_1_minute: Option<i64>,
+    max_images_per_1_minute: Option<i64>,
+    max_audio_megabytes_per_1_minute: Option<i64>,
+    batch_1_day_max_input_tokens: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let project_id = project_id.unwrap_or_default();
+    if project_id.trim().is_empty() {
+        anyhow::bail!("project id is required");
+    }
+    let rate_limit_id = rate_limit_id.unwrap_or_default();
+    if rate_limit_id.trim().is_empty() {
+        anyhow::bail!("rate limit id is required");
+    }
+    let mut payload_map = serde_json::Map::new();
+    insert_openai_limit_value(&mut payload_map, "max_requests_per_1_minute", max_requests_per_1_minute);
+    insert_openai_limit_value(&mut payload_map, "max_requests_per_1_day", max_requests_per_1_day);
+    insert_openai_limit_value(&mut payload_map, "max_tokens_per_1_minute", max_tokens_per_1_minute);
+    insert_openai_limit_value(&mut payload_map, "max_images_per_1_minute", max_images_per_1_minute);
+    insert_openai_limit_value(
+        &mut payload_map,
+        "max_audio_megabytes_per_1_minute",
+        max_audio_megabytes_per_1_minute,
+    );
+    insert_openai_limit_value(
+        &mut payload_map,
+        "batch_1_day_max_input_tokens",
+        batch_1_day_max_input_tokens,
+    );
+    let payload = resolve_openai_json_payload(
+        body,
+        body_file,
+        if payload_map.is_empty() { None } else { Some(Value::Object(payload_map)) },
+        "provide at least one limit field or --body/--body-file",
+    )?;
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        Some(project_id.clone()),
+        home,
+        settings_file,
+        |runtime| openai_update_project_rate_limit(&runtime, &project_id, &rate_limit_id, &payload),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn execute_openai_request<T, F>(
     account: Option<String>,
     base_url: Option<String>,
@@ -10819,6 +11756,32 @@ where
     )
     .map_err(anyhow::Error::msg)?;
     request(runtime).map_err(anyhow::Error::msg)
+}
+
+fn resolve_openai_json_payload(
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    fallback: Option<Value>,
+    empty_error: &str,
+) -> Result<Value> {
+    if let Some(path) = body_file {
+        let raw = std::fs::read_to_string(path)?;
+        return serde_json::from_str(raw.trim()).map_err(anyhow::Error::msg);
+    }
+    if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        return serde_json::from_str(body.trim()).map_err(anyhow::Error::msg);
+    }
+    fallback.ok_or_else(|| anyhow::Error::msg(empty_error.to_owned()))
+}
+
+fn insert_openai_limit_value(
+    payload: &mut serde_json::Map<String, Value>,
+    key: &str,
+    value: Option<i64>,
+) {
+    if let Some(value) = value.filter(|value| *value >= 0) {
+        payload.insert(key.to_owned(), Value::Number(value.into()));
+    }
 }
 
 fn print_openai_api_response(response: OpenAIAPIResponse, json: bool, raw: bool) -> Result<()> {
