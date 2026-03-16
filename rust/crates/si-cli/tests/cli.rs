@@ -1212,6 +1212,46 @@ fn github_graphql_query_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_workflow_logs_raw_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/actions/runs/21/logs HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        let body = "step 1\nstep 2\n";
+        format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nx-github-request-id: req_gh_workflow_logs\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "logs",
+            "Aureuma/si",
+            "21",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--raw",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert!(text.contains("Status: 200 200 OK"));
+    assert!(text.contains("Request ID: req_gh_workflow_logs"));
+    assert!(text.contains("step 1\nstep 2\n"));
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

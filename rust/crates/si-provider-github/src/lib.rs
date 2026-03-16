@@ -634,6 +634,18 @@ pub fn get_workflow_run(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn get_workflow_logs(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    run_id: i64,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/actions/runs/{run_id}/logs");
+    normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
+}
+
 pub fn list_issues(
     runtime: &GitHubRuntime,
     owner: &str,
