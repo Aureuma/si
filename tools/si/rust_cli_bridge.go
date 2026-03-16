@@ -403,6 +403,18 @@ func runGCPAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"auth", "status"}, args...)...)
 }
 
+func runGooglePlacesContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "context", "list"}, args...)...)
+}
+
+func runGooglePlacesContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "context", "current"}, args...)...)
+}
+
+func runGooglePlacesAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "auth", "status"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }
