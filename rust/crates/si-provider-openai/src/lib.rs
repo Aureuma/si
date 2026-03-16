@@ -59,6 +59,24 @@ pub struct OpenAIAPIResponse {
     pub data: Option<Value>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct OpenAIAuthStatus {
+    pub status: String,
+    pub account_alias: String,
+    pub organization_id: String,
+    pub project_id: String,
+    pub source: String,
+    pub base_url: String,
+    pub api_key_preview: String,
+    pub admin_key_set: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_error: Option<String>,
+}
+
 pub fn list_contexts(settings: &OpenAISettings) -> Vec<OpenAIContextListEntry> {
     let mut rows = Vec::with_capacity(settings.accounts.len());
     for (alias, account) in &settings.accounts {
@@ -453,6 +471,60 @@ pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> Stri
     out
 }
 
+pub fn verify_auth_status(runtime: &OpenAIRuntime) -> OpenAIAuthStatus {
+    match list_models(runtime, Some(1)) {
+        Ok(response) => OpenAIAuthStatus {
+            status: "ready".to_owned(),
+            account_alias: runtime.account_alias.clone(),
+            organization_id: runtime.organization_id.clone(),
+            project_id: runtime.project_id.clone(),
+            source: runtime.source.clone(),
+            base_url: runtime.base_url.clone(),
+            api_key_preview: preview_secret(&runtime.api_key),
+            admin_key_set: runtime.admin_key_set,
+            verify_status: Some(response.status_code),
+            verify: response.data,
+            verify_error: None,
+        },
+        Err(err) => OpenAIAuthStatus {
+            status: "error".to_owned(),
+            account_alias: runtime.account_alias.clone(),
+            organization_id: runtime.organization_id.clone(),
+            project_id: runtime.project_id.clone(),
+            source: runtime.source.clone(),
+            base_url: runtime.base_url.clone(),
+            api_key_preview: preview_secret(&runtime.api_key),
+            admin_key_set: runtime.admin_key_set,
+            verify_status: None,
+            verify: None,
+            verify_error: Some(err),
+        },
+    }
+}
+
+pub fn render_auth_status_text(status: &OpenAIAuthStatus) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("OpenAI auth: {}\n", status.status.trim()));
+    out.push_str(&format!(
+        "Context: account={} base={} org={} project={}\n",
+        if status.account_alias.trim().is_empty() {
+            "(default)"
+        } else {
+            status.account_alias.trim()
+        },
+        status.base_url.trim(),
+        or_dash(&status.organization_id),
+        or_dash(&status.project_id),
+    ));
+    if status.status == "ready" {
+        out.push_str(&format!("Source: {}\n", or_dash(&status.source)));
+        out.push_str(&format!("API key preview: {}\n", or_dash(&status.api_key_preview)));
+    } else if let Some(err) = &status.verify_error {
+        out.push_str(&format!("OpenAI error: {}\n", err.trim()));
+    }
+    out
+}
+
 fn openai_get(
     runtime: &OpenAIRuntime,
     path: &str,
@@ -551,6 +623,17 @@ fn ensure_trailing_newline(mut value: String) -> String {
         value.push('\n');
     }
     value
+}
+
+fn preview_secret(value: &str) -> String {
+    let value = value.trim();
+    if value.is_empty() {
+        return String::new();
+    }
+    if value.len() <= 8 {
+        return "****".to_owned();
+    }
+    format!("{}…{}", &value[..4], &value[value.len() - 4..])
 }
 
 fn bool_string(value: bool) -> String {
@@ -656,5 +739,24 @@ mod tests {
         );
         assert!(rendered.contains("Status: 200 200 OK"));
         assert!(rendered.contains("\"id\": \"gpt-test\""));
+    }
+
+    #[test]
+    fn render_auth_status_text_includes_error() {
+        let rendered = render_auth_status_text(&OpenAIAuthStatus {
+            status: "error".to_owned(),
+            account_alias: "core".to_owned(),
+            organization_id: String::new(),
+            project_id: String::new(),
+            source: "env:OPENAI_API_KEY".to_owned(),
+            base_url: "https://api.openai.com".to_owned(),
+            api_key_preview: "sk-t…1234".to_owned(),
+            admin_key_set: false,
+            verify_status: None,
+            verify: None,
+            verify_error: Some("boom".to_owned()),
+        });
+        assert!(rendered.contains("OpenAI auth: error"));
+        assert!(rendered.contains("OpenAI error: boom"));
     }
 }

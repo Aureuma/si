@@ -423,6 +423,10 @@ func runOpenAIContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "current"}, args...)...)
 }
 
+func runOpenAIAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"auth", "status"}, args...)...)
+}
+
 func runOpenAIModelListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"model", "list"}, args...)...)
 }
