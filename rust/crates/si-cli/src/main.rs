@@ -420,6 +420,30 @@ enum CloudflareCommand {
         #[arg(long)]
         settings_file: Option<PathBuf>,
     },
+    Smoke {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        no_fail: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -6427,6 +6451,31 @@ fn main() -> Result<()> {
                 raw,
                 from,
                 to,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            )?,
+            CloudflareCommand::Smoke {
+                json,
+                no_fail,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            } => run_cloudflare_smoke(
+                json,
+                no_fail,
                 account,
                 env,
                 zone_id,
@@ -14438,6 +14487,213 @@ fn run_cloudflare_report(
         println!("Report: {label}");
     }
     print_cloudflare_api_response(&response, json, raw)
+}
+
+#[derive(Debug, Clone)]
+struct CloudflareSmokeSpec {
+    name: &'static str,
+    path: &'static str,
+    requires_account: bool,
+    params: std::collections::BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CloudflareSmokeCheckView {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    ok: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    skipped: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    status_code: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error_code: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    request_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    detail: Option<String>,
+}
+
+fn cloudflare_smoke_specs(runtime: &CloudflareAuthRuntime) -> Vec<CloudflareSmokeSpec> {
+    let mut zones_params = std::collections::BTreeMap::from([("per_page".to_owned(), "1".to_owned())]);
+    if !runtime.account_id.trim().is_empty() {
+        zones_params.insert("account.id".to_owned(), runtime.account_id.trim().to_owned());
+    }
+    vec![
+        CloudflareSmokeSpec { name: "token_verify", path: "/user/tokens/verify", requires_account: false, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "accounts", path: "/accounts", requires_account: false, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "zones_by_account", path: "/zones", requires_account: false, params: zones_params },
+        CloudflareSmokeSpec { name: "account_details", path: "/accounts/{account_id}", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "workers_scripts", path: "/accounts/{account_id}/workers/scripts", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "pages_projects", path: "/accounts/{account_id}/pages/projects", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "r2_buckets", path: "/accounts/{account_id}/r2/buckets", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "d1_databases", path: "/accounts/{account_id}/d1/database", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "kv_namespaces", path: "/accounts/{account_id}/storage/kv/namespaces", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "queues", path: "/accounts/{account_id}/queues", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "access_apps", path: "/accounts/{account_id}/access/apps", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "tunnels", path: "/accounts/{account_id}/cfd_tunnel", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "lb_pools", path: "/accounts/{account_id}/load_balancers/pools", requires_account: true, params: std::collections::BTreeMap::new() },
+        CloudflareSmokeSpec { name: "email_addresses", path: "/accounts/{account_id}/email/routing/addresses", requires_account: true, params: std::collections::BTreeMap::new() },
+    ]
+}
+
+fn summarize_cloudflare_response(response: &CloudflareAPIResponse) -> String {
+    if let Some(data) = &response.data {
+        if let Ok(compact) = serde_json::to_string(data) {
+            return compact;
+        }
+    }
+    if let Some(list) = &response.list {
+        return format!("{} items", list.len());
+    }
+    if !response.body.trim().is_empty() {
+        return response.body.trim().to_owned();
+    }
+    "-".to_owned()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_smoke(
+    json: bool,
+    no_fail: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_cloudflare_auth_runtime(
+        &settings.cloudflare,
+        &env,
+        &CloudflareAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            zone_id: zone_id.unwrap_or_default(),
+            zone_name: zone.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            account_id: account_id.unwrap_or_default(),
+            api_token: api_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let mut results = Vec::new();
+    let mut pass_count = 0usize;
+    let mut fail_count = 0usize;
+    let mut skip_count = 0usize;
+    for spec in cloudflare_smoke_specs(&runtime) {
+        if spec.requires_account && runtime.account_id.trim().is_empty() {
+            skip_count += 1;
+            results.push(CloudflareSmokeCheckView {
+                name: spec.name.to_owned(),
+                path: Some(spec.path.to_owned()),
+                ok: false,
+                skipped: true,
+                status_code: None,
+                error_code: None,
+                request_id: None,
+                detail: Some("missing account id".to_owned()),
+            });
+            continue;
+        }
+        let path = resolve_cloudflare_path_template(spec.path, &runtime)?;
+        match execute_cloudflare_api_request(
+            &runtime,
+            &CloudflareAPIRequest {
+                method: "GET".to_owned(),
+                path: path.clone(),
+                params: spec.params,
+                ..CloudflareAPIRequest::default()
+            },
+        ) {
+            Ok(response) => {
+                pass_count += 1;
+                results.push(CloudflareSmokeCheckView {
+                    name: spec.name.to_owned(),
+                    path: Some(path),
+                    ok: true,
+                    skipped: false,
+                    status_code: Some(response.status_code),
+                    error_code: None,
+                    request_id: (!response.request_id.trim().is_empty()).then_some(response.request_id.clone()),
+                    detail: Some(summarize_cloudflare_response(&response)),
+                });
+            }
+            Err(err) => {
+                fail_count += 1;
+                results.push(CloudflareSmokeCheckView {
+                    name: spec.name.to_owned(),
+                    path: Some(path),
+                    ok: false,
+                    skipped: false,
+                    status_code: None,
+                    error_code: None,
+                    request_id: None,
+                    detail: Some(err),
+                });
+            }
+        }
+    }
+    let all_ok = fail_count == 0;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "ok": all_ok,
+                "context": {
+                    "account_alias": runtime.account_alias,
+                    "account_id": runtime.account_id,
+                    "environment": runtime.environment,
+                    "zone_id": runtime.zone_id,
+                    "zone_name": runtime.zone_name,
+                    "source": runtime.source,
+                    "base_url": runtime.base_url,
+                },
+                "summary": {
+                    "pass": pass_count,
+                    "fail": fail_count,
+                    "skip": skip_count,
+                },
+                "checks": results,
+            }))?
+        );
+    } else {
+        let status = if all_ok { "ok" } else { "issues found" };
+        println!("Cloudflare smoke: {status}");
+        println!(
+            "Context: account={} account_id={} env={} zone_id={} zone_name={} base={}",
+            if runtime.account_alias.trim().is_empty() { "(default)" } else { runtime.account_alias.trim() },
+            if runtime.account_id.trim().is_empty() { "-" } else { runtime.account_id.trim() },
+            runtime.environment.trim(),
+            if runtime.zone_id.trim().is_empty() { "-" } else { runtime.zone_id.trim() },
+            if runtime.zone_name.trim().is_empty() { "-" } else { runtime.zone_name.trim() },
+            runtime.base_url.trim(),
+        );
+        println!("Summary: pass={pass_count} fail={fail_count} skip={skip_count}");
+        for result in results {
+            let status = if result.skipped { "SKIP" } else if result.ok { "PASS" } else { "FAIL" };
+            println!(
+                "{status} {} {} {}",
+                result.name,
+                result
+                    .status_code
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "-".to_owned()),
+                result.detail.unwrap_or_else(|| "-".to_owned())
+            );
+        }
+    }
+    if !all_ok && !no_fail {
+        anyhow::bail!("cloudflare smoke checks failed");
+    }
+    Ok(())
 }
 
 fn parse_oci_raw_service(value: &str) -> Result<OCIAPIService> {
