@@ -410,6 +410,24 @@ func runCloudflareLogsCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "job", "jobs":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"logs", "job", "list"}, args[2:]...)...)
+		case "get":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"logs", "job", "get"}, args[2:]...)...)
+		case "create":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"logs", "job", "create"}, args[2:]...)...)
+		case "update":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"logs", "job", "update"}, args[2:]...)...)
+		case "delete", "remove", "rm":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"logs", "job", "delete"}, args[2:]...)...)
+		default:
+			return false, nil
+		}
 	case "received", "download":
 		return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"logs", "received"}, args[1:]...)...)
 	default:
