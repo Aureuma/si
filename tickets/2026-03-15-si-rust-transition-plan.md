@@ -420,6 +420,7 @@ Progress notes:
 - completed: initial `si-rs-provider-workos` crate now owns WorkOS `context list`, `context current`, and `auth status` local runtime resolution/rendering, extending Phase 7 to a third low-complexity provider family behind the Rust compatibility boundary with focused Rust and Go command proofs
 - completed: initial `si-rs-provider-cloudflare` crate now owns Cloudflare `context list` and `context current` local runtime resolution/rendering, extending Phase 7 with the next low-complexity provider family while leaving network-verification-heavy `auth status` on the Go path for now
 - completed: initial `si-rs-provider-apple` crate now owns Apple App Store `context list` and `context current` local runtime resolution/rendering, extending Phase 7 into the next provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
+- completed: initial `si-rs-provider-aws` crate now owns AWS `context list`, `context current`, and local `auth status` runtime resolution/rendering, extending Phase 7 into the cloud-provider tier behind the Rust compatibility boundary with focused Rust and Go command proofs
 
 ### Phase 8: Release/install migration
 

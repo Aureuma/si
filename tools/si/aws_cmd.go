@@ -154,6 +154,14 @@ func cmdAWSAuth(args []string) {
 }
 
 func cmdAWSAuthStatus(args []string) {
+	delegated, err := runAWSAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("aws auth status", flag.ExitOnError)
 	flags := bindAWSCommonFlags(fs)
@@ -237,6 +245,14 @@ func cmdAWSContext(args []string) {
 }
 
 func cmdAWSContextList(args []string) {
+	delegated, err := runAWSContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("aws context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
@@ -291,6 +307,14 @@ func cmdAWSContextList(args []string) {
 }
 
 func cmdAWSContextCurrent(args []string) {
+	delegated, err := runAWSContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("aws context current", flag.ExitOnError)
 	flags := bindAWSCommonFlags(fs)
