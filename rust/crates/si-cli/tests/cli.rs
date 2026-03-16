@@ -602,6 +602,171 @@ fn github_release_get_json_fetches_tag_with_app_auth() {
 }
 
 #[test]
+fn github_release_create_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /repos/Aureuma/si/releases HTTP/1.1\r\n"));
+        assert!(request.contains("\"tag_name\":\"v1.2.4\""));
+        assert!(request.contains("\"name\":\"Release 1.2.4\""));
+        assert!(request.contains("\"draft\":true"));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_release_create")],
+            r#"{"id":102,"tag_name":"v1.2.4","name":"Release 1.2.4"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "release",
+            "create",
+            "Aureuma/si",
+            "--tag",
+            "v1.2.4",
+            "--title",
+            "Release 1.2.4",
+            "--draft",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_release_create");
+    assert_eq!(parsed["data"]["tag_name"], "v1.2.4");
+    server.join();
+}
+
+#[test]
+fn github_release_upload_json_mutates_via_api_with_oauth() {
+    let file = tempfile::NamedTempFile::new().expect("temp file");
+    std::fs::write(file.path(), b"asset-bytes").expect("write asset");
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let upload_base = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let upload_base_for_server = upload_base.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n"));
+                let base_url = upload_base_for_server.lock().expect("lock upload base").clone();
+                http_json_response(
+                    "200 OK",
+                    &[("x-github-request-id", "req_gh_release_meta")],
+                    &format!(
+                        r#"{{"id":102,"tag_name":"v1.2.4","upload_url":"{}/uploads/repos/Aureuma/si/releases/102/assets{{?name,label}}"}}"#,
+                        base_url
+                    ),
+                )
+            }
+            1 => {
+                assert!(request.starts_with("POST /uploads/repos/Aureuma/si/releases/102/assets?name="));
+                assert!(request.contains("content-type: application/octet-stream\r\n"));
+                http_json_response(
+                    "201 Created",
+                    &[("x-github-request-id", "req_gh_release_upload")],
+                    r#"{"id":301,"name":"asset.tgz"}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+    *upload_base.lock().expect("lock upload base") = server.base_url.clone();
+    let asset_path = file.path().to_string_lossy().to_string();
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "release",
+            "upload",
+            "Aureuma/si",
+            "v1.2.4",
+            "--asset",
+            &asset_path,
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_release_upload");
+    assert_eq!(parsed["data"]["id"], 301);
+    server.join();
+}
+
+#[test]
+fn github_release_delete_json_mutates_via_api_with_oauth() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /repos/Aureuma/si/releases/tags/v1.2.4 HTTP/1.1\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("x-github-request-id", "req_gh_release_meta_delete")],
+                    r#"{"id":102,"tag_name":"v1.2.4"}"#,
+                )
+            }
+            1 => {
+                assert!(request.starts_with("DELETE /repos/Aureuma/si/releases/102 HTTP/1.1\r\n"));
+                http_json_response(
+                    "204 No Content",
+                    &[("x-github-request-id", "req_gh_release_delete")],
+                    "",
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "release",
+            "delete",
+            "Aureuma/si",
+            "v1.2.4",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
+    assert_eq!(parsed["request_id"], "req_gh_release_delete");
+    server.join();
+}
+
+#[test]
 fn github_repo_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /users/Aureuma/repos?page=1&per_page=100 HTTP/1.1\r\n"));
