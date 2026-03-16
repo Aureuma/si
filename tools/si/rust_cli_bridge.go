@@ -371,6 +371,14 @@ func runCloudflareContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"context", "current"}, args...)...)
 }
 
+func runAppleAppStoreContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "list"}, args...)...)
+}
+
+func runAppleAppStoreContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "current"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }
