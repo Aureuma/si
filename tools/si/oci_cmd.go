@@ -1116,6 +1116,13 @@ func cmdOCIComputeInstance(args []string) {
 }
 
 func cmdOCIOracular(args []string) {
+	delegated, err := runOCIOracularCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci oracular <cloud-init|tenancy>")
 	if !routedOK {
 		return

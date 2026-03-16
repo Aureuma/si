@@ -444,6 +444,7 @@ Progress notes:
 - completed: the top-level `context` wrappers for OpenAI, AWS, GCP, Google Places, Apple App Store, and OCI now route `list` and `current` directly into Rust while keeping the mutable `use` subcommand on the Go side
 - completed: the provider-root wrappers for AWS, GCP, Google Places, and Apple App Store now short-circuit directly into Rust whenever the request stays within already-migrated auth/context subtrees, reducing another layer of Go-only routing without disturbing the remaining Go-owned commands
 - completed: the `openai` and `oci` provider-root wrappers now also short-circuit directly into Rust for already-migrated read-only subtrees, including OpenAI admin/project retrieval flows and OCI tenancy inspection, while leaving write paths and non-migrated OCI API families on the Go side
+- completed: the remaining nested `openai` and `oci` wrapper layers now also delegate migrated read-only subcommands into Rust, so list/get/status monitoring and tenancy-inspection paths no longer need to traverse extra Go-only routing shells before hitting the Rust compatibility boundary
 
 ### Phase 8: Release/install migration
 
