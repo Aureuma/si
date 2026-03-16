@@ -1,3 +1,6 @@
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use blake2::{Blake2bVar, digest::{Update, VariableOutput}};
+use crypto_box::{PublicKey as CryptoBoxPublicKey, SalsaBox, SecretKey as CryptoBoxSecretKey, aead::{Aead, generic_array::GenericArray, rand_core::OsRng}};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use reqwest::blocking::{Client, Response};
 use reqwest::header::{
@@ -113,6 +116,24 @@ pub struct GitHubBranchProtectionOptions {
     pub restrict_users: Vec<String>,
     pub restrict_teams: Vec<String>,
     pub restrict_apps: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitHubSecretScope {
+    Repo {
+        owner: String,
+        repo: String,
+    },
+    Env {
+        owner: String,
+        repo: String,
+        env: String,
+    },
+    Org {
+        org: String,
+        visibility: String,
+        repo_ids: Vec<i64>,
+    },
 }
 
 impl Serialize for GitHubAPIResponse {
@@ -1699,6 +1720,78 @@ pub fn delete_release(
     )?)
 }
 
+pub fn set_secret(
+    runtime: &GitHubRuntime,
+    scope: &GitHubSecretScope,
+    name: &str,
+    value: &str,
+) -> Result<(), String> {
+    if name.trim().is_empty() {
+        return Err("secret name is required".to_owned());
+    }
+    let client = build_http_client()?;
+    let (owner, repo) = secret_scope_owner_repo(scope);
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let key_response = normalize_response(github_get(
+        &client,
+        &runtime.base_url,
+        &secret_scope_public_key_path(scope),
+        &BTreeMap::new(),
+        &token,
+    )?)?;
+    let key = key_response
+        .data
+        .as_ref()
+        .and_then(|item| item.get("key"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let key_id = key_response
+        .data
+        .as_ref()
+        .and_then(|item| item.get("key_id"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if key.is_empty() || key_id.is_empty() {
+        return Err("github secret public key response missing key/key_id".to_owned());
+    }
+    let encrypted = encrypt_github_secret_value(&key, value)?;
+    let mut payload = secret_scope_payload_base(scope, &key_id);
+    payload.insert("encrypted_value".to_owned(), Value::String(encrypted));
+    normalize_response(github_send_json(
+        &client,
+        "PUT",
+        &runtime.base_url,
+        &secret_scope_upsert_path(scope, name),
+        &token,
+        &Value::Object(payload),
+    )?)?;
+    Ok(())
+}
+
+pub fn delete_secret(
+    runtime: &GitHubRuntime,
+    scope: &GitHubSecretScope,
+    name: &str,
+) -> Result<GitHubAPIResponse, String> {
+    if name.trim().is_empty() {
+        return Err("secret name is required".to_owned());
+    }
+    let client = build_http_client()?;
+    let (owner, repo) = secret_scope_owner_repo(scope);
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    normalize_response(github_send_without_body(
+        &client,
+        "DELETE",
+        &runtime.base_url,
+        &secret_scope_upsert_path(scope, name),
+        &token,
+    )?)
+}
+
 pub fn resolve_access_token(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2495,6 +2588,99 @@ fn unique_non_empty(values: Vec<String>) -> Vec<String> {
         out.push(trimmed.to_owned());
     }
     out
+}
+
+fn secret_scope_public_key_path(scope: &GitHubSecretScope) -> String {
+    match scope {
+        GitHubSecretScope::Repo { owner, repo } => {
+            format!("/repos/{owner}/{repo}/actions/secrets/public-key")
+        }
+        GitHubSecretScope::Env { owner, repo, env } => {
+            format!("/repos/{owner}/{repo}/environments/{env}/secrets/public-key")
+        }
+        GitHubSecretScope::Org { org, .. } => format!("/orgs/{org}/actions/secrets/public-key"),
+    }
+}
+
+fn secret_scope_upsert_path(scope: &GitHubSecretScope, name: &str) -> String {
+    match scope {
+        GitHubSecretScope::Repo { owner, repo } => {
+            format!("/repos/{owner}/{repo}/actions/secrets/{}", name.trim())
+        }
+        GitHubSecretScope::Env { owner, repo, env } => {
+            format!(
+                "/repos/{owner}/{repo}/environments/{env}/secrets/{}",
+                name.trim()
+            )
+        }
+        GitHubSecretScope::Org { org, .. } => {
+            format!("/orgs/{org}/actions/secrets/{}", name.trim())
+        }
+    }
+}
+
+fn secret_scope_owner_repo(scope: &GitHubSecretScope) -> (&str, &str) {
+    match scope {
+        GitHubSecretScope::Repo { owner, repo } => (owner.as_str(), repo.as_str()),
+        GitHubSecretScope::Env { owner, repo, .. } => (owner.as_str(), repo.as_str()),
+        GitHubSecretScope::Org { org, .. } => (org.as_str(), ""),
+    }
+}
+
+fn secret_scope_payload_base(scope: &GitHubSecretScope, key_id: &str) -> serde_json::Map<String, Value> {
+    let mut out = serde_json::Map::new();
+    out.insert("key_id".to_owned(), Value::String(key_id.trim().to_owned()));
+    if let GitHubSecretScope::Org {
+        visibility,
+        repo_ids,
+        ..
+    } = scope
+    {
+        let normalized = match visibility.trim().to_ascii_lowercase().as_str() {
+            "all" | "private" | "selected" => visibility.trim().to_ascii_lowercase(),
+            _ => "private".to_owned(),
+        };
+        out.insert("visibility".to_owned(), Value::String(normalized.clone()));
+        if normalized == "selected" && !repo_ids.is_empty() {
+            out.insert(
+                "selected_repository_ids".to_owned(),
+                Value::Array(repo_ids.iter().map(|item| Value::Number((*item).into())).collect()),
+            );
+        }
+    }
+    out
+}
+
+fn encrypt_github_secret_value(base64_public_key: &str, plaintext: &str) -> Result<String, String> {
+    let pub_bytes = BASE64
+        .decode(base64_public_key.trim())
+        .map_err(|err| format!("decode github public key: {err}"))?;
+    if pub_bytes.len() != 32 {
+        return Err(format!("invalid github public key length: {}", pub_bytes.len()));
+    }
+    let recipient_pub = CryptoBoxPublicKey::from(
+        <[u8; 32]>::try_from(pub_bytes.as_slice())
+            .map_err(|_| "invalid github public key length".to_owned())?,
+    );
+    let ephemeral_secret = CryptoBoxSecretKey::generate(&mut OsRng);
+    let ephemeral_pub_bytes = ephemeral_secret.public_key().as_bytes().to_owned();
+    let mut nonce_hash =
+        Blake2bVar::new(24).map_err(|err| format!("init nonce hash: {err}"))?;
+    nonce_hash.update(&ephemeral_pub_bytes);
+    nonce_hash.update(recipient_pub.as_bytes());
+    let mut nonce_bytes = [0_u8; 24];
+    nonce_hash
+        .finalize_variable(&mut nonce_bytes)
+        .map_err(|err| format!("finalize nonce hash: {err}"))?;
+    let nonce = GenericArray::clone_from_slice(&nonce_bytes);
+    let cipher = SalsaBox::new(&recipient_pub, &ephemeral_secret);
+    let sealed = cipher
+        .encrypt(&nonce, plaintext.as_bytes())
+        .map_err(|err| format!("encrypt github secret: {err}"))?;
+    let mut out = Vec::with_capacity(ephemeral_pub_bytes.len() + sealed.len());
+    out.extend_from_slice(&ephemeral_pub_bytes);
+    out.extend_from_slice(&sealed);
+    Ok(BASE64.encode(out))
 }
 
 fn resolve_branch_create_sha(

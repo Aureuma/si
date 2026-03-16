@@ -4427,6 +4427,210 @@ func TestRunGitHubReleaseDeleteCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 }
 
+func TestRunGitHubSecretRepoSetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-secret-repo-set'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubSecretRepoSetCommand([]string{"Aureuma/si", "MY_SECRET", "--value", "topsecret", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubSecretRepoSetCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github secret repo set to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-secret-repo-set" {
+		t.Fatalf("expected delegated Rust github secret repo set output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nsecret\nrepo\nset\nAureuma/si\nMY_SECRET\n--value\ntopsecret\n--json" {
+		t.Fatalf("expected Rust CLI args to be github secret repo set + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubSecretRepoDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-secret-repo-delete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubSecretRepoDeleteCommand([]string{"Aureuma/si", "MY_SECRET", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubSecretRepoDeleteCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github secret repo delete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-secret-repo-delete" {
+		t.Fatalf("expected delegated Rust github secret repo delete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nsecret\nrepo\ndelete\nAureuma/si\nMY_SECRET\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be github secret repo delete + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubSecretEnvSetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-secret-env-set'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubSecretEnvSetCommand([]string{"Aureuma/si", "prod", "MY_SECRET", "--value", "topsecret", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubSecretEnvSetCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github secret env set to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-secret-env-set" {
+		t.Fatalf("expected delegated Rust github secret env set output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nsecret\nenv\nset\nAureuma/si\nprod\nMY_SECRET\n--value\ntopsecret\n--json" {
+		t.Fatalf("expected Rust CLI args to be github secret env set + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubSecretEnvDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-secret-env-delete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubSecretEnvDeleteCommand([]string{"Aureuma/si", "prod", "MY_SECRET", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubSecretEnvDeleteCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github secret env delete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-secret-env-delete" {
+		t.Fatalf("expected delegated Rust github secret env delete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nsecret\nenv\ndelete\nAureuma/si\nprod\nMY_SECRET\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be github secret env delete + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubSecretOrgSetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-secret-org-set'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubSecretOrgSetCommand([]string{"Aureuma", "MY_SECRET", "--value", "topsecret", "--visibility", "selected", "--repos", "1,2", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubSecretOrgSetCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github secret org set to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-secret-org-set" {
+		t.Fatalf("expected delegated Rust github secret org set output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nsecret\norg\nset\nAureuma\nMY_SECRET\n--value\ntopsecret\n--visibility\nselected\n--repos\n1,2\n--json" {
+		t.Fatalf("expected Rust CLI args to be github secret org set + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubSecretOrgDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-secret-org-delete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubSecretOrgDeleteCommand([]string{"Aureuma", "MY_SECRET", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubSecretOrgDeleteCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github secret org delete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-secret-org-delete" {
+		t.Fatalf("expected delegated Rust github secret org delete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nsecret\norg\ndelete\nAureuma\nMY_SECRET\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be github secret org delete + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubRepoCommandDefaultsToGoForMutationPath(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
