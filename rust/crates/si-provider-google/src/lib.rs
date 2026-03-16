@@ -1,6 +1,10 @@
+use reqwest::blocking::Client;
+use reqwest::Method;
 use serde::Serialize;
+use serde_json::Value;
 use si_rs_config::settings::{GoogleAccountEntry, GoogleSettings};
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GooglePlacesContextListEntry {
@@ -44,6 +48,46 @@ pub struct GooglePlacesAuthStatus {
     pub source: String,
     pub key_preview: String,
     pub base_url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GooglePlacesRuntime {
+    pub account_alias: String,
+    pub project_id: String,
+    pub environment: String,
+    pub language_code: String,
+    pub region_code: String,
+    pub source: String,
+    pub api_key: String,
+    pub base_url: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GooglePlacesAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub params: BTreeMap<String, String>,
+    pub json_body: Option<Value>,
+    pub field_mask: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GooglePlacesAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub content_type: String,
+    pub data: Option<Value>,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GooglePlacesMediaResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub content_type: String,
+    pub bytes: Vec<u8>,
 }
 
 pub fn list_places_contexts(settings: &GoogleSettings) -> Vec<GooglePlacesContextListEntry> {
@@ -133,22 +177,11 @@ pub fn resolve_places_auth_status(
     })
 }
 
-struct GooglePlacesRuntimeContext {
-    account_alias: String,
-    project_id: String,
-    environment: String,
-    language_code: String,
-    region_code: String,
-    source: String,
-    api_key: String,
-    base_url: String,
-}
-
 fn resolve_places_runtime_context(
     settings: &GoogleSettings,
     env: &BTreeMap<String, String>,
     overrides: &GooglePlacesOverrides,
-) -> Result<GooglePlacesRuntimeContext, String> {
+) -> Result<GooglePlacesRuntime, String> {
     let (alias, account) = resolve_account_selection(settings, env, &overrides.account);
     let environment = parse_environment(&first_non_empty(&[
         Some(overrides.environment.as_str()),
@@ -180,7 +213,7 @@ fn resolve_places_runtime_context(
         resolve_language_code(&alias, &account, env, &overrides.language);
     let (region_code, region_source) =
         resolve_region_code(&alias, &account, env, &overrides.region);
-    Ok(GooglePlacesRuntimeContext {
+    Ok(GooglePlacesRuntime {
         account_alias: alias,
         project_id,
         environment,
@@ -189,6 +222,185 @@ fn resolve_places_runtime_context(
         source: join_sources(&[key_source, project_source, language_source, region_source]),
         api_key,
         base_url,
+    })
+}
+
+pub fn resolve_places_runtime(
+    settings: &GoogleSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GooglePlacesOverrides,
+) -> Result<GooglePlacesRuntime, String> {
+    resolve_places_runtime_context(settings, env, overrides)
+}
+
+pub fn execute_places_api_request(
+    runtime: &GooglePlacesRuntime,
+    request: &GooglePlacesAPIRequest,
+) -> Result<GooglePlacesAPIResponse, String> {
+    let method = Method::from_bytes(request.method.trim().as_bytes())
+        .map_err(|err| format!("invalid google places method {:?}: {err}", request.method))?;
+    let path = normalize_path(&request.path);
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|err| format!("failed to build google places client: {err}"))?;
+    let url = format!("{}{}", runtime.base_url.trim_end_matches('/'), path);
+    let mut builder = client
+        .request(method, &url)
+        .header("X-Goog-Api-Key", runtime.api_key.trim())
+        .header("User-Agent", "si-rs-provider-google/1.0");
+    if !request.field_mask.trim().is_empty() {
+        builder = builder.header("X-Goog-FieldMask", request.field_mask.trim());
+    }
+    if !request.params.is_empty() {
+        builder = builder.query(&request.params);
+    }
+    if let Some(body) = &request.json_body {
+        builder = builder.json(body);
+    }
+    let response = builder
+        .send()
+        .map_err(|err| format!("google places request failed: {err}"))?;
+    normalize_places_api_response(response)
+}
+
+pub fn download_places_media(
+    runtime: &GooglePlacesRuntime,
+    path: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<GooglePlacesMediaResponse, String> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|err| format!("failed to build google places client: {err}"))?;
+    let url = format!("{}{}", runtime.base_url.trim_end_matches('/'), normalize_path(path));
+    let mut builder = client
+        .request(Method::GET, &url)
+        .header("X-Goog-Api-Key", runtime.api_key.trim())
+        .header("User-Agent", "si-rs-provider-google/1.0");
+    if !params.is_empty() {
+        builder = builder.query(params);
+    }
+    let response = builder
+        .send()
+        .map_err(|err| format!("google places media request failed: {err}"))?;
+    normalize_places_media_response(response)
+}
+
+fn normalize_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        "/".to_owned()
+    } else if trimmed.starts_with('/') {
+        trimmed.to_owned()
+    } else {
+        format!("/{trimmed}")
+    }
+}
+
+fn response_request_id(headers: &reqwest::header::HeaderMap) -> String {
+    headers
+        .get("x-request-id")
+        .or_else(|| headers.get("x-goog-request-id"))
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned()
+}
+
+fn response_status_text(status: reqwest::StatusCode) -> String {
+    status.canonical_reason().unwrap_or_default().trim().to_owned()
+}
+
+fn normalize_places_api_response(
+    response: reqwest::blocking::Response,
+) -> Result<GooglePlacesAPIResponse, String> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let request_id = response_request_id(&headers);
+    let content_type = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let bytes = response
+        .bytes()
+        .map_err(|err| format!("failed to read google places response body: {err}"))?;
+    let body = String::from_utf8_lossy(&bytes).into_owned();
+    if !status.is_success() {
+        let mut message = format!(
+            "google places request failed: {} {}",
+            status.as_u16(),
+            response_status_text(status)
+        );
+        if !request_id.is_empty() {
+            message.push_str(&format!(" [request_id={request_id}]"));
+        }
+        let trimmed_body = body.trim();
+        if !trimmed_body.is_empty() {
+            message.push_str(": ");
+            message.push_str(trimmed_body);
+        }
+        return Err(message);
+    }
+    let data = if content_type.contains("json")
+        || body.trim_start().starts_with('{')
+        || body.trim_start().starts_with('[')
+    {
+        serde_json::from_slice(&bytes).ok()
+    } else {
+        None
+    };
+    Ok(GooglePlacesAPIResponse {
+        status_code: status.as_u16(),
+        status: response_status_text(status),
+        request_id,
+        content_type,
+        data,
+        body,
+    })
+}
+
+fn normalize_places_media_response(
+    response: reqwest::blocking::Response,
+) -> Result<GooglePlacesMediaResponse, String> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let request_id = response_request_id(&headers);
+    let content_type = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let bytes = response
+        .bytes()
+        .map_err(|err| format!("failed to read google places media body: {err}"))?
+        .to_vec();
+    if !status.is_success() {
+        let body = String::from_utf8_lossy(&bytes).into_owned();
+        let mut message = format!(
+            "google places media request failed: {} {}",
+            status.as_u16(),
+            response_status_text(status)
+        );
+        if !request_id.is_empty() {
+            message.push_str(&format!(" [request_id={request_id}]"));
+        }
+        let trimmed_body = body.trim();
+        if !trimmed_body.is_empty() {
+            message.push_str(": ");
+            message.push_str(trimmed_body);
+        }
+        return Err(message);
+    }
+    Ok(GooglePlacesMediaResponse {
+        status_code: status.as_u16(),
+        status: response_status_text(status),
+        request_id,
+        content_type,
+        bytes,
     })
 }
 
