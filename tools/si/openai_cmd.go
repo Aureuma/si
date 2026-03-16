@@ -1565,6 +1565,13 @@ func cmdOpenAIUsageMetric(metric string, args []string) {
 	if metric == "" {
 		fatal(fmt.Errorf("unsupported usage metric"))
 	}
+	delegated, err := runOpenAIUsageMetricCommand(metric, args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true, "batch": true})
 	fs := flag.NewFlagSet("openai usage "+metric, flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
