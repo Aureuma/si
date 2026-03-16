@@ -71,6 +71,8 @@ use si_rs_provider_github::{
     list_projects as github_list_projects, list_pull_requests as github_list_pull_requests,
     list_releases as github_list_releases, list_repos as github_list_repos,
     list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
+    graphql_query as github_graphql_query,
+    raw_get as github_raw_get,
     resolve_access_token as github_resolve_access_token,
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
@@ -1479,6 +1481,68 @@ enum GitHubCommand {
     Git {
         #[command(subcommand)]
         command: GitHubGitCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long = "settings-file")]
+        settings_file: Option<PathBuf>,
+    },
+    Graphql {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        query: Option<String>,
+        #[arg(long = "var")]
+        vars: Vec<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long = "settings-file")]
+        settings_file: Option<PathBuf>,
     },
     Project {
         #[command(subcommand)]
@@ -4971,6 +5035,70 @@ fn main() -> Result<()> {
                     GitHubGitCredentialCommand::Erase => {}
                 },
             },
+            GitHubCommand::Raw {
+                account,
+                owner,
+                base_url,
+                auth_mode,
+                token,
+                app_id,
+                app_key,
+                installation_id,
+                method,
+                path,
+                params,
+                home,
+                settings_file,
+                json,
+                raw,
+            } => run_github_raw(
+                account,
+                owner,
+                base_url,
+                auth_mode,
+                token,
+                app_id,
+                app_key,
+                installation_id,
+                method,
+                path,
+                params,
+                home,
+                settings_file,
+                json,
+                raw,
+            )?,
+            GitHubCommand::Graphql {
+                account,
+                owner,
+                base_url,
+                auth_mode,
+                token,
+                app_id,
+                app_key,
+                installation_id,
+                query,
+                vars,
+                home,
+                settings_file,
+                json,
+                raw,
+            } => run_github_graphql(
+                account,
+                owner,
+                base_url,
+                auth_mode,
+                token,
+                app_id,
+                app_key,
+                installation_id,
+                query,
+                vars,
+                home,
+                settings_file,
+                json,
+                raw,
+            )?,
             GitHubCommand::Project { command } => match command {
                 GitHubProjectCommand::List {
                     organization_ref,
@@ -8546,6 +8674,30 @@ fn parse_github_params(params: Vec<String>) -> Result<BTreeMap<String, String>> 
     Ok(out)
 }
 
+fn parse_github_graphql_vars(params: Vec<String>) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let mut out = serde_json::Map::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            return Err(anyhow::Error::msg(format!(
+                "invalid --var {raw:?} (expected key=value)"
+            )));
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(anyhow::Error::msg("github --var key cannot be empty"));
+        }
+        let value = value.trim();
+        let parsed = serde_json::from_str::<serde_json::Value>(value)
+            .unwrap_or_else(|_| serde_json::Value::String(value.to_owned()));
+        out.insert(key.to_owned(), parsed);
+    }
+    Ok(out)
+}
+
+fn github_graphql_query_is_read_only(query: &str) -> bool {
+    !query.trim_start().to_ascii_lowercase().starts_with("mutation")
+}
+
 #[allow(clippy::too_many_arguments)]
 fn load_github_runtime(
     account: Option<String>,
@@ -9198,6 +9350,92 @@ fn run_github_git_credential_get(
     }
     print!("username=x-access-token\npassword={token}\n\n");
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_raw(
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    method: String,
+    path: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !method.trim().eq_ignore_ascii_case("GET") {
+        return Err(anyhow::Error::msg(
+            "github raw Rust path only supports GET",
+        ));
+    }
+    let path = path
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("github raw requires --path"))?;
+    let params = parse_github_params(params)?;
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let response = github_raw_get(&runtime, &path, &params).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_graphql(
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    query: Option<String>,
+    vars: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let query = query
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("github graphql requires --query"))?;
+    if !github_graphql_query_is_read_only(&query) {
+        return Err(anyhow::Error::msg(
+            "github graphql Rust path only supports queries",
+        ));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let variables = serde_json::Value::Object(parse_github_graphql_vars(vars)?);
+    let response =
+        github_graphql_query(&runtime, &query, variables).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
 }
 
 #[allow(clippy::too_many_arguments)]

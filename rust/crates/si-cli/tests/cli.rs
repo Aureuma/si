@@ -1131,6 +1131,87 @@ fn github_git_credential_get_reads_stdin_and_prints_token() {
 }
 
 #[test]
+fn github_raw_get_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /rate_limit?scope=core HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_raw")],
+            r#"{"rate":{"limit":5000,"remaining":4999}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "raw",
+            "--method",
+            "GET",
+            "--path",
+            "/rate_limit",
+            "--param",
+            "scope=core",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_raw");
+    assert_eq!(parsed["data"]["rate"]["limit"], 5000);
+    server.join();
+}
+
+#[test]
+fn github_graphql_query_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        assert!(request.contains("\"query\":\"query { viewer { login } }\""));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_graphql")],
+            r#"{"data":{"viewer":{"login":"shawn"}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "graphql",
+            "--query",
+            "query { viewer { login } }",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_graphql");
+    assert_eq!(parsed["data"]["viewer"]["login"], "shawn");
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

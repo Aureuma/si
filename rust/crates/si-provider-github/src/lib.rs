@@ -820,6 +820,24 @@ pub fn resolve_access_token(
     github_access_token(&client, runtime, owner, repo)
 }
 
+pub fn raw_get(
+    runtime: &GitHubRuntime,
+    path: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, &runtime.owner, "")?;
+    normalize_response(github_get(&client, &runtime.base_url, path.trim(), params, &token)?)
+}
+
+pub fn graphql_query(
+    runtime: &GitHubRuntime,
+    query: &str,
+    variables: Value,
+) -> Result<GitHubAPIResponse, String> {
+    github_graphql(runtime, &runtime.owner, query, variables)
+}
+
 fn build_list_entry(
     alias: &str,
     entry: &GitHubAccountEntry,
