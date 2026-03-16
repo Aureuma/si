@@ -405,6 +405,18 @@ func runCloudflareSmokeCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"smoke"}, args...)...)
 }
 
+func runCloudflareLogsCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "received", "download":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"logs", "received"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
 func runCloudflareAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -432,6 +444,8 @@ func runCloudflareCommand(args []string) (bool, error) {
 		return runCloudflareReportCommand(args[1:])
 	case "smoke":
 		return runCloudflareSmokeCommand(args[1:])
+	case "logs":
+		return runCloudflareLogsCommand(args[1:])
 	case "raw", "api":
 		return runCloudflareRawCommand(args[1:])
 	default:
