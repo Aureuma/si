@@ -483,6 +483,38 @@ func runOCIContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "current"}, args...)...)
 }
 
+func runOCIAuthStatusCommand(args []string) (bool, error) {
+	if ociAuthStatusVerifyEnabled(args) {
+		return false, nil
+	}
+	return maybeDispatchRustCLIReadOnly("oci", append([]string{"auth", "status"}, args...)...)
+}
+
+func ociAuthStatusVerifyEnabled(args []string) bool {
+	verify := true
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--verify":
+			if idx+1 < len(args) {
+				next := strings.TrimSpace(args[idx+1])
+				if next == "false" || next == "0" {
+					verify = false
+					idx++
+				}
+			}
+		case arg == "--verify=false", arg == "--verify=0":
+			verify = false
+		case arg == "--verify=true", arg == "--verify=1":
+			verify = true
+		case strings.HasPrefix(arg, "--verify="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--verify="))
+			verify = value != "false" && value != "0"
+		}
+	}
+	return verify
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }

@@ -25,6 +25,16 @@ pub struct OCIContextOverrides {
     pub auth_style: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OCIAuthOverrides {
+    pub account: String,
+    pub profile: String,
+    pub config_file: String,
+    pub region: String,
+    pub base_url: String,
+    pub auth_style: String,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct OCICurrentContext {
     pub account_alias: String,
@@ -35,6 +45,21 @@ pub struct OCICurrentContext {
     pub auth_style: String,
     pub source: String,
     pub tenancy_ocid: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct OCIAuthStatus {
+    pub status: String,
+    pub account_alias: String,
+    pub profile: String,
+    pub config_file: String,
+    pub region: String,
+    pub base_url: String,
+    pub auth_style: String,
+    pub tenancy_ocid: String,
+    pub user_ocid: String,
+    pub fingerprint: String,
+    pub source: String,
 }
 
 pub fn list_contexts(settings: &OCISettings) -> Vec<OCIContextListEntry> {
@@ -162,6 +187,121 @@ pub fn resolve_current_context(
     })
 }
 
+pub fn resolve_auth_status(
+    settings: &OCISettings,
+    env_map: &BTreeMap<String, String>,
+    overrides: &OCIAuthOverrides,
+) -> Result<OCIAuthStatus, String> {
+    let (alias, account) = resolve_account_selection(settings, env_map, &overrides.account);
+    let auth_style = normalize_auth_style(&overrides.auth_style)?;
+    if auth_style != "signature" {
+        return Err("oci signature auth is required for this command (set --auth signature)".to_owned());
+    }
+
+    let profile = {
+        let value = first_non_empty(&[
+            Some(overrides.profile.as_str()),
+            account.profile.as_deref(),
+            env_map.get("OCI_CLI_PROFILE").map(String::as_str),
+            settings.profile.as_deref(),
+            Some("DEFAULT"),
+        ]);
+        if value.is_empty() { "DEFAULT".to_owned() } else { value }
+    };
+    let config_file = expand_tilde(&first_non_empty(&[
+        Some(overrides.config_file.as_str()),
+        account.config_file.as_deref(),
+        env_map.get("OCI_CONFIG_FILE").map(String::as_str),
+        settings.config_file.as_deref(),
+        Some("~/.oci/config"),
+    ]));
+    let mut region = first_non_empty(&[
+        Some(overrides.region.as_str()),
+        account.region.as_deref(),
+        env_map.get("OCI_CLI_REGION").map(String::as_str),
+        settings.region.as_deref(),
+    ]);
+    let mut source = Vec::new();
+
+    let (mut tenancy_ocid, tenancy_source) = resolve_account_value(
+        account.tenancy_ocid.as_deref(),
+        account.tenancy_ocid_env.as_deref(),
+        env_map,
+    );
+    let (mut user_ocid, user_source) =
+        resolve_account_value(account.user_ocid.as_deref(), account.user_ocid_env.as_deref(), env_map);
+    let (mut fingerprint, fingerprint_source) = resolve_account_value(
+        account.fingerprint.as_deref(),
+        account.fingerprint_env.as_deref(),
+        env_map,
+    );
+    let (mut private_key_path, private_key_source) = resolve_account_value(
+        account.private_key_path.as_deref(),
+        account.private_key_path_env.as_deref(),
+        env_map,
+    );
+
+    source.extend([tenancy_source, user_source, fingerprint_source, private_key_source].into_iter().flatten());
+
+    let profile_values = parse_config_profile(&config_file, &profile)?;
+    source.push(format!("profile:{profile}"));
+    if tenancy_ocid.is_empty() {
+        tenancy_ocid = trim_or_empty(profile_values.get("tenancy").map(String::as_str));
+    }
+    if user_ocid.is_empty() {
+        user_ocid = trim_or_empty(profile_values.get("user").map(String::as_str));
+    }
+    if fingerprint.is_empty() {
+        fingerprint = trim_or_empty(profile_values.get("fingerprint").map(String::as_str));
+    }
+    if private_key_path.is_empty() {
+        private_key_path = trim_or_empty(profile_values.get("key_file").map(String::as_str));
+    }
+    if region.is_empty() {
+        region = trim_or_empty(profile_values.get("region").map(String::as_str));
+    }
+    if region.is_empty() {
+        region = "us-ashburn-1".to_owned();
+    }
+    private_key_path = normalize_private_key_path(&config_file, &private_key_path);
+    let base_url = first_non_empty(&[
+        Some(overrides.base_url.as_str()),
+        settings.api_base_url.as_deref(),
+        Some(oci_core_url(&region).as_str()),
+    ])
+    .trim_end_matches('/')
+    .to_owned();
+
+    if tenancy_ocid.is_empty() {
+        return Err("oci signature auth requires tenancy ocid".to_owned());
+    }
+    if user_ocid.is_empty() {
+        return Err("oci signature auth requires user ocid".to_owned());
+    }
+    if fingerprint.is_empty() {
+        return Err("oci signature auth requires fingerprint".to_owned());
+    }
+    if private_key_path.is_empty() {
+        return Err("oci signature private key is not configured".to_owned());
+    }
+    fs::metadata(&private_key_path)
+        .map_err(|err| format!("read oci private key {:?}: {err}", private_key_path))?;
+
+    Ok(OCIAuthStatus {
+        status: "ready".to_owned(),
+        account_alias: alias,
+        profile,
+        config_file,
+        region,
+        base_url,
+        auth_style,
+        tenancy_ocid,
+        user_ocid,
+        fingerprint,
+        source: join_sources(&source),
+    })
+}
+
 fn resolve_account_selection(
     settings: &OCISettings,
     env_map: &BTreeMap<String, String>,
@@ -243,6 +383,33 @@ fn resolve_env_reference(
         .map(str::to_owned)
 }
 
+fn resolve_account_value(
+    value: Option<&str>,
+    env_reference: Option<&str>,
+    env_map: &BTreeMap<String, String>,
+) -> (String, Option<String>) {
+    let direct = trim_or_empty(value);
+    if !direct.is_empty() {
+        return (direct, None);
+    }
+    let reference = env_reference.map(str::trim).unwrap_or_default();
+    if reference.is_empty() {
+        return (String::new(), None);
+    }
+    let env_value = env_map
+        .get(reference)
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_default()
+        .to_owned();
+    if env_value.is_empty() {
+        (String::new(), None)
+    } else {
+        (env_value, Some(format!("env:{reference}")))
+    }
+}
+
 fn expand_tilde(value: &str) -> String {
     let value = value.trim();
     if value == "~" {
@@ -259,6 +426,23 @@ fn expand_tilde(value: &str) -> String {
 
 fn home_dir() -> Option<String> {
     env::var("HOME").ok().filter(|value| !value.trim().is_empty())
+}
+
+fn normalize_private_key_path(config_file: &str, private_key_path: &str) -> String {
+    let expanded = expand_tilde(private_key_path);
+    if expanded.trim().is_empty() {
+        return String::new();
+    }
+    let path = Path::new(&expanded);
+    if path.is_absolute() {
+        return path.display().to_string();
+    }
+    Path::new(config_file)
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .join(path)
+        .display()
+        .to_string()
 }
 
 fn oci_core_url(region: &str) -> String {
@@ -285,6 +469,16 @@ fn first_non_empty(values: &[Option<&str>]) -> String {
         .find(|value| !value.is_empty())
         .unwrap_or_default()
         .to_owned()
+}
+
+fn join_sources(values: &[String]) -> String {
+    values
+        .iter()
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn or_dash(value: &str) -> &str {
@@ -326,5 +520,58 @@ mod tests {
         assert_eq!(current.profile, "DEFAULT");
         assert_eq!(current.region, "us-phoenix-1");
         assert_eq!(current.tenancy_ocid, "ocid1.tenancy.oc1..example");
+    }
+
+    #[test]
+    fn auth_status_reads_signature_material() {
+        let temp = env::temp_dir().join(format!("si-rs-oci-auth-{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp);
+        let config = temp.join("config");
+        let key = temp.join("keys").join("oci.pem");
+        fs::create_dir_all(key.parent().expect("key parent")).expect("mkdir key parent");
+        fs::write(
+            &config,
+            "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..profile\nuser=ocid1.user.oc1..profile\nfingerprint=aa:bb:cc\nkey_file=keys/oci.pem\nregion=us-phoenix-1\n",
+        )
+        .expect("write config");
+        fs::write(&key, "dummy-private-key").expect("write key");
+
+        let mut settings = OCISettings::default();
+        settings.default_account = Some("team".to_owned());
+
+        let status = resolve_auth_status(
+            &settings,
+            &BTreeMap::new(),
+            &OCIAuthOverrides {
+                config_file: config.display().to_string(),
+                ..OCIAuthOverrides::default()
+            },
+        )
+        .expect("auth status");
+
+        assert_eq!(status.status, "ready");
+        assert_eq!(status.profile, "DEFAULT");
+        assert_eq!(status.region, "us-phoenix-1");
+        assert_eq!(status.tenancy_ocid, "ocid1.tenancy.oc1..profile");
+        assert_eq!(status.user_ocid, "ocid1.user.oc1..profile");
+        assert_eq!(status.fingerprint, "aa:bb:cc");
+        assert_eq!(status.source, "profile:DEFAULT");
+    }
+
+    #[test]
+    fn auth_status_requires_signature_auth() {
+        let err = resolve_auth_status(
+            &OCISettings::default(),
+            &BTreeMap::new(),
+            &OCIAuthOverrides {
+                auth_style: "none".to_owned(),
+                ..OCIAuthOverrides::default()
+            },
+        )
+        .expect_err("expected signature auth error");
+        assert_eq!(
+            err,
+            "oci signature auth is required for this command (set --auth signature)"
+        );
     }
 }
