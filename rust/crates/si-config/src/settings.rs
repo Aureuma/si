@@ -17,6 +17,8 @@ pub struct Settings {
     #[serde(default)]
     pub cloudflare: CloudflareSettings,
     #[serde(default)]
+    pub apple: AppleSettings,
+    #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
     pub workos: WorkOSSettings,
@@ -71,6 +73,7 @@ impl Settings {
             codex: CodexSettings::default(),
             stripe: StripeSettings::default(),
             cloudflare: CloudflareSettings::default(),
+            apple: AppleSettings::default(),
             github: GitHubSettings::default(),
             workos: WorkOSSettings::default(),
             dyad: DyadSettings::default(),
@@ -119,6 +122,7 @@ impl Settings {
                 self.codex = payload.codex;
                 self.stripe = payload.stripe;
                 self.cloudflare = payload.cloudflare;
+                self.apple = payload.apple;
                 self.github = payload.github;
                 self.workos = payload.workos;
                 self.dyad = payload.dyad;
@@ -161,6 +165,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.profile);
         self.stripe.normalize();
         self.cloudflare.normalize();
+        self.apple.normalize();
         self.github.normalize();
         self.workos.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
@@ -183,6 +188,8 @@ struct CoreSettingsModule {
     pub stripe: StripeSettings,
     #[serde(default)]
     pub cloudflare: CloudflareSettings,
+    #[serde(default)]
+    pub apple: AppleSettings,
     #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
@@ -355,6 +362,88 @@ impl CloudflareAccountEntry {
         normalize_option_string(&mut self.staging_zone_id);
         normalize_option_string(&mut self.dev_zone_id);
         normalize_option_string(&mut self.api_token_env);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct AppleSettings {
+    pub default_account: Option<String>,
+    pub default_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub appstore: AppleAppStoreSettings,
+}
+
+impl AppleSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.log_file);
+        self.appstore.normalize();
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct AppleAppStoreSettings {
+    pub api_base_url: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, AppleAppStoreAccountEntry>,
+}
+
+impl AppleAppStoreSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.api_base_url);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct AppleAppStoreAccountEntry {
+    pub name: Option<String>,
+    pub project_id: Option<String>,
+    pub project_id_env: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub issuer_id: Option<String>,
+    pub issuer_id_env: Option<String>,
+    pub key_id: Option<String>,
+    pub key_id_env: Option<String>,
+    pub private_key_pem: Option<String>,
+    pub private_key_env: Option<String>,
+    pub private_key_file: Option<String>,
+    pub private_key_file_env: Option<String>,
+    pub default_bundle_id: Option<String>,
+    pub default_language: Option<String>,
+    pub default_platform: Option<String>,
+}
+
+impl AppleAppStoreAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.project_id);
+        normalize_option_string(&mut self.project_id_env);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.issuer_id);
+        normalize_option_string(&mut self.issuer_id_env);
+        normalize_option_string(&mut self.key_id);
+        normalize_option_string(&mut self.key_id_env);
+        normalize_option_string(&mut self.private_key_pem);
+        normalize_option_string(&mut self.private_key_env);
+        normalize_option_string(&mut self.private_key_file);
+        normalize_option_string(&mut self.private_key_file_env);
+        normalize_option_string(&mut self.default_bundle_id);
+        normalize_option_string(&mut self.default_language);
+        normalize_option_string(&mut self.default_platform);
     }
 }
 

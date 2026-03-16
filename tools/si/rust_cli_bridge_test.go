@@ -297,6 +297,100 @@ func TestRunCloudflareContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 }
 
+func TestRunAppleAppStoreContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAppleAppStoreContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runAppleAppStoreContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go apple appstore context list path by default")
+	}
+}
+
+func TestRunAppleAppStoreContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-list" {
+		t.Fatalf("expected delegated Rust apple appstore context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunAppleAppStoreContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAppleAppStoreContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runAppleAppStoreContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go apple appstore context current path by default")
+	}
+}
+
+func TestRunAppleAppStoreContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-current" {
+		t.Fatalf("expected delegated Rust apple appstore context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore context current + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

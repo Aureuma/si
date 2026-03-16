@@ -709,6 +709,14 @@ func cmdAppleAppStoreContext(args []string) {
 }
 
 func cmdAppleAppStoreContextList(args []string) {
+	delegated, err := runAppleAppStoreContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("apple appstore context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
@@ -768,6 +776,14 @@ func cmdAppleAppStoreContextList(args []string) {
 }
 
 func cmdAppleAppStoreContextCurrent(args []string) {
+	delegated, err := runAppleAppStoreContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("apple appstore context current", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)

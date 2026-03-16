@@ -814,6 +814,102 @@ prod_zone_id = "zone_prod"
 }
 
 #[test]
+fn apple_appstore_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[apple]
+default_account = "core"
+
+[apple.appstore.accounts.core]
+name = "Core"
+project_id = "proj_core"
+default_bundle_id = "com.example.core"
+default_platform = "IOS"
+default_language = "en-US"
+
+[apple.appstore.accounts.ops]
+project_id = "proj_ops"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["apple", "appstore", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["bundle_id"], "com.example.core");
+    assert_eq!(contexts[1]["alias"], "ops");
+}
+
+#[test]
+fn apple_appstore_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[apple]
+default_account = "core"
+default_env = "prod"
+
+[apple.appstore.accounts.core]
+project_id = "proj_core"
+issuer_id_env = "CORE_ISSUER"
+key_id_env = "CORE_KEY"
+private_key_env = "CORE_PRIVATE_KEY"
+default_bundle_id = "com.example.core"
+default_language = "en-US"
+default_platform = "IOS"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_ISSUER", "issuer_123")
+        .env("CORE_KEY", "key_123")
+        .env("CORE_PRIVATE_KEY", "-----BEGIN PRIVATE KEY-----")
+        .args(["apple", "appstore", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["project_id"], "proj_core");
+    assert_eq!(parsed["environment"], "prod");
+    assert_eq!(parsed["bundle_id"], "com.example.core");
+    assert_eq!(parsed["platform"], "IOS");
+    assert_eq!(parsed["token_source"], "env:CORE_PRIVATE_KEY");
+    assert_eq!(
+        parsed["source"],
+        "settings.apple.project_id,settings.apple.default_bundle_id,settings.apple.default_language,settings.apple.default_platform,env:CORE_ISSUER,env:CORE_KEY"
+    );
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

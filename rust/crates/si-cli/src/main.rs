@@ -31,6 +31,11 @@ use si_rs_fort::{
     teardown_persisted_session_state,
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
+use si_rs_provider_apple::{
+    AppleAppStoreContextListEntry, AppleAppStoreCurrentContext, list_appstore_contexts,
+    render_appstore_context_list_text,
+    resolve_current_context as resolve_apple_appstore_current_context,
+};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_cloudflare::{
     CloudflareContextListEntry, CloudflareContextOverrides, CloudflareCurrentContext,
@@ -100,6 +105,10 @@ enum Command {
     Cloudflare {
         #[command(subcommand)]
         command: CloudflareCommand,
+    },
+    Apple {
+        #[command(subcommand)]
+        command: AppleCommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -207,6 +216,47 @@ enum CloudflareContextCommand {
         base_url: Option<String>,
         #[arg(long)]
         account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AppleCommand {
+    #[command(name = "appstore")]
+    AppStore {
+        #[command(subcommand)]
+        command: AppleAppStoreCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AppleAppStoreCommand {
+    Context {
+        #[command(subcommand)]
+        command: AppleAppStoreContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AppleAppStoreContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -1351,6 +1401,40 @@ impl From<CloudflareCurrentContext> for CloudflareCurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct AppleAppStoreContextListPayload {
+    contexts: Vec<AppleAppStoreContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct AppleAppStoreCurrentContextPayload {
+    account_alias: String,
+    project_id: String,
+    environment: String,
+    source: String,
+    token_source: String,
+    bundle_id: String,
+    locale: String,
+    platform: String,
+    base_url: String,
+}
+
+impl From<AppleAppStoreCurrentContext> for AppleAppStoreCurrentContextPayload {
+    fn from(value: AppleAppStoreCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            project_id: value.project_id,
+            environment: value.environment,
+            source: value.source,
+            token_source: value.token_source,
+            bundle_id: value.bundle_id,
+            locale: value.locale,
+            platform: value.platform,
+            base_url: value.base_url,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -1903,6 +1987,20 @@ fn main() -> Result<()> {
                         format,
                     )?
                 }
+            },
+        },
+        Command::Apple { command } => match command {
+            AppleCommand::AppStore { command } => match command {
+                AppleAppStoreCommand::Context { command } => match command {
+                    AppleAppStoreContextCommand::List { home, settings_file, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_apple_appstore_context_list(home, settings_file, format)?
+                    }
+                    AppleAppStoreContextCommand::Current { home, settings_file, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_apple_appstore_context_current(home, settings_file, format)?
+                    }
+                },
             },
         },
         Command::Stripe { command } => match command {
@@ -3163,6 +3261,65 @@ fn show_cloudflare_context_list(
             )
         }
         OutputFormat::Text => print!("{}", render_cloudflare_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_apple_appstore_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_appstore_contexts(&settings.apple);
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&AppleAppStoreContextListPayload { contexts })?
+            )
+        }
+        OutputFormat::Text => print!("{}", render_appstore_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_apple_appstore_context_current(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = AppleAppStoreCurrentContextPayload::from(
+        resolve_apple_appstore_current_context(&settings.apple, &env)
+            .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current apple appstore context: account={} ({}) env={} bundle={} platform={}",
+                account,
+                or_dash(&payload.project_id),
+                payload.environment,
+                or_dash(&payload.bundle_id),
+                payload.platform
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Token source: {}", or_dash(&payload.token_source));
+        }
     }
     Ok(())
 }
