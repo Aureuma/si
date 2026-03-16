@@ -68,6 +68,8 @@ use si_rs_provider_github::{
     get_pull_request as github_get_pull_request, get_release as github_get_release,
     get_repo as github_get_repo, list_branches as github_list_branches, list_contexts,
     list_issues as github_list_issues,
+    list_project_fields as github_list_project_fields,
+    list_project_items as github_list_project_items,
     list_projects as github_list_projects, list_pull_requests as github_list_pull_requests,
     list_releases as github_list_releases, list_repos as github_list_repos,
     get_workflow_logs as github_get_workflow_logs,
@@ -1903,6 +1905,66 @@ enum GitHubProjectCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Fields {
+        project_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value_t = 100)]
+        limit: usize,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Items {
+        project_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long)]
+        include_archived: bool,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -5184,6 +5246,70 @@ fn main() -> Result<()> {
                     app_id,
                     app_key,
                     installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::Fields {
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    limit,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_fields(
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    limit,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubProjectCommand::Items {
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    limit,
+                    include_archived,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_project_items(
+                    project_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    limit,
+                    include_archived,
                     home,
                     settings_file,
                     json,
@@ -8991,6 +9117,59 @@ fn summarize_github_project(project: &Value) -> String {
     format!("#{number} {title} [{public_text}, {closed_text}] {project_id}")
 }
 
+fn summarize_github_project_field(field: &Value) -> String {
+    let name = field
+        .get("name")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("(unnamed)");
+    let data_type = field
+        .get("dataType")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("UNKNOWN");
+    let field_id = field
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("-");
+    format!("{name} [{data_type}] {field_id}")
+}
+
+fn summarize_github_project_item(item: &Value) -> String {
+    let item_id = item
+        .get("id")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("-");
+    let archived = if item.get("isArchived").and_then(Value::as_bool).unwrap_or(false) {
+        "archived"
+    } else {
+        "active"
+    };
+    let item_type = item
+        .get("type")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("item");
+    let content = item.get("content").unwrap_or(&Value::Null);
+    let title = content
+        .get("title")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("(untitled)");
+    if let Some(number) = content.get("number").and_then(Value::as_i64) {
+        return format!("#{number} {title} [{item_type}, {archived}] {item_id}");
+    }
+    format!("{title} [{item_type}, {archived}] {item_id}")
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_github_project_list(
     organization_ref: Option<String>,
@@ -9134,6 +9313,171 @@ fn run_github_project_get(
         return Ok(());
     }
     println!("{}", serde_json::to_string_pretty(&project)?);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_fields(
+    project_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    limit: usize,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if limit == 0 {
+        return Err(anyhow::Error::msg("--limit must be greater than 0"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let reference = parse_github_project_ref(project_ref.as_deref().unwrap_or_default())?;
+    let mut organization = reference.organization.clone();
+    if organization.trim().is_empty() {
+        organization = owner.unwrap_or_else(|| runtime.owner.clone());
+    }
+    let project_id = if !reference.project_id.trim().is_empty() {
+        reference.project_id
+    } else {
+        if organization.trim().is_empty() {
+            return Err(anyhow::Error::msg(format!(
+                "organization is required to resolve project number {}",
+                reference.number
+            )));
+        }
+        github_resolve_project_id(&runtime, &organization, reference.number)
+            .map_err(anyhow::Error::msg)?
+    };
+    let response =
+        github_list_project_fields(&runtime, &project_id, limit).map_err(anyhow::Error::msg)?;
+    let fields = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("node"))
+        .and_then(|project| project.get("fields"))
+        .and_then(|fields| fields.get("nodes"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "count": fields.len(),
+                "fields": fields,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!("Project fields: {} ({})", project_id, fields.len());
+    for field in &fields {
+        println!("  {}", summarize_github_project_field(field));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_project_items(
+    project_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    limit: usize,
+    include_archived: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if limit == 0 {
+        return Err(anyhow::Error::msg("--limit must be greater than 0"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let reference = parse_github_project_ref(project_ref.as_deref().unwrap_or_default())?;
+    let mut organization = reference.organization.clone();
+    if organization.trim().is_empty() {
+        organization = owner.unwrap_or_else(|| runtime.owner.clone());
+    }
+    let project_id = if !reference.project_id.trim().is_empty() {
+        reference.project_id
+    } else {
+        if organization.trim().is_empty() {
+            return Err(anyhow::Error::msg(format!(
+                "organization is required to resolve project number {}",
+                reference.number
+            )));
+        }
+        github_resolve_project_id(&runtime, &organization, reference.number)
+            .map_err(anyhow::Error::msg)?
+    };
+    let response = github_list_project_items(&runtime, &project_id, limit, include_archived)
+        .map_err(anyhow::Error::msg)?;
+    let items = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("node"))
+        .and_then(|project| project.get("items"))
+        .and_then(|items| items.get("nodes"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "project_id": project_id,
+                "count": items.len(),
+                "items": items,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    println!("Project items: {} ({})", project_id, items.len());
+    for item in &items {
+        println!("  {}", summarize_github_project_item(item));
+    }
     Ok(())
 }
 
