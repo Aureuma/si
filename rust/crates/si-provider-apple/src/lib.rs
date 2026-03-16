@@ -78,6 +78,12 @@ pub struct AppleAppStoreRuntime {
     pub private_key_pem: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppleAppStoreIssuedToken {
+    pub value: String,
+    pub expires_at_epoch: u64,
+}
+
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct AppleAppStoreAPIResponse {
     pub status_code: u16,
@@ -328,7 +334,7 @@ pub fn run_api_request(
     content_type: Option<&str>,
 ) -> Result<AppleAppStoreAPIResponse, String> {
     let endpoint = resolve_url(&runtime.base_url, path, params)?;
-    let token = build_api_token(runtime)?;
+    let token = issue_api_token(runtime)?;
     let method = reqwest::Method::from_bytes(method.trim().to_ascii_uppercase().as_bytes())
         .map_err(|err| format!("invalid apple appstore method {method:?}: {err}"))?;
     let client = Client::builder()
@@ -338,7 +344,7 @@ pub fn run_api_request(
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
     headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
-    let auth = format!("Bearer {token}");
+    let auth = format!("Bearer {}", token.value);
     headers.insert(
         AUTHORIZATION,
         HeaderValue::from_str(&auth).map_err(|err| format!("build auth header: {err}"))?,
@@ -898,7 +904,7 @@ fn read_private_key_file(path: &str) -> Result<String, String> {
     Ok(raw)
 }
 
-fn build_api_token(runtime: &AppleAppStoreRuntime) -> Result<String, String> {
+pub fn issue_api_token(runtime: &AppleAppStoreRuntime) -> Result<AppleAppStoreIssuedToken, String> {
     #[derive(Serialize)]
     struct Claims<'a> {
         iss: &'a str,
@@ -919,7 +925,12 @@ fn build_api_token(runtime: &AppleAppStoreRuntime) -> Result<String, String> {
     };
     let key = EncodingKey::from_ec_pem(runtime.private_key_pem.as_bytes())
         .map_err(|err| format!("parse apple appstore private key: {err}"))?;
-    encode(&header, &claims, &key).map_err(|err| format!("sign apple appstore token: {err}"))
+    let value =
+        encode(&header, &claims, &key).map_err(|err| format!("sign apple appstore token: {err}"))?;
+    Ok(AppleAppStoreIssuedToken {
+        value,
+        expires_at_epoch: claims.exp,
+    })
 }
 
 fn resolve_url(base_url: &str, path: &str, params: &BTreeMap<String, String>) -> Result<String, String> {

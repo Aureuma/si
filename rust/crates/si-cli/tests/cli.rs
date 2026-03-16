@@ -5067,7 +5067,7 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
 fn apple_appstore_auth_status_json_reads_local_inputs() {
     let key_file = tempdir().expect("tempdir");
     let key_path = key_file.path().join("AuthKey_TEST.p8");
-    fs::write(&key_path, "-----BEGIN PRIVATE KEY-----").expect("write key");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
 
     let output = cargo_bin()
         .args(["apple", "appstore", "auth", "status"])
@@ -5320,6 +5320,83 @@ fn apple_appstore_apply_json_applies_metadata_bundle() {
     assert_eq!(parsed["locales_applied"], 1);
     assert_eq!(parsed["app_info_updated"], 1);
     assert_eq!(parsed["version_info_updated"], 0);
+    server.join();
+}
+
+#[test]
+fn apple_appstore_auth_status_json_verifies_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/apps?limit=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer "));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_apple_auth_verify")],
+            r#"{"data":[{"id":"app_123"}]}"#,
+        )
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "auth", "status",
+            "--base-url", &server.base_url,
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["verify"]["ok"], true);
+    assert_eq!(parsed["verify"]["status_code"], 200);
+    assert_eq!(parsed["verify"]["items"], 1);
+    assert!(parsed["token_expires_at"].as_str().unwrap_or_default().contains('T'));
+    server.join();
+}
+
+#[test]
+fn apple_appstore_doctor_json_verifies_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/apps?limit=1 HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_apple_doctor")],
+            r#"{"data":[{"id":"app_123"}]}"#,
+        )
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "doctor",
+            "--base-url", &server.base_url,
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["verify"]["ok"], true);
+    assert_eq!(parsed["verify"]["items"], 1);
     server.join();
 }
 

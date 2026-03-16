@@ -38,6 +38,7 @@ use si_rs_provider_apple::{
     AppleAppStoreContextListEntry, AppleAppStoreCurrentContext, AppleAppStoreRuntime,
     list_appstore_contexts,
     render_appstore_context_list_text,
+    issue_api_token as issue_apple_appstore_token,
     resolve_runtime as resolve_apple_appstore_runtime,
     resolve_auth_status as resolve_apple_appstore_auth_status,
     resolve_current_context as resolve_apple_appstore_current_context,
@@ -1271,6 +1272,40 @@ enum AppleAppStoreCommand {
     Context {
         #[command(subcommand)]
         command: AppleAppStoreContextCommand,
+    },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        public: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     App {
         #[command(subcommand)]
@@ -6794,6 +6829,14 @@ struct AppleAppStoreAuthStatusPayload {
     locale: String,
     platform: String,
     base_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token_expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verify: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verify_error: Option<String>,
 }
 
 impl From<AppleAppStoreAuthStatus> for AppleAppStoreAuthStatusPayload {
@@ -6809,6 +6852,10 @@ impl From<AppleAppStoreAuthStatus> for AppleAppStoreAuthStatusPayload {
             locale: value.locale,
             platform: value.platform,
             base_url: value.base_url,
+            token_expires_at: None,
+            token_error: None,
+            verify: None,
+            verify_error: None,
         }
     }
 }
@@ -8274,6 +8321,43 @@ fn main() -> Result<()> {
                         show_apple_appstore_context_current(home, settings_file, format)?
                     }
                 },
+                AppleAppStoreCommand::Doctor {
+                    account,
+                    env,
+                    bundle_id,
+                    locale,
+                    platform,
+                    issuer_id,
+                    key_id,
+                    private_key,
+                    private_key_file,
+                    project_id,
+                    base_url,
+                    public,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_apple_appstore_doctor(
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        public,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
                 AppleAppStoreCommand::App { command } => match command {
                     AppleAppStoreAppCommand::List {
                         account,
@@ -13605,35 +13689,87 @@ fn show_apple_appstore_auth_status(
         if value.trim().is_empty() { "-" } else { value }
     }
 
-    if verify {
-        return Err(anyhow::anyhow!(
-            "apple appstore auth verification is not yet implemented in Rust; rerun with --verify=false or use the Go fallback"
-        ));
+    let auth_status = resolve_apple_appstore_auth_status(
+        &Settings::load(
+            &home.clone().unwrap_or_else(default_home_dir),
+            settings_file.as_deref(),
+        )?
+        .apple,
+        &std::env::vars().collect(),
+        &AppleAppStoreAuthOverrides {
+            account: account.clone().unwrap_or_default(),
+            environment: environment.clone().unwrap_or_default(),
+            bundle_id: bundle_id.clone().unwrap_or_default(),
+            locale: locale.clone().unwrap_or_default(),
+            platform: platform.clone().unwrap_or_default(),
+            issuer_id: issuer_id.clone().unwrap_or_default(),
+            key_id: key_id.clone().unwrap_or_default(),
+            private_key: private_key.clone().unwrap_or_default(),
+            private_key_file: private_key_file.clone().unwrap_or_default(),
+            project_id: project_id.clone().unwrap_or_default(),
+            base_url: base_url.clone().unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let runtime = load_apple_appstore_runtime(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        home,
+        settings_file,
+    )?;
+    let mut payload = AppleAppStoreAuthStatusPayload::from(auth_status);
+    let issued = issue_apple_appstore_token(&runtime);
+    let mut token_error = None;
+    if let Ok(token) = &issued {
+        if let Some(expires_at) = Utc.timestamp_opt(token.expires_at_epoch as i64, 0).single() {
+            payload.token_expires_at = Some(expires_at.to_rfc3339());
+        }
+    } else if let Err(err) = &issued {
+        payload.status = "error".to_owned();
+        payload.token_error = Some(err.clone());
+        token_error = Some(err.clone());
     }
-
-    let home = home.unwrap_or_else(default_home_dir);
-    let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
-    let payload = AppleAppStoreAuthStatusPayload::from(
-        resolve_apple_appstore_auth_status(
-            &settings.apple,
-            &env,
-            &AppleAppStoreAuthOverrides {
-                account: account.unwrap_or_default(),
-                environment: environment.unwrap_or_default(),
-                bundle_id: bundle_id.unwrap_or_default(),
-                locale: locale.unwrap_or_default(),
-                platform: platform.unwrap_or_default(),
-                issuer_id: issuer_id.unwrap_or_default(),
-                key_id: key_id.unwrap_or_default(),
-                private_key: private_key.unwrap_or_default(),
-                private_key_file: private_key_file.unwrap_or_default(),
-                project_id: project_id.unwrap_or_default(),
-                base_url: base_url.unwrap_or_default(),
-            },
-        )
-        .map_err(anyhow::Error::msg)?,
-    );
+    let mut verify_error = None;
+    if verify && token_error.is_none() {
+        let response = run_apple_appstore_api_request(
+            &runtime,
+            "GET",
+            "/v1/apps",
+            &BTreeMap::from([("limit".to_owned(), "1".to_owned())]),
+            None,
+            None,
+            None,
+        );
+        match response {
+            Ok(response) => {
+                let items = response
+                    .data
+                    .as_ref()
+                    .and_then(|data| data.get("data"))
+                    .and_then(Value::as_array)
+                    .map(Vec::len)
+                    .unwrap_or(0);
+                payload.verify = Some(serde_json::json!({
+                    "ok": true,
+                    "status_code": response.status_code,
+                    "items": items,
+                }));
+            }
+            Err(err) => {
+                payload.verify_error = Some(err.clone());
+                verify_error = Some(err);
+            }
+        }
+    }
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
         OutputFormat::Text => {
@@ -13653,9 +13789,65 @@ fn show_apple_appstore_auth_status(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Token source: {}", or_dash(&payload.token_source));
+            if let Some(expires_at) = &payload.token_expires_at {
+                println!("Token expires: {}", expires_at);
+            }
+            if let Some(err) = &payload.verify_error {
+                println!("Verify: {}", err);
+            } else if payload.verify.is_some() {
+                println!("Verify: ok");
+            }
         }
     }
+    if let Some(err) = token_error {
+        return Err(anyhow::anyhow!(err));
+    }
+    if let Some(err) = verify_error {
+        return Err(anyhow::anyhow!(err));
+    }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_apple_appstore_doctor(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    public: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    if public {
+        anyhow::bail!(
+            "apple appstore doctor --public is not yet implemented in Rust; use the Go fallback"
+        );
+    }
+    show_apple_appstore_auth_status(
+        account,
+        environment,
+        bundle_id,
+        locale,
+        platform,
+        issuer_id,
+        key_id,
+        private_key,
+        private_key_file,
+        project_id,
+        base_url,
+        true,
+        home,
+        settings_file,
+        format,
+    )
 }
 
 fn show_apple_appstore_context_list(
