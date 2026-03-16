@@ -25,6 +25,7 @@ si-rs-provider-github = { path = "../si-provider-github" }
 si-rs-provider-aws = { path = "../si-provider-aws" }
 si-rs-provider-gcp = { path = "../si-provider-gcp" }
 si-rs-provider-google = { path = "../si-provider-google" }
+si-rs-provider-openai = { path = "../si-provider-openai" }
 si-rs-provider-stripe = { path = "../si-provider-stripe" }
 si-rs-provider-workos = { path = "../si-provider-workos" }
 si-rs-provider-cloudflare = { path = "../si-provider-cloudflare" }

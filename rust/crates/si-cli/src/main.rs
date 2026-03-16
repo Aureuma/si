@@ -64,6 +64,12 @@ use si_rs_provider_google::{
     GooglePlacesOverrides, list_places_contexts, render_places_context_list_text,
     resolve_places_auth_status, resolve_places_current_context,
 };
+use si_rs_provider_openai::{
+    OpenAIContextListEntry, OpenAIContextOverrides, OpenAICurrentContext,
+    list_contexts as list_openai_contexts,
+    render_context_list_text as render_openai_context_list_text,
+    resolve_current_context as resolve_openai_current_context,
+};
 use si_rs_provider_stripe::{
     StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
     list_contexts as list_stripe_contexts,
@@ -139,6 +145,11 @@ enum Command {
     Google {
         #[command(subcommand)]
         command: GoogleCommand,
+    },
+    #[command(name = "openai")]
+    OpenAI {
+        #[command(subcommand)]
+        command: OpenAICommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -495,6 +506,50 @@ enum GooglePlacesContextCommand {
         language: Option<String>,
         #[arg(long)]
         region: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAICommand {
+    Context {
+        #[command(subcommand)]
+        command: OpenAIContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -1826,6 +1881,34 @@ impl From<GooglePlacesAuthStatus> for GooglePlacesAuthStatusPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct OpenAIContextListPayload {
+    contexts: Vec<OpenAIContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenAICurrentContextPayload {
+    account_alias: String,
+    base_url: String,
+    organization_id: String,
+    project_id: String,
+    source: String,
+    admin_key_set: bool,
+}
+
+impl From<OpenAICurrentContext> for OpenAICurrentContextPayload {
+    fn from(value: OpenAICurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            base_url: value.base_url,
+            organization_id: value.organization_id,
+            project_id: value.project_id,
+            source: value.source,
+            admin_key_set: value.admin_key_set,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -2534,6 +2617,39 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+            },
+        },
+        Command::OpenAI { command } => match command {
+            OpenAICommand::Context { command } => match command {
+                OpenAIContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_openai_context_list(home, settings_file, format)?
+                }
+                OpenAIContextCommand::Current {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_openai_context_current(
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
             },
         },
         Command::Stripe { command } => match command {
@@ -4196,6 +4312,79 @@ fn show_google_places_auth_status(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Key preview: {}", or_dash(&payload.key_preview));
+        }
+    }
+    Ok(())
+}
+
+fn show_openai_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_openai_contexts(&settings.openai);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&OpenAIContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_openai_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_openai_context_current(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = OpenAICurrentContextPayload::from(
+        resolve_openai_current_context(
+            &settings.openai,
+            &env,
+            &OpenAIContextOverrides {
+                account: account.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                api_key: api_key.unwrap_or_default(),
+                admin_api_key: admin_api_key.unwrap_or_default(),
+                org_id: org_id.unwrap_or_default(),
+                project_id: project_id.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current openai context: account={} base={} org={} project={}",
+                account,
+                payload.base_url,
+                or_dash(&payload.organization_id),
+                or_dash(&payload.project_id)
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Admin key set: {}", if payload.admin_key_set { "true" } else { "false" });
         }
     }
     Ok(())

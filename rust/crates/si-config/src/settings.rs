@@ -25,6 +25,8 @@ pub struct Settings {
     #[serde(default)]
     pub apple: AppleSettings,
     #[serde(default)]
+    pub openai: OpenAISettings,
+    #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
     pub workos: WorkOSSettings,
@@ -83,6 +85,7 @@ impl Settings {
             google: GoogleSettings::default(),
             cloudflare: CloudflareSettings::default(),
             apple: AppleSettings::default(),
+            openai: OpenAISettings::default(),
             github: GitHubSettings::default(),
             workos: WorkOSSettings::default(),
             dyad: DyadSettings::default(),
@@ -135,6 +138,7 @@ impl Settings {
                 self.google = payload.google;
                 self.cloudflare = payload.cloudflare;
                 self.apple = payload.apple;
+                self.openai = payload.openai;
                 self.github = payload.github;
                 self.workos = payload.workos;
                 self.dyad = payload.dyad;
@@ -181,6 +185,7 @@ impl Settings {
         self.google.normalize();
         self.cloudflare.normalize();
         self.apple.normalize();
+        self.openai.normalize();
         self.github.normalize();
         self.workos.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
@@ -211,6 +216,8 @@ struct CoreSettingsModule {
     pub cloudflare: CloudflareSettings,
     #[serde(default)]
     pub apple: AppleSettings,
+    #[serde(default)]
+    pub openai: OpenAISettings,
     #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
@@ -567,6 +574,64 @@ impl AppleSettings {
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.log_file);
         self.appstore.normalize();
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenAISettings {
+    pub default_account: Option<String>,
+    pub api_base_url: Option<String>,
+    pub default_organization_id: Option<String>,
+    pub default_project_id: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, OpenAIAccountEntry>,
+}
+
+impl OpenAISettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.default_organization_id);
+        normalize_option_string(&mut self.default_project_id);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OpenAIAccountEntry {
+    pub name: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub api_base_url: Option<String>,
+    pub api_key_env: Option<String>,
+    pub admin_api_key_env: Option<String>,
+    pub organization_id: Option<String>,
+    pub organization_id_env: Option<String>,
+    pub project_id: Option<String>,
+    pub project_id_env: Option<String>,
+}
+
+impl OpenAIAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.api_key_env);
+        normalize_option_string(&mut self.admin_api_key_env);
+        normalize_option_string(&mut self.organization_id);
+        normalize_option_string(&mut self.organization_id_env);
+        normalize_option_string(&mut self.project_id);
+        normalize_option_string(&mut self.project_id_env);
     }
 }
 

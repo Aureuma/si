@@ -415,6 +415,14 @@ func runGooglePlacesAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "auth", "status"}, args...)...)
 }
 
+func runOpenAIContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "list"}, args...)...)
+}
+
+func runOpenAIContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "current"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }
