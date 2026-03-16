@@ -1115,6 +1115,10 @@ enum OciCommand {
         #[command(subcommand)]
         command: OciContextCommand,
     },
+    Oracular {
+        #[command(subcommand)]
+        command: OciOracularCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1134,6 +1138,24 @@ enum OciAuthCommand {
         auth: Option<String>,
         #[arg(long, default_value_t = true, action = ArgAction::Set)]
         verify: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciOracularCommand {
+    Tenancy {
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -2661,6 +2683,13 @@ impl From<OCIAuthStatus> for OCIAuthStatusPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct OCIOracularTenancyPayload {
+    profile: String,
+    config_file: String,
+    tenancy_ocid: String,
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -3884,6 +3913,19 @@ fn main() -> Result<()> {
                         settings_file,
                         format,
                     )?
+                }
+            },
+            OciCommand::Oracular { command } => match command {
+                OciOracularCommand::Tenancy {
+                    profile,
+                    config_file,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_oci_oracular_tenancy(profile, config_file, home, settings_file, format)?
                 }
             },
             OciCommand::Context { command } => match command {
@@ -6462,6 +6504,49 @@ fn show_oci_auth_status(
                 account, payload.profile, payload.region, payload.auth_style, payload.base_url
             );
             println!("Source: {}", or_dash(&payload.source));
+        }
+    }
+    Ok(())
+}
+
+fn show_oci_oracular_tenancy(
+    profile: Option<String>,
+    config_file: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let current = resolve_oci_current_context(
+        &settings.oci,
+        &env,
+        &OCIContextOverrides {
+            profile: profile.unwrap_or_default(),
+            config_file: config_file.unwrap_or_default(),
+            ..OCIContextOverrides::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let payload = OCIOracularTenancyPayload {
+        profile: current.profile,
+        config_file: current.config_file,
+        tenancy_ocid: current.tenancy_ocid,
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            println!("OCI tenancy: {}", or_dash(&payload.tenancy_ocid));
+            println!(
+                "Context: profile={} config={}",
+                or_dash(&payload.profile),
+                or_dash(&payload.config_file)
+            );
         }
     }
     Ok(())
