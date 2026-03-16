@@ -4624,12 +4624,12 @@ func TestRunGitHubWorkflowCommandDefaultsToGoForNonMigratedSubtree(t *testing.T)
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
-	delegated, err := runGitHubWorkflowCommand([]string{"logs", "Aureuma/si", "21", "--json"})
+	delegated, err := runGitHubWorkflowCommand([]string{"watch", "Aureuma/si", "21", "--json"})
 	if err != nil {
 		t.Fatalf("runGitHubWorkflowCommand: %v", err)
 	}
 	if delegated {
-		t.Fatalf("expected Go github workflow logs path by default")
+		t.Fatalf("expected Go github workflow watch path by default")
 	}
 }
 
@@ -4805,6 +4805,53 @@ func TestRunGitHubWorkflowRunGetCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 	if strings.TrimSpace(string(argsData)) != "github\nworkflow\nrun\nget\nAureuma/si\n21\n--json" {
 		t.Fatalf("expected Rust CLI args to be github workflow run get + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubWorkflowLogsCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubWorkflowLogsCommand([]string{"Aureuma/si", "21", "--raw"})
+	if err != nil {
+		t.Fatalf("runGitHubWorkflowLogsCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github workflow logs path by default")
+	}
+}
+
+func TestRunGitHubWorkflowLogsCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-workflow-logs'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubWorkflowLogsCommand([]string{"Aureuma/si", "21", "--raw"})
+		if err != nil {
+			t.Fatalf("runGitHubWorkflowLogsCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github workflow logs to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-workflow-logs" {
+		t.Fatalf("expected delegated Rust github workflow logs output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nworkflow\nlogs\nAureuma/si\n21\n--raw" {
+		t.Fatalf("expected Rust CLI args to be github workflow logs + args, got %q", string(argsData))
 	}
 }
 

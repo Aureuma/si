@@ -70,6 +70,7 @@ use si_rs_provider_github::{
     list_issues as github_list_issues,
     list_projects as github_list_projects, list_pull_requests as github_list_pull_requests,
     list_releases as github_list_releases, list_repos as github_list_repos,
+    get_workflow_logs as github_get_workflow_logs,
     list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
     graphql_query as github_graphql_query,
     raw_get as github_raw_get,
@@ -1976,6 +1977,34 @@ enum GitHubWorkflowCommand {
     Run {
         #[command(subcommand)]
         command: GitHubWorkflowRunCommand,
+    },
+    Logs {
+        repo_ref: Option<String>,
+        run_id: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -5389,6 +5418,37 @@ fn main() -> Result<()> {
                         raw,
                     )?,
                 },
+                GitHubWorkflowCommand::Logs {
+                    repo_ref,
+                    run_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_workflow_logs(
+                    repo_ref,
+                    run_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
             GitHubCommand::Repo { command } => match command {
                 GitHubRepoCommand::List {
@@ -9190,6 +9250,44 @@ fn run_github_workflow_run_get(
     let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
     let response =
         github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
+            .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_workflow_logs(
+    repo_ref: Option<String>,
+    run_id: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
+    let response =
+        github_get_workflow_logs(&runtime, &repo_owner, &repo_name, run_id)
             .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
