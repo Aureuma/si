@@ -1574,6 +1574,132 @@ fn github_pr_get_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_pr_create_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /repos/Aureuma/si/pulls HTTP/1.1\r\n"));
+        assert!(request.contains("\"head\":\"feature/rust\""));
+        assert!(request.contains("\"base\":\"main\""));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_pr_create")],
+            r#"{"id":1,"number":35,"title":"Rust PR","state":"open"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "pr",
+            "create",
+            "Aureuma/si",
+            "--head",
+            "feature/rust",
+            "--base",
+            "main",
+            "--title",
+            "Rust PR",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_pr_create");
+    assert_eq!(parsed["data"]["number"], 35);
+    server.join();
+}
+
+#[test]
+fn github_pr_comment_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /repos/Aureuma/si/issues/35/comments HTTP/1.1\r\n"));
+        assert!(request.contains("\"body\":\"ship it\""));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_pr_comment")],
+            r#"{"id":9,"body":"ship it"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "pr",
+            "comment",
+            "Aureuma/si",
+            "35",
+            "--body",
+            "ship it",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_pr_comment");
+    assert_eq!(parsed["data"]["body"], "ship it");
+    server.join();
+}
+
+#[test]
+fn github_pr_merge_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PUT /repos/Aureuma/si/pulls/35/merge HTTP/1.1\r\n"));
+        assert!(request.contains("\"merge_method\":\"squash\""));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_pr_merge")],
+            r#"{"sha":"abc123","merged":true,"message":"Pull Request successfully merged"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "pr",
+            "merge",
+            "Aureuma/si",
+            "35",
+            "--method",
+            "squash",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gh_pr_merge");
+    assert_eq!(parsed["data"]["merged"], true);
+    server.join();
+}
+
+#[test]
 fn github_branch_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /repos/Aureuma/si/branches?page=1&per_page=100&protected=true HTTP/1.1\r\n"));

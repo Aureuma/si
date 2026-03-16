@@ -68,6 +68,7 @@ use si_rs_provider_github::{
     clear_project_item_field_value as github_clear_project_item_field_value,
     comment_issue as github_comment_issue,
     create_issue as github_create_issue,
+    create_pull_request as github_create_pull_request,
     delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
@@ -86,6 +87,8 @@ use si_rs_provider_github::{
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
     set_issue_state as github_set_issue_state,
+    comment_pull_request as github_comment_pull_request,
+    merge_pull_request as github_merge_pull_request,
     get_workflow_run as github_get_workflow_run,
     unarchive_project_item as github_unarchive_project_item,
     update_project as github_update_project,
@@ -2584,6 +2587,109 @@ enum GitHubPullRequestCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        head: Option<String>,
+        #[arg(long)]
+        base: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        draft: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Comment {
+        repo_ref: Option<String>,
+        number: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Merge {
+        repo_ref: Option<String>,
+        number: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value = "merge")]
+        method: String,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        message: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -6192,6 +6298,117 @@ fn main() -> Result<()> {
                     app_id,
                     app_key,
                     installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubPullRequestCommand::Create {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    head,
+                    base,
+                    title,
+                    body,
+                    draft,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_pr_create(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    head,
+                    base,
+                    title,
+                    body,
+                    draft,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubPullRequestCommand::Comment {
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    body,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_pr_comment(
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    body,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubPullRequestCommand::Merge {
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    method,
+                    title,
+                    message,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_pr_merge(
+                    repo_ref,
+                    number,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    method,
+                    title,
+                    message,
                     home,
                     settings_file,
                     json,
@@ -11772,6 +11989,180 @@ fn run_github_pr_get(
     let number = number.ok_or_else(|| anyhow::Error::msg("pull request number is required"))?;
     let response = github_get_pull_request(&runtime, &repo_owner, &repo_name, number)
         .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_pr_create(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    head: Option<String>,
+    base: Option<String>,
+    title: Option<String>,
+    body: Option<String>,
+    draft: bool,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let head = head
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--head, --base, and --title are required"))?;
+    let base = base
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--head, --base, and --title are required"))?;
+    let title = title
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--head, --base, and --title are required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let mut payload = parse_github_params(params)?;
+    payload.insert("head".to_owned(), head);
+    payload.insert("base".to_owned(), base);
+    payload.insert("title".to_owned(), title);
+    if let Some(body) = body.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        payload.insert("body".to_owned(), body);
+    }
+    let mut payload_json =
+        serde_json::Map::from_iter(payload.into_iter().map(|(key, value)| (key, Value::String(value))));
+    if draft {
+        payload_json.insert("draft".to_owned(), Value::Bool(true));
+    }
+    let response = github_create_pull_request(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        Value::Object(payload_json),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_pr_comment(
+    repo_ref: Option<String>,
+    number: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let body = body
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--body is required"))?;
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let number = number.ok_or_else(|| anyhow::Error::msg("pull request number is required"))?;
+    let response =
+        github_comment_pull_request(&runtime, &repo_owner, &repo_name, number, &body)
+            .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_pr_merge(
+    repo_ref: Option<String>,
+    number: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    method: String,
+    title: Option<String>,
+    message: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let merge_method = method.trim().to_ascii_lowercase();
+    if merge_method != "merge" && merge_method != "squash" && merge_method != "rebase" {
+        return Err(anyhow::Error::msg(format!(
+            "invalid --method {:?} (expected merge|squash|rebase)",
+            method
+        )));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let number = number.ok_or_else(|| anyhow::Error::msg("pull request number is required"))?;
+    let mut payload = serde_json::Map::new();
+    payload.insert("merge_method".to_owned(), Value::String(merge_method));
+    if let Some(title) = title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        payload.insert("commit_title".to_owned(), Value::String(title));
+    }
+    if let Some(message) = message.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        payload.insert("commit_message".to_owned(), Value::String(message));
+    }
+    let response = github_merge_pull_request(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        number,
+        Value::Object(payload),
+    )
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
