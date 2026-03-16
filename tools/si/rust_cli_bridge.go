@@ -379,6 +379,18 @@ func runAppleAppStoreContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "current"}, args...)...)
 }
 
+func runAWSContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "list"}, args...)...)
+}
+
+func runAWSContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "current"}, args...)...)
+}
+
+func runAWSAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth", "status"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }

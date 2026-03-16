@@ -22,6 +22,7 @@ si-rs-fort = { path = "../si-fort" }
 si-rs-process = { path = "../si-process" }
 si-rs-provider-catalog = { path = "../si-provider-catalog" }
 si-rs-provider-github = { path = "../si-provider-github" }
+si-rs-provider-aws = { path = "../si-provider-aws" }
 si-rs-provider-stripe = { path = "../si-provider-stripe" }
 si-rs-provider-workos = { path = "../si-provider-workos" }
 si-rs-provider-cloudflare = { path = "../si-provider-cloudflare" }

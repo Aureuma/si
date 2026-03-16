@@ -910,6 +910,134 @@ default_platform = "IOS"
 }
 
 #[test]
+fn aws_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[aws]
+default_account = "core"
+default_region = "us-east-1"
+
+[aws.accounts.core]
+name = "Core"
+access_key_id_env = "CORE_AWS_ACCESS_KEY_ID"
+
+[aws.accounts.ops]
+region = "us-west-2"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["aws", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["region"], "us-east-1");
+    assert_eq!(contexts[1]["region"], "us-west-2");
+}
+
+#[test]
+fn aws_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[aws]
+default_account = "core"
+default_region = "us-east-1"
+
+[aws.accounts.core]
+access_key_id_env = "CORE_AWS_ACCESS_KEY_ID"
+secret_access_key_env = "CORE_AWS_SECRET_ACCESS_KEY"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_AWS_ACCESS_KEY_ID", "AKIA1234567890ABCD")
+        .env("CORE_AWS_SECRET_ACCESS_KEY", "secret")
+        .args(["aws", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["region"], "us-east-1");
+    assert_eq!(parsed["base_url"], "https://iam.amazonaws.com");
+    assert_eq!(parsed["source"], "env:CORE_AWS_ACCESS_KEY_ID,env:CORE_AWS_SECRET_ACCESS_KEY");
+    assert_eq!(parsed["access_key"], "AKIA**********ABCD");
+}
+
+#[test]
+fn aws_auth_status_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[aws]
+default_account = "core"
+
+[aws.accounts.core]
+region = "us-west-2"
+access_key_id_env = "CORE_AWS_ACCESS_KEY_ID"
+secret_access_key_env = "CORE_AWS_SECRET_ACCESS_KEY"
+session_token_env = "CORE_AWS_SESSION_TOKEN"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_AWS_ACCESS_KEY_ID", "AKIA1234567890ABCD")
+        .env("CORE_AWS_SECRET_ACCESS_KEY", "secret")
+        .env("CORE_AWS_SESSION_TOKEN", "session")
+        .args(["aws", "auth", "status", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["region"], "us-west-2");
+    assert_eq!(
+        parsed["source"],
+        "env:CORE_AWS_ACCESS_KEY_ID,env:CORE_AWS_SECRET_ACCESS_KEY,env:CORE_AWS_SESSION_TOKEN"
+    );
+    assert_eq!(parsed["access_key"], "AKIA**********ABCD");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

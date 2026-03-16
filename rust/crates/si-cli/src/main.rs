@@ -36,6 +36,12 @@ use si_rs_provider_apple::{
     render_appstore_context_list_text,
     resolve_current_context as resolve_apple_appstore_current_context,
 };
+use si_rs_provider_aws::{
+    AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry, AWSCurrentContext,
+    list_contexts as list_aws_contexts, render_context_list_text as render_aws_context_list_text,
+    resolve_auth_status as resolve_aws_auth_status,
+    resolve_current_context as resolve_aws_current_context,
+};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_cloudflare::{
     CloudflareContextListEntry, CloudflareContextOverrides, CloudflareCurrentContext,
@@ -109,6 +115,10 @@ enum Command {
     Apple {
         #[command(subcommand)]
         command: AppleCommand,
+    },
+    Aws {
+        #[command(subcommand)]
+        command: AWSCommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -246,6 +256,68 @@ enum AppleAppStoreCommand {
 
 #[derive(Debug, Subcommand)]
 enum AppleAppStoreContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSCommand {
+    Auth {
+        #[command(subcommand)]
+        command: AWSAuthCommand,
+    },
+    Context {
+        #[command(subcommand)]
+        command: AWSContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSContextCommand {
     List {
         #[arg(long)]
         home: Option<PathBuf>,
@@ -1435,6 +1507,53 @@ impl From<AppleAppStoreCurrentContext> for AppleAppStoreCurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct AWSContextListPayload {
+    contexts: Vec<AWSContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct AWSCurrentContextPayload {
+    account_alias: String,
+    region: String,
+    base_url: String,
+    source: String,
+    access_key: String,
+}
+
+impl From<AWSCurrentContext> for AWSCurrentContextPayload {
+    fn from(value: AWSCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            region: value.region,
+            base_url: value.base_url,
+            source: value.source,
+            access_key: value.access_key,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct AWSAuthStatusPayload {
+    account_alias: String,
+    region: String,
+    base_url: String,
+    source: String,
+    access_key: String,
+}
+
+impl From<AWSAuthStatus> for AWSAuthStatusPayload {
+    fn from(value: AWSAuthStatus) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            region: value.region,
+            base_url: value.base_url,
+            source: value.source,
+            access_key: value.access_key,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -2001,6 +2120,45 @@ fn main() -> Result<()> {
                         show_apple_appstore_context_current(home, settings_file, format)?
                     }
                 },
+            },
+        },
+        Command::Aws { command } => match command {
+            AWSCommand::Auth { command } => match command {
+                AWSAuthCommand::Status {
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_aws_auth_status(
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
+            AWSCommand::Context { command } => match command {
+                AWSContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_aws_context_list(home, settings_file, format)?
+                }
+                AWSContextCommand::Current { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_aws_context_current(home, settings_file, format)?
+                }
             },
         },
         Command::Stripe { command } => match command {
@@ -3319,6 +3477,110 @@ fn show_apple_appstore_context_current(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Token source: {}", or_dash(&payload.token_source));
+        }
+    }
+    Ok(())
+}
+
+fn show_aws_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_aws_contexts(&settings.aws);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&AWSContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_aws_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_aws_context_current(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = AWSCurrentContextPayload::from(
+        resolve_aws_current_context(&settings.aws, &env).map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current aws context: account={} region={} base={}",
+                account, payload.region, payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_aws_auth_status(
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = AWSAuthStatusPayload::from(
+        resolve_aws_auth_status(
+            &settings.aws,
+            &env,
+            &AWSAuthOverrides {
+                account: account.unwrap_or_default(),
+                region: region.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                access_key: access_key.unwrap_or_default(),
+                secret_key: secret_key.unwrap_or_default(),
+                session_token: session_token.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("AWS auth: ready");
+            println!(
+                "Context: account={} region={} base={}",
+                account, payload.region, payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Access key: {}", or_dash(&payload.access_key));
         }
     }
     Ok(())
