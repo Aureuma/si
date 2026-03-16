@@ -549,6 +549,37 @@ pub fn list_project_service_accounts(
     )
 }
 
+pub fn list_project_rate_limits(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    limit: Option<usize>,
+    after: &str,
+    before: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let mut params = Vec::new();
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.push(("limit", limit.to_string()));
+    }
+    if !after.trim().is_empty() {
+        params.push(("after", after.trim().to_owned()));
+    }
+    if !before.trim().is_empty() {
+        params.push(("before", before.trim().to_owned()));
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    openai_get(
+        runtime,
+        &format!("/v1/organization/projects/{project_id}/rate_limits"),
+        &params,
+        true,
+    )
+}
+
 pub fn get_project_service_account(
     runtime: &OpenAIRuntime,
     project_id: &str,

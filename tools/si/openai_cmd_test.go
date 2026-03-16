@@ -314,3 +314,31 @@ func TestCmdOpenAIProjectServiceAccountGetDelegatesToRustCLIWhenConfigured(t *te
 		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }
+
+func TestCmdOpenAIProjectRateLimitListDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"status_code\":200,\"status\":\"200 OK\",\"request_id\":\"req_123\",\"body\":\"{\\\"data\\\":[]}\",\"data\":{\"data\":[]}}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdOpenAIProjectRateLimitList([]string{"--json", "--project-id", "proj_123", "--limit", "1", "--after", "cursor"})
+	})
+
+	if !strings.Contains(out, "\"status_code\":200") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\nrate-limit\nlist\n--json\n--project-id\nproj_123\n--limit\n1\n--after\ncursor" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}

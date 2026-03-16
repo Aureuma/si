@@ -1331,6 +1331,53 @@ func TestRunOpenAIProjectServiceAccountGetCommandDelegatesToRustCLIWhenConfigure
 	}
 }
 
+func TestRunOpenAIProjectRateLimitListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIProjectRateLimitListCommand([]string{"--json", "--project-id", "proj_123"})
+	if err != nil {
+		t.Fatalf("runOpenAIProjectRateLimitListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai project rate-limit list path by default")
+	}
+}
+
+func TestRunOpenAIProjectRateLimitListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-project-rate-limit-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIProjectRateLimitListCommand([]string{"--json", "--project-id", "proj_123"})
+		if err != nil {
+			t.Fatalf("runOpenAIProjectRateLimitListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai project rate-limit list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-project-rate-limit-list" {
+		t.Fatalf("expected delegated Rust openai project rate-limit list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\nrate-limit\nlist\n--json\n--project-id\nproj_123" {
+		t.Fatalf("expected Rust CLI args to be openai project rate-limit list + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunOCIContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

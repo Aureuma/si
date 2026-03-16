@@ -953,6 +953,13 @@ func cmdOpenAIProjectRateLimit(args []string) {
 }
 
 func cmdOpenAIProjectRateLimitList(args []string) {
+	delegated, err := runOpenAIProjectRateLimitListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai project rate-limit list", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
