@@ -679,6 +679,13 @@ func cmdOpenAIDoctor(args []string) {
 }
 
 func cmdOpenAIModel(args []string) {
+	delegated, err := runOpenAIModelCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai model <list|get> ...")
 	if !routedOK {
 		return
