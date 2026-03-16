@@ -1779,6 +1779,192 @@ fn github_branch_get_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_branch_create_json_mutates_via_api_with_oauth() {
+    let server = start_http_server(3, |request| {
+        if request.starts_with("GET /repos/Aureuma/si HTTP/1.1\r\n") {
+            return http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_repo_get")],
+                r#"{"default_branch":"main"}"#,
+            );
+        }
+        if request.starts_with("GET /repos/Aureuma/si/branches/main HTTP/1.1\r\n") {
+            return http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_branch_base")],
+                r#"{"name":"main","commit":{"sha":"abc123def456"}}"#,
+            );
+        }
+        assert!(request.starts_with("POST /repos/Aureuma/si/git/refs HTTP/1.1\r\n"));
+        assert!(request.contains("\"ref\":\"refs/heads/feature/rust\""));
+        assert!(request.contains("\"sha\":\"abc123def456\""));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_branch_create")],
+            r#"{"ref":"refs/heads/feature/rust","object":{"sha":"abc123def456"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "branch",
+            "create",
+            "Aureuma/si",
+            "feature/rust",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_branch_create");
+    assert_eq!(parsed["data"]["base_sha_source"], "branch:main");
+    server.join();
+}
+
+#[test]
+fn github_branch_delete_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "DELETE /repos/Aureuma/si/git/refs/heads/feature%2Frust HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response("204 No Content", &[("x-github-request-id", "req_gh_branch_delete")], "")
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "branch",
+            "delete",
+            "Aureuma/si",
+            "feature/rust",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
+    assert_eq!(parsed["request_id"], "req_gh_branch_delete");
+    server.join();
+}
+
+#[test]
+fn github_branch_protect_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "PUT /repos/Aureuma/si/branches/main/protection HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("\"strict\":true"));
+        assert!(request.contains("\"checks\":[\"ci\",\"lint\"]"));
+        assert!(request.contains("\"required_approving_review_count\":2"));
+        assert!(request.contains("\"users\":[\"alice\"]"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_branch_protect")],
+            r#"{"url":"https://api.github.com/repos/Aureuma/si/branches/main/protection","required_linear_history":{"enabled":true}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "branch",
+            "protect",
+            "Aureuma/si",
+            "main",
+            "--required-check",
+            "ci",
+            "--required-check",
+            "lint",
+            "--required-approvals",
+            "2",
+            "--restrict-user",
+            "alice",
+            "--require-linear-history",
+            "true",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_branch_protect");
+    assert_eq!(parsed["data"]["required_linear_history"]["enabled"], true);
+    server.join();
+}
+
+#[test]
+fn github_branch_unprotect_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "DELETE /repos/Aureuma/si/branches/main/protection HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "204 No Content",
+            &[("x-github-request-id", "req_gh_branch_unprotect")],
+            "",
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "branch",
+            "unprotect",
+            "Aureuma/si",
+            "main",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
+    assert_eq!(parsed["request_id"], "req_gh_branch_unprotect");
+    server.join();
+}
+
+#[test]
 fn github_git_credential_get_reads_stdin_and_prints_token() {
     let output = cargo_bin()
         .env("GITHUB_TOKEN", "gho_example_token")

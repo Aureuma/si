@@ -82,6 +82,37 @@ pub struct GitHubAPIResponse {
     pub list: Vec<Value>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitHubBranchCreateOptions {
+    pub name: String,
+    pub from_branch: String,
+    pub sha: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubBranchProtectionOptions {
+    pub strict_checks: bool,
+    pub enforce_admins: bool,
+    pub required_approvals: i64,
+    pub dismiss_stale_reviews: bool,
+    pub require_code_owner_reviews: bool,
+    pub require_last_push_approval: bool,
+    pub require_conversation_resolution: bool,
+    pub allow_force_pushes: bool,
+    pub allow_deletions: bool,
+    pub disable_status_checks: bool,
+    pub disable_pr_reviews: bool,
+    pub disable_restrictions: bool,
+    pub block_creations: bool,
+    pub require_linear_history: bool,
+    pub lock_branch: bool,
+    pub allow_fork_syncing: bool,
+    pub required_checks: Vec<String>,
+    pub restrict_users: Vec<String>,
+    pub restrict_teams: Vec<String>,
+    pub restrict_apps: Vec<String>,
+}
+
 impl Serialize for GitHubAPIResponse {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -1274,6 +1305,173 @@ pub fn get_branch(
     normalize_response(github_get(&client, &runtime.base_url, &path, params, &token)?)
 }
 
+pub fn create_branch(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    options: &GitHubBranchCreateOptions,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let branch_name = normalize_branch_name(&options.name);
+    if branch_name.is_empty() {
+        return Err("branch name is required".to_owned());
+    }
+    let sha = options.sha.trim();
+    let from_branch = options.from_branch.trim();
+    if !sha.is_empty() && sha.eq_ignore_ascii_case(from_branch) {
+        return Err("--sha and --from must not be the same value".to_owned());
+    }
+    let (base_sha, base_sha_source) = if sha.is_empty() {
+        resolve_branch_create_sha(&client, runtime, owner, repo, from_branch, &token)?
+    } else {
+        (sha.to_owned(), "--sha".to_owned())
+    };
+    let payload = serde_json::json!({
+        "ref": format!("refs/heads/{branch_name}"),
+        "sha": base_sha,
+    });
+    let mut response = normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &format!("/repos/{owner}/{repo}/git/refs"),
+        &token,
+        &payload,
+    )?)?;
+    if response.data.is_none() {
+        response.data = Some(serde_json::json!({}));
+    }
+    if let Some(data) = response.data.as_mut().and_then(Value::as_object_mut) {
+        data.entry("base_sha_source".to_owned())
+            .or_insert_with(|| Value::String(base_sha_source));
+    }
+    Ok(response)
+}
+
+pub fn delete_branch(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    branch: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let branch_name = normalize_branch_name(branch);
+    if branch_name.is_empty() {
+        return Err("branch is required".to_owned());
+    }
+    let path = format!(
+        "/repos/{owner}/{repo}/git/refs/heads/{}",
+        percent_encode_path_segment(&branch_name)
+    );
+    normalize_response(github_send_without_body(
+        &client,
+        "DELETE",
+        &runtime.base_url,
+        &path,
+        &token,
+    )?)
+}
+
+pub fn protect_branch(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    branch: &str,
+    options: &GitHubBranchProtectionOptions,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let branch_name = normalize_branch_name(branch);
+    if branch_name.is_empty() {
+        return Err("branch is required".to_owned());
+    }
+    let checks = unique_non_empty(options.required_checks.clone());
+    let users = unique_non_empty(options.restrict_users.clone());
+    let teams = unique_non_empty(options.restrict_teams.clone());
+    let apps = unique_non_empty(options.restrict_apps.clone());
+    let required_status_checks = if !options.disable_status_checks && !checks.is_empty() {
+        Some(serde_json::json!({
+            "strict": options.strict_checks,
+            "checks": checks,
+        }))
+    } else {
+        None
+    };
+    let required_pull_request_reviews = if options.disable_pr_reviews {
+        None
+    } else {
+        Some(serde_json::json!({
+            "dismiss_stale_reviews": options.dismiss_stale_reviews,
+            "require_code_owner_reviews": options.require_code_owner_reviews,
+            "require_last_push_approval": options.require_last_push_approval,
+            "required_approving_review_count": options.required_approvals.clamp(0, 6),
+        }))
+    };
+    let restrictions = if !options.disable_restrictions
+        && (!users.is_empty() || !teams.is_empty() || !apps.is_empty())
+    {
+        Some(serde_json::json!({
+            "users": users,
+            "teams": teams,
+            "apps": apps,
+        }))
+    } else {
+        None
+    };
+    let payload = serde_json::json!({
+        "required_status_checks": required_status_checks,
+        "enforce_admins": options.enforce_admins,
+        "required_pull_request_reviews": required_pull_request_reviews,
+        "restrictions": restrictions,
+        "required_conversation_resolution": options.require_conversation_resolution,
+        "allow_force_pushes": options.allow_force_pushes,
+        "allow_deletions": options.allow_deletions,
+        "block_creations": options.block_creations,
+        "required_linear_history": options.require_linear_history,
+        "lock_branch": options.lock_branch,
+        "allow_fork_syncing": options.allow_fork_syncing,
+    });
+    let path = format!(
+        "/repos/{owner}/{repo}/branches/{}/protection",
+        percent_encode_path_segment(&branch_name)
+    );
+    normalize_response(github_send_json(
+        &client,
+        "PUT",
+        &runtime.base_url,
+        &path,
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn unprotect_branch(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    branch: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let branch_name = normalize_branch_name(branch);
+    if branch_name.is_empty() {
+        return Err("branch is required".to_owned());
+    }
+    let path = format!(
+        "/repos/{owner}/{repo}/branches/{}/protection",
+        percent_encode_path_segment(&branch_name)
+    );
+    normalize_response(github_send_without_body(
+        &client,
+        "DELETE",
+        &runtime.base_url,
+        &path,
+        &token,
+    )?)
+}
+
 pub fn get_release(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -1848,6 +2046,24 @@ fn github_send_json(
         .map_err(|err| format!("github request failed: {err}"))
 }
 
+fn github_send_without_body(
+    client: &Client,
+    method: &str,
+    base_url: &str,
+    path: &str,
+    token: &str,
+) -> Result<Response, String> {
+    let url = resolve_url(base_url, path, &BTreeMap::new())?;
+    let builder = match method {
+        "DELETE" => client.delete(url),
+        _ => return Err(format!("unsupported github bodyless request method: {method}")),
+    };
+    builder
+        .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(token)))?)
+        .send()
+        .map_err(|err| format!("github request failed: {err}"))
+}
+
 fn github_graphql(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2010,6 +2226,82 @@ fn percent_encode_path_segment(value: &str) -> String {
         }
     }
     out
+}
+
+fn normalize_branch_name(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches("refs/heads/")
+        .trim_start_matches("heads/")
+        .trim_matches('/')
+        .to_owned()
+}
+
+fn unique_non_empty(values: Vec<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut seen = BTreeMap::new();
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || seen.contains_key(trimmed) {
+            continue;
+        }
+        seen.insert(trimmed.to_owned(), ());
+        out.push(trimmed.to_owned());
+    }
+    out
+}
+
+fn resolve_branch_create_sha(
+    client: &Client,
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    from_branch: &str,
+    token: &str,
+) -> Result<(String, String), String> {
+    let mut selected_from = normalize_branch_name(from_branch);
+    if selected_from.is_empty() {
+        let repo_response = normalize_response(github_get(
+            client,
+            &runtime.base_url,
+            &format!("/repos/{owner}/{repo}"),
+            &BTreeMap::new(),
+            token,
+        )?)?;
+        let default_branch = repo_response
+            .data
+            .as_ref()
+            .and_then(|item| item.get("default_branch"))
+            .and_then(Value::as_str)
+            .map(normalize_branch_name)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| "main".to_owned());
+        selected_from = default_branch;
+    }
+    let branch_response = normalize_response(github_get(
+        client,
+        &runtime.base_url,
+        &format!(
+            "/repos/{owner}/{repo}/branches/{}",
+            percent_encode_path_segment(&selected_from)
+        ),
+        &BTreeMap::new(),
+        token,
+    )?)?;
+    let sha = branch_response
+        .data
+        .as_ref()
+        .and_then(|item| item.get("commit"))
+        .and_then(Value::as_object)
+        .and_then(|item| item.get("sha"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if sha.is_empty() {
+        return Err(format!("base commit sha not found for branch {selected_from:?}"));
+    }
+    Ok((sha, format!("branch:{selected_from}")))
 }
 
 fn preview_secret(secret: &str) -> String {

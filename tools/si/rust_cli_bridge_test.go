@@ -5383,19 +5383,6 @@ func TestRunGitHubIssueReopenCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 }
 
-func TestRunGitHubBranchCommandDefaultsToGoForMutationPath(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runGitHubBranchCommand([]string{"create", "Aureuma/si", "--json"})
-	if err != nil {
-		t.Fatalf("runGitHubBranchCommand: %v", err)
-	}
-	if delegated {
-		t.Fatalf("expected Go github branch mutation path by default")
-	}
-}
-
 func TestRunGitHubBranchCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
@@ -5521,6 +5508,142 @@ func TestRunGitHubBranchGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 	if strings.TrimSpace(string(argsData)) != "github\nbranch\nget\nAureuma/si\nmain\n--json" {
 		t.Fatalf("expected Rust CLI args to be github branch get + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubBranchCreateCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-branch-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubBranchCreateCommand([]string{"Aureuma/si", "feature/rust", "--from", "main", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubBranchCreateCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github branch create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-branch-create" {
+		t.Fatalf("expected delegated Rust github branch create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nbranch\ncreate\nAureuma/si\nfeature/rust\n--from\nmain\n--json" {
+		t.Fatalf("expected Rust CLI args to be github branch create + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubBranchDeleteCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-branch-delete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubBranchDeleteCommand([]string{"Aureuma/si", "feature/rust", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubBranchDeleteCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github branch delete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-branch-delete" {
+		t.Fatalf("expected delegated Rust github branch delete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nbranch\ndelete\nAureuma/si\nfeature/rust\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be github branch delete + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubBranchProtectCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-branch-protect'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubBranchProtectCommand([]string{"Aureuma/si", "main", "--required-check", "ci", "--required-approvals", "2", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubBranchProtectCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github branch protect to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-branch-protect" {
+		t.Fatalf("expected delegated Rust github branch protect output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nbranch\nprotect\nAureuma/si\nmain\n--required-check\nci\n--required-approvals\n2\n--json" {
+		t.Fatalf("expected Rust CLI args to be github branch protect + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubBranchUnprotectCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-branch-unprotect'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubBranchUnprotectCommand([]string{"Aureuma/si", "main", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubBranchUnprotectCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github branch unprotect to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-branch-unprotect" {
+		t.Fatalf("expected delegated Rust github branch unprotect output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nbranch\nunprotect\nAureuma/si\nmain\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be github branch unprotect + args, got %q", string(argsData))
 	}
 }
 
