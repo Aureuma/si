@@ -15,6 +15,13 @@ import (
 )
 
 func cmdGithubBranch(args []string) {
+	delegated, err := runGitHubBranchCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github branch <list|get|create|delete|protect|unprotect> ...")
 	if !routedOK {
 		return
@@ -39,6 +46,13 @@ func cmdGithubBranch(args []string) {
 }
 
 func cmdGithubBranchList(args []string) {
+	delegated, err := runGitHubBranchListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github branch list", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -106,6 +120,13 @@ func cmdGithubBranchList(args []string) {
 }
 
 func cmdGithubBranchGet(args []string) {
+	delegated, err := runGitHubBranchGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github branch get", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
