@@ -730,6 +730,7 @@ dependencies = [
  "si-rs-provider-cloudflare",
  "si-rs-provider-gcp",
  "si-rs-provider-github",
+ "si-rs-provider-google",
  "si-rs-provider-stripe",
  "si-rs-provider-workos",
  "si-rs-runtime",
@@ -851,6 +852,14 @@ dependencies = [
 
 [[package]]
 name = "si-rs-provider-github"
+version = "0.54.0"
+dependencies = [
+ "serde",
+ "si-rs-config",
+]
+
+[[package]]
+name = "si-rs-provider-google"
 version = "0.54.0"
 dependencies = [
  "serde",
