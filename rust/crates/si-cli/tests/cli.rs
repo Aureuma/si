@@ -2126,6 +2126,32 @@ fn oci_auth_status_json_reads_local_signature_context() {
 }
 
 #[test]
+fn oci_oracular_tenancy_json_reads_profile_config() {
+    let config_dir = tempdir().expect("tempdir");
+    let config_file = config_dir.path().join("config");
+    fs::write(
+        &config_file,
+        "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nregion=us-phoenix-1\n",
+    )
+    .expect("write config");
+
+    let output = cargo_bin()
+        .args(["oci", "oracular", "tenancy"])
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["profile"], "DEFAULT");
+    assert_eq!(parsed["config_file"], config_file.to_str().expect("utf8"));
+    assert_eq!(parsed["tenancy_ocid"], "ocid1.tenancy.oc1..example");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");
