@@ -1515,6 +1515,87 @@ fn openai_model_get_text_formats_response() {
 }
 
 #[test]
+fn openai_project_list_json_fetches_from_api_with_admin_key() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /v1/organization/projects?limit=1&include_archived=true HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_projects")],
+            r#"{"data":[{"id":"proj_123","name":"Core"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "project",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--limit",
+            "1",
+            "--include-archived",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_projects");
+    assert_eq!(parsed["data"]["data"][0]["id"], "proj_123");
+    server.join();
+}
+
+#[test]
+fn openai_project_get_text_formats_response() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/organization/projects/proj_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_project")],
+            r#"{"id":"proj_123","name":"Core"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "project",
+            "get",
+            "proj_123",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let rendered = String::from_utf8_lossy(&output);
+    assert!(rendered.contains("Status: 200 200 OK"));
+    assert!(rendered.contains("Request ID: req_project"));
+    assert!(rendered.contains("\"id\": \"proj_123\""));
+    server.join();
+}
+
+#[test]
 fn oci_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

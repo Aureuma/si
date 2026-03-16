@@ -779,6 +779,13 @@ func cmdOpenAIProject(args []string) {
 }
 
 func cmdOpenAIProjectList(args []string) {
+	delegated, err := runOpenAIProjectListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true, "include-archived": true})
 	fs := flag.NewFlagSet("openai project list", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
@@ -806,6 +813,13 @@ func cmdOpenAIProjectList(args []string) {
 }
 
 func cmdOpenAIProjectGet(args []string) {
+	delegated, err := runOpenAIProjectGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai project get", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
