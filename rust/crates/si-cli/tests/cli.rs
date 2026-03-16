@@ -4612,6 +4612,100 @@ fn openai_monitor_limits_json_fetches_project_rate_limits() {
 }
 
 #[test]
+fn openai_raw_json_fetches_with_headers_and_query_params() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/models?limit=2 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-test\r\n"));
+        assert!(request.contains("openai-organization: org_123\r\n"));
+        assert!(request.contains("openai-project: proj_123\r\n"));
+        assert!(request.contains("X-Test: alpha\r\n") || request.contains("x-test: alpha\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_openai_raw_get")],
+            r#"{"data":[{"id":"gpt-4.1-mini"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "raw",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--org-id",
+            "org_123",
+            "--project-id",
+            "proj_123",
+            "--path",
+            "/v1/models",
+            "--param",
+            "limit=2",
+            "--header",
+            "x-test=alpha",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_openai_raw_get");
+    assert_eq!(parsed["data"]["data"][0]["id"], "gpt-4.1-mini");
+    server.join();
+}
+
+#[test]
+fn openai_raw_json_posts_json_body_with_admin_key() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/organization/projects HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-admin\r\n"));
+        assert!(request.contains("content-type: application/json\r\n"));
+        assert!(request.contains("\r\n\r\n{\"name\":\"Core\"}"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_openai_raw_post")],
+            r#"{"id":"proj_123","name":"Core"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "raw",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--admin-api-key",
+            "sk-admin",
+            "--admin",
+            "--method",
+            "POST",
+            "--path",
+            "/v1/organization/projects",
+            "--json-body",
+            "{\"name\":\"Core\"}",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_openai_raw_post");
+    assert_eq!(parsed["data"]["id"], "proj_123");
+    server.join();
+}
+
+#[test]
 fn oci_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

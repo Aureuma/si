@@ -134,6 +134,7 @@ use si_rs_provider_openai::{
     create_admin_api_key as openai_create_admin_api_key,
     create_project as openai_create_project,
     create_project_service_account as openai_create_project_service_account,
+    execute_api_request as execute_openai_api_request,
     delete_admin_api_key as openai_delete_admin_api_key,
     delete_project_api_key as openai_delete_project_api_key,
     delete_project_service_account as openai_delete_project_service_account,
@@ -762,6 +763,46 @@ enum OpenAICommand {
     Project {
         #[command(subcommand)]
         command: OpenAIProjectCommand,
+    },
+    Raw {
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long, default_value = "/v1/models")]
+        path: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long, default_value = "application/json")]
+        content_type: String,
+        #[arg(long)]
+        admin: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -7226,6 +7267,47 @@ fn main() -> Result<()> {
                     )?,
                 },
             },
+            OpenAICommand::Raw {
+                method,
+                path,
+                body,
+                body_file,
+                json_body,
+                content_type,
+                admin,
+                params,
+                headers,
+                account,
+                base_url,
+                api_key,
+                admin_api_key,
+                org_id,
+                project_id,
+                home,
+                settings_file,
+                json,
+                raw,
+            } => run_openai_raw(
+                method,
+                path,
+                body,
+                body_file,
+                json_body,
+                content_type,
+                admin,
+                params,
+                headers,
+                account,
+                base_url,
+                api_key,
+                admin_api_key,
+                org_id,
+                project_id,
+                home,
+                settings_file,
+                json,
+                raw,
+            )?,
         },
         Command::Oci { command } => match command {
             OciCommand::Auth { command } => match command {
@@ -12788,6 +12870,48 @@ fn insert_openai_limit_value(
     }
 }
 
+fn parse_openai_key_value_pairs(
+    values: Vec<String>,
+    flag_name: &str,
+) -> Result<Vec<(String, String)>> {
+    let mut parsed = Vec::with_capacity(values.len());
+    for value in values {
+        let (key, item) = value
+            .split_once('=')
+            .ok_or_else(|| anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value")))?;
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("invalid --{flag_name}: key must not be empty");
+        }
+        parsed.push((key.to_owned(), item.trim().to_owned()));
+    }
+    Ok(parsed)
+}
+
+fn resolve_openai_raw_body(
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    json_body: Option<String>,
+) -> Result<Option<Vec<u8>>> {
+    if let Some(raw_json) = json_body.filter(|value| !value.trim().is_empty()) {
+        let payload: Value = serde_json::from_str(raw_json.trim()).map_err(anyhow::Error::msg)?;
+        return serde_json::to_vec(&payload)
+            .map(Some)
+            .map_err(anyhow::Error::msg);
+    }
+    let raw = if let Some(path) = body_file {
+        std::fs::read_to_string(path)?
+    } else {
+        body.unwrap_or_default()
+    };
+    let raw = raw.trim().to_owned();
+    if raw.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(raw.into_bytes()))
+    }
+}
+
 fn print_openai_api_response(response: OpenAIAPIResponse, json: bool, raw: bool) -> Result<()> {
     if json {
         println!("{}", serde_json::to_string_pretty(&response)?);
@@ -12795,6 +12919,56 @@ fn print_openai_api_response(response: OpenAIAPIResponse, json: bool, raw: bool)
         print!("{}", render_openai_api_response_text(&response, raw));
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_raw(
+    method: String,
+    path: String,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    json_body: Option<String>,
+    content_type: String,
+    admin: bool,
+    params: Vec<String>,
+    headers: Vec<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let params = parse_openai_key_value_pairs(params, "param")?;
+    let headers = parse_openai_key_value_pairs(headers, "header")?;
+    let body = resolve_openai_raw_body(body, body_file, json_body)?;
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| {
+            execute_openai_api_request(
+                &runtime,
+                method.trim(),
+                path.trim(),
+                &params,
+                &headers,
+                body,
+                Some(content_type.trim()),
+                admin,
+            )
+        },
+    )?;
+    print_openai_api_response(response, json, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
