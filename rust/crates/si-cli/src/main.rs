@@ -32,6 +32,7 @@ use si_rs_fort::{
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
+use si_rs_provider_github::{GitHubContextListEntry, list_contexts, render_context_list_text};
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
@@ -72,6 +73,11 @@ enum Command {
     Providers {
         #[command(subcommand)]
         command: ProvidersCommand,
+    },
+    #[command(name = "github")]
+    GitHub {
+        #[command(subcommand)]
+        command: GitHubCommand,
     },
     Dyad {
         #[command(subcommand)]
@@ -125,6 +131,28 @@ enum ProvidersCommand {
     Characteristics {
         #[arg(long)]
         provider: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubCommand {
+    Context {
+        #[command(subcommand)]
+        command: GitHubContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
         #[arg(long, default_value = "text")]
@@ -1051,6 +1079,11 @@ struct ProviderCapabilitiesView {
 }
 
 #[derive(Debug, Serialize)]
+struct GitHubContextListPayload {
+    contexts: Vec<GitHubContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
 struct DyadSpawnPlanView {
     dyad: String,
     role: String,
@@ -1436,6 +1469,14 @@ fn main() -> Result<()> {
                 let format = if json { OutputFormat::Json } else { format };
                 show_provider_characteristics(provider.as_deref(), format)?
             }
+        },
+        Command::GitHub { command } => match command {
+            GitHubCommand::Context { command } => match command {
+                GitHubContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_github_context_list(home, settings_file, format)?
+                }
+            },
         },
         Command::Dyad { command } => match *command {
             DyadCommand::SpawnPlan {
@@ -2534,6 +2575,23 @@ fn show_provider_characteristics(provider: Option<&str>, format: OutputFormat) -
         }
     }
 
+    Ok(())
+}
+
+fn show_github_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_contexts(&settings.github);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&GitHubContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_context_list_text(&contexts)),
+    }
     Ok(())
 }
 
