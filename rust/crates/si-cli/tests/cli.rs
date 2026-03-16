@@ -753,6 +753,124 @@ fn github_project_get_json_fetches_from_graphql_with_oauth() {
 }
 
 #[test]
+fn github_workflow_list_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/actions/workflows HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_workflow_list")],
+            r#"{"total_count":1,"workflows":[{"id":11,"name":"CI","path":".github/workflows/ci.yml"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "list",
+            "Aureuma/si",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_list");
+    assert_eq!(parsed["list"][0]["name"], "CI");
+    server.join();
+}
+
+#[test]
+fn github_workflow_runs_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/actions/runs?branch=main HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_workflow_runs")],
+            r#"{"total_count":1,"workflow_runs":[{"id":21,"name":"CI","status":"completed"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "runs",
+            "Aureuma/si",
+            "--param",
+            "branch=main",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_runs");
+    assert_eq!(parsed["list"][0]["id"], 21);
+    server.join();
+}
+
+#[test]
+fn github_workflow_run_get_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/actions/runs/21 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_workflow_run")],
+            r#"{"id":21,"name":"CI","status":"completed"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "run",
+            "get",
+            "Aureuma/si",
+            "21",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_run");
+    assert_eq!(parsed["data"]["id"], 21);
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

@@ -1159,6 +1159,46 @@ func runGitHubProjectCommand(args []string) (bool, error) {
 	}
 }
 
+func runGitHubWorkflowListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "list"}, args...)...)
+}
+
+func runGitHubWorkflowRunsCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "runs"}, args...)...)
+}
+
+func runGitHubWorkflowRunGetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "run", "get"}, args...)...)
+}
+
+func runGitHubWorkflowRunCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "get":
+		return runGitHubWorkflowRunGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGitHubWorkflowCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runGitHubWorkflowListCommand(args[1:])
+	case "runs":
+		return runGitHubWorkflowRunsCommand(args[1:])
+	case "run":
+		return runGitHubWorkflowRunCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGitHubCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1170,6 +1210,8 @@ func runGitHubCommand(args []string) (bool, error) {
 		return runGitHubContextCommand(args[1:])
 	case "project":
 		return runGitHubProjectCommand(args[1:])
+	case "workflow":
+		return runGitHubWorkflowCommand(args[1:])
 	case "repo":
 		return runGitHubRepoCommand(args[1:])
 	case "release":

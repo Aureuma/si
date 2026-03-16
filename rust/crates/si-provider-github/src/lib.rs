@@ -576,6 +576,64 @@ query($id:ID!){
     )
 }
 
+pub fn list_workflows(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/actions/workflows");
+    let mut response =
+        normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)?;
+    response.list = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("workflows"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(response)
+}
+
+pub fn list_workflow_runs(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    workflow: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = if workflow.trim().is_empty() {
+        format!("/repos/{owner}/{repo}/actions/runs")
+    } else {
+        format!("/repos/{owner}/{repo}/actions/workflows/{}/runs", workflow.trim())
+    };
+    let mut response =
+        normalize_response(github_get(&client, &runtime.base_url, &path, params, &token)?)?;
+    response.list = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("workflow_runs"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    Ok(response)
+}
+
+pub fn get_workflow_run(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    run_id: i64,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/actions/runs/{run_id}");
+    normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
+}
+
 pub fn get_release(
     runtime: &GitHubRuntime,
     owner: &str,
