@@ -3205,6 +3205,84 @@ fn cloudflare_raw_text_prints_body_for_raw_mode() {
 }
 
 #[test]
+fn cloudflare_analytics_http_json_fetches_zone_dashboard() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones/zone_123/analytics/dashboard?since=2026-03-01 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_analytics")],
+            r#"{"success":true,"result":{"totals":{"requests":{"all":123}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "analytics", "http"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "since=2026-03-01",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_cloudflare_analytics");
+    assert_eq!(parsed["data"]["totals"]["requests"]["all"], 123);
+    server.join();
+}
+
+#[test]
+fn cloudflare_report_billing_summary_json_fetches_account_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /accounts/acc_core/billing/subscriptions?since=2026-03-01&until=2026-03-15 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_report")],
+            r#"{"success":true,"result":{"subscriptions":[{"id":"sub_123"}]}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "report", "billing-summary"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "acc_core",
+            "--from",
+            "2026-03-01",
+            "--to",
+            "2026-03-15",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_cloudflare_report");
+    assert_eq!(parsed["data"]["subscriptions"][0]["id"], "sub_123");
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
