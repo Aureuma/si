@@ -61,8 +61,10 @@ use si_rs_provider_gcp::{
     resolve_current_context as resolve_gcp_current_context,
 };
 use si_rs_provider_github::{
-    GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry, list_contexts,
+    GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
+    get_release as github_get_release, list_contexts, list_releases as github_list_releases,
     render_context_list_text, resolve_auth_status, resolve_current_context,
+    resolve_runtime as resolve_github_runtime,
 };
 use si_rs_provider_google::{
     GooglePlacesAuthStatus, GooglePlacesContextListEntry, GooglePlacesCurrentContext,
@@ -117,6 +119,7 @@ use si_rs_warmup::{
     set_disabled_marker as set_rust_warmup_disabled_marker,
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
+use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{self, Read};
 use std::path::PathBuf;
@@ -1459,6 +1462,10 @@ enum GitHubCommand {
         #[command(subcommand)]
         command: GitHubContextCommand,
     },
+    Release {
+        #[command(subcommand)]
+        command: GitHubReleaseCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1512,6 +1519,69 @@ enum GitHubContextCommand {
         json: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubReleaseCommand {
+    List {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value_t = 5)]
+        max_pages: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        repo_ref: Option<String>,
+        release_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -4313,6 +4383,72 @@ fn main() -> Result<()> {
                     let format = if json { OutputFormat::Json } else { format };
                     show_github_context_current(home, settings_file, format)?
                 }
+            },
+            GitHubCommand::Release { command } => match command {
+                GitHubReleaseCommand::List {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    max_pages,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_release_list(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    max_pages,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubReleaseCommand::Get {
+                    repo_ref,
+                    release_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_release_get(
+                    repo_ref,
+                    release_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
         },
         Command::Dyad { command } => match *command {
@@ -7327,6 +7463,178 @@ fn show_github_auth_status(
         }
     }
     Ok(())
+}
+
+fn parse_github_owner_repo(repo_ref: &str, default_owner: &str) -> Result<(String, String)> {
+    let trimmed = repo_ref.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow::Error::msg("github repo is required"));
+    }
+    if let Some((owner, repo)) = trimmed.split_once('/') {
+        let owner = owner.trim();
+        let repo = repo.trim();
+        if owner.is_empty() || repo.is_empty() {
+            return Err(anyhow::Error::msg("github repo must be <owner/repo> or <repo>"));
+        }
+        return Ok((owner.to_owned(), repo.to_owned()));
+    }
+    let owner = default_owner.trim();
+    if owner.is_empty() {
+        return Err(anyhow::Error::msg("github owner is required when repo is not fully qualified"));
+    }
+    Ok((owner.to_owned(), trimmed.to_owned()))
+}
+
+fn parse_github_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            return Err(anyhow::Error::msg(format!(
+                "invalid --param {raw:?} (expected key=value)"
+            )));
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(anyhow::Error::msg("github --param key cannot be empty"));
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_github_runtime(
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<si_rs_provider_github::GitHubRuntime> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_github_runtime(
+        &settings.github,
+        &env,
+        &GitHubAuthOverrides {
+            account: account.unwrap_or_default(),
+            owner: owner.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            auth_mode: auth_mode.unwrap_or_default(),
+            token: token.unwrap_or_default(),
+            app_id,
+            app_key: app_key.unwrap_or_default(),
+            installation_id,
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+fn print_github_api_response(response: &GitHubAPIResponse, json: bool, raw: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(response)?);
+        return Ok(());
+    }
+
+    println!("Status: {} {}", response.status_code, response.status);
+    if !response.request_id.trim().is_empty() {
+        println!("Request ID: {}", response.request_id);
+    }
+    if raw && !response.body.trim().is_empty() {
+        println!("{}", response.body);
+        return Ok(());
+    }
+    if let Some(data) = &response.data {
+        println!("{}", serde_json::to_string_pretty(data)?);
+    } else if !response.list.is_empty() {
+        println!("{}", serde_json::to_string_pretty(&response.list)?);
+    } else if !response.body.trim().is_empty() {
+        println!("{}", response.body);
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_release_list(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    max_pages: usize,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let params = parse_github_params(params)?;
+    let response =
+        github_list_releases(&runtime, &repo_owner, &repo_name, &params, max_pages)
+            .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_release_get(
+    repo_ref: Option<String>,
+    release_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let release_ref = release_ref
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("github release ref is required"))?;
+    let response = github_get_release(&runtime, &repo_owner, &repo_name, &release_ref)
+        .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
 }
 
 #[allow(clippy::too_many_arguments)]

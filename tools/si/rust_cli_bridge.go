@@ -1093,6 +1093,28 @@ func runGitHubAuthCommand(args []string) (bool, error) {
 	}
 }
 
+func runGitHubReleaseListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"release", "list"}, args...)...)
+}
+
+func runGitHubReleaseGetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"release", "get"}, args...)...)
+}
+
+func runGitHubReleaseCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runGitHubReleaseListCommand(args[1:])
+	case "get":
+		return runGitHubReleaseGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGitHubCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1102,6 +1124,8 @@ func runGitHubCommand(args []string) (bool, error) {
 		return runGitHubAuthCommand(args[1:])
 	case "context":
 		return runGitHubContextCommand(args[1:])
+	case "release":
+		return runGitHubReleaseCommand(args[1:])
 	default:
 		return false, nil
 	}

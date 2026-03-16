@@ -4197,6 +4197,147 @@ func TestRunGitHubAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 }
 
+func TestRunGitHubReleaseCommandDefaultsToGoForMutationPath(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubReleaseCommand([]string{"create", "Aureuma/si", "--json"})
+	if err != nil {
+		t.Fatalf("runGitHubReleaseCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github release mutation path by default")
+	}
+}
+
+func TestRunGitHubReleaseCommandDelegatesToRustCLIForReadPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-release-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubReleaseCommand([]string{"list", "Aureuma/si", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubReleaseCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github release wrapper to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-release-wrapper" {
+		t.Fatalf("expected delegated Rust github release output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nrelease\nlist\nAureuma/si\n--json" {
+		t.Fatalf("expected Rust CLI args to be github release + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubReleaseListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubReleaseListCommand([]string{"Aureuma/si", "--json"})
+	if err != nil {
+		t.Fatalf("runGitHubReleaseListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github release list path by default")
+	}
+}
+
+func TestRunGitHubReleaseListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-release-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubReleaseListCommand([]string{"Aureuma/si", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubReleaseListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github release list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-release-list" {
+		t.Fatalf("expected delegated Rust github release list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nrelease\nlist\nAureuma/si\n--json" {
+		t.Fatalf("expected Rust CLI args to be github release list + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubReleaseGetCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubReleaseGetCommand([]string{"Aureuma/si", "v1.2.3", "--json"})
+	if err != nil {
+		t.Fatalf("runGitHubReleaseGetCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github release get path by default")
+	}
+}
+
+func TestRunGitHubReleaseGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-release-get'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubReleaseGetCommand([]string{"Aureuma/si", "v1.2.3", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubReleaseGetCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github release get to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-release-get" {
+		t.Fatalf("expected delegated Rust github release get output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nrelease\nget\nAureuma/si\nv1.2.3\n--json" {
+		t.Fatalf("expected Rust CLI args to be github release get + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

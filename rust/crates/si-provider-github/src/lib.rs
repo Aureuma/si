@@ -1,6 +1,12 @@
-use serde::Serialize;
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use reqwest::blocking::{Client, Response};
+use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue, USER_AGENT};
+use serde::{Serialize, Serializer};
+use serde_json::Value;
 use si_rs_config::settings::{GitHubAccountEntry, GitHubSettings};
 use std::collections::BTreeMap;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GitHubContextListEntry {
@@ -41,6 +47,68 @@ pub struct GitHubAuthStatus {
     pub base_url: String,
     pub source: String,
     pub token_preview: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GitHubRuntime {
+    pub account_alias: String,
+    pub owner: String,
+    pub auth_mode: String,
+    pub base_url: String,
+    pub source: String,
+    credentials: GitHubCredentials,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum GitHubCredentials {
+    OAuth {
+        access_token: String,
+    },
+    App {
+        app_id: i64,
+        app_key: String,
+        installation_id: i64,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GitHubAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
+    pub data: Option<Value>,
+    pub list: Vec<Value>,
+}
+
+impl Serialize for GitHubAPIResponse {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeMap;
+
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("status_code", &self.status_code)?;
+        map.serialize_entry("status", &self.status)?;
+        if !self.request_id.trim().is_empty() {
+            map.serialize_entry("request_id", &self.request_id)?;
+        }
+        if !self.headers.is_empty() {
+            map.serialize_entry("headers", &self.headers)?;
+        }
+        if !self.body.is_empty() {
+            map.serialize_entry("body", &self.body)?;
+        }
+        if let Some(data) = &self.data {
+            map.serialize_entry("data", data)?;
+        }
+        if !self.list.is_empty() {
+            map.serialize_entry("list", &self.list)?;
+        }
+        map.end()
+    }
 }
 
 pub fn list_contexts(settings: &GitHubSettings) -> Vec<GitHubContextListEntry> {
@@ -193,6 +261,181 @@ pub fn resolve_auth_status(
         source: join_sources(&source),
         token_preview,
     })
+}
+
+pub fn resolve_runtime(
+    settings: &GitHubSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> Result<GitHubRuntime, String> {
+    let selected_account = resolve_account_selection(settings, env, &overrides.account);
+    let entry = selected_account.as_ref().and_then(|alias| settings.accounts.get(alias));
+
+    let owner = first_non_empty(&[
+        Some(overrides.owner.as_str()),
+        entry.and_then(|item| item.owner.as_deref()),
+        settings.default_owner.as_deref(),
+        env.get("GITHUB_DEFAULT_OWNER").map(String::as_str),
+    ])
+    .to_owned();
+    let base_url = first_non_empty(&[
+        Some(overrides.base_url.as_str()),
+        entry.and_then(|item| item.api_base_url.as_deref()),
+        settings.api_base_url.as_deref(),
+        env.get("GITHUB_API_BASE_URL").map(String::as_str),
+        Some("https://api.github.com"),
+    ])
+    .to_owned();
+
+    let mut source = Vec::new();
+    if let Some(alias) = selected_account.as_deref() {
+        if !overrides.account.trim().is_empty() && overrides.account.trim() == alias {
+            source.push("flag:--account".to_owned());
+        } else if settings.default_account.as_deref().map(str::trim) == Some(alias) {
+            source.push("settings.default_account".to_owned());
+        } else if env
+            .get("GITHUB_DEFAULT_ACCOUNT")
+            .map(|value| value.trim() == alias)
+            .unwrap_or(false)
+        {
+            source.push("env:GITHUB_DEFAULT_ACCOUNT".to_owned());
+        }
+    }
+    if !overrides.owner.trim().is_empty() {
+        source.push("flag:--owner".to_owned());
+    } else if entry.and_then(|item| item.owner.as_deref()).is_some_and(|value| value.trim() == owner)
+    {
+        source.push("settings.owner".to_owned());
+    } else if settings.default_owner.as_deref().is_some_and(|value| value.trim() == owner) {
+        source.push("settings.default_owner".to_owned());
+    } else if env
+        .get("GITHUB_DEFAULT_OWNER")
+        .map(|value| value.trim() == owner)
+        .unwrap_or(false)
+    {
+        source.push("env:GITHUB_DEFAULT_OWNER".to_owned());
+    }
+    if !overrides.base_url.trim().is_empty() {
+        source.push("flag:--base-url".to_owned());
+    } else if entry
+        .and_then(|item| item.api_base_url.as_deref())
+        .is_some_and(|value| value.trim() == base_url)
+    {
+        source.push("settings.api_base_url".to_owned());
+    } else if settings.api_base_url.as_deref().is_some_and(|value| value.trim() == base_url) {
+        source.push("settings.api_base_url".to_owned());
+    } else if env
+        .get("GITHUB_API_BASE_URL")
+        .map(|value| value.trim() == base_url)
+        .unwrap_or(false)
+    {
+        source.push("env:GITHUB_API_BASE_URL".to_owned());
+    }
+
+    let (auth_mode, auth_mode_source) = resolve_auth_mode(settings, entry, env, overrides)?;
+    source.extend(auth_mode_source);
+    let credentials = if auth_mode == "oauth" {
+        let (token, token_source) =
+            resolve_oauth_token(selected_account.as_deref(), entry, env, overrides);
+        if token.trim().is_empty() {
+            return Err("github oauth token not found".to_owned());
+        }
+        source.push(token_source);
+        GitHubCredentials::OAuth { access_token: normalize_bearer_token(&token) }
+    } else {
+        let (app_id, app_id_source) =
+            resolve_app_id(selected_account.as_deref(), entry, env, overrides);
+        let (app_key, app_key_source) =
+            resolve_app_key(selected_account.as_deref(), entry, env, overrides);
+        let (installation_id, installation_source) =
+            resolve_installation_id(selected_account.as_deref(), entry, env, overrides);
+        if app_id <= 0 || app_key.trim().is_empty() {
+            return Err("github app auth requires app id and private key".to_owned());
+        }
+        source.push(app_id_source);
+        source.push(app_key_source);
+        if !installation_source.trim().is_empty() {
+            source.push(installation_source);
+        }
+        GitHubCredentials::App {
+            app_id,
+            app_key: normalize_private_key(&app_key),
+            installation_id,
+        }
+    };
+
+    Ok(GitHubRuntime {
+        account_alias: selected_account.unwrap_or_default(),
+        owner,
+        auth_mode,
+        base_url,
+        source: join_sources(&source),
+        credentials,
+    })
+}
+
+pub fn list_releases(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    params: &BTreeMap<String, String>,
+    max_pages: usize,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let mut merged = params.clone();
+    merged.entry("per_page".to_owned()).or_insert_with(|| "100".to_owned());
+    let mut items = Vec::new();
+    let mut last_response = GitHubAPIResponse {
+        status_code: 200,
+        status: "200 OK".to_owned(),
+        request_id: String::new(),
+        headers: BTreeMap::new(),
+        body: String::new(),
+        data: None,
+        list: Vec::new(),
+    };
+    let total_pages = if max_pages == 0 { 5 } else { max_pages };
+    for page in 1..=total_pages {
+        merged.insert("page".to_owned(), page.to_string());
+        let response = github_get(
+            &client,
+            &runtime.base_url,
+            &format!("/repos/{owner}/{repo}/releases"),
+            &merged,
+            &token,
+        )?;
+        let next = parse_next_link(response.headers());
+        let payload = normalize_response(response)?;
+        items.extend(payload.list.iter().cloned());
+        last_response = payload;
+        if next.is_none() || last_response.list.is_empty() {
+            break;
+        }
+    }
+    last_response.data = None;
+    last_response.list = items;
+    Ok(last_response)
+}
+
+pub fn get_release(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    release_ref: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let trimmed = release_ref.trim();
+    if trimmed.is_empty() {
+        return Err("github release ref is required".to_owned());
+    }
+    let path = if trimmed.parse::<u64>().is_ok() {
+        format!("/repos/{owner}/{repo}/releases/{trimmed}")
+    } else {
+        format!("/repos/{owner}/{repo}/releases/tags/{trimmed}")
+    };
+    normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
 fn build_list_entry(
@@ -520,6 +763,292 @@ fn github_account_env_prefix(
     }
     let slug = slug.trim_matches('_');
     if slug.is_empty() { String::new() } else { format!("GITHUB_{slug}_") }
+}
+
+fn normalize_bearer_token(value: &str) -> String {
+    let trimmed = value.trim();
+    trimmed
+        .strip_prefix("Bearer ")
+        .or_else(|| trimmed.strip_prefix("bearer "))
+        .unwrap_or(trimmed)
+        .trim()
+        .to_owned()
+}
+
+fn normalize_private_key(value: &str) -> String {
+    value.trim().replace("\\n", "\n")
+}
+
+fn build_http_client() -> Result<Client, String> {
+    Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|err| format!("build github http client: {err}"))
+}
+
+fn github_access_token(
+    client: &Client,
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+) -> Result<String, String> {
+    match &runtime.credentials {
+        GitHubCredentials::OAuth { access_token } => Ok(access_token.clone()),
+        GitHubCredentials::App { app_id, app_key, installation_id } => {
+            let jwt = github_app_jwt(*app_id, app_key)?;
+            let resolved_installation_id = if *installation_id > 0 {
+                *installation_id
+            } else {
+                lookup_installation_id(client, &runtime.base_url, owner, repo, &jwt)?
+            };
+            exchange_installation_token(
+                client,
+                &runtime.base_url,
+                resolved_installation_id,
+                &jwt,
+            )
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubAppClaims {
+    iat: i64,
+    exp: i64,
+    iss: String,
+}
+
+fn github_app_jwt(app_id: i64, app_key: &str) -> Result<String, String> {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|err| format!("github jwt clock error: {err}"))?
+        .as_secs() as i64;
+    let claims = GitHubAppClaims {
+        iat: now - 60,
+        exp: now + 9 * 60,
+        iss: app_id.to_string(),
+    };
+    encode(
+        &Header::new(Algorithm::RS256),
+        &claims,
+        &EncodingKey::from_rsa_pem(app_key.as_bytes())
+            .map_err(|err| format!("github app private key invalid: {err}"))?,
+    )
+    .map_err(|err| format!("sign github app jwt: {err}"))
+}
+
+fn exchange_installation_token(
+    client: &Client,
+    base_url: &str,
+    installation_id: i64,
+    jwt: &str,
+) -> Result<String, String> {
+    let url = resolve_url(
+        base_url,
+        &format!("/app/installations/{installation_id}/access_tokens"),
+        &BTreeMap::new(),
+    )?;
+    let response = client
+        .post(url)
+        .headers(default_headers(&format!("Bearer {jwt}"))?)
+        .send()
+        .map_err(|err| format!("github installation token request failed: {err}"))?;
+    let status = response.status();
+    let request_id = response
+        .headers()
+        .get("x-github-request-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let body = response
+        .text()
+        .map_err(|err| format!("read github installation token response: {err}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "github installation token request failed: status={} request_id={} body={}",
+            status.as_u16(),
+            request_id,
+            body.trim()
+        ));
+    }
+    let payload: Value = serde_json::from_str(&body)
+        .map_err(|err| format!("decode github installation token response: {err}"))?;
+    let token = payload
+        .get("token")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if token.is_empty() {
+        return Err("github installation token response missing token".to_owned());
+    }
+    Ok(token)
+}
+
+fn lookup_installation_id(
+    client: &Client,
+    base_url: &str,
+    owner: &str,
+    repo: &str,
+    jwt: &str,
+) -> Result<i64, String> {
+    let mut candidates = Vec::new();
+    if !owner.trim().is_empty() && !repo.trim().is_empty() {
+        candidates.push(format!("/repos/{owner}/{repo}/installation"));
+    }
+    if !owner.trim().is_empty() {
+        candidates.push(format!("/orgs/{owner}/installation"));
+        candidates.push(format!("/users/{owner}/installation"));
+    }
+    for path in candidates {
+        let url = resolve_url(base_url, &path, &BTreeMap::new())?;
+        let response = client
+            .get(url)
+            .headers(default_headers(&format!("Bearer {jwt}"))?)
+            .send()
+            .map_err(|err| format!("github installation lookup failed: {err}"))?;
+        if !response.status().is_success() {
+            continue;
+        }
+        let body = response
+            .text()
+            .map_err(|err| format!("read github installation lookup response: {err}"))?;
+        let payload: Value = match serde_json::from_str(&body) {
+            Ok(value) => value,
+            Err(_) => continue,
+        };
+        if let Some(id) = payload.get("id").and_then(Value::as_i64).filter(|value| *value > 0) {
+            return Ok(id);
+        }
+    }
+    Err(format!(
+        "unable to resolve github app installation id for owner={} repo={}",
+        owner.trim(),
+        repo.trim()
+    ))
+}
+
+fn github_get(
+    client: &Client,
+    base_url: &str,
+    path: &str,
+    params: &BTreeMap<String, String>,
+    token: &str,
+) -> Result<Response, String> {
+    let url = resolve_url(base_url, path, params)?;
+    client
+        .get(url)
+        .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(token)))?)
+        .send()
+        .map_err(|err| format!("github request failed: {err}"))
+}
+
+fn default_headers(auth_value: &str) -> Result<HeaderMap, String> {
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
+    headers.insert(
+        HeaderName::from_static("x-github-api-version"),
+        HeaderValue::from_static("2022-11-28"),
+    );
+    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(auth_value)
+            .map_err(|err| format!("build github auth header: {err}"))?,
+    );
+    Ok(headers)
+}
+
+fn normalize_response(response: Response) -> Result<GitHubAPIResponse, String> {
+    let status_code = response.status().as_u16();
+    let status = response.status().to_string();
+    let headers = response.headers().clone();
+    let request_id = first_header(&headers, "x-github-request-id");
+    let body = response
+        .text()
+        .map_err(|err| format!("read github response body: {err}"))?;
+    if status_code < 200 || status_code >= 300 {
+        return Err(format!(
+            "github request failed: status={} request_id={} body={}",
+            status_code,
+            request_id,
+            body.trim()
+        ));
+    }
+    let mut payload = GitHubAPIResponse {
+        status_code,
+        status,
+        request_id,
+        headers: BTreeMap::new(),
+        body,
+        data: None,
+        list: Vec::new(),
+    };
+    for (key, value) in &headers {
+        if let Ok(text) = value.to_str() {
+            payload.headers.insert(key.as_str().to_owned(), text.to_owned());
+        }
+    }
+    if payload.body.trim().is_empty() {
+        return Ok(payload);
+    }
+    if let Ok(parsed) = serde_json::from_str::<Value>(&payload.body) {
+        match parsed {
+            Value::Array(items) => payload.list = items,
+            Value::Object(_) => payload.data = Some(parsed),
+            _ => {}
+        }
+    }
+    Ok(payload)
+}
+
+fn resolve_url(
+    base_url: &str,
+    path: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<Url, String> {
+    let mut url = Url::parse(base_url).map_err(|err| format!("invalid github base url: {err}"))?;
+    let existing_path = url.path().trim_end_matches('/');
+    let next_path = path.trim_start_matches('/');
+    let joined = if existing_path.is_empty() || existing_path == "/" {
+        format!("/{}", next_path)
+    } else if next_path.is_empty() {
+        existing_path.to_owned()
+    } else {
+        format!("{existing_path}/{next_path}")
+    };
+    url.set_path(&joined);
+    if !params.is_empty() {
+        let mut pairs = url.query_pairs_mut();
+        pairs.clear();
+        for (key, value) in params {
+            pairs.append_pair(key, value);
+        }
+    }
+    Ok(url)
+}
+
+fn first_header(headers: &HeaderMap, name: &str) -> String {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned()
+}
+
+fn parse_next_link(headers: &HeaderMap) -> Option<String> {
+    let link = first_header(headers, "link");
+    for part in link.split(',') {
+        let trimmed = part.trim();
+        if !trimmed.contains("rel=\"next\"") {
+            continue;
+        }
+        let start = trimmed.find('<')?;
+        let end = trimmed[start + 1..].find('>')?;
+        return Some(trimmed[start + 1..start + 1 + end].to_owned());
+    }
+    None
 }
 
 fn preview_secret(secret: &str) -> String {

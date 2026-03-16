@@ -15,6 +15,13 @@ import (
 )
 
 func cmdGithubRelease(args []string) {
+	delegated, err := runGitHubReleaseCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github release <list|get|create|upload|delete> ...")
 	if !routedOK {
 		return
@@ -37,6 +44,13 @@ func cmdGithubRelease(args []string) {
 }
 
 func cmdGithubReleaseList(args []string) {
+	delegated, err := runGitHubReleaseListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github release list", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -75,6 +89,13 @@ func cmdGithubReleaseList(args []string) {
 }
 
 func cmdGithubReleaseGet(args []string) {
+	delegated, err := runGitHubReleaseGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github release get", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
