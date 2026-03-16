@@ -477,6 +477,51 @@ pub fn get_project(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIRespons
     openai_get(runtime, &format!("/v1/organization/projects/{escaped}"), &[], true)
 }
 
+pub fn list_project_api_keys(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    limit: Option<usize>,
+    after: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let mut params = Vec::new();
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.push(("limit", limit.to_string()));
+    }
+    if !after.trim().is_empty() {
+        params.push(("after", after.trim().to_owned()));
+    }
+    let escaped = url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    openai_get(runtime, &format!("/v1/organization/projects/{escaped}/api_keys"), &params, true)
+}
+
+pub fn get_project_api_key(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    key_id: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let key_id = key_id.trim();
+    if key_id.is_empty() {
+        return Err("key id is required".to_owned());
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    let key_id = url::form_urlencoded::byte_serialize(key_id.as_bytes()).collect::<String>();
+    openai_get(
+        runtime,
+        &format!("/v1/organization/projects/{project_id}/api_keys/{key_id}"),
+        &[],
+        true,
+    )
+}
+
 pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> String {
     if raw {
         if response.body.trim().is_empty() {
