@@ -1060,6 +1060,65 @@ pub fn get_issue(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn create_issue(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    payload: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/issues");
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &path,
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn comment_issue(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    number: i64,
+    body: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/issues/{number}/comments");
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &path,
+        &token,
+        &serde_json::json!({ "body": body.trim() }),
+    )?)
+}
+
+pub fn set_issue_state(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    number: i64,
+    state: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/issues/{number}");
+    normalize_response(github_send_json(
+        &client,
+        "PATCH",
+        &runtime.base_url,
+        &path,
+        &token,
+        &serde_json::json!({ "state": state.trim() }),
+    )?)
+}
+
 pub fn list_pull_requests(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -1714,6 +1773,27 @@ fn github_get(
     client
         .get(url)
         .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(token)))?)
+        .send()
+        .map_err(|err| format!("github request failed: {err}"))
+}
+
+fn github_send_json(
+    client: &Client,
+    method: &str,
+    base_url: &str,
+    path: &str,
+    token: &str,
+    payload: &Value,
+) -> Result<Response, String> {
+    let url = resolve_url(base_url, path, &BTreeMap::new())?;
+    let builder = match method {
+        "POST" => client.post(url),
+        "PATCH" => client.patch(url),
+        _ => return Err(format!("unsupported github json request method: {method}")),
+    };
+    builder
+        .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(token)))?)
+        .json(payload)
         .send()
         .map_err(|err| format!("github request failed: {err}"))
 }

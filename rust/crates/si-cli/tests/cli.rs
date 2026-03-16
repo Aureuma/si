@@ -1335,6 +1335,166 @@ fn github_issue_get_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_issue_create_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /repos/Aureuma/si/issues HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        assert!(request.contains("\"title\":\"Rust issue\""));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_issue_create")],
+            r#"{"id":1,"number":77,"title":"Rust issue","state":"open"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "issue",
+            "create",
+            "Aureuma/si",
+            "--title",
+            "Rust issue",
+            "--body",
+            "created from rust",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_issue_create");
+    assert_eq!(parsed["data"]["number"], 77);
+    server.join();
+}
+
+#[test]
+fn github_issue_comment_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /repos/Aureuma/si/issues/77/comments HTTP/1.1\r\n"));
+        assert!(request.contains("\"body\":\"looks good\""));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_issue_comment")],
+            r#"{"id":11,"body":"looks good"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "issue",
+            "comment",
+            "Aureuma/si",
+            "77",
+            "--body",
+            "looks good",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_issue_comment");
+    assert_eq!(parsed["data"]["body"], "looks good");
+    server.join();
+}
+
+#[test]
+fn github_issue_close_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /repos/Aureuma/si/issues/77 HTTP/1.1\r\n"));
+        assert!(request.contains("\"state\":\"closed\""));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_issue_close")],
+            r#"{"id":1,"number":77,"state":"closed"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "issue",
+            "close",
+            "Aureuma/si",
+            "77",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gh_issue_close");
+    assert_eq!(parsed["data"]["state"], "closed");
+    server.join();
+}
+
+#[test]
+fn github_issue_reopen_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /repos/Aureuma/si/issues/77 HTTP/1.1\r\n"));
+        assert!(request.contains("\"state\":\"open\""));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_issue_reopen")],
+            r#"{"id":1,"number":77,"state":"open"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "issue",
+            "reopen",
+            "Aureuma/si",
+            "77",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gh_issue_reopen");
+    assert_eq!(parsed["data"]["state"], "open");
+    server.join();
+}
+
+#[test]
 fn github_pr_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /repos/Aureuma/si/pulls?page=1&per_page=100&state=open HTTP/1.1\r\n"));
