@@ -287,6 +287,13 @@ func resolveCloudflareZoneID(alias string, account CloudflareAccountEntry, env s
 }
 
 func cmdCloudflareAuth(args []string) {
+	delegated, err := runCloudflareAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare auth status|status [--account <alias>] [--env <prod|staging|dev>] [--zone-id <zone>] [--json]")
 	if !routedOK {
 		return
@@ -386,6 +393,13 @@ func cmdCloudflareAuthStatus(args []string) {
 }
 
 func cmdCloudflareContext(args []string) {
+	delegated, err := runCloudflareContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si cloudflare context <list|current|use>")
 	if !routedOK {
 		return

@@ -97,6 +97,13 @@ func (e *workosAPIErrorDetails) Error() string {
 }
 
 func cmdWorkOS(args []string) {
+	delegated, err := runWorkOSCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, workosUsageText)
 	if !routedOK {
 		return
@@ -132,6 +139,13 @@ func cmdWorkOS(args []string) {
 }
 
 func cmdWorkOSAuth(args []string) {
+	delegated, err := runWorkOSAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
 	if !routedOK {
 		return
@@ -231,6 +245,13 @@ func cmdWorkOSAuthStatus(args []string) {
 }
 
 func cmdWorkOSContext(args []string) {
+	delegated, err := runWorkOSContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si workos context <list|current|use>")
 	if !routedOK {
 		return
