@@ -232,6 +232,13 @@ func cmdAWSAuthStatus(args []string) {
 }
 
 func cmdAWSContext(args []string) {
+	delegated, err := runAWSContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws context <list|current|use>")
 	if !routedOK {
 		return

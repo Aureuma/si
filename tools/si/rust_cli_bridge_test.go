@@ -532,6 +532,53 @@ func TestRunAppleAppStoreAuthCommandDelegatesToRustCLIWhenVerifyDisabled(t *test
 	}
 }
 
+func TestRunAppleAppStoreContextCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAppleAppStoreContextCommand([]string{"list", "--json"})
+	if err != nil {
+		t.Fatalf("runAppleAppStoreContextCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go apple appstore context path by default")
+	}
+}
+
+func TestRunAppleAppStoreContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-appstore-context'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreContextCommand([]string{"list", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreContextCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore context to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-appstore-context" {
+		t.Fatalf("expected delegated Rust apple appstore context output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore context + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -670,6 +717,53 @@ func TestRunAWSAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "aws\nauth\nstatus\n--json" {
 		t.Fatalf("expected Rust CLI args to be aws auth + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSContextCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSContextCommand([]string{"list", "--json"})
+	if err != nil {
+		t.Fatalf("runAWSContextCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go aws context path by default")
+	}
+}
+
+func TestRunAWSContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-context-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSContextCommand([]string{"list", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSContextCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws context to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-context-wrapper" {
+		t.Fatalf("expected delegated Rust aws context output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws context + args, got %q", string(argsData))
 	}
 }
 
@@ -908,6 +1002,53 @@ func TestRunGCPAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGCPContextCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGCPContextCommand([]string{"list", "--json"})
+	if err != nil {
+		t.Fatalf("runGCPContextCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go gcp context path by default")
+	}
+}
+
+func TestRunGCPContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-context-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPContextCommand([]string{"list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPContextCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp context to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-context-wrapper" {
+		t.Fatalf("expected delegated Rust gcp context output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp context + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGooglePlacesContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -1049,6 +1190,53 @@ func TestRunGooglePlacesAuthCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 }
 
+func TestRunGooglePlacesContextCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesContextCommand([]string{"list", "--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesContextCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places context path by default")
+	}
+}
+
+func TestRunGooglePlacesContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-context-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesContextCommand([]string{"list", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesContextCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places context to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-context-wrapper" {
+		t.Fatalf("expected delegated Rust google places context output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places context + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGooglePlacesAuthStatusCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -1187,6 +1375,53 @@ func TestRunOpenAIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 	if strings.TrimSpace(string(argsData)) != "openai\ncontext\ncurrent\n--json" {
 		t.Fatalf("expected Rust CLI args to be openai context current + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunOpenAIContextCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIContextCommand([]string{"list", "--json"})
+	if err != nil {
+		t.Fatalf("runOpenAIContextCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai context path by default")
+	}
+}
+
+func TestRunOpenAIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-context-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIContextCommand([]string{"list", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIContextCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai context to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-context-wrapper" {
+		t.Fatalf("expected delegated Rust openai context output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai context + args, got %q", string(argsData))
 	}
 }
 
@@ -2221,6 +2456,53 @@ func TestRunOCIAuthCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "oci\nauth\nstatus\n--verify=false\n--json" {
 		t.Fatalf("expected Rust CLI args to be oci auth + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCIContextCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOCIContextCommand([]string{"list", "--json"})
+	if err != nil {
+		t.Fatalf("runOCIContextCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go oci context path by default")
+	}
+}
+
+func TestRunOCIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-context-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCIContextCommand([]string{"list", "--json"})
+		if err != nil {
+			t.Fatalf("runOCIContextCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci context to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-context-wrapper" {
+		t.Fatalf("expected delegated Rust oci context output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci context + args, got %q", string(argsData))
 	}
 }
 

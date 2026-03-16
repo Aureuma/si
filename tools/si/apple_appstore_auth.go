@@ -702,6 +702,13 @@ func cmdAppleAppStoreAuthStatus(args []string) {
 }
 
 func cmdAppleAppStoreContext(args []string) {
+	delegated, err := runAppleAppStoreContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si apple appstore context <list|current|use>")
 	if !routedOK {
 		return
