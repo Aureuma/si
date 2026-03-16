@@ -417,6 +417,7 @@ Progress notes:
 - completed: the GitHub provider slice now owns `auth status` local auth/context resolution and rendering too, so the first Phase 7 provider auth-source seam has moved behind a provider-specific Rust module and live Go delegation path while the Go fallback still covers the full legacy behavior
 - completed: the GitHub provider slice now has explicit OAuth and App auth-source matrix coverage in Rust CLI and provider tests, strengthening the Phase 7 auth/env contract validation lane before moving on to the next provider family
 - completed: initial `si-rs-provider-stripe` crate now owns Stripe `context list`, `context current`, and `auth status` local runtime resolution/rendering, giving Phase 7 a second provider family behind the Rust compatibility boundary with focused Rust and Go command proofs
+- completed: initial `si-rs-provider-workos` crate now owns WorkOS `context list`, `context current`, and `auth status` local runtime resolution/rendering, extending Phase 7 to a third low-complexity provider family behind the Rust compatibility boundary with focused Rust and Go command proofs
 
 ### Phase 8: Release/install migration
 

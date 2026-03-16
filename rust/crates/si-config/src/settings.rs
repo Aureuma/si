@@ -17,6 +17,8 @@ pub struct Settings {
     #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
+    pub workos: WorkOSSettings,
+    #[serde(default)]
     pub dyad: DyadSettings,
     #[serde(default)]
     pub surf: SurfSettings,
@@ -67,6 +69,7 @@ impl Settings {
             codex: CodexSettings::default(),
             stripe: StripeSettings::default(),
             github: GitHubSettings::default(),
+            workos: WorkOSSettings::default(),
             dyad: DyadSettings::default(),
             surf: SurfSettings::default(),
             viva: VivaSettings::default(),
@@ -113,6 +116,7 @@ impl Settings {
                 self.codex = payload.codex;
                 self.stripe = payload.stripe;
                 self.github = payload.github;
+                self.workos = payload.workos;
                 self.dyad = payload.dyad;
             }
             SettingsModule::Surf => {
@@ -153,6 +157,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.profile);
         self.stripe.normalize();
         self.github.normalize();
+        self.workos.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
         normalize_option_string(&mut self.dyad.critic_image);
         normalize_option_string(&mut self.dyad.workspace);
@@ -173,6 +178,8 @@ struct CoreSettingsModule {
     pub stripe: StripeSettings,
     #[serde(default)]
     pub github: GitHubSettings,
+    #[serde(default)]
+    pub workos: WorkOSSettings,
     #[serde(default)]
     pub dyad: DyadSettings,
 }
@@ -341,6 +348,64 @@ impl GitHubAccountEntry {
         normalize_option_string(&mut self.app_private_key_pem);
         normalize_option_string(&mut self.app_private_key_env);
         normalize_option_string(&mut self.installation_env);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WorkOSSettings {
+    pub default_account: Option<String>,
+    pub default_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub default_organization_id: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, WorkOSAccountEntry>,
+}
+
+impl WorkOSSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.default_organization_id);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct WorkOSAccountEntry {
+    pub name: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub api_base_url: Option<String>,
+    pub api_key_env: Option<String>,
+    pub prod_api_key_env: Option<String>,
+    pub staging_api_key_env: Option<String>,
+    pub dev_api_key_env: Option<String>,
+    pub client_id_env: Option<String>,
+    pub organization_id: Option<String>,
+}
+
+impl WorkOSAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.api_key_env);
+        normalize_option_string(&mut self.prod_api_key_env);
+        normalize_option_string(&mut self.staging_api_key_env);
+        normalize_option_string(&mut self.dev_api_key_env);
+        normalize_option_string(&mut self.client_id_env);
+        normalize_option_string(&mut self.organization_id);
     }
 }
 
