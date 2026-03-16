@@ -4965,19 +4965,6 @@ func TestRunGitHubProjectItemsCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 }
 
-func TestRunGitHubWorkflowCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
-	t.Setenv(siExperimentalRustCLIEnv, "")
-	t.Setenv(siRustCLIBinEnv, "")
-
-	delegated, err := runGitHubWorkflowCommand([]string{"watch", "Aureuma/si", "21", "--json"})
-	if err != nil {
-		t.Fatalf("runGitHubWorkflowCommand: %v", err)
-	}
-	if delegated {
-		t.Fatalf("expected Go github workflow watch path by default")
-	}
-}
-
 func TestRunGitHubWorkflowCommandDelegatesToRustCLIForReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
@@ -5197,6 +5184,142 @@ func TestRunGitHubWorkflowLogsCommandDelegatesToRustCLIWhenConfigured(t *testing
 	}
 	if strings.TrimSpace(string(argsData)) != "github\nworkflow\nlogs\nAureuma/si\n21\n--raw" {
 		t.Fatalf("expected Rust CLI args to be github workflow logs + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubWorkflowDispatchCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-workflow-dispatch'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubWorkflowDispatchCommand([]string{"Aureuma/si", "ci.yml", "--ref", "main", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubWorkflowDispatchCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github workflow dispatch to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-workflow-dispatch" {
+		t.Fatalf("expected delegated Rust github workflow dispatch output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nworkflow\ndispatch\nAureuma/si\nci.yml\n--ref\nmain\n--json" {
+		t.Fatalf("expected Rust CLI args to be github workflow dispatch + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubWorkflowRunCancelCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-workflow-run-cancel'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubWorkflowRunCancelCommand([]string{"Aureuma/si", "21", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubWorkflowRunCancelCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github workflow run cancel to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-workflow-run-cancel" {
+		t.Fatalf("expected delegated Rust github workflow run cancel output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nworkflow\nrun\ncancel\nAureuma/si\n21\n--json" {
+		t.Fatalf("expected Rust CLI args to be github workflow run cancel + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubWorkflowRunRerunCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-workflow-run-rerun'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubWorkflowRunRerunCommand([]string{"Aureuma/si", "21", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubWorkflowRunRerunCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github workflow run rerun to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-workflow-run-rerun" {
+		t.Fatalf("expected delegated Rust github workflow run rerun output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nworkflow\nrun\nrerun\nAureuma/si\n21\n--json" {
+		t.Fatalf("expected Rust CLI args to be github workflow run rerun + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubWorkflowWatchCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-workflow-watch'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubWorkflowWatchCommand([]string{"Aureuma/si", "21", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubWorkflowWatchCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github workflow watch to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-workflow-watch" {
+		t.Fatalf("expected delegated Rust github workflow watch output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nworkflow\nwatch\nAureuma/si\n21\n--json" {
+		t.Fatalf("expected Rust CLI args to be github workflow watch + args, got %q", string(argsData))
 	}
 }
 

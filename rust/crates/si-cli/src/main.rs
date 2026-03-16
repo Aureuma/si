@@ -65,12 +65,14 @@ use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
     add_project_item as github_add_project_item,
     archive_project_item as github_archive_project_item,
+    cancel_workflow_run as github_cancel_workflow_run,
     clear_project_item_field_value as github_clear_project_item_field_value,
     comment_issue as github_comment_issue,
     create_branch as github_create_branch,
     create_issue as github_create_issue,
     create_pull_request as github_create_pull_request,
     delete_branch as github_delete_branch,
+    dispatch_workflow as github_dispatch_workflow,
     delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
@@ -87,6 +89,7 @@ use si_rs_provider_github::{
     graphql_query as github_graphql_query,
     protect_branch as github_protect_branch,
     raw_get as github_raw_get,
+    rerun_workflow_run as github_rerun_workflow_run,
     resolve_access_token as github_resolve_access_token,
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
@@ -2454,6 +2457,38 @@ enum GitHubWorkflowCommand {
         #[arg(long)]
         raw: bool,
     },
+    Dispatch {
+        repo_ref: Option<String>,
+        workflow_ref: Option<String>,
+        #[arg(long)]
+        r#ref: Option<String>,
+        #[arg(long = "input")]
+        inputs: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
     Run {
         #[command(subcommand)]
         command: GitHubWorkflowRunCommand,
@@ -2486,11 +2521,99 @@ enum GitHubWorkflowCommand {
         #[arg(long)]
         raw: bool,
     },
+    Watch {
+        repo_ref: Option<String>,
+        run_id: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value_t = 10)]
+        interval_seconds: u64,
+        #[arg(long, default_value_t = 1800)]
+        timeout_seconds: u64,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum GitHubWorkflowRunCommand {
+    Cancel {
+        repo_ref: Option<String>,
+        run_id: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
     Get {
+        repo_ref: Option<String>,
+        run_id: Option<i64>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Rerun {
         repo_ref: Option<String>,
         run_id: Option<i64>,
         #[arg(long)]
@@ -6819,7 +6942,74 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+                GitHubWorkflowCommand::Dispatch {
+                    repo_ref,
+                    workflow_ref,
+                    r#ref,
+                    inputs,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_workflow_dispatch(
+                    repo_ref,
+                    workflow_ref,
+                    r#ref,
+                    inputs,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
                 GitHubWorkflowCommand::Run { command } => match command {
+                    GitHubWorkflowRunCommand::Cancel {
+                        repo_ref,
+                        run_id,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_workflow_run_action(
+                        repo_ref,
+                        run_id,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        "cancel",
+                    )?,
                     GitHubWorkflowRunCommand::Get {
                         repo_ref,
                         run_id,
@@ -6851,6 +7041,38 @@ fn main() -> Result<()> {
                         json,
                         raw,
                     )?,
+                    GitHubWorkflowRunCommand::Rerun {
+                        repo_ref,
+                        run_id,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_workflow_run_action(
+                        repo_ref,
+                        run_id,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        "rerun",
+                    )?,
                 },
                 GitHubWorkflowCommand::Logs {
                     repo_ref,
@@ -6878,6 +7100,41 @@ fn main() -> Result<()> {
                     app_id,
                     app_key,
                     installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubWorkflowCommand::Watch {
+                    repo_ref,
+                    run_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    interval_seconds,
+                    timeout_seconds,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_workflow_watch(
+                    repo_ref,
+                    run_id,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    interval_seconds,
+                    timeout_seconds,
                     home,
                     settings_file,
                     json,
@@ -11753,6 +12010,58 @@ fn run_github_workflow_runs(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn run_github_workflow_dispatch(
+    repo_ref: Option<String>,
+    workflow_ref: Option<String>,
+    git_ref: Option<String>,
+    inputs: Vec<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let workflow_ref = workflow_ref
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("workflow id/file is required"))?;
+    let git_ref = git_ref
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--ref is required"))?;
+    let inputs = parse_github_params(inputs)?;
+    let response = github_dispatch_workflow(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        &workflow_ref,
+        &git_ref,
+        &inputs,
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
 fn run_github_workflow_run_get(
     repo_ref: Option<String>,
     run_id: Option<i64>,
@@ -11787,6 +12096,48 @@ fn run_github_workflow_run_get(
     let response =
         github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
             .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_workflow_run_action(
+    repo_ref: Option<String>,
+    run_id: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+    action: &str,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
+    let response = match action {
+        "cancel" => github_cancel_workflow_run(&runtime, &repo_owner, &repo_name, run_id),
+        "rerun" => github_rerun_workflow_run(&runtime, &repo_owner, &repo_name, run_id),
+        _ => Err(format!("unsupported workflow run action: {action}")),
+    }
+    .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
@@ -11826,6 +12177,153 @@ fn run_github_workflow_logs(
         github_get_workflow_logs(&runtime, &repo_owner, &repo_name, run_id)
             .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
+}
+
+#[derive(Debug, Default)]
+struct GitHubWorkflowWatchStatus {
+    name: String,
+    status: String,
+    conclusion: String,
+    head_branch: String,
+    event: String,
+}
+
+fn github_workflow_watch_status(response: &GitHubAPIResponse) -> GitHubWorkflowWatchStatus {
+    let data = response.data.as_ref();
+    GitHubWorkflowWatchStatus {
+        name: data
+            .and_then(|item| item.get("name"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+        status: data
+            .and_then(|item| item.get("status"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+        conclusion: data
+            .and_then(|item| item.get("conclusion"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+        head_branch: data
+            .and_then(|item| item.get("head_branch"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+        event: data
+            .and_then(|item| item.get("event"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .trim()
+            .to_owned(),
+    }
+}
+
+fn github_workflow_is_failure_conclusion(conclusion: &str) -> bool {
+    !matches!(
+        conclusion.trim().to_ascii_lowercase().as_str(),
+        "" | "success" | "skipped" | "neutral"
+    )
+}
+
+fn github_workflow_or_dash(value: &str) -> &str {
+    if value.trim().is_empty() { "-" } else { value }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_workflow_watch(
+    repo_ref: Option<String>,
+    run_id: Option<i64>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    interval_seconds: u64,
+    timeout_seconds: u64,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if interval_seconds == 0 {
+        return Err(anyhow::Error::msg("--interval-seconds must be > 0"));
+    }
+    if timeout_seconds == 0 {
+        return Err(anyhow::Error::msg("--timeout-seconds must be > 0"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
+    if !json {
+        println!(
+            "GitHub workflow watch: waiting for run {} on {}/{} (interval={}s timeout={}s)",
+            run_id, repo_owner, repo_name, interval_seconds, timeout_seconds
+        );
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_seconds);
+    let mut last_state = String::new();
+    loop {
+        if std::time::Instant::now() > deadline {
+            return Err(anyhow::Error::msg(format!(
+                "workflow run {} timed out after {} seconds",
+                run_id, timeout_seconds
+            )));
+        }
+        let response = github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
+            .map_err(anyhow::Error::msg)?;
+        let status = github_workflow_watch_status(&response);
+        let state = format!("{}|{}", status.status, status.conclusion);
+        if !json && state != last_state {
+            let title = if status.name.trim().is_empty() {
+                run_id.to_string()
+            } else {
+                status.name.clone()
+            };
+            println!(
+                "{} status={} conclusion={} branch={} event={} title={}",
+                chrono::Utc::now().to_rfc3339(),
+                github_workflow_or_dash(&status.status),
+                github_workflow_or_dash(&status.conclusion),
+                github_workflow_or_dash(&status.head_branch),
+                github_workflow_or_dash(&status.event),
+                title,
+            );
+            last_state = state;
+        }
+        if status.status.eq_ignore_ascii_case("completed") {
+            print_github_api_response(&response, json, raw)?;
+            if github_workflow_is_failure_conclusion(&status.conclusion) {
+                return Err(anyhow::Error::msg(format!(
+                    "workflow run {} finished with conclusion={}",
+                    run_id,
+                    github_workflow_or_dash(&status.conclusion)
+                )));
+            }
+            return Ok(());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(interval_seconds));
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

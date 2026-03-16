@@ -1275,6 +1275,22 @@ func runGitHubWorkflowLogsCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"workflow", "logs"}, args...)...)
 }
 
+func runGitHubWorkflowDispatchCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "dispatch"}, args...)...)
+}
+
+func runGitHubWorkflowRunCancelCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "run", "cancel"}, args...)...)
+}
+
+func runGitHubWorkflowRunRerunCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "run", "rerun"}, args...)...)
+}
+
+func runGitHubWorkflowWatchCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"workflow", "watch"}, args...)...)
+}
+
 func runGitHubWorkflowRunCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1282,8 +1298,12 @@ func runGitHubWorkflowRunCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "get":
 		return runGitHubWorkflowRunGetCommand(args[1:])
+	case "cancel":
+		return runGitHubWorkflowRunCancelCommand(args[1:])
+	case "rerun":
+		return runGitHubWorkflowRunRerunCommand(args[1:])
 	default:
-		return false, nil
+		return runGitHubWorkflowDispatchCommand(args)
 	}
 }
 
@@ -1300,6 +1320,8 @@ func runGitHubWorkflowCommand(args []string) (bool, error) {
 		return runGitHubWorkflowRunCommand(args[1:])
 	case "logs":
 		return runGitHubWorkflowLogsCommand(args[1:])
+	case "watch":
+		return runGitHubWorkflowWatchCommand(args[1:])
 	default:
 		return false, nil
 	}
