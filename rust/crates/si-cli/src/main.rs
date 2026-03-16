@@ -121,9 +121,11 @@ use si_rs_provider_github::{
     update_project_item_field_value as github_update_project_item_field_value,
 };
 use si_rs_provider_google::{
-    GooglePlacesAuthStatus, GooglePlacesContextListEntry, GooglePlacesCurrentContext,
-    GooglePlacesOverrides, list_places_contexts, render_places_context_list_text,
-    resolve_places_auth_status, resolve_places_current_context,
+    GooglePlacesAPIRequest, GooglePlacesAPIResponse, GooglePlacesAuthStatus,
+    GooglePlacesContextListEntry, GooglePlacesCurrentContext,
+    GooglePlacesOverrides, GooglePlacesRuntime, download_places_media,
+    execute_places_api_request, list_places_contexts, render_places_context_list_text,
+    resolve_places_auth_status, resolve_places_current_context, resolve_places_runtime,
 };
 use si_rs_provider_oci::{
     OCIAPIRequest, OCIAPIResponse, OCIAPIService, OCIAuthOverrides, OCIAuthStatus,
@@ -1817,6 +1819,209 @@ enum GooglePlacesCommand {
         #[command(subcommand)]
         command: GooglePlacesContextCommand,
     },
+    Autocomplete {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        input: String,
+        #[arg(long)]
+        session: Option<String>,
+        #[arg(long)]
+        include_query_predictions: bool,
+        #[arg(long)]
+        origin: Option<String>,
+        #[arg(long)]
+        location_bias: Option<String>,
+        #[arg(long)]
+        location_restriction: Option<String>,
+        #[arg(long)]
+        input_offset: Option<i64>,
+        #[arg(long)]
+        field_mask: Option<String>,
+        #[arg(long, default_value = "autocomplete-basic")]
+        field_preset: String,
+        #[arg(long)]
+        allow_wildcard_mask: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    SearchText {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        query: String,
+        #[arg(long)]
+        page_size: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long)]
+        included_type: Option<String>,
+        #[arg(long)]
+        excluded_type: Option<String>,
+        #[arg(long)]
+        strict_type_filter: bool,
+        #[arg(long)]
+        open_now: bool,
+        #[arg(long)]
+        min_rating: Option<f64>,
+        #[arg(long = "rank")]
+        rank_preference: Option<String>,
+        #[arg(long)]
+        location_bias: Option<String>,
+        #[arg(long)]
+        location_restriction: Option<String>,
+        #[arg(long)]
+        field_mask: Option<String>,
+        #[arg(long, default_value = "search-basic")]
+        field_preset: String,
+        #[arg(long)]
+        allow_wildcard_mask: bool,
+        #[arg(long)]
+        all: bool,
+        #[arg(long, default_value_t = 5)]
+        max_pages: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    SearchNearby {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        center: String,
+        #[arg(long)]
+        radius: f64,
+        #[arg(long)]
+        included_type: Option<String>,
+        #[arg(long)]
+        excluded_type: Option<String>,
+        #[arg(long = "rank", default_value = "distance")]
+        rank_preference: String,
+        #[arg(long)]
+        page_size: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long)]
+        open_now: bool,
+        #[arg(long)]
+        field_mask: Option<String>,
+        #[arg(long, default_value = "search-basic")]
+        field_preset: String,
+        #[arg(long)]
+        allow_wildcard_mask: bool,
+        #[arg(long)]
+        all: bool,
+        #[arg(long, default_value_t = 5)]
+        max_pages: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Details {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        session: Option<String>,
+        #[arg(long)]
+        field_mask: Option<String>,
+        #[arg(long, default_value = "details-basic")]
+        field_preset: String,
+        #[arg(long)]
+        allow_wildcard_mask: bool,
+        place: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Photo {
+        #[command(subcommand)]
+        command: GooglePlacesPhotoCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1874,6 +2079,70 @@ enum GooglePlacesContextCommand {
         language: Option<String>,
         #[arg(long)]
         region: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesPhotoCommand {
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        photo: String,
+        #[arg(long)]
+        max_width: Option<usize>,
+        #[arg(long)]
+        max_height: Option<usize>,
+        #[arg(long)]
+        follow: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Download {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        photo: String,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        max_width: Option<usize>,
+        #[arg(long)]
+        max_height: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -8677,6 +8946,288 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+                GooglePlacesCommand::Autocomplete {
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    project_id,
+                    language,
+                    region,
+                    input,
+                    session,
+                    include_query_predictions,
+                    origin,
+                    location_bias,
+                    location_restriction,
+                    input_offset,
+                    field_mask,
+                    field_preset,
+                    allow_wildcard_mask,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_places_autocomplete(
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        input,
+                        session,
+                        include_query_predictions,
+                        origin,
+                        location_bias,
+                        location_restriction,
+                        input_offset,
+                        field_mask,
+                        field_preset,
+                        allow_wildcard_mask,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GooglePlacesCommand::SearchText {
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    project_id,
+                    language,
+                    region,
+                    query,
+                    page_size,
+                    page_token,
+                    included_type,
+                    excluded_type,
+                    strict_type_filter,
+                    open_now,
+                    min_rating,
+                    rank_preference,
+                    location_bias,
+                    location_restriction,
+                    field_mask,
+                    field_preset,
+                    allow_wildcard_mask,
+                    all,
+                    max_pages,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_places_search_text(
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        query,
+                        page_size,
+                        page_token,
+                        included_type,
+                        excluded_type,
+                        strict_type_filter,
+                        open_now,
+                        min_rating,
+                        rank_preference,
+                        location_bias,
+                        location_restriction,
+                        field_mask,
+                        field_preset,
+                        allow_wildcard_mask,
+                        all,
+                        max_pages,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GooglePlacesCommand::SearchNearby {
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    project_id,
+                    language,
+                    region,
+                    center,
+                    radius,
+                    included_type,
+                    excluded_type,
+                    rank_preference,
+                    page_size,
+                    page_token,
+                    open_now,
+                    field_mask,
+                    field_preset,
+                    allow_wildcard_mask,
+                    all,
+                    max_pages,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_places_search_nearby(
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        center,
+                        radius,
+                        included_type,
+                        excluded_type,
+                        rank_preference,
+                        page_size,
+                        page_token,
+                        open_now,
+                        field_mask,
+                        field_preset,
+                        allow_wildcard_mask,
+                        all,
+                        max_pages,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GooglePlacesCommand::Details {
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    project_id,
+                    language,
+                    region,
+                    session,
+                    field_mask,
+                    field_preset,
+                    allow_wildcard_mask,
+                    place,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_places_details(
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        session,
+                        field_mask,
+                        field_preset,
+                        allow_wildcard_mask,
+                        place,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GooglePlacesCommand::Photo { command } => match command {
+                    GooglePlacesPhotoCommand::Get {
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        photo,
+                        max_width,
+                        max_height,
+                        follow,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_photo_get(
+                            account,
+                            env,
+                            api_key,
+                            base_url,
+                            project_id,
+                            photo,
+                            max_width,
+                            max_height,
+                            follow,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlacesPhotoCommand::Download {
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        photo,
+                        output,
+                        max_width,
+                        max_height,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_photo_download(
+                            account,
+                            env,
+                            api_key,
+                            base_url,
+                            project_id,
+                            photo,
+                            output,
+                            max_width,
+                            max_height,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
             },
         },
         Command::OpenAI { command } => match command {
@@ -15412,6 +15963,750 @@ fn show_google_places_auth_status(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Key preview: {}", or_dash(&payload.key_preview));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_google_places_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GooglePlacesRuntime> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    resolve_places_runtime(
+        &settings.google,
+        &env,
+        &GooglePlacesOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            project_id: project_id.unwrap_or_default(),
+            language: language.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)
+}
+
+fn print_google_places_api_response(
+    response: &GooglePlacesAPIResponse,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
+        OutputFormat::Text => {
+            println!("Status: {} {}", response.status_code, response.status);
+            if !response.request_id.trim().is_empty() {
+                println!("Request ID: {}", response.request_id);
+            }
+            if raw && !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            } else if let Some(data) = &response.data {
+                println!("{}", serde_json::to_string_pretty(data)?);
+            } else if !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn parse_google_places_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            anyhow::bail!("invalid --param {raw:?} (expected key=value)");
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("google places --param key cannot be empty");
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
+fn parse_google_places_json_object(raw: Option<String>, name: &str) -> Result<Option<Value>> {
+    let Some(raw) = raw.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+    let value: Value = serde_json::from_str(&raw)
+        .map_err(|err| anyhow::anyhow!("invalid {name} JSON: {err}"))?;
+    if !value.is_object() {
+        anyhow::bail!("{name} must be a JSON object");
+    }
+    Ok(Some(value))
+}
+
+fn parse_google_places_lat_lng(raw: &str) -> Result<Value> {
+    let (lat, lng) = raw
+        .split_once(',')
+        .ok_or_else(|| anyhow::anyhow!("expected lat,lng"))?;
+    let latitude: f64 = lat.trim().parse().map_err(|err| anyhow::anyhow!("invalid latitude: {err}"))?;
+    let longitude: f64 = lng.trim().parse().map_err(|err| anyhow::anyhow!("invalid longitude: {err}"))?;
+    Ok(serde_json::json!({"latitude": latitude, "longitude": longitude}))
+}
+
+fn resolve_google_places_field_mask(
+    operation: &str,
+    field_mask: Option<String>,
+    field_preset: String,
+    required: bool,
+    allow_wildcard_mask: bool,
+) -> Result<String> {
+    if let Some(mask) = field_mask.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        if mask == "*" && !allow_wildcard_mask {
+            anyhow::bail!("wildcard field masks require --allow-wildcard-mask");
+        }
+        return Ok(mask);
+    }
+    let preset = field_preset.trim();
+    let resolved = match (operation, preset) {
+        ("autocomplete", "" | "autocomplete-basic") => {
+            "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.queryPrediction.text.text"
+        }
+        ("search-text", "" | "search-basic") | ("search-nearby", "" | "search-basic") => {
+            "places.id,places.displayName.text,places.formattedAddress,nextPageToken"
+        }
+        ("details", "" | "details-basic") => {
+            "id,displayName.text,formattedAddress,googleMapsUri"
+        }
+        _ if !preset.is_empty() => preset,
+        _ if required => anyhow::bail!("field mask is required for google places {operation}"),
+        _ => "",
+    };
+    Ok(resolved.to_owned())
+}
+
+fn normalize_google_places_rank_preference(raw: Option<String>) -> Option<String> {
+    let value = raw.unwrap_or_default().trim().to_lowercase();
+    match value.as_str() {
+        "" => None,
+        "relevance" | "relevance_high" => Some("RELEVANCE".to_owned()),
+        "distance" => Some("DISTANCE".to_owned()),
+        "popularity" => Some("POPULARITY".to_owned()),
+        _ => Some(value.to_uppercase()),
+    }
+}
+
+fn normalize_google_places_nearby_rank_preference(raw: String) -> String {
+    match raw.trim().to_lowercase().as_str() {
+        "" | "distance" => "DISTANCE".to_owned(),
+        "popularity" | "relevance" => "POPULARITY".to_owned(),
+        other => other.to_uppercase(),
+    }
+}
+
+fn parse_google_places_csv_list(raw: Option<String>) -> Vec<String> {
+    raw.unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn resolve_google_place_resource_path(place: String) -> Result<String> {
+    let trimmed = place.trim().trim_start_matches('/');
+    if trimmed.is_empty() {
+        anyhow::bail!("place identifier is required");
+    }
+    if trimmed.starts_with("v1/places/") {
+        Ok(format!("/{}", trimmed))
+    } else if trimmed.starts_with("places/") {
+        Ok(format!("/v1/{}", trimmed))
+    } else {
+        Ok(format!("/v1/places/{}", trimmed))
+    }
+}
+
+fn resolve_google_photo_media_path(photo: String) -> Result<String> {
+    let trimmed = photo.trim().trim_start_matches('/');
+    if trimmed.is_empty() {
+        anyhow::bail!("photo identifier is required");
+    }
+    if trimmed.ends_with("/media") {
+        if trimmed.starts_with("v1/") {
+            Ok(format!("/{}", trimmed))
+        } else {
+            Ok(format!("/v1/{}", trimmed))
+        }
+    } else if trimmed.starts_with("v1/") {
+        Ok(format!("/{}/media", trimmed))
+    } else {
+        Ok(format!("/v1/{}/media", trimmed))
+    }
+}
+
+fn extract_google_places_items(response: &GooglePlacesAPIResponse) -> Vec<Value> {
+    response
+        .data
+        .as_ref()
+        .and_then(|value| value.get("places"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn extract_google_places_next_page_token(response: &GooglePlacesAPIResponse) -> Option<String> {
+    response
+        .data
+        .as_ref()
+        .and_then(|value| value.get("nextPageToken"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+}
+
+fn execute_google_places_paginated_search(
+    runtime: &GooglePlacesRuntime,
+    path: &str,
+    mut body: Value,
+    params: BTreeMap<String, String>,
+    field_mask: String,
+    max_pages: usize,
+) -> Result<Value> {
+    let mut items = Vec::new();
+    let mut next_page_token = String::new();
+    let total_pages = max_pages.max(1);
+    for _ in 0..total_pages {
+        let response = execute_places_api_request(
+            runtime,
+            &GooglePlacesAPIRequest {
+                method: "POST".to_owned(),
+                path: path.to_owned(),
+                params: params.clone(),
+                json_body: Some(body.clone()),
+                field_mask: field_mask.clone(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        items.extend(extract_google_places_items(&response));
+        next_page_token = extract_google_places_next_page_token(&response).unwrap_or_default();
+        if next_page_token.is_empty() {
+            break;
+        }
+        if let Some(object) = body.as_object_mut() {
+            object.insert("pageToken".to_owned(), Value::String(next_page_token.clone()));
+        }
+    }
+    Ok(serde_json::json!({
+        "count": items.len(),
+        "next_page_token": next_page_token,
+        "items": items
+    }))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_autocomplete(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    input: String,
+    session: Option<String>,
+    include_query_predictions: bool,
+    origin: Option<String>,
+    location_bias: Option<String>,
+    location_restriction: Option<String>,
+    input_offset: Option<i64>,
+    field_mask: Option<String>,
+    field_preset: String,
+    allow_wildcard_mask: bool,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        language,
+        region,
+        home,
+        settings_file,
+    )?;
+    let mut body = serde_json::Map::from_iter([("input".to_owned(), Value::String(input.trim().to_owned()))]);
+    if let Some(session) = session.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        body.insert("sessionToken".to_owned(), Value::String(session));
+    }
+    if include_query_predictions {
+        body.insert("includeQueryPredictions".to_owned(), Value::Bool(true));
+    }
+    if let Some(input_offset) = input_offset {
+        body.insert("inputOffset".to_owned(), Value::Number(input_offset.into()));
+    }
+    if !runtime.language_code.trim().is_empty() {
+        body.insert("languageCode".to_owned(), Value::String(runtime.language_code.clone()));
+    }
+    if !runtime.region_code.trim().is_empty() {
+        body.insert("regionCode".to_owned(), Value::String(runtime.region_code.clone()));
+    }
+    if let Some(origin) = origin.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        body.insert("origin".to_owned(), parse_google_places_lat_lng(&origin)?);
+    }
+    if let Some(location_bias) = parse_google_places_json_object(location_bias, "location-bias")? {
+        body.insert("locationBias".to_owned(), location_bias);
+    }
+    if let Some(location_restriction) =
+        parse_google_places_json_object(location_restriction, "location-restriction")?
+    {
+        body.insert("locationRestriction".to_owned(), location_restriction);
+    }
+    let response = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "POST".to_owned(),
+            path: "/v1/places:autocomplete".to_owned(),
+            params: parse_google_places_params(params)?,
+            json_body: Some(Value::Object(body)),
+            field_mask: resolve_google_places_field_mask(
+                "autocomplete",
+                field_mask,
+                field_preset,
+                false,
+                allow_wildcard_mask,
+            )?,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_places_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_search_text(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    query: String,
+    page_size: Option<usize>,
+    page_token: Option<String>,
+    included_type: Option<String>,
+    excluded_type: Option<String>,
+    strict_type_filter: bool,
+    open_now: bool,
+    min_rating: Option<f64>,
+    rank_preference: Option<String>,
+    location_bias: Option<String>,
+    location_restriction: Option<String>,
+    field_mask: Option<String>,
+    field_preset: String,
+    allow_wildcard_mask: bool,
+    all: bool,
+    max_pages: usize,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        language,
+        region,
+        home,
+        settings_file,
+    )?;
+    let mut body =
+        serde_json::Map::from_iter([("textQuery".to_owned(), Value::String(query.trim().to_owned()))]);
+    if let Some(page_size) = page_size {
+        body.insert("maxResultCount".to_owned(), Value::Number((page_size as u64).into()));
+    }
+    if let Some(page_token) = page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        body.insert("pageToken".to_owned(), Value::String(page_token));
+    }
+    if let Some(included_type) =
+        included_type.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("includedType".to_owned(), Value::String(included_type));
+    }
+    if let Some(excluded_type) =
+        excluded_type.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        body.insert("excludedType".to_owned(), Value::String(excluded_type));
+    }
+    if strict_type_filter {
+        body.insert("strictTypeFiltering".to_owned(), Value::Bool(true));
+    }
+    if open_now {
+        body.insert("openNow".to_owned(), Value::Bool(true));
+    }
+    if let Some(min_rating) = min_rating.and_then(serde_json::Number::from_f64) {
+        body.insert("minRating".to_owned(), Value::Number(min_rating));
+    }
+    if let Some(rank_preference) = normalize_google_places_rank_preference(rank_preference) {
+        body.insert("rankPreference".to_owned(), Value::String(rank_preference));
+    }
+    if !runtime.language_code.trim().is_empty() {
+        body.insert("languageCode".to_owned(), Value::String(runtime.language_code.clone()));
+    }
+    if !runtime.region_code.trim().is_empty() {
+        body.insert("regionCode".to_owned(), Value::String(runtime.region_code.clone()));
+    }
+    if let Some(location_bias) = parse_google_places_json_object(location_bias, "location-bias")? {
+        body.insert("locationBias".to_owned(), location_bias);
+    }
+    if let Some(location_restriction) =
+        parse_google_places_json_object(location_restriction, "location-restriction")?
+    {
+        body.insert("locationRestriction".to_owned(), location_restriction);
+    }
+    let params = parse_google_places_params(params)?;
+    let field_mask = resolve_google_places_field_mask(
+        "search-text",
+        field_mask,
+        field_preset,
+        true,
+        allow_wildcard_mask,
+    )?;
+    if all {
+        let payload = execute_google_places_paginated_search(
+            &runtime,
+            "/v1/places:searchText",
+            Value::Object(body),
+            params,
+            field_mask,
+            max_pages,
+        )?;
+        match format {
+            OutputFormat::Json | OutputFormat::Text => {
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+            }
+        }
+        return Ok(());
+    }
+    let response = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "POST".to_owned(),
+            path: "/v1/places:searchText".to_owned(),
+            params,
+            json_body: Some(Value::Object(body)),
+            field_mask,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_places_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_search_nearby(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    center: String,
+    radius: f64,
+    included_type: Option<String>,
+    excluded_type: Option<String>,
+    rank_preference: String,
+    page_size: Option<usize>,
+    page_token: Option<String>,
+    open_now: bool,
+    field_mask: Option<String>,
+    field_preset: String,
+    allow_wildcard_mask: bool,
+    all: bool,
+    max_pages: usize,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        language,
+        region,
+        home,
+        settings_file,
+    )?;
+    let mut body = serde_json::Map::new();
+    body.insert(
+        "locationRestriction".to_owned(),
+        serde_json::json!({
+            "circle": {
+                "center": parse_google_places_lat_lng(&center)?,
+                "radius": radius
+            }
+        }),
+    );
+    let included_types = parse_google_places_csv_list(included_type);
+    if !included_types.is_empty() {
+        body.insert(
+            "includedTypes".to_owned(),
+            Value::Array(included_types.into_iter().map(Value::String).collect()),
+        );
+    }
+    let excluded_types = parse_google_places_csv_list(excluded_type);
+    if !excluded_types.is_empty() {
+        body.insert(
+            "excludedTypes".to_owned(),
+            Value::Array(excluded_types.into_iter().map(Value::String).collect()),
+        );
+    }
+    body.insert(
+        "rankPreference".to_owned(),
+        Value::String(normalize_google_places_nearby_rank_preference(rank_preference)),
+    );
+    if let Some(page_size) = page_size {
+        body.insert("maxResultCount".to_owned(), Value::Number((page_size as u64).into()));
+    }
+    if let Some(page_token) = page_token.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        body.insert("pageToken".to_owned(), Value::String(page_token));
+    }
+    if open_now {
+        body.insert("openNow".to_owned(), Value::Bool(true));
+    }
+    if !runtime.language_code.trim().is_empty() {
+        body.insert("languageCode".to_owned(), Value::String(runtime.language_code.clone()));
+    }
+    if !runtime.region_code.trim().is_empty() {
+        body.insert("regionCode".to_owned(), Value::String(runtime.region_code.clone()));
+    }
+    let params = parse_google_places_params(params)?;
+    let field_mask = resolve_google_places_field_mask(
+        "search-nearby",
+        field_mask,
+        field_preset,
+        true,
+        allow_wildcard_mask,
+    )?;
+    if all {
+        let payload = execute_google_places_paginated_search(
+            &runtime,
+            "/v1/places:searchNearby",
+            Value::Object(body),
+            params,
+            field_mask,
+            max_pages,
+        )?;
+        match format {
+            OutputFormat::Json | OutputFormat::Text => {
+                println!("{}", serde_json::to_string_pretty(&payload)?);
+            }
+        }
+        return Ok(());
+    }
+    let response = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "POST".to_owned(),
+            path: "/v1/places:searchNearby".to_owned(),
+            params,
+            json_body: Some(Value::Object(body)),
+            field_mask,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_places_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_details(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    session: Option<String>,
+    field_mask: Option<String>,
+    field_preset: String,
+    allow_wildcard_mask: bool,
+    place: String,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        language,
+        region,
+        home,
+        settings_file,
+    )?;
+    let mut params = parse_google_places_params(params)?;
+    if !runtime.language_code.trim().is_empty() {
+        params.insert("languageCode".to_owned(), runtime.language_code.clone());
+    }
+    if !runtime.region_code.trim().is_empty() {
+        params.insert("regionCode".to_owned(), runtime.region_code.clone());
+    }
+    if let Some(session) = session.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
+        params.insert("sessionToken".to_owned(), session);
+    }
+    let response = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "GET".to_owned(),
+            path: resolve_google_place_resource_path(place)?,
+            params,
+            json_body: None,
+            field_mask: resolve_google_places_field_mask(
+                "details",
+                field_mask,
+                field_preset,
+                true,
+                allow_wildcard_mask,
+            )?,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_places_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_photo_get(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    photo: String,
+    max_width: Option<usize>,
+    max_height: Option<usize>,
+    follow: bool,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if follow {
+        anyhow::bail!("google places photo get --follow remains on the Go path for now");
+    }
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        None,
+        None,
+        home,
+        settings_file,
+    )?;
+    let mut params = parse_google_places_params(params)?;
+    if let Some(max_width) = max_width {
+        params.insert("maxWidthPx".to_owned(), max_width.to_string());
+    }
+    if let Some(max_height) = max_height {
+        params.insert("maxHeightPx".to_owned(), max_height.to_string());
+    }
+    params.insert("skipHttpRedirect".to_owned(), "true".to_owned());
+    let response = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "GET".to_owned(),
+            path: resolve_google_photo_media_path(photo)?,
+            params,
+            json_body: None,
+            field_mask: String::new(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_places_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_photo_download(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    photo: String,
+    output: PathBuf,
+    max_width: Option<usize>,
+    max_height: Option<usize>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        None,
+        None,
+        home,
+        settings_file,
+    )?;
+    let mut params = parse_google_places_params(params)?;
+    if let Some(max_width) = max_width {
+        params.insert("maxWidthPx".to_owned(), max_width.to_string());
+    }
+    if let Some(max_height) = max_height {
+        params.insert("maxHeightPx".to_owned(), max_height.to_string());
+    }
+    let response =
+        download_places_media(&runtime, &resolve_google_photo_media_path(photo)?, &params)
+            .map_err(anyhow::Error::msg)?;
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&output, &response.bytes)?;
+    let payload = serde_json::json!({
+        "output": output,
+        "bytes_written": response.bytes.len(),
+        "content_type": response.content_type,
+        "status_code": response.status_code,
+        "request_id": response.request_id,
+    });
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            println!(
+                "Downloaded photo to {} ({} bytes)",
+                output.display(),
+                response.bytes.len()
+            );
         }
     }
     Ok(())

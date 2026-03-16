@@ -2264,6 +2264,121 @@ func TestRunGooglePlacesCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGooglePlacesCommandDelegatesToRustCLIForAutocomplete(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-autocomplete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesCommand([]string{"autocomplete", "--input", "cafe", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places autocomplete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-autocomplete" {
+		t.Fatalf("expected delegated Rust google places autocomplete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\nautocomplete\n--input\ncafe\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places autocomplete + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlacesPhotoGetDefaultsToGoForFollow(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesCommand([]string{"photo", "get", "places/p1/photos/ph1", "--follow"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places photo get path when --follow is set")
+	}
+}
+
+func TestRunGooglePlacesPhotoDownloadDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-photo-download'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesCommand([]string{"photo", "download", "places/p1/photos/ph1", "--output", "/tmp/photo.jpg", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places photo download to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-photo-download" {
+		t.Fatalf("expected delegated Rust google places photo download output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\nphoto\ndownload\nplaces/p1/photos/ph1\n--output\n/tmp/photo.jpg\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places photo download + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGoogleCommandDelegatesToRustCLIForMigratedPlacesAutocomplete(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-root-autocomplete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGoogleCommand([]string{"places", "autocomplete", "--input", "cafe", "--json"})
+		if err != nil {
+			t.Fatalf("runGoogleCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google root to delegate places autocomplete to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-root-autocomplete" {
+		t.Fatalf("expected delegated Rust google root autocomplete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\nautocomplete\n--input\ncafe\n--json" {
+		t.Fatalf("expected Rust CLI args to be google root autocomplete + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGoogleCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
