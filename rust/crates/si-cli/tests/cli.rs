@@ -1108,6 +1108,29 @@ fn github_branch_get_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_git_credential_get_reads_stdin_and_prints_token() {
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "git",
+            "credential",
+            "get",
+            "--auth-mode",
+            "oauth",
+        ])
+        .write_stdin("protocol=https\nhost=github.com\npath=Aureuma/si.git\n\n")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let text = String::from_utf8(output).expect("utf8 output");
+    assert_eq!(text, "username=x-access-token\npassword=gho_example_token\n\n");
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

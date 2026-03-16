@@ -71,6 +71,7 @@ use si_rs_provider_github::{
     list_projects as github_list_projects, list_pull_requests as github_list_pull_requests,
     list_releases as github_list_releases, list_repos as github_list_repos,
     list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
+    resolve_access_token as github_resolve_access_token,
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
     get_workflow_run as github_get_workflow_run,
@@ -1475,6 +1476,10 @@ enum GitHubCommand {
         #[command(subcommand)]
         command: GitHubBranchCommand,
     },
+    Git {
+        #[command(subcommand)]
+        command: GitHubGitCommand,
+    },
     Project {
         #[command(subcommand)]
         command: GitHubProjectCommand,
@@ -1567,6 +1572,42 @@ enum GitHubBranchCommand {
         #[arg(long)]
         raw: bool,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubGitCommand {
+    Credential {
+        #[command(subcommand)]
+        command: GitHubGitCredentialCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubGitCredentialCommand {
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Store,
+    Erase,
 }
 
 #[derive(Debug, Subcommand)]
@@ -4900,6 +4941,35 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+            },
+            GitHubCommand::Git { command } => match command {
+                GitHubGitCommand::Credential { command } => match command {
+                    GitHubGitCredentialCommand::Get {
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                    } => run_github_git_credential_get(
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                    )?,
+                    GitHubGitCredentialCommand::Store => {}
+                    GitHubGitCredentialCommand::Erase => {}
+                },
             },
             GitHubCommand::Project { command } => match command {
                 GitHubProjectCommand::List {
@@ -8357,6 +8427,108 @@ fn parse_github_owner_repo(repo_ref: &str, default_owner: &str) -> Result<(Strin
     Ok((owner.to_owned(), trimmed.to_owned()))
 }
 
+#[derive(Debug, Default)]
+struct GitHubGitCredentialRequest {
+    protocol: String,
+    host: String,
+    path: String,
+}
+
+fn read_github_git_credential_request(mut input: impl Read) -> Result<GitHubGitCredentialRequest> {
+    let mut raw = String::new();
+    input.read_to_string(&mut raw)?;
+    let mut payload = BTreeMap::new();
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            break;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        payload.insert(key.trim().to_ascii_lowercase(), value.trim().to_owned());
+    }
+    let mut request = GitHubGitCredentialRequest {
+        protocol: payload.get("protocol").cloned().unwrap_or_default(),
+        host: payload.get("host").cloned().unwrap_or_default(),
+        path: payload.get("path").cloned().unwrap_or_default(),
+    };
+    if let Some(raw_url) = payload.get("url").map(String::as_str).filter(|value| !value.trim().is_empty()) {
+        let parsed = url::Url::parse(raw_url).map_err(|err| anyhow::Error::msg(format!("parse credential url: {err}")))?;
+        if request.protocol.trim().is_empty() {
+            request.protocol = parsed.scheme().trim().to_owned();
+        }
+        if request.host.trim().is_empty() {
+            request.host = parsed.host_str().unwrap_or_default().trim().to_owned();
+        }
+        if request.path.trim().is_empty() {
+            request.path = parsed.path().trim().to_owned();
+        }
+    }
+    request.host = normalize_git_host(&request.host);
+    if request.host.trim().is_empty() {
+        return Err(anyhow::Error::msg("git credential request is missing host"));
+    }
+    Ok(request)
+}
+
+fn normalize_git_host(host: &str) -> String {
+    let mut host = host.trim().to_ascii_lowercase();
+    for prefix in ["https://", "http://", "ssh://"] {
+        if let Some(stripped) = host.strip_prefix(prefix) {
+            host = stripped.to_owned();
+        }
+    }
+    if let Some((_, right)) = host.split_once('@') {
+        host = right.to_owned();
+    }
+    if let Some((left, _)) = host.split_once('/') {
+        host = left.to_owned();
+    }
+    host.trim().to_owned()
+}
+
+fn git_owner_repo_from_credential_path(path: &str) -> (String, String) {
+    let mut path = path.trim();
+    if path.is_empty() {
+        return (String::new(), String::new());
+    }
+    path = path.trim_start_matches('/');
+    if let Some((left, _)) = path.split_once('?') {
+        path = left;
+    }
+    let mut parts = path.split('/');
+    let owner = parts.next().unwrap_or_default().trim();
+    let repo = parts
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .trim_end_matches(".git");
+    if owner.is_empty() || repo.is_empty() {
+        return (String::new(), String::new());
+    }
+    (owner.to_owned(), repo.to_owned())
+}
+
+fn is_git_credential_host_allowed(host: &str, base_url: &str) -> bool {
+    let host = normalize_git_host(host);
+    if host.is_empty() {
+        return false;
+    }
+    let mut allowed = BTreeMap::new();
+    allowed.insert("github.com".to_owned(), ());
+    if let Ok(parsed) = url::Url::parse(base_url.trim()) {
+        let base_host = normalize_git_host(parsed.host_str().unwrap_or_default());
+        if !base_host.is_empty() {
+            allowed.insert(base_host.clone(), ());
+            if let Some(stripped) = base_host.strip_prefix("api.") {
+                allowed.insert(stripped.to_owned(), ());
+            }
+        }
+    }
+    allowed.contains_key(&host)
+}
+
 fn parse_github_params(params: Vec<String>) -> Result<BTreeMap<String, String>> {
     let mut out = BTreeMap::new();
     for raw in params {
@@ -8976,6 +9148,56 @@ fn run_github_branch_get(
         github_get_branch(&runtime, &repo_owner, &repo_name, &branch, &params)
             .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_git_credential_get(
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let request = read_github_git_credential_request(io::stdin())?;
+    let (parsed_owner, parsed_repo) = git_owner_repo_from_credential_path(&request.path);
+    let owner = owner.or_else(|| {
+        if parsed_owner.trim().is_empty() {
+            None
+        } else {
+            Some(parsed_owner.clone())
+        }
+    });
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    if !is_git_credential_host_allowed(&request.host, &runtime.base_url) {
+        return Ok(());
+    }
+    let token = github_resolve_access_token(
+        &runtime,
+        if runtime.owner.trim().is_empty() { &parsed_owner } else { &runtime.owner },
+        &parsed_repo,
+    )
+    .map_err(anyhow::Error::msg)?;
+    if token.trim().is_empty() {
+        return Err(anyhow::Error::msg("github auth token is empty"));
+    }
+    print!("username=x-access-token\npassword={token}\n\n");
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

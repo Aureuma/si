@@ -1261,6 +1261,7 @@ dependencies = [
  "si-rs-vault",
  "si-rs-warmup",
  "tempfile",
+ "url",
 ]
 
 [[package]]

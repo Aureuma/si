@@ -811,6 +811,15 @@ pub fn get_release(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn resolve_access_token(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+) -> Result<String, String> {
+    let client = build_http_client()?;
+    github_access_token(&client, runtime, owner, repo)
+}
+
 fn build_list_entry(
     alias: &str,
     entry: &GitHubAccountEntry,
