@@ -439,6 +439,7 @@ Progress notes:
 - completed: the OpenAI provider slice now also owns read-only `codex usage`, reusing the migrated completions-usage path with Codex-default model filtering so another live OpenAI monitoring surface no longer stays only on the Go wrapper path
 - completed: the OpenAI provider slice now also owns the read-only `monitor` wrapper surface, preserving Go-compatible `usage` defaulting and `limits` routing while removing another top-level monitoring command from the remaining Go wrapper seam
 - completed: the Go compatibility layer no longer owns top-level `openai usage` or `openai codex` wrapper parsing either, so those read-only routing surfaces now dispatch directly into the already-migrated Rust command tree
+- completed: the top-level read-only `openai model` wrapper now dispatches directly into Rust as well, shrinking the last pure OpenAI retrieval wrapper seam on the Go side while preserving the existing fallback path
 
 ### Phase 8: Release/install migration
 
