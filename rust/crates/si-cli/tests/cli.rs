@@ -1162,6 +1162,147 @@ access_token_env = "CORE_TOKEN"
 }
 
 #[test]
+fn google_places_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[google]
+default_account = "core"
+
+[google.accounts.core]
+project_id = "proj_core"
+default_language_code = "en"
+default_region_code = "US"
+
+[google.accounts.ops]
+project_id = "proj_ops"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["google", "places", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["project"], "proj_core");
+    assert_eq!(contexts[0]["language"], "en");
+    assert_eq!(contexts[0]["region"], "US");
+    assert_eq!(contexts[1]["alias"], "ops");
+}
+
+#[test]
+fn google_places_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[google]
+default_account = "core"
+default_env = "prod"
+
+[google.accounts.core]
+project_id_env = "CORE_PROJECT"
+places_api_key_env = "CORE_API_KEY"
+default_language_code = "en"
+default_region_code = "US"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_PROJECT", "proj_core")
+        .env("CORE_API_KEY", "AIza.token.core.xyz")
+        .args(["google", "places", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["project_id"], "proj_core");
+    assert_eq!(parsed["environment"], "prod");
+    assert_eq!(parsed["language_code"], "en");
+    assert_eq!(parsed["region_code"], "US");
+    assert_eq!(parsed["base_url"], "https://places.googleapis.com");
+    assert_eq!(
+        parsed["source"],
+        "env:CORE_API_KEY,env:CORE_PROJECT,settings.default_language_code,settings.default_region_code"
+    );
+}
+
+#[test]
+fn google_places_auth_status_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[google]
+default_account = "core"
+default_env = "staging"
+
+[google.accounts.core]
+project_id_env = "CORE_PROJECT"
+staging_places_api_key_env = "CORE_STAGING_KEY"
+default_language_code = "en"
+default_region_code = "GB"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_PROJECT", "proj_core")
+        .env("CORE_STAGING_KEY", "AIza.staging-token-xyz")
+        .args(["google", "places", "auth", "status", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["project_id"], "proj_core");
+    assert_eq!(parsed["environment"], "staging");
+    assert_eq!(parsed["language_code"], "en");
+    assert_eq!(parsed["region_code"], "GB");
+    assert_eq!(parsed["base_url"], "https://places.googleapis.com");
+    assert_eq!(
+        parsed["source"],
+        "env:CORE_STAGING_KEY,env:CORE_PROJECT,settings.default_language_code,settings.default_region_code"
+    );
+    assert_eq!(parsed["key_preview"], "AIz****************xyz");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

@@ -220,6 +220,13 @@ func cmdGooglePlacesAuth(args []string) {
 }
 
 func cmdGooglePlacesAuthStatus(args []string) {
+	delegated, err := runGooglePlacesAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("google places auth status", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -322,6 +329,13 @@ func cmdGooglePlacesContext(args []string) {
 }
 
 func cmdGooglePlacesContextList(args []string) {
+	delegated, err := runGooglePlacesContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	fs := flag.NewFlagSet("google places context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
@@ -379,6 +393,13 @@ func cmdGooglePlacesContextList(args []string) {
 }
 
 func cmdGooglePlacesContextCurrent(args []string) {
+	delegated, err := runGooglePlacesContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	fs := flag.NewFlagSet("google places context current", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)

@@ -19,6 +19,8 @@ pub struct Settings {
     #[serde(default)]
     pub gcp: GCPSettings,
     #[serde(default)]
+    pub google: GoogleSettings,
+    #[serde(default)]
     pub cloudflare: CloudflareSettings,
     #[serde(default)]
     pub apple: AppleSettings,
@@ -78,6 +80,7 @@ impl Settings {
             stripe: StripeSettings::default(),
             aws: AWSSettings::default(),
             gcp: GCPSettings::default(),
+            google: GoogleSettings::default(),
             cloudflare: CloudflareSettings::default(),
             apple: AppleSettings::default(),
             github: GitHubSettings::default(),
@@ -129,6 +132,7 @@ impl Settings {
                 self.stripe = payload.stripe;
                 self.aws = payload.aws;
                 self.gcp = payload.gcp;
+                self.google = payload.google;
                 self.cloudflare = payload.cloudflare;
                 self.apple = payload.apple;
                 self.github = payload.github;
@@ -174,6 +178,7 @@ impl Settings {
         self.stripe.normalize();
         self.aws.normalize();
         self.gcp.normalize();
+        self.google.normalize();
         self.cloudflare.normalize();
         self.apple.normalize();
         self.github.normalize();
@@ -200,6 +205,8 @@ struct CoreSettingsModule {
     pub aws: AWSSettings,
     #[serde(default)]
     pub gcp: GCPSettings,
+    #[serde(default)]
+    pub google: GoogleSettings,
     #[serde(default)]
     pub cloudflare: CloudflareSettings,
     #[serde(default)]
@@ -416,6 +423,68 @@ impl GCPAccountEntry {
         normalize_option_string(&mut self.access_token_env);
         normalize_option_string(&mut self.api_key_env);
         normalize_option_string(&mut self.api_base_url);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GoogleSettings {
+    pub default_account: Option<String>,
+    pub default_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub vault_file: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, GoogleAccountEntry>,
+}
+
+impl GoogleSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.vault_file);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GoogleAccountEntry {
+    pub name: Option<String>,
+    pub project_id: Option<String>,
+    pub project_id_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub places_api_key_env: Option<String>,
+    pub prod_places_api_key_env: Option<String>,
+    pub staging_places_api_key_env: Option<String>,
+    pub dev_places_api_key_env: Option<String>,
+    pub default_region_code: Option<String>,
+    pub default_language_code: Option<String>,
+}
+
+impl GoogleAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.project_id);
+        normalize_option_string(&mut self.project_id_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.places_api_key_env);
+        normalize_option_string(&mut self.prod_places_api_key_env);
+        normalize_option_string(&mut self.staging_places_api_key_env);
+        normalize_option_string(&mut self.dev_places_api_key_env);
+        normalize_option_string(&mut self.default_region_code);
+        normalize_option_string(&mut self.default_language_code);
     }
 }
 
