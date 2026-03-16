@@ -1334,6 +1334,122 @@ func TestCmdDyadSpawnUsesRustPlanBeforeExecution(t *testing.T) {
 	}
 }
 
+func TestCmdDyadSpawnWorkspaceConfigsMatrix(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	alphaWorkspace := filepath.Join(dir, "alpha-workspace")
+	alphaConfigs := filepath.Join(dir, "alpha-configs")
+	betaWorkspace := filepath.Join(dir, "beta-workspace")
+	betaConfigs := filepath.Join(dir, "beta-configs")
+	for _, path := range []string{alphaWorkspace, alphaConfigs, betaWorkspace, betaConfigs} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", path, err)
+		}
+	}
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '--' >>" + shellSingleQuote(argsPath) + "\nargs=\"$*\"\ncase \"$args\" in\n  *--name\\ alpha*)\n    printf '%s\\n' '{\"name\":\"alpha\",\"role\":\"research\",\"workspace_host\":\"" + filepath.ToSlash(alphaWorkspace) + "\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"" + filepath.ToSlash(alphaWorkspace) + "\",\"configs_host\":\"" + filepath.ToSlash(alphaConfigs) + "\",\"codex_volume\":\"codex-alpha-rust\",\"skills_volume\":\"skills-alpha-rust\",\"network_name\":\"si-alpha-rust\",\"forward_ports\":\"1555-1556\",\"docker_socket\":true,\"actor\":{\"name\":\"si-dyad-alpha-actor\",\"image\":\"actor-alpha-rust\"},\"critic\":{\"name\":\"si-dyad-alpha-critic\",\"image\":\"critic-alpha-rust\"}}'\n    ;;\n  *--name\\ beta*)\n    printf '%s\\n' '{\"name\":\"beta\",\"role\":\"design\",\"workspace_host\":\"" + filepath.ToSlash(betaWorkspace) + "\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"" + filepath.ToSlash(betaWorkspace) + "\",\"configs_host\":\"" + filepath.ToSlash(betaConfigs) + "\",\"codex_volume\":\"codex-beta-rust\",\"skills_volume\":\"skills-beta-rust\",\"network_name\":\"si-beta-rust\",\"forward_ports\":\"2555-2556\",\"docker_socket\":false,\"actor\":{\"name\":\"si-dyad-beta-actor\",\"image\":\"actor-beta-rust\"},\"critic\":{\"name\":\"si-dyad-beta-critic\",\"image\":\"critic-beta-rust\"}}'\n    ;;\n  *)\n    printf 'unexpected args: %s\\n' \"$args\" >&2\n    exit 1\n    ;;\nesac\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	prevRun := runDyadSpawnFlowFn
+	t.Cleanup(func() {
+		runDyadSpawnFlowFn = prevRun
+	})
+
+	cases := []struct {
+		name             string
+		wantRole         string
+		wantWorkspace    string
+		wantConfigs      string
+		wantActorImage   string
+		wantCriticImage  string
+		wantNetwork      string
+		wantForwardPorts string
+		wantDockerSocket bool
+		wantCodexVolume  string
+		wantSkillsVolume string
+	}{
+		{
+			name:             "alpha",
+			wantRole:         "research",
+			wantWorkspace:    filepath.ToSlash(alphaWorkspace),
+			wantConfigs:      filepath.ToSlash(alphaConfigs),
+			wantActorImage:   "actor-alpha-rust",
+			wantCriticImage:  "critic-alpha-rust",
+			wantNetwork:      "si-alpha-rust",
+			wantForwardPorts: "1555-1556",
+			wantDockerSocket: true,
+			wantCodexVolume:  "codex-alpha-rust",
+			wantSkillsVolume: "skills-alpha-rust",
+		},
+		{
+			name:             "beta",
+			wantRole:         "design",
+			wantWorkspace:    filepath.ToSlash(betaWorkspace),
+			wantConfigs:      filepath.ToSlash(betaConfigs),
+			wantActorImage:   "actor-beta-rust",
+			wantCriticImage:  "critic-beta-rust",
+			wantNetwork:      "si-beta-rust",
+			wantForwardPorts: "2555-2556",
+			wantDockerSocket: false,
+			wantCodexVolume:  "codex-beta-rust",
+			wantSkillsVolume: "skills-beta-rust",
+		},
+	}
+
+	var gotOpts shared.DyadOptions
+	runDyadSpawnFlowFn = func(opts shared.DyadOptions, profile *codexProfile) error {
+		gotOpts = opts
+		if profile != nil {
+			t.Fatalf("expected nil profile with --skip-auth")
+		}
+		return nil
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			gotOpts = shared.DyadOptions{}
+			_ = captureOutputForTest(t, func() {
+				cmdDyadSpawn([]string{tc.name, "--skip-auth"})
+			})
+			if gotOpts.Dyad != tc.name || gotOpts.Role != tc.wantRole {
+				t.Fatalf("unexpected opts: %#v", gotOpts)
+			}
+			if gotOpts.WorkspaceHost != tc.wantWorkspace || gotOpts.ConfigsHost != tc.wantConfigs {
+				t.Fatalf("unexpected paths: %#v", gotOpts)
+			}
+			if gotOpts.ActorImage != tc.wantActorImage || gotOpts.CriticImage != tc.wantCriticImage {
+				t.Fatalf("unexpected images: %#v", gotOpts)
+			}
+			if gotOpts.Network != tc.wantNetwork || gotOpts.ForwardPorts != tc.wantForwardPorts || gotOpts.DockerSocket != tc.wantDockerSocket {
+				t.Fatalf("unexpected runtime opts: %#v", gotOpts)
+			}
+			if gotOpts.CodexVolume != tc.wantCodexVolume || gotOpts.SkillsVolume != tc.wantSkillsVolume {
+				t.Fatalf("unexpected volumes: %#v", gotOpts)
+			}
+		})
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := string(argsData)
+	for _, expected := range []string{
+		"dyad\nspawn-plan\n--name\nalpha",
+		"dyad\nspawn-plan\n--name\nbeta",
+	} {
+		if !strings.Contains(argsText, expected) {
+			t.Fatalf("unexpected Rust CLI args: %q", argsText)
+		}
+	}
+}
+
 func TestCmdDyadRecreateUsesDelegatedRemoveAndSpawnFlow(t *testing.T) {
 	prevRemove := removeDyadWithCompatibilityFn
 	prevSpawn := runDyadSpawnCmdFn
