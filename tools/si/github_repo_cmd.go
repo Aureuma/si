@@ -14,6 +14,13 @@ import (
 )
 
 func cmdGithubRepo(args []string) {
+	delegated, err := runGitHubRepoCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github repo <list|get|create|update|archive|delete> ...")
 	if !routedOK {
 		return
@@ -38,6 +45,13 @@ func cmdGithubRepo(args []string) {
 }
 
 func cmdGithubRepoList(args []string) {
+	delegated, err := runGitHubRepoListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github repo list", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -108,6 +122,13 @@ func cmdGithubRepoList(args []string) {
 }
 
 func cmdGithubRepoGet(args []string) {
+	delegated, err := runGitHubRepoGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github repo get", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")

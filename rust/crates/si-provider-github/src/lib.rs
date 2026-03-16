@@ -418,6 +418,60 @@ pub fn list_releases(
     Ok(last_response)
 }
 
+pub fn list_repos(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    params: &BTreeMap<String, String>,
+    max_pages: usize,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, "")?;
+    let mut merged = params.clone();
+    merged.entry("per_page".to_owned()).or_insert_with(|| "100".to_owned());
+    let mut items = Vec::new();
+    let mut last_response = GitHubAPIResponse {
+        status_code: 200,
+        status: "200 OK".to_owned(),
+        request_id: String::new(),
+        headers: BTreeMap::new(),
+        body: String::new(),
+        data: None,
+        list: Vec::new(),
+    };
+    let total_pages = if max_pages == 0 { 10 } else { max_pages };
+    for page in 1..=total_pages {
+        merged.insert("page".to_owned(), page.to_string());
+        let response = github_get(
+            &client,
+            &runtime.base_url,
+            &format!("/users/{owner}/repos"),
+            &merged,
+            &token,
+        )?;
+        let next = parse_next_link(response.headers());
+        let payload = normalize_response(response)?;
+        items.extend(payload.list.iter().cloned());
+        last_response = payload;
+        if next.is_none() || last_response.list.is_empty() {
+            break;
+        }
+    }
+    last_response.data = None;
+    last_response.list = items;
+    Ok(last_response)
+}
+
+pub fn get_repo(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}");
+    normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
+}
+
 pub fn get_release(
     runtime: &GitHubRuntime,
     owner: &str,
