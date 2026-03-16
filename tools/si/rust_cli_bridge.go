@@ -585,6 +585,44 @@ func runGooglePlacesAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "auth", "status"}, args...)...)
 }
 
+func runOpenAICommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runOpenAIAuthCommand(args[1:])
+	case "context":
+		return runOpenAIContextCommand(args[1:])
+	case "model", "models":
+		return runOpenAIModelCommand(args[1:])
+	case "project", "projects":
+		return runOpenAIProjectCommand(args[1:])
+	case "key", "keys", "admin-key", "admin-keys":
+		return runOpenAIKeyCommand(args[1:])
+	case "usage":
+		return runOpenAIUsageCommand(args[1:])
+	case "monitor", "monitoring":
+		return runOpenAIMonitorCommand(args[1:])
+	case "codex":
+		return runOpenAICodexCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runOpenAIAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return runOpenAIAuthStatusCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runOpenAIContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "list"}, args...)...)
 }
@@ -651,6 +689,20 @@ func runOpenAIKeyGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"key", "get"}, args...)...)
 }
 
+func runOpenAIKeyCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOpenAIKeyListCommand(args[1:])
+	case "get", "retrieve":
+		return runOpenAIKeyGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runOpenAIProjectListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "list"}, args...)...)
 }
@@ -677,6 +729,66 @@ func runOpenAIProjectServiceAccountGetCommand(args []string) (bool, error) {
 
 func runOpenAIProjectRateLimitListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "rate-limit", "list"}, args...)...)
+}
+
+func runOpenAIProjectRateLimitCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOpenAIProjectRateLimitListCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runOpenAIProjectAPIKeyCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOpenAIProjectAPIKeyListCommand(args[1:])
+	case "get", "retrieve":
+		return runOpenAIProjectAPIKeyGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runOpenAIProjectServiceAccountCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOpenAIProjectServiceAccountListCommand(args[1:])
+	case "get", "retrieve":
+		return runOpenAIProjectServiceAccountGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runOpenAIProjectCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOpenAIProjectListCommand(args[1:])
+	case "get", "retrieve":
+		return runOpenAIProjectGetCommand(args[1:])
+	case "rate-limit", "rate-limits":
+		return runOpenAIProjectRateLimitCommand(args[1:])
+	case "api-key", "api-keys":
+		return runOpenAIProjectAPIKeyCommand(args[1:])
+	case "service-account", "service-accounts":
+		return runOpenAIProjectServiceAccountCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runOCIContextListCommand(args []string) (bool, error) {
@@ -716,6 +828,34 @@ func runOCIAuthStatusCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"auth", "status"}, args...)...)
+}
+
+func runOCIOracularCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "tenancy":
+		return runOCIOracularTenancyCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runOCICommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runOCIAuthCommand(args[1:])
+	case "context":
+		return runOCIContextCommand(args[1:])
+	case "oracular":
+		return runOCIOracularCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runOCIOracularTenancyCommand(args []string) (bool, error) {
