@@ -3128,6 +3128,83 @@ fn cloudflare_auth_status_json_verifies_token() {
 }
 
 #[test]
+fn cloudflare_raw_json_fetches_with_query_params() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones?per_page=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_raw")],
+            r#"{"success":true,"result":[{"id":"zone_123","name":"example.com"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "raw"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--path",
+            "/zones",
+            "--param",
+            "per_page=1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_cloudflare_raw");
+    assert_eq!(parsed["list"][0]["id"], "zone_123");
+    server.join();
+}
+
+#[test]
+fn cloudflare_raw_text_prints_body_for_raw_mode() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /zones HTTP/1.1\r\n"));
+        assert!(request.contains("content-type: application/json\r\n"));
+        assert!(request.contains("\r\n\r\n{\"name\":\"example.com\"}"));
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"success":true,"result":{"id":"zone_123","name":"example.com"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "raw"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--method",
+            "POST",
+            "--path",
+            "/zones",
+            "--body",
+            "{\"name\":\"example.com\"}",
+            "--raw",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let rendered = String::from_utf8_lossy(&output);
+    assert!(rendered.contains("\"id\":\"zone_123\""));
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
