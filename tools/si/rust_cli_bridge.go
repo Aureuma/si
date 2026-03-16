@@ -941,6 +941,24 @@ func runOCIAuthCommand(args []string) (bool, error) {
 	return false, nil
 }
 
+func runOCIDoctorCommand(args []string) (bool, error) {
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--public", arg == "--public=true", arg == "--public=1":
+			return false, nil
+		case arg == "--public=false", arg == "--public=0":
+		case arg == "--public" && idx+1 < len(args):
+			next := strings.TrimSpace(args[idx+1])
+			if next == "true" || next == "1" {
+				return false, nil
+			}
+			idx++
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("oci", append([]string{"doctor"}, args...)...)
+}
+
 func runOCIAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"auth", "status"}, args...)...)
 }
@@ -1007,6 +1025,8 @@ func runOCICommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "auth":
 		return runOCIAuthCommand(args[1:])
+	case "doctor":
+		return runOCIDoctorCommand(args[1:])
 	case "context":
 		return runOCIContextCommand(args[1:])
 	case "identity":
