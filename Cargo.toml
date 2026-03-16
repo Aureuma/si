@@ -12,6 +12,7 @@ members = [
     "rust/crates/si-warmup",
     "rust/crates/si-codex",
     "rust/crates/si-dyad",
+    "rust/crates/si-provider-github",
     "rust/crates/si-cli",
 ]
 resolver = "2"
