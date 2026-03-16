@@ -1526,6 +1526,88 @@ func runGitHubPRCommand(args []string) (bool, error) {
 	}
 }
 
+func runGitHubSecretRepoSetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"secret", "repo", "set"}, args...)...)
+}
+
+func runGitHubSecretRepoDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"secret", "repo", "delete"}, args...)...)
+}
+
+func runGitHubSecretRepoCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "set":
+		return runGitHubSecretRepoSetCommand(args[1:])
+	case "delete":
+		return runGitHubSecretRepoDeleteCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGitHubSecretEnvSetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"secret", "env", "set"}, args...)...)
+}
+
+func runGitHubSecretEnvDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"secret", "env", "delete"}, args...)...)
+}
+
+func runGitHubSecretEnvCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "set":
+		return runGitHubSecretEnvSetCommand(args[1:])
+	case "delete":
+		return runGitHubSecretEnvDeleteCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGitHubSecretOrgSetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"secret", "org", "set"}, args...)...)
+}
+
+func runGitHubSecretOrgDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"secret", "org", "delete"}, args...)...)
+}
+
+func runGitHubSecretOrgCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "set":
+		return runGitHubSecretOrgSetCommand(args[1:])
+	case "delete":
+		return runGitHubSecretOrgDeleteCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGitHubSecretCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "repo":
+		return runGitHubSecretRepoCommand(args[1:])
+	case "env":
+		return runGitHubSecretEnvCommand(args[1:])
+	case "org":
+		return runGitHubSecretOrgCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGitHubCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1555,6 +1637,8 @@ func runGitHubCommand(args []string) (bool, error) {
 		return runGitHubRepoCommand(args[1:])
 	case "release":
 		return runGitHubReleaseCommand(args[1:])
+	case "secret":
+		return runGitHubSecretCommand(args[1:])
 	default:
 		return false, nil
 	}
