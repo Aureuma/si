@@ -442,6 +442,7 @@ Progress notes:
 - completed: the top-level read-only `openai model` wrapper now dispatches directly into Rust as well, shrinking the last pure OpenAI retrieval wrapper seam on the Go side while preserving the existing fallback path
 - completed: the top-level `auth` wrappers for AWS, GCP, and Google Places now dispatch directly into the migrated Rust command trees, while Apple App Store and OCI auth wrappers also route through Rust whenever their existing `--verify=false` compatibility path is selected
 - completed: the top-level `context` wrappers for OpenAI, AWS, GCP, Google Places, Apple App Store, and OCI now route `list` and `current` directly into Rust while keeping the mutable `use` subcommand on the Go side
+- completed: the provider-root wrappers for AWS, GCP, Google Places, and Apple App Store now short-circuit directly into Rust whenever the request stays within already-migrated auth/context subtrees, reducing another layer of Go-only routing without disturbing the remaining Go-owned commands
 
 ### Phase 8: Release/install migration
 
