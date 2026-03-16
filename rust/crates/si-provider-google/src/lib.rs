@@ -67,7 +67,10 @@ pub struct GooglePlacesAPIRequest {
     pub method: String,
     pub path: String,
     pub params: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
     pub json_body: Option<Value>,
+    pub raw_body: String,
+    pub content_type: String,
     pub field_mask: String,
 }
 
@@ -255,8 +258,22 @@ pub fn execute_places_api_request(
     if !request.params.is_empty() {
         builder = builder.query(&request.params);
     }
+    for (key, value) in &request.headers {
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        builder = builder.header(key, value.trim());
+    }
     if let Some(body) = &request.json_body {
         builder = builder.json(body);
+    } else if !request.raw_body.trim().is_empty() {
+        let content_type = if request.content_type.trim().is_empty() {
+            "application/json"
+        } else {
+            request.content_type.trim()
+        };
+        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
     }
     let response = builder
         .send()
