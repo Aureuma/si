@@ -12,6 +12,7 @@ use si_rs_command_manifest::{
     CommandCategory, CommandSpec, find_root_command, visible_root_commands,
 };
 use si_rs_config::paths::SiPaths;
+use si_rs_config::runtime::git_repo_root_from;
 use si_rs_config::settings::Settings;
 use si_rs_docker::{
     ContainerAction, ContainerExecSpec, docker_container_action_command,
@@ -165,10 +166,12 @@ use si_rs_warmup::{
     set_disabled_marker as set_rust_warmup_disabled_marker,
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
+use std::fs;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{self, Read};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command as StdCommand;
 
 #[derive(Debug, Parser)]
 #[command(name = "si-rs", disable_version_flag = true, disable_help_subcommand = true)]
@@ -2057,6 +2060,85 @@ enum GitHubGitCommand {
     Credential {
         #[command(subcommand)]
         command: GitHubGitCredentialCommand,
+    },
+    Setup {
+        #[arg(long)]
+        root: Option<PathBuf>,
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        no_vault: bool,
+        #[arg(long)]
+        vault_file: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        helper_owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    RemoteAuth {
+        #[arg(long)]
+        root: Option<PathBuf>,
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        #[arg(long)]
+        vault_key: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long, default_value_t = true)]
+        track_upstream: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+    },
+    CloneAuth {
+        repo_source: Option<String>,
+        #[arg(long = "repo")]
+        repo: Option<String>,
+        #[arg(long)]
+        root: Option<PathBuf>,
+        #[arg(long)]
+        dest: Option<String>,
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        #[arg(long)]
+        vault_key: Option<String>,
+        #[arg(long, default_value_t = true)]
+        track_upstream: bool,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -6515,6 +6597,88 @@ fn main() -> Result<()> {
                     GitHubGitCredentialCommand::Store => {}
                     GitHubGitCredentialCommand::Erase => {}
                 },
+                GitHubGitCommand::Setup {
+                    root,
+                    remote,
+                    dry_run,
+                    no_vault,
+                    vault_file,
+                    account,
+                    owner,
+                    helper_owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                } => run_github_git_setup(
+                    root,
+                    remote,
+                    dry_run,
+                    no_vault,
+                    vault_file,
+                    account,
+                    owner,
+                    helper_owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                )?,
+                GitHubGitCommand::RemoteAuth {
+                    root,
+                    remote,
+                    vault_key,
+                    owner,
+                    track_upstream,
+                    dry_run,
+                    home,
+                    settings_file,
+                    json,
+                } => run_github_git_remote_auth(
+                    root,
+                    remote,
+                    vault_key,
+                    owner,
+                    track_upstream,
+                    dry_run,
+                    home,
+                    settings_file,
+                    json,
+                )?,
+                GitHubGitCommand::CloneAuth {
+                    repo_source,
+                    repo,
+                    root,
+                    dest,
+                    remote,
+                    vault_key,
+                    track_upstream,
+                    dry_run,
+                    home,
+                    settings_file,
+                    json,
+                } => run_github_git_clone_auth(
+                    repo.or(repo_source),
+                    root,
+                    dest,
+                    remote,
+                    vault_key,
+                    track_upstream,
+                    dry_run,
+                    home,
+                    settings_file,
+                    json,
+                )?,
             },
             GitHubCommand::Raw {
                 account,
@@ -11244,6 +11408,102 @@ struct GitHubGitCredentialRequest {
     path: String,
 }
 
+#[derive(Debug, Serialize)]
+struct GitHubGitSetupResult {
+    root: String,
+    dry_run: bool,
+    repos_scanned: usize,
+    repos_updated: usize,
+    repos_skipped: usize,
+    hosts: Vec<String>,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    helper_command: String,
+    changes: Vec<GitHubGitSetupRepoChange>,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubGitSetupRepoChange {
+    repo: String,
+    remote: String,
+    before: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    after: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    push_before: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    push_after: String,
+    changed: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    skipped: String,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubGitCloneAuthResult {
+    repo_source: String,
+    owner: String,
+    name: String,
+    root: String,
+    destination: String,
+    remote: String,
+    vault_key: String,
+    clone_url: String,
+    dry_run: bool,
+    cloned: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    tracking: String,
+    would_clone: bool,
+    would_rewrite_remote: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    error: String,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubGitRemoteAuthResult {
+    root: String,
+    remote: String,
+    vault_key: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    owner_filter: String,
+    dry_run: bool,
+    track_upstream: bool,
+    repos_scanned: usize,
+    repos_updated: usize,
+    repos_skipped: usize,
+    repos_errored: usize,
+    changes: Vec<GitHubGitRemoteAuthRepoChange>,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubGitRemoteAuthRepoChange {
+    repo: String,
+    remote: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    owner: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    name: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    before: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    push_before: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    after: String,
+    changed: bool,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    tracking: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    skipped: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    error: String,
+}
+
+#[derive(Debug, Clone)]
+struct GitHubRemoteNormalized {
+    host: String,
+    owner: String,
+    repo: String,
+    url: String,
+}
+
 fn read_github_git_credential_request(mut input: impl Read) -> Result<GitHubGitCredentialRequest> {
     let mut raw = String::new();
     input.read_to_string(&mut raw)?;
@@ -14111,6 +14371,925 @@ fn run_github_git_credential_get(
     }
     print!("username=x-access-token\npassword={token}\n\n");
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_git_setup(
+    root: Option<PathBuf>,
+    remote: String,
+    dry_run: bool,
+    no_vault: bool,
+    vault_file: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    helper_owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let remote = remote.trim().to_owned();
+    if remote.is_empty() {
+        return Err(anyhow::Error::msg("--remote is required"));
+    }
+    let root_path = resolve_github_git_repos_root(root, &settings)?;
+    let repos = list_github_git_repos(&root_path)?;
+    if repos.is_empty() {
+        return Err(anyhow::Error::msg(format!(
+            "no git repositories found under {}",
+            root_path.display()
+        )));
+    }
+
+    let mut changes = Vec::with_capacity(repos.len());
+    let mut hosts = BTreeMap::new();
+    let mut first_owner = String::new();
+    let mut first_repo = String::new();
+
+    for repo_path in &repos {
+        let mut change = GitHubGitSetupRepoChange {
+            repo: repo_path.display().to_string(),
+            remote: remote.clone(),
+            before: String::new(),
+            after: String::new(),
+            push_before: String::new(),
+            push_after: String::new(),
+            changed: false,
+            skipped: String::new(),
+        };
+        let before = match git_remote_get_url(repo_path, &remote, false) {
+            Ok(value) => value,
+            Err(err) => {
+                change.skipped = err.to_string();
+                changes.push(change);
+                continue;
+            }
+        };
+        change.before = before.clone();
+        let push_before = git_remote_get_url(repo_path, &remote, true).unwrap_or_default();
+        change.push_before = push_before.clone();
+
+        let Some(normalized) = normalize_github_remote_url(&before) else {
+            change.skipped = "remote is not a supported github URL".to_owned();
+            changes.push(change);
+            continue;
+        };
+        change.after = normalized.url.clone();
+        if first_owner.is_empty() {
+            first_owner = normalized.owner.clone();
+            first_repo = normalized.repo.clone();
+        }
+        hosts.insert(normalized.host.clone(), ());
+        change.push_after = normalized.url.clone();
+        if !push_before.trim().is_empty() {
+            if let Some(push_normalized) = normalize_github_remote_url(&push_before) {
+                change.push_after = push_normalized.url.clone();
+                hosts.insert(push_normalized.host.clone(), ());
+            }
+        }
+        change.changed = change.before.trim() != change.after.trim()
+            || (!change.push_before.trim().is_empty()
+                && change.push_before.trim() != change.push_after.trim());
+
+        if change.changed && !dry_run {
+            git_remote_set_url(repo_path, &remote, &change.after, false)?;
+            if !change.push_before.trim().is_empty() {
+                git_remote_set_url(repo_path, &remote, &change.push_after, true)?;
+            }
+        }
+        changes.push(change);
+    }
+
+    let host_list = hosts.keys().cloned().collect::<Vec<_>>();
+    if host_list.is_empty() {
+        return Err(anyhow::Error::msg(format!(
+            "no github remotes found under {}",
+            root_path.display()
+        )));
+    }
+
+    let probe_owner = owner
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .unwrap_or(first_owner);
+    if probe_owner.trim().is_empty() {
+        return Err(anyhow::Error::msg("owner is required for auth probe; pass --owner"));
+    }
+    let runtime = load_github_runtime(
+        account.clone(),
+        Some(probe_owner.clone()),
+        base_url.clone(),
+        auth_mode.clone(),
+        token.clone(),
+        app_id,
+        app_key.clone(),
+        installation_id,
+        Some(home.clone()),
+        settings_file.clone(),
+    )?;
+    let probe_token =
+        github_resolve_access_token(&runtime, &probe_owner, first_repo.trim()).map_err(anyhow::Error::msg)?;
+    if probe_token.trim().is_empty() {
+        return Err(anyhow::Error::msg("github auth probe returned empty token"));
+    }
+
+    let helper_command = build_github_credential_helper_command(
+        !no_vault,
+        vault_file.as_deref().unwrap_or_default(),
+        account.as_deref().unwrap_or_default(),
+        helper_owner.as_deref().unwrap_or_default(),
+        base_url.as_deref().unwrap_or_default(),
+        auth_mode.as_deref().unwrap_or_default(),
+        token.as_deref().unwrap_or_default(),
+        app_id.unwrap_or_default(),
+        app_key.as_deref().unwrap_or_default(),
+        installation_id.unwrap_or_default(),
+    );
+
+    if !dry_run {
+        for host in &host_list {
+            git_config_host_credential_helper(host, &helper_command)?;
+            git_config_host_use_http_path(host)?;
+        }
+    }
+
+    let result = GitHubGitSetupResult {
+        root: root_path.display().to_string(),
+        dry_run,
+        repos_scanned: repos.len(),
+        repos_updated: count_setup_changes(&changes),
+        repos_skipped: count_setup_skipped(&changes),
+        hosts: host_list,
+        helper_command,
+        changes,
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        return Ok(());
+    }
+
+    println!("GitHub git setup: completed");
+    println!("Root: {}", result.root);
+    println!(
+        "Repos: {} scanned, {} changed, {} skipped",
+        result.repos_scanned, result.repos_updated, result.repos_skipped
+    );
+    println!("Hosts: {}", result.hosts.join(", "));
+    if result.dry_run {
+        println!("Mode: dry-run");
+    }
+    Ok(())
+}
+
+fn run_github_git_remote_auth(
+    root: Option<PathBuf>,
+    remote: String,
+    vault_key: Option<String>,
+    owner: Option<String>,
+    track_upstream: bool,
+    dry_run: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let remote = remote.trim().to_owned();
+    if remote.is_empty() {
+        return Err(anyhow::Error::msg("--remote is required"));
+    }
+    let key = vault_key.unwrap_or_default();
+    if key.trim().is_empty() {
+        return Err(anyhow::Error::msg("--vault-key is required"));
+    }
+    let cwd = std::env::current_dir()?;
+    let pat = resolve_github_git_vault_key_value(&settings, key.trim(), &cwd)?;
+    let root_path = resolve_github_git_repos_root(root, &settings)?;
+    let repos = list_github_git_repos(&root_path)?;
+    if repos.is_empty() {
+        return Err(anyhow::Error::msg(format!(
+            "no git repositories found under {}",
+            root_path.display()
+        )));
+    }
+
+    let owner_filter = owner.unwrap_or_default().trim().to_owned();
+    let mut changes = Vec::with_capacity(repos.len());
+    for repo_path in &repos {
+        let mut change = GitHubGitRemoteAuthRepoChange {
+            repo: repo_path.display().to_string(),
+            remote: remote.clone(),
+            owner: String::new(),
+            name: String::new(),
+            before: String::new(),
+            push_before: String::new(),
+            after: String::new(),
+            changed: false,
+            tracking: String::new(),
+            skipped: String::new(),
+            error: String::new(),
+        };
+        let fetch_url = match git_remote_get_url(repo_path, &remote, false) {
+            Ok(value) => value,
+            Err(err) => {
+                change.skipped = err.to_string();
+                changes.push(change);
+                continue;
+            }
+        };
+        let push_url = git_remote_get_url(repo_path, &remote, true).unwrap_or_default();
+        change.before = redact_github_remote_pat_url(&fetch_url);
+        change.push_before = redact_github_remote_pat_url(&push_url);
+
+        let Some(normalized) = normalize_github_remote_url(&fetch_url) else {
+            change.skipped = "remote is not a supported github URL".to_owned();
+            changes.push(change);
+            continue;
+        };
+        change.owner = normalized.owner.clone();
+        change.name = normalized.repo.clone();
+        if !owner_filter.is_empty() && !owner_filter.eq_ignore_ascii_case(&normalized.owner) {
+            change.skipped = "owner filter mismatch".to_owned();
+            changes.push(change);
+            continue;
+        }
+
+        let auth_url = match build_github_remote_url_with_pat(&normalized.url, &pat) {
+            Ok(value) => value,
+            Err(err) => {
+                change.error = err.to_string();
+                changes.push(change);
+                continue;
+            }
+        };
+        change.after = redact_github_remote_pat_url(&auth_url);
+        change.changed =
+            fetch_url.trim() != auth_url.trim() || push_url.trim() != auth_url.trim();
+
+        if change.changed && !dry_run {
+            if let Err(err) = git_remote_set_url(repo_path, &remote, &auth_url, false) {
+                change.error = err.to_string();
+                changes.push(change);
+                continue;
+            }
+            if let Err(err) = git_remote_set_url(repo_path, &remote, &auth_url, true) {
+                change.error = err.to_string();
+                changes.push(change);
+                continue;
+            }
+        }
+
+        if track_upstream {
+            match ensure_git_branch_tracking(repo_path, &remote, dry_run) {
+                Ok(status) => change.tracking = status,
+                Err(err) => change.error = err.to_string(),
+            }
+        }
+        changes.push(change);
+    }
+
+    let result = GitHubGitRemoteAuthResult {
+        root: root_path.display().to_string(),
+        remote,
+        vault_key: key.trim().to_owned(),
+        owner_filter,
+        dry_run,
+        track_upstream,
+        repos_scanned: repos.len(),
+        repos_updated: count_remote_auth_changed(&changes),
+        repos_skipped: count_remote_auth_skipped(&changes),
+        repos_errored: count_remote_auth_errored(&changes),
+        changes,
+    };
+    if json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        if result.repos_errored > 0 {
+            return Err(anyhow::Error::msg(format!(
+                "remote-auth encountered {} errors",
+                result.repos_errored
+            )));
+        }
+        return Ok(());
+    }
+
+    println!("GitHub PAT remote auth: completed");
+    println!("Root: {}", result.root);
+    println!("Remote: {}", result.remote);
+    println!("Vault key: {}", result.vault_key);
+    if !result.owner_filter.is_empty() {
+        println!("Owner filter: {}", result.owner_filter);
+    }
+    println!(
+        "Repos: {} scanned, {} changed, {} skipped, {} errors",
+        result.repos_scanned, result.repos_updated, result.repos_skipped, result.repos_errored
+    );
+    if result.dry_run {
+        println!("Mode: dry-run");
+    }
+    if result.repos_errored > 0 {
+        return Err(anyhow::Error::msg(format!(
+            "remote-auth encountered {} errors",
+            result.repos_errored
+        )));
+    }
+    Ok(())
+}
+
+fn run_github_git_clone_auth(
+    repo_source: Option<String>,
+    root: Option<PathBuf>,
+    dest: Option<String>,
+    remote: String,
+    vault_key: Option<String>,
+    track_upstream: bool,
+    dry_run: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+) -> Result<()> {
+    let repo_source = repo_source.unwrap_or_default();
+    if repo_source.trim().is_empty() {
+        return Err(anyhow::Error::msg("repository source is required"));
+    }
+    let key = vault_key.unwrap_or_default();
+    if key.trim().is_empty() {
+        return Err(anyhow::Error::msg("--vault-key is required"));
+    }
+    let remote = remote.trim().to_owned();
+    if remote.is_empty() {
+        return Err(anyhow::Error::msg("--remote is required"));
+    }
+
+    let normalized =
+        parse_github_clone_source(&repo_source).map_err(anyhow::Error::msg)?;
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let cwd = std::env::current_dir()?;
+    let root_path = resolve_github_git_repos_root(root, &settings)?;
+    let destination = plan_github_clone_destination(&root_path, &normalized.repo, dest.as_deref());
+    ensure_clone_destination_available(&destination)?;
+    let pat = resolve_github_git_vault_key_value(&settings, key.trim(), &cwd)?;
+    let auth_url = build_github_remote_url_with_pat(&normalized.url, &pat).map_err(anyhow::Error::msg)?;
+
+    let mut result = GitHubGitCloneAuthResult {
+        repo_source: repo_source.trim().to_owned(),
+        owner: normalized.owner.clone(),
+        name: normalized.repo.clone(),
+        root: root_path.display().to_string(),
+        destination: destination.display().to_string(),
+        remote: remote.clone(),
+        vault_key: key.trim().to_owned(),
+        clone_url: redact_github_remote_pat_url(&auth_url),
+        dry_run,
+        cloned: false,
+        tracking: String::new(),
+        would_clone: true,
+        would_rewrite_remote: true,
+        error: String::new(),
+    };
+
+    if !dry_run {
+        git_clone_repository(&auth_url, &destination, &remote)?;
+        result.cloned = true;
+        git_remote_set_url(&destination, &remote, &auth_url, false)?;
+        git_remote_set_url(&destination, &remote, &auth_url, true)?;
+        if track_upstream {
+            result.tracking = ensure_git_branch_tracking(&destination, &remote, false)?;
+        }
+    } else if track_upstream {
+        result.tracking = "would-set".to_owned();
+    }
+
+    if json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+        return Ok(());
+    }
+
+    println!("GitHub PAT clone: completed");
+    println!("Repo: {}/{}", result.owner, result.name);
+    println!("Destination: {}", result.destination);
+    println!("Remote: {}", result.remote);
+    println!("Clone URL: {}", result.clone_url);
+    if result.dry_run {
+        println!("Mode: dry-run");
+    }
+    if !result.tracking.is_empty() {
+        println!("Tracking: {}", result.tracking);
+    }
+    Ok(())
+}
+
+fn normalize_github_remote_url(raw: &str) -> Option<GitHubRemoteNormalized> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let (host, path) = if let Some(without_user) = raw.strip_prefix("git@") {
+        let (host, path) = without_user.split_once(':')?;
+        (host.trim().to_owned(), path.trim().to_owned())
+    } else {
+        let parsed = url::Url::parse(raw).ok()?;
+        let host = parsed.host_str()?.trim().to_owned();
+        let path = parsed.path().trim().trim_start_matches('/').to_owned();
+        (host, path)
+    };
+    let host = normalize_git_host(&host);
+    if !looks_like_github_host(&host) {
+        return None;
+    }
+    let (owner, repo) = git_owner_repo_from_credential_path(&path);
+    if owner.trim().is_empty() || repo.trim().is_empty() {
+        return None;
+    }
+    Some(GitHubRemoteNormalized {
+        host: host.clone(),
+        owner: owner.clone(),
+        repo: repo.clone(),
+        url: format!("https://{host}/{owner}/{repo}.git"),
+    })
+}
+
+fn parse_github_clone_source(raw: &str) -> std::result::Result<GitHubRemoteNormalized, String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Err("repository source is required".to_owned());
+    }
+    if raw.contains("://") || raw.starts_with("git@") {
+        return normalize_github_remote_url(raw).ok_or_else(|| {
+            "repository source must be a supported github URL or owner/repo".to_owned()
+        });
+    }
+    if raw.to_ascii_lowercase().starts_with("github.com/") {
+        return normalize_github_remote_url(&format!("https://{raw}")).ok_or_else(|| {
+            "repository source must be a supported github URL or owner/repo".to_owned()
+        });
+    }
+    let (owner, repo) = git_owner_repo_from_credential_path(raw);
+    if owner.trim().is_empty() || repo.trim().is_empty() {
+        return Err("repository source must be <owner/repo> or a github URL".to_owned());
+    }
+    Ok(GitHubRemoteNormalized {
+        host: "github.com".to_owned(),
+        owner: owner.clone(),
+        repo: repo.clone(),
+        url: format!("https://github.com/{owner}/{repo}.git"),
+    })
+}
+
+fn looks_like_github_host(host: &str) -> bool {
+    let host = normalize_git_host(host);
+    host == "github.com" || host.contains("github")
+}
+
+fn resolve_github_git_repos_root(root: Option<PathBuf>, settings: &Settings) -> Result<PathBuf> {
+    let cwd = std::env::current_dir()?;
+    let candidates = [
+        root.as_ref().and_then(non_empty_path),
+        std::env::var("SI_WORKSPACE_ROOT")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+            .map(PathBuf::from),
+        settings
+            .paths
+            .workspace_root
+            .as_ref()
+            .filter(|value| !value.trim().is_empty())
+            .map(PathBuf::from),
+    ];
+    for candidate in candidates.into_iter().flatten() {
+        return Ok(resolve_relative_path(&cwd, &candidate));
+    }
+    let repo_root = git_repo_root_from(&cwd)
+        .map_err(|_| anyhow::Error::msg(format!("unable to infer workspace root from {}", cwd.display())))?;
+    let parent = repo_root.parent().ok_or_else(|| {
+        anyhow::Error::msg(format!("unable to infer workspace root from {}", repo_root.display()))
+    })?;
+    Ok(parent.to_path_buf())
+}
+
+fn non_empty_path(path: &PathBuf) -> Option<PathBuf> {
+    if path.as_os_str().is_empty() {
+        None
+    } else {
+        Some(path.clone())
+    }
+}
+
+fn resolve_relative_path(base: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        base.join(path)
+    }
+}
+
+fn list_github_git_repos(root: &Path) -> Result<Vec<PathBuf>> {
+    let mut repos = Vec::new();
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let repo_path = entry.path();
+        if repo_path.join(".git").exists() {
+            repos.push(repo_path);
+        }
+    }
+    repos.sort();
+    Ok(repos)
+}
+
+fn git_remote_get_url(repo_path: &Path, remote: &str, push: bool) -> Result<String> {
+    let mut args = vec![
+        "-C".to_owned(),
+        repo_path.display().to_string(),
+        "remote".to_owned(),
+        "get-url".to_owned(),
+    ];
+    if push {
+        args.push("--push".to_owned());
+    }
+    args.push(remote.trim().to_owned());
+    run_git_output(&args)
+}
+
+fn git_remote_set_url(repo_path: &Path, remote: &str, value: &str, push: bool) -> Result<()> {
+    let mut args = vec![
+        "-C".to_owned(),
+        repo_path.display().to_string(),
+        "remote".to_owned(),
+        "set-url".to_owned(),
+    ];
+    if push {
+        args.push("--push".to_owned());
+    }
+    args.push(remote.trim().to_owned());
+    args.push(value.trim().to_owned());
+    run_git_no_output(&args)
+}
+
+fn git_clone_repository(remote_url: &str, destination: &Path, remote: &str) -> Result<()> {
+    let mut args = vec!["clone".to_owned()];
+    if !remote.trim().is_empty() && remote.trim() != "origin" {
+        args.push("--origin".to_owned());
+        args.push(remote.trim().to_owned());
+    }
+    args.push(remote_url.trim().to_owned());
+    args.push(destination.display().to_string());
+    run_git_no_output(&args)
+}
+
+fn git_current_branch(repo_path: &Path) -> Result<String> {
+    let branch = run_git_output(&[
+        "-C".to_owned(),
+        repo_path.display().to_string(),
+        "rev-parse".to_owned(),
+        "--abbrev-ref".to_owned(),
+        "HEAD".to_owned(),
+    ])?;
+    if branch.trim().is_empty() || branch.trim() == "HEAD" {
+        return Ok(String::new());
+    }
+    Ok(branch)
+}
+
+fn git_set_branch_config(repo_path: &Path, branch: &str, key: &str, value: &str) -> Result<()> {
+    let name = format!("branch.{}.{}", branch.trim(), key.trim());
+    run_git_no_output(&[
+        "-C".to_owned(),
+        repo_path.display().to_string(),
+        "config".to_owned(),
+        name,
+        value.to_owned(),
+    ])
+}
+
+fn ensure_git_branch_tracking(repo_path: &Path, remote: &str, dry_run: bool) -> Result<String> {
+    let branch = git_current_branch(repo_path)?;
+    if branch.trim().is_empty() {
+        return Ok(if dry_run {
+            "would-skip-detached".to_owned()
+        } else {
+            "detached".to_owned()
+        });
+    }
+    if dry_run {
+        return Ok("would-set".to_owned());
+    }
+    git_set_branch_config(repo_path, &branch, "remote", remote)?;
+    git_set_branch_config(repo_path, &branch, "merge", &format!("refs/heads/{branch}"))?;
+    Ok("set".to_owned())
+}
+
+fn git_config_host_credential_helper(host: &str, helper: &str) -> Result<()> {
+    let host = normalize_git_host(host);
+    if host.trim().is_empty() {
+        return Err(anyhow::Error::msg("git credential host is required"));
+    }
+    run_git_no_output(&[
+        "config".to_owned(),
+        "--global".to_owned(),
+        "--replace-all".to_owned(),
+        format!("credential.https://{host}.helper"),
+        helper.to_owned(),
+    ])
+}
+
+fn git_config_host_use_http_path(host: &str) -> Result<()> {
+    let host = normalize_git_host(host);
+    if host.trim().is_empty() {
+        return Err(anyhow::Error::msg("git credential host is required"));
+    }
+    run_git_no_output(&[
+        "config".to_owned(),
+        "--global".to_owned(),
+        format!("credential.https://{host}.useHttpPath"),
+        "true".to_owned(),
+    ])
+}
+
+fn run_git_output(args: &[String]) -> Result<String> {
+    let output = StdCommand::new("git").args(args).output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = format!("{} {}", stdout.trim(), stderr.trim()).trim().to_owned();
+        return Err(anyhow::Error::msg(format!(
+            "git {} failed{}",
+            args.join(" "),
+            if detail.is_empty() {
+                String::new()
+            } else {
+                format!(": {detail}")
+            }
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+fn run_git_no_output(args: &[String]) -> Result<()> {
+    let _ = run_git_output(args)?;
+    Ok(())
+}
+
+fn plan_github_clone_destination(root: &Path, repo_name: &str, dest: Option<&str>) -> PathBuf {
+    let repo_name = repo_name.trim();
+    let dest = dest.unwrap_or_default().trim();
+    if dest.is_empty() {
+        return root.join(repo_name);
+    }
+    let dest_path = PathBuf::from(dest);
+    if dest_path.is_absolute() {
+        return dest_path;
+    }
+    root.join(dest_path)
+}
+
+fn ensure_clone_destination_available(destination: &Path) -> Result<()> {
+    if destination.as_os_str().is_empty() {
+        return Err(anyhow::Error::msg("destination path is required"));
+    }
+    match fs::metadata(destination) {
+        Ok(metadata) if metadata.is_dir() => {
+            return Err(anyhow::Error::msg(format!(
+                "destination already exists: {}",
+                destination.display()
+            )))
+        }
+        Ok(_) => {
+            return Err(anyhow::Error::msg(format!(
+                "destination path exists and is not a directory: {}",
+                destination.display()
+            )))
+        }
+        Err(err) if err.kind() != std::io::ErrorKind::NotFound => return Err(err.into()),
+        Err(_) => {}
+    }
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    Ok(())
+}
+
+fn build_github_credential_helper_command(
+    use_vault: bool,
+    vault_file: &str,
+    account: &str,
+    owner: &str,
+    base_url: &str,
+    auth_mode: &str,
+    access_token: &str,
+    app_id: i64,
+    app_key: &str,
+    installation_id: i64,
+) -> String {
+    let mut parts = vec!["!si".to_owned()];
+    if use_vault {
+        parts.extend(["vault".to_owned(), "run".to_owned()]);
+        if !vault_file.trim().is_empty() {
+            parts.extend(["--scope".to_owned(), shell_quote(vault_file.trim())]);
+        }
+        parts.extend(["--".to_owned(), "si".to_owned()]);
+    }
+    parts.extend(["github".to_owned(), "git".to_owned(), "credential".to_owned()]);
+    append_helper_arg(&mut parts, "--account", account);
+    append_helper_arg(&mut parts, "--owner", owner);
+    append_helper_arg(&mut parts, "--base-url", base_url);
+    append_helper_arg(&mut parts, "--auth-mode", auth_mode);
+    append_helper_arg(&mut parts, "--token", access_token);
+    if app_id > 0 {
+        parts.extend(["--app-id".to_owned(), app_id.to_string()]);
+    }
+    append_helper_arg(&mut parts, "--app-key", app_key);
+    if installation_id > 0 {
+        parts.extend(["--installation-id".to_owned(), installation_id.to_string()]);
+    }
+    parts.join(" ")
+}
+
+fn append_helper_arg(parts: &mut Vec<String>, flag_name: &str, value: &str) {
+    if value.trim().is_empty() {
+        return;
+    }
+    parts.push(flag_name.to_owned());
+    parts.push(shell_quote(value.trim()));
+}
+
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_owned();
+    }
+    if !value.contains(|ch: char| ch.is_whitespace() || "'\"\\$`".contains(ch)) {
+        return value.to_owned();
+    }
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn build_github_remote_url_with_pat(raw_canonical_url: &str, pat: &str) -> std::result::Result<String, String> {
+    let raw_canonical_url = raw_canonical_url.trim();
+    if raw_canonical_url.is_empty() {
+        return Err("github remote url is required".to_owned());
+    }
+    let pat = pat.trim();
+    if pat.is_empty() {
+        return Err("github PAT is required".to_owned());
+    }
+    let mut parsed =
+        url::Url::parse(raw_canonical_url).map_err(|err| format!("parse github remote url: {err}"))?;
+    if !parsed.scheme().eq_ignore_ascii_case("https") {
+        return Err("github remote url must use https".to_owned());
+    }
+    if normalize_git_host(parsed.host_str().unwrap_or_default()).is_empty() {
+        return Err("github remote url host is required".to_owned());
+    }
+    parsed.set_username(pat).map_err(|_| "github remote url username set failed".to_owned())?;
+    Ok(parsed.to_string())
+}
+
+fn redact_github_remote_pat_url(raw: &str) -> String {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return String::new();
+    }
+    let Ok(mut parsed) = url::Url::parse(raw) else {
+        return raw.to_owned();
+    };
+    let Some(passwordless) = parsed.username().trim().strip_prefix("") else {
+        return raw.to_owned();
+    };
+    if passwordless.is_empty() {
+        return raw.to_owned();
+    }
+    let masked = mask_github_credential_value(parsed.username());
+    let _ = parsed.set_username(&masked);
+    parsed.to_string()
+}
+
+fn mask_github_credential_value(value: &str) -> String {
+    let value = value.trim();
+    if value.len() <= 8 {
+        return "****".to_owned();
+    }
+    format!("{}...{}", &value[..4], &value[value.len() - 4..])
+}
+
+fn resolve_github_git_vault_key_value(
+    settings: &Settings,
+    key: &str,
+    cwd: &Path,
+) -> Result<String> {
+    if let Ok(value) = std::env::var(key) {
+        let value = value.trim().to_owned();
+        if !value.is_empty() {
+            return Ok(value);
+        }
+        return Err(anyhow::Error::msg(format!(
+            "vault key {key:?} resolved to an empty value"
+        )));
+    }
+
+    let mut candidates = Vec::new();
+    if let Ok(path) = std::env::var("SI_VAULT_ENV_FILE") {
+        if !path.trim().is_empty() {
+            candidates.push(resolve_relative_path(cwd, Path::new(path.trim())));
+        }
+    }
+    candidates.push(cwd.join(".env"));
+    if let Some(root) = settings
+        .paths
+        .workspace_root
+        .as_ref()
+        .filter(|value| !value.trim().is_empty())
+        .map(PathBuf::from)
+    {
+        candidates.push(resolve_relative_path(cwd, &root).join(".env"));
+    }
+
+    for candidate in candidates {
+        if !candidate.exists() {
+            continue;
+        }
+        let values = parse_simple_dotenv_file(&candidate)?;
+        if let Some(value) = values.get(key) {
+            let value = value.trim().to_owned();
+            if value.is_empty() {
+                return Err(anyhow::Error::msg(format!(
+                    "vault key {key:?} resolved to an empty value"
+                )));
+            }
+            return Ok(value);
+        }
+    }
+    Err(anyhow::Error::msg(format!(
+        "vault key {key:?} is missing or unreadable"
+    )))
+}
+
+fn parse_simple_dotenv_file(path: &Path) -> Result<BTreeMap<String, String>> {
+    let raw = fs::read_to_string(path)?;
+    let mut values = BTreeMap::new();
+    for raw_line in raw.lines() {
+        let mut line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if let Some(rest) = line.strip_prefix("export ") {
+            line = rest.trim_start();
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        values.insert(key.to_owned(), normalize_simple_dotenv_value(value.trim()));
+    }
+    Ok(values)
+}
+
+fn normalize_simple_dotenv_value(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.len() >= 2 {
+        if (trimmed.starts_with('"') && trimmed.ends_with('"'))
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\''))
+        {
+            return trimmed[1..trimmed.len() - 1].to_owned();
+        }
+    }
+    trimmed.to_owned()
+}
+
+fn count_setup_changes(items: &[GitHubGitSetupRepoChange]) -> usize {
+    items.iter().filter(|item| item.changed).count()
+}
+
+fn count_setup_skipped(items: &[GitHubGitSetupRepoChange]) -> usize {
+    items.iter().filter(|item| !item.skipped.trim().is_empty()).count()
+}
+
+fn count_remote_auth_changed(items: &[GitHubGitRemoteAuthRepoChange]) -> usize {
+    items
+        .iter()
+        .filter(|item| item.changed && item.error.trim().is_empty())
+        .count()
+}
+
+fn count_remote_auth_skipped(items: &[GitHubGitRemoteAuthRepoChange]) -> usize {
+    items.iter().filter(|item| !item.skipped.trim().is_empty()).count()
+}
+
+fn count_remote_auth_errored(items: &[GitHubGitRemoteAuthRepoChange]) -> usize {
+    items.iter().filter(|item| !item.error.trim().is_empty()).count()
 }
 
 #[allow(clippy::too_many_arguments)]

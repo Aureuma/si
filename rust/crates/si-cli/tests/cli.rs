@@ -6665,3 +6665,149 @@ fn write_executable_script(path: &Path, content: &str) {
         fs::set_permissions(path, perms).expect("chmod");
     }
 }
+
+#[test]
+fn github_git_setup_json_dry_run_normalizes_remotes_and_helper() {
+    let home = tempdir().expect("tempdir");
+    let root = tempdir().expect("tempdir");
+    let repo = root.path().join("demo");
+
+    fs::create_dir_all(&repo).expect("create repo");
+    run_git(&repo, &["init"]);
+    run_git(&repo, &["remote", "add", "origin", "git@github.com:Aureuma/demo.git"]);
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "git",
+            "setup",
+            "--root",
+            root.path().to_str().expect("root str"),
+            "--account",
+            "core",
+            "--owner",
+            "Aureuma",
+            "--auth-mode",
+            "oauth",
+            "--dry-run",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["repos_scanned"], 1);
+    assert_eq!(parsed["repos_updated"], 1);
+    assert_eq!(parsed["hosts"][0], "github.com");
+    assert_eq!(
+        parsed["helper_command"],
+        "!si vault run -- si github git credential --account core --auth-mode oauth"
+    );
+    assert_eq!(parsed["changes"][0]["after"], "https://github.com/Aureuma/demo.git");
+}
+
+#[test]
+fn github_git_remote_auth_json_dry_run_reads_pat_from_env() {
+    let home = tempdir().expect("tempdir");
+    let root = tempdir().expect("tempdir");
+    let repo = root.path().join("demo");
+
+    fs::create_dir_all(&repo).expect("create repo");
+    run_git(&repo, &["init"]);
+    run_git(&repo, &["config", "user.email", "test@example.com"]);
+    run_git(&repo, &["config", "user.name", "test"]);
+    run_git(&repo, &["remote", "add", "origin", "https://github.com/Aureuma/demo.git"]);
+    fs::write(repo.join("README.md"), "demo\n").expect("write file");
+    run_git(&repo, &["add", "README.md"]);
+    run_git(&repo, &["commit", "-m", "init"]);
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("GH_PAT", "github_pat_example123")
+        .args([
+            "github",
+            "git",
+            "remote-auth",
+            "--root",
+            root.path().to_str().expect("root str"),
+            "--vault-key",
+            "GH_PAT",
+            "--dry-run",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["repos_scanned"], 1);
+    assert_eq!(parsed["repos_updated"], 1);
+    assert_eq!(parsed["repos_errored"], 0);
+    assert_eq!(parsed["changes"][0]["tracking"], "would-set");
+    let after = parsed["changes"][0]["after"].as_str().expect("after string");
+    assert!(!after.contains("github_pat_example123"));
+    assert!(after.contains("github.com/Aureuma/demo.git"));
+}
+
+#[test]
+fn github_git_clone_auth_json_dry_run_reads_pat_from_env() {
+    let home = tempdir().expect("tempdir");
+    let root = tempdir().expect("tempdir");
+
+    let output = cargo_bin()
+        .env("HOME", home.path())
+        .env("GH_PAT", "github_pat_example123")
+        .args([
+            "github",
+            "git",
+            "clone-auth",
+            "Aureuma/demo",
+            "--root",
+            root.path().to_str().expect("root str"),
+            "--vault-key",
+            "GH_PAT",
+            "--dry-run",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["owner"], "Aureuma");
+    assert_eq!(parsed["name"], "demo");
+    assert_eq!(
+        parsed["destination"],
+        root.path().join("demo").to_str().expect("destination str")
+    );
+    let clone_url = parsed["clone_url"].as_str().expect("clone url string");
+    assert!(!clone_url.contains("github_pat_example123"));
+    assert!(clone_url.contains("github.com/Aureuma/demo.git"));
+}
+
+fn run_git(repo: &Path, args: &[&str]) -> String {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .expect("run git");
+    if !output.status.success() {
+        panic!(
+            "git {} failed: {}{}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
