@@ -678,6 +678,81 @@ fn github_repo_get_json_fetches_repo_with_oauth() {
 }
 
 #[test]
+fn github_project_list_json_fetches_from_graphql_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_list")],
+            r#"{"data":{"organization":{"projectsV2":{"nodes":[{"id":"PVT_123","number":7,"title":"Roadmap","public":true,"closed":false,"url":"https://github.com/orgs/Aureuma/projects/7"}]}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "list",
+            "Aureuma",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["organization"], "Aureuma");
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["projects"][0]["title"], "Roadmap");
+    server.join();
+}
+
+#[test]
+fn github_project_get_json_fetches_from_graphql_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /graphql HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_project_get")],
+            r#"{"data":{"node":{"id":"PVT_123","number":7,"title":"Roadmap","public":true,"closed":false,"url":"https://github.com/orgs/Aureuma/projects/7","items":{"totalCount":3},"fields":{"totalCount":4}}}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "project",
+            "get",
+            "PVT_123",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["project"]["id"], "PVT_123");
+    assert_eq!(parsed["project"]["title"], "Roadmap");
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
