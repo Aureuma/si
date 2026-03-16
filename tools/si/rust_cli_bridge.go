@@ -435,6 +435,66 @@ func runCloudflareLogsCommand(args []string) (bool, error) {
 	}
 }
 
+func runCloudflareResourceAtPath(prefix []string, args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append(append([]string{}, prefix...), append([]string{"list"}, args[1:]...)...)...)
+	case "get":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append(append([]string{}, prefix...), append([]string{"get"}, args[1:]...)...)...)
+	case "create":
+		return maybeDispatchRustCLICompat("cloudflare", append(append([]string{}, prefix...), append([]string{"create"}, args[1:]...)...)...)
+	case "update":
+		return maybeDispatchRustCLICompat("cloudflare", append(append([]string{}, prefix...), append([]string{"update"}, args[1:]...)...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLICompat("cloudflare", append(append([]string{}, prefix...), append([]string{"delete"}, args[1:]...)...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareEmailCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "rule", "rules", "route", "routes":
+		return runCloudflareResourceAtPath([]string{"email", "rule"}, args[1:])
+	case "address", "addresses", "destination", "destinations":
+		return runCloudflareResourceAtPath([]string{"email", "address"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareWorkersCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "script", "scripts":
+		return runCloudflareResourceAtPath([]string{"workers", "script"}, args[1:])
+	case "route", "routes":
+		return runCloudflareResourceAtPath([]string{"workers", "route"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflarePagesCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "project", "projects":
+		return runCloudflareResourceAtPath([]string{"pages", "project"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runCloudflareAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -462,6 +522,26 @@ func runCloudflareCommand(args []string) (bool, error) {
 		return runCloudflareReportCommand(args[1:])
 	case "smoke":
 		return runCloudflareSmokeCommand(args[1:])
+	case "zone":
+		return runCloudflareResourceAtPath([]string{"zone"}, args[1:])
+	case "dns":
+		return runCloudflareResourceAtPath([]string{"dns"}, args[1:])
+	case "email":
+		return runCloudflareEmailCommand(args[1:])
+	case "token", "tokens":
+		return runCloudflareResourceAtPath([]string{"token"}, args[1:])
+	case "ruleset":
+		return runCloudflareResourceAtPath([]string{"ruleset"}, args[1:])
+	case "firewall":
+		return runCloudflareResourceAtPath([]string{"firewall"}, args[1:])
+	case "ratelimit":
+		return runCloudflareResourceAtPath([]string{"ratelimit"}, args[1:])
+	case "workers":
+		return runCloudflareWorkersCommand(args[1:])
+	case "pages":
+		return runCloudflarePagesCommand(args[1:])
+	case "queue", "queues":
+		return runCloudflareResourceAtPath([]string{"queue"}, args[1:])
 	case "logs":
 		return runCloudflareLogsCommand(args[1:])
 	case "raw", "api":
