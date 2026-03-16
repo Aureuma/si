@@ -245,6 +245,13 @@ func cmdOCIAuthStatus(args []string) {
 }
 
 func cmdOCIContext(args []string) {
+	delegated, err := runOCIContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci context <list|current|use>")
 	if !routedOK {
 		return

@@ -383,6 +383,20 @@ func runAppleAppStoreContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "current"}, args...)...)
 }
 
+func runAppleAppStoreContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runAppleAppStoreContextListCommand(args[1:])
+	case "current":
+		return runAppleAppStoreContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runAppleAppStoreAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -433,6 +447,20 @@ func runAWSContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "current"}, args...)...)
 }
 
+func runAWSContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runAWSContextListCommand(args[1:])
+	case "current":
+		return runAWSContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runAWSAuthCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth"}, args...)...)
 }
@@ -453,6 +481,20 @@ func runGCPContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"context", "current"}, args...)...)
 }
 
+func runGCPContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runGCPContextListCommand(args[1:])
+	case "current":
+		return runGCPContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGCPAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"auth", "status"}, args...)...)
 }
@@ -463,6 +505,20 @@ func runGooglePlacesContextListCommand(args []string) (bool, error) {
 
 func runGooglePlacesContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "context", "current"}, args...)...)
+}
+
+func runGooglePlacesContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runGooglePlacesContextListCommand(args[1:])
+	case "current":
+		return runGooglePlacesContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runGooglePlacesAuthCommand(args []string) (bool, error) {
@@ -479,6 +535,20 @@ func runOpenAIContextListCommand(args []string) (bool, error) {
 
 func runOpenAIContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "current"}, args...)...)
+}
+
+func runOpenAIContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOpenAIContextListCommand(args[1:])
+	case "current":
+		return runOpenAIContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runOpenAIAuthStatusCommand(args []string) (bool, error) {
@@ -559,6 +629,20 @@ func runOCIContextListCommand(args []string) (bool, error) {
 
 func runOCIContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "current"}, args...)...)
+}
+
+func runOCIContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runOCIContextListCommand(args[1:])
+	case "current":
+		return runOCIContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runOCIAuthCommand(args []string) (bool, error) {

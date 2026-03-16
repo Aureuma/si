@@ -390,6 +390,13 @@ func formatCodexProfileSummary(profile codexProfile) string {
 }
 
 func cmdOpenAIContext(args []string) {
+	delegated, err := runOpenAIContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai context <list|current|use>")
 	if !routedOK {
 		return

@@ -218,6 +218,13 @@ func cmdGCPAuthStatus(args []string) {
 }
 
 func cmdGCPContext(args []string) {
+	delegated, err := runGCPContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp context <list|current|use>")
 	if !routedOK {
 		return

@@ -318,6 +318,13 @@ func cmdGooglePlacesAuthStatus(args []string) {
 }
 
 func cmdGooglePlacesContext(args []string) {
+	delegated, err := runGooglePlacesContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places context <list|current|use>")
 	if !routedOK {
 		return
