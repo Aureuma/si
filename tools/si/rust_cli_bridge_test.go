@@ -2144,6 +2144,74 @@ func TestRunGCPCommandDelegatesToRustCLIForIAM(t *testing.T) {
 	}
 }
 
+func TestRunGCPCommandDelegatesToRustCLIForGemini(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-gemini'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"gemini", "models", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp gemini to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-gemini" {
+		t.Fatalf("expected delegated Rust gcp gemini output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\ngemini\nmodels\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp gemini + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGCPCommandDelegatesAIWrapperToRustCLIForGemini(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-ai-gemini'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"ai", "gemini", "models", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp ai gemini to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-ai-gemini" {
+		t.Fatalf("expected delegated Rust gcp ai gemini output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\ngemini\nmodels\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp gemini + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPCommandDelegatesToRustCLIForService(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
