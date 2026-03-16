@@ -472,6 +472,110 @@ pub fn get_repo(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn list_projects(
+    runtime: &GitHubRuntime,
+    organization: &str,
+    limit: usize,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+query($org:String!,$first:Int!){
+  organization(login:$org) {
+    projectsV2(first:$first, orderBy:{field:UPDATED_AT,direction:DESC}) {
+      nodes {
+        id
+        number
+        title
+        shortDescription
+        public
+        closed
+        url
+        updatedAt
+      }
+    }
+  }
+}
+"#;
+    let variables = serde_json::json!({
+        "org": organization.trim(),
+        "first": if limit == 0 { 30 } else { limit },
+    });
+    github_graphql(runtime, organization, query, variables)
+}
+
+pub fn resolve_project_id(
+    runtime: &GitHubRuntime,
+    organization: &str,
+    number: i64,
+) -> Result<String, String> {
+    let query = r#"
+query($org:String!,$number:Int!){
+  organization(login:$org) {
+    projectV2(number:$number) {
+      id
+      number
+      title
+      url
+      closed
+      public
+    }
+  }
+}
+"#;
+    let response = github_graphql(
+        runtime,
+        organization,
+        query,
+        serde_json::json!({
+            "org": organization.trim(),
+            "number": number,
+        }),
+    )?;
+    let project_id = response
+        .data
+        .as_ref()
+        .and_then(|data| data.get("organization"))
+        .and_then(|organization| organization.get("projectV2"))
+        .and_then(|project| project.get("id"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if project_id.is_empty() {
+        return Err(format!("project not found: {}/{}", organization.trim(), number));
+    }
+    Ok(project_id)
+}
+
+pub fn get_project(runtime: &GitHubRuntime, project_id: &str) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+query($id:ID!){
+  node(id:$id) {
+    ... on ProjectV2 {
+      id
+      number
+      title
+      shortDescription
+      readme
+      public
+      closed
+      url
+      updatedAt
+      items(first:1) { totalCount }
+      fields(first:1) { totalCount }
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "id": project_id.trim(),
+        }),
+    )
+}
+
 pub fn get_release(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -995,6 +1099,48 @@ fn github_get(
         .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(token)))?)
         .send()
         .map_err(|err| format!("github request failed: {err}"))
+}
+
+fn github_graphql(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    query: &str,
+    variables: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, "")?;
+    let url = resolve_url(&runtime.base_url, "/graphql", &BTreeMap::new())?;
+    let response = client
+        .post(url)
+        .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(&token)))?)
+        .json(&serde_json::json!({
+            "query": query.trim(),
+            "variables": variables,
+        }))
+        .send()
+        .map_err(|err| format!("github request failed: {err}"))?;
+    let mut payload = normalize_response(response)?;
+    let Some(root) = payload.data.as_ref() else {
+        return Err("graphql response missing body".to_owned());
+    };
+    if let Some(errors) = root.get("errors").and_then(Value::as_array) {
+        let messages = errors
+            .iter()
+            .filter_map(|item| item.get("message").and_then(Value::as_str))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .collect::<Vec<_>>();
+        if messages.is_empty() {
+            return Err("graphql returned errors".to_owned());
+        }
+        return Err(format!("graphql returned errors: {}", messages.join("; ")));
+    }
+    let data = root
+        .get("data")
+        .cloned()
+        .ok_or_else(|| "graphql response missing data".to_owned())?;
+    payload.data = Some(data);
+    Ok(payload)
 }
 
 fn default_headers(auth_value: &str) -> Result<HeaderMap, String> {
