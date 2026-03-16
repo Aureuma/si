@@ -648,4 +648,42 @@ mod tests {
         assert_eq!(resolved.source, "settings.default_account,settings.auth_mode,env:GITHUB_TOKEN");
         assert_eq!(resolved.token_preview, "gho_exam...");
     }
+
+    #[test]
+    fn resolve_auth_status_uses_app_sources() {
+        let mut accounts = BTreeMap::new();
+        accounts.insert(
+            "core".to_owned(),
+            GitHubAccountEntry {
+                owner: Some("Aureuma".to_owned()),
+                ..GitHubAccountEntry::default()
+            },
+        );
+        let settings = GitHubSettings {
+            default_account: Some("core".to_owned()),
+            default_auth_mode: Some("app".to_owned()),
+            accounts,
+            ..GitHubSettings::default()
+        };
+        let mut env = BTreeMap::new();
+        env.insert("GITHUB_CORE_APP_ID".to_owned(), "42".to_owned());
+        env.insert(
+            "GITHUB_CORE_APP_PRIVATE_KEY_PEM".to_owned(),
+            "-----BEGIN PRIVATE KEY-----abc".to_owned(),
+        );
+        env.insert("GITHUB_CORE_INSTALLATION_ID".to_owned(), "99".to_owned());
+
+        let resolved =
+            resolve_auth_status(&settings, &env, &GitHubAuthOverrides::default()).unwrap();
+
+        assert_eq!(resolved.account_alias, "core");
+        assert_eq!(resolved.owner, "Aureuma");
+        assert_eq!(resolved.auth_mode, "app");
+        assert_eq!(resolved.base_url, "https://api.github.com");
+        assert_eq!(
+            resolved.source,
+            "settings.default_account,settings.default_auth_mode,env:GITHUB_CORE_APP_ID,env:GITHUB_CORE_APP_PRIVATE_KEY_PEM,env:GITHUB_CORE_INSTALLATION_ID"
+        );
+        assert_eq!(resolved.token_preview, "-");
+    }
 }
