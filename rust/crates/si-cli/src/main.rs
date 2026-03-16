@@ -67,8 +67,10 @@ use si_rs_provider_github::{
     archive_project_item as github_archive_project_item,
     clear_project_item_field_value as github_clear_project_item_field_value,
     comment_issue as github_comment_issue,
+    create_branch as github_create_branch,
     create_issue as github_create_issue,
     create_pull_request as github_create_pull_request,
+    delete_branch as github_delete_branch,
     delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
@@ -81,7 +83,9 @@ use si_rs_provider_github::{
     list_releases as github_list_releases, list_repos as github_list_repos,
     get_workflow_logs as github_get_workflow_logs,
     list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
+    GitHubBranchCreateOptions, GitHubBranchProtectionOptions,
     graphql_query as github_graphql_query,
+    protect_branch as github_protect_branch,
     raw_get as github_raw_get,
     resolve_access_token as github_resolve_access_token,
     render_context_list_text, resolve_auth_status, resolve_current_context,
@@ -90,6 +94,7 @@ use si_rs_provider_github::{
     comment_pull_request as github_comment_pull_request,
     merge_pull_request as github_merge_pull_request,
     get_workflow_run as github_get_workflow_run,
+    unprotect_branch as github_unprotect_branch,
     unarchive_project_item as github_unarchive_project_item,
     update_project as github_update_project,
     update_project_item_field_value as github_update_project_item_field_value,
@@ -1643,6 +1648,168 @@ enum GitHubBranchCommand {
         installation_id: Option<i64>,
         #[arg(long = "param")]
         params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        repo_ref: Option<String>,
+        branch: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long = "from")]
+        from_branch: Option<String>,
+        #[arg(long)]
+        sha: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        repo_ref: Option<String>,
+        branch: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Protect {
+        repo_ref: Option<String>,
+        branch: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        strict: bool,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        enforce_admins: bool,
+        #[arg(long, default_value_t = 1)]
+        required_approvals: i64,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        dismiss_stale_reviews: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        require_code_owner_reviews: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        require_last_push_approval: bool,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        require_conversation_resolution: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        allow_force_pushes: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        allow_deletions: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        disable_status_checks: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        disable_pr_reviews: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        disable_restrictions: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        block_creations: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        require_linear_history: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        lock_branch: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        allow_fork_syncing: bool,
+        #[arg(long = "required-check")]
+        required_checks: Vec<String>,
+        #[arg(long = "restrict-user")]
+        restrict_users: Vec<String>,
+        #[arg(long = "restrict-team")]
+        restrict_teams: Vec<String>,
+        #[arg(long = "restrict-app")]
+        restrict_apps: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Unprotect {
+        repo_ref: Option<String>,
+        branch: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -5564,6 +5731,180 @@ fn main() -> Result<()> {
                     app_key,
                     installation_id,
                     params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubBranchCommand::Create {
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    name,
+                    from_branch,
+                    sha,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_branch_create(
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    name,
+                    from_branch,
+                    sha,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubBranchCommand::Delete {
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_branch_delete(
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubBranchCommand::Protect {
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    strict,
+                    enforce_admins,
+                    required_approvals,
+                    dismiss_stale_reviews,
+                    require_code_owner_reviews,
+                    require_last_push_approval,
+                    require_conversation_resolution,
+                    allow_force_pushes,
+                    allow_deletions,
+                    disable_status_checks,
+                    disable_pr_reviews,
+                    disable_restrictions,
+                    block_creations,
+                    require_linear_history,
+                    lock_branch,
+                    allow_fork_syncing,
+                    required_checks,
+                    restrict_users,
+                    restrict_teams,
+                    restrict_apps,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_branch_protect(
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    strict,
+                    enforce_admins,
+                    required_approvals,
+                    dismiss_stale_reviews,
+                    require_code_owner_reviews,
+                    require_last_push_approval,
+                    require_conversation_resolution,
+                    allow_force_pushes,
+                    allow_deletions,
+                    disable_status_checks,
+                    disable_pr_reviews,
+                    disable_restrictions,
+                    block_creations,
+                    require_linear_history,
+                    lock_branch,
+                    allow_fork_syncing,
+                    required_checks,
+                    restrict_users,
+                    restrict_teams,
+                    restrict_apps,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubBranchCommand::Unprotect {
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_branch_unprotect(
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
                     home,
                     settings_file,
                     json,
@@ -9708,6 +10049,29 @@ fn parse_github_owner_repo(repo_ref: &str, default_owner: &str) -> Result<(Strin
     Ok((owner.to_owned(), trimmed.to_owned()))
 }
 
+fn normalize_github_branch_name(value: &str) -> String {
+    value
+        .trim()
+        .trim_start_matches("refs/heads/")
+        .trim_start_matches("heads/")
+        .trim_matches('/')
+        .to_owned()
+}
+
+fn unique_non_empty_strings(values: Vec<String>) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut seen = BTreeMap::new();
+    for value in values {
+        let trimmed = value.trim();
+        if trimmed.is_empty() || seen.contains_key(trimmed) {
+            continue;
+        }
+        seen.insert(trimmed.to_owned(), ());
+        out.push(trimmed.to_owned());
+    }
+    out
+}
+
 #[derive(Debug, Default)]
 struct GitHubGitCredentialRequest {
     protocol: String,
@@ -11569,6 +11933,242 @@ fn run_github_branch_get(
     let response =
         github_get_branch(&runtime, &repo_owner, &repo_name, &branch, &params)
             .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_branch_create(
+    repo_ref: Option<String>,
+    branch: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    name: Option<String>,
+    from_branch: Option<String>,
+    sha: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let branch_name = normalize_github_branch_name(
+        name.or(branch).as_deref().unwrap_or_default(),
+    );
+    if branch_name.trim().is_empty() {
+        return Err(anyhow::Error::msg(
+            "branch name is required (use [branch] or --name)",
+        ));
+    }
+    let sha = sha.unwrap_or_default();
+    let from_branch = from_branch.unwrap_or_default();
+    if !sha.trim().is_empty() && sha.trim().eq_ignore_ascii_case(from_branch.trim()) {
+        return Err(anyhow::Error::msg("--sha and --from must not be the same value"));
+    }
+    let response = github_create_branch(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        &GitHubBranchCreateOptions {
+            name: branch_name,
+            from_branch,
+            sha,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_branch_delete(
+    repo_ref: Option<String>,
+    branch: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("branch deletion requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let branch = normalize_github_branch_name(branch.as_deref().unwrap_or_default());
+    if branch.trim().is_empty() {
+        return Err(anyhow::Error::msg("branch is required"));
+    }
+    let response =
+        github_delete_branch(&runtime, &repo_owner, &repo_name, &branch).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_branch_protect(
+    repo_ref: Option<String>,
+    branch: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    strict: bool,
+    enforce_admins: bool,
+    required_approvals: i64,
+    dismiss_stale_reviews: bool,
+    require_code_owner_reviews: bool,
+    require_last_push_approval: bool,
+    require_conversation_resolution: bool,
+    allow_force_pushes: bool,
+    allow_deletions: bool,
+    disable_status_checks: bool,
+    disable_pr_reviews: bool,
+    disable_restrictions: bool,
+    block_creations: bool,
+    require_linear_history: bool,
+    lock_branch: bool,
+    allow_fork_syncing: bool,
+    required_checks: Vec<String>,
+    restrict_users: Vec<String>,
+    restrict_teams: Vec<String>,
+    restrict_apps: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let branch = normalize_github_branch_name(branch.as_deref().unwrap_or_default());
+    if branch.trim().is_empty() {
+        return Err(anyhow::Error::msg("branch is required"));
+    }
+    let response = github_protect_branch(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        &branch,
+        &GitHubBranchProtectionOptions {
+            strict_checks: strict,
+            enforce_admins,
+            required_approvals: required_approvals.clamp(0, 6),
+            dismiss_stale_reviews,
+            require_code_owner_reviews,
+            require_last_push_approval,
+            require_conversation_resolution,
+            allow_force_pushes,
+            allow_deletions,
+            disable_status_checks,
+            disable_pr_reviews,
+            disable_restrictions,
+            block_creations,
+            require_linear_history,
+            lock_branch,
+            allow_fork_syncing,
+            required_checks: unique_non_empty_strings(required_checks),
+            restrict_users: unique_non_empty_strings(restrict_users),
+            restrict_teams: unique_non_empty_strings(restrict_teams),
+            restrict_apps: unique_non_empty_strings(restrict_apps),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_branch_unprotect(
+    repo_ref: Option<String>,
+    branch: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("branch protection removal requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let branch = normalize_github_branch_name(branch.as_deref().unwrap_or_default());
+    if branch.trim().is_empty() {
+        return Err(anyhow::Error::msg("branch is required"));
+    }
+    let response = github_unprotect_branch(&runtime, &repo_owner, &repo_name, &branch)
+        .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
