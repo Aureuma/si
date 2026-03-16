@@ -603,6 +603,13 @@ func cmdAppleAppStoreAuth(args []string) {
 }
 
 func cmdAppleAppStoreAuthStatus(args []string) {
+	delegated, err := runAppleAppStoreAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	fs, common := appleAppStoreCommonFlagSet("apple appstore auth status", args, false)
 	verify := fs.Bool("verify", true, "verify token against /v1/apps?limit=1")
 	_ = fs.Parse(args)

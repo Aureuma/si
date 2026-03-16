@@ -32,8 +32,10 @@ use si_rs_fort::{
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_apple::{
-    AppleAppStoreContextListEntry, AppleAppStoreCurrentContext, list_appstore_contexts,
+    AppleAppStoreAuthOverrides, AppleAppStoreAuthStatus, AppleAppStoreContextListEntry,
+    AppleAppStoreCurrentContext, list_appstore_contexts,
     render_appstore_context_list_text,
+    resolve_auth_status as resolve_apple_appstore_auth_status,
     resolve_current_context as resolve_apple_appstore_current_context,
 };
 use si_rs_provider_aws::{
@@ -303,9 +305,51 @@ enum AppleCommand {
 
 #[derive(Debug, Subcommand)]
 enum AppleAppStoreCommand {
+    Auth {
+        #[command(subcommand)]
+        command: AppleAppStoreAuthCommand,
+    },
     Context {
         #[command(subcommand)]
         command: AppleAppStoreContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AppleAppStoreAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        bundle_id: Option<String>,
+        #[arg(long)]
+        locale: Option<String>,
+        #[arg(long)]
+        platform: Option<String>,
+        #[arg(long)]
+        issuer_id: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
+        #[arg(long)]
+        private_key: Option<String>,
+        #[arg(long)]
+        private_key_file: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        verify: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -2269,6 +2313,37 @@ impl From<AppleAppStoreCurrentContext> for AppleAppStoreCurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct AppleAppStoreAuthStatusPayload {
+    status: String,
+    account_alias: String,
+    project_id: String,
+    environment: String,
+    source: String,
+    token_source: String,
+    bundle_id: String,
+    locale: String,
+    platform: String,
+    base_url: String,
+}
+
+impl From<AppleAppStoreAuthStatus> for AppleAppStoreAuthStatusPayload {
+    fn from(value: AppleAppStoreAuthStatus) -> Self {
+        Self {
+            status: value.status,
+            account_alias: value.account_alias,
+            project_id: value.project_id,
+            environment: value.environment,
+            source: value.source,
+            token_source: value.token_source,
+            bundle_id: value.bundle_id,
+            locale: value.locale,
+            platform: value.platform,
+            base_url: value.base_url,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct AWSContextListPayload {
     contexts: Vec<AWSContextListEntry>,
 }
@@ -3071,6 +3146,45 @@ fn main() -> Result<()> {
         },
         Command::Apple { command } => match command {
             AppleCommand::AppStore { command } => match command {
+                AppleAppStoreCommand::Auth { command } => match command {
+                    AppleAppStoreAuthCommand::Status {
+                        account,
+                        env,
+                        bundle_id,
+                        locale,
+                        platform,
+                        issuer_id,
+                        key_id,
+                        private_key,
+                        private_key_file,
+                        project_id,
+                        base_url,
+                        verify,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        show_apple_appstore_auth_status(
+                            account,
+                            env,
+                            bundle_id,
+                            locale,
+                            platform,
+                            issuer_id,
+                            key_id,
+                            private_key,
+                            private_key_file,
+                            project_id,
+                            base_url,
+                            verify,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
                 AppleAppStoreCommand::Context { command } => match command {
                     AppleAppStoreContextCommand::List { home, settings_file, json, format } => {
                         let format = if json { OutputFormat::Json } else { format };
@@ -4962,6 +5076,81 @@ fn show_cloudflare_context_list(
             )
         }
         OutputFormat::Text => print!("{}", render_cloudflare_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_apple_appstore_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    bundle_id: Option<String>,
+    locale: Option<String>,
+    platform: Option<String>,
+    issuer_id: Option<String>,
+    key_id: Option<String>,
+    private_key: Option<String>,
+    private_key_file: Option<String>,
+    project_id: Option<String>,
+    base_url: Option<String>,
+    verify: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    if verify {
+        return Err(anyhow::anyhow!(
+            "apple appstore auth verification is not yet implemented in Rust; rerun with --verify=false or use the Go fallback"
+        ));
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = AppleAppStoreAuthStatusPayload::from(
+        resolve_apple_appstore_auth_status(
+            &settings.apple,
+            &env,
+            &AppleAppStoreAuthOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                bundle_id: bundle_id.unwrap_or_default(),
+                locale: locale.unwrap_or_default(),
+                platform: platform.unwrap_or_default(),
+                issuer_id: issuer_id.unwrap_or_default(),
+                key_id: key_id.unwrap_or_default(),
+                private_key: private_key.unwrap_or_default(),
+                private_key_file: private_key_file.unwrap_or_default(),
+                project_id: project_id.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("Apple App Store auth: {}", payload.status);
+            println!(
+                "Context: account={} ({}) env={} bundle={} platform={}",
+                account,
+                or_dash(&payload.project_id),
+                payload.environment,
+                or_dash(&payload.bundle_id),
+                payload.platform
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Token source: {}", or_dash(&payload.token_source));
+        }
     }
     Ok(())
 }

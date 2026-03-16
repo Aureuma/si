@@ -379,6 +379,38 @@ func runAppleAppStoreContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "current"}, args...)...)
 }
 
+func runAppleAppStoreAuthStatusCommand(args []string) (bool, error) {
+	if appleAppStoreAuthStatusVerifyEnabled(args) {
+		return false, nil
+	}
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "auth", "status"}, args...)...)
+}
+
+func appleAppStoreAuthStatusVerifyEnabled(args []string) bool {
+	verify := true
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--verify":
+			if idx+1 < len(args) {
+				next := strings.TrimSpace(args[idx+1])
+				if next == "false" || next == "0" {
+					verify = false
+					idx++
+				}
+			}
+		case arg == "--verify=false", arg == "--verify=0":
+			verify = false
+		case arg == "--verify=true", arg == "--verify=1":
+			verify = true
+		case strings.HasPrefix(arg, "--verify="):
+			value := strings.TrimSpace(strings.TrimPrefix(arg, "--verify="))
+			verify = value != "false" && value != "0"
+		}
+	}
+	return verify
+}
+
 func runAWSContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "list"}, args...)...)
 }

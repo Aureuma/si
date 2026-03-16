@@ -27,6 +27,35 @@ pub struct AppleAppStoreCurrentContext {
     pub base_url: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AppleAppStoreAuthOverrides {
+    pub account: String,
+    pub environment: String,
+    pub bundle_id: String,
+    pub locale: String,
+    pub platform: String,
+    pub issuer_id: String,
+    pub key_id: String,
+    pub private_key: String,
+    pub private_key_file: String,
+    pub project_id: String,
+    pub base_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct AppleAppStoreAuthStatus {
+    pub status: String,
+    pub account_alias: String,
+    pub project_id: String,
+    pub environment: String,
+    pub source: String,
+    pub token_source: String,
+    pub bundle_id: String,
+    pub locale: String,
+    pub platform: String,
+    pub base_url: String,
+}
+
 pub fn list_appstore_contexts(settings: &AppleSettings) -> Vec<AppleAppStoreContextListEntry> {
     let mut rows = Vec::with_capacity(settings.appstore.accounts.len());
     for (alias, account) in &settings.appstore.accounts {
@@ -86,8 +115,8 @@ pub fn resolve_current_context(
     settings: &AppleSettings,
     env: &BTreeMap<String, String>,
 ) -> Result<AppleAppStoreCurrentContext, String> {
-    let (alias, account) = resolve_account_selection(settings, env);
-    let environment = resolve_environment(settings, env)?;
+    let (alias, account) = resolve_account_selection(settings, env, "");
+    let environment = resolve_environment(settings, env, "")?;
     let base_url = first_non_empty(&[
         settings.appstore.api_base_url.as_deref(),
         settings.api_base_url.as_deref(),
@@ -125,11 +154,75 @@ pub fn resolve_current_context(
     })
 }
 
+pub fn resolve_auth_status(
+    settings: &AppleSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &AppleAppStoreAuthOverrides,
+) -> Result<AppleAppStoreAuthStatus, String> {
+    let (alias, account) = resolve_account_selection(settings, env, &overrides.account);
+    let environment = resolve_environment(settings, env, &overrides.environment)?;
+    let base_url = first_non_empty(&[
+        Some(overrides.base_url.as_str()),
+        settings.appstore.api_base_url.as_deref(),
+        settings.api_base_url.as_deref(),
+        env.get("APPLE_APPSTORE_API_BASE_URL").map(String::as_str),
+        Some("https://api.appstoreconnect.apple.com"),
+    ])
+    .to_owned();
+
+    let (project_id, project_source) =
+        resolve_project_id_with_override(overrides.project_id.as_str(), &alias, &account, env);
+    let (bundle_id, bundle_source) =
+        resolve_bundle_id_with_override(overrides.bundle_id.as_str(), &alias, &account, env);
+    let (locale, locale_source) =
+        resolve_locale_with_override(overrides.locale.as_str(), &alias, &account, env);
+    let (platform, platform_source) = resolve_platform_with_override(
+        overrides.platform.as_str(),
+        &alias,
+        &account,
+        env,
+    )?;
+    let (_, issuer_source) =
+        resolve_issuer_id_with_override(overrides.issuer_id.as_str(), &alias, &account, env)?;
+    let (_, key_source) =
+        resolve_key_id_with_override(overrides.key_id.as_str(), &alias, &account, env)?;
+    let token_source = resolve_private_key_source_with_override(
+        overrides.private_key.as_str(),
+        overrides.private_key_file.as_str(),
+        &alias,
+        &account,
+        env,
+    )?;
+    let source = join_sources(&[
+        project_source,
+        bundle_source,
+        locale_source,
+        platform_source,
+        issuer_source,
+        key_source,
+    ]);
+
+    Ok(AppleAppStoreAuthStatus {
+        status: "ready".to_owned(),
+        account_alias: alias,
+        project_id,
+        environment,
+        source,
+        token_source,
+        bundle_id,
+        locale,
+        platform,
+        base_url,
+    })
+}
+
 fn resolve_account_selection(
     settings: &AppleSettings,
     env: &BTreeMap<String, String>,
+    override_account: &str,
 ) -> (String, AppleAppStoreAccountEntry) {
     let mut selected = first_non_empty(&[
+        Some(override_account),
         settings.default_account.as_deref(),
         env.get("APPLE_DEFAULT_ACCOUNT").map(String::as_str),
     ])
@@ -149,8 +242,10 @@ fn resolve_account_selection(
 fn resolve_environment(
     settings: &AppleSettings,
     env: &BTreeMap<String, String>,
+    override_environment: &str,
 ) -> Result<String, String> {
     let raw = first_non_empty(&[
+        Some(override_environment),
         settings.default_env.as_deref(),
         env.get("APPLE_DEFAULT_ENV").map(String::as_str),
         Some("prod"),
@@ -158,6 +253,19 @@ fn resolve_environment(
     normalize_environment(Some(raw))
         .map(str::to_owned)
         .ok_or_else(|| "environment required (prod|staging|dev)".to_owned())
+}
+
+fn resolve_project_id_with_override(
+    override_project_id: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> (String, String) {
+    let override_project_id = override_project_id.trim();
+    if !override_project_id.is_empty() {
+        return (override_project_id.to_owned(), "flag:--project-id".to_owned());
+    }
+    resolve_project_id(alias, account, env)
 }
 
 fn resolve_project_id(
@@ -193,6 +301,19 @@ fn resolve_project_id(
     (String::new(), String::new())
 }
 
+fn resolve_bundle_id_with_override(
+    override_bundle_id: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> (String, String) {
+    let override_bundle_id = override_bundle_id.trim();
+    if !override_bundle_id.is_empty() {
+        return (override_bundle_id.to_owned(), "flag:--bundle-id".to_owned());
+    }
+    resolve_bundle_id(alias, account, env)
+}
+
 fn resolve_bundle_id(
     alias: &str,
     account: &AppleAppStoreAccountEntry,
@@ -217,6 +338,18 @@ fn resolve_bundle_id(
     (String::new(), String::new())
 }
 
+fn resolve_locale_with_override(
+    override_locale: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> (String, String) {
+    if let Some(locale) = normalize_locale(Some(override_locale)) {
+        return (locale.to_owned(), "flag:--locale".to_owned());
+    }
+    resolve_locale(alias, account, env)
+}
+
 fn resolve_locale(
     alias: &str,
     account: &AppleAppStoreAccountEntry,
@@ -237,6 +370,24 @@ fn resolve_locale(
         return (locale.to_owned(), "env:APPLE_APPSTORE_LOCALE".to_owned());
     }
     ("en-US".to_owned(), "default".to_owned())
+}
+
+fn resolve_platform_with_override(
+    override_platform: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> Result<(String, String), String> {
+    let override_platform = override_platform.trim();
+    if !override_platform.is_empty() {
+        if let Some(platform) = normalize_platform(Some(override_platform)) {
+            return Ok((platform.to_owned(), "flag:--platform".to_owned()));
+        }
+        return Err(format!(
+            "invalid --platform {override_platform:?} (expected IOS|MAC_OS|TV_OS|VISION_OS)"
+        ));
+    }
+    resolve_platform(alias, account, env)
 }
 
 fn resolve_platform(
@@ -268,6 +419,19 @@ fn resolve_platform(
         ));
     }
     Ok(("IOS".to_owned(), "default".to_owned()))
+}
+
+fn resolve_issuer_id_with_override(
+    override_issuer_id: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> Result<(String, String), String> {
+    let override_issuer_id = override_issuer_id.trim();
+    if !override_issuer_id.is_empty() {
+        return Ok((override_issuer_id.to_owned(), "flag:--issuer-id".to_owned()));
+    }
+    resolve_issuer_id(alias, account, env)
 }
 
 fn resolve_issuer_id(
@@ -306,6 +470,19 @@ fn resolve_issuer_id(
     Err("apple appstore issuer id not found (set APPLE_<ACCOUNT>_APPSTORE_ISSUER_ID or APPLE_APPSTORE_ISSUER_ID)".to_owned())
 }
 
+fn resolve_key_id_with_override(
+    override_key_id: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> Result<(String, String), String> {
+    let override_key_id = override_key_id.trim();
+    if !override_key_id.is_empty() {
+        return Ok((override_key_id.to_owned(), "flag:--key-id".to_owned()));
+    }
+    resolve_key_id(alias, account, env)
+}
+
 fn resolve_key_id(
     alias: &str,
     account: &AppleAppStoreAccountEntry,
@@ -336,6 +513,26 @@ fn resolve_key_id(
         return Ok((value.to_owned(), "env:APPLE_APPSTORE_KEY_ID".to_owned()));
     }
     Err("apple appstore key id not found (set APPLE_<ACCOUNT>_APPSTORE_KEY_ID or APPLE_APPSTORE_KEY_ID)".to_owned())
+}
+
+fn resolve_private_key_source_with_override(
+    override_private_key: &str,
+    override_private_key_file: &str,
+    alias: &str,
+    account: &AppleAppStoreAccountEntry,
+    env: &BTreeMap<String, String>,
+) -> Result<String, String> {
+    let override_private_key = override_private_key.trim();
+    if !override_private_key.is_empty() {
+        return validate_private_key_value(override_private_key)
+            .map(|_| "flag:--private-key".to_owned());
+    }
+    let override_private_key_file = override_private_key_file.trim();
+    if !override_private_key_file.is_empty() {
+        return validate_private_key_file(override_private_key_file)
+            .map(|_| "flag:--private-key-file".to_owned());
+    }
+    resolve_private_key_source(alias, account, env)
 }
 
 fn resolve_private_key_source(
@@ -599,6 +796,42 @@ mod tests {
         assert_eq!(
             current.source,
             "settings.apple.project_id,settings.apple.default_bundle_id,settings.apple.default_language,settings.apple.default_platform,env:CORE_ISSUER,env:CORE_KEY"
+        );
+    }
+
+    #[test]
+    fn auth_status_uses_flag_overrides() {
+        let status = resolve_auth_status(
+            &AppleSettings::default(),
+            &BTreeMap::new(),
+            &AppleAppStoreAuthOverrides {
+                account: "mobile".to_owned(),
+                environment: "staging".to_owned(),
+                bundle_id: "com.example.mobile".to_owned(),
+                locale: "fr-FR".to_owned(),
+                platform: "MAC_OS".to_owned(),
+                issuer_id: "issuer_123".to_owned(),
+                key_id: "key_123".to_owned(),
+                private_key: "-----BEGIN PRIVATE KEY-----".to_owned(),
+                project_id: "proj_mobile".to_owned(),
+                base_url: "https://example.invalid".to_owned(),
+                ..AppleAppStoreAuthOverrides::default()
+            },
+        )
+        .expect("auth status");
+
+        assert_eq!(status.status, "ready");
+        assert_eq!(status.account_alias, "mobile");
+        assert_eq!(status.environment, "staging");
+        assert_eq!(status.project_id, "proj_mobile");
+        assert_eq!(status.bundle_id, "com.example.mobile");
+        assert_eq!(status.locale, "fr-FR");
+        assert_eq!(status.platform, "MAC_OS");
+        assert_eq!(status.base_url, "https://example.invalid");
+        assert_eq!(status.token_source, "flag:--private-key");
+        assert_eq!(
+            status.source,
+            "flag:--project-id,flag:--bundle-id,flag:--locale,flag:--platform,flag:--issuer-id,flag:--key-id"
         );
     }
 }
