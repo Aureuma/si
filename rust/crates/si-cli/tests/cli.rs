@@ -4752,6 +4752,42 @@ fn oci_auth_status_json_verifies_with_identity_probe() {
 }
 
 #[test]
+fn oci_doctor_json_verifies_runtime_probe() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "GET /20160918/availabilityDomains?compartmentId=ocid1.tenancy.oc1..example HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("Signature version=\"1\""));
+        http_json_response(
+            "200 OK",
+            &[("opc-request-id", "req_oci_doctor")],
+            r#"[{"name":"AD-1"}]"#,
+        )
+    });
+    let home = tempdir().expect("tempdir");
+    let config_file = write_oci_test_config(&home, &server.base_url);
+
+    let output = cargo_bin()
+        .args(["oci", "doctor"])
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    server.join();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["provider"], "oci_core");
+    assert_eq!(parsed["checks"][3]["name"], "request");
+    assert_eq!(parsed["checks"][3]["ok"], true);
+}
+
+#[test]
 fn oci_oracular_tenancy_json_reads_profile_config() {
     let config_dir = tempdir().expect("tempdir");
     let config_file = config_dir.path().join("config");
