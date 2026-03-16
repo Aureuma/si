@@ -881,7 +881,7 @@ func cmdDyadList(args []string) {
 		}
 		return
 	}
-	client, err := shared.NewClient()
+	client, err := newDyadClientFn()
 	if err != nil {
 		fatal(err)
 	}
@@ -1032,13 +1032,19 @@ func cmdDyadRecreate(args []string) {
 		fatal(err)
 	}
 	defer client.Close()
-	if output, delegated, err := removeDyadWithCompatibility(context.Background(), client, name); err != nil {
+	if output, delegated, err := removeDyadWithCompatibilityFn(context.Background(), client, name); err != nil {
 		fatal(err)
 	} else if delegated && strings.TrimSpace(output) != "" {
 		fmt.Print(output)
 	}
-	cmdDyadSpawn(args)
+	runDyadSpawnCmdFn(args)
 }
+
+var (
+	removeDyadWithCompatibilityFn = removeDyadWithCompatibility
+	runDyadSpawnCmdFn             = cmdDyadSpawn
+	newDyadClientFn               = shared.NewClient
+)
 
 func removeDyadWithCompatibility(ctx context.Context, client *shared.Client, name string) (string, bool, error) {
 	if output, delegated, err := maybeRunRustDyadRemove(name); err != nil {
