@@ -908,6 +908,100 @@ func TestRunOpenAIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 }
 
+func TestRunOpenAIModelListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIModelListCommand([]string{"--json", "--limit", "1"})
+	if err != nil {
+		t.Fatalf("runOpenAIModelListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai model list path by default")
+	}
+}
+
+func TestRunOpenAIModelListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-model-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIModelListCommand([]string{"--json", "--limit", "1"})
+		if err != nil {
+			t.Fatalf("runOpenAIModelListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai model list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-model-list" {
+		t.Fatalf("expected delegated Rust openai model list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nmodel\nlist\n--json\n--limit\n1" {
+		t.Fatalf("expected Rust CLI args to be openai model list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunOpenAIModelGetCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIModelGetCommand([]string{"gpt-test"})
+	if err != nil {
+		t.Fatalf("runOpenAIModelGetCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai model get path by default")
+	}
+}
+
+func TestRunOpenAIModelGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-model-get'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIModelGetCommand([]string{"gpt-test"})
+		if err != nil {
+			t.Fatalf("runOpenAIModelGetCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai model get to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-model-get" {
+		t.Fatalf("expected delegated Rust openai model get output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nmodel\nget\ngpt-test" {
+		t.Fatalf("expected Rust CLI args to be openai model get + arg, got %q", string(argsData))
+	}
+}
+
 func TestRunOCIContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

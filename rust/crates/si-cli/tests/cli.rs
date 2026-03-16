@@ -3,8 +3,10 @@ use chrono::Local;
 use serde_json::Value;
 use std::fs;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
+use std::net::TcpListener;
 use std::path::Path;
+use std::thread;
 use tempfile::tempdir;
 
 fn cargo_bin() -> Command {
@@ -1393,6 +1395,86 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
         parsed["source"],
         "env:CORE_OPENAI_API_KEY,env:CORE_OPENAI_ADMIN_KEY,env:CORE_OPENAI_ORG,settings.default_project_id"
     );
+}
+
+#[test]
+fn openai_model_list_json_fetches_from_api() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/models?limit=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-test\r\n"));
+        assert!(request.contains("openai-organization: org_core\r\n"));
+        assert!(request.contains("openai-project: proj_core\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_models")],
+            r#"{"data":[{"id":"gpt-4.1-mini","object":"model"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "model",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--org-id",
+            "org_core",
+            "--project-id",
+            "proj_core",
+            "--limit",
+            "1",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_models");
+    assert_eq!(parsed["data"]["data"][0]["id"], "gpt-4.1-mini");
+    server.join();
+}
+
+#[test]
+fn openai_model_get_text_formats_response() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/models/gpt-test HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-test\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_model")],
+            r#"{"id":"gpt-test","object":"model"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "model",
+            "get",
+            "gpt-test",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let rendered = String::from_utf8_lossy(&output);
+    assert!(rendered.contains("Status: 200 200 OK"));
+    assert!(rendered.contains("Request ID: req_model"));
+    assert!(rendered.contains("\"id\": \"gpt-test\""));
+    server.join();
 }
 
 #[test]
@@ -3475,6 +3557,60 @@ fn codex_report_parse_json_extracts_report_for_prompt_index() {
 
 fn path_string(path: impl AsRef<Path>) -> Value {
     Value::String(path.as_ref().display().to_string())
+}
+
+struct TestHttpServer {
+    base_url: String,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl TestHttpServer {
+    fn join(mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.join().expect("server thread should join");
+        }
+    }
+}
+
+fn start_one_shot_http_server<F>(handler: F) -> TestHttpServer
+where
+    F: FnOnce(String) -> String + Send + 'static,
+{
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+    let addr = listener.local_addr().expect("local addr");
+    let handle = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut request = Vec::new();
+        let mut buffer = [0_u8; 4096];
+        loop {
+            let read = stream.read(&mut buffer).expect("read request");
+            if read == 0 {
+                break;
+            }
+            request.extend_from_slice(&buffer[..read]);
+            if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                break;
+            }
+        }
+        let request = String::from_utf8(request).expect("request utf8");
+        let response = handler(request);
+        stream.write_all(response.as_bytes()).expect("write response");
+        stream.flush().expect("flush response");
+    });
+    TestHttpServer { base_url: format!("http://{addr}"), handle: Some(handle) }
+}
+
+fn http_json_response(status: &str, headers: &[(&str, &str)], body: &str) -> String {
+    let mut response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+        body.len()
+    );
+    for (key, value) in headers {
+        response.push_str(&format!("{key}: {value}\r\n"));
+    }
+    response.push_str("\r\n");
+    response.push_str(body);
+    response
 }
 
 fn write_executable_script(path: &Path, content: &str) {
