@@ -13,6 +13,8 @@ pub struct Settings {
     #[serde(default)]
     pub codex: CodexSettings,
     #[serde(default)]
+    pub github: GitHubSettings,
+    #[serde(default)]
     pub dyad: DyadSettings,
     #[serde(default)]
     pub surf: SurfSettings,
@@ -61,6 +63,7 @@ impl Settings {
                 workspace_root: None,
             },
             codex: CodexSettings::default(),
+            github: GitHubSettings::default(),
             dyad: DyadSettings::default(),
             surf: SurfSettings::default(),
             viva: VivaSettings::default(),
@@ -105,6 +108,7 @@ impl Settings {
                 }
                 self.paths = payload.paths;
                 self.codex = payload.codex;
+                self.github = payload.github;
                 self.dyad = payload.dyad;
             }
             SettingsModule::Surf => {
@@ -143,6 +147,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.workspace);
         normalize_option_string(&mut self.codex.workdir);
         normalize_option_string(&mut self.codex.profile);
+        self.github.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
         normalize_option_string(&mut self.dyad.critic_image);
         normalize_option_string(&mut self.dyad.workspace);
@@ -159,6 +164,8 @@ struct CoreSettingsModule {
     pub paths: SettingsPaths,
     #[serde(default)]
     pub codex: CodexSettings,
+    #[serde(default)]
+    pub github: GitHubSettings,
     #[serde(default)]
     pub dyad: DyadSettings,
 }
@@ -216,6 +223,68 @@ pub struct CodexSettings {
     pub workspace: Option<String>,
     pub workdir: Option<String>,
     pub profile: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GitHubSettings {
+    pub default_account: Option<String>,
+    pub default_auth_mode: Option<String>,
+    pub api_base_url: Option<String>,
+    pub default_owner: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, GitHubAccountEntry>,
+}
+
+impl GitHubSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_auth_mode);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.default_owner);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GitHubAccountEntry {
+    pub name: Option<String>,
+    pub owner: Option<String>,
+    pub api_base_url: Option<String>,
+    pub auth_mode: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub oauth_access_token: Option<String>,
+    pub oauth_token_env: Option<String>,
+    pub app_id: Option<i64>,
+    pub app_id_env: Option<String>,
+    pub app_private_key_pem: Option<String>,
+    pub app_private_key_env: Option<String>,
+    pub installation_id: Option<i64>,
+    pub installation_env: Option<String>,
+}
+
+impl GitHubAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.owner);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.auth_mode);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.oauth_access_token);
+        normalize_option_string(&mut self.oauth_token_env);
+        normalize_option_string(&mut self.app_id_env);
+        normalize_option_string(&mut self.app_private_key_pem);
+        normalize_option_string(&mut self.app_private_key_env);
+        normalize_option_string(&mut self.installation_env);
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
@@ -932,5 +1001,42 @@ install_orbitals = ["remote-control", "surf"]
         assert_eq!(bootstrap.build_si, Some(false));
         assert_eq!(bootstrap.pull_latest, Some(false));
         assert_eq!(bootstrap.install_orbitals, vec!["remote-control", "surf"]);
+    }
+
+    #[test]
+    fn loads_github_settings_from_core_module() {
+        let home = tempdir().expect("tempdir");
+        let settings_dir = home.path().join(".si");
+        fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+        fs::write(
+            settings_dir.join("settings.toml"),
+            r#"
+schema_version = 1
+
+[github]
+default_account = "core"
+default_auth_mode = "oauth"
+api_base_url = "https://api.github.com"
+default_owner = "Aureuma"
+
+[github.accounts.core]
+name = "Core"
+owner = "Aureuma"
+api_base_url = "https://ghe.example/api/v3"
+auth_mode = "oauth"
+oauth_token_env = "GITHUB_CORE_TOKEN"
+"#,
+        )
+        .expect("write settings");
+
+        let settings = Settings::load(home.path(), None).expect("load settings");
+        assert_eq!(settings.github.default_account.as_deref(), Some("core"));
+        assert_eq!(settings.github.default_auth_mode.as_deref(), Some("oauth"));
+        assert_eq!(settings.github.default_owner.as_deref(), Some("Aureuma"));
+        let account = settings.github.accounts.get("core").expect("core account");
+        assert_eq!(account.name.as_deref(), Some("Core"));
+        assert_eq!(account.owner.as_deref(), Some("Aureuma"));
+        assert_eq!(account.api_base_url.as_deref(), Some("https://ghe.example/api/v3"));
+        assert_eq!(account.oauth_token_env.as_deref(), Some("GITHUB_CORE_TOKEN"));
     }
 }

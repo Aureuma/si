@@ -322,6 +322,53 @@ fn providers_characteristics_supports_alias_ids() {
 }
 
 #[test]
+fn github_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[github]
+default_account = "core"
+default_auth_mode = "oauth"
+
+[github.accounts.core]
+name = "Core"
+owner = "Aureuma"
+api_base_url = "https://ghe.example/api/v3"
+auth_mode = "oauth"
+
+[github.accounts.ops]
+name = "Ops"
+owner = "OpsOrg"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["github", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts.len(), 2);
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["auth_mode"], "oauth");
+    assert_eq!(contexts[1]["alias"], "ops");
+    assert_eq!(contexts[1]["auth_mode"], "oauth");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

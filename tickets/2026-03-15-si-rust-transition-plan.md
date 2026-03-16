@@ -92,7 +92,7 @@ Planned follow-on crates:
 | 4. Runtime substrate migration | in_progress | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
 | 5. Security/runtime migration | in_progress | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
 | 6. Codex/dyad lifecycle migration | completed | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
-| 7. Provider migration | planned | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
+| 7. Provider migration | in_progress | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
 | 8. Release/install migration | planned | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
 | 9. Primary binary cutover | planned | Rust binary becomes default `si` | Go compatibility shell, packaging switch, release notes, rollback plan | full CI green, release candidate soak, Homebrew/npm/manual install verification |
 | 10. Go retirement | planned | remove obsolete Go code paths | delete migrated Go modules and scripts, simplify repo | no runtime references left, docs updated, release published from Rust path |
@@ -388,7 +388,7 @@ Progress notes:
 
 ### Phase 7: Provider migration
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -408,6 +408,11 @@ Testing:
 Exit criteria:
 
 - provider surfaces are no longer monolithic files in the main CLI package.
+
+Progress notes:
+
+- completed: initial `si-rs-provider-github` crate now owns GitHub context-list rendering from settings, giving Phase 7 its first real provider-specific Rust module boundary
+- completed: experimental Go `si github context list` now delegates to the Rust provider slice behind the compatibility boundary, with fixture-backed Rust CLI coverage and a live Go command proof
 
 ### Phase 8: Release/install migration
 

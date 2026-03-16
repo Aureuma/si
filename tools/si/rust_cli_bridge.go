@@ -363,6 +363,10 @@ func runProvidersCharacteristicsCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("providers", append([]string{"characteristics"}, args...)...)
 }
 
+func runGitHubContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"context", "list"}, args...)...)
+}
+
 func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodexSpawnPlan, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil

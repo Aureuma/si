@@ -558,6 +558,14 @@ func cmdGithubContext(args []string) {
 }
 
 func cmdGithubContextList(args []string) {
+	delegated, err := runGitHubContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("github context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)

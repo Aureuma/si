@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"si/tools/si/internal/vault"
@@ -166,5 +167,33 @@ func TestResolveGitHubOAuthAccessTokenFromVaultEncrypted(t *testing.T) {
 	}
 	if source != "vault:GH_PAT_AUREUMA_VANGUARDA" {
 		t.Fatalf("source=%q", source)
+	}
+}
+
+func TestCmdGithubContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '[{\"alias\":\"core\",\"default\":\"true\"}]'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdGithubContextList([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ncontext\nlist\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }
