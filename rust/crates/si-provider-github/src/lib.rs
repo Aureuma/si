@@ -1170,6 +1170,55 @@ pub fn get_pull_request(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn create_pull_request(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    payload: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/pulls");
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &path,
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn comment_pull_request(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    number: i64,
+    body: &str,
+) -> Result<GitHubAPIResponse, String> {
+    comment_issue(runtime, owner, repo, number, body)
+}
+
+pub fn merge_pull_request(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    number: i64,
+    payload: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/pulls/{number}/merge");
+    normalize_response(github_send_json(
+        &client,
+        "PUT",
+        &runtime.base_url,
+        &path,
+        &token,
+        &payload,
+    )?)
+}
+
 pub fn list_branches(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -1789,6 +1838,7 @@ fn github_send_json(
     let builder = match method {
         "POST" => client.post(url),
         "PATCH" => client.patch(url),
+        "PUT" => client.put(url),
         _ => return Err(format!("unsupported github json request method: {method}")),
     };
     builder
