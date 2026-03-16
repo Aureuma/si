@@ -5199,6 +5199,103 @@ fn google_places_photo_download_json_writes_output() {
 }
 
 #[test]
+fn google_places_doctor_json_verifies_requests() {
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    let server = start_http_server(2, |request| {
+        if request.starts_with("POST /v1/places:autocomplete HTTP/1.1\r\n") {
+            assert!(request.contains("\"input\":\"cafe\""));
+            http_json_response(
+                "200 OK",
+                &[("x-goog-request-id", "req_google_doctor_autocomplete")],
+                r#"{"suggestions":[]}"#,
+            )
+        } else {
+            assert!(request.starts_with("POST /v1/places:searchText HTTP/1.1\r\n"));
+            assert!(request.contains("\"textQuery\":\"coffee\""));
+            http_json_response(
+                "200 OK",
+                &[("x-goog-request-id", "req_google_doctor_search")],
+                r#"{"places":[]}"#,
+            )
+        }
+    });
+
+    let output = cargo_bin()
+        .args(["google", "places", "doctor"])
+        .args([
+            "--home",
+            home.path().to_str().expect("home str"),
+            "--api-key",
+            "google-test-key",
+            "--base-url",
+            &server.base_url,
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["checks"][0]["request_id"], "req_google_doctor_autocomplete");
+    assert_eq!(parsed["checks"][1]["request_id"], "req_google_doctor_search");
+    server.join();
+}
+
+#[test]
+fn google_places_raw_json_fetches_with_headers_and_query_params() {
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/places/place_123?regionCode=US HTTP/1.1\r\n"));
+        assert!(request.contains("x-goog-api-key: google-test-key\r\n"));
+        assert!(request.contains("x-custom: value\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-goog-request-id", "req_google_raw")],
+            r#"{"id":"place_123","displayName":{"text":"Cafe"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["google", "places", "raw"])
+        .args([
+            "--home",
+            home.path().to_str().expect("home str"),
+            "--api-key",
+            "google-test-key",
+            "--base-url",
+            &server.base_url,
+            "--method",
+            "GET",
+            "--path",
+            "/v1/places/place_123",
+            "--param",
+            "regionCode=US",
+            "--header",
+            "x-custom=value",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_google_raw");
+    assert_eq!(parsed["data"]["id"], "place_123");
+    server.join();
+}
+
+#[test]
 fn openai_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

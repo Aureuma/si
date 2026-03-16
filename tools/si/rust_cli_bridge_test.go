@@ -2345,6 +2345,87 @@ func TestRunGooglePlacesPhotoDownloadDelegatesToRustCLIWhenConfigured(t *testing
 	}
 }
 
+func TestRunGooglePlacesDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesDoctorCommand([]string{"--public", "--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesDoctorCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places doctor path for --public")
+	}
+}
+
+func TestRunGooglePlacesDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-doctor'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesDoctorCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesDoctorCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-doctor" {
+		t.Fatalf("expected delegated Rust google places doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places doctor + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlacesRawDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-raw'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesCommand([]string{"raw", "--method", "GET", "--path", "/v1/places/p1", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places raw to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-raw" {
+		t.Fatalf("expected delegated Rust google places raw output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\nraw\n--method\nGET\n--path\n/v1/places/p1\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places raw + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGoogleCommandDelegatesToRustCLIForMigratedPlacesAutocomplete(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
