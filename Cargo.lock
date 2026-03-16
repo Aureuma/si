@@ -727,6 +727,7 @@ dependencies = [
  "si-rs-provider-catalog",
  "si-rs-provider-github",
  "si-rs-provider-stripe",
+ "si-rs-provider-workos",
  "si-rs-runtime",
  "si-rs-vault",
  "si-rs-warmup",
@@ -822,6 +823,14 @@ dependencies = [
 
 [[package]]
 name = "si-rs-provider-stripe"
+version = "0.54.0"
+dependencies = [
+ "serde",
+ "si-rs-config",
+]
+
+[[package]]
+name = "si-rs-provider-workos"
 version = "0.54.0"
 dependencies = [
  "serde",
