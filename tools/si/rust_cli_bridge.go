@@ -371,8 +371,48 @@ func runCloudflareContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"context", "current"}, args...)...)
 }
 
+func runCloudflareContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runCloudflareContextListCommand(args[1:])
+	case "current":
+		return runCloudflareContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runCloudflareAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"auth", "status"}, args...)...)
+}
+
+func runCloudflareAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return runCloudflareAuthStatusCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runCloudflareAuthCommand(args[1:])
+	case "context":
+		return runCloudflareContextCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runAppleAppStoreContextListCommand(args []string) (bool, error) {
@@ -895,8 +935,48 @@ func runStripeContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "current"}, args...)...)
 }
 
+func runStripeContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runStripeContextListCommand(args[1:])
+	case "current":
+		return runStripeContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runStripeAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"auth", "status"}, args...)...)
+}
+
+func runStripeAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return runStripeAuthStatusCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runStripeCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runStripeAuthCommand(args[1:])
+	case "context":
+		return runStripeContextCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runWorkOSContextListCommand(args []string) (bool, error) {
@@ -907,8 +987,48 @@ func runWorkOSContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("workos", append([]string{"context", "current"}, args...)...)
 }
 
+func runWorkOSContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runWorkOSContextListCommand(args[1:])
+	case "current":
+		return runWorkOSContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runWorkOSAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("workos", append([]string{"auth", "status"}, args...)...)
+}
+
+func runWorkOSAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return runWorkOSAuthStatusCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runWorkOSCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runWorkOSAuthCommand(args[1:])
+	case "context":
+		return runWorkOSContextCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runGitHubContextListCommand(args []string) (bool, error) {

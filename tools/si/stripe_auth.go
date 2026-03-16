@@ -115,6 +115,13 @@ func resolveStripeAPIKey(account StripeAccountSetting, env stripebridge.Environm
 }
 
 func cmdStripeAuth(args []string) {
+	delegated, err := runStripeAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si stripe auth status [--account <alias|acct_id>] [--env <live|sandbox>] [--api-key <key>] [--json]")
 	if !routedOK {
 		return
@@ -262,6 +269,13 @@ func cmdStripeDoctor(args []string) {
 }
 
 func cmdStripeContext(args []string) {
+	delegated, err := runStripeContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si stripe context <list|current|use>")
 	if !routedOK {
 		return
