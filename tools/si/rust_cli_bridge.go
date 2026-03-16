@@ -451,6 +451,14 @@ func runOpenAIProjectAPIKeyGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "api-key", "get"}, args...)...)
 }
 
+func runOpenAIProjectServiceAccountListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "service-account", "list"}, args...)...)
+}
+
+func runOpenAIProjectServiceAccountGetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"project", "service-account", "get"}, args...)...)
+}
+
 func runOCIContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "list"}, args...)...)
 }
