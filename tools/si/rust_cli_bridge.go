@@ -1360,6 +1360,22 @@ func runGitHubIssueGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"issue", "get"}, args...)...)
 }
 
+func runGitHubIssueCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"issue", "create"}, args...)...)
+}
+
+func runGitHubIssueCommentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"issue", "comment"}, args...)...)
+}
+
+func runGitHubIssueCloseCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"issue", "close"}, args...)...)
+}
+
+func runGitHubIssueReopenCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"issue", "reopen"}, args...)...)
+}
+
 func runGitHubIssueCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1369,6 +1385,14 @@ func runGitHubIssueCommand(args []string) (bool, error) {
 		return runGitHubIssueListCommand(args[1:])
 	case "get":
 		return runGitHubIssueGetCommand(args[1:])
+	case "create":
+		return runGitHubIssueCreateCommand(args[1:])
+	case "comment":
+		return runGitHubIssueCommentCommand(args[1:])
+	case "close":
+		return runGitHubIssueCloseCommand(args[1:])
+	case "reopen":
+		return runGitHubIssueReopenCommand(args[1:])
 	default:
 		return false, nil
 	}
