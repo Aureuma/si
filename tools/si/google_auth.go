@@ -206,6 +206,13 @@ func resolveGoogleRegionCode(alias string, account GoogleAccountEntry, override 
 }
 
 func cmdGooglePlacesAuth(args []string) {
+	delegated, err := runGooglePlacesAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si google places auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
 	if !routedOK {
 		return
