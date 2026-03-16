@@ -457,11 +457,162 @@ enum CloudflareCommand {
 
 #[derive(Debug, Subcommand)]
 enum CloudflareLogsCommand {
+    Job {
+        #[command(subcommand)]
+        command: CloudflareLogsJobCommand,
+    },
     Received {
         #[arg(long)]
         json: bool,
         #[arg(long)]
         raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareLogsJobCommand {
+    List {
+        #[arg(long, default_value_t = 10)]
+        max_pages: usize,
+        #[arg(long, default_value_t = 100)]
+        limit: i64,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Create {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Update {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        force: bool,
         #[arg(long = "param")]
         params: Vec<String>,
         #[arg(long)]
@@ -6773,6 +6924,159 @@ fn main() -> Result<()> {
                 settings_file,
             )?,
             CloudflareCommand::Logs { command } => match command {
+                CloudflareLogsCommand::Job { command } => match command {
+                    CloudflareLogsJobCommand::List {
+                        max_pages,
+                        limit,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_logs_job_list(
+                        max_pages,
+                        limit,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                    CloudflareLogsJobCommand::Get {
+                        id,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_logs_job_get(
+                        id,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                    CloudflareLogsJobCommand::Create {
+                        json,
+                        raw,
+                        body,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_logs_job_create(
+                        json,
+                        raw,
+                        body,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                    CloudflareLogsJobCommand::Update {
+                        id,
+                        json,
+                        raw,
+                        body,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_logs_job_update(
+                        id,
+                        json,
+                        raw,
+                        body,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                    CloudflareLogsJobCommand::Delete {
+                        id,
+                        json,
+                        raw,
+                        force,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    } => run_cloudflare_logs_job_delete(
+                        id,
+                        json,
+                        raw,
+                        force,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                },
                 CloudflareLogsCommand::Received {
                     json,
                     raw,
@@ -16592,6 +16896,344 @@ fn run_cloudflare_logs_received(
         CloudflareAPIRequest {
             method: "GET".to_owned(),
             path: "/zones/{zone_id}/logs/received".to_owned(),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+fn parse_cloudflare_body_values(values: Vec<String>) -> Value {
+    let mut out = serde_json::Map::new();
+    for (key, value) in parse_cloudflare_key_values(values) {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            out.insert(key, Value::String(String::new()));
+            continue;
+        }
+        if (trimmed.starts_with('{')
+            || trimmed.starts_with('[')
+            || matches!(trimmed, "true" | "false" | "null"))
+            && serde_json::from_str::<Value>(trimmed).is_ok()
+        {
+            out.insert(
+                key,
+                serde_json::from_str(trimmed).unwrap_or(Value::String(trimmed.to_owned())),
+            );
+            continue;
+        }
+        out.insert(key, Value::String(trimmed.to_owned()));
+    }
+    Value::Object(out)
+}
+
+fn summarize_cloudflare_item(item: &serde_json::Map<String, Value>) -> String {
+    let mut id = "-".to_owned();
+    for key in ["id", "zone_id", "name", "tag"] {
+        let value = item
+            .get(key)
+            .map(stringify_cloudflare_value)
+            .unwrap_or_else(|| "-".to_owned());
+        if value.trim() != "-" && !value.trim().is_empty() {
+            id = value;
+            break;
+        }
+    }
+    let mut title = "-".to_owned();
+    for key in ["name", "hostname", "email", "status", "content", "value", "type"] {
+        let value = item
+            .get(key)
+            .map(stringify_cloudflare_value)
+            .unwrap_or_else(|| "-".to_owned());
+        if value.trim() != "-" && !value.trim().is_empty() {
+            title = value;
+            break;
+        }
+    }
+    format!("{id} {title}")
+}
+
+fn stringify_cloudflare_value(value: &Value) -> String {
+    match value {
+        Value::Null => "-".to_owned(),
+        Value::String(string) => {
+            if string.trim().is_empty() {
+                "-".to_owned()
+            } else {
+                string.clone()
+            }
+        }
+        Value::Bool(boolean) => boolean.to_string(),
+        Value::Number(number) => number.to_string(),
+        other => serde_json::to_string(other).unwrap_or_else(|_| "-".to_owned()),
+    }
+}
+
+fn cloudflare_total_pages_from_body(body: &str) -> usize {
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("result_info")
+                .and_then(Value::as_object)
+                .and_then(|info| info.get("total_pages"))
+                .and_then(Value::as_u64)
+        })
+        .and_then(|pages| usize::try_from(pages).ok())
+        .filter(|pages| *pages > 0)
+        .unwrap_or(1)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_logs_job_list(
+    max_pages: usize,
+    limit: i64,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let base_params = parse_cloudflare_key_values(params);
+    let explicit_page = base_params.contains_key("page");
+    let max_pages = max_pages.max(1);
+    let mut page = base_params
+        .get("page")
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(1);
+    let mut items = Vec::new();
+
+    loop {
+        let mut request_params = base_params.clone();
+        if !explicit_page {
+            request_params.insert("page".to_owned(), page.to_string());
+        }
+        let response = execute_cloudflare_request(
+            account.clone(),
+            environment.clone(),
+            zone_id.clone(),
+            zone.clone(),
+            api_token.clone(),
+            base_url.clone(),
+            account_id.clone(),
+            home.clone(),
+            settings_file.clone(),
+            CloudflareAPIRequest {
+                method: "GET".to_owned(),
+                path: "/zones/{zone_id}/logpush/jobs".to_owned(),
+                params: request_params,
+                ..CloudflareAPIRequest::default()
+            },
+        )?;
+        if let Some(mut page_items) = response.list.clone() {
+            items.append(&mut page_items);
+        }
+        let done_for_limit = limit >= 0 && items.len() >= limit as usize;
+        let total_pages = cloudflare_total_pages_from_body(&response.body);
+        if explicit_page || page >= total_pages || page >= max_pages || done_for_limit {
+            break;
+        }
+        page += 1;
+    }
+
+    if limit >= 0 && items.len() > limit as usize {
+        items.truncate(limit as usize);
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "object": "log job",
+                "count": items.len(),
+                "data": items,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", serde_json::to_string(&items)?);
+        return Ok(());
+    }
+    println!("Object list: log job ({})", items.len());
+    for item in &items {
+        if let Some(item) = item.as_object() {
+            println!("  {}", summarize_cloudflare_item(item));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_logs_job_get(
+    id: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/zones/{{zone_id}}/logpush/jobs/{}", id.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_logs_job_create(
+    json: bool,
+    raw: bool,
+    body: Option<String>,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let request = if let Some(body) = body.filter(|body| !body.trim().is_empty()) {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: "/zones/{zone_id}/logpush/jobs".to_owned(),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        }
+    } else {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: "/zones/{zone_id}/logpush/jobs".to_owned(),
+            json_body: Some(parse_cloudflare_body_values(params)),
+            ..CloudflareAPIRequest::default()
+        }
+    };
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        request,
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_logs_job_update(
+    id: String,
+    json: bool,
+    raw: bool,
+    body: Option<String>,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let request = if let Some(body) = body.filter(|body| !body.trim().is_empty()) {
+        CloudflareAPIRequest {
+            method: "PATCH".to_owned(),
+            path: format!("/zones/{{zone_id}}/logpush/jobs/{}", id.trim()),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        }
+    } else {
+        CloudflareAPIRequest {
+            method: "PATCH".to_owned(),
+            path: format!("/zones/{{zone_id}}/logpush/jobs/{}", id.trim()),
+            json_body: Some(parse_cloudflare_body_values(params)),
+            ..CloudflareAPIRequest::default()
+        }
+    };
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        request,
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_logs_job_delete(
+    id: String,
+    json: bool,
+    raw: bool,
+    force: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("delete log job requires --force");
+    }
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        CloudflareAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/zones/{{zone_id}}/logpush/jobs/{}", id.trim()),
             params: parse_cloudflare_key_values(params),
             ..CloudflareAPIRequest::default()
         },

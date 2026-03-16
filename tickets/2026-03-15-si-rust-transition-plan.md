@@ -478,6 +478,7 @@ Progress notes:
 - completed: the Cloudflare provider slice now also owns the read-only `analytics` and `report` operational surfaces, reusing the migrated Rust transport plus Go wrapper delegation so the next broader Cloudflare runtime reads no longer stay only on the Go path
 - completed: the Cloudflare provider slice now also owns `smoke`, reusing the migrated Rust transport for the multi-endpoint read-only health matrix plus Go wrapper delegation so the next operational readiness surface no longer depends on the Go path
 - completed: the Cloudflare provider slice now also owns read-only `logs received`, reusing the migrated Rust transport plus Go wrapper delegation so the next narrow operational retrieval surface no longer stays only on the Go path
+- completed: the Cloudflare provider slice now also owns the full `logs job` subtree (`list`, `get`, `create`, `update`, and force-gated `delete`), with Rust-owned list pagination, JSON-body shaping, and Go wrapper delegation so Cloudflare logpush job management no longer depends on the Go path
 - completed: the top-level `apple` and `google` roots now also short-circuit directly into Rust when routing into the already-migrated `appstore` and `places` subtrees, removing the last obvious outer wrapper layer above those provider families while leaving other Apple/Google surfaces on the Go side
 
 ### Phase 8: Release/install migration

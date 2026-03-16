@@ -655,6 +655,176 @@ func TestRunCloudflareCommandDelegatesToRustCLIForLogsReceived(t *testing.T) {
 	}
 }
 
+func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobList(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-logs-job-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"logs", "job", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare logs job list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-logs-job-list" {
+		t.Fatalf("expected delegated Rust cloudflare logs job list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\nlogs\njob\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare logs job list + args, got %q", string(argsData))
+	}
+}
+
+func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobGet(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-logs-job-get'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"logs", "job", "get", "job_123", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare logs job get to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-logs-job-get" {
+		t.Fatalf("expected delegated Rust cloudflare logs job get output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\nlogs\njob\nget\njob_123\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare logs job get + args, got %q", string(argsData))
+	}
+}
+
+func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobCreate(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-logs-job-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"logs", "job", "create", "--param", "name=core", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare logs job create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-logs-job-create" {
+		t.Fatalf("expected delegated Rust cloudflare logs job create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\nlogs\njob\ncreate\n--param\nname=core\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare logs job create + args, got %q", string(argsData))
+	}
+}
+
+func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobUpdate(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-logs-job-update'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"logs", "job", "update", "job_123", "--param", "enabled=true", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare logs job update to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-logs-job-update" {
+		t.Fatalf("expected delegated Rust cloudflare logs job update output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\nlogs\njob\nupdate\njob_123\n--param\nenabled=true\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare logs job update + args, got %q", string(argsData))
+	}
+}
+
+func TestRunCloudflareCommandDelegatesToRustCLIForLogsJobDelete(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-logs-job-delete'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"logs", "job", "delete", "job_123", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare logs job delete to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-logs-job-delete" {
+		t.Fatalf("expected delegated Rust cloudflare logs job delete output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\nlogs\njob\ndelete\njob_123\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare logs job delete + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAppleAppStoreContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
