@@ -407,3 +407,101 @@ func TestCodexDelegatedLifecycleSmoke(t *testing.T) {
 		}
 	}
 }
+
+func TestCodexDelegatedSpawnAndRemoveProfileMatrix(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	settingsDir := filepath.Join(home, ".si", "codex")
+	if err := os.MkdirAll(settingsDir, 0o755); err != nil {
+		t.Fatalf("mkdir settings dir: %v", err)
+	}
+	settingsToml := strings.Join([]string{
+		"schema_version = 1",
+		"[codex.profiles.entries.ferma]",
+		`name = "Ferma"`,
+		`email = "ferma@example.com"`,
+		"[codex.profiles.entries.berylla]",
+		`name = "Berylla"`,
+		`email = "berylla@example.com"`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(settingsDir, "settings.toml"), []byte(settingsToml), 0o600); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	workspace := filepath.Join(dir, "workspace")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatalf("mkdir workspace: %v", err)
+	}
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >>" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '--' >>" + shellSingleQuote(argsPath) + "\ncmd=\"$2\"\nargs=\"$*\"\ncase \"$cmd:$args\" in\n  remove-plan:*ferma*)\n    printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"slug\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-gh-ferma\"}'\n    ;;\n  remove-plan:*berylla*)\n    printf '%s\\n' '{\"name\":\"berylla\",\"container_name\":\"si-codex-berylla\",\"slug\":\"berylla\",\"codex_volume\":\"si-codex-berylla\",\"gh_volume\":\"si-gh-berylla\"}'\n    ;;\n  spawn-plan:*ferma*)\n    printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"workspace_host\":\"" + filepath.ToSlash(workspace) + "\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"" + filepath.ToSlash(workspace) + "\",\"workdir\":\"" + filepath.ToSlash(workspace) + "\",\"codex_volume\":\"codex-ferma-rust\",\"skills_volume\":\"skills-ferma-rust\",\"gh_volume\":\"gh-ferma-rust\",\"image\":\"image-ferma-rust\",\"network_name\":\"si-ferma-rust\",\"docker_socket\":true,\"detach\":true,\"clean_slate\":false,\"env\":[\"HOME=/home/si\"]}'\n    ;;\n  spawn-plan:*berylla*)\n    printf '%s\\n' '{\"name\":\"berylla\",\"container_name\":\"si-codex-berylla\",\"workspace_host\":\"" + filepath.ToSlash(workspace) + "\",\"workspace_primary_target\":\"/workspace\",\"workspace_mirror_target\":\"" + filepath.ToSlash(workspace) + "\",\"workdir\":\"" + filepath.ToSlash(workspace) + "\",\"codex_volume\":\"codex-berylla-rust\",\"skills_volume\":\"skills-berylla-rust\",\"gh_volume\":\"gh-berylla-rust\",\"image\":\"image-berylla-rust\",\"network_name\":\"si-berylla-rust\",\"docker_socket\":true,\"detach\":true,\"clean_slate\":false,\"env\":[\"HOME=/home/si\"]}'\n    ;;\n  spawn-spec:*ferma*)\n    printf '%s\\n' '{\"container_name\":\"si-codex-ferma\",\"image\":\"image-ferma-rust\",\"working_dir\":\"" + filepath.ToSlash(workspace) + "\",\"network\":\"si-ferma-rust\",\"restart_policy\":\"unless-stopped\",\"command\":[\"bash\",\"-lc\",\"sleep infinity\"],\"env\":[{\"key\":\"HOME\",\"value\":\"/home/si\"}],\"volume_mounts\":[],\"bind_mounts\":[]}'\n    ;;\n  spawn-spec:*berylla*)\n    printf '%s\\n' '{\"container_name\":\"si-codex-berylla\",\"image\":\"image-berylla-rust\",\"working_dir\":\"" + filepath.ToSlash(workspace) + "\",\"network\":\"si-berylla-rust\",\"restart_policy\":\"unless-stopped\",\"command\":[\"bash\",\"-lc\",\"sleep infinity\"],\"env\":[{\"key\":\"HOME\",\"value\":\"/home/si\"}],\"volume_mounts\":[],\"bind_mounts\":[]}'\n    ;;\n  remove:*ferma*)\n    printf '%s\\n' '{\"name\":\"ferma\",\"container_name\":\"si-codex-ferma\",\"profile_id\":\"ferma\",\"codex_volume\":\"si-codex-ferma\",\"gh_volume\":\"si-gh-ferma\",\"output\":\"removed\"}'\n    ;;\n  remove:*berylla*)\n    printf '%s\\n' '{\"name\":\"berylla\",\"container_name\":\"si-codex-berylla\",\"profile_id\":\"berylla\",\"codex_volume\":\"si-codex-berylla\",\"gh_volume\":\"si-gh-berylla\",\"output\":\"removed\"}'\n    ;;\n  *)\n    printf 'unexpected command: %s %s\\n' \"$cmd\" \"$args\" >&2\n    exit 1\n    ;;\nesac\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	cases := []struct {
+		name            string
+		wantImage       string
+		wantNetwork     string
+		wantCodexVolume string
+		wantRemoveText  string
+	}{
+		{name: "ferma", wantImage: "image-ferma-rust", wantNetwork: "si-ferma-rust", wantCodexVolume: "codex-ferma-rust", wantRemoveText: "si-codex-ferma"},
+		{name: "berylla", wantImage: "image-berylla-rust", wantNetwork: "si-berylla-rust", wantCodexVolume: "codex-berylla-rust", wantRemoveText: "si-codex-berylla"},
+	}
+
+	prev := observeCodexSpawnPreparedFn
+	t.Cleanup(func() {
+		observeCodexSpawnPreparedFn = prev
+	})
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			var got codexSpawnPrepared
+			observeCodexSpawnPreparedFn = func(prepared codexSpawnPrepared) (bool, error) {
+				got = prepared
+				return true, nil
+			}
+
+			_ = captureOutputForTest(t, func() {
+				cmdCodexSpawn([]string{tc.name, "--profile", tc.name, "--workspace", workspace})
+			})
+			if got.Name != tc.name || got.ProfileID != tc.name {
+				t.Fatalf("unexpected prepared spawn: %#v", got)
+			}
+			if got.Image != tc.wantImage || got.NetworkName != tc.wantNetwork || got.CodexVolume != tc.wantCodexVolume {
+				t.Fatalf("unexpected prepared spawn: %#v", got)
+			}
+
+			removeOutput := captureOutputForTest(t, func() {
+				cmdCodexRemove([]string{tc.name})
+			})
+			if !strings.Contains(removeOutput, tc.wantRemoveText) {
+				t.Fatalf("unexpected remove output: %q", removeOutput)
+			}
+		})
+	}
+
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	argsText := string(argsData)
+	for _, expected := range []string{
+		"codex\nspawn-plan\n--format\njson",
+		"--name\nferma",
+		"codex\nspawn-spec\n--format\njson",
+		"codex\nremove\nferma\n--format\njson",
+		"--name\nberylla",
+		"codex\nremove\nberylla\n--format\njson",
+	} {
+		if !strings.Contains(argsText, expected) {
+			t.Fatalf("expected delegated args %q in %q", expected, argsText)
+		}
+	}
+}
