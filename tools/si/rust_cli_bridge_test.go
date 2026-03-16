@@ -908,6 +908,100 @@ func TestRunOpenAIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 }
 
+func TestRunOCIContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOCIContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runOCIContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go oci context list path by default")
+	}
+}
+
+func TestRunOCIContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCIContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runOCIContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-list" {
+		t.Fatalf("expected delegated Rust oci context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunOCIContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOCIContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runOCIContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go oci context current path by default")
+	}
+}
+
+func TestRunOCIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCIContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runOCIContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-current" {
+		t.Fatalf("expected delegated Rust oci context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci context current + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

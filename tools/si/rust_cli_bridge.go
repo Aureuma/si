@@ -423,6 +423,14 @@ func runOpenAIContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"context", "current"}, args...)...)
 }
 
+func runOCIContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "list"}, args...)...)
+}
+
+func runOCIContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "current"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }

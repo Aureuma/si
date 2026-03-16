@@ -64,6 +64,11 @@ use si_rs_provider_google::{
     GooglePlacesOverrides, list_places_contexts, render_places_context_list_text,
     resolve_places_auth_status, resolve_places_current_context,
 };
+use si_rs_provider_oci::{
+    OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
+    list_contexts as list_oci_contexts, render_context_list_text as render_oci_context_list_text,
+    resolve_current_context as resolve_oci_current_context,
+};
 use si_rs_provider_openai::{
     OpenAIContextListEntry, OpenAIContextOverrides, OpenAICurrentContext,
     list_contexts as list_openai_contexts,
@@ -150,6 +155,11 @@ enum Command {
     OpenAI {
         #[command(subcommand)]
         command: OpenAICommand,
+    },
+    #[command(name = "oci")]
+    Oci {
+        #[command(subcommand)]
+        command: OciCommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -550,6 +560,50 @@ enum OpenAIContextCommand {
         org_id: Option<String>,
         #[arg(long)]
         project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciCommand {
+    Context {
+        #[command(subcommand)]
+        command: OciContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -1909,6 +1963,38 @@ impl From<OpenAICurrentContext> for OpenAICurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct OCIContextListPayload {
+    contexts: Vec<OCIContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct OCICurrentContextPayload {
+    account_alias: String,
+    profile: String,
+    config_file: String,
+    region: String,
+    base_url: String,
+    auth_style: String,
+    source: String,
+    tenancy_ocid: String,
+}
+
+impl From<OCICurrentContext> for OCICurrentContextPayload {
+    fn from(value: OCICurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            profile: value.profile,
+            config_file: value.config_file,
+            region: value.region,
+            base_url: value.base_url,
+            auth_style: value.auth_style,
+            source: value.source,
+            tenancy_ocid: value.tenancy_ocid,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -2645,6 +2731,39 @@ fn main() -> Result<()> {
                         admin_api_key,
                         org_id,
                         project_id,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
+        },
+        Command::Oci { command } => match command {
+            OciCommand::Context { command } => match command {
+                OciContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_oci_context_list(home, settings_file, format)?
+                }
+                OciContextCommand::Current {
+                    account,
+                    profile,
+                    config_file,
+                    region,
+                    base_url,
+                    auth,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_oci_context_current(
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
                         home,
                         settings_file,
                         format,
@@ -4385,6 +4504,76 @@ fn show_openai_context_current(
             );
             println!("Source: {}", or_dash(&payload.source));
             println!("Admin key set: {}", if payload.admin_key_set { "true" } else { "false" });
+        }
+    }
+    Ok(())
+}
+
+fn show_oci_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_oci_contexts(&settings.oci);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&OCIContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_oci_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_oci_context_current(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = OCICurrentContextPayload::from(
+        resolve_oci_current_context(
+            &settings.oci,
+            &env,
+            &OCIContextOverrides {
+                account: account.unwrap_or_default(),
+                profile: profile.unwrap_or_default(),
+                config_file: config_file.unwrap_or_default(),
+                region: region.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                auth_style: auth.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current oci context: account={} profile={} region={} base={} auth={}",
+                account, payload.profile, payload.region, payload.base_url, payload.auth_style
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Tenancy: {}", or_dash(&payload.tenancy_ocid));
         }
     }
     Ok(())
