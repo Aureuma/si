@@ -1,6 +1,8 @@
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use reqwest::blocking::{Client, Response};
-use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderName, HeaderValue, USER_AGENT};
+use reqwest::header::{
+    ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, USER_AGENT,
+};
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 use si_rs_config::settings::{GitHubAccountEntry, GitHubSettings};
@@ -1621,6 +1623,82 @@ pub fn get_release(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn create_release(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    payload: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &format!("/repos/{owner}/{repo}/releases"),
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn upload_release_asset(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    release_ref: &str,
+    asset_name: &str,
+    label: &str,
+    content_type: &str,
+    asset_bytes: &[u8],
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let release = get_release(runtime, owner, repo, release_ref)?;
+    let upload_url = release
+        .data
+        .as_ref()
+        .and_then(|item| item.get("upload_url"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if upload_url.is_empty() {
+        return Err("release upload url not found".to_owned());
+    }
+    let upload_url = expand_release_upload_url(&upload_url, asset_name, label)?;
+    normalize_response(github_send_bytes(
+        &client,
+        &upload_url,
+        &token,
+        content_type,
+        asset_bytes,
+    )?)
+}
+
+pub fn delete_release(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    release_ref: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let release = get_release(runtime, owner, repo, release_ref)?;
+    let release_id = release
+        .data
+        .as_ref()
+        .and_then(|item| item.get("id"))
+        .and_then(Value::as_i64)
+        .ok_or_else(|| "release response missing id".to_owned())?;
+    normalize_response(github_send_without_body(
+        &client,
+        "DELETE",
+        &runtime.base_url,
+        &format!("/repos/{owner}/{repo}/releases/{release_id}"),
+        &token,
+    )?)
+}
+
 pub fn resolve_access_token(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2194,6 +2272,27 @@ fn github_send_without_body(
         .map_err(|err| format!("github request failed: {err}"))
 }
 
+fn github_send_bytes(
+    client: &Client,
+    url: &str,
+    token: &str,
+    content_type: &str,
+    body: &[u8],
+) -> Result<Response, String> {
+    let parsed = Url::parse(url).map_err(|err| format!("invalid github upload url: {err}"))?;
+    client
+        .post(parsed)
+        .headers(default_headers(&format!("Bearer {}", normalize_bearer_token(token)))?)
+        .header(
+            CONTENT_TYPE,
+            HeaderValue::from_str(content_type.trim())
+                .map_err(|err| format!("build github content-type header: {err}"))?,
+        )
+        .body(body.to_vec())
+        .send()
+        .map_err(|err| format!("github request failed: {err}"))
+}
+
 fn github_graphql(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2356,6 +2455,23 @@ fn percent_encode_path_segment(value: &str) -> String {
         }
     }
     out
+}
+
+fn expand_release_upload_url(upload_url: &str, asset_name: &str, label: &str) -> Result<String, String> {
+    let template = upload_url.trim();
+    if template.is_empty() {
+        return Err("release upload url not found".to_owned());
+    }
+    let base = template.split('{').next().unwrap_or_default().trim();
+    let mut url = Url::parse(base).map_err(|err| format!("invalid github upload url: {err}"))?;
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("name", asset_name.trim());
+        if !label.trim().is_empty() {
+            pairs.append_pair("label", label.trim());
+        }
+    }
+    Ok(url.to_string())
 }
 
 fn normalize_branch_name(value: &str) -> String {
