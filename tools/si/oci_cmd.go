@@ -143,6 +143,13 @@ func cmdOCI(args []string) {
 }
 
 func cmdOCIAuth(args []string) {
+	delegated, err := runOCIAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si oci auth status [--profile <name>] [--config-file <path>] [--region <region>] [--json]")
 	if !routedOK {
 		return

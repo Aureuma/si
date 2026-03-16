@@ -586,6 +586,13 @@ func printAppleAppStoreContextBanner(runtime appleAppStoreRuntimeContext, jsonOu
 }
 
 func cmdAppleAppStoreAuth(args []string) {
+	delegated, err := runAppleAppStoreAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si apple appstore auth status [--account <alias>] [--env <prod|staging|dev>] [--json]")
 	if !routedOK {
 		return
