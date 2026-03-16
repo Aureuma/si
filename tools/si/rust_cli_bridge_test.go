@@ -391,6 +391,147 @@ func TestRunAppleAppStoreContextCurrentCommandDelegatesToRustCLIWhenConfigured(t
 	}
 }
 
+func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runAWSContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go aws context list path by default")
+	}
+}
+
+func TestRunAWSContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runAWSContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-list" {
+		t.Fatalf("expected delegated Rust aws context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runAWSContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go aws context current path by default")
+	}
+}
+
+func TestRunAWSContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runAWSContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-current" {
+		t.Fatalf("expected delegated Rust aws context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws context current + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSAuthStatusCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSAuthStatusCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runAWSAuthStatusCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go aws auth status path by default")
+	}
+}
+
+func TestRunAWSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSAuthStatusCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runAWSAuthStatusCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws auth status to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-auth" {
+		t.Fatalf("expected delegated Rust aws auth status output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws auth status + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
