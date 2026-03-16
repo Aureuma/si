@@ -5325,6 +5325,100 @@ func TestRunGitHubPRGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGitHubRawCommandDefaultsToGoForNonGetMethod(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubRawCommand([]string{"--method", "POST", "--path", "/graphql", "--json"})
+	if err != nil {
+		t.Fatalf("runGitHubRawCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github raw path for non-GET method")
+	}
+}
+
+func TestRunGitHubRawCommandDelegatesToRustCLIForGet(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-raw'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubRawCommand([]string{"--path", "/rate_limit", "--param", "scope=core", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubRawCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github raw command to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-raw" {
+		t.Fatalf("expected delegated Rust github raw output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nraw\n--path\n/rate_limit\n--param\nscope=core\n--json" {
+		t.Fatalf("expected Rust CLI args to be github raw + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubGraphQLCommandDefaultsToGoForMutation(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubGraphQLCommand([]string{"--query", "mutation { viewer { login } }", "--json"})
+	if err != nil {
+		t.Fatalf("runGitHubGraphQLCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github graphql path for mutation query")
+	}
+}
+
+func TestRunGitHubGraphQLCommandDelegatesToRustCLIForQuery(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-graphql'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubGraphQLCommand([]string{"--query", "query { viewer { login } }", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubGraphQLCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github graphql command to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-graphql" {
+		t.Fatalf("expected delegated Rust github graphql output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ngraphql\n--query\nquery { viewer { login } }\n--json" {
+		t.Fatalf("expected Rust CLI args to be github graphql + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
