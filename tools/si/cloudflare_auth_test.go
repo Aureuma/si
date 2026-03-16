@@ -132,3 +132,59 @@ func TestResolveCloudflareCredentialsFromVaultEncrypted(t *testing.T) {
 		t.Fatalf("token source=%q", tokenSource)
 	}
 }
+
+func TestCmdCloudflareContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"contexts\":[{\"alias\":\"core\"}]}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdCloudflareContextList([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\ncontext\nlist\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestCmdCloudflareContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"account_alias\":\"core\",\"account_id\":\"acc_core\",\"environment\":\"prod\",\"zone_id\":\"zone_prod\",\"zone_name\":\"example.com\",\"base_url\":\"https://api.cloudflare.com/client/v4\",\"source\":\"settings.account_id,settings.prod_zone_id\"}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdCloudflareContextCurrent([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"account_alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\ncontext\ncurrent\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}

@@ -363,6 +363,14 @@ func runProvidersCharacteristicsCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("providers", append([]string{"characteristics"}, args...)...)
 }
 
+func runCloudflareContextListCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"context", "list"}, args...)...)
+}
+
+func runCloudflareContextCurrentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"context", "current"}, args...)...)
+}
+
 func runStripeContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"context", "list"}, args...)...)
 }

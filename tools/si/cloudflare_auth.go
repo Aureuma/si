@@ -397,6 +397,14 @@ func cmdCloudflareContext(args []string) {
 }
 
 func cmdCloudflareContextList(args []string) {
+	delegated, err := runCloudflareContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("cloudflare context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)
@@ -457,6 +465,14 @@ func cmdCloudflareContextList(args []string) {
 }
 
 func cmdCloudflareContextCurrent(args []string) {
+	delegated, err := runCloudflareContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("cloudflare context current", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
 	_ = fs.Parse(args)

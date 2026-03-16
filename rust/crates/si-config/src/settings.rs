@@ -15,6 +15,8 @@ pub struct Settings {
     #[serde(default)]
     pub stripe: StripeSettings,
     #[serde(default)]
+    pub cloudflare: CloudflareSettings,
+    #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
     pub workos: WorkOSSettings,
@@ -68,6 +70,7 @@ impl Settings {
             },
             codex: CodexSettings::default(),
             stripe: StripeSettings::default(),
+            cloudflare: CloudflareSettings::default(),
             github: GitHubSettings::default(),
             workos: WorkOSSettings::default(),
             dyad: DyadSettings::default(),
@@ -115,6 +118,7 @@ impl Settings {
                 self.paths = payload.paths;
                 self.codex = payload.codex;
                 self.stripe = payload.stripe;
+                self.cloudflare = payload.cloudflare;
                 self.github = payload.github;
                 self.workos = payload.workos;
                 self.dyad = payload.dyad;
@@ -156,6 +160,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.workdir);
         normalize_option_string(&mut self.codex.profile);
         self.stripe.normalize();
+        self.cloudflare.normalize();
         self.github.normalize();
         self.workos.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
@@ -176,6 +181,8 @@ struct CoreSettingsModule {
     pub codex: CodexSettings,
     #[serde(default)]
     pub stripe: StripeSettings,
+    #[serde(default)]
+    pub cloudflare: CloudflareSettings,
     #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
@@ -286,6 +293,68 @@ impl StripeAccountEntry {
         normalize_option_string(&mut self.sandbox_key);
         normalize_option_string(&mut self.live_key_env);
         normalize_option_string(&mut self.sandbox_key_env);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CloudflareSettings {
+    pub default_account: Option<String>,
+    pub default_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub vault_file: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, CloudflareAccountEntry>,
+}
+
+impl CloudflareSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.vault_file);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CloudflareAccountEntry {
+    pub name: Option<String>,
+    pub account_id: Option<String>,
+    pub account_id_env: Option<String>,
+    pub api_base_url: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub default_zone_id: Option<String>,
+    pub default_zone_name: Option<String>,
+    pub prod_zone_id: Option<String>,
+    pub staging_zone_id: Option<String>,
+    pub dev_zone_id: Option<String>,
+    pub api_token_env: Option<String>,
+}
+
+impl CloudflareAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.account_id);
+        normalize_option_string(&mut self.account_id_env);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.default_zone_id);
+        normalize_option_string(&mut self.default_zone_name);
+        normalize_option_string(&mut self.prod_zone_id);
+        normalize_option_string(&mut self.staging_zone_id);
+        normalize_option_string(&mut self.dev_zone_id);
+        normalize_option_string(&mut self.api_token_env);
     }
 }
 
