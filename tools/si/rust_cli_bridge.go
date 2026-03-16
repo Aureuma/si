@@ -879,6 +879,35 @@ func runGooglePlacesCommand(args []string) (bool, error) {
 		return runGooglePlacesAuthCommand(args[1:])
 	case "context":
 		return runGooglePlacesContextCommand(args[1:])
+	case "autocomplete":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "autocomplete"}, args[1:]...)...)
+	case "search-text", "text-search", "searchtext":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "search-text"}, args[1:]...)...)
+	case "search-nearby", "nearby-search", "searchnearby":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "search-nearby"}, args[1:]...)...)
+	case "details", "detail":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "details"}, args[1:]...)...)
+	case "photo", "photos":
+		return runGooglePlacesPhotoCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlacesPhotoCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "get":
+		for _, arg := range args[1:] {
+			if strings.EqualFold(strings.TrimSpace(arg), "--follow") {
+				return false, nil
+			}
+		}
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "photo", "get"}, args[1:]...)...)
+	case "download":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "photo", "download"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
