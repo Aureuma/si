@@ -431,6 +431,7 @@ Progress notes:
 - completed: the OpenAI provider slice now owns read-only project `api-key list` and `api-key get` execution too, extending Phase 7 deeper into OpenAI project-admin retrieval flows while delete/create/mutation paths remain on the Go path
 - completed: the OpenAI provider slice now owns read-only project `service-account list` and `service-account get` execution too, extending Phase 7 through the remaining project-admin retrieval flows while creation/deletion and broader mutation paths remain on the Go path
 - completed: the OpenAI provider slice now owns read-only project `rate-limit list` execution too, extending Phase 7 across the remaining OpenAI project-admin listing surfaces while update/mutation flows remain on the Go path
+- completed: the OpenAI provider slice now owns read-only top-level admin `key list` and `key get` execution too, extending Phase 7 across the remaining non-mutating OpenAI admin-key retrieval surfaces while create/delete and broader mutation paths remain on the Go path
 
 ### Phase 8: Release/install migration
 
