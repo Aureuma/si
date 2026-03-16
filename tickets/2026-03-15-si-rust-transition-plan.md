@@ -414,6 +414,7 @@ Progress notes:
 - completed: initial `si-rs-provider-github` crate now owns GitHub context-list rendering from settings, giving Phase 7 its first real provider-specific Rust module boundary
 - completed: experimental Go `si github context list` now delegates to the Rust provider slice behind the compatibility boundary, with fixture-backed Rust CLI coverage and a live Go command proof
 - completed: the GitHub provider slice now also owns `context current` resolution and rendering, so the first Phase 7 auth/context path has moved behind a provider-specific Rust module and live Go delegation path
+- completed: the GitHub provider slice now owns `auth status` local auth/context resolution and rendering too, so the first Phase 7 provider auth-source seam has moved behind a provider-specific Rust module and live Go delegation path while the Go fallback still covers the full legacy behavior
 
 ### Phase 8: Release/install migration
 

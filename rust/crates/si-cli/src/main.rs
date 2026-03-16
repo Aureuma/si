@@ -33,7 +33,8 @@ use si_rs_fort::{
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_github::{
-    GitHubContextListEntry, list_contexts, render_context_list_text, resolve_current_context,
+    GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry, list_contexts,
+    render_context_list_text, resolve_auth_status, resolve_current_context,
 };
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
@@ -142,9 +143,43 @@ enum ProvidersCommand {
 
 #[derive(Debug, Subcommand)]
 enum GitHubCommand {
+    Auth {
+        #[command(subcommand)]
+        command: GitHubAuthCommand,
+    },
     Context {
         #[command(subcommand)]
         command: GitHubContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -1105,6 +1140,29 @@ struct GitHubCurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct GitHubAuthStatusPayload {
+    account_alias: String,
+    owner: String,
+    auth_mode: String,
+    base_url: String,
+    source: String,
+    token_preview: String,
+}
+
+impl From<GitHubAuthStatus> for GitHubAuthStatusPayload {
+    fn from(value: GitHubAuthStatus) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            owner: value.owner,
+            auth_mode: value.auth_mode,
+            base_url: value.base_url,
+            source: value.source,
+            token_preview: value.token_preview,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct DyadSpawnPlanView {
     dyad: String,
     role: String,
@@ -1492,6 +1550,37 @@ fn main() -> Result<()> {
             }
         },
         Command::GitHub { command } => match command {
+            GitHubCommand::Auth { command } => match command {
+                GitHubAuthCommand::Status {
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_github_auth_status(
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
             GitHubCommand::Context { command } => match command {
                 GitHubContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -2651,6 +2740,71 @@ fn show_github_context_current(
                 or_dash(&payload.base_url)
             );
             println!("Source: {}", or_dash(&payload.source));
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_github_auth_status(
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let status = resolve_auth_status(
+        &settings.github,
+        &env,
+        &GitHubAuthOverrides {
+            account: account.unwrap_or_default(),
+            owner: owner.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            auth_mode: auth_mode.unwrap_or_default(),
+            token: token.unwrap_or_default(),
+            app_id,
+            app_key: app_key.unwrap_or_default(),
+            installation_id,
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let payload = GitHubAuthStatusPayload::from(status);
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            let base_url = if payload.base_url.trim().is_empty() {
+                "https://api.github.com"
+            } else {
+                payload.base_url.as_str()
+            };
+            println!("GitHub auth: ready");
+            println!(
+                "Context: account={} owner={} auth={} base={}",
+                account,
+                or_dash(&payload.owner),
+                or_dash(&payload.auth_mode),
+                base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Token preview: {}", or_dash(&payload.token_preview));
         }
     }
     Ok(())

@@ -21,6 +21,28 @@ pub struct GitHubCurrentContext {
     pub source: String,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GitHubAuthOverrides {
+    pub account: String,
+    pub owner: String,
+    pub base_url: String,
+    pub auth_mode: String,
+    pub token: String,
+    pub app_id: Option<i64>,
+    pub app_key: String,
+    pub installation_id: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GitHubAuthStatus {
+    pub account_alias: String,
+    pub owner: String,
+    pub auth_mode: String,
+    pub base_url: String,
+    pub source: String,
+    pub token_preview: String,
+}
+
 pub fn list_contexts(settings: &GitHubSettings) -> Vec<GitHubContextListEntry> {
     let mut rows = Vec::with_capacity(settings.accounts.len());
     for (alias, entry) in &settings.accounts {
@@ -38,7 +60,7 @@ pub fn resolve_current_context(
     settings: &GitHubSettings,
     env: &BTreeMap<String, String>,
 ) -> GitHubCurrentContext {
-    let selected_account = resolve_account_selection(settings, env);
+    let selected_account = resolve_account_selection(settings, env, "");
     let entry = selected_account.as_ref().and_then(|alias| settings.accounts.get(alias));
 
     let owner = first_non_empty(&[
@@ -96,6 +118,81 @@ pub fn resolve_current_context(
         base_url,
         source: source.join(","),
     }
+}
+
+pub fn resolve_auth_status(
+    settings: &GitHubSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> Result<GitHubAuthStatus, String> {
+    let selected_account = resolve_account_selection(settings, env, &overrides.account);
+    let entry = selected_account.as_ref().and_then(|alias| settings.accounts.get(alias));
+
+    let owner = first_non_empty(&[
+        Some(overrides.owner.as_str()),
+        entry.and_then(|item| item.owner.as_deref()),
+        settings.default_owner.as_deref(),
+        env.get("GITHUB_DEFAULT_OWNER").map(String::as_str),
+    ])
+    .to_owned();
+    let base_url = first_non_empty(&[
+        Some(overrides.base_url.as_str()),
+        entry.and_then(|item| item.api_base_url.as_deref()),
+        settings.api_base_url.as_deref(),
+        env.get("GITHUB_API_BASE_URL").map(String::as_str),
+        Some("https://api.github.com"),
+    ])
+    .to_owned();
+
+    let mut source = Vec::new();
+    if let Some(alias) = selected_account.as_deref() {
+        if !overrides.account.trim().is_empty() && overrides.account.trim() == alias {
+            source.push("flag:--account".to_owned());
+        } else if settings.default_account.as_deref().map(str::trim) == Some(alias) {
+            source.push("settings.default_account".to_owned());
+        } else if env
+            .get("GITHUB_DEFAULT_ACCOUNT")
+            .map(|value| value.trim() == alias)
+            .unwrap_or(false)
+        {
+            source.push("env:GITHUB_DEFAULT_ACCOUNT".to_owned());
+        }
+    }
+
+    let (auth_mode, auth_mode_source) = resolve_auth_mode(settings, entry, env, overrides)?;
+    source.extend(auth_mode_source);
+    let token_preview = if auth_mode == "oauth" {
+        let (token, token_source) =
+            resolve_oauth_token(selected_account.as_deref(), entry, env, overrides);
+        if token.trim().is_empty() {
+            return Err("github oauth token not found".to_owned());
+        }
+        source.push(token_source);
+        preview_secret(&token)
+    } else {
+        let (app_id, app_id_source) =
+            resolve_app_id(selected_account.as_deref(), entry, env, overrides);
+        let (app_key, app_key_source) =
+            resolve_app_key(selected_account.as_deref(), entry, env, overrides);
+        let (_, installation_source) =
+            resolve_installation_id(selected_account.as_deref(), entry, env, overrides);
+        if app_id <= 0 || app_key.trim().is_empty() {
+            return Err("github app auth requires app id and private key".to_owned());
+        }
+        source.push(app_id_source);
+        source.push(app_key_source);
+        source.push(installation_source);
+        "-".to_owned()
+    };
+
+    Ok(GitHubAuthStatus {
+        account_alias: selected_account.unwrap_or_default(),
+        owner,
+        auth_mode,
+        base_url,
+        source: join_sources(&source),
+        token_preview,
+    })
 }
 
 fn build_list_entry(
@@ -186,8 +283,10 @@ fn bool_string(value: bool) -> String {
 fn resolve_account_selection(
     settings: &GitHubSettings,
     env: &BTreeMap<String, String>,
+    override_account: &str,
 ) -> Option<String> {
     let selected = first_non_empty(&[
+        Some(override_account),
         settings.default_account.as_deref(),
         env.get("GITHUB_DEFAULT_ACCOUNT").map(String::as_str),
     ]);
@@ -198,6 +297,247 @@ fn resolve_account_selection(
         return settings.accounts.keys().next().cloned();
     }
     None
+}
+
+fn resolve_auth_mode(
+    settings: &GitHubSettings,
+    entry: Option<&GitHubAccountEntry>,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> Result<(String, Vec<String>), String> {
+    let raw = first_non_empty(&[
+        Some(overrides.auth_mode.as_str()),
+        entry.and_then(|item| item.auth_mode.as_deref()),
+        env.get("GITHUB_AUTH_MODE").map(String::as_str),
+        env.get("GITHUB_DEFAULT_AUTH_MODE").map(String::as_str),
+        settings.default_auth_mode.as_deref(),
+        Some("app"),
+    ]);
+    let auth_mode = normalize_auth_mode(raw)?;
+    let source = if !overrides.auth_mode.trim().is_empty() {
+        vec!["flag:--auth-mode".to_owned()]
+    } else if entry.and_then(|item| item.auth_mode.as_deref()).map(str::trim) == Some(raw) {
+        vec!["settings.auth_mode".to_owned()]
+    } else if env.get("GITHUB_AUTH_MODE").map(|value| value.trim() == raw).unwrap_or(false) {
+        vec!["env:GITHUB_AUTH_MODE".to_owned()]
+    } else if env.get("GITHUB_DEFAULT_AUTH_MODE").map(|value| value.trim() == raw).unwrap_or(false)
+    {
+        vec!["env:GITHUB_DEFAULT_AUTH_MODE".to_owned()]
+    } else if settings.default_auth_mode.as_deref().map(str::trim) == Some(raw) {
+        vec!["settings.default_auth_mode".to_owned()]
+    } else {
+        Vec::new()
+    };
+    Ok((auth_mode.to_owned(), source))
+}
+
+fn normalize_auth_mode(raw: &str) -> Result<&'static str, String> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "app" => Ok("app"),
+        "oauth" | "token" | "pat" => Ok("oauth"),
+        value => Err(format!("invalid auth mode {value:?} (expected app|oauth)")),
+    }
+}
+
+fn resolve_oauth_token(
+    account_alias: Option<&str>,
+    entry: Option<&GitHubAccountEntry>,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> (String, String) {
+    if !overrides.token.trim().is_empty() {
+        return (overrides.token.trim().to_owned(), "flag:--token".to_owned());
+    }
+    if let Some(value) = entry.and_then(|item| item.oauth_access_token.as_deref()) {
+        if !value.trim().is_empty() {
+            return (value.trim().to_owned(), "settings.oauth_access_token".to_owned());
+        }
+    }
+    if let Some(reference) = entry.and_then(|item| item.oauth_token_env.as_deref()) {
+        if let Some(value) = env.get(reference.trim()) {
+            if !value.trim().is_empty() {
+                return (value.trim().to_owned(), format!("env:{}", reference.trim()));
+            }
+        }
+    }
+    let prefix = github_account_env_prefix(account_alias, entry);
+    for key in ["OAUTH_ACCESS_TOKEN", "TOKEN"] {
+        let env_key = format!("{prefix}{key}");
+        if let Some(value) = env.get(&env_key) {
+            if !value.trim().is_empty() {
+                return (value.trim().to_owned(), format!("env:{env_key}"));
+            }
+        }
+    }
+    for key in ["GITHUB_OAUTH_TOKEN", "GITHUB_TOKEN", "GH_TOKEN", "GITHUB_PAT", "GH_PAT"] {
+        if let Some(value) = env.get(key) {
+            if !value.trim().is_empty() {
+                return (value.trim().to_owned(), format!("env:{key}"));
+            }
+        }
+    }
+    (String::new(), String::new())
+}
+
+fn resolve_app_id(
+    account_alias: Option<&str>,
+    entry: Option<&GitHubAccountEntry>,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> (i64, String) {
+    if let Some(value) = overrides.app_id.filter(|value| *value > 0) {
+        return (value, "flag:--app-id".to_owned());
+    }
+    if let Some(value) = entry.and_then(|item| item.app_id).filter(|value| *value > 0) {
+        return (value, "settings.app_id".to_owned());
+    }
+    if let Some(reference) = entry.and_then(|item| item.app_id_env.as_deref()) {
+        if let Some(value) = env
+            .get(reference.trim())
+            .and_then(|raw| raw.trim().parse::<i64>().ok())
+            .filter(|value| *value > 0)
+        {
+            return (value, format!("env:{}", reference.trim()));
+        }
+    }
+    let env_key = format!("{}APP_ID", github_account_env_prefix(account_alias, entry));
+    if let Some(value) =
+        env.get(&env_key).and_then(|raw| raw.trim().parse::<i64>().ok()).filter(|value| *value > 0)
+    {
+        return (value, format!("env:{env_key}"));
+    }
+    if let Some(value) = env
+        .get("GITHUB_APP_ID")
+        .and_then(|raw| raw.trim().parse::<i64>().ok())
+        .filter(|value| *value > 0)
+    {
+        return (value, "env:GITHUB_APP_ID".to_owned());
+    }
+    (0, String::new())
+}
+
+fn resolve_app_key(
+    account_alias: Option<&str>,
+    entry: Option<&GitHubAccountEntry>,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> (String, String) {
+    if !overrides.app_key.trim().is_empty() {
+        return (overrides.app_key.trim().to_owned(), "flag:--app-key".to_owned());
+    }
+    if let Some(value) = entry.and_then(|item| item.app_private_key_pem.as_deref()) {
+        if !value.trim().is_empty() {
+            return (value.trim().to_owned(), "settings.app_private_key_pem".to_owned());
+        }
+    }
+    if let Some(reference) = entry.and_then(|item| item.app_private_key_env.as_deref()) {
+        if let Some(value) = env.get(reference.trim()) {
+            if !value.trim().is_empty() {
+                return (value.trim().to_owned(), format!("env:{}", reference.trim()));
+            }
+        }
+    }
+    let env_key = format!("{}APP_PRIVATE_KEY_PEM", github_account_env_prefix(account_alias, entry));
+    if let Some(value) = env.get(&env_key) {
+        if !value.trim().is_empty() {
+            return (value.trim().to_owned(), format!("env:{env_key}"));
+        }
+    }
+    if let Some(value) = env.get("GITHUB_APP_PRIVATE_KEY_PEM") {
+        if !value.trim().is_empty() {
+            return (value.trim().to_owned(), "env:GITHUB_APP_PRIVATE_KEY_PEM".to_owned());
+        }
+    }
+    (String::new(), String::new())
+}
+
+fn resolve_installation_id(
+    account_alias: Option<&str>,
+    entry: Option<&GitHubAccountEntry>,
+    env: &BTreeMap<String, String>,
+    overrides: &GitHubAuthOverrides,
+) -> (i64, String) {
+    if let Some(value) = overrides.installation_id.filter(|value| *value > 0) {
+        return (value, "flag:--installation-id".to_owned());
+    }
+    if let Some(value) = entry.and_then(|item| item.installation_id).filter(|value| *value > 0) {
+        return (value, "settings.installation_id".to_owned());
+    }
+    if let Some(reference) = entry.and_then(|item| item.installation_env.as_deref()) {
+        if let Some(value) = env
+            .get(reference.trim())
+            .and_then(|raw| raw.trim().parse::<i64>().ok())
+            .filter(|value| *value > 0)
+        {
+            return (value, format!("env:{}", reference.trim()));
+        }
+    }
+    let env_key = format!("{}INSTALLATION_ID", github_account_env_prefix(account_alias, entry));
+    if let Some(value) =
+        env.get(&env_key).and_then(|raw| raw.trim().parse::<i64>().ok()).filter(|value| *value > 0)
+    {
+        return (value, format!("env:{env_key}"));
+    }
+    if let Some(value) = env
+        .get("GITHUB_INSTALLATION_ID")
+        .and_then(|raw| raw.trim().parse::<i64>().ok())
+        .filter(|value| *value > 0)
+    {
+        return (value, "env:GITHUB_INSTALLATION_ID".to_owned());
+    }
+    (0, String::new())
+}
+
+fn github_account_env_prefix(
+    account_alias: Option<&str>,
+    entry: Option<&GitHubAccountEntry>,
+) -> String {
+    if let Some(prefix) = entry.and_then(|item| item.vault_prefix.as_deref()) {
+        let trimmed = prefix.trim();
+        if !trimmed.is_empty() {
+            let upper = trimmed.to_ascii_uppercase();
+            return if upper.ends_with('_') { upper } else { format!("{upper}_") };
+        }
+    }
+    let alias = account_alias.unwrap_or_default().trim();
+    if alias.is_empty() {
+        return String::new();
+    }
+    let mut slug = String::new();
+    let mut last_underscore = false;
+    for ch in alias.chars() {
+        let next = if ch.is_ascii_alphanumeric() {
+            last_underscore = false;
+            ch.to_ascii_uppercase()
+        } else {
+            if last_underscore {
+                continue;
+            }
+            last_underscore = true;
+            '_'
+        };
+        slug.push(next);
+    }
+    let slug = slug.trim_matches('_');
+    if slug.is_empty() { String::new() } else { format!("GITHUB_{slug}_") }
+}
+
+fn preview_secret(secret: &str) -> String {
+    let trimmed = secret.trim();
+    if trimmed.is_empty() {
+        return "-".to_owned();
+    }
+    let preview: String = trimmed.chars().take(8).collect();
+    if trimmed.chars().count() <= 10 { preview } else { format!("{preview}...") }
+}
+
+fn join_sources(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn or_dash(value: &str) -> &str {
@@ -277,5 +617,35 @@ mod tests {
         assert_eq!(resolved.base_url, "https://ghe.example/api/v3");
         assert!(resolved.source.contains("settings.default_account"));
         assert!(resolved.source.contains("settings.auth_mode"));
+    }
+
+    #[test]
+    fn resolve_auth_status_uses_oauth_sources() {
+        let mut accounts = BTreeMap::new();
+        accounts.insert(
+            "core".to_owned(),
+            GitHubAccountEntry {
+                owner: Some("Aureuma".to_owned()),
+                auth_mode: Some("oauth".to_owned()),
+                ..GitHubAccountEntry::default()
+            },
+        );
+        let settings = GitHubSettings {
+            default_account: Some("core".to_owned()),
+            accounts,
+            ..GitHubSettings::default()
+        };
+        let mut env = BTreeMap::new();
+        env.insert("GITHUB_TOKEN".to_owned(), "gho_example_token".to_owned());
+
+        let resolved =
+            resolve_auth_status(&settings, &env, &GitHubAuthOverrides::default()).unwrap();
+
+        assert_eq!(resolved.account_alias, "core");
+        assert_eq!(resolved.owner, "Aureuma");
+        assert_eq!(resolved.auth_mode, "oauth");
+        assert_eq!(resolved.base_url, "https://api.github.com");
+        assert_eq!(resolved.source, "settings.default_account,settings.auth_mode,env:GITHUB_TOKEN");
+        assert_eq!(resolved.token_preview, "gho_exam...");
     }
 }

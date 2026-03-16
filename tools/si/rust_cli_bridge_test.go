@@ -297,6 +297,53 @@ func TestRunGitHubContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 }
 
+func TestRunGitHubAuthStatusCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubAuthStatusCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGitHubAuthStatusCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github auth status path by default")
+	}
+}
+
+func TestRunGitHubAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-auth-status'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubAuthStatusCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGitHubAuthStatusCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github auth status to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-auth-status" {
+		t.Fatalf("expected delegated Rust github auth status output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be github auth status + flags, got %q", string(argsData))
+	}
+}
+
 func TestMaybeRunRustVaultTrustLookupDelegatesAndParsesJSON(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

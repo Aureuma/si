@@ -392,6 +392,14 @@ func cmdGithubAuth(args []string) {
 }
 
 func cmdGithubAuthStatus(args []string) {
+	delegated, err := runGitHubAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	fs := flag.NewFlagSet("github auth status", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
 	owner := fs.String("owner", "", "default owner/org")

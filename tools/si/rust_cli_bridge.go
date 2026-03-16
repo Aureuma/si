@@ -371,6 +371,10 @@ func runGitHubContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"context", "current"}, args...)...)
 }
 
+func runGitHubAuthStatusCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"auth", "status"}, args...)...)
+}
+
 func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodexSpawnPlan, bool, error) {
 	if !shouldUseExperimentalRustCLI() {
 		return nil, false, nil
