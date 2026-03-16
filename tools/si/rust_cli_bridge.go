@@ -1406,6 +1406,18 @@ func runGitHubPRGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"pr", "get"}, args...)...)
 }
 
+func runGitHubPRCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"pr", "create"}, args...)...)
+}
+
+func runGitHubPRCommentCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"pr", "comment"}, args...)...)
+}
+
+func runGitHubPRMergeCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"pr", "merge"}, args...)...)
+}
+
 func runGitHubPRCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1415,6 +1427,12 @@ func runGitHubPRCommand(args []string) (bool, error) {
 		return runGitHubPRListCommand(args[1:])
 	case "get":
 		return runGitHubPRGetCommand(args[1:])
+	case "create":
+		return runGitHubPRCreateCommand(args[1:])
+	case "comment":
+		return runGitHubPRCommentCommand(args[1:])
+	case "merge":
+		return runGitHubPRMergeCommand(args[1:])
 	default:
 		return false, nil
 	}

@@ -5853,6 +5853,108 @@ func TestRunGitHubPRGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGitHubPRCreateCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-pr-create'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubPRCreateCommand([]string{"Aureuma/si", "--head", "feature/rust", "--base", "main", "--title", "Rust PR", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubPRCreateCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github pr create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-pr-create" {
+		t.Fatalf("expected delegated Rust github pr create output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\npr\ncreate\nAureuma/si\n--head\nfeature/rust\n--base\nmain\n--title\nRust PR\n--json" {
+		t.Fatalf("expected Rust CLI args to be github pr create + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubPRCommentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-pr-comment'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubPRCommentCommand([]string{"Aureuma/si", "35", "--body", "ship it", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubPRCommentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github pr comment to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-pr-comment" {
+		t.Fatalf("expected delegated Rust github pr comment output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\npr\ncomment\nAureuma/si\n35\n--body\nship it\n--json" {
+		t.Fatalf("expected Rust CLI args to be github pr comment + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubPRMergeCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-pr-merge'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubPRMergeCommand([]string{"Aureuma/si", "35", "--method", "squash", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubPRMergeCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github pr merge to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-pr-merge" {
+		t.Fatalf("expected delegated Rust github pr merge output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\npr\nmerge\nAureuma/si\n35\n--method\nsquash\n--json" {
+		t.Fatalf("expected Rust CLI args to be github pr merge + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubRawCommandDefaultsToGoForNonGetMethod(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
