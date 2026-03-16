@@ -1028,6 +1028,76 @@ pub fn get_workflow_run(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn dispatch_workflow(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    workflow: &str,
+    git_ref: &str,
+    inputs: &BTreeMap<String, String>,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    if workflow.trim().is_empty() {
+        return Err("workflow id/file is required".to_owned());
+    }
+    if git_ref.trim().is_empty() {
+        return Err("--ref is required".to_owned());
+    }
+    let path = format!("/repos/{owner}/{repo}/actions/workflows/{}/dispatches", workflow.trim());
+    let mut payload = serde_json::json!({
+        "ref": git_ref.trim(),
+    });
+    if !inputs.is_empty() {
+        payload["inputs"] = serde_json::to_value(inputs)
+            .map_err(|err| format!("encode workflow inputs: {err}"))?;
+    }
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &path,
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn cancel_workflow_run(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    run_id: i64,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/actions/runs/{run_id}/cancel");
+    normalize_response(github_send_without_body(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &path,
+        &token,
+    )?)
+}
+
+pub fn rerun_workflow_run(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    run_id: i64,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!("/repos/{owner}/{repo}/actions/runs/{run_id}/rerun");
+    normalize_response(github_send_without_body(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &path,
+        &token,
+    )?)
+}
+
 pub fn get_workflow_logs(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -2055,6 +2125,7 @@ fn github_send_without_body(
 ) -> Result<Response, String> {
     let url = resolve_url(base_url, path, &BTreeMap::new())?;
     let builder = match method {
+        "POST" => client.post(url),
         "DELETE" => client.delete(url),
         _ => return Err(format!("unsupported github bodyless request method: {method}")),
     };
