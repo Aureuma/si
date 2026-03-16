@@ -602,6 +602,82 @@ fn github_release_get_json_fetches_tag_with_app_auth() {
 }
 
 #[test]
+fn github_repo_list_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /users/Aureuma/repos?page=1&per_page=100 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_repo_list")],
+            r#"[{"id":101,"full_name":"Aureuma/si"}]"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "repo",
+            "list",
+            "Aureuma",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["owner"], "Aureuma");
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["data"][0]["full_name"], "Aureuma/si");
+    server.join();
+}
+
+#[test]
+fn github_repo_get_json_fetches_repo_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_repo_get")],
+            r#"{"id":101,"full_name":"Aureuma/si"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "repo",
+            "get",
+            "Aureuma/si",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_repo_get");
+    assert_eq!(parsed["data"]["full_name"], "Aureuma/si");
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
