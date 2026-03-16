@@ -189,3 +189,80 @@ func TestCmdCodexRespawnUsesRustPlanForRemoveAndSpawnActions(t *testing.T) {
 		t.Fatalf("unexpected rust respawn args: %q", string(argsData))
 	}
 }
+
+func TestCmdCodexRespawnProfileMatrix(t *testing.T) {
+	cases := []struct {
+		name         string
+		profile      string
+		removeTarget string
+	}{
+		{name: "ferma", profile: "ferma", removeTarget: "ferma-old"},
+		{name: "berylla", profile: "berylla", removeTarget: "berylla-old"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			argsPath := filepath.Join(dir, "args.txt")
+			scriptPath := filepath.Join(dir, "si-rs")
+			script := "#!/bin/sh\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\nprintf '%s\\n' '{\"effective_name\":\"" + tc.name + "\",\"profile_id\":\"" + tc.profile + "\",\"remove_targets\":[\"" + tc.removeTarget + "\",\"" + tc.name + "\"]}'\n"
+			if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+				t.Fatalf("write script: %v", err)
+			}
+
+			t.Setenv(siRustCLIBinEnv, scriptPath)
+			t.Setenv(siExperimentalRustCLIEnv, "")
+
+			prevRemove := runCodexRemoveFn
+			prevSpawn := runCodexSpawnFn
+			t.Cleanup(func() {
+				runCodexRemoveFn = prevRemove
+				runCodexSpawnFn = prevSpawn
+			})
+
+			var removes [][]string
+			var spawns [][]string
+			runCodexRemoveFn = func(args []string) {
+				removes = append(removes, append([]string(nil), args...))
+			}
+			runCodexSpawnFn = func(args []string) {
+				spawns = append(spawns, append([]string(nil), args...))
+			}
+
+			cmdCodexRespawn([]string{tc.name, "--profile=", "--volumes"})
+
+			if len(removes) != 2 {
+				t.Fatalf("unexpected remove calls: %#v", removes)
+			}
+			wantRemoves := [][]string{
+				{"--volumes", tc.removeTarget},
+				{"--volumes", tc.name},
+			}
+			for i := range wantRemoves {
+				if strings.Join(removes[i], "\n") != strings.Join(wantRemoves[i], "\n") {
+					t.Fatalf("unexpected remove args[%d]=%v want %v", i, removes[i], wantRemoves[i])
+				}
+			}
+			if len(spawns) != 1 {
+				t.Fatalf("unexpected spawn calls: %#v", spawns)
+			}
+			wantSpawn := []string{"--profile", tc.profile, tc.name}
+			if strings.Join(spawns[0], "\n") != strings.Join(wantSpawn, "\n") {
+				t.Fatalf("unexpected spawn args=%v want %v", spawns[0], wantSpawn)
+			}
+
+			argsData, err := os.ReadFile(argsPath)
+			if err != nil {
+				t.Fatalf("read args file: %v", err)
+			}
+			argsText := string(argsData)
+			if !strings.Contains(argsText, "codex\nrespawn-plan\n"+tc.name+"\n--format\njson") {
+				t.Fatalf("unexpected rust respawn args: %q", argsText)
+			}
+			if !strings.Contains(argsText, "--profile-id\n"+tc.profile) {
+				t.Fatalf("unexpected rust respawn args: %q", argsText)
+			}
+		})
+	}
+}
