@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"si/tools/si/internal/stripebridge"
@@ -61,5 +63,89 @@ func TestParseStripeEnvironment(t *testing.T) {
 	}
 	if _, err := parseStripeEnvironment("test"); err == nil {
 		t.Fatalf("expected test env rejection")
+	}
+}
+
+func TestCmdStripeContextListDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"contexts\":[{\"alias\":\"core\",\"id\":\"acct_core\"}]}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdStripeContextList([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "stripe\ncontext\nlist\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestCmdStripeContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"account_alias\":\"core\",\"account_id\":\"acct_core\",\"environment\":\"sandbox\",\"key_source\":\"settings.sandbox_key\"}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdStripeContextCurrent([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"account_alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "stripe\ncontext\ncurrent\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
+func TestCmdStripeAuthStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"account_alias\":\"core\",\"account_id\":\"acct_core\",\"environment\":\"sandbox\",\"key_source\":\"env:SI_STRIPE_API_KEY\",\"key_preview\":\"sk_test_...\"}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdStripeAuthStatus([]string{"--json"})
+	})
+
+	if !strings.Contains(out, "\"account_alias\":\"core\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "stripe\nauth\nstatus\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
 	}
 }

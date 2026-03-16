@@ -13,6 +13,8 @@ pub struct Settings {
     #[serde(default)]
     pub codex: CodexSettings,
     #[serde(default)]
+    pub stripe: StripeSettings,
+    #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
     pub dyad: DyadSettings,
@@ -63,6 +65,7 @@ impl Settings {
                 workspace_root: None,
             },
             codex: CodexSettings::default(),
+            stripe: StripeSettings::default(),
             github: GitHubSettings::default(),
             dyad: DyadSettings::default(),
             surf: SurfSettings::default(),
@@ -108,6 +111,7 @@ impl Settings {
                 }
                 self.paths = payload.paths;
                 self.codex = payload.codex;
+                self.stripe = payload.stripe;
                 self.github = payload.github;
                 self.dyad = payload.dyad;
             }
@@ -147,6 +151,7 @@ impl Settings {
         normalize_option_string(&mut self.codex.workspace);
         normalize_option_string(&mut self.codex.workdir);
         normalize_option_string(&mut self.codex.profile);
+        self.stripe.normalize();
         self.github.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
         normalize_option_string(&mut self.dyad.critic_image);
@@ -164,6 +169,8 @@ struct CoreSettingsModule {
     pub paths: SettingsPaths,
     #[serde(default)]
     pub codex: CodexSettings,
+    #[serde(default)]
+    pub stripe: StripeSettings,
     #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
@@ -223,6 +230,56 @@ pub struct CodexSettings {
     pub workspace: Option<String>,
     pub workdir: Option<String>,
     pub profile: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct StripeSettings {
+    pub organization: Option<String>,
+    pub default_account: Option<String>,
+    pub default_env: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, StripeAccountEntry>,
+}
+
+impl StripeSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.organization);
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.default_env);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct StripeAccountEntry {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    pub live_key: Option<String>,
+    pub sandbox_key: Option<String>,
+    pub live_key_env: Option<String>,
+    pub sandbox_key_env: Option<String>,
+}
+
+impl StripeAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.id);
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.live_key);
+        normalize_option_string(&mut self.sandbox_key);
+        normalize_option_string(&mut self.live_key_env);
+        normalize_option_string(&mut self.sandbox_key_env);
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]

@@ -36,6 +36,13 @@ use si_rs_provider_github::{
     GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry, list_contexts,
     render_context_list_text, resolve_auth_status, resolve_current_context,
 };
+use si_rs_provider_stripe::{
+    StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
+    list_contexts as list_stripe_contexts,
+    render_context_list_text as render_stripe_context_list_text,
+    resolve_auth_status as resolve_stripe_auth_status,
+    resolve_current_context as resolve_stripe_current_context,
+};
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
 use si_rs_warmup::{
@@ -76,6 +83,10 @@ enum Command {
     Providers {
         #[command(subcommand)]
         command: ProvidersCommand,
+    },
+    Stripe {
+        #[command(subcommand)]
+        command: StripeCommand,
     },
     #[command(name = "github")]
     GitHub {
@@ -134,6 +145,62 @@ enum ProvidersCommand {
     Characteristics {
         #[arg(long)]
         provider: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum StripeCommand {
+    Auth {
+        #[command(subcommand)]
+        command: StripeAuthCommand,
+    },
+    Context {
+        #[command(subcommand)]
+        command: StripeContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum StripeAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum StripeContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
         #[arg(long, default_value = "text")]
@@ -1126,6 +1193,51 @@ struct ProviderCapabilitiesView {
 }
 
 #[derive(Debug, Serialize)]
+struct StripeContextListPayload {
+    contexts: Vec<StripeContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct StripeCurrentContextPayload {
+    account_alias: String,
+    account_id: String,
+    environment: String,
+    key_source: String,
+}
+
+impl From<StripeCurrentContext> for StripeCurrentContextPayload {
+    fn from(value: StripeCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            account_id: value.account_id,
+            environment: value.environment,
+            key_source: value.key_source,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct StripeAuthStatusPayload {
+    account_alias: String,
+    account_id: String,
+    environment: String,
+    key_source: String,
+    key_preview: String,
+}
+
+impl From<StripeAuthStatus> for StripeAuthStatusPayload {
+    fn from(value: StripeAuthStatus) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            account_id: value.account_id,
+            environment: value.environment,
+            key_source: value.key_source,
+            key_preview: value.key_preview,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct GitHubContextListPayload {
     contexts: Vec<GitHubContextListEntry>,
 }
@@ -1548,6 +1660,32 @@ fn main() -> Result<()> {
                 let format = if json { OutputFormat::Json } else { format };
                 show_provider_characteristics(provider.as_deref(), format)?
             }
+        },
+        Command::Stripe { command } => match command {
+            StripeCommand::Auth { command } => match command {
+                StripeAuthCommand::Status {
+                    account,
+                    env,
+                    api_key,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_stripe_auth_status(account, env, api_key, home, settings_file, format)?
+                }
+            },
+            StripeCommand::Context { command } => match command {
+                StripeContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_stripe_context_list(home, settings_file, format)?
+                }
+                StripeContextCommand::Current { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_stripe_context_current(home, settings_file, format)?
+                }
+            },
         },
         Command::GitHub { command } => match command {
             GitHubCommand::Auth { command } => match command {
@@ -2705,6 +2843,107 @@ fn show_github_context_list(
             println!("{}", serde_json::to_string_pretty(&GitHubContextListPayload { contexts })?)
         }
         OutputFormat::Text => print!("{}", render_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_stripe_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_stripe_contexts(&settings.stripe);
+    match format {
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&StripeContextListPayload { contexts })?)
+        }
+        OutputFormat::Text => print!("{}", render_stripe_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_stripe_context_current(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = StripeCurrentContextPayload::from(
+        resolve_stripe_current_context(&settings.stripe, &env).map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!(
+                "Current stripe context: account={} ({}) env={}",
+                account,
+                or_dash(&payload.account_id),
+                payload.environment
+            );
+            println!("Key source: {}", or_dash(&payload.key_source));
+        }
+    }
+    Ok(())
+}
+
+fn show_stripe_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = StripeAuthStatusPayload::from(
+        resolve_stripe_auth_status(
+            &settings.stripe,
+            &env,
+            &StripeAuthOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                api_key: api_key.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("Stripe auth: ready");
+            println!(
+                "Context: account={} ({}) env={}",
+                account,
+                or_dash(&payload.account_id),
+                payload.environment
+            );
+            println!("Key source: {}", or_dash(&payload.key_source));
+            println!("Key preview: {}", or_dash(&payload.key_preview));
+        }
     }
     Ok(())
 }

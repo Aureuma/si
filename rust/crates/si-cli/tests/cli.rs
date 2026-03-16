@@ -494,6 +494,124 @@ owner = "Aureuma"
 }
 
 #[test]
+fn stripe_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[stripe]
+default_account = "core"
+
+[stripe.accounts.core]
+id = "acct_core"
+name = "Core"
+live_key_env = "CORE_LIVE"
+
+[stripe.accounts.ops]
+id = "acct_ops"
+sandbox_key = "sk_test_ops"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["stripe", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts.len(), 2);
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "yes");
+    assert_eq!(contexts[0]["live_key_config"], "yes");
+    assert_eq!(contexts[1]["alias"], "ops");
+    assert_eq!(contexts[1]["sandbox_key_config"], "yes");
+}
+
+#[test]
+fn stripe_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[stripe]
+default_account = "core"
+default_env = "sandbox"
+
+[stripe.accounts.core]
+id = "acct_core"
+sandbox_key = "sk_test_core"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["stripe", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["account_id"], "acct_core");
+    assert_eq!(parsed["environment"], "sandbox");
+    assert_eq!(parsed["key_source"], "settings.sandbox_key");
+}
+
+#[test]
+fn stripe_auth_status_json_resolves_env_key() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[stripe]
+default_env = "sandbox"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("SI_STRIPE_API_KEY", "sk_test_shared")
+        .args(["stripe", "auth", "status", "--account", "acct_123", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "");
+    assert_eq!(parsed["account_id"], "acct_123");
+    assert_eq!(parsed["environment"], "sandbox");
+    assert_eq!(parsed["key_source"], "env:SI_STRIPE_API_KEY");
+    assert_eq!(parsed["key_preview"], "sk_test_...");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");
