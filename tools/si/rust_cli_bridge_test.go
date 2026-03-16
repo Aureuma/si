@@ -4996,6 +4996,100 @@ func TestRunGitHubBranchGetCommandDelegatesToRustCLIWhenConfigured(t *testing.T)
 	}
 }
 
+func TestRunGitHubGitCredentialCommandDefaultsToGoForNonGet(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubGitCredentialCommand([]string{"store"})
+	if err != nil {
+		t.Fatalf("runGitHubGitCredentialCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github git credential store path by default")
+	}
+}
+
+func TestRunGitHubGitCredentialCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-git-credential'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubGitCredentialCommand([]string{"get", "--auth-mode", "oauth"})
+		if err != nil {
+			t.Fatalf("runGitHubGitCredentialCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github git credential get to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-git-credential" {
+		t.Fatalf("expected delegated Rust github git credential output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ngit\ncredential\nget\n--auth-mode\noauth" {
+		t.Fatalf("expected Rust CLI args to be github git credential get + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubGitCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGitHubGitCommand([]string{"setup"})
+	if err != nil {
+		t.Fatalf("runGitHubGitCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go github git setup path by default")
+	}
+}
+
+func TestRunGitHubGitCommandDelegatesToRustCLIForCredentialGet(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-git-wrapper'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubGitCommand([]string{"credential", "get", "--auth-mode", "oauth"})
+		if err != nil {
+			t.Fatalf("runGitHubGitCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github git wrapper to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-git-wrapper" {
+		t.Fatalf("expected delegated Rust github git output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ngit\ncredential\nget\n--auth-mode\noauth" {
+		t.Fatalf("expected Rust CLI args to be github git credential get + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubIssueListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

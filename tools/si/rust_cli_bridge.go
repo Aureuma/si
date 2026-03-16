@@ -1221,6 +1221,38 @@ func runGitHubWorkflowCommand(args []string) (bool, error) {
 	}
 }
 
+func runGitHubGitCredentialGetCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"git", "credential", "get"}, args...)...)
+}
+
+func runGitHubGitCredentialCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return runGitHubGitCredentialGetCommand(args)
+	}
+	first := strings.ToLower(strings.TrimSpace(args[0]))
+	if strings.HasPrefix(first, "-") {
+		return runGitHubGitCredentialGetCommand(args)
+	}
+	switch first {
+	case "get":
+		return runGitHubGitCredentialGetCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGitHubGitCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "credential":
+		return runGitHubGitCredentialCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGitHubIssueListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"issue", "list"}, args...)...)
 }
@@ -1276,6 +1308,8 @@ func runGitHubCommand(args []string) (bool, error) {
 		return runGitHubContextCommand(args[1:])
 	case "branch":
 		return runGitHubBranchCommand(args[1:])
+	case "git":
+		return runGitHubGitCommand(args[1:])
 	case "issue":
 		return runGitHubIssueCommand(args[1:])
 	case "pr":
