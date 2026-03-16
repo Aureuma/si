@@ -2020,6 +2020,41 @@ fn oci_context_current_json_reads_profile_config() {
 }
 
 #[test]
+fn oci_auth_status_json_reads_local_signature_context() {
+    let config_dir = tempdir().expect("tempdir");
+    let config_file = config_dir.path().join("config");
+    let key_dir = config_dir.path().join("keys");
+    let key_file = key_dir.join("oci.pem");
+    fs::create_dir_all(&key_dir).expect("mkdir key dir");
+    fs::write(
+        &config_file,
+        "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nuser=ocid1.user.oc1..example\nfingerprint=aa:bb:cc\nkey_file=keys/oci.pem\nregion=us-phoenix-1\n",
+    )
+    .expect("write config");
+    fs::write(&key_file, "dummy-private-key").expect("write key");
+
+    let output = cargo_bin()
+        .args(["oci", "auth", "status"])
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .args(["--verify=false", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["profile"], "DEFAULT");
+    assert_eq!(parsed["region"], "us-phoenix-1");
+    assert_eq!(parsed["auth_style"], "signature");
+    assert_eq!(parsed["tenancy_ocid"], "ocid1.tenancy.oc1..example");
+    assert_eq!(parsed["user_ocid"], "ocid1.user.oc1..example");
+    assert_eq!(parsed["fingerprint"], "aa:bb:cc");
+    assert_eq!(parsed["source"], "profile:DEFAULT");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");
