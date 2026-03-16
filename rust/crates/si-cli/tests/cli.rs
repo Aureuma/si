@@ -816,6 +816,42 @@ prod_zone_id = "zone_prod"
 }
 
 #[test]
+fn cloudflare_auth_status_json_verifies_token() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /user/tokens/verify HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[],
+            r#"{"success":true,"result":{"id":"verify_123","status":"active"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "auth", "status"])
+        .args(["--account", "core"])
+        .args(["--env", "prod"])
+        .args(["--zone-id", "zone_prod"])
+        .args(["--account-id", "acc_core"])
+        .args(["--api-token", "cf-test-token"])
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["account_id"], "acc_core");
+    assert_eq!(parsed["zone_id"], "zone_prod");
+    assert_eq!(parsed["token_preview"], "cf-tes...");
+    assert_eq!(parsed["verify"]["result"]["id"], "verify_123");
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
