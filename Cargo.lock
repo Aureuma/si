@@ -731,6 +731,7 @@ dependencies = [
  "si-rs-provider-gcp",
  "si-rs-provider-github",
  "si-rs-provider-google",
+ "si-rs-provider-oci",
  "si-rs-provider-openai",
  "si-rs-provider-stripe",
  "si-rs-provider-workos",
@@ -861,6 +862,14 @@ dependencies = [
 
 [[package]]
 name = "si-rs-provider-google"
+version = "0.54.0"
+dependencies = [
+ "serde",
+ "si-rs-config",
+]
+
+[[package]]
+name = "si-rs-provider-oci"
 version = "0.54.0"
 dependencies = [
  "serde",
