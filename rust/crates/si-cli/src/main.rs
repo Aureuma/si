@@ -1781,6 +1781,10 @@ enum GCPCommand {
         #[command(subcommand)]
         command: GCPAPIKeyCommand,
     },
+    Iam {
+        #[command(subcommand)]
+        command: GCPIAMCommand,
+    },
     Raw {
         #[arg(long)]
         account: Option<String>,
@@ -2054,6 +2058,378 @@ enum GCPAPIKeyCommand {
         resource: Option<String>,
         #[arg(long)]
         force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPIAMCommand {
+    #[command(alias = "service-accounts", alias = "sa")]
+    ServiceAccount {
+        #[command(subcommand)]
+        command: GCPIAMServiceAccountCommand,
+    },
+    #[command(alias = "service-account-keys", alias = "sa-key", alias = "key", alias = "keys")]
+    ServiceAccountKey {
+        #[command(subcommand)]
+        command: GCPIAMServiceAccountKeyCommand,
+    },
+    #[command(alias = "iam-policy")]
+    Policy {
+        #[command(subcommand)]
+        command: GCPIAMPolicyCommand,
+    },
+    #[command(alias = "roles")]
+    Role {
+        #[command(subcommand)]
+        command: GCPIAMRoleCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPIAMServiceAccountCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        account_id: String,
+        #[arg(long)]
+        display_name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPIAMServiceAccountKeyCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        service_account: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        service_account: String,
+        #[arg(long, default_value = "TYPE_GOOGLE_CREDENTIALS_FILE")]
+        private_key_type: String,
+        #[arg(long, default_value = "KEY_ALG_RSA_2048")]
+        key_algorithm: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        service_account: Option<String>,
+        #[arg(long)]
+        key: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPIAMPolicyCommand {
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        resource: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Set {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        resource: Option<String>,
+        #[arg(long)]
+        policy_json: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "test")]
+    TestPermissions {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        resource: Option<String>,
+        #[arg(long = "permission")]
+        permissions: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPIAMRoleCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        parent: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        resource: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -9744,6 +10120,338 @@ fn main() -> Result<()> {
                         raw,
                     )?
                 }
+            },
+            GCPCommand::Iam { command } => match command {
+                GCPIAMCommand::ServiceAccount { command } => match command {
+                    GCPIAMServiceAccountCommand::List {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        limit,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_list(
+                            account, env, project, base_url, access_token, limit, params, home,
+                            settings_file, format, raw,
+                        )?
+                    }
+                    GCPIAMServiceAccountCommand::Get {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name,
+                        resource,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_get(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            name.or(resource),
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GCPIAMServiceAccountCommand::Create {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        account_id,
+                        display_name,
+                        description,
+                        body,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_create(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            account_id,
+                            display_name,
+                            description,
+                            body,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GCPIAMServiceAccountCommand::Delete {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name,
+                        resource,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_delete(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            name.or(resource),
+                            force,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                GCPIAMCommand::ServiceAccountKey { command } => match command {
+                    GCPIAMServiceAccountKeyCommand::List {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        service_account,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_key_list(
+                            account, env, project, base_url, access_token, service_account,
+                            params, home, settings_file, format, raw,
+                        )?
+                    }
+                    GCPIAMServiceAccountKeyCommand::Create {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        service_account,
+                        private_key_type,
+                        key_algorithm,
+                        body,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_key_create(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            service_account,
+                            private_key_type,
+                            key_algorithm,
+                            body,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GCPIAMServiceAccountKeyCommand::Delete {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name,
+                        service_account,
+                        key,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_service_account_key_delete(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            name,
+                            service_account,
+                            key,
+                            force,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                GCPIAMCommand::Policy { command } => match command {
+                    GCPIAMPolicyCommand::Get {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        resource,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_policy_get(
+                            account, env, project, base_url, access_token, resource, home,
+                            settings_file, format, raw,
+                        )?
+                    }
+                    GCPIAMPolicyCommand::Set {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        resource,
+                        policy_json,
+                        body,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_policy_set(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            resource,
+                            policy_json,
+                            body,
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GCPIAMPolicyCommand::TestPermissions {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        resource,
+                        permissions,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_policy_test_permissions(
+                            account, env, project, base_url, access_token, resource, permissions,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                },
+                GCPIAMCommand::Role { command } => match command {
+                    GCPIAMRoleCommand::List {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        parent,
+                        limit,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_role_list(
+                            account, env, project, base_url, access_token, parent, limit, params,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    GCPIAMRoleCommand::Get {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        name,
+                        resource,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_iam_role_get(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            name.or(resource),
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
             },
             GCPCommand::Raw {
                 account,
@@ -17562,6 +18270,569 @@ fn run_gcp_apikey_undelete(
             method: "POST".to_owned(),
             path: format!("/v2/{resource_name}:undelete"),
             json_body: Some(serde_json::json!({})),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+fn gcp_iam_base_url(base_url: Option<String>) -> Option<String> {
+    Some(
+        base_url
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "https://iam.googleapis.com".to_owned()),
+    )
+}
+
+fn gcp_crm_base_url(base_url: Option<String>) -> Option<String> {
+    Some(
+        base_url
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "https://cloudresourcemanager.googleapis.com".to_owned()),
+    )
+}
+
+fn normalize_gcp_service_account_name(project_id: &str, value: &str) -> String {
+    let value = value.trim();
+    if value.starts_with("projects/") {
+        return value.trim_matches('/').to_owned();
+    }
+    if value.contains('@') {
+        return format!(
+            "projects/{}/serviceAccounts/{}",
+            project_id.trim(),
+            value
+        );
+    }
+    value.trim_matches('/').to_owned()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_gcp_iam_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GCPRuntime> {
+    load_gcp_runtime(
+        account,
+        environment,
+        project,
+        gcp_iam_base_url(base_url),
+        access_token,
+        home,
+        settings_file,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_gcp_crm_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<GCPRuntime> {
+    load_gcp_runtime(
+        account,
+        environment,
+        project,
+        gcp_crm_base_url(base_url),
+        access_token,
+        home,
+        settings_file,
+        true,
+    )
+}
+
+fn resolve_gcp_iam_policy_resource(runtime: &GCPRuntime, resource: Option<String>) -> String {
+    let resource = resource.unwrap_or_default().trim().trim_matches('/').to_owned();
+    if resource.is_empty() {
+        format!("projects/{}", runtime.project_id.trim())
+    } else {
+        resource
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    limit: Option<usize>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let mut params = parse_gcp_params(params)?;
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.insert("pageSize".to_owned(), limit.to_string());
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v1/projects/{}/serviceAccounts", runtime.project_id.trim()),
+            params,
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_get(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource_name = normalize_gcp_service_account_name(
+        &runtime.project_id,
+        name.as_deref().unwrap_or_default(),
+    );
+    if resource_name.trim().is_empty() {
+        anyhow::bail!("service account name is required");
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v1/{resource_name}"),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_create(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    account_id: String,
+    display_name: Option<String>,
+    description: Option<String>,
+    body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    if account_id.trim().is_empty() {
+        anyhow::bail!("--account-id is required");
+    }
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/projects/{}/serviceAccounts", runtime.project_id.trim()),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let mut payload = parse_gcp_json_body_params(params)?;
+        payload.insert("accountId".to_owned(), Value::String(account_id.trim().to_owned()));
+        let mut sa = serde_json::Map::new();
+        if let Some(display_name) = display_name.filter(|value| !value.trim().is_empty()) {
+            sa.insert("displayName".to_owned(), Value::String(display_name.trim().to_owned()));
+        }
+        if let Some(description) = description.filter(|value| !value.trim().is_empty()) {
+            sa.insert("description".to_owned(), Value::String(description.trim().to_owned()));
+        }
+        if !sa.is_empty() {
+            payload.insert("serviceAccount".to_owned(), Value::Object(sa));
+        }
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/projects/{}/serviceAccounts", runtime.project_id.trim()),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_delete(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("--force is required");
+    }
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource_name = normalize_gcp_service_account_name(
+        &runtime.project_id,
+        name.as_deref().unwrap_or_default(),
+    );
+    if resource_name.trim().is_empty() {
+        anyhow::bail!("service account name is required");
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/v1/{resource_name}"),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_key_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    service_account: String,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let sa_name = normalize_gcp_service_account_name(&runtime.project_id, &service_account);
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v1/{sa_name}/keys"),
+            params: parse_gcp_params(params)?,
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_key_create(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    service_account: String,
+    private_key_type: String,
+    key_algorithm: String,
+    body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let sa_name = normalize_gcp_service_account_name(&runtime.project_id, &service_account);
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{sa_name}/keys"),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let mut payload = parse_gcp_json_body_params(params)?;
+        payload
+            .entry("privateKeyType".to_owned())
+            .or_insert_with(|| Value::String(private_key_type.trim().to_owned()));
+        payload
+            .entry("keyAlgorithm".to_owned())
+            .or_insert_with(|| Value::String(key_algorithm.trim().to_owned()));
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{sa_name}/keys"),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_service_account_key_delete(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    service_account: Option<String>,
+    key: Option<String>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("--force is required");
+    }
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let key_name = if let Some(name) = name.filter(|value| !value.trim().is_empty()) {
+        name.trim().to_owned()
+    } else {
+        let sa = service_account
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("provide --name or (--service-account and --key)"))?;
+        let key = key
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("provide --name or (--service-account and --key)"))?;
+        format!(
+            "{}/keys/{}",
+            normalize_gcp_service_account_name(&runtime.project_id, &sa),
+            key.trim()
+        )
+    };
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/v1/{key_name}"),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_policy_get(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    resource: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_crm_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource = resolve_gcp_iam_policy_resource(&runtime, resource);
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{resource}:getIamPolicy"),
+            json_body: Some(serde_json::json!({})),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_policy_set(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    resource: Option<String>,
+    policy_json: Option<String>,
+    body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_crm_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource = resolve_gcp_iam_policy_resource(&runtime, resource);
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{resource}:setIamPolicy"),
+            raw_body: body,
+            content_type: "application/json".to_owned(),
+            ..GCPAPIRequest::default()
+        }
+    } else {
+        let mut payload = parse_gcp_json_body_params(params)?;
+        if let Some(policy_json) = policy_json.filter(|value| !value.trim().is_empty()) {
+            let policy = parse_gcp_json_value(&policy_json, "--policy-json")?;
+            payload.insert("policy".to_owned(), policy);
+        }
+        if !payload.contains_key("policy") {
+            anyhow::bail!("policy payload required: set --policy-json or --body/--param with policy");
+        }
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{resource}:setIamPolicy"),
+            json_body: Some(Value::Object(payload)),
+            ..GCPAPIRequest::default()
+        }
+    };
+    let response = execute_gcp_api_request(&runtime, &request).map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_policy_test_permissions(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    resource: Option<String>,
+    permissions: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_crm_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let resource = resolve_gcp_iam_policy_resource(&runtime, resource);
+    let permissions: Vec<String> = permissions
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .collect();
+    if permissions.is_empty() {
+        anyhow::bail!("at least one --permission is required");
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/v1/{resource}:testIamPermissions"),
+            json_body: Some(serde_json::json!({ "permissions": permissions })),
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_role_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    parent: Option<String>,
+    limit: Option<usize>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let mut params = parse_gcp_params(params)?;
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.insert("pageSize".to_owned(), limit.to_string());
+    }
+    let path = match parent.filter(|value| !value.trim().is_empty()) {
+        Some(parent) => format!("/v1/{}/roles", parent.trim().trim_matches('/')),
+        None => "/v1/roles".to_owned(),
+    };
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path,
+            params,
+            ..GCPAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_iam_role_get(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    name: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_gcp_iam_runtime(
+        account, environment, project, base_url, access_token, home, settings_file,
+    )?;
+    let name = name.unwrap_or_default().trim().trim_matches('/').to_owned();
+    if name.is_empty() {
+        anyhow::bail!("role name is required");
+    }
+    let response = execute_gcp_api_request(
+        &runtime,
+        &GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v1/{name}"),
             ..GCPAPIRequest::default()
         },
     )

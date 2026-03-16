@@ -5197,6 +5197,186 @@ fn gcp_apikey_delete_json_requires_force_and_deletes() {
 }
 
 #[test]
+fn gcp_iam_service_account_list_json_fetches_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/projects/proj_core/serviceAccounts?"));
+        assert!(request.contains("pageSize=2"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_gcp_iam_sa_list")],
+            r#"{"accounts":[{"email":"svc@proj_core.iam.gserviceaccount.com"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "iam", "service-account", "list", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--limit", "2", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_gcp_iam_sa_list");
+    server.join();
+}
+
+#[test]
+fn gcp_iam_service_account_create_json_posts_payload() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/projects/proj_core/serviceAccounts HTTP/1.1\r\n"));
+        assert!(request.contains("\"accountId\":\"svc-core\""));
+        assert!(request.contains("\"displayName\":\"Core service\""));
+        http_json_response("200 OK", &[], r#"{"email":"svc-core@proj_core.iam.gserviceaccount.com"}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "iam", "service-account", "create", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--account-id",
+            "svc-core",
+            "--display-name",
+            "Core service",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(
+        parsed["data"]["email"],
+        "svc-core@proj_core.iam.gserviceaccount.com"
+    );
+    server.join();
+}
+
+#[test]
+fn gcp_iam_service_account_key_create_json_posts_defaults() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/projects/proj_core/serviceAccounts/svc@proj_core.iam.gserviceaccount.com/keys HTTP/1.1\r\n"));
+        assert!(request.contains("\"privateKeyType\":\"TYPE_GOOGLE_CREDENTIALS_FILE\""));
+        assert!(request.contains("\"keyAlgorithm\":\"KEY_ALG_RSA_2048\""));
+        http_json_response("200 OK", &[], r#"{"name":"projects/proj_core/serviceAccounts/svc@proj_core.iam.gserviceaccount.com/keys/key1"}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "iam", "service-account-key", "create", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--service-account",
+            "svc@proj_core.iam.gserviceaccount.com",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert!(parsed["data"]["name"].as_str().unwrap_or_default().ends_with("/keys/key1"));
+    server.join();
+}
+
+#[test]
+fn gcp_iam_policy_get_json_defaults_project_resource() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/projects/proj_core:getIamPolicy HTTP/1.1\r\n"));
+        assert!(request.contains("\r\n\r\n{}"));
+        http_json_response("200 OK", &[], r#"{"bindings":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "iam", "policy", "get", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["bindings"], serde_json::json!([]));
+    server.join();
+}
+
+#[test]
+fn gcp_iam_role_list_json_fetches_roles() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n",
+    )
+    .expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/roles?"));
+        assert!(request.contains("pageSize=5"));
+        http_json_response("200 OK", &[], r#"{"roles":[{"name":"roles/viewer"}]}"#)
+    });
+
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "iam", "role", "list", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--limit", "5", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["roles"][0]["name"], "roles/viewer");
+    server.join();
+}
+
+#[test]
 fn google_places_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
