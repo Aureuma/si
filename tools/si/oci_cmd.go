@@ -158,6 +158,13 @@ func cmdOCIAuth(args []string) {
 }
 
 func cmdOCIAuthStatus(args []string) {
+	delegated, err := runOCIAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("oci auth status", flag.ExitOnError)
 	flags := bindOCICommonFlags(fs)

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::TimeZone;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
 use si_rs_codex::{
     RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
@@ -65,8 +65,9 @@ use si_rs_provider_google::{
     resolve_places_auth_status, resolve_places_current_context,
 };
 use si_rs_provider_oci::{
-    OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
+    OCIAuthOverrides, OCIAuthStatus, OCIContextListEntry, OCIContextOverrides, OCICurrentContext,
     list_contexts as list_oci_contexts, render_context_list_text as render_oci_context_list_text,
+    resolve_auth_status as resolve_oci_auth_status,
     resolve_current_context as resolve_oci_current_context,
 };
 use si_rs_provider_openai::{
@@ -1027,9 +1028,41 @@ enum OpenAIProjectRateLimitCommand {
 
 #[derive(Debug, Subcommand)]
 enum OciCommand {
+    Auth {
+        #[command(subcommand)]
+        command: OciAuthCommand,
+    },
     Context {
         #[command(subcommand)]
         command: OciContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OciAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        profile: Option<String>,
+        #[arg(long)]
+        config_file: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth: Option<String>,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        verify: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -2449,6 +2482,39 @@ impl From<OCICurrentContext> for OCICurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct OCIAuthStatusPayload {
+    status: String,
+    account_alias: String,
+    profile: String,
+    config_file: String,
+    region: String,
+    base_url: String,
+    auth_style: String,
+    tenancy_ocid: String,
+    user_ocid: String,
+    fingerprint: String,
+    source: String,
+}
+
+impl From<OCIAuthStatus> for OCIAuthStatusPayload {
+    fn from(value: OCIAuthStatus) -> Self {
+        Self {
+            status: value.status,
+            account_alias: value.account_alias,
+            profile: value.profile,
+            config_file: value.config_file,
+            region: value.region,
+            base_url: value.base_url,
+            auth_style: value.auth_style,
+            tenancy_ocid: value.tenancy_ocid,
+            user_ocid: value.user_ocid,
+            fingerprint: value.fingerprint,
+            source: value.source,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -3577,6 +3643,35 @@ fn main() -> Result<()> {
             },
         },
         Command::Oci { command } => match command {
+            OciCommand::Auth { command } => match command {
+                OciAuthCommand::Status {
+                    account,
+                    profile,
+                    config_file,
+                    region,
+                    base_url,
+                    auth,
+                    verify,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_oci_auth_status(
+                        account,
+                        profile,
+                        config_file,
+                        region,
+                        base_url,
+                        auth,
+                        verify,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
             OciCommand::Context { command } => match command {
                 OciContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -5940,6 +6035,66 @@ fn print_openai_api_response(response: OpenAIAPIResponse, json: bool, raw: bool)
         println!("{}", serde_json::to_string_pretty(&response)?);
     } else {
         print!("{}", render_openai_api_response_text(&response, raw));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_oci_auth_status(
+    account: Option<String>,
+    profile: Option<String>,
+    config_file: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    auth: Option<String>,
+    verify: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    if verify {
+        return Err(anyhow::anyhow!(
+            "oci auth verification is not yet implemented in Rust; rerun with --verify=false or use the Go fallback"
+        ));
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = OCIAuthStatusPayload::from(
+        resolve_oci_auth_status(
+            &settings.oci,
+            &env,
+            &OCIAuthOverrides {
+                account: account.unwrap_or_default(),
+                profile: profile.unwrap_or_default(),
+                config_file: config_file.unwrap_or_default(),
+                region: region.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                auth_style: auth.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            println!("OCI auth: {}", payload.status);
+            println!(
+                "Context: account={} profile={} region={} auth={} base={}",
+                account, payload.profile, payload.region, payload.auth_style, payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
     }
     Ok(())
 }

@@ -1613,6 +1613,53 @@ func TestRunOCIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.
 	}
 }
 
+func TestRunOCIAuthStatusCommandDefaultsToGoWhileVerifyIsEnabled(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOCIAuthStatusCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runOCIAuthStatusCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go oci auth status path while verification stays on the Go side")
+	}
+}
+
+func TestRunOCIAuthStatusCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCIAuthStatusCommand([]string{"--verify=false", "--json"})
+		if err != nil {
+			t.Fatalf("runOCIAuthStatusCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci auth status to delegate to Rust when verification is disabled")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-auth" {
+		t.Fatalf("expected delegated Rust oci auth status output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\nauth\nstatus\n--verify=false\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci auth status + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
