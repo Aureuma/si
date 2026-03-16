@@ -682,6 +682,10 @@ enum OpenAICommand {
         #[arg(long)]
         raw: bool,
     },
+    Monitor {
+        #[command(subcommand)]
+        command: OpenAIMonitorCommand,
+    },
     Codex {
         #[command(subcommand)]
         command: OpenAICodexCommand,
@@ -839,6 +843,86 @@ enum OpenAIUsageMetric {
     CodeInterpreterSessions,
     #[value(name = "costs")]
     Costs,
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIMonitorCommand {
+    Usage {
+        metric: Option<OpenAIUsageMetric>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        start_time: Option<i64>,
+        #[arg(long)]
+        end_time: Option<i64>,
+        #[arg(long)]
+        bucket_width: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        page: Option<String>,
+        #[arg(long)]
+        batch: bool,
+        #[arg(long = "project")]
+        project_ids: Vec<String>,
+        #[arg(long = "user-id")]
+        user_ids: Vec<String>,
+        #[arg(long = "api-key-id")]
+        api_key_ids: Vec<String>,
+        #[arg(long = "model")]
+        models: Vec<String>,
+        #[arg(long = "group-by")]
+        group_by: Vec<String>,
+        #[arg(long = "param")]
+        extra_params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    #[command(alias = "rate-limits")]
+    Limits {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        before: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -3673,6 +3757,86 @@ fn main() -> Result<()> {
                 json,
                 raw,
             )?,
+            OpenAICommand::Monitor { command } => match command {
+                OpenAIMonitorCommand::Usage {
+                    metric,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    start_time,
+                    end_time,
+                    bucket_width,
+                    limit,
+                    page,
+                    batch,
+                    project_ids,
+                    user_ids,
+                    api_key_ids,
+                    models,
+                    group_by,
+                    extra_params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_monitor_usage(
+                    metric,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    start_time,
+                    end_time,
+                    bucket_width,
+                    limit,
+                    page,
+                    batch,
+                    project_ids,
+                    user_ids,
+                    api_key_ids,
+                    models,
+                    group_by,
+                    extra_params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIMonitorCommand::Limits {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    after,
+                    before,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_project_rate_limit_list(
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    after,
+                    before,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
             OpenAICommand::Codex { command } => match command {
                 OpenAICodexCommand::Usage {
                     account,
@@ -6141,6 +6305,59 @@ fn run_openai_usage(
         |runtime| openai_get_usage_metric(&runtime, metric_name, &params),
     )?;
     print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_monitor_usage(
+    metric: Option<OpenAIUsageMetric>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    bucket_width: Option<String>,
+    limit: Option<usize>,
+    page: Option<String>,
+    batch: bool,
+    project_ids: Vec<String>,
+    user_ids: Vec<String>,
+    api_key_ids: Vec<String>,
+    models: Vec<String>,
+    group_by: Vec<String>,
+    extra_params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    run_openai_usage(
+        metric.unwrap_or(OpenAIUsageMetric::Completions),
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        start_time,
+        end_time,
+        bucket_width,
+        limit,
+        page,
+        batch,
+        project_ids,
+        user_ids,
+        api_key_ids,
+        models,
+        group_by,
+        extra_params,
+        home,
+        settings_file,
+        json,
+        raw,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
