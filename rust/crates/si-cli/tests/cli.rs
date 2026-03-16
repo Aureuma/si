@@ -3760,6 +3760,194 @@ fn cloudflare_logs_received_json_fetches_zone_endpoint() {
 }
 
 #[test]
+fn cloudflare_logs_job_list_json_fetches_zone_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones/zone_123/logpush/jobs?page=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_logs_job_list")],
+            r#"{"success":true,"result":[{"id":"job_123","name":"core-job"}],"result_info":{"page":1,"total_pages":1}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "logs", "job", "list"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["object"], "log job");
+    assert_eq!(parsed["count"], 1);
+    assert_eq!(parsed["data"][0]["id"], "job_123");
+    server.join();
+}
+
+#[test]
+fn cloudflare_logs_job_get_json_fetches_zone_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /zones/zone_123/logpush/jobs/job_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_logs_job_get")],
+            r#"{"success":true,"result":{"id":"job_123","name":"core-job"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "logs", "job", "get", "job_123"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_logs_job_get");
+    assert_eq!(parsed["data"]["id"], "job_123");
+    server.join();
+}
+
+#[test]
+fn cloudflare_logs_job_create_json_posts_body() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /zones/zone_123/logpush/jobs HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        assert!(request.contains("content-type: application/json\r\n"));
+        assert!(request.contains("\"name\":\"core-job\""));
+        assert!(request.contains("\"enabled\":true"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_logs_job_create")],
+            r#"{"success":true,"result":{"id":"job_123","name":"core-job"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "logs", "job", "create"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "name=core-job",
+            "--param",
+            "enabled=true",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_logs_job_create");
+    assert_eq!(parsed["data"]["name"], "core-job");
+    server.join();
+}
+
+#[test]
+fn cloudflare_logs_job_update_json_patches_body() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /zones/zone_123/logpush/jobs/job_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        assert!(request.contains("content-type: application/json\r\n"));
+        assert!(request.contains("\"enabled\":false"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_logs_job_update")],
+            r#"{"success":true,"result":{"id":"job_123","enabled":false}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "logs", "job", "update", "job_123"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--param",
+            "enabled=false",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_logs_job_update");
+    assert_eq!(parsed["data"]["enabled"], false);
+    server.join();
+}
+
+#[test]
+fn cloudflare_logs_job_delete_json_deletes_job() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /zones/zone_123/logpush/jobs/job_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer cf-test-token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_logs_job_delete")],
+            r#"{"success":true,"result":{"id":"job_123","deleted":true}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "logs", "job", "delete", "job_123"])
+        .args([
+            "--api-token",
+            "cf-test-token",
+            "--base-url",
+            &server.base_url,
+            "--zone-id",
+            "zone_123",
+            "--force",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_logs_job_delete");
+    assert_eq!(parsed["data"]["deleted"], true);
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
