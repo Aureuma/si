@@ -151,6 +151,13 @@ func cmdOpenAI(args []string) {
 }
 
 func cmdOpenAIAuth(args []string) {
+	delegated, err := runOpenAIAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, openAIAuthUsageText)
 	if !routedOK {
 		return
@@ -770,6 +777,13 @@ func cmdOpenAIModelGet(args []string) {
 }
 
 func cmdOpenAIProject(args []string) {
+	delegated, err := runOpenAIProjectCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project <list|get|create|update|archive|rate-limit|api-key|service-account> ...")
 	if !routedOK {
 		return
@@ -956,6 +970,13 @@ func cmdOpenAIProjectArchive(args []string) {
 }
 
 func cmdOpenAIProjectRateLimit(args []string) {
+	delegated, err := runOpenAIProjectRateLimitCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project rate-limit <list|update> ...")
 	if !routedOK {
 		return
@@ -1074,6 +1095,13 @@ func cmdOpenAIProjectRateLimitUpdate(args []string) {
 }
 
 func cmdOpenAIProjectAPIKey(args []string) {
+	delegated, err := runOpenAIProjectAPIKeyCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project api-key <list|get|delete> ...")
 	if !routedOK {
 		return
@@ -1188,6 +1216,13 @@ func cmdOpenAIProjectAPIKeyDelete(args []string) {
 }
 
 func cmdOpenAIProjectServiceAccount(args []string) {
+	delegated, err := runOpenAIProjectServiceAccountCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai project service-account <list|create|get|delete> ...")
 	if !routedOK {
 		return
@@ -1340,6 +1375,13 @@ func cmdOpenAIProjectServiceAccountDelete(args []string) {
 }
 
 func cmdOpenAIKey(args []string) {
+	delegated, err := runOpenAIKeyCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai key <list|get|create|delete> ...")
 	if !routedOK {
 		return
