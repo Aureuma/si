@@ -1253,6 +1253,45 @@ func runGitHubGitCommand(args []string) (bool, error) {
 	}
 }
 
+func rustCLIFlagValue(args []string, name string) (string, bool) {
+	for idx := 0; idx < len(args); idx++ {
+		raw := strings.TrimSpace(args[idx])
+		if raw == name {
+			if idx+1 >= len(args) {
+				return "", false
+			}
+			return strings.TrimSpace(args[idx+1]), true
+		}
+		prefix := name + "="
+		if strings.HasPrefix(raw, prefix) {
+			return strings.TrimSpace(raw[len(prefix):]), true
+		}
+	}
+	return "", false
+}
+
+func runGitHubRawCommand(args []string) (bool, error) {
+	method := "GET"
+	if value, ok := rustCLIFlagValue(args, "--method"); ok && strings.TrimSpace(value) != "" {
+		method = value
+	}
+	if !strings.EqualFold(strings.TrimSpace(method), "GET") {
+		return false, nil
+	}
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"raw"}, args...)...)
+}
+
+func runGitHubGraphQLCommand(args []string) (bool, error) {
+	query, ok := rustCLIFlagValue(args, "--query")
+	if !ok || strings.TrimSpace(query) == "" {
+		return false, nil
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(query)), "mutation") {
+		return false, nil
+	}
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"graphql"}, args...)...)
+}
+
 func runGitHubIssueListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"issue", "list"}, args...)...)
 }
@@ -1310,6 +1349,10 @@ func runGitHubCommand(args []string) (bool, error) {
 		return runGitHubBranchCommand(args[1:])
 	case "git":
 		return runGitHubGitCommand(args[1:])
+	case "raw":
+		return runGitHubRawCommand(args[1:])
+	case "graphql":
+		return runGitHubGraphQLCommand(args[1:])
 	case "issue":
 		return runGitHubIssueCommand(args[1:])
 	case "pr":
