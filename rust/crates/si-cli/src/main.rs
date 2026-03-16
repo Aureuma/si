@@ -2022,6 +2022,72 @@ enum GooglePlacesCommand {
         #[command(subcommand)]
         command: GooglePlacesPhotoCommand,
     },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        content_type: Option<String>,
+        #[arg(long)]
+        field_mask: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -9228,6 +9294,78 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+                GooglePlacesCommand::Doctor {
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    project_id,
+                    language,
+                    region,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_places_doctor(
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+                GooglePlacesCommand::Raw {
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    project_id,
+                    language,
+                    region,
+                    method,
+                    path,
+                    params,
+                    headers,
+                    body,
+                    json_body,
+                    content_type,
+                    field_mask,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_places_raw(
+                        account,
+                        env,
+                        api_key,
+                        base_url,
+                        project_id,
+                        language,
+                        region,
+                        method,
+                        path,
+                        params,
+                        headers,
+                        body,
+                        json_body,
+                        content_type,
+                        field_mask,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
             },
         },
         Command::OpenAI { command } => match command {
@@ -16038,6 +16176,21 @@ fn parse_google_places_params(params: Vec<String>) -> Result<BTreeMap<String, St
     Ok(out)
 }
 
+fn parse_google_places_headers(headers: Vec<String>) -> Result<BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for raw in headers {
+        let Some((key, value)) = raw.split_once('=') else {
+            anyhow::bail!("invalid --header {raw:?} (expected key=value)");
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            anyhow::bail!("google places --header key cannot be empty");
+        }
+        out.insert(key.to_owned(), value.trim().to_owned());
+    }
+    Ok(out)
+}
+
 fn parse_google_places_json_object(raw: Option<String>, name: &str) -> Result<Option<Value>> {
     let Some(raw) = raw.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -16191,6 +16344,7 @@ fn execute_google_places_paginated_search(
                 params: params.clone(),
                 json_body: Some(body.clone()),
                 field_mask: field_mask.clone(),
+                ..GooglePlacesAPIRequest::default()
             },
         )
         .map_err(anyhow::Error::msg)?;
@@ -16287,6 +16441,7 @@ fn run_google_places_autocomplete(
                 false,
                 allow_wildcard_mask,
             )?,
+            ..GooglePlacesAPIRequest::default()
         },
     )
     .map_err(anyhow::Error::msg)?;
@@ -16411,6 +16566,7 @@ fn run_google_places_search_text(
             params,
             json_body: Some(Value::Object(body)),
             field_mask,
+            ..GooglePlacesAPIRequest::default()
         },
     )
     .map_err(anyhow::Error::msg)?;
@@ -16531,6 +16687,7 @@ fn run_google_places_search_nearby(
             params,
             json_body: Some(Value::Object(body)),
             field_mask,
+            ..GooglePlacesAPIRequest::default()
         },
     )
     .map_err(anyhow::Error::msg)?;
@@ -16592,6 +16749,7 @@ fn run_google_places_details(
                 true,
                 allow_wildcard_mask,
             )?,
+            ..GooglePlacesAPIRequest::default()
         },
     )
     .map_err(anyhow::Error::msg)?;
@@ -16645,6 +16803,7 @@ fn run_google_places_photo_get(
             params,
             json_body: None,
             field_mask: String::new(),
+            ..GooglePlacesAPIRequest::default()
         },
     )
     .map_err(anyhow::Error::msg)?;
@@ -16710,6 +16869,162 @@ fn run_google_places_photo_download(
         }
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_doctor(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        language,
+        region,
+        home,
+        settings_file,
+    )?;
+    let autocomplete = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "POST".to_owned(),
+            path: "/v1/places:autocomplete".to_owned(),
+            json_body: Some(serde_json::json!({
+                "input": "cafe",
+                "languageCode": runtime.language_code,
+                "regionCode": runtime.region_code
+            })),
+            field_mask: resolve_google_places_field_mask(
+                "autocomplete",
+                None,
+                "autocomplete-basic".to_owned(),
+                false,
+                false,
+            )?,
+            ..GooglePlacesAPIRequest::default()
+        },
+    );
+    let search_text = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method: "POST".to_owned(),
+            path: "/v1/places:searchText".to_owned(),
+            json_body: Some(serde_json::json!({
+                "textQuery": "coffee",
+                "languageCode": runtime.language_code,
+                "regionCode": runtime.region_code
+            })),
+            field_mask: resolve_google_places_field_mask(
+                "search-text",
+                None,
+                "search-basic".to_owned(),
+                true,
+                false,
+            )?,
+            ..GooglePlacesAPIRequest::default()
+        },
+    );
+    let checks = vec![
+        serde_json::json!({
+            "name": "autocomplete",
+            "ok": autocomplete.is_ok(),
+            "request_id": autocomplete.as_ref().ok().map(|value| value.request_id.clone()).unwrap_or_default(),
+            "status_code": autocomplete.as_ref().ok().map(|value| value.status_code).unwrap_or_default(),
+            "error": autocomplete.as_ref().err().cloned().unwrap_or_default(),
+        }),
+        serde_json::json!({
+            "name": "search-text",
+            "ok": search_text.is_ok(),
+            "request_id": search_text.as_ref().ok().map(|value| value.request_id.clone()).unwrap_or_default(),
+            "status_code": search_text.as_ref().ok().map(|value| value.status_code).unwrap_or_default(),
+            "error": search_text.as_ref().err().cloned().unwrap_or_default(),
+        }),
+    ];
+    let payload = serde_json::json!({
+        "ok": autocomplete.is_ok() && search_text.is_ok(),
+        "context": {
+            "account_alias": runtime.account_alias,
+            "project_id": runtime.project_id,
+            "environment": runtime.environment,
+            "language_code": runtime.language_code,
+            "region_code": runtime.region_code,
+            "source": runtime.source,
+            "base_url": runtime.base_url,
+        },
+        "checks": checks,
+    });
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_places_raw(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    method: String,
+    path: String,
+    params: Vec<String>,
+    headers: Vec<String>,
+    body: Option<String>,
+    json_body: Option<String>,
+    content_type: Option<String>,
+    field_mask: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_places_runtime(
+        account,
+        environment,
+        api_key,
+        base_url,
+        project_id,
+        language,
+        region,
+        home,
+        settings_file,
+    )?;
+    let json_body = match json_body {
+        Some(value) if !value.trim().is_empty() => {
+            Some(serde_json::from_str::<Value>(&value).map_err(|err| anyhow::anyhow!("invalid --json-body: {err}"))?)
+        }
+        _ => None,
+    };
+    let response = execute_places_api_request(
+        &runtime,
+        &GooglePlacesAPIRequest {
+            method,
+            path,
+            params: parse_google_places_params(params)?,
+            headers: parse_google_places_headers(headers)?,
+            json_body,
+            raw_body: body.unwrap_or_default(),
+            content_type: content_type.unwrap_or_default(),
+            field_mask: field_mask.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_places_api_response(&response, format, raw)
 }
 
 fn show_openai_context_list(

@@ -879,6 +879,8 @@ func runGooglePlacesCommand(args []string) (bool, error) {
 		return runGooglePlacesAuthCommand(args[1:])
 	case "context":
 		return runGooglePlacesContextCommand(args[1:])
+	case "doctor":
+		return runGooglePlacesDoctorCommand(args[1:])
 	case "autocomplete":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "autocomplete"}, args[1:]...)...)
 	case "search-text", "text-search", "searchtext":
@@ -889,9 +891,20 @@ func runGooglePlacesCommand(args []string) (bool, error) {
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "details"}, args[1:]...)...)
 	case "photo", "photos":
 		return runGooglePlacesPhotoCommand(args[1:])
+	case "raw":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "raw"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
+}
+
+func runGooglePlacesDoctorCommand(args []string) (bool, error) {
+	for _, arg := range args {
+		if strings.EqualFold(strings.TrimSpace(arg), "--public") {
+			return false, nil
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "doctor"}, args...)...)
 }
 
 func runGooglePlacesPhotoCommand(args []string) (bool, error) {
