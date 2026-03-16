@@ -389,6 +389,10 @@ func runCloudflareAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"auth", "status"}, args...)...)
 }
 
+func runCloudflareRawCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("cloudflare", append([]string{"raw"}, args...)...)
+}
+
 func runCloudflareAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -410,6 +414,8 @@ func runCloudflareCommand(args []string) (bool, error) {
 		return runCloudflareAuthCommand(args[1:])
 	case "context":
 		return runCloudflareContextCommand(args[1:])
+	case "raw", "api":
+		return runCloudflareRawCommand(args[1:])
 	default:
 		return false, nil
 	}

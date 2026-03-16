@@ -48,9 +48,12 @@ use si_rs_provider_aws::{
 };
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_cloudflare::{
-    CloudflareAuthRuntime, CloudflareAuthStatus, CloudflareAuthOverrides,
+    CloudflareAPIRequest, CloudflareAPIResponse, CloudflareAuthRuntime, CloudflareAuthStatus,
+    CloudflareAuthOverrides,
     CloudflareContextListEntry, CloudflareContextOverrides, CloudflareCurrentContext,
+    execute_api_request as execute_cloudflare_api_request,
     list_contexts as list_cloudflare_contexts,
+    render_api_response_text as render_cloudflare_api_response_text,
     render_context_list_text as render_cloudflare_context_list_text,
     resolve_auth_runtime as resolve_cloudflare_auth_runtime,
     resolve_current_context as resolve_cloudflare_current_context,
@@ -328,6 +331,38 @@ enum CloudflareCommand {
     Context {
         #[command(subcommand)]
         command: CloudflareContextCommand,
+    },
+    Raw {
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
     },
 }
 
@@ -6231,6 +6266,39 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            CloudflareCommand::Raw {
+                method,
+                path,
+                body,
+                json,
+                raw,
+                params,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            } => run_cloudflare_raw(
+                method,
+                path,
+                body,
+                json,
+                raw,
+                params,
+                account,
+                env,
+                zone_id,
+                zone,
+                api_token,
+                base_url,
+                account_id,
+                home,
+                settings_file,
+            )?,
             CloudflareCommand::Context { command } => match command {
                 CloudflareContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -14010,6 +14078,85 @@ fn parse_oci_key_values(values: Vec<String>) -> std::collections::BTreeMap<Strin
         }
     }
     out
+}
+
+fn parse_cloudflare_key_values(values: Vec<String>) -> std::collections::BTreeMap<String, String> {
+    let mut out = std::collections::BTreeMap::new();
+    for entry in values {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((key, value)) = trimmed.split_once('=') {
+            let key = key.trim();
+            if key.is_empty() {
+                continue;
+            }
+            out.insert(key.to_owned(), value.trim().to_owned());
+        }
+    }
+    out
+}
+
+fn print_cloudflare_api_response(response: &CloudflareAPIResponse, json: bool, raw: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(response)?);
+    } else {
+        print!("{}", render_cloudflare_api_response_text(response, raw));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_raw(
+    method: String,
+    path: String,
+    body: Option<String>,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if path.trim().is_empty() {
+        anyhow::bail!("path is required");
+    }
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_cloudflare_auth_runtime(
+        &settings.cloudflare,
+        &env,
+        &CloudflareAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            zone_id: zone_id.unwrap_or_default(),
+            zone_name: zone.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            account_id: account_id.unwrap_or_default(),
+            api_token: api_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let response = execute_cloudflare_api_request(
+        &runtime,
+        &CloudflareAPIRequest {
+            method,
+            path,
+            params: parse_cloudflare_key_values(params),
+            raw_body: body.unwrap_or_default(),
+            ..CloudflareAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_cloudflare_api_response(&response, json, raw)
 }
 
 fn parse_oci_raw_service(value: &str) -> Result<OCIAPIService> {

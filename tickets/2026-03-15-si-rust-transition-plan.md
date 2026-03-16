@@ -470,6 +470,7 @@ Progress notes:
 - completed: the GitHub provider slice now also owns the remaining `git` helper lane (`credential get`, `setup`, `remote-auth`, and `clone-auth`), with Rust-owned local repo scanning, remote normalization/rewrites, helper command generation, and auth token resolution plus Go wrapper delegation so the full `github git` subtree now lives behind the Rust provider boundary
 - completed: the GitHub provider slice now also owns read-only escape-hatch retrieval through `github raw` GET requests and query-only `github graphql`, with Rust-owned runtime/auth execution and Go wrapper delegation for those read paths while mutating raw/graphql traffic remains on the Go side
 - completed: Stripe, WorkOS, and Cloudflare now follow the same pattern too, with provider-root plus `auth` and `context` wrapper layers short-circuiting directly into Rust for their already-migrated read-only paths while broader resource and mutation families remain on the Go side
+- completed: the Cloudflare provider slice now also owns the `raw` escape hatch, with Rust-owned auth/runtime resolution, direct API transport, and Go wrapper delegation so the first broader Cloudflare operational command no longer depends on the Go path
 - completed: the top-level `apple` and `google` roots now also short-circuit directly into Rust when routing into the already-migrated `appstore` and `places` subtrees, removing the last obvious outer wrapper layer above those provider families while leaving other Apple/Google surfaces on the Go side
 
 ### Phase 8: Release/install migration
