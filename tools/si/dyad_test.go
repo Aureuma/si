@@ -1276,6 +1276,51 @@ func TestCmdDyadSpawnUsesRustPlanBeforeExecution(t *testing.T) {
 	}
 }
 
+func TestCmdDyadRecreateUsesDelegatedRemoveAndSpawnFlow(t *testing.T) {
+	prevRemove := removeDyadWithCompatibilityFn
+	prevSpawn := runDyadSpawnCmdFn
+	prevClient := newDyadClientFn
+	t.Cleanup(func() {
+		removeDyadWithCompatibilityFn = prevRemove
+		runDyadSpawnCmdFn = prevSpawn
+		newDyadClientFn = prevClient
+	})
+
+	removeCalled := false
+	removeDyadWithCompatibilityFn = func(ctx context.Context, client *shared.Client, name string) (string, bool, error) {
+		removeCalled = true
+		if client == nil {
+			t.Fatalf("expected shared client")
+		}
+		if name != "alpha" {
+			t.Fatalf("unexpected recreate target: %q", name)
+		}
+		return "dyad alpha removed\n", true, nil
+	}
+
+	var spawnedArgs []string
+	runDyadSpawnCmdFn = func(args []string) {
+		spawnedArgs = append([]string(nil), args...)
+	}
+	newDyadClientFn = func() (*shared.Client, error) {
+		return &shared.Client{}, nil
+	}
+
+	output := captureOutputForTest(t, func() {
+		cmdDyadRecreate([]string{"alpha", "--skip-auth"})
+	})
+
+	if !removeCalled {
+		t.Fatalf("expected delegated remove flow")
+	}
+	if !strings.Contains(output, "dyad alpha removed") {
+		t.Fatalf("unexpected output: %q", output)
+	}
+	if strings.Join(spawnedArgs, "\n") != "alpha\n--skip-auth" {
+		t.Fatalf("unexpected spawn args: %q", strings.Join(spawnedArgs, "\n"))
+	}
+}
+
 func TestCmdDyadRemoveAllUsesBatchFlow(t *testing.T) {
 	prev := runDyadRemoveAllFn
 	t.Cleanup(func() {
