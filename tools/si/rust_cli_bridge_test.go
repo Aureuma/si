@@ -1219,6 +1219,142 @@ func TestRunAppleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 }
 
+func TestRunAppleAppStoreAppCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-app'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreAppCommand([]string{"create", "--bundle-id", "com.example.mobile", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreAppCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore app to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-app" {
+		t.Fatalf("expected delegated Rust apple appstore app output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\napp\ncreate\n--bundle-id\ncom.example.mobile\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore app + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAppleAppStoreListingCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-listing'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreListingCommand([]string{"update", "--bundle-id", "com.example.mobile", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreListingCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore listing to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-listing" {
+		t.Fatalf("expected delegated Rust apple appstore listing output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\nlisting\nupdate\n--bundle-id\ncom.example.mobile\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore listing + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAppleAppStoreRawCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-raw'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreRawCommand([]string{"--path", "/v1/apps", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreRawCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore raw to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-raw" {
+		t.Fatalf("expected delegated Rust apple appstore raw output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\nraw\n--path\n/v1/apps\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore raw + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAppleAppStoreApplyCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-apply'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreApplyCommand([]string{"--metadata-dir", "appstore", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreApplyCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore apply to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-apply" {
+		t.Fatalf("expected delegated Rust apple appstore apply output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\napply\n--metadata-dir\nappstore\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore apply + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
