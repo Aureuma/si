@@ -107,6 +107,13 @@ func (e *openaiAPIErrorDetails) Error() string {
 }
 
 func cmdOpenAI(args []string) {
+	delegated, err := runOpenAICommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, openAIUsageText)
 	if !routedOK {
 		return
