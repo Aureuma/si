@@ -4240,6 +4240,248 @@ fn cloudflare_queue_list_json_fetches_account_endpoint() {
 }
 
 #[test]
+fn cloudflare_waf_update_json_patches_zone_resource() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /zones/zone_123/firewall/waf/packages/waf_123 HTTP/1.1\r\n"));
+        assert!(request.contains("\"mode\":\"on\""));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_waf_update")],
+            r#"{"success":true,"result":{"id":"waf_123","mode":"on"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "waf", "update", "waf_123"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--zone-id", "zone_123",
+            "--param", "mode=on",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_waf_update");
+    assert_eq!(parsed["data"]["mode"], "on");
+    server.join();
+}
+
+#[test]
+fn cloudflare_r2_bucket_get_json_fetches_account_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /accounts/acct_123/r2/buckets/bucket_123 HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_r2_bucket_get")],
+            r#"{"success":true,"result":{"id":"bucket_123","name":"assets"}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "r2", "bucket", "get", "bucket_123"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_r2_bucket_get");
+    assert_eq!(parsed["data"]["name"], "assets");
+    server.join();
+}
+
+#[test]
+fn cloudflare_d1_db_create_json_posts_account_resource() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /accounts/acct_123/d1/database HTTP/1.1\r\n"));
+        assert!(request.contains("\"name\":\"core\""));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_d1_db_create")],
+            r#"{"success":true,"result":{"id":"db_123","name":"core"}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "d1", "db", "create"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--param", "name=core",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_d1_db_create");
+    assert_eq!(parsed["data"]["id"], "db_123");
+    server.join();
+}
+
+#[test]
+fn cloudflare_kv_namespace_delete_json_deletes_account_resource() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /accounts/acct_123/storage/kv/namespaces/ns_123 HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_kv_namespace_delete")],
+            r#"{"success":true,"result":{"id":"ns_123","deleted":true}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "kv", "namespace", "delete", "ns_123"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--force",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_kv_namespace_delete");
+    assert_eq!(parsed["data"]["deleted"], true);
+    server.join();
+}
+
+#[test]
+fn cloudflare_access_app_list_json_fetches_account_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /accounts/acct_123/access/apps?page=1 HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_access_app_list")],
+            r#"{"success":true,"result":[{"id":"app_123","name":"core"}],"result_info":{"page":1,"total_pages":1}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "access", "app", "list"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["object"], "access app");
+    assert_eq!(parsed["data"][0]["id"], "app_123");
+    server.join();
+}
+
+#[test]
+fn cloudflare_access_policy_update_json_patches_account_resource() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PATCH /accounts/acct_123/access/policies/pol_123 HTTP/1.1\r\n"));
+        assert!(request.contains("\"name\":\"core-policy\""));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_access_policy_update")],
+            r#"{"success":true,"result":{"id":"pol_123","name":"core-policy"}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "access", "policy", "update", "pol_123"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--param", "name=core-policy",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_access_policy_update");
+    assert_eq!(parsed["data"]["name"], "core-policy");
+    server.join();
+}
+
+#[test]
+fn cloudflare_tunnel_get_json_fetches_account_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /accounts/acct_123/cfd_tunnel/tun_123 HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_tunnel_get")],
+            r#"{"success":true,"result":{"id":"tun_123","name":"edge"}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "tunnel", "get", "tun_123"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_tunnel_get");
+    assert_eq!(parsed["data"]["name"], "edge");
+    server.join();
+}
+
+#[test]
+fn cloudflare_tls_cert_create_json_posts_zone_resource() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /zones/zone_123/custom_certificates HTTP/1.1\r\n"));
+        assert!(request.contains("\"hostname\":\"example.com\""));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_tls_cert_create")],
+            r#"{"success":true,"result":{"id":"cert_123","hostname":"example.com"}}"#,
+        )
+    });
+    let output = cargo_bin()
+        .args(["cloudflare", "tls", "cert", "create"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--zone-id", "zone_123",
+            "--param", "hostname=example.com",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_tls_cert_create");
+    assert_eq!(parsed["data"]["id"], "cert_123");
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

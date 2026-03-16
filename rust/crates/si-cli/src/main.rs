@@ -493,6 +493,34 @@ enum CloudflareCommand {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
+    WAF {
+        #[command(subcommand)]
+        command: CloudflareReadUpdateResourceCommand,
+    },
+    R2 {
+        #[command(subcommand)]
+        command: CloudflareR2Command,
+    },
+    D1 {
+        #[command(subcommand)]
+        command: CloudflareD1Command,
+    },
+    KV {
+        #[command(subcommand)]
+        command: CloudflareKVCommand,
+    },
+    Access {
+        #[command(subcommand)]
+        command: CloudflareAccessCommand,
+    },
+    Tunnel {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+    TLS {
+        #[command(subcommand)]
+        command: CloudflareTLSCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -852,6 +880,140 @@ enum CloudflareResourceCommand {
         home: Option<PathBuf>,
         #[arg(long)]
         settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareReadUpdateResourceCommand {
+    List {
+        #[arg(long, default_value_t = 10)]
+        max_pages: usize,
+        #[arg(long, default_value_t = 100)]
+        limit: i64,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Update {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareR2Command {
+    Bucket {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareD1Command {
+    DB {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareKVCommand {
+    Namespace {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareAccessCommand {
+    App {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+    Policy {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareTLSCommand {
+    Cert {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
     },
 }
 
@@ -7679,6 +7841,47 @@ fn main() -> Result<()> {
                 cloudflare_queue_spec(),
                 command,
             )?,
+            CloudflareCommand::WAF { command } => {
+                run_cloudflare_read_update_resource_command(cloudflare_waf_spec(), command)?
+            }
+            CloudflareCommand::R2 { command } => match command {
+                CloudflareR2Command::Bucket { command } => run_cloudflare_resource_command(
+                    cloudflare_r2_bucket_spec(),
+                    command,
+                )?,
+            },
+            CloudflareCommand::D1 { command } => match command {
+                CloudflareD1Command::DB { command } => run_cloudflare_resource_command(
+                    cloudflare_d1_db_spec(),
+                    command,
+                )?,
+            },
+            CloudflareCommand::KV { command } => match command {
+                CloudflareKVCommand::Namespace { command } => run_cloudflare_resource_command(
+                    cloudflare_kv_namespace_spec(),
+                    command,
+                )?,
+            },
+            CloudflareCommand::Access { command } => match command {
+                CloudflareAccessCommand::App { command } => run_cloudflare_resource_command(
+                    cloudflare_access_app_spec(),
+                    command,
+                )?,
+                CloudflareAccessCommand::Policy { command } => run_cloudflare_resource_command(
+                    cloudflare_access_policy_spec(),
+                    command,
+                )?,
+            },
+            CloudflareCommand::Tunnel { command } => run_cloudflare_resource_command(
+                cloudflare_tunnel_spec(),
+                command,
+            )?,
+            CloudflareCommand::TLS { command } => match command {
+                CloudflareTLSCommand::Cert { command } => run_cloudflare_resource_command(
+                    cloudflare_tls_cert_spec(),
+                    command,
+                )?,
+            },
             CloudflareCommand::Context { command } => match command {
                 CloudflareContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -17704,6 +17907,94 @@ const fn cloudflare_queue_spec() -> CloudflareResourceSpec {
     )
 }
 
+const fn cloudflare_waf_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "waf",
+        "/zones/{zone_id}/firewall/waf/packages",
+        "/zones/{zone_id}/firewall/waf/packages/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_r2_bucket_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "r2 bucket",
+        "/accounts/{account_id}/r2/buckets",
+        "/accounts/{account_id}/r2/buckets/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_d1_db_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "d1 db",
+        "/accounts/{account_id}/d1/database",
+        "/accounts/{account_id}/d1/database/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_kv_namespace_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "kv namespace",
+        "/accounts/{account_id}/storage/kv/namespaces",
+        "/accounts/{account_id}/storage/kv/namespaces/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_access_app_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "access app",
+        "/accounts/{account_id}/access/apps",
+        "/accounts/{account_id}/access/apps/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_access_policy_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "access policy",
+        "/accounts/{account_id}/access/policies",
+        "/accounts/{account_id}/access/policies/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_tunnel_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "tunnel",
+        "/accounts/{account_id}/cfd_tunnel",
+        "/accounts/{account_id}/cfd_tunnel/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_tls_cert_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "certificate",
+        "/zones/{zone_id}/custom_certificates",
+        "/zones/{zone_id}/custom_certificates/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
 fn cloudflare_resource_path(spec: CloudflareResourceSpec, id: &str) -> String {
     spec.resource_path.replace("{id}", id.trim())
 }
@@ -18098,6 +18389,83 @@ fn run_cloudflare_resource_command(
             settings_file,
         } => run_cloudflare_resource_delete(
             spec, id, json, raw, force, params, account, env, zone_id, zone, api_token, base_url,
+            account_id, home, settings_file,
+        ),
+    }
+}
+
+fn run_cloudflare_read_update_resource_command(
+    spec: CloudflareResourceSpec,
+    command: CloudflareReadUpdateResourceCommand,
+) -> Result<()> {
+    match command {
+        CloudflareReadUpdateResourceCommand::List {
+            max_pages,
+            limit,
+            json,
+            raw,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
+        } => run_cloudflare_resource_list(
+            spec,
+            max_pages,
+            limit,
+            json,
+            raw,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
+        ),
+        CloudflareReadUpdateResourceCommand::Get {
+            id,
+            json,
+            raw,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
+        } => run_cloudflare_resource_get(
+            spec, id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
+            account_id, home, settings_file,
+        ),
+        CloudflareReadUpdateResourceCommand::Update {
+            id,
+            json,
+            raw,
+            body,
+            params,
+            account,
+            env,
+            zone_id,
+            zone,
+            api_token,
+            base_url,
+            account_id,
+            home,
+            settings_file,
+        } => run_cloudflare_resource_update(
+            spec, id, json, raw, body, params, account, env, zone_id, zone, api_token, base_url,
             account_id, home, settings_file,
         ),
     }
