@@ -71,9 +71,11 @@ use si_rs_provider_github::{
     comment_issue as github_comment_issue,
     create_branch as github_create_branch,
     create_issue as github_create_issue,
+    create_release as github_create_release,
     create_repo as github_create_repo,
     create_pull_request as github_create_pull_request,
     delete_branch as github_delete_branch,
+    delete_release as github_delete_release,
     delete_repo as github_delete_repo,
     dispatch_workflow as github_dispatch_workflow,
     delete_project_item as github_delete_project_item,
@@ -100,6 +102,7 @@ use si_rs_provider_github::{
     comment_pull_request as github_comment_pull_request,
     merge_pull_request as github_merge_pull_request,
     get_workflow_run as github_get_workflow_run,
+    upload_release_asset as github_upload_release_asset,
     unprotect_branch as github_unprotect_branch,
     unarchive_project_item as github_unarchive_project_item,
     update_repo as github_update_repo,
@@ -1970,6 +1973,113 @@ enum GitHubReleaseCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        tag: Option<String>,
+        #[arg(long)]
+        title: Option<String>,
+        #[arg(long)]
+        notes: Option<String>,
+        #[arg(long)]
+        notes_file: Option<PathBuf>,
+        #[arg(long)]
+        target: Option<String>,
+        #[arg(long)]
+        draft: bool,
+        #[arg(long)]
+        prerelease: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Upload {
+        repo_ref: Option<String>,
+        release_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        asset: Option<PathBuf>,
+        #[arg(long)]
+        label: Option<String>,
+        #[arg(long, default_value = "application/octet-stream")]
+        content_type: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        repo_ref: Option<String>,
+        release_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -7518,6 +7628,121 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+                GitHubReleaseCommand::Create {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    tag,
+                    title,
+                    notes,
+                    notes_file,
+                    target,
+                    draft,
+                    prerelease,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_release_create(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    tag,
+                    title,
+                    notes,
+                    notes_file,
+                    target,
+                    draft,
+                    prerelease,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubReleaseCommand::Upload {
+                    repo_ref,
+                    release_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    asset,
+                    label,
+                    content_type,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_release_upload(
+                    repo_ref,
+                    release_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    asset,
+                    label,
+                    content_type,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubReleaseCommand::Delete {
+                    repo_ref,
+                    release_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_release_delete(
+                    repo_ref,
+                    release_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
         },
         Command::Dyad { command } => match *command {
@@ -10871,6 +11096,188 @@ fn run_github_release_get(
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| anyhow::Error::msg("github release ref is required"))?;
     let response = github_get_release(&runtime, &repo_owner, &repo_name, &release_ref)
+        .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_release_create(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    tag: Option<String>,
+    title: Option<String>,
+    notes: Option<String>,
+    notes_file: Option<PathBuf>,
+    target: Option<String>,
+    draft: bool,
+    prerelease: bool,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let tag = tag
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--tag and --title are required"))?;
+    let title = title
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--tag and --title are required"))?;
+    let mut payload = parse_github_body_params(params)?;
+    payload.insert("tag_name".to_owned(), Value::String(tag.trim().to_owned()));
+    payload.insert("name".to_owned(), Value::String(title.trim().to_owned()));
+    let notes_text = if let Some(path) = notes_file {
+        std::fs::read_to_string(path)?
+    } else {
+        notes.unwrap_or_default()
+    };
+    if !notes_text.trim().is_empty() {
+        payload.insert("body".to_owned(), Value::String(notes_text));
+    }
+    if let Some(target) = target.filter(|value| !value.trim().is_empty()) {
+        payload.insert(
+            "target_commitish".to_owned(),
+            Value::String(target.trim().to_owned()),
+        );
+    }
+    if draft {
+        payload.insert("draft".to_owned(), Value::Bool(true));
+    }
+    if prerelease {
+        payload.insert("prerelease".to_owned(), Value::Bool(true));
+    }
+    let response = github_create_release(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        Value::Object(payload),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_release_upload(
+    repo_ref: Option<String>,
+    release_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    asset: Option<PathBuf>,
+    label: Option<String>,
+    content_type: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let release_ref = release_ref
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("release tag or id is required"))?;
+    let asset = asset.ok_or_else(|| anyhow::Error::msg("--asset is required"))?;
+    let asset_bytes = std::fs::read(&asset)?;
+    let asset_name = asset
+        .file_name()
+        .and_then(|item| item.to_str())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if asset_name.is_empty() {
+        return Err(anyhow::Error::msg("--asset is required"));
+    }
+    let response = github_upload_release_asset(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        &release_ref,
+        &asset_name,
+        label.as_deref().unwrap_or_default(),
+        &content_type,
+        &asset_bytes,
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_release_delete(
+    repo_ref: Option<String>,
+    release_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("delete release requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let release_ref = release_ref
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("release tag or id is required"))?;
+    let response = github_delete_release(&runtime, &repo_owner, &repo_name, &release_ref)
         .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }

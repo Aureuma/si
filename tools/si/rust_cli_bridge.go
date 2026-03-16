@@ -1147,6 +1147,18 @@ func runGitHubReleaseGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"release", "get"}, args...)...)
 }
 
+func runGitHubReleaseCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"release", "create"}, args...)...)
+}
+
+func runGitHubReleaseUploadCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"release", "upload"}, args...)...)
+}
+
+func runGitHubReleaseDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"release", "delete"}, args...)...)
+}
+
 func runGitHubReleaseCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1156,6 +1168,12 @@ func runGitHubReleaseCommand(args []string) (bool, error) {
 		return runGitHubReleaseListCommand(args[1:])
 	case "get":
 		return runGitHubReleaseGetCommand(args[1:])
+	case "create":
+		return runGitHubReleaseCreateCommand(args[1:])
+	case "upload":
+		return runGitHubReleaseUploadCommand(args[1:])
+	case "delete":
+		return runGitHubReleaseDeleteCommand(args[1:])
 	default:
 		return false, nil
 	}
