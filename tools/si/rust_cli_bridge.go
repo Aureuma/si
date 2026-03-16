@@ -1396,6 +1396,12 @@ func runGitHubGitCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "credential":
 		return runGitHubGitCredentialCommand(args[1:])
+	case "setup":
+		return maybeDispatchRustCLICompat("github", append([]string{"git", "setup"}, args[1:]...)...)
+	case "remote-auth":
+		return maybeDispatchRustCLICompat("github", append([]string{"git", "remote-auth"}, args[1:]...)...)
+	case "clone-auth":
+		return maybeDispatchRustCLICompat("github", append([]string{"git", "clone-auth"}, args[1:]...)...)
 	default:
 		return false, nil
 	}

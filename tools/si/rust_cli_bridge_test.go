@@ -6293,6 +6293,108 @@ func TestRunGitHubGitCommandDelegatesToRustCLIForCredentialGet(t *testing.T) {
 	}
 }
 
+func TestRunGitHubGitCommandDelegatesToRustCLIForSetup(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-git-setup'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubGitCommand([]string{"setup", "--dry-run", "--json"})
+		if err != nil {
+			t.Fatalf("runGitHubGitCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github git setup to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-git-setup" {
+		t.Fatalf("expected delegated Rust github git setup output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ngit\nsetup\n--dry-run\n--json" {
+		t.Fatalf("expected Rust CLI args to be github git setup + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubGitCommandDelegatesToRustCLIForRemoteAuth(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-git-remote-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubGitCommand([]string{"remote-auth", "--vault-key", "GH_PAT"})
+		if err != nil {
+			t.Fatalf("runGitHubGitCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github git remote-auth to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-git-remote-auth" {
+		t.Fatalf("expected delegated Rust github git remote-auth output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ngit\nremote-auth\n--vault-key\nGH_PAT" {
+		t.Fatalf("expected Rust CLI args to be github git remote-auth + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGitHubGitCommandDelegatesToRustCLIForCloneAuth(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-github-git-clone-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGitHubGitCommand([]string{"clone-auth", "Aureuma/si", "--vault-key", "GH_PAT"})
+		if err != nil {
+			t.Fatalf("runGitHubGitCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected github git clone-auth to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-github-git-clone-auth" {
+		t.Fatalf("expected delegated Rust github git clone-auth output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "github\ngit\nclone-auth\nAureuma/si\n--vault-key\nGH_PAT" {
+		t.Fatalf("expected Rust CLI args to be github git clone-auth + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunGitHubIssueListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
