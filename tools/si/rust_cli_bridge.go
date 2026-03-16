@@ -379,6 +379,20 @@ func runAppleAppStoreContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "list"}, args...)...)
 }
 
+func runAppleAppStoreCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runAppleAppStoreAuthCommand(args[1:])
+	case "context":
+		return runAppleAppStoreContextCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runAppleAppStoreContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "current"}, args...)...)
 }
@@ -443,6 +457,20 @@ func runAWSContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "list"}, args...)...)
 }
 
+func runAWSCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runAWSAuthCommand(args[1:])
+	case "context":
+		return runAWSContextCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runAWSContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "current"}, args...)...)
 }
@@ -473,6 +501,20 @@ func runGCPAuthCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"auth"}, args...)...)
 }
 
+func runGCPCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runGCPAuthCommand(args[1:])
+	case "context":
+		return runGCPContextCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGCPContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"context", "list"}, args...)...)
 }
@@ -501,6 +543,20 @@ func runGCPAuthStatusCommand(args []string) (bool, error) {
 
 func runGooglePlacesContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "context", "list"}, args...)...)
+}
+
+func runGooglePlacesCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runGooglePlacesAuthCommand(args[1:])
+	case "context":
+		return runGooglePlacesContextCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runGooglePlacesContextCurrentCommand(args []string) (bool, error) {

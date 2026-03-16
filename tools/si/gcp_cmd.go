@@ -90,6 +90,13 @@ func (e *gcpAPIErrorDetails) Error() string {
 }
 
 func cmdGCP(args []string) {
+	delegated, err := runGCPCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, gcpUsageText)
 	if !routedOK {
 		return

@@ -579,6 +579,53 @@ func TestRunAppleAppStoreContextCommandDelegatesToRustCLIWhenConfigured(t *testi
 	}
 }
 
+func TestRunAppleAppStoreCommandDefaultsToGoWhileVerifyIsEnabled(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAppleAppStoreCommand([]string{"auth", "status", "--json"})
+	if err != nil {
+		t.Fatalf("runAppleAppStoreCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go apple appstore root path while verify is enabled")
+	}
+}
+
+func TestRunAppleAppStoreCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-appstore-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreCommand([]string{"auth", "status", "--verify=false", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore root to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-appstore-root" {
+		t.Fatalf("expected delegated Rust apple appstore root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\nauth\nstatus\n--verify=false\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore root + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -764,6 +811,53 @@ func TestRunAWSContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "aws\ncontext\nlist\n--json" {
 		t.Fatalf("expected Rust CLI args to be aws context + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSCommand([]string{"auth", "status", "--json"})
+	if err != nil {
+		t.Fatalf("runAWSCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go aws root path by default")
+	}
+}
+
+func TestRunAWSCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"auth", "status", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws root to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-root" {
+		t.Fatalf("expected delegated Rust aws root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws root + args, got %q", string(argsData))
 	}
 }
 
@@ -1049,6 +1143,53 @@ func TestRunGCPContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGCPCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGCPCommand([]string{"auth", "status", "--json"})
+	if err != nil {
+		t.Fatalf("runGCPCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go gcp root path by default")
+	}
+}
+
+func TestRunGCPCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"auth", "status", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp root to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-root" {
+		t.Fatalf("expected delegated Rust gcp root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp root + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGooglePlacesContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -1234,6 +1375,53 @@ func TestRunGooglePlacesContextCommandDelegatesToRustCLIWhenConfigured(t *testin
 	}
 	if strings.TrimSpace(string(argsData)) != "google\nplaces\ncontext\nlist\n--json" {
 		t.Fatalf("expected Rust CLI args to be google places context + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlacesCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlacesCommand([]string{"auth", "status", "--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlacesCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google places root path by default")
+	}
+}
+
+func TestRunGooglePlacesCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-places-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlacesCommand([]string{"auth", "status", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlacesCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google places root to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-places-root" {
+		t.Fatalf("expected delegated Rust google places root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplaces\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be google places root + args, got %q", string(argsData))
 	}
 }
 
