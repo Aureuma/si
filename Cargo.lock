@@ -1794,6 +1794,7 @@ dependencies = [
  "serde",
  "serde_json",
  "si-rs-config",
+ "url",
 ]
 
 [[package]]
