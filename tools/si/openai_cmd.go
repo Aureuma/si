@@ -1455,6 +1455,13 @@ func cmdOpenAIKeyDelete(args []string) {
 }
 
 func cmdOpenAIUsage(args []string) {
+	delegated, err := runOpenAIUsageCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai usage <completions|embeddings|images|audio_speeches|audio_transcriptions|moderations|vector_stores|code_interpreter_sessions|costs> ...")
 	if !routedOK {
 		return
@@ -1495,6 +1502,13 @@ func cmdOpenAIMonitor(args []string) {
 }
 
 func cmdOpenAICodex(args []string) {
+	delegated, err := runOpenAICodexCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai codex usage [--model <name>] ...")
 	if !routedOK {
 		return
