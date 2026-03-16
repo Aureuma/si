@@ -489,6 +489,7 @@ Progress notes:
 - completed: the Apple App Store provider slice now also owns the default verification lane, with Rust-owned `auth status --verify` and signed `doctor` execution plus Go wrapper delegation, while the unauthenticated `doctor --public` probe still stays on the Go side for now
 - completed: the GCP provider slice now also owns the root Service Usage runtime lane (`doctor`, `service enable|disable|get|list`, and `raw`), with Rust-owned bearer-token transport, direct Service Usage request execution, and Go wrapper delegation while preserving the separate unauthenticated `doctor --public` probe on the Go side
 - completed: the GCP provider slice now also owns the full API Keys lane (`apikey list|get|create|update|delete|lookup|undelete`), with Rust-owned API Keys transport routing, resource-name expansion, JSON-body shaping, and Go wrapper delegation while preserving the existing `--force` safety gate on destructive restore/delete operations
+- completed: the GCP provider slice now also owns the full IAM lane (`iam service-account`, `iam service-account-key`, `iam policy`, and `iam role`), with Rust-owned IAM and Cloud Resource Manager request routing, service-account/resource normalization, policy default-resource fallback, and Go wrapper delegation while preserving the existing `--force` safety gates on destructive IAM operations
 
 ### Phase 8: Release/install migration
 

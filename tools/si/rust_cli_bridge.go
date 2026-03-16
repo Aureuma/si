@@ -829,6 +829,8 @@ func runGCPCommand(args []string) (bool, error) {
 		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"service"}, args[1:]...)...)
 	case "apikey", "api-key", "apikeys":
 		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"apikey"}, args[1:]...)...)
+	case "iam":
+		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"iam"}, args[1:]...)...)
 	case "raw":
 		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"raw"}, args[1:]...)...)
 	default:

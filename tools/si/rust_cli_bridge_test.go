@@ -2110,6 +2110,40 @@ func TestRunGCPCommandDelegatesToRustCLIForAPIKey(t *testing.T) {
 	}
 }
 
+func TestRunGCPCommandDelegatesToRustCLIForIAM(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-iam'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"iam", "role", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp iam to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-iam" {
+		t.Fatalf("expected delegated Rust gcp iam output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\niam\nrole\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp iam + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPCommandDelegatesToRustCLIForService(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
