@@ -4393,6 +4393,74 @@ func TestRunStripeCommandDelegatesToRustCLIForReport(t *testing.T) {
 	}
 }
 
+func TestRunStripeCommandDelegatesToRustCLIForObjectList(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-stripe-object-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runStripeCommand([]string{"object", "list", "product", "--json"})
+		if err != nil {
+			t.Fatalf("runStripeCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected stripe object list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-stripe-object-list" {
+		t.Fatalf("expected delegated Rust stripe object list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "stripe\nobject\nlist\nproduct\n--json" {
+		t.Fatalf("expected Rust CLI args to be stripe object list + args, got %q", string(argsData))
+	}
+}
+
+func TestRunStripeCommandDelegatesToRustCLIForObjectGet(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-stripe-object-get'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runStripeCommand([]string{"object", "get", "product", "prod_123", "--json"})
+		if err != nil {
+			t.Fatalf("runStripeCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected stripe object get to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-stripe-object-get" {
+		t.Fatalf("expected delegated Rust stripe object get output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "stripe\nobject\nget\nproduct\nprod_123\n--json" {
+		t.Fatalf("expected Rust CLI args to be stripe object get + args, got %q", string(argsData))
+	}
+}
+
 func TestRunWorkOSContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
