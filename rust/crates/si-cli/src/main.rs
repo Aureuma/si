@@ -32,6 +32,12 @@ use si_rs_fort::{
 };
 use si_rs_process::{ProcessRunner, RunOptions, StdinBehavior};
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
+use si_rs_provider_cloudflare::{
+    CloudflareContextListEntry, CloudflareContextOverrides, CloudflareCurrentContext,
+    list_contexts as list_cloudflare_contexts,
+    render_context_list_text as render_cloudflare_context_list_text,
+    resolve_current_context as resolve_cloudflare_current_context,
+};
 use si_rs_provider_github::{
     GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry, list_contexts,
     render_context_list_text, resolve_auth_status, resolve_current_context,
@@ -90,6 +96,10 @@ enum Command {
     Providers {
         #[command(subcommand)]
         command: ProvidersCommand,
+    },
+    Cloudflare {
+        #[command(subcommand)]
+        command: CloudflareCommand,
     },
     Stripe {
         #[command(subcommand)]
@@ -157,6 +167,50 @@ enum ProvidersCommand {
     Characteristics {
         #[arg(long)]
         provider: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareCommand {
+    Context {
+        #[command(subcommand)]
+        command: CloudflareContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareContextCommand {
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Current {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
         #[arg(long, default_value = "text")]
@@ -1267,6 +1321,36 @@ struct ProviderCapabilitiesView {
 }
 
 #[derive(Debug, Serialize)]
+struct CloudflareContextListPayload {
+    contexts: Vec<CloudflareContextListEntry>,
+}
+
+#[derive(Debug, Serialize)]
+struct CloudflareCurrentContextPayload {
+    account_alias: String,
+    account_id: String,
+    environment: String,
+    zone_id: String,
+    zone_name: String,
+    base_url: String,
+    source: String,
+}
+
+impl From<CloudflareCurrentContext> for CloudflareCurrentContextPayload {
+    fn from(value: CloudflareCurrentContext) -> Self {
+        Self {
+            account_alias: value.account_alias,
+            account_id: value.account_id,
+            environment: value.environment,
+            zone_id: value.zone_id,
+            zone_name: value.zone_name,
+            base_url: value.base_url,
+            source: value.source,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct StripeContextListPayload {
     contexts: Vec<StripeContextListEntry>,
 }
@@ -1787,6 +1871,39 @@ fn main() -> Result<()> {
                 let format = if json { OutputFormat::Json } else { format };
                 show_provider_characteristics(provider.as_deref(), format)?
             }
+        },
+        Command::Cloudflare { command } => match command {
+            CloudflareCommand::Context { command } => match command {
+                CloudflareContextCommand::List { home, settings_file, json, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_cloudflare_context_list(home, settings_file, format)?
+                }
+                CloudflareContextCommand::Current {
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_cloudflare_context_current(
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
         },
         Command::Stripe { command } => match command {
             StripeCommand::Auth { command } => match command {
@@ -3026,6 +3143,86 @@ fn show_stripe_context_list(
             println!("{}", serde_json::to_string_pretty(&StripeContextListPayload { contexts })?)
         }
         OutputFormat::Text => print!("{}", render_stripe_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+fn show_cloudflare_context_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let contexts = list_cloudflare_contexts(&settings.cloudflare);
+    match format {
+        OutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&CloudflareContextListPayload { contexts })?
+            )
+        }
+        OutputFormat::Text => print!("{}", render_cloudflare_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_cloudflare_context_current(
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let payload = CloudflareCurrentContextPayload::from(
+        resolve_cloudflare_current_context(
+            &settings.cloudflare,
+            &env,
+            &CloudflareContextOverrides {
+                account: account.unwrap_or_default(),
+                environment: environment.unwrap_or_default(),
+                zone_id: zone_id.unwrap_or_default(),
+                zone_name: zone.unwrap_or_default(),
+                base_url: base_url.unwrap_or_default(),
+                account_id: account_id.unwrap_or_default(),
+            },
+        )
+        .map_err(anyhow::Error::msg)?,
+    );
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            let zone = if !payload.zone_id.trim().is_empty() {
+                payload.zone_id.as_str()
+            } else {
+                or_dash(&payload.zone_name)
+            };
+            println!(
+                "Current cloudflare context: account={} ({}) env={} zone={}",
+                account,
+                or_dash(&payload.account_id),
+                payload.environment,
+                zone
+            );
+            println!("Source: {}", or_dash(&payload.source));
+        }
     }
     Ok(())
 }

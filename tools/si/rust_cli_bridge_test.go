@@ -203,6 +203,100 @@ func TestRunProvidersCharacteristicsCommandDelegatesToRustCLIWhenConfigured(t *t
 	}
 }
 
+func TestRunCloudflareContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runCloudflareContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runCloudflareContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go cloudflare context list path by default")
+	}
+}
+
+func TestRunCloudflareContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-list" {
+		t.Fatalf("expected delegated Rust cloudflare context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunCloudflareContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runCloudflareContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runCloudflareContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go cloudflare context current path by default")
+	}
+}
+
+func TestRunCloudflareContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-current" {
+		t.Fatalf("expected delegated Rust cloudflare context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare context current + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

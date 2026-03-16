@@ -731,6 +731,89 @@ organization_id = "org_123"
 }
 
 #[test]
+fn cloudflare_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[cloudflare]
+default_account = "core"
+
+[cloudflare.accounts.core]
+name = "Core"
+account_id = "acc_core"
+prod_zone_id = "zone_prod"
+
+[cloudflare.accounts.ops]
+account_id = "acc_ops"
+staging_zone_id = "zone_staging"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["cloudflare", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[1]["staging_zone"], "zone_staging");
+}
+
+#[test]
+fn cloudflare_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[cloudflare]
+default_account = "core"
+default_env = "prod"
+
+[cloudflare.accounts.core]
+account_id = "acc_core"
+default_zone_name = "example.com"
+prod_zone_id = "zone_prod"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["cloudflare", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["account_id"], "acc_core");
+    assert_eq!(parsed["environment"], "prod");
+    assert_eq!(parsed["zone_id"], "zone_prod");
+    assert_eq!(parsed["zone_name"], "example.com");
+    assert_eq!(parsed["source"], "settings.account_id,settings.prod_zone_id");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");
