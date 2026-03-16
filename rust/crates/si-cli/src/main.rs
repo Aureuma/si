@@ -2088,6 +2088,18 @@ enum GooglePlacesCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    Session {
+        #[command(subcommand)]
+        command: GooglePlacesSessionCommand,
+    },
+    Types {
+        #[command(subcommand)]
+        command: GooglePlacesTypesCommand,
+    },
+    Report {
+        #[command(subcommand)]
+        command: GooglePlacesReportCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -2209,6 +2221,115 @@ enum GooglePlacesPhotoCommand {
         max_height: Option<usize>,
         #[arg(long = "param")]
         params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesSessionCommand {
+    New {
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        note: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Inspect {
+        token: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    End {
+        token: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    List {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesTypesCommand {
+    List {
+        #[arg(long)]
+        group: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Validate {
+        place_type: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlacesReportCommand {
+    Usage {
+        #[arg(long)]
+        since: Option<String>,
+        #[arg(long)]
+        until: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Sessions {
+        #[arg(long)]
+        since: Option<String>,
+        #[arg(long)]
+        until: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -9366,6 +9487,103 @@ fn main() -> Result<()> {
                         raw,
                     )?
                 }
+                GooglePlacesCommand::Session { command } => match command {
+                    GooglePlacesSessionCommand::New {
+                        token,
+                        account,
+                        note,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_session_new(
+                            token,
+                            account,
+                            note,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                    GooglePlacesSessionCommand::Inspect {
+                        token,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_session_inspect(token, home, settings_file, format)?
+                    }
+                    GooglePlacesSessionCommand::End {
+                        token,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_session_end(token, home, settings_file, format)?
+                    }
+                    GooglePlacesSessionCommand::List { home, settings_file, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_session_list(home, settings_file, format)?
+                    }
+                },
+                GooglePlacesCommand::Types { command } => match command {
+                    GooglePlacesTypesCommand::List { group, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_types_list(group, format)?
+                    }
+                    GooglePlacesTypesCommand::Validate { place_type, json, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_types_validate(place_type, format)?
+                    }
+                },
+                GooglePlacesCommand::Report { command } => match command {
+                    GooglePlacesReportCommand::Usage {
+                        since,
+                        until,
+                        account,
+                        env,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_report_usage(
+                            since,
+                            until,
+                            account,
+                            env,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                    GooglePlacesReportCommand::Sessions {
+                        since,
+                        until,
+                        account,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_places_report_sessions(
+                            since,
+                            until,
+                            account,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
             },
         },
         Command::OpenAI { command } => match command {
@@ -17025,6 +17243,521 @@ fn run_google_places_raw(
     )
     .map_err(anyhow::Error::msg)?;
     print_google_places_api_response(&response, format, raw)
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct GooglePlacesSessionEntryView {
+    token: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    account_alias: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    ended_at: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "String::is_empty")]
+    note: String,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+struct GooglePlacesSessionStoreView {
+    sessions: BTreeMap<String, GooglePlacesSessionEntryView>,
+}
+
+fn google_places_session_store_path(home: &std::path::Path) -> PathBuf {
+    home.join(".si").join("google").join("places").join("sessions.json")
+}
+
+fn load_google_places_session_store(home: &std::path::Path) -> Result<GooglePlacesSessionStoreView> {
+    let path = google_places_session_store_path(home);
+    if !path.exists() {
+        return Ok(GooglePlacesSessionStoreView::default());
+    }
+    let raw = std::fs::read(&path)?;
+    if raw.is_empty() {
+        return Ok(GooglePlacesSessionStoreView::default());
+    }
+    let mut store: GooglePlacesSessionStoreView = serde_json::from_slice(&raw)?;
+    if store.sessions.is_empty() {
+        store.sessions = BTreeMap::new();
+    }
+    Ok(store)
+}
+
+fn save_google_places_session_store(
+    home: &std::path::Path,
+    store: &GooglePlacesSessionStoreView,
+) -> Result<()> {
+    let path = google_places_session_store_path(home);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut raw = serde_json::to_vec_pretty(store)?;
+    raw.push(b'\n');
+    std::fs::write(path, raw)?;
+    Ok(())
+}
+
+fn generate_google_places_session_token() -> Result<String> {
+    let mut file = std::fs::File::open("/dev/urandom")?;
+    let mut buf = [0u8; 16];
+    use std::io::Read as _;
+    file.read_exact(&mut buf)?;
+    buf[6] = (buf[6] & 0x0f) | 0x40;
+    buf[8] = (buf[8] & 0x3f) | 0x80;
+    let hex = buf.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    Ok(format!(
+        "{}-{}-{}-{}-{}",
+        &hex[..8],
+        &hex[8..12],
+        &hex[12..16],
+        &hex[16..20],
+        &hex[20..]
+    ))
+}
+
+fn google_places_now_rfc3339() -> String {
+    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+}
+
+fn default_google_places_account_alias(settings: &Settings) -> String {
+    settings
+        .google
+        .default_account
+        .clone()
+        .or_else(|| std::env::var("GOOGLE_DEFAULT_ACCOUNT").ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned()
+}
+
+fn load_google_places_settings(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<(PathBuf, Settings)> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    Ok((home, settings))
+}
+
+fn run_google_places_session_new(
+    token: Option<String>,
+    account: Option<String>,
+    note: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, settings) = load_google_places_settings(home, settings_file)?;
+    let mut store = load_google_places_session_store(&home)?;
+    let token =
+        token.filter(|value| !value.trim().is_empty()).unwrap_or(generate_google_places_session_token()?);
+    if store.sessions.contains_key(&token) {
+        anyhow::bail!("session token already exists: {token}");
+    }
+    let now = google_places_now_rfc3339();
+    let entry = GooglePlacesSessionEntryView {
+        token: token.clone(),
+        account_alias: account
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| default_google_places_account_alias(&settings)),
+        created_at: now.clone(),
+        updated_at: now,
+        ended_at: String::new(),
+        note: note.unwrap_or_default().trim().to_owned(),
+    };
+    store.sessions.insert(token, entry.clone());
+    save_google_places_session_store(&home, &store)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&entry)?),
+        OutputFormat::Text => println!("google places session created: {}", entry.token),
+    }
+    Ok(())
+}
+
+fn run_google_places_session_inspect(
+    token: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, _) = load_google_places_settings(home, settings_file)?;
+    let store = load_google_places_session_store(&home)?;
+    let entry = store
+        .sessions
+        .get(token.trim())
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("session token not found: {}", token.trim()))?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&entry)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&entry)?),
+    }
+    Ok(())
+}
+
+fn run_google_places_session_end(
+    token: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, _) = load_google_places_settings(home, settings_file)?;
+    let mut store = load_google_places_session_store(&home)?;
+    let token_key = token.trim().to_owned();
+    let entry = store
+        .sessions
+        .get_mut(&token_key)
+        .ok_or_else(|| anyhow::anyhow!("session token not found: {}", token_key))?;
+    let now = google_places_now_rfc3339();
+    entry.updated_at = now.clone();
+    if entry.ended_at.trim().is_empty() {
+        entry.ended_at = now;
+    }
+    let payload = entry.clone();
+    save_google_places_session_store(&home, &store)?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("google places session ended: {}", payload.token),
+    }
+    Ok(())
+}
+
+fn run_google_places_session_list(
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, _) = load_google_places_settings(home, settings_file)?;
+    let store = load_google_places_session_store(&home)?;
+    let mut rows = store.sessions.values().cloned().collect::<Vec<_>>();
+    rows.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&rows)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&rows)?),
+    }
+    Ok(())
+}
+
+fn google_places_type_catalog() -> BTreeMap<&'static str, Vec<&'static str>> {
+    BTreeMap::from([
+        ("business", vec!["accounting", "atm", "bank", "city_hall", "courthouse", "embassy", "fire_station", "insurance_agency", "lawyer", "local_government_office", "moving_company", "post_office", "real_estate_agency", "storage", "travel_agency"]),
+        ("culture", vec!["art_gallery", "library", "museum", "performing_arts_theater", "tourist_attraction", "zoo"]),
+        ("education", vec!["primary_school", "school", "secondary_school", "university"]),
+        ("food", vec!["bakery", "bar", "cafe", "coffee_shop", "fast_food_restaurant", "meal_delivery", "meal_takeaway", "restaurant", "sandwich_shop", "steak_house"]),
+        ("government", vec!["city_hall", "courthouse", "fire_station", "police", "post_office", "local_government_office"]),
+        ("health", vec!["dentist", "doctor", "drugstore", "hospital", "medical_lab", "pharmacy", "physiotherapist", "veterinary_care"]),
+        ("lodging", vec!["campground", "extended_stay_hotel", "hostel", "hotel", "lodging", "motel", "resort_hotel"]),
+        ("outdoor", vec!["amusement_park", "beach", "campground", "dog_park", "hiking_area", "national_park", "park", "playground", "state_park"]),
+        ("services", vec!["beauty_salon", "car_rental", "car_repair", "car_wash", "electrician", "florist", "funeral_home", "gym", "hair_care", "laundry", "locksmith", "painter", "pet_store", "plumber", "roofing_contractor", "spa"]),
+        ("shopping", vec!["book_store", "clothing_store", "convenience_store", "department_store", "electronics_store", "furniture_store", "grocery_store", "hardware_store", "home_goods_store", "jewelry_store", "liquor_store", "market", "shopping_mall", "store", "supermarket"]),
+        ("sports", vec!["athletic_field", "fitness_center", "golf_course", "gym", "ice_skating_rink", "sports_complex", "stadium", "swimming_pool"]),
+        ("transport", vec!["airport", "bus_station", "bus_stop", "electric_vehicle_charging_station", "gas_station", "light_rail_station", "parking", "subway_station", "taxi_stand", "train_station", "transit_station"]),
+    ])
+}
+
+fn run_google_places_types_list(group: Option<String>, format: OutputFormat) -> Result<()> {
+    let catalog = google_places_type_catalog();
+    let selected = group.unwrap_or_default().trim().to_lowercase();
+    let payload = if selected.is_empty() || selected == "all" {
+        serde_json::json!({ "groups": catalog })
+    } else {
+        let values = catalog
+            .get(selected.as_str())
+            .ok_or_else(|| anyhow::anyhow!("unknown type group {:?}", selected))?;
+        serde_json::json!({ "group": selected, "types": values })
+    };
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
+}
+
+fn run_google_places_types_validate(place_type: String, format: OutputFormat) -> Result<()> {
+    let place_type = place_type.trim().to_lowercase();
+    let catalog = google_places_type_catalog();
+    let mut group = String::new();
+    let mut valid = false;
+    for (group_name, values) in &catalog {
+        if values.iter().any(|value| *value == place_type) {
+            valid = true;
+            group = (*group_name).to_owned();
+            break;
+        }
+    }
+    let mut suggestions = Vec::new();
+    if !valid {
+        for values in catalog.values() {
+            for value in values {
+                if value.contains(&place_type) || place_type.contains(value) {
+                    suggestions.push((*value).to_owned());
+                }
+            }
+        }
+        suggestions.sort();
+        suggestions.truncate(5);
+    }
+    let payload = serde_json::json!({
+        "type": place_type,
+        "valid": valid,
+        "group": group,
+        "suggestions": suggestions
+    });
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
+}
+
+fn parse_google_report_time(raw: Option<String>) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    let raw = raw.unwrap_or_default();
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
+    if let Ok(seconds) = raw.parse::<i64>() {
+        return chrono::DateTime::from_timestamp(seconds, 0)
+            .map(Some)
+            .ok_or_else(|| anyhow::anyhow!("invalid unix timestamp"));
+    }
+    Ok(Some(
+        chrono::DateTime::parse_from_rfc3339(raw)
+            .map_err(|err| anyhow::anyhow!("{err}"))?
+            .with_timezone(&chrono::Utc),
+    ))
+}
+
+fn parse_google_report_window(
+    since: Option<String>,
+    until: Option<String>,
+) -> Result<(Option<chrono::DateTime<chrono::Utc>>, Option<chrono::DateTime<chrono::Utc>>)> {
+    let since = parse_google_report_time(since)?;
+    let until = parse_google_report_time(until)?;
+    if let (Some(since), Some(until)) = (&since, &until) {
+        if since > until {
+            anyhow::bail!("--since must be <= --until");
+        }
+    }
+    Ok((since, until))
+}
+
+fn in_google_report_range(
+    ts: chrono::DateTime<chrono::Utc>,
+    since: &Option<chrono::DateTime<chrono::Utc>>,
+    until: &Option<chrono::DateTime<chrono::Utc>>,
+) -> bool {
+    if let Some(since) = since {
+        if ts < *since {
+            return false;
+        }
+    }
+    if let Some(until) = until {
+        if ts > *until {
+            return false;
+        }
+    }
+    true
+}
+
+fn resolve_google_places_log_path(home: &std::path::Path, settings: &Settings) -> PathBuf {
+    if let Ok(value) = std::env::var("SI_GOOGLE_PLACES_LOG_FILE") {
+        if !value.trim().is_empty() {
+            return PathBuf::from(value);
+        }
+    }
+    if let Some(value) = settings.google.log_file.as_deref() {
+        if !value.trim().is_empty() {
+            return PathBuf::from(value);
+        }
+    }
+    home.join(".si").join("logs").join("google-places.log")
+}
+
+fn run_google_places_report_usage(
+    since: Option<String>,
+    until: Option<String>,
+    account: Option<String>,
+    env: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, settings) = load_google_places_settings(home, settings_file)?;
+    let (since, until) = parse_google_report_window(since, until)?;
+    let account = account.unwrap_or_default().trim().to_owned();
+    let env = env.unwrap_or_default().trim().to_lowercase();
+    let log_path = resolve_google_places_log_path(&home, &settings);
+    let mut requests = 0usize;
+    let mut responses = 0usize;
+    let mut errors = 0usize;
+    let mut total_duration = 0i64;
+    let mut duration_count = 0i64;
+    let mut status_buckets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut top_endpoints: BTreeMap<String, usize> = BTreeMap::new();
+    let mut unique_request_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if log_path.exists() {
+        let file = std::fs::File::open(&log_path)?;
+        let reader = std::io::BufReader::new(file);
+        use std::io::BufRead as _;
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let entry: Value = match serde_json::from_str(&line) {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+            let ts = entry
+                .get("ts")
+                .and_then(Value::as_str)
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| value.with_timezone(&chrono::Utc));
+            let Some(ts) = ts else { continue };
+            if !in_google_report_range(ts, &since, &until) {
+                continue;
+            }
+            if !account.is_empty()
+                && entry
+                    .get("ctx_account_alias")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim()
+                    != account
+            {
+                continue;
+            }
+            if !env.is_empty()
+                && entry
+                    .get("ctx_environment")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_lowercase()
+                    != env
+            {
+                continue;
+            }
+            let event = entry.get("event").and_then(Value::as_str).unwrap_or_default();
+            let method = entry.get("method").and_then(Value::as_str).unwrap_or_default().trim().to_uppercase();
+            let path = entry.get("path").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+            let endpoint = format!("{method} {}", if path.is_empty() { "-" } else { &path });
+            match event {
+                "request" => {
+                    requests += 1;
+                    *top_endpoints.entry(endpoint).or_default() += 1;
+                }
+                "response" => {
+                    responses += 1;
+                    let status = entry.get("status").and_then(Value::as_i64).unwrap_or_default();
+                    let bucket = match status {
+                        500..=599 => "5xx",
+                        400..=499 => "4xx",
+                        300..=399 => "3xx",
+                        200..=299 => "2xx",
+                        100..=199 => "1xx",
+                        _ => "unknown",
+                    };
+                    *status_buckets.entry(bucket.to_owned()).or_default() += 1;
+                    if status >= 400 {
+                        errors += 1;
+                    }
+                    if let Some(duration) = entry.get("duration_ms").and_then(Value::as_i64) {
+                        total_duration += duration;
+                        duration_count += 1;
+                    }
+                    if let Some(request_id) = entry.get("request_id").and_then(Value::as_str) {
+                        if !request_id.trim().is_empty() {
+                            unique_request_ids.insert(request_id.trim().to_owned());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut endpoints = top_endpoints
+        .into_iter()
+        .map(|(endpoint, count)| serde_json::json!({"endpoint": endpoint, "count": count}))
+        .collect::<Vec<_>>();
+    endpoints.sort_by(|left, right| {
+        right["count"]
+            .as_u64()
+            .unwrap_or_default()
+            .cmp(&left["count"].as_u64().unwrap_or_default())
+            .then_with(|| left["endpoint"].as_str().unwrap_or_default().cmp(right["endpoint"].as_str().unwrap_or_default()))
+    });
+    endpoints.truncate(10);
+    let payload = serde_json::json!({
+        "log_path": log_path,
+        "requests": requests,
+        "responses": responses,
+        "errors": errors,
+        "average_ms": if duration_count > 0 { total_duration / duration_count } else { 0 },
+        "status_buckets": status_buckets,
+        "unique_request_ids": unique_request_ids.len(),
+        "top_endpoints": endpoints,
+        "filter_account": account,
+        "filter_environment": env,
+        "window_since": since.map(|value| value.to_rfc3339()).unwrap_or_default(),
+        "window_until": until.map(|value| value.to_rfc3339()).unwrap_or_default(),
+    });
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
+}
+
+fn run_google_places_report_sessions(
+    since: Option<String>,
+    until: Option<String>,
+    account: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (home, _) = load_google_places_settings(home, settings_file)?;
+    let (since, until) = parse_google_report_window(since, until)?;
+    let account = account.unwrap_or_default().trim().to_owned();
+    let store = load_google_places_session_store(&home)?;
+    let mut rows = Vec::new();
+    let mut active = 0usize;
+    let mut ended = 0usize;
+    for entry in store.sessions.values() {
+        if !account.is_empty() && entry.account_alias.trim() != account {
+            continue;
+        }
+        let Ok(created_at) = chrono::DateTime::parse_from_rfc3339(entry.created_at.trim()) else { continue };
+        let created_at = created_at.with_timezone(&chrono::Utc);
+        if !in_google_report_range(created_at, &since, &until) {
+            continue;
+        }
+        if entry.ended_at.trim().is_empty() {
+            active += 1;
+        } else {
+            ended += 1;
+        }
+        rows.push(entry.clone());
+    }
+    rows.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    let payload = serde_json::json!({
+        "total": rows.len(),
+        "active": active,
+        "ended": ended,
+        "filter_account": account,
+        "window_since": since.map(|value| value.to_rfc3339()).unwrap_or_default(),
+        "window_until": until.map(|value| value.to_rfc3339()).unwrap_or_default(),
+        "sessions": rows,
+    });
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
 }
 
 fn show_openai_context_list(

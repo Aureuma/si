@@ -5296,6 +5296,128 @@ fn google_places_raw_json_fetches_with_headers_and_query_params() {
 }
 
 #[test]
+fn google_places_session_json_round_trip_uses_home_store() {
+    let home = tempdir().expect("tempdir");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
+    fs::write(
+        home.path().join(".si/settings.toml"),
+        "schema_version = 1\n[google]\ndefault_account = \"core\"\n",
+    )
+    .expect("write settings");
+
+    let created = cargo_bin()
+        .args(["google", "places", "session", "new"])
+        .args(["--home", home.path().to_str().expect("home str"), "--note", "demo", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let created: Value = serde_json::from_slice(&created).expect("json output");
+    let token = created["token"].as_str().expect("token").to_owned();
+    assert_eq!(created["account_alias"], "core");
+
+    let listed = cargo_bin()
+        .args(["google", "places", "session", "list"])
+        .args(["--home", home.path().to_str().expect("home str"), "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let listed: Value = serde_json::from_slice(&listed).expect("json output");
+    assert_eq!(listed[0]["token"], token);
+
+    let ended = cargo_bin()
+        .args(["google", "places", "session", "end", &token])
+        .args(["--home", home.path().to_str().expect("home str"), "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let ended: Value = serde_json::from_slice(&ended).expect("json output");
+    assert_eq!(ended["token"], token);
+    assert!(ended["ended_at"].as_str().expect("ended_at").len() > 0);
+}
+
+#[test]
+fn google_places_types_validate_json_reports_group() {
+    let output = cargo_bin()
+        .args(["google", "places", "types", "validate", "cafe", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["valid"], true);
+    assert_eq!(parsed["group"], "food");
+}
+
+#[test]
+fn google_places_report_usage_json_reads_log_file() {
+    let home = tempdir().expect("tempdir");
+    let log_dir = tempdir().expect("tempdir");
+    let log_path = log_dir.path().join("google-places.log");
+    fs::create_dir_all(home.path().join(".si")).expect("mkdir settings dir");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(
+        &log_path,
+        concat!(
+            "{\"ts\":\"2026-03-16T00:00:00Z\",\"event\":\"request\",\"method\":\"POST\",\"path\":\"/v1/places:autocomplete\",\"ctx_account_alias\":\"core\",\"ctx_environment\":\"prod\"}\n",
+            "{\"ts\":\"2026-03-16T00:00:01Z\",\"event\":\"response\",\"method\":\"POST\",\"path\":\"/v1/places:autocomplete\",\"status\":200,\"duration_ms\":42,\"request_id\":\"req_1\",\"ctx_account_alias\":\"core\",\"ctx_environment\":\"prod\"}\n"
+        ),
+    )
+    .expect("write log");
+
+    let output = cargo_bin()
+        .env("SI_GOOGLE_PLACES_LOG_FILE", log_path.to_str().expect("log path"))
+        .args(["google", "places", "report", "usage"])
+        .args(["--home", home.path().to_str().expect("home str"), "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["requests"], 1);
+    assert_eq!(parsed["responses"], 1);
+    assert_eq!(parsed["status_buckets"]["2xx"], 1);
+}
+
+#[test]
+fn google_places_report_sessions_json_reads_store() {
+    let home = tempdir().expect("tempdir");
+    let store_dir = home.path().join(".si/google/places");
+    fs::create_dir_all(&store_dir).expect("mkdir store dir");
+    fs::write(home.path().join(".si/settings.toml"), "schema_version = 1\n").expect("write settings");
+    fs::write(
+        store_dir.join("sessions.json"),
+        concat!(
+            "{\n  \"sessions\": {\n",
+            "    \"sess_1\": {\"token\":\"sess_1\",\"account_alias\":\"core\",\"created_at\":\"2026-03-16T00:00:00Z\",\"updated_at\":\"2026-03-16T00:00:00Z\"},\n",
+            "    \"sess_2\": {\"token\":\"sess_2\",\"account_alias\":\"core\",\"created_at\":\"2026-03-16T01:00:00Z\",\"updated_at\":\"2026-03-16T02:00:00Z\",\"ended_at\":\"2026-03-16T02:00:00Z\"}\n",
+            "  }\n}\n"
+        ),
+    )
+    .expect("write store");
+
+    let output = cargo_bin()
+        .args(["google", "places", "report", "sessions"])
+        .args(["--home", home.path().to_str().expect("home str"), "--account", "core", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["total"], 2);
+    assert_eq!(parsed["active"], 1);
+    assert_eq!(parsed["ended"], 1);
+}
+
+#[test]
 fn openai_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
