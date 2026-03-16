@@ -1167,6 +1167,14 @@ func runGitHubProjectGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "get"}, args...)...)
 }
 
+func runGitHubProjectFieldsCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "fields"}, args...)...)
+}
+
+func runGitHubProjectItemsCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("github", append([]string{"project", "items"}, args...)...)
+}
+
 func runGitHubProjectCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1176,6 +1184,10 @@ func runGitHubProjectCommand(args []string) (bool, error) {
 		return runGitHubProjectListCommand(args[1:])
 	case "get":
 		return runGitHubProjectGetCommand(args[1:])
+	case "fields":
+		return runGitHubProjectFieldsCommand(args[1:])
+	case "items":
+		return runGitHubProjectItemsCommand(args[1:])
 	default:
 		return false, nil
 	}

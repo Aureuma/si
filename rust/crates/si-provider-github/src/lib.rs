@@ -576,6 +576,181 @@ query($id:ID!){
     )
 }
 
+pub fn list_project_fields(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    limit: usize,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+query($id:ID!,$first:Int!){
+  node(id:$id) {
+    ... on ProjectV2 {
+      id
+      fields(first:$first) {
+        nodes {
+          ... on ProjectV2Field {
+            id
+            name
+            dataType
+          }
+          ... on ProjectV2SingleSelectField {
+            id
+            name
+            dataType
+            options {
+              id
+              name
+            }
+          }
+          ... on ProjectV2IterationField {
+            id
+            name
+            dataType
+            configuration {
+              iterations {
+                id
+                title
+                startDate
+                duration
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "id": project_id.trim(),
+            "first": if limit == 0 { 100 } else { limit },
+        }),
+    )
+}
+
+pub fn list_project_items(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    limit: usize,
+    include_archived: bool,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+query($id:ID!,$first:Int!,$includeArchived:Boolean!){
+  node(id:$id) {
+    ... on ProjectV2 {
+      id
+      items(first:$first, includeArchived:$includeArchived) {
+        nodes {
+          id
+          isArchived
+          type
+          content {
+            __typename
+            ... on DraftIssue {
+              title
+              body
+            }
+            ... on Issue {
+              id
+              number
+              title
+              state
+              url
+              repository {
+                name
+                owner {
+                  login
+                }
+              }
+            }
+            ... on PullRequest {
+              id
+              number
+              title
+              state
+              url
+              repository {
+                name
+                owner {
+                  login
+                }
+              }
+            }
+          }
+          fieldValues(first:20) {
+            nodes {
+              ... on ProjectV2ItemFieldTextValue {
+                text
+                field {
+                  ... on ProjectV2FieldCommon {
+                    id
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldNumberValue {
+                number
+                field {
+                  ... on ProjectV2FieldCommon {
+                    id
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldDateValue {
+                date
+                field {
+                  ... on ProjectV2FieldCommon {
+                    id
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                optionId
+                field {
+                  ... on ProjectV2FieldCommon {
+                    id
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldIterationValue {
+                title
+                iterationId
+                startDate
+                field {
+                  ... on ProjectV2FieldCommon {
+                    id
+                    name
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "id": project_id.trim(),
+            "first": if limit == 0 { 50 } else { limit },
+            "includeArchived": include_archived,
+        }),
+    )
+}
+
 pub fn list_workflows(
     runtime: &GitHubRuntime,
     owner: &str,
