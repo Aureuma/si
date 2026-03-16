@@ -1126,6 +1126,20 @@ func runStripeReportCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("stripe", append([]string{"report"}, args...)...)
 }
 
+func runStripeObjectCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"object", "list"}, args[1:]...)...)
+	case "get":
+		return maybeDispatchRustCLIReadOnly("stripe", append([]string{"object", "get"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
 func runStripeAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1151,6 +1165,8 @@ func runStripeCommand(args []string) (bool, error) {
 		return runStripeRawCommand(args[1:])
 	case "report":
 		return runStripeReportCommand(args[1:])
+	case "object":
+		return runStripeObjectCommand(args[1:])
 	default:
 		return false, nil
 	}
