@@ -1297,7 +1297,9 @@ dependencies = [
 name = "si-rs-provider-cloudflare"
 version = "0.54.0"
 dependencies = [
+ "reqwest",
  "serde",
+ "serde_json",
  "si-rs-config",
 ]
 
