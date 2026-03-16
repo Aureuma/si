@@ -39,11 +39,12 @@ const (
 )
 
 var (
-	openLoginURLFn              = openLoginURL
-	copyDeviceCodeToClipboardFn = copyDeviceCodeToClipboard
-	runCodexRemoveFn            = cmdCodexRemove
-	runCodexSpawnFn             = cmdCodexSpawn
-	observeCodexSpawnPreparedFn = func(codexSpawnPrepared) (bool, error) { return false, nil }
+	openLoginURLFn                 = openLoginURL
+	copyDeviceCodeToClipboardFn    = copyDeviceCodeToClipboard
+	runCodexRemoveFn               = cmdCodexRemove
+	runCodexSpawnFn                = cmdCodexSpawn
+	observeCodexSpawnPreparedFn    = func(codexSpawnPrepared) (bool, error) { return false, nil }
+	observeCodexExecTmuxPreparedFn = func(codexExecTmuxPrepared) (bool, error) { return false, nil }
 )
 
 func dispatchCodexCommand(cmd string, args []string) bool {
@@ -125,6 +126,12 @@ type codexSpawnPrepared struct {
 	ProfileID              string
 	DelegatedSpawnPlan     bool
 	HasRustSpec            bool
+}
+
+type codexExecTmuxPrepared struct {
+	Name          string
+	ContainerName string
+	TmuxMode      bool
 }
 
 func addCodexSpawnFlags(fs *flag.FlagSet) *codexSpawnFlags {
@@ -1210,6 +1217,18 @@ func cmdCodexExec(args []string) {
 	}
 	if err := validateRunTmuxArgs(tmuxMode, cmd); err != nil {
 		fatal(err)
+	}
+	if tmuxMode {
+		prepared := codexExecTmuxPrepared{
+			Name:          name,
+			ContainerName: containerName,
+			TmuxMode:      true,
+		}
+		if intercepted, err := observeCodexExecTmuxPreparedFn(prepared); err != nil {
+			fatal(err)
+		} else if intercepted {
+			return
+		}
 	}
 
 	profileID := ""

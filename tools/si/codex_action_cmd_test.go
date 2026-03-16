@@ -317,6 +317,27 @@ func TestCmdCodexSpawnUsesRustPlanBeforeExecution(t *testing.T) {
 	}
 }
 
+func TestCmdCodexExecTmuxReachesAttachBoundary(t *testing.T) {
+	prev := observeCodexExecTmuxPreparedFn
+	t.Cleanup(func() {
+		observeCodexExecTmuxPreparedFn = prev
+	})
+
+	var got codexExecTmuxPrepared
+	observeCodexExecTmuxPreparedFn = func(prepared codexExecTmuxPrepared) (bool, error) {
+		got = prepared
+		return true, nil
+	}
+
+	_ = captureOutputForTest(t, func() {
+		cmdCodexExec([]string{"ferma", "--tmux"})
+	})
+
+	if got.Name != "ferma" || got.ContainerName != "si-codex-ferma" || !got.TmuxMode {
+		t.Fatalf("unexpected prepared tmux exec: %#v", got)
+	}
+}
+
 func TestCodexDelegatedLifecycleSmoke(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
