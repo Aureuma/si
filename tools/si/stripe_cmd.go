@@ -5,6 +5,13 @@ import "strings"
 const stripeUsageText = "usage: si stripe <auth|context|doctor|object|raw|report|sync>"
 
 func cmdStripe(args []string) {
+	delegated, err := runStripeCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, stripeUsageText)
 	if !routedOK {
 		return
