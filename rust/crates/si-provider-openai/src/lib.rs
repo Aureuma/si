@@ -1,5 +1,5 @@
 use reqwest::blocking::Client;
-use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
 use serde::Serialize;
 use serde_json::Value;
 use si_rs_config::settings::{OpenAIAccountEntry, OpenAISettings};
@@ -477,6 +477,38 @@ pub fn get_project(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIRespons
     openai_get(runtime, &format!("/v1/organization/projects/{escaped}"), &[], true)
 }
 
+pub fn create_project(runtime: &OpenAIRuntime, payload: &Value) -> Result<OpenAIAPIResponse, String> {
+    openai_send_json(runtime, "POST", "/v1/organization/projects", payload, true)
+}
+
+pub fn update_project(
+    runtime: &OpenAIRuntime,
+    id: &str,
+    payload: &Value,
+) -> Result<OpenAIAPIResponse, String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let escaped = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
+    openai_send_json(runtime, "POST", &format!("/v1/organization/projects/{escaped}"), payload, true)
+}
+
+pub fn archive_project(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIResponse, String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let escaped = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
+    openai_send_json(
+        runtime,
+        "POST",
+        &format!("/v1/organization/projects/{escaped}/archive"),
+        &Value::Object(Default::default()),
+        true,
+    )
+}
+
 pub fn list_admin_api_keys(
     runtime: &OpenAIRuntime,
     limit: Option<usize>,
@@ -506,6 +538,25 @@ pub fn get_admin_api_key(
     }
     let escaped = url::form_urlencoded::byte_serialize(key_id.as_bytes()).collect::<String>();
     openai_get(runtime, &format!("/v1/organization/admin_api_keys/{escaped}"), &[], true)
+}
+
+pub fn create_admin_api_key(
+    runtime: &OpenAIRuntime,
+    payload: &Value,
+) -> Result<OpenAIAPIResponse, String> {
+    openai_send_json(runtime, "POST", "/v1/organization/admin_api_keys", payload, true)
+}
+
+pub fn delete_admin_api_key(
+    runtime: &OpenAIRuntime,
+    key_id: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let key_id = key_id.trim();
+    if key_id.is_empty() {
+        return Err("key id is required".to_owned());
+    }
+    let escaped = url::form_urlencoded::byte_serialize(key_id.as_bytes()).collect::<String>();
+    openai_delete(runtime, &format!("/v1/organization/admin_api_keys/{escaped}"), true)
 }
 
 pub fn get_usage_metric(
@@ -569,6 +620,29 @@ pub fn get_project_api_key(
     )
 }
 
+pub fn delete_project_api_key(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    key_id: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let key_id = key_id.trim();
+    if key_id.is_empty() {
+        return Err("key id is required".to_owned());
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    let key_id = url::form_urlencoded::byte_serialize(key_id.as_bytes()).collect::<String>();
+    openai_delete(
+        runtime,
+        &format!("/v1/organization/projects/{project_id}/api_keys/{key_id}"),
+        true,
+    )
+}
+
 pub fn list_project_service_accounts(
     runtime: &OpenAIRuntime,
     project_id: &str,
@@ -592,6 +666,26 @@ pub fn list_project_service_accounts(
         runtime,
         &format!("/v1/organization/projects/{project_id}/service_accounts"),
         &params,
+        true,
+    )
+}
+
+pub fn create_project_service_account(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    payload: &Value,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    openai_send_json(
+        runtime,
+        "POST",
+        &format!("/v1/organization/projects/{project_id}/service_accounts"),
+        payload,
         true,
     )
 }
@@ -627,6 +721,33 @@ pub fn list_project_rate_limits(
     )
 }
 
+pub fn update_project_rate_limit(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    rate_limit_id: &str,
+    payload: &Value,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let rate_limit_id = rate_limit_id.trim();
+    if rate_limit_id.is_empty() {
+        return Err("rate limit id is required".to_owned());
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    let rate_limit_id =
+        url::form_urlencoded::byte_serialize(rate_limit_id.as_bytes()).collect::<String>();
+    openai_send_json(
+        runtime,
+        "POST",
+        &format!("/v1/organization/projects/{project_id}/rate_limits/{rate_limit_id}"),
+        payload,
+        true,
+    )
+}
+
 pub fn get_project_service_account(
     runtime: &OpenAIRuntime,
     project_id: &str,
@@ -648,6 +769,30 @@ pub fn get_project_service_account(
         runtime,
         &format!("/v1/organization/projects/{project_id}/service_accounts/{service_account_id}"),
         &[],
+        true,
+    )
+}
+
+pub fn delete_project_service_account(
+    runtime: &OpenAIRuntime,
+    project_id: &str,
+    service_account_id: &str,
+) -> Result<OpenAIAPIResponse, String> {
+    let project_id = project_id.trim();
+    if project_id.is_empty() {
+        return Err("project id is required".to_owned());
+    }
+    let service_account_id = service_account_id.trim();
+    if service_account_id.is_empty() {
+        return Err("service account id is required".to_owned());
+    }
+    let project_id =
+        url::form_urlencoded::byte_serialize(project_id.as_bytes()).collect::<String>();
+    let service_account_id =
+        url::form_urlencoded::byte_serialize(service_account_id.as_bytes()).collect::<String>();
+    openai_delete(
+        runtime,
+        &format!("/v1/organization/projects/{project_id}/service_accounts/{service_account_id}"),
         true,
     )
 }
@@ -757,6 +902,45 @@ fn openai_get(
     params: &[(&str, String)],
     use_admin_key: bool,
 ) -> Result<OpenAIAPIResponse, String> {
+    openai_request(runtime, "GET", path, params, None, use_admin_key)
+}
+
+fn openai_send_json(
+    runtime: &OpenAIRuntime,
+    method: &str,
+    path: &str,
+    payload: &Value,
+    use_admin_key: bool,
+) -> Result<OpenAIAPIResponse, String> {
+    openai_request(
+        runtime,
+        method,
+        path,
+        &[],
+        Some(
+            serde_json::to_vec(payload)
+                .map_err(|err| format!("encode openai request body: {err}"))?,
+        ),
+        use_admin_key,
+    )
+}
+
+fn openai_delete(
+    runtime: &OpenAIRuntime,
+    path: &str,
+    use_admin_key: bool,
+) -> Result<OpenAIAPIResponse, String> {
+    openai_request(runtime, "DELETE", path, &[], None, use_admin_key)
+}
+
+fn openai_request(
+    runtime: &OpenAIRuntime,
+    method: &str,
+    path: &str,
+    params: &[(&str, String)],
+    body: Option<Vec<u8>>,
+    use_admin_key: bool,
+) -> Result<OpenAIAPIResponse, String> {
     let url = resolve_url(&runtime.base_url, path, params)?;
     let client = Client::builder()
         .timeout(Duration::from_secs(60))
@@ -789,10 +973,17 @@ fn openai_get(
                 .map_err(|err| format!("build openai project header: {err}"))?,
         );
     }
+    if body.is_some() {
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    }
 
-    let response = client
-        .get(url)
-        .headers(headers)
+    let method = reqwest::Method::from_bytes(method.trim().as_bytes())
+        .map_err(|err| format!("build openai http method: {err}"))?;
+    let mut request = client.request(method, url).headers(headers);
+    if let Some(body) = body {
+        request = request.body(body);
+    }
+    let response = request
         .send()
         .map_err(|err| format!("openai request failed: {err}"))?;
     let status = response.status();
