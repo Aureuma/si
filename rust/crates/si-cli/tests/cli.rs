@@ -5549,6 +5549,110 @@ fn gcp_gemini_image_generate_writes_png_and_reports_json() {
 }
 
 #[test]
+fn gcp_vertex_model_list_json_fetches_models() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/projects/proj_core/locations/us-central1/models?"));
+        assert!(request.contains("pageSize=2"));
+        http_json_response("200 OK", &[], r#"{"models":[{"name":"projects/proj_core/locations/us-central1/models/m1"}]}"#)
+    });
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "vertex", "model", "list", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--limit", "2", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert!(parsed["data"]["models"][0]["name"].as_str().unwrap_or_default().ends_with("/models/m1"));
+    server.join();
+}
+
+#[test]
+fn gcp_vertex_endpoint_create_json_posts_body() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/projects/proj_core/locations/us-central1/endpoints HTTP/1.1\r\n"));
+        assert!(request.contains("\"displayName\":\"endpoint-a\""));
+        http_json_response("200 OK", &[], r#"{"name":"operations/create-endpoint"}"#)
+    });
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "vertex", "endpoint", "create", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--param", "displayName=endpoint-a", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["name"], "operations/create-endpoint");
+    server.join();
+}
+
+#[test]
+fn gcp_vertex_endpoint_predict_json_posts_instances() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1/projects/proj_core/locations/us-central1/endpoints/ep1:predict HTTP/1.1\r\n"));
+        assert!(request.contains("\"instances\":[{\"prompt\":\"hi\"}]"));
+        http_json_response("200 OK", &[], r#"{"predictions":[{"text":"ok"}]}"#)
+    });
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "vertex", "endpoint", "predict", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "ep1", "--instances-json", "[{\"prompt\":\"hi\"}]", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["predictions"][0]["text"], "ok");
+    server.join();
+}
+
+#[test]
+fn gcp_vertex_raw_json_fetches_with_header() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n[gcp.accounts.core]\nproject_id = \"proj_core\"\naccess_token_env = \"CORE_TOKEN\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/projects/proj_core/locations/us-central1/models HTTP/1.1\r\n"));
+        assert!(request.contains("x-extra: yes\r\n"));
+        http_json_response("200 OK", &[], r#"{"models":[]}"#)
+    });
+    let output = cargo_bin()
+        .env("CORE_TOKEN", "ya29.token-core-xyz")
+        .args(["gcp", "vertex", "raw", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--path", "/v1/projects/proj_core/locations/us-central1/models", "--header", "x-extra=yes", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["models"], serde_json::json!([]));
+    server.join();
+}
+
+#[test]
 fn google_places_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

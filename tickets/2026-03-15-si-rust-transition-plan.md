@@ -491,6 +491,7 @@ Progress notes:
 - completed: the GCP provider slice now also owns the full API Keys lane (`apikey list|get|create|update|delete|lookup|undelete`), with Rust-owned API Keys transport routing, resource-name expansion, JSON-body shaping, and Go wrapper delegation while preserving the existing `--force` safety gate on destructive restore/delete operations
 - completed: the GCP provider slice now also owns the full IAM lane (`iam service-account`, `iam service-account-key`, `iam policy`, and `iam role`), with Rust-owned IAM and Cloud Resource Manager request routing, service-account/resource normalization, policy default-resource fallback, and Go wrapper delegation while preserving the existing `--force` safety gates on destructive IAM operations
 - completed: the GCP provider slice now also owns the full Gemini lane (`gemini models`, `generate`, `embed`, `count-tokens`, `batch-embed`, `image generate`, and `raw`), with Rust-owned Gemini API-key resolution and OAuth fallback, model-name normalization, inline image extraction/writes, and Go wrapper delegation for both direct `gcp gemini` and `gcp ai gemini` entry points
+- completed: the GCP provider slice now also owns the full Vertex lane (`vertex model`, `endpoint`, `batch`, `pipeline`, `operation`, and `raw`), with Rust-owned location/base-url resolution, Vertex resource-name normalization, request-body shaping, force-gated destructive operations, and Go wrapper delegation for direct `gcp vertex` entry points
 
 ### Phase 8: Release/install migration
 

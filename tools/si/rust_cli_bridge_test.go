@@ -2212,6 +2212,37 @@ func TestRunGCPCommandDelegatesAIWrapperToRustCLIForGemini(t *testing.T) {
 	}
 }
 
+func TestRunGCPCommandDelegatesToRustCLIForVertex(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-vertex'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPCommand([]string{"vertex", "model", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGCPCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp vertex to delegate to Rust")
+		}
+	})
+	if strings.TrimSpace(out) != "rust-gcp-vertex" {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\nvertex\nmodel\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp vertex + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPCommandDelegatesToRustCLIForService(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
