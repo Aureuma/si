@@ -508,6 +508,22 @@ pub fn get_admin_api_key(
     openai_get(runtime, &format!("/v1/organization/admin_api_keys/{escaped}"), &[], true)
 }
 
+pub fn get_usage_metric(
+    runtime: &OpenAIRuntime,
+    metric: &str,
+    params: &[(String, String)],
+) -> Result<OpenAIAPIResponse, String> {
+    let metric = normalize_usage_metric(metric)?;
+    let path = if metric == "costs" {
+        "/v1/organization/costs".to_owned()
+    } else {
+        format!("/v1/organization/usage/{metric}")
+    };
+    let params =
+        params.iter().map(|(key, value)| (key.as_str(), value.clone())).collect::<Vec<_>>();
+    openai_get(runtime, &path, &params, true)
+}
+
 pub fn list_project_api_keys(
     runtime: &OpenAIRuntime,
     project_id: &str,
@@ -659,6 +675,26 @@ pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> Stri
         out.push('\n');
     }
     out
+}
+
+fn normalize_usage_metric(metric: &str) -> Result<&str, String> {
+    match metric.trim().to_ascii_lowercase().as_str() {
+        "completion" | "completions" => Ok("completions"),
+        "embedding" | "embeddings" => Ok("embeddings"),
+        "image" | "images" => Ok("images"),
+        "audio-speeches" | "audio_speeches" | "speeches" => Ok("audio_speeches"),
+        "audio-transcriptions" | "audio_transcriptions" | "transcriptions" => {
+            Ok("audio_transcriptions")
+        }
+        "moderation" | "moderations" => Ok("moderations"),
+        "vector-store" | "vector-stores" | "vector_stores" => Ok("vector_stores"),
+        "code-interpreter-sessions"
+        | "code_interpreter_sessions"
+        | "code-interpreter"
+        | "code_interpreter" => Ok("code_interpreter_sessions"),
+        "cost" | "costs" => Ok("costs"),
+        _ => Err("unsupported usage metric".to_owned()),
+    }
 }
 
 pub fn verify_auth_status(runtime: &OpenAIRuntime) -> OpenAIAuthStatus {

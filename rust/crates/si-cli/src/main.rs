@@ -75,8 +75,9 @@ use si_rs_provider_openai::{
     get_model as openai_get_model, get_project as openai_get_project,
     get_project_api_key as openai_get_project_api_key,
     get_project_service_account as openai_get_project_service_account,
-    list_admin_api_keys as openai_list_admin_api_keys, list_contexts as list_openai_contexts,
-    list_models as openai_list_models, list_project_api_keys as openai_list_project_api_keys,
+    get_usage_metric as openai_get_usage_metric, list_admin_api_keys as openai_list_admin_api_keys,
+    list_contexts as list_openai_contexts, list_models as openai_list_models,
+    list_project_api_keys as openai_list_project_api_keys,
     list_project_rate_limits as openai_list_project_rate_limits,
     list_project_service_accounts as openai_list_project_service_accounts,
     list_projects as openai_list_projects,
@@ -121,6 +122,7 @@ struct Cli {
     command: Command,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Subcommand)]
 enum Command {
     Version,
@@ -538,6 +540,7 @@ enum GooglePlacesContextCommand {
     },
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Subcommand)]
 enum OpenAICommand {
     Auth {
@@ -551,6 +554,53 @@ enum OpenAICommand {
     Model {
         #[command(subcommand)]
         command: OpenAIModelCommand,
+    },
+    Usage {
+        metric: OpenAIUsageMetric,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        start_time: Option<i64>,
+        #[arg(long)]
+        end_time: Option<i64>,
+        #[arg(long)]
+        bucket_width: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        page: Option<String>,
+        #[arg(long)]
+        batch: bool,
+        #[arg(long = "project")]
+        project_ids: Vec<String>,
+        #[arg(long = "user-id")]
+        user_ids: Vec<String>,
+        #[arg(long = "api-key-id")]
+        api_key_ids: Vec<String>,
+        #[arg(long = "model")]
+        models: Vec<String>,
+        #[arg(long = "group-by")]
+        group_by: Vec<String>,
+        #[arg(long = "param")]
+        extra_params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
     Key {
         #[command(subcommand)]
@@ -675,6 +725,36 @@ enum OpenAIModelCommand {
         #[arg(long)]
         raw: bool,
     },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+enum OpenAIUsageMetric {
+    #[value(name = "completions")]
+    Completions,
+    #[value(name = "embeddings")]
+    Embeddings,
+    #[value(name = "images")]
+    Images,
+    #[value(name = "audio_speeches", alias = "audio-speeches", alias = "speeches")]
+    AudioSpeeches,
+    #[value(
+        name = "audio_transcriptions",
+        alias = "audio-transcriptions",
+        alias = "transcriptions"
+    )]
+    AudioTranscriptions,
+    #[value(name = "moderations")]
+    Moderations,
+    #[value(name = "vector_stores", alias = "vector-stores", alias = "vector-store")]
+    VectorStores,
+    #[value(
+        name = "code_interpreter_sessions",
+        alias = "code-interpreter-sessions",
+        alias = "code-interpreter"
+    )]
+    CodeInterpreterSessions,
+    #[value(name = "costs")]
+    Costs,
 }
 
 #[derive(Debug, Subcommand)]
@@ -3191,6 +3271,55 @@ fn main() -> Result<()> {
                     raw,
                 )?,
             },
+            OpenAICommand::Usage {
+                metric,
+                account,
+                base_url,
+                api_key,
+                admin_api_key,
+                org_id,
+                project_id,
+                start_time,
+                end_time,
+                bucket_width,
+                limit,
+                page,
+                batch,
+                project_ids,
+                user_ids,
+                api_key_ids,
+                models,
+                group_by,
+                extra_params,
+                home,
+                settings_file,
+                json,
+                raw,
+            } => run_openai_usage(
+                metric,
+                account,
+                base_url,
+                api_key,
+                admin_api_key,
+                org_id,
+                project_id,
+                start_time,
+                end_time,
+                bucket_width,
+                limit,
+                page,
+                batch,
+                project_ids,
+                user_ids,
+                api_key_ids,
+                models,
+                group_by,
+                extra_params,
+                home,
+                settings_file,
+                json,
+                raw,
+            )?,
             OpenAICommand::Key { command } => match command {
                 OpenAIKeyCommand::List {
                     account,
@@ -5312,6 +5441,132 @@ fn run_openai_model_get(
         |runtime| openai_get_model(&runtime, &id),
     )?;
     print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_usage(
+    metric: OpenAIUsageMetric,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    bucket_width: Option<String>,
+    limit: Option<usize>,
+    page: Option<String>,
+    batch: bool,
+    project_ids: Vec<String>,
+    user_ids: Vec<String>,
+    api_key_ids: Vec<String>,
+    models: Vec<String>,
+    group_by: Vec<String>,
+    extra_params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let metric_name = openai_usage_metric_name(metric);
+    let mut params = Vec::new();
+    let start_time = start_time.unwrap_or_else(|| {
+        (std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 24 * 60 * 60))
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|value| value.as_secs() as i64)
+            .unwrap_or_default()
+    });
+    if start_time > 0 {
+        params.push(("start_time".to_owned(), start_time.to_string()));
+    }
+    if let Some(end_time) = end_time.filter(|value| *value > 0) {
+        params.push(("end_time".to_owned(), end_time.to_string()));
+    }
+    if let Some(bucket_width) =
+        bucket_width.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        params.push(("bucket_width".to_owned(), bucket_width));
+    }
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.push(("limit".to_owned(), limit.to_string()));
+    }
+    if let Some(page) = page.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty())
+    {
+        params.push(("page".to_owned(), page));
+    }
+    if metric_name == "completions" && batch {
+        params.push(("batch".to_owned(), "true".to_owned()));
+    }
+    for item in project_ids {
+        let value = item.trim();
+        if !value.is_empty() {
+            params.push(("project_ids".to_owned(), value.to_owned()));
+        }
+    }
+    for item in user_ids {
+        let value = item.trim();
+        if !value.is_empty() {
+            params.push(("user_ids".to_owned(), value.to_owned()));
+        }
+    }
+    for item in api_key_ids {
+        let value = item.trim();
+        if !value.is_empty() {
+            params.push(("api_key_ids".to_owned(), value.to_owned()));
+        }
+    }
+    for item in models {
+        let value = item.trim();
+        if !value.is_empty() {
+            params.push(("models".to_owned(), value.to_owned()));
+        }
+    }
+    for item in group_by {
+        let value = item.trim();
+        if !value.is_empty() {
+            params.push(("group_by".to_owned(), value.to_owned()));
+        }
+    }
+    for item in extra_params {
+        let value = item.trim();
+        if value.is_empty() {
+            continue;
+        }
+        if let Some((key, param_value)) = value.split_once('=') {
+            let key = key.trim();
+            let param_value = param_value.trim();
+            if !key.is_empty() {
+                params.push((key.to_owned(), param_value.to_owned()));
+            }
+        }
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_get_usage_metric(&runtime, metric_name, &params),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+fn openai_usage_metric_name(metric: OpenAIUsageMetric) -> &'static str {
+    match metric {
+        OpenAIUsageMetric::Completions => "completions",
+        OpenAIUsageMetric::Embeddings => "embeddings",
+        OpenAIUsageMetric::Images => "images",
+        OpenAIUsageMetric::AudioSpeeches => "audio_speeches",
+        OpenAIUsageMetric::AudioTranscriptions => "audio_transcriptions",
+        OpenAIUsageMetric::Moderations => "moderations",
+        OpenAIUsageMetric::VectorStores => "vector_stores",
+        OpenAIUsageMetric::CodeInterpreterSessions => "code_interpreter_sessions",
+        OpenAIUsageMetric::Costs => "costs",
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
