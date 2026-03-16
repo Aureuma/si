@@ -503,6 +503,65 @@ pub fn get_repo(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn create_repo(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    payload: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, "")?;
+    normalize_response(github_send_json(
+        &client,
+        "POST",
+        &runtime.base_url,
+        &format!("/orgs/{owner}/repos"),
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn update_repo(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    payload: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    normalize_response(github_send_json(
+        &client,
+        "PATCH",
+        &runtime.base_url,
+        &format!("/repos/{owner}/{repo}"),
+        &token,
+        &payload,
+    )?)
+}
+
+pub fn archive_repo(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+) -> Result<GitHubAPIResponse, String> {
+    update_repo(runtime, owner, repo, serde_json::json!({ "archived": true }))
+}
+
+pub fn delete_repo(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    normalize_response(github_send_without_body(
+        &client,
+        "DELETE",
+        &runtime.base_url,
+        &format!("/repos/{owner}/{repo}"),
+        &token,
+    )?)
+}
+
 pub fn list_projects(
     runtime: &GitHubRuntime,
     organization: &str,

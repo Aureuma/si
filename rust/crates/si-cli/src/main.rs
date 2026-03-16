@@ -65,13 +65,16 @@ use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
     add_project_item as github_add_project_item,
     archive_project_item as github_archive_project_item,
+    archive_repo as github_archive_repo,
     cancel_workflow_run as github_cancel_workflow_run,
     clear_project_item_field_value as github_clear_project_item_field_value,
     comment_issue as github_comment_issue,
     create_branch as github_create_branch,
     create_issue as github_create_issue,
+    create_repo as github_create_repo,
     create_pull_request as github_create_pull_request,
     delete_branch as github_delete_branch,
+    delete_repo as github_delete_repo,
     dispatch_workflow as github_dispatch_workflow,
     delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
@@ -99,6 +102,7 @@ use si_rs_provider_github::{
     get_workflow_run as github_get_workflow_run,
     unprotect_branch as github_unprotect_branch,
     unarchive_project_item as github_unarchive_project_item,
+    update_repo as github_update_repo,
     update_project as github_update_project,
     update_project_item_field_value as github_update_project_item_field_value,
 };
@@ -2028,6 +2032,124 @@ enum GitHubRepoCommand {
         app_key: Option<String>,
         #[arg(long)]
         installation_id: Option<i64>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        repo_name: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Update {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Archive {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -7204,6 +7326,132 @@ fn main() -> Result<()> {
                     json,
                     raw,
                 )?,
+                GitHubRepoCommand::Create {
+                    repo_name,
+                    name,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_repo_create(
+                    repo_name,
+                    name,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubRepoCommand::Update {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_repo_update(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubRepoCommand::Archive {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_repo_archive(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubRepoCommand::Delete {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_repo_delete(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    force,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
             GitHubCommand::Release { command } => match command {
                 GitHubReleaseCommand::List {
@@ -10448,6 +10696,26 @@ fn parse_github_params(params: Vec<String>) -> Result<BTreeMap<String, String>> 
     Ok(out)
 }
 
+fn parse_github_body_params(params: Vec<String>) -> Result<serde_json::Map<String, serde_json::Value>> {
+    let mut out = serde_json::Map::new();
+    for raw in params {
+        let Some((key, value)) = raw.split_once('=') else {
+            return Err(anyhow::Error::msg(format!(
+                "invalid --param {raw:?} (expected key=value)"
+            )));
+        };
+        let key = key.trim();
+        if key.is_empty() {
+            return Err(anyhow::Error::msg("github --param key cannot be empty"));
+        }
+        let value = value.trim();
+        let parsed = serde_json::from_str::<serde_json::Value>(value)
+            .unwrap_or_else(|_| serde_json::Value::String(value.to_owned()));
+        out.insert(key.to_owned(), parsed);
+    }
+    Ok(out)
+}
+
 fn parse_github_graphql_vars(params: Vec<String>) -> Result<serde_json::Map<String, serde_json::Value>> {
     let mut out = serde_json::Map::new();
     for raw in params {
@@ -13360,6 +13628,178 @@ fn run_github_repo_get(
         parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
     let response =
         github_get_repo(&runtime, &repo_owner, &repo_name).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_repo_create(
+    repo_name: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner.clone(),
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let repo_name = name
+        .or(repo_name)
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("repo name is required (use positional name or --name)"))?;
+    let selected_owner = owner.unwrap_or_else(|| runtime.owner.clone());
+    if selected_owner.trim().is_empty() {
+        return Err(anyhow::Error::msg("owner is required (use --owner or context owner)"));
+    }
+    let mut payload = parse_github_body_params(params)?;
+    payload.insert("name".to_owned(), serde_json::Value::String(repo_name.trim().to_owned()));
+    let response = github_create_repo(
+        &runtime,
+        selected_owner.trim(),
+        serde_json::Value::Object(payload),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_repo_update(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let payload = parse_github_body_params(params)?;
+    if payload.is_empty() {
+        return Err(anyhow::Error::msg("at least one --param key=value is required"));
+    }
+    let response = github_update_repo(
+        &runtime,
+        &repo_owner,
+        &repo_name,
+        serde_json::Value::Object(payload),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_repo_archive(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("archive repository requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let response =
+        github_archive_repo(&runtime, &repo_owner, &repo_name).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_repo_delete(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("delete repository requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let response =
+        github_delete_repo(&runtime, &repo_owner, &repo_name).map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 

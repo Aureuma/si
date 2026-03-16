@@ -1169,6 +1169,22 @@ func runGitHubRepoGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"repo", "get"}, args...)...)
 }
 
+func runGitHubRepoCreateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"repo", "create"}, args...)...)
+}
+
+func runGitHubRepoUpdateCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"repo", "update"}, args...)...)
+}
+
+func runGitHubRepoArchiveCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"repo", "archive"}, args...)...)
+}
+
+func runGitHubRepoDeleteCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("github", append([]string{"repo", "delete"}, args...)...)
+}
+
 func runGitHubRepoCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -1178,6 +1194,14 @@ func runGitHubRepoCommand(args []string) (bool, error) {
 		return runGitHubRepoListCommand(args[1:])
 	case "get":
 		return runGitHubRepoGetCommand(args[1:])
+	case "create":
+		return runGitHubRepoCreateCommand(args[1:])
+	case "update":
+		return runGitHubRepoUpdateCommand(args[1:])
+	case "archive":
+		return runGitHubRepoArchiveCommand(args[1:])
+	case "delete":
+		return runGitHubRepoDeleteCommand(args[1:])
 	default:
 		return false, nil
 	}
