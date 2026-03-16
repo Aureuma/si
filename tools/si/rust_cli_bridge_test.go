@@ -814,6 +814,100 @@ func TestRunGooglePlacesAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *tes
 	}
 }
 
+func TestRunOpenAIContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runOpenAIContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai context list path by default")
+	}
+}
+
+func TestRunOpenAIContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-list" {
+		t.Fatalf("expected delegated Rust openai context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunOpenAIContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runOpenAIContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai context current path by default")
+	}
+}
+
+func TestRunOpenAIContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-current" {
+		t.Fatalf("expected delegated Rust openai context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai context current + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
