@@ -13,6 +13,13 @@ import (
 )
 
 func cmdGithubPR(args []string) {
+	delegated, err := runGitHubPRCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github pr <list|get|create|comment|merge> ...")
 	if !routedOK {
 		return
@@ -35,6 +42,13 @@ func cmdGithubPR(args []string) {
 }
 
 func cmdGithubPRList(args []string) {
+	delegated, err := runGitHubPRListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github pr list", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -73,6 +87,13 @@ func cmdGithubPRList(args []string) {
 }
 
 func cmdGithubPRGet(args []string) {
+	delegated, err := runGitHubPRGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("github pr get", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
