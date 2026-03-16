@@ -471,12 +471,20 @@ func runOpenAIModelGetCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"model", "get"}, args...)...)
 }
 
+func runOpenAIUsageCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"usage"}, args...)...)
+}
+
 func runOpenAIUsageMetricCommand(metric string, args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"usage", metric}, args...)...)
 }
 
 func runOpenAIMonitorCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"monitor"}, args...)...)
+}
+
+func runOpenAICodexCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"codex"}, args...)...)
 }
 
 func runOpenAICodexUsageCommand(args []string) (bool, error) {
