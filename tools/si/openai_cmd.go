@@ -1466,6 +1466,13 @@ func cmdOpenAIUsage(args []string) {
 }
 
 func cmdOpenAIMonitor(args []string) {
+	delegated, err := runOpenAIMonitorCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si openai monitor <usage|limits> ...")
 	if !routedOK {
 		return
