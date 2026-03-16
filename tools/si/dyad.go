@@ -333,7 +333,7 @@ func cmdDyadSpawn(args []string) {
 var runDyadSpawnFlowFn = runDyadSpawnFlow
 
 func runDyadSpawnFlow(opts shared.DyadOptions, profile *codexProfile) error {
-	client, err := shared.NewClient()
+	client, err := newDyadClientFn()
 	if err != nil {
 		return err
 	}
@@ -345,20 +345,20 @@ func runDyadSpawnFlow(opts shared.DyadOptions, profile *codexProfile) error {
 		return err
 	}
 	if !usedRustStart {
-		actorID, criticID, err = client.EnsureDyad(ctx, opts)
+		actorID, criticID, err = ensureDyadFn(client, ctx, opts)
 		if err != nil {
 			return err
 		}
 	}
-	ensureDyadContainerSiHomeOwnership(ctx, client, actorID)
-	ensureDyadContainerSiHomeOwnership(ctx, client, criticID)
+	ensureDyadContainerSiHomeOwnershipFn(ctx, client, actorID)
+	ensureDyadContainerSiHomeOwnershipFn(ctx, client, criticID)
 	if profile != nil {
-		seedDyadProfileAuth(ctx, client, actorID, *profile)
-		seedDyadProfileAuth(ctx, client, criticID, *profile)
+		seedDyadProfileAuthFn(ctx, client, actorID, *profile)
+		seedDyadProfileAuthFn(ctx, client, criticID, *profile)
 	}
-	if identity, ok := hostGitIdentity(); ok {
-		seedGitIdentity(ctx, client, actorID, "si", "/home/si", identity)
-		seedGitIdentity(ctx, client, criticID, "si", "/home/si", identity)
+	if identity, ok := hostGitIdentityFn(); ok {
+		seedGitIdentityFn(ctx, client, actorID, "si", "/home/si", identity)
+		seedGitIdentityFn(ctx, client, criticID, "si", "/home/si", identity)
 	}
 	successf("dyad %s ready (role=%s)", opts.Dyad, opts.Role)
 	return nil
@@ -372,18 +372,18 @@ func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, op
 	if err != nil {
 		return "", "", false, err
 	}
-	actorID, _, err := client.ContainerByName(ctx, actorName)
+	actorID, _, err := dyadContainerByNameFn(client, ctx, actorName)
 	if err != nil {
 		return "", "", false, err
 	}
-	criticID, _, err := client.ContainerByName(ctx, criticName)
+	criticID, _, err := dyadContainerByNameFn(client, ctx, criticName)
 	if err != nil {
 		return "", "", false, err
 	}
 	if actorID != "" || criticID != "" {
 		return "", "", false, nil
 	}
-	delegated, err := maybeStartRustDyadSpawn(rustDyadSpawnPlanRequest{
+	delegated, err := maybeStartRustDyadSpawnFn(rustDyadSpawnPlanRequest{
 		Name:                    opts.Dyad,
 		Role:                    opts.Role,
 		ActorImage:              opts.ActorImage,
@@ -427,11 +427,11 @@ func maybeEnsureDyadSpawnWithRust(ctx context.Context, client *shared.Client, op
 	if !delegated {
 		return "", "", false, nil
 	}
-	actorID, _, err = client.ContainerByName(ctx, actorName)
+	actorID, _, err = dyadContainerByNameFn(client, ctx, actorName)
 	if err != nil {
 		return "", "", true, err
 	}
-	criticID, _, err = client.ContainerByName(ctx, criticName)
+	criticID, _, err = dyadContainerByNameFn(client, ctx, criticName)
 	if err != nil {
 		return "", "", true, err
 	}
@@ -578,6 +578,17 @@ var (
 	runDyadTmuxCommandFn          = dyadTmuxRun
 	attachDyadTmuxSessionFn       = dyadTmuxAttach
 	dyadPeekIsInteractiveFn       = isInteractiveTerminal
+	ensureDyadFn                  = func(client *shared.Client, ctx context.Context, opts shared.DyadOptions) (string, string, error) {
+		return client.EnsureDyad(ctx, opts)
+	}
+	dyadContainerByNameFn = func(client *shared.Client, ctx context.Context, name string) (string, *types.ContainerJSON, error) {
+		return client.ContainerByName(ctx, name)
+	}
+	maybeStartRustDyadSpawnFn            = maybeStartRustDyadSpawn
+	ensureDyadContainerSiHomeOwnershipFn = ensureDyadContainerSiHomeOwnership
+	seedDyadProfileAuthFn                = seedDyadProfileAuth
+	hostGitIdentityFn                    = hostGitIdentity
+	seedGitIdentityFn                    = seedGitIdentity
 )
 
 func lookupDyadPeekContainers(ctx context.Context, actorContainer string, criticContainer string) (string, string, error) {
