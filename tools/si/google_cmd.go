@@ -5,6 +5,13 @@ import "strings"
 const googleUsageText = "usage: si google <places|play|youtube|youtube-data>"
 
 func cmdGoogle(args []string) {
+	delegated, err := runGoogleCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, googleUsageText)
 	if !routedOK {
 		return

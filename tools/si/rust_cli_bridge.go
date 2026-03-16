@@ -415,6 +415,18 @@ func runCloudflareCommand(args []string) (bool, error) {
 	}
 }
 
+func runAppleCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "appstore":
+		return runAppleAppStoreCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runAppleAppStoreContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "list"}, args...)...)
 }
@@ -583,6 +595,18 @@ func runGCPAuthStatusCommand(args []string) (bool, error) {
 
 func runGooglePlacesContextListCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "context", "list"}, args...)...)
+}
+
+func runGoogleCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "places":
+		return runGooglePlacesCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func runGooglePlacesCommand(args []string) (bool, error) {
