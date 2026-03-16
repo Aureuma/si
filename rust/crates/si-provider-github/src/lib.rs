@@ -751,6 +751,194 @@ query($id:ID!,$first:Int!,$includeArchived:Boolean!){
     )
 }
 
+pub fn update_project(
+    runtime: &GitHubRuntime,
+    input: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($input:UpdateProjectV2Input!){
+  updateProjectV2(input:$input) {
+    projectV2 {
+      id
+      number
+      title
+      shortDescription
+      readme
+      public
+      closed
+      url
+      updatedAt
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "input": input,
+        }),
+    )
+}
+
+pub fn add_project_item(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    content_id: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($projectId:ID!,$contentId:ID!){
+  addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}) {
+    item {
+      id
+      type
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "projectId": project_id.trim(),
+            "contentId": content_id.trim(),
+        }),
+    )
+}
+
+pub fn update_project_item_field_value(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    item_id: &str,
+    field_id: &str,
+    value: Value,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($projectId:ID!,$itemId:ID!,$fieldId:ID!,$value:ProjectV2FieldValue!){
+  updateProjectV2ItemFieldValue(input:{projectId:$projectId, itemId:$itemId, fieldId:$fieldId, value:$value}) {
+    projectV2Item {
+      id
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "projectId": project_id.trim(),
+            "itemId": item_id.trim(),
+            "fieldId": field_id.trim(),
+            "value": value,
+        }),
+    )
+}
+
+pub fn clear_project_item_field_value(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    item_id: &str,
+    field_id: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($projectId:ID!,$itemId:ID!,$fieldId:ID!){
+  clearProjectV2ItemFieldValue(input:{projectId:$projectId, itemId:$itemId, fieldId:$fieldId}) {
+    projectV2Item {
+      id
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "projectId": project_id.trim(),
+            "itemId": item_id.trim(),
+            "fieldId": field_id.trim(),
+        }),
+    )
+}
+
+pub fn archive_project_item(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    item_id: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($projectId:ID!,$itemId:ID!){
+  archiveProjectV2Item(input:{projectId:$projectId, itemId:$itemId}) {
+    item {
+      id
+      isArchived
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "projectId": project_id.trim(),
+            "itemId": item_id.trim(),
+        }),
+    )
+}
+
+pub fn unarchive_project_item(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    item_id: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($projectId:ID!,$itemId:ID!){
+  unarchiveProjectV2Item(input:{projectId:$projectId, itemId:$itemId}) {
+    item {
+      id
+      isArchived
+    }
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "projectId": project_id.trim(),
+            "itemId": item_id.trim(),
+        }),
+    )
+}
+
+pub fn delete_project_item(
+    runtime: &GitHubRuntime,
+    project_id: &str,
+    item_id: &str,
+) -> Result<GitHubAPIResponse, String> {
+    let query = r#"
+mutation($projectId:ID!,$itemId:ID!){
+  deleteProjectV2Item(input:{projectId:$projectId, itemId:$itemId}) {
+    deletedItemId
+  }
+}
+"#;
+    github_graphql(
+        runtime,
+        &runtime.owner,
+        query,
+        serde_json::json!({
+            "projectId": project_id.trim(),
+            "itemId": item_id.trim(),
+        }),
+    )
+}
+
 pub fn list_workflows(
     runtime: &GitHubRuntime,
     owner: &str,
