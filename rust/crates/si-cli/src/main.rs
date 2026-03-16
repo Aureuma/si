@@ -46,10 +46,13 @@ use si_rs_provider_aws::{
 };
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_cloudflare::{
+    CloudflareAuthRuntime, CloudflareAuthStatus, CloudflareAuthOverrides,
     CloudflareContextListEntry, CloudflareContextOverrides, CloudflareCurrentContext,
     list_contexts as list_cloudflare_contexts,
     render_context_list_text as render_cloudflare_context_list_text,
+    resolve_auth_runtime as resolve_cloudflare_auth_runtime,
     resolve_current_context as resolve_cloudflare_current_context,
+    verify_auth_status as verify_cloudflare_auth_status,
 };
 use si_rs_provider_gcp::{
     GCPAuthOverrides, GCPAuthStatus, GCPContextListEntry, GCPCurrentContext,
@@ -252,9 +255,41 @@ enum ProvidersCommand {
 
 #[derive(Debug, Subcommand)]
 enum CloudflareCommand {
+    Auth {
+        #[command(subcommand)]
+        command: CloudflareAuthCommand,
+    },
     Context {
         #[command(subcommand)]
         command: CloudflareContextCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -2279,6 +2314,42 @@ impl From<CloudflareCurrentContext> for CloudflareCurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
+struct CloudflareAuthStatusPayload {
+    status: String,
+    account_alias: String,
+    account_id: String,
+    environment: String,
+    zone_id: String,
+    zone_name: String,
+    source: String,
+    token_preview: String,
+    base_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verify: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    verify_error: Option<String>,
+}
+
+impl From<&CloudflareAuthRuntime> for CloudflareAuthStatusPayload {
+    fn from(value: &CloudflareAuthRuntime) -> Self {
+        let status = CloudflareAuthStatus::from(value);
+        Self {
+            status: status.status,
+            account_alias: status.account_alias,
+            account_id: status.account_id,
+            environment: status.environment,
+            zone_id: status.zone_id,
+            zone_name: status.zone_name,
+            source: status.source,
+            token_preview: status.token_preview,
+            base_url: status.base_url,
+            verify: None,
+            verify_error: None,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
 struct AppleAppStoreContextListPayload {
     contexts: Vec<AppleAppStoreContextListEntry>,
 }
@@ -3112,6 +3183,35 @@ fn main() -> Result<()> {
             }
         },
         Command::Cloudflare { command } => match command {
+            CloudflareCommand::Auth { command } => match command {
+                CloudflareAuthCommand::Status {
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_cloudflare_auth_status(
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
             CloudflareCommand::Context { command } => match command {
                 CloudflareContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -5076,6 +5176,85 @@ fn show_cloudflare_context_list(
             )
         }
         OutputFormat::Text => print!("{}", render_cloudflare_context_list_text(&contexts)),
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn show_cloudflare_auth_status(
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_cloudflare_auth_runtime(
+        &settings.cloudflare,
+        &env,
+        &CloudflareAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            zone_id: zone_id.unwrap_or_default(),
+            zone_name: zone.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            account_id: account_id.unwrap_or_default(),
+            api_token: api_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    let mut payload = CloudflareAuthStatusPayload::from(&runtime);
+    let verify_error = match verify_cloudflare_auth_status(&runtime) {
+        Ok(verify) => {
+            payload.verify = Some(verify);
+            None
+        }
+        Err(err) => {
+            payload.status = "error".to_owned();
+            payload.verify_error = Some(err.clone());
+            Some(err)
+        }
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if payload.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                payload.account_alias.as_str()
+            };
+            let zone = if !payload.zone_id.trim().is_empty() {
+                payload.zone_id.as_str()
+            } else {
+                or_dash(&payload.zone_name)
+            };
+            println!("Cloudflare auth: {}", payload.status);
+            println!(
+                "Context: account={} ({}) env={} zone={} base={}",
+                account,
+                or_dash(&payload.account_id),
+                payload.environment,
+                zone,
+                payload.base_url
+            );
+            println!("Source: {}", or_dash(&payload.source));
+            println!("Token preview: {}", or_dash(&payload.token_preview));
+        }
+    }
+    if let Some(err) = verify_error {
+        return Err(anyhow::anyhow!(err));
     }
     Ok(())
 }

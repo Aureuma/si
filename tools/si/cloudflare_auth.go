@@ -301,6 +301,13 @@ func cmdCloudflareAuth(args []string) {
 }
 
 func cmdCloudflareAuthStatus(args []string) {
+	delegated, err := runCloudflareAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("cloudflare auth status", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
