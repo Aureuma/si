@@ -445,6 +445,7 @@ Progress notes:
 - completed: the provider-root wrappers for AWS, GCP, Google Places, and Apple App Store now short-circuit directly into Rust whenever the request stays within already-migrated auth/context subtrees, reducing another layer of Go-only routing without disturbing the remaining Go-owned commands
 - completed: the `openai` and `oci` provider-root wrappers now also short-circuit directly into Rust for already-migrated read-only subtrees, including OpenAI admin/project retrieval flows and OCI tenancy inspection, while leaving write paths and non-migrated OCI API families on the Go side
 - completed: the remaining nested `openai` and `oci` wrapper layers now also delegate migrated read-only subcommands into Rust, so list/get/status monitoring and tenancy-inspection paths no longer need to traverse extra Go-only routing shells before hitting the Rust compatibility boundary
+- completed: the GitHub provider root plus its `auth` and `context` wrappers now also short-circuit directly into Rust for the already-migrated read-only status/current/list surfaces, leaving the larger repo/project/workflow mutation families on the Go side until their Phase 7 slices are explicitly migrated
 
 ### Phase 8: Release/install migration
 

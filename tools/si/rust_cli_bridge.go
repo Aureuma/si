@@ -919,8 +919,48 @@ func runGitHubContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"context", "current"}, args...)...)
 }
 
+func runGitHubContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return runGitHubContextListCommand(args[1:])
+	case "current":
+		return runGitHubContextCurrentCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runGitHubAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("github", append([]string{"auth", "status"}, args...)...)
+}
+
+func runGitHubAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return runGitHubAuthStatusCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGitHubCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runGitHubAuthCommand(args[1:])
+	case "context":
+		return runGitHubContextCommand(args[1:])
+	default:
+		return false, nil
+	}
 }
 
 func maybeBuildRustCodexSpawnPlan(request rustCodexSpawnPlanRequest) (*rustCodexSpawnPlan, bool, error) {
