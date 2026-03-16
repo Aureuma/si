@@ -767,6 +767,164 @@ fn github_release_delete_json_mutates_via_api_with_oauth() {
 }
 
 #[test]
+fn github_secret_repo_set_json_encrypts_and_mutates_with_oauth() {
+    let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /repos/Aureuma/si/actions/secrets/public-key HTTP/1.1\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("x-github-request-id", "req_gh_secret_key")],
+                    &format!(r#"{{"key_id":"kid-1","key":"{}"}}"#, key),
+                )
+            }
+            1 => {
+                assert!(request.starts_with("PUT /repos/Aureuma/si/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
+                assert!(request.contains("\"key_id\":\"kid-1\""));
+                assert!(request.contains("\"encrypted_value\":\""));
+                assert!(!request.contains("super-secret"));
+                http_json_response("201 Created", &[], "")
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github","secret","repo","set","Aureuma/si","MY_SECRET",
+            "--value","super-secret","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+        ])
+        .assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["data"]["scope"], "repo");
+    server.join();
+}
+
+#[test]
+fn github_secret_repo_delete_json_mutates_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /repos/Aureuma/si/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
+        http_json_response("204 No Content", &[("x-github-request-id","req_gh_secret_repo_delete")], "")
+    });
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github","secret","repo","delete","Aureuma/si","MY_SECRET",
+            "--force","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+        ])
+        .assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
+    server.join();
+}
+
+#[test]
+fn github_secret_env_set_json_encrypts_and_mutates_with_oauth() {
+    let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /repos/Aureuma/si/environments/prod/secrets/public-key HTTP/1.1\r\n"));
+                http_json_response("200 OK", &[], &format!(r#"{{"key_id":"kid-2","key":"{}"}}"#, key))
+            }
+            1 => {
+                assert!(request.starts_with("PUT /repos/Aureuma/si/environments/prod/secrets/MY_SECRET HTTP/1.1\r\n"));
+                assert!(!request.contains("super-secret"));
+                http_json_response("201 Created", &[], "")
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github","secret","env","set","Aureuma/si","prod","MY_SECRET",
+            "--value","super-secret","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+        ])
+        .assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["scope"], "env");
+    assert_eq!(parsed["data"]["environment"], "prod");
+    server.join();
+}
+
+#[test]
+fn github_secret_env_delete_json_mutates_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /repos/Aureuma/si/environments/prod/secrets/MY_SECRET HTTP/1.1\r\n"));
+        http_json_response("204 No Content", &[], "")
+    });
+    cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github","secret","env","delete","Aureuma/si","prod","MY_SECRET",
+            "--force","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+        ])
+        .assert().success();
+    server.join();
+}
+
+#[test]
+fn github_secret_org_set_json_encrypts_and_mutates_with_oauth() {
+    let key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let seen = calls.clone();
+    let server = start_http_server(2, move |request| {
+        let call = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(request.starts_with("GET /orgs/Aureuma/actions/secrets/public-key HTTP/1.1\r\n"));
+                http_json_response("200 OK", &[], &format!(r#"{{"key_id":"kid-3","key":"{}"}}"#, key))
+            }
+            1 => {
+                assert!(request.starts_with("PUT /orgs/Aureuma/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
+                assert!(request.contains("\"visibility\":\"selected\""));
+                assert!(request.contains("\"selected_repository_ids\":[1,2]"));
+                assert!(!request.contains("super-secret"));
+                http_json_response("201 Created", &[], "")
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github","secret","org","set","Aureuma","MY_SECRET",
+            "--value","super-secret","--visibility","selected","--repos","1,2",
+            "--base-url",&server.base_url,"--auth-mode","oauth","--json",
+        ])
+        .assert().success().get_output().stdout.clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["scope"], "org");
+    assert_eq!(parsed["data"]["org"], "Aureuma");
+    server.join();
+}
+
+#[test]
+fn github_secret_org_delete_json_mutates_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("DELETE /orgs/Aureuma/actions/secrets/MY_SECRET HTTP/1.1\r\n"));
+        http_json_response("204 No Content", &[], "")
+    });
+    cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github","secret","org","delete","Aureuma","MY_SECRET",
+            "--force","--base-url",&server.base_url,"--auth-mode","oauth","--json",
+        ])
+        .assert().success();
+    server.join();
+}
+
+#[test]
 fn github_repo_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /users/Aureuma/repos?page=1&per_page=100 HTTP/1.1\r\n"));

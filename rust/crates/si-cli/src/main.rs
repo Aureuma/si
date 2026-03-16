@@ -77,6 +77,7 @@ use si_rs_provider_github::{
     delete_branch as github_delete_branch,
     delete_release as github_delete_release,
     delete_repo as github_delete_repo,
+    delete_secret as github_delete_secret,
     dispatch_workflow as github_dispatch_workflow,
     delete_project_item as github_delete_project_item,
     get_branch as github_get_branch,
@@ -91,6 +92,7 @@ use si_rs_provider_github::{
     get_workflow_logs as github_get_workflow_logs,
     list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
     GitHubBranchCreateOptions, GitHubBranchProtectionOptions,
+    GitHubSecretScope,
     graphql_query as github_graphql_query,
     protect_branch as github_protect_branch,
     raw_get as github_raw_get,
@@ -99,6 +101,7 @@ use si_rs_provider_github::{
     render_context_list_text, resolve_auth_status, resolve_current_context,
     resolve_project_id as github_resolve_project_id, resolve_runtime as resolve_github_runtime,
     set_issue_state as github_set_issue_state,
+    set_secret as github_set_secret,
     comment_pull_request as github_comment_pull_request,
     merge_pull_request as github_merge_pull_request,
     get_workflow_run as github_get_workflow_run,
@@ -1599,6 +1602,224 @@ enum GitHubCommand {
     Release {
         #[command(subcommand)]
         command: GitHubReleaseCommand,
+    },
+    Secret {
+        #[command(subcommand)]
+        command: GitHubSecretCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubSecretCommand {
+    Repo {
+        #[command(subcommand)]
+        command: GitHubSecretRepoCommand,
+    },
+    Env {
+        #[command(subcommand)]
+        command: GitHubSecretEnvCommand,
+    },
+    Org {
+        #[command(subcommand)]
+        command: GitHubSecretOrgCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubSecretRepoCommand {
+    Set {
+        repo_ref: Option<String>,
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        value: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        repo_ref: Option<String>,
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubSecretEnvCommand {
+    Set {
+        repo_ref: Option<String>,
+        environment: Option<String>,
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        value: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        repo_ref: Option<String>,
+        environment: Option<String>,
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubSecretOrgCommand {
+    Set {
+        org: Option<String>,
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        value: Option<String>,
+        #[arg(long, default_value = "private")]
+        visibility: String,
+        #[arg(long)]
+        repos: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        org: Option<String>,
+        name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -7744,6 +7965,220 @@ fn main() -> Result<()> {
                     raw,
                 )?,
             },
+            GitHubCommand::Secret { command } => match command {
+                GitHubSecretCommand::Repo { command } => match command {
+                    GitHubSecretRepoCommand::Set {
+                        repo_ref,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        value,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_secret_repo_set(
+                        repo_ref,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        value,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    GitHubSecretRepoCommand::Delete {
+                        repo_ref,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_secret_repo_delete(
+                        repo_ref,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                },
+                GitHubSecretCommand::Env { command } => match command {
+                    GitHubSecretEnvCommand::Set {
+                        repo_ref,
+                        environment,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        value,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_secret_env_set(
+                        repo_ref,
+                        environment,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        value,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    GitHubSecretEnvCommand::Delete {
+                        repo_ref,
+                        environment,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_secret_env_delete(
+                        repo_ref,
+                        environment,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                },
+                GitHubSecretCommand::Org { command } => match command {
+                    GitHubSecretOrgCommand::Set {
+                        org,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        value,
+                        visibility,
+                        repos,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_secret_org_set(
+                        org,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        value,
+                        visibility,
+                        repos,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                    GitHubSecretOrgCommand::Delete {
+                        org,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    } => run_github_secret_org_delete(
+                        org,
+                        name,
+                        account,
+                        owner,
+                        base_url,
+                        auth_mode,
+                        token,
+                        app_id,
+                        app_key,
+                        installation_id,
+                        force,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                    )?,
+                },
+            },
         },
         Command::Dyad { command } => match *command {
             DyadCommand::SpawnPlan {
@@ -10961,6 +11396,16 @@ fn parse_github_graphql_vars(params: Vec<String>) -> Result<serde_json::Map<Stri
     Ok(out)
 }
 
+fn parse_github_csv_ints(raw: &str) -> Vec<i64> {
+    raw.trim()
+        .split(',')
+        .filter_map(|part| {
+            let value = part.trim().parse::<i64>().ok()?;
+            if value > 0 { Some(value) } else { None }
+        })
+        .collect()
+}
+
 fn github_graphql_query_is_read_only(query: &str) -> bool {
     !query.trim_start().to_ascii_lowercase().starts_with("mutation")
 }
@@ -11279,6 +11724,279 @@ fn run_github_release_delete(
         .ok_or_else(|| anyhow::Error::msg("release tag or id is required"))?;
     let response = github_delete_release(&runtime, &repo_owner, &repo_name, &release_ref)
         .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+fn github_secret_created_response(data: Value) -> GitHubAPIResponse {
+    GitHubAPIResponse {
+        status_code: 201,
+        status: "201 Created".to_owned(),
+        request_id: String::new(),
+        headers: BTreeMap::new(),
+        body: String::new(),
+        data: Some(data),
+        list: Vec::new(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_secret_repo_set(
+    repo_ref: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    value: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let value = value.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--value is required"))?;
+    let runtime = load_github_runtime(
+        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let name = name.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
+    github_set_secret(
+        &runtime,
+        &GitHubSecretScope::Repo { owner: repo_owner.clone(), repo: repo_name.clone() },
+        &name,
+        &value,
+    ).map_err(anyhow::Error::msg)?;
+    print_github_api_response(
+        &github_secret_created_response(serde_json::json!({
+            "scope": "repo",
+            "name": name,
+            "owner": repo_owner,
+            "repo": repo_name,
+        })),
+        json,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_secret_repo_delete(
+    repo_ref: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("delete repo secret requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let name = name.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
+    let response = github_delete_secret(
+        &runtime,
+        &GitHubSecretScope::Repo { owner: repo_owner, repo: repo_name },
+        &name,
+    ).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_secret_env_set(
+    repo_ref: Option<String>,
+    environment: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    value: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let value = value.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--value is required"))?;
+    let runtime = load_github_runtime(
+        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let environment = environment.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("environment is required"))?;
+    let name = name.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
+    github_set_secret(
+        &runtime,
+        &GitHubSecretScope::Env {
+            owner: repo_owner.clone(),
+            repo: repo_name.clone(),
+            env: environment.clone(),
+        },
+        &name,
+        &value,
+    ).map_err(anyhow::Error::msg)?;
+    print_github_api_response(
+        &github_secret_created_response(serde_json::json!({
+            "scope": "env",
+            "environment": environment,
+            "name": name,
+            "owner": repo_owner,
+            "repo": repo_name,
+        })),
+        json,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_secret_env_delete(
+    repo_ref: Option<String>,
+    environment: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("delete environment secret requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let environment = environment.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("environment is required"))?;
+    let name = name.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
+    let response = github_delete_secret(
+        &runtime,
+        &GitHubSecretScope::Env { owner: repo_owner, repo: repo_name, env: environment },
+        &name,
+    ).map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_secret_org_set(
+    org: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    value: Option<String>,
+    visibility: String,
+    repos: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let value = value.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("--value is required"))?;
+    let runtime = load_github_runtime(
+        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+    )?;
+    let org = org.or_else(|| if runtime.owner.trim().is_empty() { None } else { Some(runtime.owner.clone()) })
+        .filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("org is required"))?;
+    let name = name.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
+    github_set_secret(
+        &runtime,
+        &GitHubSecretScope::Org {
+            org: org.clone(),
+            visibility,
+            repo_ids: parse_github_csv_ints(repos.as_deref().unwrap_or_default()),
+        },
+        &name,
+        &value,
+    ).map_err(anyhow::Error::msg)?;
+    print_github_api_response(
+        &github_secret_created_response(serde_json::json!({
+            "scope": "org",
+            "org": org,
+            "name": name,
+        })),
+        json,
+        raw,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_secret_org_delete(
+    org: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    force: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        return Err(anyhow::Error::msg("delete org secret requires --force"));
+    }
+    let runtime = load_github_runtime(
+        account, owner, base_url, auth_mode, token, app_id, app_key, installation_id, home, settings_file,
+    )?;
+    let org = org.or_else(|| if runtime.owner.trim().is_empty() { None } else { Some(runtime.owner.clone()) })
+        .filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("org is required"))?;
+    let name = name.filter(|item| !item.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("secret name is required"))?;
+    let response = github_delete_secret(
+        &runtime,
+        &GitHubSecretScope::Org { org, visibility: "private".to_owned(), repo_ids: Vec::new() },
+        &name,
+    ).map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
 
