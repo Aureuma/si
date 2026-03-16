@@ -685,6 +685,13 @@ func cmdOpenAIModel(args []string) {
 }
 
 func cmdOpenAIModelList(args []string) {
+	delegated, err := runOpenAIModelListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai model list", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
@@ -704,6 +711,13 @@ func cmdOpenAIModelList(args []string) {
 }
 
 func cmdOpenAIModelGet(args []string) {
+	delegated, err := runOpenAIModelGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai model get", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)

@@ -70,10 +70,12 @@ use si_rs_provider_oci::{
     resolve_current_context as resolve_oci_current_context,
 };
 use si_rs_provider_openai::{
-    OpenAIContextListEntry, OpenAIContextOverrides, OpenAICurrentContext,
-    list_contexts as list_openai_contexts,
+    OpenAIAPIResponse, OpenAIContextListEntry, OpenAIContextOverrides, OpenAICurrentContext,
+    OpenAIRuntime, get_model as openai_get_model, list_contexts as list_openai_contexts,
+    list_models as openai_list_models, render_api_response_text as render_openai_api_response_text,
     render_context_list_text as render_openai_context_list_text,
     resolve_current_context as resolve_openai_current_context,
+    resolve_runtime as resolve_openai_runtime,
 };
 use si_rs_provider_stripe::{
     StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
@@ -533,6 +535,10 @@ enum OpenAICommand {
         #[command(subcommand)]
         command: OpenAIContextCommand,
     },
+    Model {
+        #[command(subcommand)]
+        command: OpenAIModelCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -568,6 +574,59 @@ enum OpenAIContextCommand {
         json: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIModelCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        model_id: Option<String>,
+        #[arg(long)]
+        id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -2737,6 +2796,59 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            OpenAICommand::Model { command } => match command {
+                OpenAIModelCommand::List {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_model_list(
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIModelCommand::Get {
+                    model_id,
+                    id,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_model_get(
+                    id.or(model_id),
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
         },
         Command::Oci { command } => match command {
             OciCommand::Context { command } => match command {
@@ -4505,6 +4617,109 @@ fn show_openai_context_current(
             println!("Source: {}", or_dash(&payload.source));
             println!("Admin key set: {}", if payload.admin_key_set { "true" } else { "false" });
         }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_model_list(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    limit: Option<usize>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_list_models(&runtime, limit),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_model_get(
+    id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let id = id.unwrap_or_default();
+    if id.trim().is_empty() {
+        anyhow::bail!("model id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_get_model(&runtime, &id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_openai_request<F>(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: F,
+) -> Result<OpenAIAPIResponse>
+where
+    F: FnOnce(OpenAIRuntime) -> std::result::Result<OpenAIAPIResponse, String>,
+{
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_openai_runtime(
+        &settings.openai,
+        &env,
+        &OpenAIContextOverrides {
+            account: account.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            admin_api_key: admin_api_key.unwrap_or_default(),
+            org_id: org_id.unwrap_or_default(),
+            project_id: project_id.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    request(runtime).map_err(anyhow::Error::msg)
+}
+
+fn print_openai_api_response(response: OpenAIAPIResponse, json: bool, raw: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(&response)?);
+    } else {
+        print!("{}", render_openai_api_response_text(&response, raw));
     }
     Ok(())
 }

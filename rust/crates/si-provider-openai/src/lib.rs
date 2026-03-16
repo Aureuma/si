@@ -1,6 +1,11 @@
+use reqwest::blocking::Client;
+use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 use serde::Serialize;
+use serde_json::Value;
 use si_rs_config::settings::{OpenAIAccountEntry, OpenAISettings};
 use std::collections::BTreeMap;
+use std::time::Duration;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct OpenAIContextListEntry {
@@ -31,6 +36,27 @@ pub struct OpenAICurrentContext {
     pub project_id: String,
     pub source: String,
     pub admin_key_set: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenAIRuntime {
+    pub account_alias: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub organization_id: String,
+    pub project_id: String,
+    pub source: String,
+    pub admin_key_set: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct OpenAIAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
 }
 
 pub fn list_contexts(settings: &OpenAISettings) -> Vec<OpenAIContextListEntry> {
@@ -99,6 +125,22 @@ pub fn resolve_current_context(
     env: &BTreeMap<String, String>,
     overrides: &OpenAIContextOverrides,
 ) -> Result<OpenAICurrentContext, String> {
+    let runtime = resolve_runtime(settings, env, overrides)?;
+    Ok(OpenAICurrentContext {
+        account_alias: runtime.account_alias,
+        base_url: runtime.base_url,
+        organization_id: runtime.organization_id,
+        project_id: runtime.project_id,
+        source: runtime.source,
+        admin_key_set: runtime.admin_key_set,
+    })
+}
+
+pub fn resolve_runtime(
+    settings: &OpenAISettings,
+    env: &BTreeMap<String, String>,
+    overrides: &OpenAIContextOverrides,
+) -> Result<OpenAIRuntime, String> {
     let (alias, account) = resolve_account_selection(settings, env, &overrides.account);
     let base_url = first_non_empty(&[
         Some(overrides.base_url.as_str()),
@@ -110,22 +152,28 @@ pub fn resolve_current_context(
     .trim_end_matches('/')
     .to_owned();
     let (api_key, api_key_source) = resolve_api_key(&alias, &account, env, &overrides.api_key);
-    if api_key.trim().is_empty() {
-        let prefix = account_env_prefix(&alias, &account);
-        let hint = if prefix.is_empty() { "OPENAI_<ACCOUNT>_".to_owned() } else { prefix };
-        return Err(format!(
-            "openai api key not found (set --api-key, {hint}API_KEY, or OPENAI_API_KEY)"
-        ));
-    }
     let (admin_key, admin_source) =
         resolve_admin_api_key(&alias, &account, env, &overrides.admin_api_key);
+    let auth_token = if api_key.trim().is_empty() {
+        if admin_key.trim().is_empty() {
+            let prefix = account_env_prefix(&alias, &account);
+            let hint = if prefix.is_empty() { "OPENAI_<ACCOUNT>_".to_owned() } else { prefix };
+            return Err(format!(
+                "openai api key not found (set --api-key, {hint}API_KEY, or OPENAI_API_KEY)"
+            ));
+        }
+        admin_key.clone()
+    } else {
+        api_key.clone()
+    };
     let (org_id, org_source) = resolve_org_id(&alias, &account, settings, env, &overrides.org_id);
     let (project_id, project_source) =
         resolve_project_id(&alias, &account, settings, env, &overrides.project_id);
 
-    Ok(OpenAICurrentContext {
+    Ok(OpenAIRuntime {
         account_alias: alias,
         base_url,
+        api_key: auth_token,
         organization_id: org_id,
         project_id,
         source: join_sources(&[api_key_source, admin_source, org_source, project_source]),
@@ -360,6 +408,151 @@ fn account_env_prefix(alias: &str, account: &OpenAIAccountEntry) -> String {
     if alias.is_empty() { String::new() } else { format!("OPENAI_{alias}_") }
 }
 
+pub fn list_models(
+    runtime: &OpenAIRuntime,
+    limit: Option<usize>,
+) -> Result<OpenAIAPIResponse, String> {
+    let mut params = Vec::new();
+    if let Some(limit) = limit.filter(|value| *value > 0) {
+        params.push(("limit", limit.to_string()));
+    }
+    openai_get(runtime, "/v1/models", &params)
+}
+
+pub fn get_model(runtime: &OpenAIRuntime, id: &str) -> Result<OpenAIAPIResponse, String> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err("model id is required".to_owned());
+    }
+    let escaped = url::form_urlencoded::byte_serialize(id.as_bytes()).collect::<String>();
+    openai_get(runtime, &format!("/v1/models/{escaped}"), &[])
+}
+
+pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> String {
+    if raw {
+        if response.body.trim().is_empty() {
+            return String::new();
+        }
+        return ensure_trailing_newline(response.body.clone());
+    }
+    let mut out = format!("Status: {} {}\n", response.status_code, response.status.trim());
+    if !response.request_id.trim().is_empty() {
+        out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
+    }
+    if let Some(data) = &response.data {
+        if let Ok(pretty) = serde_json::to_string_pretty(data) {
+            out.push_str(&pretty);
+            out.push('\n');
+            return out;
+        }
+    }
+    if !response.body.trim().is_empty() {
+        out.push_str(response.body.trim());
+        out.push('\n');
+    }
+    out
+}
+
+fn openai_get(
+    runtime: &OpenAIRuntime,
+    path: &str,
+    params: &[(&str, String)],
+) -> Result<OpenAIAPIResponse, String> {
+    let url = resolve_url(&runtime.base_url, path, params)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|err| format!("build openai http client: {err}"))?;
+    let mut headers = HeaderMap::new();
+    let auth_value = HeaderValue::from_str(&format!("Bearer {}", runtime.api_key.trim()))
+        .map_err(|err| format!("build openai auth header: {err}"))?;
+    headers.insert(AUTHORIZATION, auth_value);
+    if !runtime.organization_id.trim().is_empty() {
+        headers.insert(
+            "OpenAI-Organization",
+            HeaderValue::from_str(runtime.organization_id.trim())
+                .map_err(|err| format!("build openai organization header: {err}"))?,
+        );
+    }
+    if !runtime.project_id.trim().is_empty() {
+        headers.insert(
+            "OpenAI-Project",
+            HeaderValue::from_str(runtime.project_id.trim())
+                .map_err(|err| format!("build openai project header: {err}"))?,
+        );
+    }
+
+    let response = client
+        .get(url)
+        .headers(headers)
+        .send()
+        .map_err(|err| format!("openai request failed: {err}"))?;
+    let status = response.status();
+    let status_text = status.to_string();
+    let request_id = first_header(response.headers(), &["x-request-id", "openai-processing-ms"]);
+    let body = response.text().map_err(|err| format!("read openai response body: {err}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "openai request failed: status={} request_id={} body={}",
+            status.as_u16(),
+            if request_id.is_empty() { "-" } else { request_id.as_str() },
+            body.trim()
+        ));
+    }
+    let data = serde_json::from_str::<Value>(body.trim()).ok();
+    Ok(OpenAIAPIResponse {
+        status_code: status.as_u16(),
+        status: status_text,
+        request_id,
+        body: body.trim().to_owned(),
+        data,
+    })
+}
+
+fn resolve_url(base_url: &str, path: &str, params: &[(&str, String)]) -> Result<String, String> {
+    let mut url = if path.starts_with("http://") || path.starts_with("https://") {
+        Url::parse(path).map_err(|err| format!("parse openai url {:?}: {err}", path))?
+    } else {
+        let base = Url::parse(base_url)
+            .map_err(|err| format!("parse openai base url {:?}: {err}", base_url))?;
+        let trimmed = if path.starts_with('/') { path.to_owned() } else { format!("/{path}") };
+        base.join(&trimmed).map_err(|err| format!("resolve openai path {:?}: {err}", path))?
+    };
+    if params.iter().any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty()) {
+        let mut pairs = url.query_pairs_mut();
+        for (key, value) in params {
+            let key = key.trim();
+            let value = value.trim();
+            if key.is_empty() || value.is_empty() {
+                continue;
+            }
+            pairs.append_pair(key, value);
+        }
+    }
+    Ok(url.to_string())
+}
+
+fn first_header(headers: &HeaderMap, names: &[&str]) -> String {
+    for name in names {
+        if let Some(value) = headers.get(*name) {
+            if let Ok(value) = value.to_str() {
+                let value = value.trim();
+                if !value.is_empty() {
+                    return value.to_owned();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn ensure_trailing_newline(mut value: String) -> String {
+    if !value.ends_with('\n') {
+        value.push('\n');
+    }
+    value
+}
+
 fn bool_string(value: bool) -> String {
     if value { "true".to_owned() } else { "false".to_owned() }
 }
@@ -430,5 +623,38 @@ mod tests {
         assert_eq!(current.organization_id, "org_123");
         assert_eq!(current.project_id, "proj_123");
         assert!(!current.source.is_empty());
+    }
+
+    #[test]
+    fn resolve_runtime_falls_back_to_admin_key_when_api_key_missing() {
+        let mut env = BTreeMap::new();
+        env.insert("OPENAI_CORE_ADMIN_API_KEY".to_owned(), "sk-admin".to_owned());
+        let runtime = resolve_runtime(
+            &OpenAISettings {
+                default_account: Some("core".to_owned()),
+                ..OpenAISettings::default()
+            },
+            &env,
+            &OpenAIContextOverrides::default(),
+        )
+        .expect("runtime");
+        assert_eq!(runtime.api_key, "sk-admin");
+        assert!(runtime.admin_key_set);
+    }
+
+    #[test]
+    fn render_api_response_text_pretty_prints_data() {
+        let rendered = render_api_response_text(
+            &OpenAIAPIResponse {
+                status_code: 200,
+                status: "200 OK".to_owned(),
+                request_id: "req_123".to_owned(),
+                body: "{\"id\":\"gpt-test\"}".to_owned(),
+                data: Some(serde_json::json!({"id": "gpt-test"})),
+            },
+            false,
+        );
+        assert!(rendered.contains("Status: 200 200 OK"));
+        assert!(rendered.contains("\"id\": \"gpt-test\""));
     }
 }
