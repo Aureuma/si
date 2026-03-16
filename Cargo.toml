@@ -16,6 +16,7 @@ members = [
     "rust/crates/si-provider-aws",
     "rust/crates/si-provider-gcp",
     "rust/crates/si-provider-google",
+    "rust/crates/si-provider-openai",
     "rust/crates/si-provider-stripe",
     "rust/crates/si-provider-workos",
     "rust/crates/si-provider-cloudflare",

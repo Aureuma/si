@@ -1303,6 +1303,99 @@ default_region_code = "GB"
 }
 
 #[test]
+fn openai_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[openai]
+default_account = "core"
+
+[openai.accounts.core]
+api_key_env = "CORE_OPENAI_API_KEY"
+admin_api_key_env = "CORE_OPENAI_ADMIN_API_KEY"
+organization_id = "org_core"
+project_id = "proj_core"
+
+[openai.accounts.ops]
+project_id_env = "OPS_OPENAI_PROJECT_ID"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["openai", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["api_key_env"], "CORE_OPENAI_API_KEY");
+    assert_eq!(contexts[0]["admin_api_key_env"], "CORE_OPENAI_ADMIN_API_KEY");
+    assert_eq!(contexts[0]["org_id"], "org_core");
+    assert_eq!(contexts[0]["project_id"], "proj_core");
+    assert_eq!(contexts[1]["alias"], "ops");
+}
+
+#[test]
+fn openai_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[openai]
+default_account = "core"
+default_project_id = "proj_default"
+
+[openai.accounts.core]
+api_key_env = "CORE_OPENAI_API_KEY"
+organization_id_env = "CORE_OPENAI_ORG"
+admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_OPENAI_API_KEY", "sk-test")
+        .env("CORE_OPENAI_ORG", "org_core")
+        .env("CORE_OPENAI_ADMIN_KEY", "sk-admin")
+        .args(["openai", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["base_url"], "https://api.openai.com");
+    assert_eq!(parsed["organization_id"], "org_core");
+    assert_eq!(parsed["project_id"], "proj_default");
+    assert_eq!(parsed["admin_key_set"], true);
+    assert_eq!(
+        parsed["source"],
+        "env:CORE_OPENAI_API_KEY,env:CORE_OPENAI_ADMIN_KEY,env:CORE_OPENAI_ORG,settings.default_project_id"
+    );
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");

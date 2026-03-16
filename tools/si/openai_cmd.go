@@ -398,6 +398,13 @@ func cmdOpenAIContext(args []string) {
 }
 
 func cmdOpenAIContextList(args []string) {
+	delegated, err := runOpenAIContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("openai context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
@@ -458,6 +465,13 @@ func cmdOpenAIContextList(args []string) {
 }
 
 func cmdOpenAIContextCurrent(args []string) {
+	delegated, err := runOpenAIContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("openai context current", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
