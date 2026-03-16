@@ -495,6 +495,68 @@ func runCloudflarePagesCommand(args []string) (bool, error) {
 	}
 }
 
+func runCloudflareR2Command(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "bucket", "buckets":
+		return runCloudflareResourceAtPath([]string{"r2", "bucket"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareD1Command(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "db", "database", "databases":
+		return runCloudflareResourceAtPath([]string{"d1", "db"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareKVCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "namespace", "namespaces":
+		return runCloudflareResourceAtPath([]string{"kv", "namespace"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareAccessCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "app", "apps":
+		return runCloudflareResourceAtPath([]string{"access", "app"}, args[1:])
+	case "policy", "policies":
+		return runCloudflareResourceAtPath([]string{"access", "policy"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runCloudflareTLSCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "cert", "certs", "certificate", "certificates":
+		return runCloudflareResourceAtPath([]string{"tls", "cert"}, args[1:])
+	default:
+		return false, nil
+	}
+}
+
 func runCloudflareAuthCommand(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
@@ -542,6 +604,20 @@ func runCloudflareCommand(args []string) (bool, error) {
 		return runCloudflarePagesCommand(args[1:])
 	case "queue", "queues":
 		return runCloudflareResourceAtPath([]string{"queue"}, args[1:])
+	case "waf":
+		return runCloudflareResourceAtPath([]string{"waf"}, args[1:])
+	case "r2":
+		return runCloudflareR2Command(args[1:])
+	case "d1":
+		return runCloudflareD1Command(args[1:])
+	case "kv":
+		return runCloudflareKVCommand(args[1:])
+	case "access":
+		return runCloudflareAccessCommand(args[1:])
+	case "tunnel", "tunnels":
+		return runCloudflareResourceAtPath([]string{"tunnel"}, args[1:])
+	case "tls":
+		return runCloudflareTLSCommand(args[1:])
 	case "logs":
 		return runCloudflareLogsCommand(args[1:])
 	case "raw", "api":

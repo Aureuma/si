@@ -843,6 +843,14 @@ func TestRunCloudflareCommandDelegatesToRustCLIForResourceFamilies(t *testing.T)
 		{name: "workers route delete", args: []string{"workers", "route", "delete", "route_123", "--force", "--json"}, expected: "cloudflare\nworkers\nroute\ndelete\nroute_123\n--force\n--json"},
 		{name: "pages project create", args: []string{"pages", "project", "create", "--param", "name=docs", "--json"}, expected: "cloudflare\npages\nproject\ncreate\n--param\nname=docs\n--json"},
 		{name: "queue list", args: []string{"queue", "list", "--json"}, expected: "cloudflare\nqueue\nlist\n--json"},
+		{name: "waf update", args: []string{"waf", "update", "waf_123", "--param", "mode=on", "--json"}, expected: "cloudflare\nwaf\nupdate\nwaf_123\n--param\nmode=on\n--json"},
+		{name: "r2 bucket get", args: []string{"r2", "bucket", "get", "bucket_123", "--json"}, expected: "cloudflare\nr2\nbucket\nget\nbucket_123\n--json"},
+		{name: "d1 db create", args: []string{"d1", "db", "create", "--param", "name=core", "--json"}, expected: "cloudflare\nd1\ndb\ncreate\n--param\nname=core\n--json"},
+		{name: "kv namespace delete", args: []string{"kv", "namespace", "delete", "ns_123", "--force", "--json"}, expected: "cloudflare\nkv\nnamespace\ndelete\nns_123\n--force\n--json"},
+		{name: "access app list", args: []string{"access", "app", "list", "--json"}, expected: "cloudflare\naccess\napp\nlist\n--json"},
+		{name: "access policy update", args: []string{"access", "policy", "update", "pol_123", "--param", "name=core", "--json"}, expected: "cloudflare\naccess\npolicy\nupdate\npol_123\n--param\nname=core\n--json"},
+		{name: "tunnel get", args: []string{"tunnel", "get", "tun_123", "--json"}, expected: "cloudflare\ntunnel\nget\ntun_123\n--json"},
+		{name: "tls cert create", args: []string{"tls", "cert", "create", "--param", "hostname=example.com", "--json"}, expected: "cloudflare\ntls\ncert\ncreate\n--param\nhostname=example.com\n--json"},
 	}
 
 	for _, tc := range cases {
