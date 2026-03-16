@@ -496,6 +496,112 @@ owner = "Aureuma"
 }
 
 #[test]
+fn github_release_list_json_fetches_from_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/releases?page=1&per_page=100 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer gho_example_token\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_release_list")],
+            r#"[{"id":101,"tag_name":"v1.2.3"}]"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "release",
+            "list",
+            "Aureuma/si",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_release_list");
+    assert_eq!(parsed["list"][0]["tag_name"], "v1.2.3");
+    server.join();
+}
+
+#[test]
+fn github_release_get_json_fetches_tag_with_app_auth() {
+    let call_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let calls = std::sync::Arc::clone(&call_count);
+    let server = start_http_server(2, move |request| {
+        let call = calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        match call {
+            0 => {
+                assert!(
+                    request.starts_with("POST /app/installations/321/access_tokens HTTP/1.1\r\n")
+                );
+                assert!(request.contains("authorization: Bearer "));
+                http_json_response(
+                    "201 Created",
+                    &[("x-github-request-id", "req_gh_install")],
+                    r#"{"token":"ghs_install_token","expires_at":"2030-01-01T00:00:00Z"}"#,
+                )
+            }
+            1 => {
+                assert!(
+                    request.starts_with(
+                        "GET /repos/Aureuma/si/releases/tags/v1.2.3 HTTP/1.1\r\n"
+                    )
+                );
+                assert!(request.contains("authorization: Bearer ghs_install_token\r\n"));
+                http_json_response(
+                    "200 OK",
+                    &[("x-github-request-id", "req_gh_release_get")],
+                    r#"{"id":101,"tag_name":"v1.2.3"}"#,
+                )
+            }
+            _ => panic!("unexpected request"),
+        }
+    });
+
+    let app_key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----";
+
+    let output = cargo_bin()
+        .env("GITHUB_APP_PRIVATE_KEY_PEM", app_key)
+        .args([
+            "github",
+            "release",
+            "get",
+            "Aureuma/si",
+            "v1.2.3",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "app",
+            "--app-id",
+            "123",
+            "--installation-id",
+            "321",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_release_get");
+    assert_eq!(parsed["data"]["tag_name"], "v1.2.3");
+    server.join();
+}
+
+#[test]
 fn stripe_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
@@ -4327,6 +4433,37 @@ where
         let response = handler(request);
         stream.write_all(response.as_bytes()).expect("write response");
         stream.flush().expect("flush response");
+    });
+    TestHttpServer { base_url: format!("http://{addr}"), handle: Some(handle) }
+}
+
+fn start_http_server<F>(requests: usize, handler: F) -> TestHttpServer
+where
+    F: Fn(String) -> String + Send + Sync + 'static,
+{
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+    let addr = listener.local_addr().expect("local addr");
+    let handler = std::sync::Arc::new(handler);
+    let handle = thread::spawn(move || {
+        for _ in 0..requests {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let read = stream.read(&mut buffer).expect("read request");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request = String::from_utf8(request).expect("request utf8");
+            let response = handler(request);
+            stream.write_all(response.as_bytes()).expect("write response");
+            stream.flush().expect("flush response");
+        }
     });
     TestHttpServer { base_url: format!("http://{addr}"), handle: Some(handle) }
 }
