@@ -1,6 +1,10 @@
+use reqwest::blocking::Client;
+use reqwest::Method;
 use serde::Serialize;
+use serde_json::Value;
 use si_rs_config::settings::{GCPAccountEntry, GCPSettings};
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct GCPContextListEntry {
@@ -39,6 +43,38 @@ pub struct GCPAuthStatus {
     pub base_url: String,
     pub source: String,
     pub token_preview: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GCPRuntime {
+    pub account_alias: String,
+    pub environment: String,
+    pub project_id: String,
+    pub base_url: String,
+    pub access_token: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GCPAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub params: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
+    pub json_body: Option<Value>,
+    pub raw_body: String,
+    pub content_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GCPAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub content_type: String,
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
+    pub data: Option<Value>,
 }
 
 pub fn list_contexts(settings: &GCPSettings) -> Vec<GCPContextListEntry> {
@@ -134,6 +170,132 @@ struct GCPRuntimeContext {
     base_url: String,
     access_token: String,
     source: String,
+}
+
+pub fn resolve_runtime(
+    settings: &GCPSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GCPAuthOverrides,
+    require_token: bool,
+) -> Result<GCPRuntime, String> {
+    let runtime = resolve_runtime_context(settings, env, overrides, require_token)?;
+    Ok(GCPRuntime {
+        account_alias: runtime.account_alias,
+        environment: runtime.environment,
+        project_id: runtime.project_id,
+        base_url: runtime.base_url,
+        access_token: runtime.access_token,
+        source: runtime.source,
+    })
+}
+
+pub fn execute_api_request(
+    runtime: &GCPRuntime,
+    request: &GCPAPIRequest,
+) -> Result<GCPAPIResponse, String> {
+    let method = Method::from_bytes(request.method.trim().as_bytes())
+        .map_err(|err| format!("invalid gcp method {:?}: {err}", request.method))?;
+    let path = normalize_path(&request.path);
+    let url = format!("{}{}", runtime.base_url.trim_end_matches('/'), path);
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|err| format!("failed to build gcp client: {err}"))?;
+    let mut builder = client.request(method, url).header("User-Agent", "si-rs-provider-gcp/1.0");
+    if !runtime.access_token.trim().is_empty() {
+        builder = builder.bearer_auth(runtime.access_token.trim());
+    }
+    if !request.params.is_empty() {
+        builder = builder.query(&request.params);
+    }
+    for (key, value) in &request.headers {
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        builder = builder.header(key, value.trim());
+    }
+    if let Some(body) = &request.json_body {
+        builder = builder.json(body);
+    } else if !request.raw_body.trim().is_empty() {
+        let content_type = if request.content_type.trim().is_empty() {
+            "application/json"
+        } else {
+            request.content_type.trim()
+        };
+        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
+    }
+    let response = builder.send().map_err(|err| format!("gcp request failed: {err}"))?;
+    normalize_api_response(response)
+}
+
+fn normalize_path(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        "/".to_owned()
+    } else if trimmed.starts_with('/') {
+        trimmed.to_owned()
+    } else {
+        format!("/{trimmed}")
+    }
+}
+
+fn normalize_api_response(response: reqwest::blocking::Response) -> Result<GCPAPIResponse, String> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let request_id = headers
+        .get("x-request-id")
+        .or_else(|| headers.get("x-goog-request-id"))
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let content_type = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let response_headers = headers
+        .iter()
+        .filter_map(|(key, value)| Some((key.as_str().to_owned(), value.to_str().ok()?.trim().to_owned())))
+        .collect::<BTreeMap<_, _>>();
+    let bytes = response
+        .bytes()
+        .map_err(|err| format!("failed to read gcp response body: {err}"))?;
+    let body = String::from_utf8_lossy(&bytes).into_owned();
+    if !status.is_success() {
+        let mut message = format!(
+            "gcp request failed: {} {}",
+            status.as_u16(),
+            status.canonical_reason().unwrap_or_default().trim()
+        );
+        if !request_id.is_empty() {
+            message.push_str(&format!(" [request_id={request_id}]"));
+        }
+        if !body.trim().is_empty() {
+            message.push_str(": ");
+            message.push_str(body.trim());
+        }
+        return Err(message);
+    }
+    let data = if content_type.contains("json")
+        || body.trim_start().starts_with('{')
+        || body.trim_start().starts_with('[')
+    {
+        serde_json::from_slice(&bytes).ok()
+    } else {
+        None
+    };
+    Ok(GCPAPIResponse {
+        status_code: status.as_u16(),
+        status: status.canonical_reason().unwrap_or_default().trim().to_owned(),
+        request_id,
+        content_type,
+        headers: response_headers,
+        body,
+        data,
+    })
 }
 
 fn resolve_runtime_context(

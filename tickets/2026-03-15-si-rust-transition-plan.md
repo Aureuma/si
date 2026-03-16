@@ -487,6 +487,7 @@ Progress notes:
 - completed: the top-level `apple` and `google` roots now also short-circuit directly into Rust when routing into the already-migrated `appstore` and `places` subtrees, removing the last obvious outer wrapper layer above those provider families while leaving other Apple/Google surfaces on the Go side
 - completed: the Apple App Store provider slice now also owns the main resource and metadata lane behind the Rust boundary, covering `app list|get|create`, `listing get|update`, `raw`, and metadata-bundle `apply`, with Rust-owned JWT transport, App Store Connect request helpers, and Go wrapper delegation while `doctor` and auth verification still remain on the Go side for now
 - completed: the Apple App Store provider slice now also owns the default verification lane, with Rust-owned `auth status --verify` and signed `doctor` execution plus Go wrapper delegation, while the unauthenticated `doctor --public` probe still stays on the Go side for now
+- completed: the GCP provider slice now also owns the root Service Usage runtime lane (`doctor`, `service enable|disable|get|list`, and `raw`), with Rust-owned bearer-token transport, direct Service Usage request execution, and Go wrapper delegation while preserving the separate unauthenticated `doctor --public` probe on the Go side
 
 ### Phase 8: Release/install migration
 

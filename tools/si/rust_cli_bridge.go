@@ -823,6 +823,12 @@ func runGCPCommand(args []string) (bool, error) {
 		return runGCPAuthCommand(args[1:])
 	case "context":
 		return runGCPContextCommand(args[1:])
+	case "doctor":
+		return runGCPDoctorCommand(args[1:])
+	case "service", "services":
+		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"service"}, args[1:]...)...)
+	case "raw":
+		return maybeDispatchRustCLIReadOnly("gcp", append([]string{"raw"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
@@ -852,6 +858,15 @@ func runGCPContextCommand(args []string) (bool, error) {
 
 func runGCPAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"auth", "status"}, args...)...)
+}
+
+func runGCPDoctorCommand(args []string) (bool, error) {
+	for _, arg := range args {
+		if strings.EqualFold(strings.TrimSpace(arg), "--public") {
+			return false, nil
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"doctor"}, args...)...)
 }
 
 func runGooglePlacesContextListCommand(args []string) (bool, error) {
