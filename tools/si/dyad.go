@@ -563,7 +563,7 @@ func cmdDyadPeek(args []string) {
 		successf("dyad peek session ready: %s", peekSession)
 		return
 	}
-	if !isInteractiveTerminal() {
+	if !dyadPeekIsInteractiveFn() {
 		fatal(errors.New("dyad peek requires an interactive terminal (or use --detached)"))
 	}
 	if err := attachDyadTmuxSessionFn(peekSession); err != nil {
@@ -577,6 +577,7 @@ var (
 	cleanupDyadPeekTmuxSessionsFn = cleanupStaleTmuxSessions
 	runDyadTmuxCommandFn          = dyadTmuxRun
 	attachDyadTmuxSessionFn       = dyadTmuxAttach
+	dyadPeekIsInteractiveFn       = isInteractiveTerminal
 )
 
 func lookupDyadPeekContainers(ctx context.Context, actorContainer string, criticContainer string) (string, string, error) {
