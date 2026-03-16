@@ -27,6 +27,8 @@ pub struct Settings {
     #[serde(default)]
     pub openai: OpenAISettings,
     #[serde(default)]
+    pub oci: OCISettings,
+    #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
     pub workos: WorkOSSettings,
@@ -86,6 +88,7 @@ impl Settings {
             cloudflare: CloudflareSettings::default(),
             apple: AppleSettings::default(),
             openai: OpenAISettings::default(),
+            oci: OCISettings::default(),
             github: GitHubSettings::default(),
             workos: WorkOSSettings::default(),
             dyad: DyadSettings::default(),
@@ -139,6 +142,7 @@ impl Settings {
                 self.cloudflare = payload.cloudflare;
                 self.apple = payload.apple;
                 self.openai = payload.openai;
+                self.oci = payload.oci;
                 self.github = payload.github;
                 self.workos = payload.workos;
                 self.dyad = payload.dyad;
@@ -186,6 +190,7 @@ impl Settings {
         self.cloudflare.normalize();
         self.apple.normalize();
         self.openai.normalize();
+        self.oci.normalize();
         self.github.normalize();
         self.workos.normalize();
         normalize_option_string(&mut self.dyad.actor_image);
@@ -218,6 +223,8 @@ struct CoreSettingsModule {
     pub apple: AppleSettings,
     #[serde(default)]
     pub openai: OpenAISettings,
+    #[serde(default)]
+    pub oci: OCISettings,
     #[serde(default)]
     pub github: GitHubSettings,
     #[serde(default)]
@@ -632,6 +639,80 @@ impl OpenAIAccountEntry {
         normalize_option_string(&mut self.organization_id_env);
         normalize_option_string(&mut self.project_id);
         normalize_option_string(&mut self.project_id_env);
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OCISettings {
+    pub default_account: Option<String>,
+    pub profile: Option<String>,
+    pub config_file: Option<String>,
+    pub region: Option<String>,
+    pub api_base_url: Option<String>,
+    pub log_file: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, OCIAccountEntry>,
+}
+
+impl OCISettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.default_account);
+        normalize_option_string(&mut self.profile);
+        normalize_option_string(&mut self.config_file);
+        normalize_option_string(&mut self.region);
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.log_file);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct OCIAccountEntry {
+    pub name: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub profile: Option<String>,
+    pub config_file: Option<String>,
+    pub region: Option<String>,
+    pub tenancy_ocid: Option<String>,
+    pub tenancy_ocid_env: Option<String>,
+    pub user_ocid: Option<String>,
+    pub user_ocid_env: Option<String>,
+    pub fingerprint: Option<String>,
+    pub fingerprint_env: Option<String>,
+    pub private_key_path: Option<String>,
+    pub private_key_path_env: Option<String>,
+    pub passphrase_env: Option<String>,
+    pub compartment_id: Option<String>,
+    pub compartment_id_env: Option<String>,
+}
+
+impl OCIAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.profile);
+        normalize_option_string(&mut self.config_file);
+        normalize_option_string(&mut self.region);
+        normalize_option_string(&mut self.tenancy_ocid);
+        normalize_option_string(&mut self.tenancy_ocid_env);
+        normalize_option_string(&mut self.user_ocid);
+        normalize_option_string(&mut self.user_ocid_env);
+        normalize_option_string(&mut self.fingerprint);
+        normalize_option_string(&mut self.fingerprint_env);
+        normalize_option_string(&mut self.private_key_path);
+        normalize_option_string(&mut self.private_key_path_env);
+        normalize_option_string(&mut self.passphrase_env);
+        normalize_option_string(&mut self.compartment_id);
+        normalize_option_string(&mut self.compartment_id_env);
     }
 }
 

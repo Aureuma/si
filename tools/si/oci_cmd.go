@@ -251,6 +251,13 @@ func cmdOCIContext(args []string) {
 }
 
 func cmdOCIContextList(args []string) {
+	delegated, err := runOCIContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("oci context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
@@ -308,6 +315,13 @@ func cmdOCIContextList(args []string) {
 }
 
 func cmdOCIContextCurrent(args []string) {
+	delegated, err := runOCIContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("oci context current", flag.ExitOnError)
 	flags := bindOCICommonFlags(fs)

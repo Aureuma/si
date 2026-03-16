@@ -1396,6 +1396,76 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
 }
 
 #[test]
+fn oci_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[oci]
+default_account = "core"
+profile = "DEFAULT"
+
+[oci.accounts.core]
+region = "us-phoenix-1"
+config_file = "/tmp/core-config"
+
+[oci.accounts.ops]
+profile = "OPS"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["oci", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["profile"], "DEFAULT");
+    assert_eq!(contexts[0]["region"], "us-phoenix-1");
+    assert_eq!(contexts[0]["config_file"], "/tmp/core-config");
+    assert_eq!(contexts[1]["alias"], "ops");
+}
+
+#[test]
+fn oci_context_current_json_reads_profile_config() {
+    let config_dir = tempdir().expect("tempdir");
+    let config_file = config_dir.path().join("config");
+    fs::write(&config_file, "[DEFAULT]\ntenancy=ocid1.tenancy.oc1..example\nregion=us-phoenix-1\n")
+        .expect("write config");
+
+    let output = cargo_bin()
+        .args(["oci", "context", "current"])
+        .args(["--config-file", config_file.to_str().expect("utf8")])
+        .arg("--format")
+        .arg("json")
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["profile"], "DEFAULT");
+    assert_eq!(parsed["region"], "us-phoenix-1");
+    assert_eq!(parsed["auth_style"], "signature");
+    assert_eq!(parsed["tenancy_ocid"], "ocid1.tenancy.oc1..example");
+    assert_eq!(parsed["source"], "profile:DEFAULT");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");
