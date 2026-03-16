@@ -482,6 +482,7 @@ Progress notes:
 - completed: the Cloudflare provider slice now also owns the next broad resource-family batch behind the Rust boundary, covering `zone`, `dns`, `email rule`, `email address`, `token`, `ruleset`, `firewall`, `ratelimit`, `workers script`, `workers route`, `pages project`, and `queue`, with shared Rust CRUD/pagination handling plus Go wrapper delegation so the main Cloudflare REST resource lanes no longer depend on the Go path
 - completed: the Cloudflare provider slice now also owns another remaining resource batch behind the Rust boundary, covering `waf` read/update plus `r2 bucket`, `d1 db`, `kv namespace`, `access app`, `access policy`, `tunnel`, and `tls cert`, reusing the shared Rust CRUD layer plus Go wrapper delegation so most remaining Cloudflare account/zone management surfaces no longer depend on the Go path
 - completed: the top-level `apple` and `google` roots now also short-circuit directly into Rust when routing into the already-migrated `appstore` and `places` subtrees, removing the last obvious outer wrapper layer above those provider families while leaving other Apple/Google surfaces on the Go side
+- completed: the Apple App Store provider slice now also owns the main resource and metadata lane behind the Rust boundary, covering `app list|get|create`, `listing get|update`, `raw`, and metadata-bundle `apply`, with Rust-owned JWT transport, App Store Connect request helpers, and Go wrapper delegation while `doctor` and auth verification still remain on the Go side for now
 
 ### Phase 8: Release/install migration
 

@@ -2443,7 +2443,7 @@ fn github_branch_get_json_fetches_from_api_with_oauth() {
 
 #[test]
 fn github_branch_create_json_mutates_via_api_with_oauth() {
-    let server = start_http_server(3, |request| {
+    let server = start_http_server(5, |request| {
         if request.starts_with("GET /repos/Aureuma/si HTTP/1.1\r\n") {
             return http_json_response(
                 "200 OK",
@@ -5096,6 +5096,231 @@ fn apple_appstore_auth_status_json_reads_local_inputs() {
     assert_eq!(parsed["locale"], "fr-FR");
     assert_eq!(parsed["platform"], "MAC_OS");
     assert_eq!(parsed["token_source"], "flag:--private-key-file");
+}
+
+const APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM: &str = r#"-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgXv1fLQwQYWpHLmrJ
+BDNK155BX3ig/zpgQGtC9XlwhN2hRANCAASXYN6j6kX+3XZV6tbvsSjPrF542r1z
+IiirJwd3+qH5BaD2H1FSA45SwJBmSifpUAaqEFjt5zEvDmqpRReOsvvY
+-----END PRIVATE KEY-----
+"#;
+
+#[test]
+fn apple_appstore_app_list_json_fetches_apps() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=5 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer "));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_apple_apps")],
+            r#"{"data":[{"id":"app_123","type":"apps","attributes":{"bundleId":"com.example.mobile"}}]}"#,
+        )
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "app", "list",
+            "--base-url", &server.base_url,
+            "--bundle-id", "com.example.mobile",
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--limit", "5",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_apple_apps");
+    assert_eq!(parsed["data"]["data"][0]["id"], "app_123");
+    server.join();
+}
+
+#[test]
+fn apple_appstore_app_create_json_creates_bundle_and_app() {
+    let server = start_http_server_with_body(4, |request| {
+        if request.starts_with("GET /v1/bundleIds?filter%5Bidentifier%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[]}"#);
+        }
+        if request.starts_with("POST /v1/bundleIds HTTP/1.1\r\n") {
+            assert!(request.contains("\"identifier\":\"com.example.mobile\""));
+            return http_json_response("201 Created", &[], r#"{"data":{"id":"bundle_123","type":"bundleIds"}}"#);
+        }
+        assert!(request.starts_with("POST /v1/apps HTTP/1.1\r\n") || request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n"));
+        if request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[]}"#);
+        }
+        assert!(request.contains("\"sku\":\"mobile-sku\""));
+        http_json_response("201 Created", &[], r#"{"data":{"id":"app_456","type":"apps"}}"#)
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "app", "create",
+            "--base-url", &server.base_url,
+            "--bundle-id", "com.example.mobile",
+            "--app-name", "Mobile",
+            "--sku", "mobile-sku",
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["bundle_created"], true);
+    assert_eq!(parsed["bundle_resource_id"], "bundle_123");
+    assert_eq!(parsed["app_created"], true);
+    assert_eq!(parsed["app_id"], "app_456");
+    server.join();
+}
+
+#[test]
+fn apple_appstore_listing_update_json_updates_localized_metadata() {
+    let server = start_http_server(4, |request| {
+        if request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[{"id":"app_123"}]}"#);
+        }
+        if request.starts_with("GET /v1/apps/app_123/appInfos?limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[{"id":"info_123"}]}"#);
+        }
+        if request.starts_with("GET /v1/appInfos/info_123/appInfoLocalizations?filter%5Blocale%5D=en-US&limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[{"id":"loc_123"}]}"#);
+        }
+        assert!(request.starts_with("PATCH /v1/appInfoLocalizations/loc_123 HTTP/1.1\r\n"));
+        assert!(request.contains("\"name\":\"New Name\""));
+        http_json_response("200 OK", &[], r#"{"data":{"id":"loc_123"}}"#)
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "listing", "update",
+            "--base-url", &server.base_url,
+            "--bundle-id", "com.example.mobile",
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--name", "New Name",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["app_info_updated"], true);
+    assert_eq!(parsed["version_info_updated"], false);
+    server.join();
+}
+
+#[test]
+fn apple_appstore_raw_json_fetches_api_path() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/apps?limit=1 HTTP/1.1\r\n"));
+        http_json_response("200 OK", &[("x-request-id", "req_apple_raw")], r#"{"data":[{"id":"app_123"}]}"#)
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "raw",
+            "--base-url", &server.base_url,
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--path", "/v1/apps",
+            "--param", "limit=1",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_apple_raw");
+    assert_eq!(parsed["data"]["data"][0]["id"], "app_123");
+    server.join();
+}
+
+#[test]
+fn apple_appstore_apply_json_applies_metadata_bundle() {
+    let metadata_dir = tempdir().expect("tempdir");
+    fs::create_dir_all(metadata_dir.path().join("app-info")).expect("mkdir app-info");
+    fs::write(
+        metadata_dir.path().join("app-info").join("en-US.json"),
+        r#"{"name":"Bundle Name"}"#,
+    )
+    .expect("write app-info");
+
+    let server = start_http_server(4, |request| {
+        if request.starts_with("GET /v1/apps?filter%5BbundleId%5D=com.example.mobile&limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[{"id":"app_123"}]}"#);
+        }
+        if request.starts_with("GET /v1/apps/app_123/appInfos?limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[{"id":"info_123"}]}"#);
+        }
+        if request.starts_with("GET /v1/appInfos/info_123/appInfoLocalizations?filter%5Blocale%5D=en-US&limit=1 HTTP/1.1\r\n") {
+            return http_json_response("200 OK", &[], r#"{"data":[]}"#);
+        }
+        assert!(request.starts_with("POST /v1/appInfoLocalizations HTTP/1.1\r\n"));
+        assert!(request.contains("\"locale\":\"en-US\""));
+        http_json_response("201 Created", &[], r#"{"data":{"id":"loc_999"}}"#)
+    });
+
+    let key_dir = tempdir().expect("tempdir");
+    let key_path = key_dir.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, APPLE_APPSTORE_TEST_EC_PRIVATE_KEY_PEM).expect("write key");
+
+    let output = cargo_bin()
+        .args([
+            "apple", "appstore", "apply",
+            "--base-url", &server.base_url,
+            "--bundle-id", "com.example.mobile",
+            "--issuer-id", "issuer_123",
+            "--key-id", "key_123",
+            "--private-key-file", key_path.to_str().expect("utf8"),
+            "--metadata-dir", metadata_dir.path().to_str().expect("utf8"),
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["locales_applied"], 1);
+    assert_eq!(parsed["app_info_updated"], 1);
+    assert_eq!(parsed["version_info_updated"], 0);
+    server.join();
 }
 
 #[test]
@@ -8723,6 +8948,53 @@ where
                 request.extend_from_slice(&buffer[..read]);
                 if request.windows(4).any(|window| window == b"\r\n\r\n") {
                     break;
+                }
+            }
+            let request = String::from_utf8(request).expect("request utf8");
+            let response = handler(request);
+            stream.write_all(response.as_bytes()).expect("write response");
+            stream.flush().expect("flush response");
+        }
+    });
+    TestHttpServer { base_url: format!("http://{addr}"), handle: Some(handle) }
+}
+
+fn start_http_server_with_body<F>(requests: usize, handler: F) -> TestHttpServer
+where
+    F: Fn(String) -> String + Send + Sync + 'static,
+{
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+    let addr = listener.local_addr().expect("local addr");
+    let handler = std::sync::Arc::new(handler);
+    let handle = thread::spawn(move || {
+        for _ in 0..requests {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 4096];
+            let mut content_length = 0_usize;
+            let mut header_end = None;
+            loop {
+                let read = stream.read(&mut buffer).expect("read request");
+                if read == 0 {
+                    break;
+                }
+                request.extend_from_slice(&buffer[..read]);
+                if header_end.is_none() {
+                    if let Some(pos) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                        header_end = Some(pos + 4);
+                        let headers = String::from_utf8_lossy(&request[..pos + 4]).to_ascii_lowercase();
+                        for line in headers.lines() {
+                            if let Some(value) = line.strip_prefix("content-length:") {
+                                content_length = value.trim().parse::<usize>().unwrap_or(0);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if let Some(end) = header_end {
+                    if request.len() >= end + content_length {
+                        break;
+                    }
                 }
             }
             let request = String::from_utf8(request).expect("request utf8");

@@ -652,6 +652,14 @@ func runAppleAppStoreCommand(args []string) (bool, error) {
 		return runAppleAppStoreAuthCommand(args[1:])
 	case "context":
 		return runAppleAppStoreContextCommand(args[1:])
+	case "app", "apps":
+		return runAppleAppStoreAppCommand(args[1:])
+	case "listing", "listings", "metadata":
+		return runAppleAppStoreListingCommand(args[1:])
+	case "raw":
+		return runAppleAppStoreRawCommand(args[1:])
+	case "apply", "deploy":
+		return runAppleAppStoreApplyCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -690,6 +698,22 @@ func runAppleAppStoreAuthStatusCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "auth", "status"}, args...)...)
+}
+
+func runAppleAppStoreAppCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "app"}, args...)...)
+}
+
+func runAppleAppStoreListingCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "listing"}, args...)...)
+}
+
+func runAppleAppStoreRawCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "raw"}, args...)...)
+}
+
+func runAppleAppStoreApplyCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "apply"}, args...)...)
 }
 
 func appleAppStoreAuthStatusVerifyEnabled(args []string) bool {
