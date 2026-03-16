@@ -1425,6 +1425,53 @@ func TestRunGooglePlacesCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunOpenAICommandDefaultsToGoForMutationPath(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAICommand([]string{"project", "create", "--json"})
+	if err != nil {
+		t.Fatalf("runOpenAICommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai root path for mutation subtree")
+	}
+}
+
+func TestRunOpenAICommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAICommand([]string{"project", "api-key", "list", "--project-id", "proj_123", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai root to delegate migrated read subtree to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-root" {
+		t.Fatalf("expected delegated Rust openai root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nproject\napi-key\nlist\n--project-id\nproj_123\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai root + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGooglePlacesAuthStatusCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -2691,6 +2738,53 @@ func TestRunOCIContextCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "oci\ncontext\nlist\n--json" {
 		t.Fatalf("expected Rust CLI args to be oci context + args, got %q", string(argsData))
+	}
+}
+
+func TestRunOCICommandDefaultsToGoForUnmigratedSubtree(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOCICommand([]string{"identity", "compartment", "list", "--json"})
+	if err != nil {
+		t.Fatalf("runOCICommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go oci root path for unmigrated subtree")
+	}
+}
+
+func TestRunOCICommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-oci-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOCICommand([]string{"oracular", "tenancy", "--json"})
+		if err != nil {
+			t.Fatalf("runOCICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected oci root to delegate migrated read subtree to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-oci-root" {
+		t.Fatalf("expected delegated Rust oci root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "oci\noracular\ntenancy\n--json" {
+		t.Fatalf("expected Rust CLI args to be oci root + args, got %q", string(argsData))
 	}
 }
 
