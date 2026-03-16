@@ -1,4 +1,6 @@
 use anyhow::Result;
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
@@ -1785,6 +1787,10 @@ enum GCPCommand {
         #[command(subcommand)]
         command: GCPIAMCommand,
     },
+    Gemini {
+        #[command(subcommand)]
+        command: GCPGeminiCommand,
+    },
     Raw {
         #[arg(long)]
         account: Option<String>,
@@ -2438,6 +2444,290 @@ enum GCPIAMRoleCommand {
         json: bool,
         #[arg(long)]
         raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPGeminiCommand {
+    #[command(alias = "model")]
+    Models {
+        #[command(subcommand)]
+        command: GCPGeminiModelsCommand,
+    },
+    #[command(alias = "generate-content")]
+    Generate {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, default_value = "gemini-2.0-flash")]
+        model: String,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        system: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        temperature: Option<f64>,
+        #[arg(long)]
+        max_output_tokens: Option<u64>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "embed-content")]
+    Embed {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, default_value = "text-embedding-004")]
+        model: String,
+        #[arg(long)]
+        text: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "count")]
+    CountTokens {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, default_value = "gemini-2.0-flash")]
+        model: String,
+        #[arg(long)]
+        text: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "batch", alias = "batch-embed-contents")]
+    BatchEmbed {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, default_value = "text-embedding-004")]
+        model: String,
+        #[arg(long = "text")]
+        texts: Vec<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Image {
+        #[command(subcommand)]
+        command: GCPGeminiImageCommand,
+    },
+    Raw {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPGeminiModelsCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        resource: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GCPGeminiImageCommand {
+    Generate {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        project: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, default_value = "gemini-2.5-flash-image")]
+        model: String,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long)]
+        transparent: bool,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -10452,6 +10742,224 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+            },
+            GCPCommand::Gemini { command } => match command {
+                GCPGeminiCommand::Models { command } => match command {
+                    GCPGeminiModelsCommand::List {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_gemini_models_list(
+                            account, env, project, base_url, access_token, api_key, params, home,
+                            settings_file, format, raw,
+                        )?
+                    }
+                    GCPGeminiModelsCommand::Get {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        model,
+                        resource,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_gemini_models_get(
+                            account,
+                            env,
+                            project,
+                            base_url,
+                            access_token,
+                            api_key,
+                            model.or(resource),
+                            params,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                GCPGeminiCommand::Generate {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    api_key,
+                    model,
+                    prompt,
+                    system,
+                    json_body,
+                    temperature,
+                    max_output_tokens,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_gemini_generate(
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        model,
+                        prompt,
+                        system,
+                        json_body,
+                        temperature,
+                        max_output_tokens,
+                        params,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                GCPGeminiCommand::Embed {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    api_key,
+                    model,
+                    text,
+                    json_body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_gemini_embed(
+                        account, env, project, base_url, access_token, api_key, model, text,
+                        json_body, params, home, settings_file, format, raw,
+                    )?
+                }
+                GCPGeminiCommand::CountTokens {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    api_key,
+                    model,
+                    text,
+                    json_body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_gemini_count_tokens(
+                        account, env, project, base_url, access_token, api_key, model, text,
+                        json_body, params, home, settings_file, format, raw,
+                    )?
+                }
+                GCPGeminiCommand::BatchEmbed {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    api_key,
+                    model,
+                    texts,
+                    json_body,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_gemini_batch_embed(
+                        account, env, project, base_url, access_token, api_key, model, texts,
+                        json_body, params, home, settings_file, format, raw,
+                    )?
+                }
+                GCPGeminiCommand::Image { command } => match command {
+                    GCPGeminiImageCommand::Generate {
+                        account,
+                        env,
+                        project,
+                        base_url,
+                        access_token,
+                        api_key,
+                        model,
+                        prompt,
+                        output,
+                        transparent,
+                        json_body,
+                        params,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_gcp_gemini_image_generate(
+                            account, env, project, base_url, access_token, api_key, model,
+                            prompt, output, transparent, json_body, params, home, settings_file,
+                            format,
+                        )?
+                    }
+                },
+                GCPGeminiCommand::Raw {
+                    account,
+                    env,
+                    project,
+                    base_url,
+                    access_token,
+                    api_key,
+                    method,
+                    path,
+                    params,
+                    headers,
+                    body,
+                    json_body,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_gcp_gemini_raw(
+                        account, env, project, base_url, access_token, api_key, method, path,
+                        params, headers, body, json_body, home, settings_file, format, raw,
+                    )?
+                }
             },
             GCPCommand::Raw {
                 account,
@@ -18837,6 +19345,578 @@ fn run_gcp_iam_role_get(
         },
     )
     .map_err(anyhow::Error::msg)?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+fn gcp_gemini_base_url(base_url: Option<String>) -> Option<String> {
+    Some(
+        base_url
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or_else(|| "https://generativelanguage.googleapis.com".to_owned()),
+    )
+}
+
+fn gcp_env_prefix(alias: &str, vault_prefix: Option<&str>) -> String {
+    if let Some(prefix) = vault_prefix.map(str::trim).filter(|value| !value.is_empty()) {
+        if prefix.ends_with('_') {
+            return prefix.to_uppercase();
+        }
+        return format!("{}_", prefix.to_uppercase());
+    }
+    let alias = alias
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch.to_ascii_uppercase() } else { '_' })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_owned();
+    if alias.is_empty() {
+        String::new()
+    } else {
+        format!("GCP_{alias}_")
+    }
+}
+
+fn resolve_gcp_api_key_for_runtime(
+    settings: &Settings,
+    env_vars: &BTreeMap<String, String>,
+    account_alias: &str,
+    override_api_key: Option<String>,
+) -> String {
+    if let Some(value) = override_api_key.filter(|value| !value.trim().is_empty()) {
+        return value.trim().to_owned();
+    }
+    if let Some(account) = settings.gcp.accounts.get(account_alias) {
+        if let Some(ref_name) = account.api_key_env.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+            if let Some(value) = env_vars.get(ref_name).map(String::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+                return value.to_owned();
+            }
+        }
+        let prefix = gcp_env_prefix(account_alias, account.vault_prefix.as_deref());
+        if !prefix.is_empty() {
+            let key = format!("{prefix}API_KEY");
+            if let Some(value) = env_vars.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+                return value.to_owned();
+            }
+        }
+    }
+    for key in ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GCP_API_KEY"] {
+        if let Some(value) = env_vars.get(key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+            return value.to_owned();
+        }
+    }
+    String::new()
+}
+
+#[allow(clippy::too_many_arguments)]
+fn load_gcp_gemini_runtime(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<(GCPRuntime, String)> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env_vars: BTreeMap<String, String> = std::env::vars().collect();
+    let runtime = resolve_gcp_runtime(
+        &settings.gcp,
+        &env_vars,
+        &GCPAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            project_id: project.unwrap_or_else(|| "_".to_owned()),
+            base_url: gcp_gemini_base_url(base_url).unwrap_or_default(),
+            access_token: access_token.unwrap_or_default(),
+        },
+        false,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let api_key = resolve_gcp_api_key_for_runtime(&settings, &env_vars, &runtime.account_alias, api_key);
+    if runtime.access_token.trim().is_empty() && api_key.trim().is_empty() {
+        anyhow::bail!(
+            "gemini auth requires --api-key, GCP_<ACCOUNT>_API_KEY / GEMINI_API_KEY / GOOGLE_API_KEY, or OAuth access token"
+        );
+    }
+    Ok((runtime, api_key))
+}
+
+fn normalize_gcp_gemini_model_name(value: &str) -> String {
+    let value = value.trim().trim_matches('/');
+    if value.starts_with("models/") {
+        value.to_owned()
+    } else {
+        format!("models/{value}")
+    }
+}
+
+fn gcp_gemini_request(
+    runtime: &GCPRuntime,
+    api_key: &str,
+    request: GCPAPIRequest,
+) -> Result<GCPAPIResponse> {
+    let mut request = request;
+    if !api_key.trim().is_empty() {
+        request
+            .params
+            .insert("key".to_owned(), api_key.trim().to_owned());
+    }
+    execute_gcp_api_request(runtime, &request).map_err(anyhow::Error::msg)
+}
+
+fn parse_gcp_json_body_required(
+    json_body: Option<String>,
+    flag_name: &str,
+) -> Result<Option<Value>> {
+    match json_body {
+        Some(value) if !value.trim().is_empty() => Ok(Some(parse_gcp_json_value(&value, flag_name)?)),
+        _ => Ok(None),
+    }
+}
+
+fn extract_gcp_gemini_inline_image(response: &GCPAPIResponse) -> Result<(String, String, String)> {
+    let data = response
+        .data
+        .clone()
+        .or_else(|| serde_json::from_str::<Value>(&response.body).ok())
+        .ok_or_else(|| anyhow::anyhow!("gemini response did not contain candidates"))?;
+    let candidates = data
+        .get("candidates")
+        .and_then(Value::as_array)
+        .ok_or_else(|| anyhow::anyhow!("gemini response did not contain candidates"))?;
+    let mut first_text = String::new();
+    for candidate in candidates {
+        let parts = candidate
+            .get("content")
+            .and_then(|value| value.get("parts"))
+            .and_then(Value::as_array);
+        let Some(parts) = parts else { continue };
+        for part in parts {
+            if first_text.is_empty() {
+                if let Some(text) = part.get("text").and_then(Value::as_str).map(str::trim).filter(|value| !value.is_empty()) {
+                    first_text = text.to_owned();
+                }
+            }
+            let Some(inline_data) = part.get("inlineData") else {
+                continue;
+            };
+            let encoded = inline_data
+                .get("data")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty());
+            let Some(encoded) = encoded else { continue };
+            let mime_type = inline_data
+                .get("mimeType")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .unwrap_or("image/png")
+                .to_owned();
+            return Ok((mime_type, encoded.to_owned(), first_text));
+        }
+    }
+    anyhow::bail!("gemini response did not contain inline image data")
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_models_list(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: "/v1beta/models".to_owned(),
+            params: parse_gcp_params(params)?,
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_models_get(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    model: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let model = model.unwrap_or_default();
+    if model.trim().is_empty() {
+        anyhow::bail!("model id is required");
+    }
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/v1beta/{}", normalize_gcp_gemini_model_name(&model)),
+            params: parse_gcp_params(params)?,
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_generate(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    model: String,
+    prompt: Option<String>,
+    system: Option<String>,
+    json_body: Option<String>,
+    temperature: Option<f64>,
+    max_output_tokens: Option<u64>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
+    let request_body = if let Some(json_body) = json_body {
+        json_body
+    } else {
+        let prompt = prompt.unwrap_or_default();
+        if prompt.trim().is_empty() {
+            anyhow::bail!("--prompt or --json-body is required");
+        }
+        let mut body = serde_json::json!({
+            "contents": [{
+                "role": "user",
+                "parts": [{"text": prompt.trim()}]
+            }]
+        });
+        if let Some(system) = system.filter(|value| !value.trim().is_empty()) {
+            body["systemInstruction"] = serde_json::json!({"parts": [{"text": system.trim()}]});
+        }
+        let mut generation_config = serde_json::Map::new();
+        if let Some(temperature) = temperature {
+            generation_config.insert("temperature".to_owned(), Value::from(temperature));
+        }
+        if let Some(max_output_tokens) = max_output_tokens.filter(|value| *value > 0) {
+            generation_config.insert("maxOutputTokens".to_owned(), Value::from(max_output_tokens));
+        }
+        if !generation_config.is_empty() {
+            body["generationConfig"] = Value::Object(generation_config);
+        }
+        body
+    };
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1beta/{}:generateContent",
+                normalize_gcp_gemini_model_name(&model)
+            ),
+            params: parse_gcp_params(params)?,
+            json_body: Some(request_body),
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_embed(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    model: String,
+    text: Option<String>,
+    json_body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
+    let request_body = if let Some(json_body) = json_body {
+        json_body
+    } else {
+        let text = text.unwrap_or_default();
+        if text.trim().is_empty() {
+            anyhow::bail!("--text or --json-body is required");
+        }
+        serde_json::json!({"content": {"parts": [{"text": text.trim()}]}})
+    };
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1beta/{}:embedContent",
+                normalize_gcp_gemini_model_name(&model)
+            ),
+            params: parse_gcp_params(params)?,
+            json_body: Some(request_body),
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_count_tokens(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    model: String,
+    text: Option<String>,
+    json_body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
+    let request_body = if let Some(json_body) = json_body {
+        json_body
+    } else {
+        let text = text.unwrap_or_default();
+        if text.trim().is_empty() {
+            anyhow::bail!("--text or --json-body is required");
+        }
+        serde_json::json!({"contents": [{"role": "user", "parts": [{"text": text.trim()}]}]})
+    };
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1beta/{}:countTokens",
+                normalize_gcp_gemini_model_name(&model)
+            ),
+            params: parse_gcp_params(params)?,
+            json_body: Some(request_body),
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_batch_embed(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    model: String,
+    texts: Vec<String>,
+    json_body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
+    let request_body = if let Some(json_body) = json_body {
+        json_body
+    } else {
+        let requests: Vec<Value> = texts
+            .into_iter()
+            .map(|value| value.trim().to_owned())
+            .filter(|value| !value.is_empty())
+            .map(|value| serde_json::json!({"content": {"parts": [{"text": value}]}}))
+            .collect();
+        if requests.is_empty() {
+            anyhow::bail!("at least one --text is required when --json-body is not provided");
+        }
+        serde_json::json!({ "requests": requests })
+    };
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1beta/{}:batchEmbedContents",
+                normalize_gcp_gemini_model_name(&model)
+            ),
+            params: parse_gcp_params(params)?,
+            json_body: Some(request_body),
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    print_gcp_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_image_generate(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    model: String,
+    prompt: Option<String>,
+    output: PathBuf,
+    transparent: bool,
+    json_body: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let json_body = parse_gcp_json_body_required(json_body, "--json-body")?;
+    let request_body = if let Some(json_body) = json_body {
+        json_body
+    } else {
+        let mut prompt = prompt.unwrap_or_default();
+        if prompt.trim().is_empty() {
+            anyhow::bail!("--prompt or --json-body is required");
+        }
+        if transparent {
+            prompt.push_str("\n\nReturn a PNG with a transparent background (alpha channel) and no canvas fill.");
+        }
+        serde_json::json!({
+            "contents": [{
+                "role": "user",
+                "parts": [{"text": prompt.trim()}]
+            }],
+            "generationConfig": {
+                "responseModalities": ["TEXT", "IMAGE"]
+            }
+        })
+    };
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method: "POST".to_owned(),
+            path: format!(
+                "/v1beta/{}:generateContent",
+                normalize_gcp_gemini_model_name(&model)
+            ),
+            params: parse_gcp_params(params)?,
+            json_body: Some(request_body),
+            ..GCPAPIRequest::default()
+        },
+    )?;
+    let (mime_type, encoded, note) = extract_gcp_gemini_inline_image(&response)?;
+    let raw_image = BASE64_STANDARD
+        .decode(encoded.trim())
+        .map_err(|err| anyhow::anyhow!("decode gemini image payload: {err}"))?;
+    let output = output;
+    if let Some(parent) = output.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(&output, &raw_image)?;
+    match format {
+        OutputFormat::Json | OutputFormat::Text => {
+            let payload = serde_json::json!({
+                "ok": true,
+                "model": model.trim(),
+                "output": output,
+                "mime_type": mime_type,
+                "bytes": raw_image.len(),
+                "description": note,
+            });
+            println!("{}", serde_json::to_string_pretty(&payload)?);
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_gcp_gemini_raw(
+    account: Option<String>,
+    environment: Option<String>,
+    project: Option<String>,
+    base_url: Option<String>,
+    access_token: Option<String>,
+    api_key: Option<String>,
+    method: String,
+    path: String,
+    params: Vec<String>,
+    headers: Vec<String>,
+    body: Option<String>,
+    json_body: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let (runtime, api_key) = load_gcp_gemini_runtime(
+        account, environment, project, base_url, access_token, api_key, home, settings_file,
+    )?;
+    let response = gcp_gemini_request(
+        &runtime,
+        &api_key,
+        GCPAPIRequest {
+            method,
+            path,
+            params: parse_gcp_params(params)?,
+            headers: parse_gcp_params(headers)?,
+            json_body: parse_gcp_json_body_required(json_body, "--json-body")?,
+            raw_body: body.unwrap_or_default(),
+            content_type: "application/json".to_owned(),
+        },
+    )?;
     print_gcp_api_response(&response, format, raw)
 }
 

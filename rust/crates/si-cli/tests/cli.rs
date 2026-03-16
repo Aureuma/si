@@ -5377,6 +5377,178 @@ fn gcp_iam_role_list_json_fetches_roles() {
 }
 
 #[test]
+fn gcp_gemini_models_list_json_fetches_models() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1beta/models?"));
+        assert!(request.contains("key=AIzaGemini"));
+        http_json_response("200 OK", &[], r#"{"models":[{"name":"models/gemini-2.0-flash"}]}"#)
+    });
+
+    let output = cargo_bin()
+        .env("GEMINI_API_KEY", "AIzaGemini")
+        .args(["gcp", "gemini", "models", "list", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["models"][0]["name"], "models/gemini-2.0-flash");
+    server.join();
+}
+
+#[test]
+fn gcp_gemini_generate_json_posts_prompt_body() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1beta/models/gemini-2.0-flash:generateContent?"));
+        assert!(request.contains("\"text\":\"hello world\""));
+        assert!(request.contains("\"temperature\":0.4"));
+        http_json_response("200 OK", &[], r#"{"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}"#)
+    });
+
+    let output = cargo_bin()
+        .env("GEMINI_API_KEY", "AIzaGemini")
+        .args(["gcp", "gemini", "generate", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--prompt",
+            "hello world",
+            "--temperature",
+            "0.4",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["candidates"][0]["content"]["parts"][0]["text"], "ok");
+    server.join();
+}
+
+#[test]
+fn gcp_gemini_embed_json_posts_text() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /v1beta/models/text-embedding-004:embedContent?"));
+        assert!(request.contains("\"text\":\"embed me\""));
+        http_json_response("200 OK", &[], r#"{"embedding":{"values":[0.1,0.2]}}"#)
+    });
+
+    let output = cargo_bin()
+        .env("GEMINI_API_KEY", "AIzaGemini")
+        .args(["gcp", "gemini", "embed", "--home"])
+        .arg(home.path())
+        .args(["--base-url", &server.base_url, "--text", "embed me", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["embedding"]["values"][1], 0.2);
+    server.join();
+}
+
+#[test]
+fn gcp_gemini_raw_json_passes_headers() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1beta/models?key=AIzaGemini HTTP/1.1\r\n"));
+        assert!(request.contains("x-extra: yes\r\n"));
+        http_json_response("200 OK", &[], r#"{"models":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .env("GEMINI_API_KEY", "AIzaGemini")
+        .args(["gcp", "gemini", "raw", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--method",
+            "GET",
+            "--path",
+            "/v1beta/models",
+            "--header",
+            "x-extra=yes",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["models"], serde_json::json!([]));
+    server.join();
+}
+
+#[test]
+fn gcp_gemini_image_generate_writes_png_and_reports_json() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(settings_dir.join("settings.toml"), "schema_version = 1\n[gcp]\ndefault_account = \"core\"\n").expect("write settings");
+    let png_bytes = b"png-data";
+    let png_b64 = BASE64_STANDARD.encode(png_bytes);
+    let output_path = home.path().join("image.png");
+    let server = start_one_shot_http_server(move |request| {
+        assert!(request.starts_with("POST /v1beta/models/gemini-2.5-flash-image:generateContent?"));
+        let body = format!(
+            "{{\"candidates\":[{{\"content\":{{\"parts\":[{{\"text\":\"note\"}},{{\"inlineData\":{{\"mimeType\":\"image/png\",\"data\":\"{}\"}}}}]}}}}]}}",
+            png_b64
+        );
+        http_json_response("200 OK", &[], &body)
+    });
+
+    let output = cargo_bin()
+        .env("GEMINI_API_KEY", "AIzaGemini")
+        .args(["gcp", "gemini", "image", "generate", "--home"])
+        .arg(home.path())
+        .args([
+            "--base-url",
+            &server.base_url,
+            "--prompt",
+            "draw",
+            "--output",
+            output_path.to_str().expect("output path"),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["mime_type"], "image/png");
+    assert_eq!(fs::read(&output_path).expect("read image"), png_bytes);
+    server.join();
+}
+
+#[test]
 fn google_places_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
