@@ -682,6 +682,10 @@ enum OpenAICommand {
         #[arg(long)]
         raw: bool,
     },
+    Codex {
+        #[command(subcommand)]
+        command: OpenAICodexCommand,
+    },
     Key {
         #[command(subcommand)]
         command: OpenAIKeyCommand,
@@ -835,6 +839,46 @@ enum OpenAIUsageMetric {
     CodeInterpreterSessions,
     #[value(name = "costs")]
     Costs,
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAICodexCommand {
+    Usage {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        start_time: Option<i64>,
+        #[arg(long)]
+        end_time: Option<i64>,
+        #[arg(long)]
+        bucket_width: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long = "model")]
+        models: Vec<String>,
+        #[arg(long = "group-by")]
+        group_by: Vec<String>,
+        #[arg(long = "project")]
+        project_ids: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -3629,6 +3673,45 @@ fn main() -> Result<()> {
                 json,
                 raw,
             )?,
+            OpenAICommand::Codex { command } => match command {
+                OpenAICodexCommand::Usage {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    start_time,
+                    end_time,
+                    bucket_width,
+                    limit,
+                    models,
+                    group_by,
+                    project_ids,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_codex_usage(
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    start_time,
+                    end_time,
+                    bucket_width,
+                    limit,
+                    models,
+                    group_by,
+                    project_ids,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
             OpenAICommand::Key { command } => match command {
                 OpenAIKeyCommand::List {
                     account,
@@ -6058,6 +6141,58 @@ fn run_openai_usage(
         |runtime| openai_get_usage_metric(&runtime, metric_name, &params),
     )?;
     print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_codex_usage(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+    bucket_width: Option<String>,
+    limit: Option<usize>,
+    models: Vec<String>,
+    group_by: Vec<String>,
+    project_ids: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let models = if models.is_empty() {
+        vec!["gpt-5-codex".to_owned()]
+    } else {
+        models
+    };
+    run_openai_usage(
+        OpenAIUsageMetric::Completions,
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        start_time,
+        end_time,
+        bucket_width.or(Some("1d".to_owned())),
+        limit.or(Some(7)),
+        None,
+        false,
+        project_ids,
+        Vec::new(),
+        Vec::new(),
+        models,
+        group_by,
+        Vec::new(),
+        home,
+        settings_file,
+        json,
+        raw,
+    )
 }
 
 fn openai_usage_metric_name(metric: OpenAIUsageMetric) -> &'static str {
