@@ -379,6 +379,7 @@ Progress notes:
 - completed: the batch `dyad remove --all` command path now has a direct command-level proof that the live CLI routes into the shared batch teardown flow instead of only leaving batch removal covered implicitly through lower-level helpers
 - completed: the batch `remove --all` codex command path now has a direct command-level proof that the live CLI routes into the shared batch teardown flow, matching the single-container and dyad batch teardown command coverage
 - completed: the shipping Go `spawn` command now has a direct command-level proof that delegated Rust remove-plan/spawn-plan/spawn-spec rewriting reaches the prepared execution boundary before Fort and Docker orchestration begin
+- completed: the shipping Go `dyad recreate` command now has a direct command-level proof that it preserves the delegated teardown path and then re-enters the live spawn flow with the parsed CLI args intact
 
 ### Phase 7: Provider migration
 
