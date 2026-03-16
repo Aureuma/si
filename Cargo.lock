@@ -725,6 +725,7 @@ dependencies = [
  "si-rs-fort",
  "si-rs-process",
  "si-rs-provider-apple",
+ "si-rs-provider-aws",
  "si-rs-provider-catalog",
  "si-rs-provider-cloudflare",
  "si-rs-provider-github",
@@ -810,6 +811,14 @@ dependencies = [
 
 [[package]]
 name = "si-rs-provider-apple"
+version = "0.54.0"
+dependencies = [
+ "serde",
+ "si-rs-config",
+]
+
+[[package]]
+name = "si-rs-provider-aws"
 version = "0.54.0"
 dependencies = [
  "serde",
