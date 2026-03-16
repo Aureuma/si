@@ -147,6 +147,14 @@ func cmdWorkOSAuth(args []string) {
 }
 
 func cmdWorkOSAuthStatus(args []string) {
+	delegated, err := runWorkOSAuthStatusCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("workos auth status", flag.ExitOnError)
 	account := fs.String("account", "", "account alias")
@@ -243,6 +251,14 @@ func cmdWorkOSContext(args []string) {
 }
 
 func cmdWorkOSContextList(args []string) {
+	delegated, err := runWorkOSContextListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("workos context list", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "output json")
@@ -300,6 +316,14 @@ func cmdWorkOSContextList(args []string) {
 }
 
 func cmdWorkOSContextCurrent(args []string) {
+	delegated, err := runWorkOSContextCurrentCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
+
 	args = stripeFlagsFirst(args, map[string]bool{"json": true})
 	fs := flag.NewFlagSet("workos context current", flag.ExitOnError)
 	flags := bindWorkOSCommonFlags(fs)

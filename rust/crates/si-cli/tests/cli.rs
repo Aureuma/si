@@ -612,6 +612,125 @@ default_env = "sandbox"
 }
 
 #[test]
+fn workos_context_list_json_reads_settings_accounts() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[workos]
+default_account = "core"
+default_env = "prod"
+
+[workos.accounts.core]
+name = "Core"
+prod_api_key_env = "CORE_PROD"
+client_id_env = "CORE_CLIENT"
+organization_id = "org_123"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["workos", "context", "list", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    let contexts = parsed["contexts"].as_array().expect("contexts array");
+    assert_eq!(contexts[0]["alias"], "core");
+    assert_eq!(contexts[0]["default"], "true");
+    assert_eq!(contexts[0]["api_key_env"], "CORE_PROD");
+}
+
+#[test]
+fn workos_context_current_json_resolves_selected_account() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[workos]
+default_account = "core"
+default_env = "prod"
+
+[workos.accounts.core]
+prod_api_key_env = "CORE_PROD"
+organization_id = "org_123"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_PROD", "sk_workos_prod")
+        .args(["workos", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["environment"], "prod");
+    assert_eq!(parsed["organization_id"], "org_123");
+    assert_eq!(parsed["source"], "env:CORE_PROD,settings.organization_id");
+}
+
+#[test]
+fn workos_auth_status_json_resolves_env_sources() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    fs::write(
+        settings_dir.join("settings.toml"),
+        r#"
+schema_version = 1
+
+[workos]
+default_account = "core"
+
+[workos.accounts.core]
+prod_api_key_env = "CORE_PROD"
+client_id_env = "CORE_CLIENT"
+organization_id = "org_123"
+"#,
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .env("CORE_PROD", "sk_workos_prod")
+        .env("CORE_CLIENT", "client_123")
+        .args(["workos", "auth", "status", "--home"])
+        .arg(home.path())
+        .args(["--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "core");
+    assert_eq!(parsed["environment"], "prod");
+    assert_eq!(parsed["source"], "env:CORE_PROD,env:CORE_CLIENT,settings.organization_id");
+    assert_eq!(parsed["key_preview"], "sk_worko...");
+}
+
+#[test]
 fn dyad_spawn_plan_json_defaults_names_and_volumes() {
     let workspace = tempdir().expect("tempdir");
     let home = tempdir().expect("tempdir");
