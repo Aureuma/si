@@ -1256,6 +1256,183 @@ fn github_workflow_run_get_json_fetches_from_api_with_oauth() {
 }
 
 #[test]
+fn github_workflow_dispatch_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /repos/Aureuma/si/actions/workflows/ci.yml/dispatches HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("\"ref\":\"main\""));
+        assert!(request.contains("\"env\":\"prod\""));
+        http_json_response(
+            "204 No Content",
+            &[("x-github-request-id", "req_gh_workflow_dispatch")],
+            "",
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "dispatch",
+            "Aureuma/si",
+            "ci.yml",
+            "--ref",
+            "main",
+            "--input",
+            "env=prod",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 204);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_dispatch");
+    server.join();
+}
+
+#[test]
+fn github_workflow_run_cancel_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /repos/Aureuma/si/actions/runs/21/cancel HTTP/1.1\r\n"
+        ));
+        http_json_response(
+            "202 Accepted",
+            &[("x-github-request-id", "req_gh_workflow_cancel")],
+            "",
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "run",
+            "cancel",
+            "Aureuma/si",
+            "21",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 202);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_cancel");
+    server.join();
+}
+
+#[test]
+fn github_workflow_run_rerun_json_mutates_via_api_with_oauth() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /repos/Aureuma/si/actions/runs/21/rerun HTTP/1.1\r\n"
+        ));
+        http_json_response(
+            "201 Created",
+            &[("x-github-request-id", "req_gh_workflow_rerun")],
+            "",
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "run",
+            "rerun",
+            "Aureuma/si",
+            "21",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_rerun");
+    server.join();
+}
+
+#[test]
+fn github_workflow_watch_json_waits_until_completed_with_oauth() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let watch_calls = calls.clone();
+    let server = start_http_server(2, move |request| {
+        assert!(request.starts_with("GET /repos/Aureuma/si/actions/runs/21 HTTP/1.1\r\n"));
+        let idx = watch_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if idx == 0 {
+            return http_json_response(
+                "200 OK",
+                &[("x-github-request-id", "req_gh_workflow_watch_1")],
+                r#"{"id":21,"name":"CI","status":"in_progress","conclusion":null,"head_branch":"main","event":"push"}"#,
+            );
+        }
+        http_json_response(
+            "200 OK",
+            &[("x-github-request-id", "req_gh_workflow_watch_2")],
+            r#"{"id":21,"name":"CI","status":"completed","conclusion":"success","head_branch":"main","event":"push"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .env("GITHUB_TOKEN", "gho_example_token")
+        .args([
+            "github",
+            "workflow",
+            "watch",
+            "Aureuma/si",
+            "21",
+            "--interval-seconds",
+            "1",
+            "--timeout-seconds",
+            "5",
+            "--base-url",
+            &server.base_url,
+            "--auth-mode",
+            "oauth",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_gh_workflow_watch_2");
+    assert_eq!(parsed["data"]["status"], "completed");
+    server.join();
+}
+
+#[test]
 fn github_issue_list_json_fetches_from_api_with_oauth() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /repos/Aureuma/si/issues?page=1&per_page=100&state=open HTTP/1.1\r\n"));
