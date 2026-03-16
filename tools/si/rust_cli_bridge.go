@@ -383,6 +383,16 @@ func runAppleAppStoreContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("apple", append([]string{"appstore", "context", "current"}, args...)...)
 }
 
+func runAppleAppStoreAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(args[0]), "status") {
+		return runAppleAppStoreAuthStatusCommand(args[1:])
+	}
+	return false, nil
+}
+
 func runAppleAppStoreAuthStatusCommand(args []string) (bool, error) {
 	if appleAppStoreAuthStatusVerifyEnabled(args) {
 		return false, nil
@@ -423,8 +433,16 @@ func runAWSContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"context", "current"}, args...)...)
 }
 
+func runAWSAuthCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth"}, args...)...)
+}
+
 func runAWSAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"auth", "status"}, args...)...)
+}
+
+func runGCPAuthCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("gcp", append([]string{"auth"}, args...)...)
 }
 
 func runGCPContextListCommand(args []string) (bool, error) {
@@ -445,6 +463,10 @@ func runGooglePlacesContextListCommand(args []string) (bool, error) {
 
 func runGooglePlacesContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "context", "current"}, args...)...)
+}
+
+func runGooglePlacesAuthCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"places", "auth"}, args...)...)
 }
 
 func runGooglePlacesAuthStatusCommand(args []string) (bool, error) {
@@ -537,6 +559,16 @@ func runOCIContextListCommand(args []string) (bool, error) {
 
 func runOCIContextCurrentCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("oci", append([]string{"context", "current"}, args...)...)
+}
+
+func runOCIAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(args[0]), "status") {
+		return runOCIAuthStatusCommand(args[1:])
+	}
+	return false, nil
 }
 
 func runOCIAuthStatusCommand(args []string) (bool, error) {

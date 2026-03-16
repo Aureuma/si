@@ -139,6 +139,13 @@ func cmdAWS(args []string) {
 }
 
 func cmdAWSAuth(args []string) {
+	delegated, err := runAWSAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si aws auth status [--account <alias>] [--region <aws-region>] [--json]")
 	if !routedOK {
 		return

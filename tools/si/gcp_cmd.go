@@ -127,6 +127,13 @@ func cmdGCP(args []string) {
 }
 
 func cmdGCPAuth(args []string) {
+	delegated, err := runGCPAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si gcp auth status [--account <alias>] [--env <prod|staging|dev>] [--project <project>] [--json]")
 	if !routedOK {
 		return
