@@ -736,6 +736,61 @@ pub fn get_pull_request(
     normalize_response(github_get(&client, &runtime.base_url, &path, &BTreeMap::new(), &token)?)
 }
 
+pub fn list_branches(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    params: &BTreeMap<String, String>,
+    max_pages: usize,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let mut merged = params.clone();
+    merged.entry("per_page".to_owned()).or_insert_with(|| "100".to_owned());
+    let mut items = Vec::new();
+    let mut last_response = GitHubAPIResponse {
+        status_code: 200,
+        status: "200 OK".to_owned(),
+        request_id: String::new(),
+        headers: BTreeMap::new(),
+        body: String::new(),
+        data: None,
+        list: Vec::new(),
+    };
+    let total_pages = if max_pages == 0 { 10 } else { max_pages };
+    for page in 1..=total_pages {
+        merged.insert("page".to_owned(), page.to_string());
+        let path = format!("/repos/{owner}/{repo}/branches");
+        let response = github_get(&client, &runtime.base_url, &path, &merged, &token)?;
+        let next = parse_next_link(response.headers());
+        let payload = normalize_response(response)?;
+        items.extend(payload.list.iter().cloned());
+        last_response = payload;
+        if next.is_none() || last_response.list.is_empty() {
+            break;
+        }
+    }
+    last_response.data = None;
+    last_response.list = items;
+    Ok(last_response)
+}
+
+pub fn get_branch(
+    runtime: &GitHubRuntime,
+    owner: &str,
+    repo: &str,
+    branch: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<GitHubAPIResponse, String> {
+    let client = build_http_client()?;
+    let token = github_access_token(&client, runtime, owner, repo)?;
+    let path = format!(
+        "/repos/{owner}/{repo}/branches/{}",
+        percent_encode_path_segment(branch.trim())
+    );
+    normalize_response(github_get(&client, &runtime.base_url, &path, params, &token)?)
+}
+
 pub fn get_release(
     runtime: &GitHubRuntime,
     owner: &str,
@@ -1409,6 +1464,20 @@ fn parse_next_link(headers: &HeaderMap) -> Option<String> {
         return Some(trimmed[start + 1..start + 1 + end].to_owned());
     }
     None
+}
+
+fn percent_encode_path_segment(value: &str) -> String {
+    let mut out = String::new();
+    for byte in value.as_bytes() {
+        let ch = *byte as char;
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '~') {
+            out.push(ch);
+        } else {
+            out.push('%');
+            out.push_str(&format!("{byte:02X}"));
+        }
+    }
+    out
 }
 
 fn preview_secret(secret: &str) -> String {

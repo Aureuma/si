@@ -63,9 +63,11 @@ use si_rs_provider_gcp::{
 };
 use si_rs_provider_github::{
     GitHubAPIResponse, GitHubAuthOverrides, GitHubAuthStatus, GitHubContextListEntry,
+    get_branch as github_get_branch,
     get_issue as github_get_issue, get_project as github_get_project,
     get_pull_request as github_get_pull_request, get_release as github_get_release,
-    get_repo as github_get_repo, list_contexts, list_issues as github_list_issues,
+    get_repo as github_get_repo, list_branches as github_list_branches, list_contexts,
+    list_issues as github_list_issues,
     list_projects as github_list_projects, list_pull_requests as github_list_pull_requests,
     list_releases as github_list_releases, list_repos as github_list_repos,
     list_workflow_runs as github_list_workflow_runs, list_workflows as github_list_workflows,
@@ -1469,6 +1471,10 @@ enum GitHubCommand {
         #[command(subcommand)]
         command: GitHubContextCommand,
     },
+    Branch {
+        #[command(subcommand)]
+        command: GitHubBranchCommand,
+    },
     Project {
         #[command(subcommand)]
         command: GitHubProjectCommand,
@@ -1493,6 +1499,73 @@ enum GitHubCommand {
     Release {
         #[command(subcommand)]
         command: GitHubReleaseCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHubBranchCommand {
+    List {
+        repo_ref: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long)]
+        protected: Option<String>,
+        #[arg(long, default_value_t = 10)]
+        max_pages: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        repo_ref: Option<String>,
+        branch: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        owner: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        token: Option<String>,
+        #[arg(long)]
+        app_id: Option<i64>,
+        #[arg(long)]
+        app_key: Option<String>,
+        #[arg(long)]
+        installation_id: Option<i64>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -4757,6 +4830,76 @@ fn main() -> Result<()> {
                     let format = if json { OutputFormat::Json } else { format };
                     show_github_context_current(home, settings_file, format)?
                 }
+            },
+            GitHubCommand::Branch { command } => match command {
+                GitHubBranchCommand::List {
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    protected,
+                    max_pages,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_branch_list(
+                    repo_ref,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    protected,
+                    max_pages,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                GitHubBranchCommand::Get {
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_github_branch_get(
+                    repo_ref,
+                    branch,
+                    account,
+                    owner,
+                    base_url,
+                    auth_mode,
+                    token,
+                    app_id,
+                    app_key,
+                    installation_id,
+                    params,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
             },
             GitHubCommand::Project { command } => match command {
                 GitHubProjectCommand::List {
@@ -8723,6 +8866,114 @@ fn run_github_workflow_run_get(
     let run_id = run_id.ok_or_else(|| anyhow::Error::msg("workflow run id is required"))?;
     let response =
         github_get_workflow_run(&runtime, &repo_owner, &repo_name, run_id)
+            .map_err(anyhow::Error::msg)?;
+    print_github_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_branch_list(
+    repo_ref: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    protected: Option<String>,
+    max_pages: usize,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let mut params = parse_github_params(params)?;
+    if let Some(value) = protected.filter(|value| !value.trim().is_empty()) {
+        let value = value.trim().to_ascii_lowercase();
+        if value != "true" && value != "false" {
+            return Err(anyhow::Error::msg(format!(
+                "invalid --protected {value:?} (expected true|false)"
+            )));
+        }
+        params.insert("protected".to_owned(), value);
+    }
+    let response =
+        github_list_branches(&runtime, &repo_owner, &repo_name, &params, max_pages)
+            .map_err(anyhow::Error::msg)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "repo": format!("{repo_owner}/{repo_name}"),
+                "count": response.list.len(),
+                "data": response.list,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", serde_json::to_string(&response.list)?);
+        return Ok(());
+    }
+    println!("Branch list: {repo_owner}/{repo_name} ({})", response.list.len());
+    println!("{}", serde_json::to_string_pretty(&response.list)?);
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_github_branch_get(
+    repo_ref: Option<String>,
+    branch: Option<String>,
+    account: Option<String>,
+    owner: Option<String>,
+    base_url: Option<String>,
+    auth_mode: Option<String>,
+    token: Option<String>,
+    app_id: Option<i64>,
+    app_key: Option<String>,
+    installation_id: Option<i64>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_github_runtime(
+        account,
+        owner,
+        base_url,
+        auth_mode,
+        token,
+        app_id,
+        app_key,
+        installation_id,
+        home,
+        settings_file,
+    )?;
+    let (repo_owner, repo_name) =
+        parse_github_owner_repo(repo_ref.as_deref().unwrap_or_default(), &runtime.owner)?;
+    let branch = branch
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow::Error::msg("branch is required"))?;
+    let params = parse_github_params(params)?;
+    let response =
+        github_get_branch(&runtime, &repo_owner, &repo_name, &branch, &params)
             .map_err(anyhow::Error::msg)?;
     print_github_api_response(&response, json, raw)
 }
