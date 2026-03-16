@@ -1398,6 +1398,43 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
 }
 
 #[test]
+fn openai_auth_status_json_verifies_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/models?limit=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-test\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_auth")],
+            r#"{"data":[{"id":"gpt-4.1-mini","object":"model"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "auth",
+            "status",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["verify_status"], 200);
+    assert_eq!(parsed["verify"]["data"][0]["id"], "gpt-4.1-mini");
+    server.join();
+}
+
+#[test]
 fn openai_model_list_json_fetches_from_api() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/models?limit=1 HTTP/1.1\r\n"));

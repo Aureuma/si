@@ -70,12 +70,14 @@ use si_rs_provider_oci::{
     resolve_current_context as resolve_oci_current_context,
 };
 use si_rs_provider_openai::{
-    OpenAIAPIResponse, OpenAIContextListEntry, OpenAIContextOverrides, OpenAICurrentContext,
-    OpenAIRuntime, get_model as openai_get_model, list_contexts as list_openai_contexts,
-    list_models as openai_list_models, render_api_response_text as render_openai_api_response_text,
+    OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
+    OpenAICurrentContext, OpenAIRuntime, get_model as openai_get_model,
+    list_contexts as list_openai_contexts, list_models as openai_list_models,
+    render_api_response_text as render_openai_api_response_text,
+    render_auth_status_text as render_openai_auth_status_text,
     render_context_list_text as render_openai_context_list_text,
     resolve_current_context as resolve_openai_current_context,
-    resolve_runtime as resolve_openai_runtime,
+    resolve_runtime as resolve_openai_runtime, verify_auth_status as verify_openai_auth_status,
 };
 use si_rs_provider_stripe::{
     StripeAuthOverrides, StripeAuthStatus, StripeContextListEntry, StripeCurrentContext,
@@ -531,6 +533,10 @@ enum GooglePlacesContextCommand {
 
 #[derive(Debug, Subcommand)]
 enum OpenAICommand {
+    Auth {
+        #[command(subcommand)]
+        command: OpenAIAuthCommand,
+    },
     Context {
         #[command(subcommand)]
         command: OpenAIContextCommand,
@@ -538,6 +544,32 @@ enum OpenAICommand {
     Model {
         #[command(subcommand)]
         command: OpenAIModelCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIAuthCommand {
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
 }
 
@@ -2765,6 +2797,33 @@ fn main() -> Result<()> {
             },
         },
         Command::OpenAI { command } => match command {
+            OpenAICommand::Auth { command } => match command {
+                OpenAIAuthCommand::Status {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    show_openai_auth_status(
+                        account,
+                        base_url,
+                        api_key,
+                        admin_api_key,
+                        org_id,
+                        project_id,
+                        home,
+                        settings_file,
+                        format,
+                    )?
+                }
+            },
             OpenAICommand::Context { command } => match command {
                 OpenAIContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -4566,6 +4625,42 @@ fn show_openai_context_list(
 }
 
 #[allow(clippy::too_many_arguments)]
+fn show_openai_auth_status(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| Ok::<OpenAIAuthStatus, String>(verify_openai_auth_status(&runtime)),
+    )?;
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => print!("{}", render_openai_auth_status_text(&payload)),
+    }
+    if payload.status != "ready" {
+        anyhow::bail!(
+            "{}",
+            payload.verify_error.unwrap_or_else(|| "openai auth verification failed".to_owned())
+        );
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
 fn show_openai_context_current(
     account: Option<String>,
     base_url: Option<String>,
@@ -4682,7 +4777,7 @@ fn run_openai_model_get(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn execute_openai_request<F>(
+fn execute_openai_request<T, F>(
     account: Option<String>,
     base_url: Option<String>,
     api_key: Option<String>,
@@ -4692,9 +4787,9 @@ fn execute_openai_request<F>(
     home: Option<PathBuf>,
     settings_file: Option<PathBuf>,
     request: F,
-) -> Result<OpenAIAPIResponse>
+) -> Result<T>
 where
-    F: FnOnce(OpenAIRuntime) -> std::result::Result<OpenAIAPIResponse, String>,
+    F: FnOnce(OpenAIRuntime) -> std::result::Result<T, String>,
 {
     let home = home.unwrap_or_else(default_home_dir);
     let settings = Settings::load(&home, settings_file.as_deref())?;

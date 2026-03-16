@@ -181,6 +181,18 @@ func cmdOpenAIAuthStatus(args []string) {
 	default:
 		fatal(fmt.Errorf("invalid --auth-mode %q (expected api or codex)", strings.TrimSpace(*authMode)))
 	}
+	delegatedArgs := []string{}
+	appendOpenAIFlagsFromCommon(&delegatedArgs, flags)
+	if *jsonOut {
+		delegatedArgs = append(delegatedArgs, "--json")
+	}
+	delegated, err := runOpenAIAuthStatusCommand(delegatedArgs)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	runtime, err := resolveRuntimeFromOpenAIFlags(flags)
 	if err != nil {
 		fatal(err)

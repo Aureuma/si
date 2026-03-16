@@ -63,6 +63,34 @@ func TestCmdOpenAIContextCurrentDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestCmdOpenAIAuthStatusDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' '{\"status\":\"ready\",\"account_alias\":\"core\",\"organization_id\":\"org_123\",\"project_id\":\"proj_123\",\"source\":\"env:OPENAI_API_KEY\",\"base_url\":\"https://api.openai.com\",\"api_key_preview\":\"sk-t…1234\",\"admin_key_set\":false,\"verify_status\":200,\"verify\":{\"data\":[]}}'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		cmdOpenAIAuthStatus([]string{"--json", "--auth-mode", "api"})
+	})
+
+	if !strings.Contains(out, "\"status\":\"ready\"") {
+		t.Fatalf("unexpected output: %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\nauth\nstatus\n--json" {
+		t.Fatalf("unexpected Rust CLI args: %q", string(argsData))
+	}
+}
+
 func TestCmdOpenAIModelListDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
