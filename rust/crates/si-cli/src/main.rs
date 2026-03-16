@@ -71,11 +71,12 @@ use si_rs_provider_oci::{
 };
 use si_rs_provider_openai::{
     OpenAIAPIResponse, OpenAIAuthStatus, OpenAIContextListEntry, OpenAIContextOverrides,
-    OpenAICurrentContext, OpenAIRuntime, get_model as openai_get_model,
-    get_project as openai_get_project, get_project_api_key as openai_get_project_api_key,
+    OpenAICurrentContext, OpenAIRuntime, get_admin_api_key as openai_get_admin_api_key,
+    get_model as openai_get_model, get_project as openai_get_project,
+    get_project_api_key as openai_get_project_api_key,
     get_project_service_account as openai_get_project_service_account,
-    list_contexts as list_openai_contexts, list_models as openai_list_models,
-    list_project_api_keys as openai_list_project_api_keys,
+    list_admin_api_keys as openai_list_admin_api_keys, list_contexts as list_openai_contexts,
+    list_models as openai_list_models, list_project_api_keys as openai_list_project_api_keys,
     list_project_rate_limits as openai_list_project_rate_limits,
     list_project_service_accounts as openai_list_project_service_accounts,
     list_projects as openai_list_projects,
@@ -551,6 +552,10 @@ enum OpenAICommand {
         #[command(subcommand)]
         command: OpenAIModelCommand,
     },
+    Key {
+        #[command(subcommand)]
+        command: OpenAIKeyCommand,
+    },
     Project {
         #[command(subcommand)]
         command: OpenAIProjectCommand,
@@ -649,6 +654,63 @@ enum OpenAIModelCommand {
         model_id: Option<String>,
         #[arg(long)]
         id: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum OpenAIKeyCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long)]
+        after: Option<String>,
+        #[arg(long)]
+        order: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        key_ref: Option<String>,
+        #[arg(long)]
+        key_id: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -3129,6 +3191,63 @@ fn main() -> Result<()> {
                     raw,
                 )?,
             },
+            OpenAICommand::Key { command } => match command {
+                OpenAIKeyCommand::List {
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    after,
+                    order,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_key_list(
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    limit,
+                    after,
+                    order,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                OpenAIKeyCommand::Get {
+                    key_ref,
+                    key_id,
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_openai_key_get(
+                    key_id.or(key_ref),
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
             OpenAICommand::Project { command } => match command {
                 OpenAIProjectCommand::List {
                     account,
@@ -5191,6 +5310,75 @@ fn run_openai_model_get(
         home,
         settings_file,
         |runtime| openai_get_model(&runtime, &id),
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_key_list(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    limit: Option<usize>,
+    after: Option<String>,
+    order: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| {
+            openai_list_admin_api_keys(
+                &runtime,
+                limit,
+                after.as_deref().unwrap_or_default(),
+                order.as_deref().unwrap_or("asc"),
+            )
+        },
+    )?;
+    print_openai_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_key_get(
+    key_id: Option<String>,
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let key_id = key_id.unwrap_or_default();
+    if key_id.trim().is_empty() {
+        anyhow::bail!("key id is required");
+    }
+    let response = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| openai_get_admin_api_key(&runtime, &key_id),
     )?;
     print_openai_api_response(response, json, raw)
 }

@@ -1341,6 +1341,13 @@ func cmdOpenAIKey(args []string) {
 }
 
 func cmdOpenAIKeyList(args []string) {
+	delegated, err := runOpenAIKeyListCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai key list", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
@@ -1368,6 +1375,13 @@ func cmdOpenAIKeyList(args []string) {
 }
 
 func cmdOpenAIKeyGet(args []string) {
+	delegated, err := runOpenAIKeyGetCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	args = stripeFlagsFirst(args, map[string]bool{"json": true, "raw": true})
 	fs := flag.NewFlagSet("openai key get", flag.ExitOnError)
 	flags := bindOpenAICommonFlags(fs)
