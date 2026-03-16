@@ -2447,6 +2447,10 @@ enum StripeCommand {
         #[arg(long)]
         json: bool,
     },
+    Object {
+        #[command(subcommand)]
+        command: StripeObjectCommand,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
@@ -2459,6 +2463,55 @@ enum StripeReportPreset {
     SubscriptionChurn,
     #[value(name = "balance-overview")]
     BalanceOverview,
+}
+
+#[derive(Debug, Subcommand)]
+enum StripeObjectCommand {
+    List {
+        object: String,
+        #[arg(long, default_value_t = 100)]
+        limit: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        object: String,
+        id: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long, hide = true)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -8317,6 +8370,58 @@ fn main() -> Result<()> {
                 settings_file,
                 json,
             )?,
+            StripeCommand::Object { command } => match command {
+                StripeObjectCommand::List {
+                    object,
+                    limit,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_stripe_object_list(
+                    object,
+                    limit,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                StripeObjectCommand::Get {
+                    object,
+                    id,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_stripe_object_get(
+                    object,
+                    id,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
         },
         Command::WorkOS { command } => match command {
             WorkOSCommand::Auth { command } => match command {
@@ -14602,6 +14707,37 @@ fn sum_stripe_balance_amounts(value: Option<&Value>) -> i64 {
         .sum()
 }
 
+struct StripeObjectSpec {
+    name: &'static str,
+    list_path: &'static str,
+    resource_path: &'static str,
+}
+
+fn resolve_stripe_object_spec(name: &str) -> Result<StripeObjectSpec> {
+    let normalized = name.trim().to_ascii_lowercase().replace('-', "_");
+    let spec = match normalized.as_str() {
+        "product" | "products" => StripeObjectSpec { name: "product", list_path: "/v1/products", resource_path: "/v1/products/%s" },
+        "price" | "prices" => StripeObjectSpec { name: "price", list_path: "/v1/prices", resource_path: "/v1/prices/%s" },
+        "coupon" | "coupons" => StripeObjectSpec { name: "coupon", list_path: "/v1/coupons", resource_path: "/v1/coupons/%s" },
+        "promotion_code" | "promotion_codes" | "promotion-codes" => StripeObjectSpec { name: "promotion_code", list_path: "/v1/promotion_codes", resource_path: "/v1/promotion_codes/%s" },
+        "tax_rate" | "tax_rates" | "tax-rates" => StripeObjectSpec { name: "tax_rate", list_path: "/v1/tax_rates", resource_path: "/v1/tax_rates/%s" },
+        "shipping_rate" | "shipping_rates" | "shipping-rates" => StripeObjectSpec { name: "shipping_rate", list_path: "/v1/shipping_rates", resource_path: "/v1/shipping_rates/%s" },
+        "customer" | "customers" => StripeObjectSpec { name: "customer", list_path: "/v1/customers", resource_path: "/v1/customers/%s" },
+        "payment_intent" | "payment_intents" | "payment-intents" => StripeObjectSpec { name: "payment_intent", list_path: "/v1/payment_intents", resource_path: "/v1/payment_intents/%s" },
+        "subscription" | "subscriptions" => StripeObjectSpec { name: "subscription", list_path: "/v1/subscriptions", resource_path: "/v1/subscriptions/%s" },
+        "invoice" | "invoices" => StripeObjectSpec { name: "invoice", list_path: "/v1/invoices", resource_path: "/v1/invoices/%s" },
+        "refund" | "refunds" => StripeObjectSpec { name: "refund", list_path: "/v1/refunds", resource_path: "/v1/refunds/%s" },
+        "charge" | "charges" => StripeObjectSpec { name: "charge", list_path: "/v1/charges", resource_path: "/v1/charges/%s" },
+        "account" | "accounts" => StripeObjectSpec { name: "account", list_path: "/v1/accounts", resource_path: "/v1/accounts/%s" },
+        "organization" | "organizations" => StripeObjectSpec { name: "organization", list_path: "/v1/organizations", resource_path: "/v1/organizations/%s" },
+        "balance_transaction" | "balance_transactions" | "balance-transactions" => StripeObjectSpec { name: "balance_transaction", list_path: "/v1/balance_transactions", resource_path: "/v1/balance_transactions/%s" },
+        "payout" | "payouts" => StripeObjectSpec { name: "payout", list_path: "/v1/payouts", resource_path: "/v1/payouts/%s" },
+        "payment_method" | "payment_methods" | "payment-methods" => StripeObjectSpec { name: "payment_method", list_path: "/v1/payment_methods", resource_path: "/v1/payment_methods/%s" },
+        _ => anyhow::bail!("unknown object {name:?}"),
+    };
+    Ok(spec)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn run_stripe_report(
     preset: StripeReportPreset,
@@ -14766,6 +14902,88 @@ fn run_stripe_report(
         println!("{}", serde_json::to_string_pretty(&payload["report"])?);
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_object_list(
+    object: String,
+    limit: usize,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let spec = resolve_stripe_object_spec(&object)?;
+    let runtime = load_stripe_runtime(account, environment, api_key, base_url, home, settings_file)?;
+    let items = list_all_stripe_objects(&runtime, spec.list_path, &parse_stripe_key_values(params), limit)
+        .map_err(anyhow::Error::msg)?;
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "object": spec.name,
+                "count": items.len(),
+                "data": items,
+            }))?
+        );
+        return Ok(());
+    }
+    if raw {
+        println!("{}", serde_json::to_string(&items)?);
+        return Ok(());
+    }
+    println!("Object list: {} ({})", spec.name, items.len());
+    for item in items {
+        if let Some(obj) = item.as_object() {
+            let id = obj.get("id").and_then(Value::as_str).unwrap_or("-");
+            let name = obj
+                .get("name")
+                .or_else(|| obj.get("description"))
+                .or_else(|| obj.get("email"))
+                .and_then(Value::as_str)
+                .unwrap_or("-");
+            println!("  {id} {name}");
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_stripe_object_get(
+    object: String,
+    id: String,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let spec = resolve_stripe_object_spec(&object)?;
+    let path = spec.resource_path.replacen("%s", id.trim(), 1);
+    let response = execute_stripe_request(
+        account,
+        environment,
+        api_key,
+        base_url,
+        home,
+        settings_file,
+        StripeAPIRequest {
+            method: "GET".to_owned(),
+            path,
+            params: parse_stripe_key_values(params),
+            ..StripeAPIRequest::default()
+        },
+    )?;
+    print_stripe_api_response(&response, json, raw)
 }
 
 fn parse_cloudflare_key_values(values: Vec<String>) -> std::collections::BTreeMap<String, String> {

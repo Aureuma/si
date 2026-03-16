@@ -2977,6 +2977,76 @@ fn stripe_report_revenue_summary_json_aggregates_transactions() {
 }
 
 #[test]
+fn stripe_object_list_json_fetches_list() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/products?limit=2 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_object_list")],
+            r#"{"object":"list","data":[{"id":"prod_123","name":"Core"},{"id":"prod_456","name":"Ops"}],"has_more":false}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "object", "list", "product"])
+        .args([
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--limit",
+            "2",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["object"], "product");
+    assert_eq!(parsed["count"], 2);
+    assert_eq!(parsed["data"][0]["id"], "prod_123");
+    server.join();
+}
+
+#[test]
+fn stripe_object_get_json_fetches_single_object() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/products/prod_123 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_test_core\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("Request-Id", "req_stripe_object_get")],
+            r#"{"id":"prod_123","name":"Core"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["stripe", "object", "get", "product", "prod_123"])
+        .args([
+            "--api-key",
+            "sk_test_core",
+            "--base-url",
+            &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_stripe_object_get");
+    assert_eq!(parsed["data"]["id"], "prod_123");
+    server.join();
+}
+
+#[test]
 fn workos_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
