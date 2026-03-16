@@ -1398,6 +1398,41 @@ admin_api_key_env = "CORE_OPENAI_ADMIN_KEY"
 }
 
 #[test]
+fn apple_appstore_auth_status_json_reads_local_inputs() {
+    let key_file = tempdir().expect("tempdir");
+    let key_path = key_file.path().join("AuthKey_TEST.p8");
+    fs::write(&key_path, "-----BEGIN PRIVATE KEY-----").expect("write key");
+
+    let output = cargo_bin()
+        .args(["apple", "appstore", "auth", "status"])
+        .args(["--account", "mobile"])
+        .args(["--env", "staging"])
+        .args(["--project-id", "proj_mobile"])
+        .args(["--bundle-id", "com.example.mobile"])
+        .args(["--locale", "fr-FR"])
+        .args(["--platform", "MAC_OS"])
+        .args(["--issuer-id", "issuer_123"])
+        .args(["--key-id", "key_123"])
+        .args(["--private-key-file", key_path.to_str().expect("utf8")])
+        .args(["--verify=false", "--format", "json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["account_alias"], "mobile");
+    assert_eq!(parsed["environment"], "staging");
+    assert_eq!(parsed["project_id"], "proj_mobile");
+    assert_eq!(parsed["bundle_id"], "com.example.mobile");
+    assert_eq!(parsed["locale"], "fr-FR");
+    assert_eq!(parsed["platform"], "MAC_OS");
+    assert_eq!(parsed["token_source"], "flag:--private-key-file");
+}
+
+#[test]
 fn openai_auth_status_json_verifies_request() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/models?limit=1 HTTP/1.1\r\n"));
