@@ -391,6 +391,53 @@ func TestRunAppleAppStoreContextCurrentCommandDelegatesToRustCLIWhenConfigured(t
 	}
 }
 
+func TestRunAppleAppStoreAuthStatusCommandDefaultsToGoWhileVerifyIsEnabled(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAppleAppStoreAuthStatusCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runAppleAppStoreAuthStatusCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go apple appstore auth status path while verification stays on the Go side")
+	}
+}
+
+func TestRunAppleAppStoreAuthStatusCommandDelegatesToRustCLIWhenVerifyDisabled(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-apple-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAppleAppStoreAuthStatusCommand([]string{"--verify=false", "--json"})
+		if err != nil {
+			t.Fatalf("runAppleAppStoreAuthStatusCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected apple appstore auth status to delegate to Rust when verification is disabled")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-apple-auth" {
+		t.Fatalf("expected delegated Rust apple appstore auth status output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "apple\nappstore\nauth\nstatus\n--verify=false\n--json" {
+		t.Fatalf("expected Rust CLI args to be apple appstore auth status + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunAWSContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
