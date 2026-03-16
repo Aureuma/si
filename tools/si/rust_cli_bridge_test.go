@@ -485,6 +485,40 @@ func TestRunCloudflareCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T)
 	}
 }
 
+func TestRunCloudflareCommandDelegatesToRustCLIForRaw(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-raw'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"raw", "--path", "/zones", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare raw to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-cloudflare-raw" {
+		t.Fatalf("expected delegated Rust cloudflare raw output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "cloudflare\nraw\n--path\n/zones\n--json" {
+		t.Fatalf("expected Rust CLI args to be cloudflare raw + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAppleAppStoreContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

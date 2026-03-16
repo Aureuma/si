@@ -1,7 +1,13 @@
+use reqwest::blocking::Client;
+use reqwest::header::{
+    ACCEPT, AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue, USER_AGENT,
+};
 use serde::Serialize;
 use serde_json::Value;
 use si_rs_config::settings::{CloudflareAccountEntry, CloudflareSettings};
 use std::collections::BTreeMap;
+use std::time::Duration;
+use url::Url;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CloudflareContextListEntry {
@@ -69,6 +75,34 @@ pub struct CloudflareAuthStatus {
     pub source: String,
     pub token_preview: String,
     pub base_url: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CloudflareAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub params: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
+    pub raw_body: String,
+    pub json_body: Option<Value>,
+    pub content_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct CloudflareAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub success: bool,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub list: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub messages: Option<Vec<Value>>,
 }
 
 pub fn list_contexts(settings: &CloudflareSettings) -> Vec<CloudflareContextListEntry> {
@@ -234,6 +268,120 @@ pub fn verify_auth_status(runtime: &CloudflareAuthRuntime) -> Result<Value, Stri
         .map_err(|err| format!("decode cloudflare auth verification response: {err}"))
 }
 
+pub fn execute_api_request(
+    runtime: &CloudflareAuthRuntime,
+    request: &CloudflareAPIRequest,
+) -> Result<CloudflareAPIResponse, String> {
+    let method = if request.method.trim().is_empty() {
+        "GET"
+    } else {
+        request.method.trim()
+    };
+    let url = resolve_api_url(&runtime.base_url, &request.path, &request.params)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(45))
+        .build()
+        .map_err(|err| format!("build cloudflare http client: {err}"))?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        HeaderValue::from_str(&format!("Bearer {}", runtime.api_token.trim()))
+            .map_err(|err| format!("build cloudflare auth header: {err}"))?,
+    );
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    headers.insert(USER_AGENT, HeaderValue::from_static("si-rs"));
+    for (key, value) in &request.headers {
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        let name = HeaderName::from_bytes(key.as_bytes())
+            .map_err(|err| format!("build cloudflare header name {key:?}: {err}"))?;
+        headers.insert(
+            name,
+            HeaderValue::from_str(value.trim())
+                .map_err(|err| format!("build cloudflare header value for {key:?}: {err}"))?,
+        );
+    }
+
+    let body = if !request.raw_body.trim().is_empty() {
+        Some(request.raw_body.trim().as_bytes().to_vec())
+    } else {
+        request
+            .json_body
+            .as_ref()
+            .map(serde_json::to_vec)
+            .transpose()
+            .map_err(|err| format!("encode cloudflare request body: {err}"))?
+    };
+    if let Some(value) = body.as_ref() {
+        let content_type = if request.content_type.trim().is_empty() {
+            "application/json"
+        } else {
+            request.content_type.trim()
+        };
+        headers.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_str(content_type)
+                .map_err(|err| format!("build cloudflare content-type header: {err}"))?,
+        );
+        let method = reqwest::Method::from_bytes(method.as_bytes())
+            .map_err(|err| format!("build cloudflare http method: {err}"))?;
+        let response = client
+            .request(method, &url)
+            .headers(headers)
+            .body(value.clone())
+            .send()
+            .map_err(|err| format!("cloudflare request failed: {err}"))?;
+        return normalize_api_response(response);
+    }
+
+    let method = reqwest::Method::from_bytes(method.as_bytes())
+        .map_err(|err| format!("build cloudflare http method: {err}"))?;
+    let response = client
+        .request(method, &url)
+        .headers(headers)
+        .send()
+        .map_err(|err| format!("cloudflare request failed: {err}"))?;
+    normalize_api_response(response)
+}
+
+pub fn render_api_response_text(response: &CloudflareAPIResponse, raw: bool) -> String {
+    if raw {
+        if response.body.trim().is_empty() {
+            return "{}\n".to_owned();
+        }
+        return ensure_trailing_newline(response.body.clone());
+    }
+    let mut out = format!(
+        "Cloudflare API: {} ({})\n",
+        response.status.trim(),
+        response.status_code
+    );
+    if !response.request_id.trim().is_empty() {
+        out.push_str(&format!("Request ID: {}\n", response.request_id.trim()));
+    }
+    if let Some(data) = &response.data {
+        if let Ok(pretty) = serde_json::to_string_pretty(data) {
+            out.push_str(&pretty);
+            out.push('\n');
+            return out;
+        }
+    }
+    if let Some(list) = &response.list {
+        if let Ok(pretty) = serde_json::to_string_pretty(list) {
+            out.push_str(&pretty);
+            out.push('\n');
+            return out;
+        }
+    }
+    if !response.body.trim().is_empty() {
+        out.push_str(response.body.trim());
+        out.push('\n');
+    }
+    out
+}
+
 impl From<&CloudflareAuthRuntime> for CloudflareAuthStatus {
     fn from(value: &CloudflareAuthRuntime) -> Self {
         Self {
@@ -271,6 +419,128 @@ fn resolve_account_selection(
         return (selected, entry.clone());
     }
     (selected, CloudflareAccountEntry::default())
+}
+
+fn normalize_api_response(response: reqwest::blocking::Response) -> Result<CloudflareAPIResponse, String> {
+    let status = response.status();
+    let status_text = status.to_string();
+    let headers = response.headers().clone();
+    let request_id = first_header(&headers, &["cf-ray", "x-request-id"]);
+    let body = response
+        .text()
+        .map_err(|err| format!("read cloudflare response body: {err}"))?;
+    let mut payload = CloudflareAPIResponse {
+        status_code: status.as_u16(),
+        status: status_text,
+        request_id,
+        success: status.is_success(),
+        headers: normalize_headers(&headers),
+        body: body.trim().to_owned(),
+        data: None,
+        list: None,
+        messages: None,
+    };
+    if let Ok(value) = serde_json::from_str::<Value>(body.trim()) {
+        if let Some(object) = value.as_object() {
+            if let Some(success) = object.get("success").and_then(Value::as_bool) {
+                payload.success = success;
+            }
+            if let Some(messages) = object.get("messages").and_then(Value::as_array) {
+                payload.messages = Some(messages.clone());
+            }
+            if let Some(result) = object.get("result") {
+                if let Some(list) = result.as_array() {
+                    payload.list = Some(list.clone());
+                } else {
+                    payload.data = Some(result.clone());
+                }
+            } else {
+                payload.data = Some(value);
+            }
+        }
+    }
+    if !status.is_success() || !payload.success {
+        return Err(format!(
+            "cloudflare request failed: status={} request_id={} body={}",
+            payload.status_code,
+            if payload.request_id.is_empty() {
+                "-"
+            } else {
+                payload.request_id.as_str()
+            },
+            payload.body.trim()
+        ));
+    }
+    Ok(payload)
+}
+
+fn normalize_headers(headers: &HeaderMap) -> BTreeMap<String, String> {
+    let mut normalized = BTreeMap::new();
+    for (key, value) in headers {
+        let value = value.to_str().unwrap_or_default().trim().to_owned();
+        normalized.insert(key.as_str().to_owned(), value);
+    }
+    normalized
+}
+
+fn resolve_api_url(
+    base_url: &str,
+    path: &str,
+    params: &BTreeMap<String, String>,
+) -> Result<String, String> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("request path is required".to_owned());
+    }
+    let mut url = if path.starts_with("http://") || path.starts_with("https://") {
+        Url::parse(path).map_err(|err| format!("parse cloudflare url {:?}: {err}", path))?
+    } else {
+        let base = Url::parse(base_url)
+            .map_err(|err| format!("parse cloudflare base url {:?}: {err}", base_url))?;
+        let trimmed = if path.starts_with('/') {
+            path.to_owned()
+        } else {
+            format!("/{path}")
+        };
+        base.join(&trimmed)
+            .map_err(|err| format!("resolve cloudflare path {:?}: {err}", path))?
+    };
+    if params
+        .iter()
+        .any(|(key, value)| !key.trim().is_empty() && !value.trim().is_empty())
+    {
+        let mut pairs = url.query_pairs_mut();
+        for (key, value) in params {
+            let key = key.trim();
+            let value = value.trim();
+            if key.is_empty() || value.is_empty() {
+                continue;
+            }
+            pairs.append_pair(key, value);
+        }
+    }
+    Ok(url.to_string())
+}
+
+fn first_header(headers: &HeaderMap, names: &[&str]) -> String {
+    for name in names {
+        if let Some(value) = headers.get(*name) {
+            if let Ok(text) = value.to_str() {
+                let text = text.trim();
+                if !text.is_empty() {
+                    return text.to_owned();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn ensure_trailing_newline(mut value: String) -> String {
+    if !value.ends_with('\n') {
+        value.push('\n');
+    }
+    value
 }
 
 fn resolve_environment(
