@@ -378,6 +378,13 @@ func nonEmpty(values ...string) []string {
 }
 
 func cmdGithubAuth(args []string) {
+	delegated, err := runGitHubAuthCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github auth status [--account <alias>] [--owner <owner>] [--auth-mode <app|oauth>] [--json]")
 	if !routedOK {
 		return
@@ -548,6 +555,13 @@ func cmdGithubDoctor(args []string) {
 }
 
 func cmdGithubContext(args []string) {
+	delegated, err := runGitHubContextCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	routedArgs, routedOK := resolveUsageSubcommandArgs(args, "usage: si github context <list|current|use>")
 	if !routedOK {
 		return
