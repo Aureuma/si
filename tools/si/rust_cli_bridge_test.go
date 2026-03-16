@@ -532,6 +532,147 @@ func TestRunAWSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGCPContextListCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGCPContextListCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go gcp context list path by default")
+	}
+}
+
+func TestRunGCPContextListCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-list'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPContextListCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGCPContextListCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp context list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-list" {
+		t.Fatalf("expected delegated Rust gcp context list output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp context list + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGCPContextCurrentCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGCPContextCurrentCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGCPContextCurrentCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go gcp context current path by default")
+	}
+}
+
+func TestRunGCPContextCurrentCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-current'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPContextCurrentCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGCPContextCurrentCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp context current to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-current" {
+		t.Fatalf("expected delegated Rust gcp context current output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\ncontext\ncurrent\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp context current + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunGCPAuthStatusCommandDefaultsToGo(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGCPAuthStatusCommand([]string{"--json"})
+	if err != nil {
+		t.Fatalf("runGCPAuthStatusCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go gcp auth status path by default")
+	}
+}
+
+func TestRunGCPAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-gcp-auth'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGCPAuthStatusCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGCPAuthStatusCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected gcp auth status to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-gcp-auth" {
+		t.Fatalf("expected delegated Rust gcp auth status output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "gcp\nauth\nstatus\n--json" {
+		t.Fatalf("expected Rust CLI args to be gcp auth status + flags, got %q", string(argsData))
+	}
+}
+
 func TestRunStripeContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
