@@ -1,5 +1,5 @@
 use reqwest::blocking::Client;
-use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderValue};
+use reqwest::header::{AUTHORIZATION, CONTENT_TYPE, HeaderMap, HeaderName, HeaderValue};
 use serde::Serialize;
 use serde_json::Value;
 use si_rs_config::settings::{OpenAIAccountEntry, OpenAISettings};
@@ -797,6 +797,28 @@ pub fn delete_project_service_account(
     )
 }
 
+pub fn execute_api_request(
+    runtime: &OpenAIRuntime,
+    method: &str,
+    path: &str,
+    params: &[(String, String)],
+    headers: &[(String, String)],
+    body: Option<Vec<u8>>,
+    content_type: Option<&str>,
+    use_admin_key: bool,
+) -> Result<OpenAIAPIResponse, String> {
+    openai_request_with_headers(
+        runtime,
+        method,
+        path,
+        params,
+        headers,
+        body,
+        content_type,
+        use_admin_key,
+    )
+}
+
 pub fn render_api_response_text(response: &OpenAIAPIResponse, raw: bool) -> String {
     if raw {
         if response.body.trim().is_empty() {
@@ -941,7 +963,38 @@ fn openai_request(
     body: Option<Vec<u8>>,
     use_admin_key: bool,
 ) -> Result<OpenAIAPIResponse, String> {
-    let url = resolve_url(&runtime.base_url, path, params)?;
+    let params = params
+        .iter()
+        .map(|(key, value)| ((*key).to_owned(), value.clone()))
+        .collect::<Vec<_>>();
+    let content_type = if body.is_some() {
+        Some("application/json")
+    } else {
+        None
+    };
+    openai_request_with_headers(
+        runtime,
+        method,
+        path,
+        &params,
+        &[],
+        body,
+        content_type,
+        use_admin_key,
+    )
+}
+
+fn openai_request_with_headers(
+    runtime: &OpenAIRuntime,
+    method: &str,
+    path: &str,
+    params: &[(String, String)],
+    extra_headers: &[(String, String)],
+    body: Option<Vec<u8>>,
+    content_type: Option<&str>,
+    use_admin_key: bool,
+) -> Result<OpenAIAPIResponse, String> {
+    let url = resolve_url_owned(&runtime.base_url, path, params)?;
     let client = Client::builder()
         .timeout(Duration::from_secs(60))
         .build()
@@ -973,7 +1026,20 @@ fn openai_request(
                 .map_err(|err| format!("build openai project header: {err}"))?,
         );
     }
-    if body.is_some() {
+    for (key, value) in extra_headers {
+        let name = HeaderName::from_bytes(key.trim().as_bytes())
+            .map_err(|err| format!("build openai header name {key:?}: {err}"))?;
+        let value = HeaderValue::from_str(value.trim())
+            .map_err(|err| format!("build openai header value for {key:?}: {err}"))?;
+        headers.insert(name, value);
+    }
+    if let Some(value) = content_type.filter(|value| !value.trim().is_empty()) {
+        headers.insert(
+            CONTENT_TYPE,
+            HeaderValue::from_str(value.trim())
+                .map_err(|err| format!("build openai content-type header: {err}"))?,
+        );
+    } else if body.is_some() {
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     }
 
@@ -1006,6 +1072,18 @@ fn openai_request(
         body: body.trim().to_owned(),
         data,
     })
+}
+
+fn resolve_url_owned(
+    base_url: &str,
+    path: &str,
+    params: &[(String, String)],
+) -> Result<String, String> {
+    let params = params
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.clone()))
+        .collect::<Vec<_>>();
+    resolve_url(base_url, path, &params)
 }
 
 fn resolve_url(base_url: &str, path: &str, params: &[(&str, String)]) -> Result<String, String> {

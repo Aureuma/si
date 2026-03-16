@@ -670,6 +670,8 @@ func runOpenAICommand(args []string) (bool, error) {
 		return runOpenAIMonitorCommand(args[1:])
 	case "codex":
 		return runOpenAICodexCommand(args[1:])
+	case "raw":
+		return runOpenAIRawCommand(args[1:])
 	default:
 		return false, nil
 	}
@@ -727,6 +729,10 @@ func runOpenAIModelGetCommand(args []string) (bool, error) {
 
 func runOpenAIUsageCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"usage"}, args...)...)
+}
+
+func runOpenAIRawCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLICompat("openai", append([]string{"raw"}, args...)...)
 }
 
 func runOpenAIUsageMetricCommand(metric string, args []string) (bool, error) {
