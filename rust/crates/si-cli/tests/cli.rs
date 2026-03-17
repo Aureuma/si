@@ -329,9 +329,12 @@ fn build_homebrew_render_core_formula_writes_formula() {
     assert!(rendered.contains("url \"http://"));
     assert!(rendered.contains("sha256 \""));
     assert!(rendered.contains("depends_on \"rust\" => :build"));
+    assert!(rendered.contains("depends_on \"go\" => :build"));
     assert!(rendered.contains("cargo\", \"install\", \"--locked\""));
     assert!(rendered.contains("std_cargo_args(path: \"rust/crates/si-cli\")"));
     assert!(rendered.contains("mv bin/\"si-rs\", bin/\"si\""));
+    assert!(rendered.contains("system \"go\", \"build\""));
+    assert!(rendered.contains("bin/\"si-go\""));
 }
 
 #[test]
@@ -363,6 +366,8 @@ fn build_homebrew_render_tap_formula_writes_formula() {
     let rendered = fs::read_to_string(output).expect("read formula");
     assert!(rendered.contains("si_1.2.3_linux_amd64.tar.gz"));
     assert!(rendered.contains("sha4"));
+    assert!(rendered.contains("adapter = Dir["));
+    assert!(rendered.contains("bin.install adapter => \"si-go\""));
 }
 
 #[test]
@@ -404,6 +409,8 @@ fn build_installer_run_dry_run_reports_rust_usage() {
     let bin_dir = tempdir().expect("bin tempdir");
     let cargo_path = bin_dir.path().join("cargo");
     write_executable_shell_script(&cargo_path, "#!/bin/sh\necho cargo 1.86.0\n");
+    let go_path = bin_dir.path().join("go");
+    write_executable_shell_script(&go_path, "#!/bin/sh\necho go version go1.22.0 linux/amd64\n");
     let path_env = format!(
         "{}:{}",
         bin_dir.path().display(),
@@ -427,7 +434,9 @@ fn build_installer_run_dry_run_reports_rust_usage() {
         .stdout
         .clone();
 
-    assert!(String::from_utf8_lossy(&output).contains("rust: using system cargo"));
+    let output = String::from_utf8_lossy(&output);
+    assert!(output.contains("rust: using system cargo"));
+    assert!(output.contains("go: using system go"));
 }
 
 #[test]
@@ -441,6 +450,11 @@ fn build_installer_run_installs_fake_binary() {
     write_executable_shell_script(
         &cargo_path,
         "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.86.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
+    let go_path = bin_dir.path().join("go");
+    write_executable_shell_script(
+        &go_path,
+        "#!/bin/sh\nif [ \"$1\" = \"version\" ]; then\n  echo go version go1.22.0 linux/amd64\n  exit 0\nfi\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
     );
     let path_env = format!(
         "{}:{}",
@@ -466,14 +480,18 @@ fn build_installer_run_installs_fake_binary() {
         .success();
 
     let installed = install_dir.join("si");
+    let installed_go = install_dir.join("si-go");
     assert!(installed.exists());
+    assert!(installed_go.exists());
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        assert_eq!(
-            fs::metadata(&installed).expect("stat installed").permissions().mode() & 0o111,
-            0o111
-        );
+        for path in [&installed, &installed_go] {
+            assert_eq!(
+                fs::metadata(path).expect("stat installed").permissions().mode() & 0o111,
+                0o111
+            );
+        }
     }
 }
 
