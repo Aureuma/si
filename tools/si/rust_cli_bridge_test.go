@@ -2304,6 +2304,40 @@ func TestRunAWSBedrockCommandDelegatesFoundationModelListToRustCLIWhenConfigured
 	}
 }
 
+func TestRunAWSBedrockCommandDelegatesRuntimeInvokeToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-bedrock-runtime'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"bedrock", "runtime", "invoke", "--model-id", "m-1", "--prompt", "hello", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws bedrock runtime invoke to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-bedrock-runtime" {
+		t.Fatalf("expected delegated Rust aws bedrock runtime output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nbedrock\nruntime\ninvoke\n--model-id\nm-1\n--prompt\nhello\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws bedrock runtime + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

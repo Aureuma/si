@@ -2893,17 +2893,24 @@ enum AWSCloudWatchCommand {
 
 #[derive(Debug, Subcommand)]
 enum AWSBedrockCommand {
+    #[command(alias = "foundation-models", alias = "model", alias = "models")]
     FoundationModel {
         #[command(subcommand)]
         command: AWSBedrockFoundationModelCommand,
     },
+    #[command(alias = "inference-profiles", alias = "profile", alias = "profiles")]
     InferenceProfile {
         #[command(subcommand)]
         command: AWSBedrockInferenceProfileCommand,
     },
+    #[command(alias = "guardrails")]
     Guardrail {
         #[command(subcommand)]
         command: AWSBedrockGuardrailCommand,
+    },
+    Runtime {
+        #[command(subcommand)]
+        command: AWSBedrockRuntimeCommand,
     },
 }
 
@@ -3057,6 +3064,122 @@ enum AWSBedrockGuardrailCommand {
         id: String,
         #[arg(long)]
         version: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockRuntimeCommand {
+    Invoke {
+        #[arg(long)]
+        model_id: Option<String>,
+        model: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long, default_value = "application/json")]
+        accept: String,
+        #[arg(long, default_value = "application/json")]
+        content_type: String,
+        #[arg(long)]
+        trace: Option<String>,
+        #[arg(long)]
+        guardrail_id: Option<String>,
+        #[arg(long)]
+        guardrail_version: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Converse {
+        #[arg(long)]
+        model_id: Option<String>,
+        model: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        trace: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "count", alias = "tokens")]
+    CountTokens {
+        #[arg(long)]
+        model_id: Option<String>,
+        model: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -12800,6 +12923,46 @@ fn main() -> Result<()> {
                         run_aws_bedrock_guardrail_get(id, version, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
                     }
                 },
+                AWSBedrockCommand::Runtime { command } => match command {
+                    AWSBedrockRuntimeCommand::Invoke {
+                        model_id, model, prompt, body, body_file, accept, content_type, trace,
+                        guardrail_id, guardrail_version, account, region, base_url, access_key,
+                        secret_key, session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_runtime_invoke(
+                            model_id.or(model).unwrap_or_default(),
+                            prompt, body, body_file, accept, content_type, trace, guardrail_id,
+                            guardrail_version, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockRuntimeCommand::Converse {
+                        model_id, model, prompt, body, body_file, trace, account, region,
+                        base_url, access_key, secret_key, session_token, home, settings_file,
+                        json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_runtime_converse(
+                            model_id.or(model).unwrap_or_default(),
+                            prompt, body, body_file, trace, account, region, base_url,
+                            access_key, secret_key, session_token, home, settings_file, format,
+                            raw,
+                        )?
+                    }
+                    AWSBedrockRuntimeCommand::CountTokens {
+                        model_id, model, prompt, body, body_file, account, region, base_url,
+                        access_key, secret_key, session_token, home, settings_file, json, raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_runtime_count_tokens(
+                            model_id.or(model).unwrap_or_default(),
+                            prompt, body, body_file, account, region, base_url, access_key,
+                            secret_key, session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                },
             },
             AWSCommand::Ec2 { command } => match command {
                 AWSEC2Command::Instance { command } => match command {
@@ -21661,6 +21824,26 @@ fn aws_path_escape(value: &str) -> String {
     url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
 }
 
+fn resolve_aws_json_body(
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    fallback: Option<Value>,
+) -> Result<String> {
+    if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        return Ok(body);
+    }
+    if let Some(path) = body_file {
+        let contents = std::fs::read_to_string(path)?;
+        if !contents.trim().is_empty() {
+            return Ok(contents);
+        }
+    }
+    if let Some(fallback) = fallback {
+        return Ok(serde_json::to_string(&fallback)?);
+    }
+    anyhow::bail!("provide --prompt, --body, or --body-file")
+}
+
 fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
@@ -22985,6 +23168,158 @@ fn run_aws_bedrock_guardrail_get(
         "bedrock",
         account, region, base_url, access_key, secret_key, session_token, home, settings_file,
         |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/guardrails/{}", aws_path_escape(id.trim())), &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_runtime_invoke(
+    model_id: String,
+    prompt: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    accept: String,
+    content_type: String,
+    trace: Option<String>,
+    guardrail_id: Option<String>,
+    guardrail_version: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = resolve_aws_json_body(
+        body,
+        body_file,
+        prompt.filter(|value| !value.trim().is_empty()).map(|value| serde_json::json!({ "inputText": value })),
+    )?;
+    let mut headers = BTreeMap::new();
+    if let Some(trace) = trace.filter(|value| !value.trim().is_empty()) {
+        headers.insert("x-amzn-bedrock-trace".to_owned(), trace.trim().to_owned());
+    }
+    if let Some(guardrail_id) = guardrail_id.filter(|value| !value.trim().is_empty()) {
+        headers.insert("x-amzn-bedrock-guardrailidentifier".to_owned(), guardrail_id.trim().to_owned());
+    }
+    if let Some(guardrail_version) = guardrail_version.filter(|value| !value.trim().is_empty()) {
+        headers.insert("x-amzn-bedrock-guardrailversion".to_owned(), guardrail_version.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "bedrock-runtime",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_api_request(
+            &runtime,
+            &AWSAPIRequest {
+                method: "POST".to_owned(),
+                path: format!("/model/{}/invoke", aws_path_escape(model_id.trim())),
+                service: "bedrock-runtime".to_owned(),
+                headers,
+                body: payload,
+                content_type,
+                accept,
+                ..AWSAPIRequest::default()
+            },
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_runtime_converse(
+    model_id: String,
+    prompt: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    trace: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = resolve_aws_json_body(
+        body,
+        body_file,
+        prompt.filter(|value| !value.trim().is_empty()).map(|value| {
+            serde_json::json!({
+                "messages": [{
+                    "role": "user",
+                    "content": [{"text": value}],
+                }]
+            })
+        }),
+    )?;
+    let mut headers = BTreeMap::new();
+    if let Some(trace) = trace.filter(|value| !value.trim().is_empty()) {
+        headers.insert("x-amzn-bedrock-trace".to_owned(), trace.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "bedrock-runtime",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_api_request(
+            &runtime,
+            &AWSAPIRequest {
+                method: "POST".to_owned(),
+                path: format!("/model/{}/converse", aws_path_escape(model_id.trim())),
+                service: "bedrock-runtime".to_owned(),
+                headers,
+                body: payload,
+                content_type: "application/json".to_owned(),
+                accept: "application/json".to_owned(),
+                ..AWSAPIRequest::default()
+            },
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_runtime_count_tokens(
+    model_id: String,
+    prompt: Option<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = resolve_aws_json_body(
+        body,
+        body_file,
+        prompt.filter(|value| !value.trim().is_empty()).map(|value| serde_json::json!({ "inputText": value })),
+    )?;
+    let response = execute_aws_service_request(
+        "bedrock-runtime",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_api_request(
+            &runtime,
+            &AWSAPIRequest {
+                method: "POST".to_owned(),
+                path: format!("/model/{}/count-tokens", aws_path_escape(model_id.trim())),
+                service: "bedrock-runtime".to_owned(),
+                body: payload,
+                content_type: "application/json".to_owned(),
+                accept: "application/json".to_owned(),
+                ..AWSAPIRequest::default()
+            },
+        ),
     )?;
     print_aws_api_response(&response, format, raw)
 }

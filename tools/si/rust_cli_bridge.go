@@ -1031,6 +1031,11 @@ func runAWSBedrockCommand(args []string) (bool, error) {
 		case "list", "get", "describe":
 			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
 		}
+	case "runtime":
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "invoke", "converse", "count-tokens", "count", "tokens":
+			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
+		}
 	}
 	return false, nil
 }

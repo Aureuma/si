@@ -5931,6 +5931,76 @@ fn aws_bedrock_guardrail_get_json_executes_signed_rest_request() {
 }
 
 #[test]
+fn aws_bedrock_runtime_invoke_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /model/m-1/invoke HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("x-amzn-bedrock-trace: ENABLED\r\n"));
+        assert!(request.contains("\r\n\r\n{\"inputText\":\"hello\"}"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_invoke")], r#"{"outputText":"ok"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "runtime", "invoke",
+            "--model-id", "m-1",
+            "--prompt", "hello",
+            "--trace", "ENABLED",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_invoke");
+    assert_eq!(parsed["data"]["outputText"], "ok");
+    server.join();
+}
+
+#[test]
+fn aws_bedrock_runtime_count_tokens_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /model/m-1/count-tokens HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("\r\n\r\n{\"inputText\":\"hello\"}"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_count")], r#"{"inputTextTokenCount":5}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "runtime", "count-tokens",
+            "--model-id", "m-1",
+            "--prompt", "hello",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_count");
+    assert_eq!(parsed["data"]["inputTextTokenCount"], 5);
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
