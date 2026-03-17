@@ -594,6 +594,149 @@ fn build_installer_smoke_docker_runs_fake_docker() {
     assert!(args.contains("run"));
 }
 
+#[test]
+fn build_self_validate_release_version_accepts_matching_tag() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "self",
+            "validate-release-version",
+            "--tag",
+            "v1.2.3",
+        ])
+        .assert()
+        .success();
+}
+
+#[test]
+fn build_self_validate_release_version_rejects_mismatch() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "self",
+            "validate-release-version",
+            "--tag",
+            "v1.2.4",
+        ])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn build_self_release_asset_creates_single_archive() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(repo.path().join("go.mod"), "module example.com/si\n\ngo 1.22.0\n").expect("go.mod");
+    fs::write(repo.path().join("README.md"), "readme\n").expect("readme");
+    fs::write(repo.path().join("LICENSE"), "license\n").expect("license");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+    fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n").expect("write main");
+    let go_dir = tempdir().expect("go tempdir");
+    let go_path = go_dir.path().join("go");
+    fs::write(
+        &go_path,
+        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then out=\"$2\"; shift 2; continue; fi\n  shift\ndone\nprintf '#!/bin/sh\\necho si\\n' > \"$out\"\nchmod 755 \"$out\"\n",
+    )
+    .expect("write fake go");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&go_path).expect("stat go").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&go_path, perms).expect("chmod go");
+    }
+    let out_dir = repo.path().join("out");
+    let path_env = format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    cargo_bin()
+        .args([
+            "build", "self", "release-asset",
+            "--repo-root", repo.path().to_str().expect("repo"),
+            "--version", "v1.2.3",
+            "--goos", "linux",
+            "--goarch", "amd64",
+            "--out-dir", out_dir.to_str().expect("out"),
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+    assert!(out_dir.join("si_1.2.3_linux_amd64.tar.gz").exists());
+}
+
+#[test]
+fn build_installer_settings_helper_prints_expected_doc() {
+    let dir = tempdir().expect("tempdir");
+    let settings = dir.path().join("settings.toml");
+    let output = cargo_bin()
+        .args([
+            "build",
+            "installer",
+            "settings-helper",
+            "--settings",
+            settings.to_str().expect("settings"),
+            "--default-browser",
+            "safari",
+            "--print",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "[codex.login]\ndefault_browser = \"safari\"\n"
+    );
+}
+
+#[test]
+fn build_installer_settings_helper_rewrites_existing_login_block() {
+    let dir = tempdir().expect("tempdir");
+    let settings = dir.path().join("settings.toml");
+    fs::write(
+        &settings,
+        "[codex.login]\ndefault_browser = \"chrome\"\nother = true\n",
+    )
+    .expect("write settings");
+    cargo_bin()
+        .args([
+            "build",
+            "installer",
+            "settings-helper",
+            "--settings",
+            settings.to_str().expect("settings"),
+            "--default-browser",
+            "safari",
+        ])
+        .assert()
+        .success();
+    let rendered = fs::read_to_string(settings).expect("read settings");
+    assert!(rendered.contains("default_browser = \"safari\""));
+    assert!(rendered.contains("other = true"));
+}
+
 fn test_app_private_key_pem() -> &'static str {
     "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
 }

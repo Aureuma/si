@@ -6,6 +6,7 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use reqwest::blocking::Client as BlockingHttpClient;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -376,6 +377,21 @@ enum BuildCommand {
 
 #[derive(Debug, Subcommand)]
 enum BuildSelfCommand {
+    #[command(name = "release-asset")]
+    ReleaseAsset {
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
+        #[arg(long)]
+        version: String,
+        #[arg(long)]
+        goos: String,
+        #[arg(long)]
+        goarch: String,
+        #[arg(long)]
+        goarm: Option<String>,
+        #[arg(long = "out-dir")]
+        out_dir: Option<PathBuf>,
+    },
     #[command(name = "release-assets", alias = "release")]
     ReleaseAssets {
         #[arg(long)]
@@ -385,10 +401,26 @@ enum BuildSelfCommand {
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
     },
+    #[command(name = "validate-release-version")]
+    ValidateReleaseVersion {
+        #[arg(long)]
+        tag: String,
+    },
 }
 
 #[derive(Debug, Subcommand)]
 enum BuildInstallerCommand {
+    #[command(name = "settings-helper")]
+    SettingsHelper {
+        #[arg(long = "settings")]
+        settings: PathBuf,
+        #[arg(long = "default-browser")]
+        default_browser: String,
+        #[arg(long = "print", action = ArgAction::SetTrue)]
+        print: bool,
+        #[arg(long = "check", action = ArgAction::SetTrue)]
+        check: bool,
+    },
     #[command(name = "run")]
     Run {
         #[arg(long, default_value = "local")]
@@ -16584,6 +16616,30 @@ fn run_build_self_release_assets(
     Ok(())
 }
 
+fn run_build_self_release_asset(
+    repo_root: Option<PathBuf>,
+    version: String,
+    goos: String,
+    goarch: String,
+    goarm: Option<String>,
+    out_dir: Option<PathBuf>,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let version = resolve_release_version(&repo_root, Some(version))?;
+    let out_dir = resolve_release_output_dir(out_dir, &repo_root)?;
+    fs::create_dir_all(&out_dir).with_context(|| format!("create {}", out_dir.display()))?;
+    let archive = build_release_asset(
+        &repo_root,
+        &out_dir,
+        &version,
+        goos.trim(),
+        goarch.trim(),
+        goarm.as_deref().map(str::trim).filter(|value| !value.is_empty()),
+    )?;
+    println!("created {}", archive.display());
+    Ok(())
+}
+
 fn resolve_release_repo_root(repo: Option<PathBuf>) -> Result<PathBuf> {
     let start = match repo {
         Some(path) if path.is_absolute() => path,
@@ -17235,6 +17291,132 @@ fn warn_if_installer_path_missing(dir: &Path) {
     }
 }
 
+fn run_installer_settings_helper(
+    settings: PathBuf,
+    default_browser: String,
+    print: bool,
+    check: bool,
+) -> Result<()> {
+    let browser = default_browser.trim().to_lowercase();
+    if browser != "safari" && browser != "chrome" {
+        return Err(anyhow!("--default-browser must be safari or chrome"));
+    }
+    let mode = if print {
+        "print"
+    } else if check {
+        "check"
+    } else {
+        "write"
+    };
+    let (rendered, existing) = render_installer_settings(&settings, &browser)?;
+    match mode {
+        "print" => {
+            print!("{rendered}");
+            Ok(())
+        }
+        "check" => {
+            if existing.as_deref() == Some(rendered.as_bytes()) {
+                Ok(())
+            } else {
+                Err(anyhow!("settings file does not match expected installer helper output"))
+            }
+        }
+        _ => {
+            write_atomic_file(&settings, rendered.as_bytes(), 0o644)?;
+            Ok(())
+        }
+    }
+}
+
+fn render_installer_settings(path: &Path, browser: &str) -> Result<(String, Option<Vec<u8>>)> {
+    match fs::read(path) {
+        Ok(existing) => {
+            let current = String::from_utf8_lossy(&existing);
+            Ok((render_installer_settings_doc(&current, browser), Some(existing)))
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            Ok((format!("[codex.login]\ndefault_browser = \"{}\"\n", browser), None))
+        }
+        Err(err) => Err(err).with_context(|| format!("read {}", path.display())),
+    }
+}
+
+fn render_installer_settings_doc(current: &str, browser: &str) -> String {
+    let lines = current.replace("\r\n", "\n");
+    let mut lines = lines.split('\n').map(str::to_owned).collect::<Vec<_>>();
+    if lines.last().map(|line| line.is_empty()).unwrap_or(false) {
+        lines.pop();
+    }
+    let header_pattern = Regex::new(r"^[[:space:]]*\[[^]]+\][[:space:]]*$").expect("valid header regex");
+    let login_header_pattern =
+        Regex::new(r"^[[:space:]]*\[codex\.login\][[:space:]]*$").expect("valid login regex");
+    let default_browser_line =
+        Regex::new(r"^[[:space:]]*default_browser[[:space:]]*=").expect("valid browser regex");
+    let replacement = format!("default_browser = \"{}\"", browser);
+    let mut out = Vec::with_capacity(lines.len() + 4);
+    let mut in_login = false;
+    let mut saw_login = false;
+    let mut wrote = false;
+    for line in lines {
+        if header_pattern.is_match(&line) {
+            if in_login && !wrote {
+                out.push(replacement.clone());
+                wrote = true;
+            }
+            if login_header_pattern.is_match(&line) {
+                in_login = true;
+                saw_login = true;
+            } else {
+                in_login = false;
+            }
+            out.push(line);
+            continue;
+        }
+        if in_login && default_browser_line.is_match(&line) {
+            if !wrote {
+                out.push(replacement.clone());
+                wrote = true;
+            }
+            continue;
+        }
+        out.push(line);
+    }
+    if saw_login && !wrote {
+        out.push(replacement.clone());
+    }
+    if !saw_login {
+        out.push(String::new());
+        out.push("[codex.login]".to_owned());
+        out.push(replacement);
+    }
+    format!("{}\n", out.join("\n"))
+}
+
+fn write_atomic_file(path: &Path, data: &[u8], mode: u32) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let temp = tempfile::Builder::new()
+        .prefix(".install-si-settings-")
+        .suffix(".tmp")
+        .tempfile_in(dir)
+        .with_context(|| format!("create temp file in {}", dir.display()))?;
+    fs::write(temp.path(), data).with_context(|| format!("write {}", temp.path().display()))?;
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(temp.path())
+            .with_context(|| format!("stat {}", temp.path().display()))?
+            .permissions();
+        perms.set_mode(mode);
+        fs::set_permissions(temp.path(), perms)
+            .with_context(|| format!("chmod {}", temp.path().display()))?;
+    }
+    fs::rename(temp.path(), path)
+        .with_context(|| format!("rename {} to {}", temp.path().display(), path.display()))?;
+    Ok(())
+}
+
 fn run_installer_smoke_host() -> Result<()> {
     let root = std::env::current_dir().context("resolve repo root")?;
     let installer = root.join("tools").join("install-si.sh");
@@ -17814,6 +17996,37 @@ fn validate_release_version(version: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_release_tag_format(tag: &str) -> Result<()> {
+    let pattern = Regex::new(r"^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$")
+        .context("compile release tag regex")?;
+    if !pattern.is_match(tag.trim()) {
+        return Err(anyhow!(
+            "tag must match vX.Y.Z (optionally with a prerelease/build suffix), got: {}",
+            tag.trim()
+        ));
+    }
+    Ok(())
+}
+
+fn run_validate_release_version(tag: String) -> Result<()> {
+    let tag = tag.trim().to_owned();
+    if tag.is_empty() {
+        return Err(anyhow!("--tag is required"));
+    }
+    validate_release_tag_format(&tag)?;
+    let cwd = std::env::current_dir().context("read current dir")?;
+    let actual = read_si_version(&cwd)?;
+    if actual != tag {
+        return Err(anyhow!(
+            "tools/si/version.go has {}, but release tag is {}",
+            actual,
+            tag
+        ));
+    }
+    println!("release tag and tools/si/version.go are aligned ({tag})");
+    Ok(())
+}
+
 fn download_file(url: &str, output: &Path) -> Result<()> {
     let response = BlockingHttpClient::new()
         .get(url)
@@ -17904,13 +18117,30 @@ fn main() -> Result<()> {
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
         Command::Build { command } => match command {
             BuildCommand::Self_ { command } => match command {
+                BuildSelfCommand::ReleaseAsset {
+                    repo_root,
+                    version,
+                    goos,
+                    goarch,
+                    goarm,
+                    out_dir,
+                } => run_build_self_release_asset(repo_root, version, goos, goarch, goarm, out_dir)?,
                 BuildSelfCommand::ReleaseAssets {
                     repo,
                     version,
                     out_dir,
                 } => run_build_self_release_assets(repo, version, out_dir)?,
+                BuildSelfCommand::ValidateReleaseVersion { tag } => {
+                    run_validate_release_version(tag)?
+                }
             },
             BuildCommand::Installer { command } => match command {
+                BuildInstallerCommand::SettingsHelper {
+                    settings,
+                    default_browser,
+                    print,
+                    check,
+                } => run_installer_settings_helper(settings, default_browser, print, check)?,
                 BuildInstallerCommand::Run {
                     backend,
                     source_dir,

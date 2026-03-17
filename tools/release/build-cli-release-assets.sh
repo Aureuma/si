@@ -3,4 +3,4 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
-exec go run ./tools/si/cmd/releasectl build-cli-release-assets "$@"
+exec cargo run -q -p si-rs-cli -- build self release-assets "$@"

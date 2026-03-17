@@ -1745,6 +1745,7 @@ dependencies = [
  "clap",
  "flate2",
  "libc",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
