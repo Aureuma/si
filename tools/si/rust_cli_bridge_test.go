@@ -4160,6 +4160,61 @@ func TestRunGoogleYouTubeEngagementDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 }
 
+func TestRunGoogleYouTubeLiveDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-youtube-live'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "live broadcast bind",
+			args: []string{"live", "broadcast", "bind", "--id", "b1", "--stream-id", "s1", "--json"},
+			want: "google\nyoutube\nlive\nbroadcast\nbind\n--id\nb1\n--stream-id\ns1\n--json",
+		},
+		{
+			name: "live chat create",
+			args: []string{"live", "chat", "create", "--live-chat-id", "lc1", "--text", "hello", "--json"},
+			want: "google\nyoutube\nlive\nchat\ncreate\n--live-chat-id\nlc1\n--text\nhello\n--json",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := captureOutputForTest(t, func() {
+				delegated, err := runGoogleYouTubeCommand(tc.args)
+				if err != nil {
+					t.Fatalf("runGoogleYouTubeCommand(%s): %v", tc.name, err)
+				}
+				if !delegated {
+					t.Fatalf("expected google youtube live command to delegate to Rust for %s", tc.name)
+				}
+			})
+
+			if strings.TrimSpace(out) != "rust-google-youtube-live" {
+				t.Fatalf("expected delegated Rust google youtube live output, got %q", out)
+			}
+			argsData, err := os.ReadFile(argsPath)
+			if err != nil {
+				t.Fatalf("read args file: %v", err)
+			}
+			if strings.TrimSpace(string(argsData)) != tc.want {
+				t.Fatalf("expected Rust CLI args %q, got %q", tc.want, string(argsData))
+			}
+		})
+	}
+}
+
 func TestRunGoogleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")

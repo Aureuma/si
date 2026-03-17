@@ -891,6 +891,144 @@ fn google_youtube_report_usage_json_reads_log_file() {
 }
 
 #[test]
+fn google_youtube_live_broadcast_bind_json_posts_api() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "oauth"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("POST /youtube/v3/liveBroadcasts/bind?"));
+        assert!(request.contains("id=b1"));
+        assert!(request.contains("streamId=s1"));
+        let body = r#"{"id":"b1"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "google",
+            "youtube",
+            "live",
+            "broadcast",
+            "bind",
+            "--id",
+            "b1",
+            "--stream-id",
+            "s1",
+            "--home",
+        ])
+        .arg(home.path())
+        .args(["--access-token", "token-123", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "b1");
+}
+
+#[test]
+fn google_youtube_live_chat_create_json_builds_body() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "oauth"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("POST /youtube/v3/liveChat/messages?"));
+        assert!(request.contains("\"liveChatId\":\"lc1\""));
+        assert!(request.contains("\"messageText\":\"hello stream\""));
+        let body = r#"{"id":"m1"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "google",
+            "youtube",
+            "live",
+            "chat",
+            "create",
+            "--live-chat-id",
+            "lc1",
+            "--text",
+            "hello stream",
+            "--home",
+        ])
+        .arg(home.path())
+        .args(["--access-token", "token-123", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "m1");
+}
+
+#[test]
 fn google_youtube_playlist_list_json_reads_api() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
