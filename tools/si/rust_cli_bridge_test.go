@@ -2993,6 +2993,40 @@ func TestRunOpenAICommandDelegatesToRustCLIForRaw(t *testing.T) {
 	}
 }
 
+func TestRunOpenAICommandDelegatesToRustCLIForDoctor(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-doctor'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAICommand([]string{"doctor", "--json"})
+		if err != nil {
+			t.Fatalf("runOpenAICommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-doctor" {
+		t.Fatalf("expected delegated Rust openai doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai doctor + args, got %q", string(argsData))
+	}
+}
+
 func TestRunOpenAIAuthCommandDefaultsToGoForCodexStatus(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -3003,6 +3037,26 @@ func TestRunOpenAIAuthCommandDefaultsToGoForCodexStatus(t *testing.T) {
 	}
 	if delegated {
 		t.Fatalf("expected Go openai auth path for codex-status")
+	}
+}
+
+func TestRunOpenAIAuthCommandDefaultsToGoForCodexModeStatus(t *testing.T) {
+	dir := t.TempDir()
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'unexpected-rust-openai-auth-codex-status'\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	delegated, err := runOpenAIAuthCommand([]string{"status", "--auth-mode", "codex", "--json"})
+	if err != nil {
+		t.Fatalf("runOpenAIAuthCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai auth status path for codex auth mode")
 	}
 }
 
@@ -3612,6 +3666,53 @@ func TestRunOpenAIAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T
 	}
 	if strings.TrimSpace(string(argsData)) != "openai\nauth\nstatus\n--json" {
 		t.Fatalf("expected Rust CLI args to be openai auth status + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunOpenAIDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runOpenAIDoctorCommand([]string{"--public", "--json"})
+	if err != nil {
+		t.Fatalf("runOpenAIDoctorCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go openai doctor path for public probe")
+	}
+}
+
+func TestRunOpenAIDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-openai-doctor-command'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runOpenAIDoctorCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runOpenAIDoctorCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected openai doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-openai-doctor-command" {
+		t.Fatalf("expected delegated Rust openai doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "openai\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be openai doctor + flags, got %q", string(argsData))
 	}
 }
 
