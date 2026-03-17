@@ -110,6 +110,104 @@ fn build_self_release_assets_writes_archives_and_checksums() {
 }
 
 #[test]
+fn build_self_build_no_upgrade_writes_binary() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("rust/crates/si-cli")).expect("mkdir cli crate");
+    let cargo_path = repo.path().join("fake-cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho built\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
+    let bin_dir = tempdir().expect("bin tempdir");
+    let bin_cargo = bin_dir.path().join("cargo");
+    fs::copy(&cargo_path, &bin_cargo).expect("copy cargo");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&bin_cargo).expect("stat cargo").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&bin_cargo, perms).expect("chmod cargo");
+    }
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let out = repo.path().join("out/si");
+    cargo_bin()
+        .args([
+            "build",
+            "self",
+            "build",
+            "--repo",
+            repo.path().to_str().expect("repo"),
+            "--no-upgrade",
+            "--output",
+            out.to_str().expect("out"),
+            "--quiet",
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+    assert!(out.exists());
+}
+
+#[test]
+fn build_self_run_forwards_args_to_cargo() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("rust/crates/si-cli")).expect("mkdir cli crate");
+    let args_path = repo.path().join("args.txt");
+    let cargo_path = repo.path().join("fake-cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > {}\nexit 0\n",
+            shell_escape_for_test(&args_path)
+        ),
+    );
+    let bin_dir = tempdir().expect("bin tempdir");
+    let bin_cargo = bin_dir.path().join("cargo");
+    fs::copy(&cargo_path, &bin_cargo).expect("copy cargo");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&bin_cargo).expect("stat cargo").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&bin_cargo, perms).expect("chmod cargo");
+    }
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    cargo_bin()
+        .args([
+            "build",
+            "self",
+            "run",
+            "--repo",
+            repo.path().to_str().expect("repo"),
+            "--",
+            "version",
+            "--json",
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+    let args = fs::read_to_string(args_path).expect("read args");
+    assert!(args.contains("run"));
+    assert!(args.contains("--manifest-path"));
+    assert!(args.contains("rust/crates/si-cli/Cargo.toml"));
+    assert!(args.contains("--bin"));
+    assert!(args.contains("si-rs"));
+    assert!(args.contains("--"));
+    assert!(args.contains("version"));
+    assert!(args.contains("--json"));
+}
+
+#[test]
 fn build_npm_build_package_creates_tarball() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");

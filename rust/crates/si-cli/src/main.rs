@@ -377,6 +377,35 @@ enum BuildCommand {
 
 #[derive(Debug, Subcommand)]
 enum BuildSelfCommand {
+    #[command(name = "build")]
+    Build {
+        #[arg(long)]
+        repo: Option<PathBuf>,
+        #[arg(long = "no-upgrade")]
+        no_upgrade: bool,
+        #[arg(long = "output")]
+        output: Option<PathBuf>,
+        #[arg(long = "install-path")]
+        install_path: Option<PathBuf>,
+        #[arg(long)]
+        quiet: bool,
+    },
+    #[command(name = "upgrade")]
+    Upgrade {
+        #[arg(long)]
+        repo: Option<PathBuf>,
+        #[arg(long = "install-path")]
+        install_path: Option<PathBuf>,
+        #[arg(long)]
+        quiet: bool,
+    },
+    #[command(name = "run")]
+    Run {
+        #[arg(long)]
+        repo: Option<PathBuf>,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
     #[command(name = "release-asset")]
     ReleaseAsset {
         #[arg(long)]
@@ -16649,6 +16678,188 @@ fn run_build_self_release_asset(
     Ok(())
 }
 
+#[derive(Debug)]
+struct SelfBuildTarget {
+    target: PathBuf,
+    upgrade: bool,
+}
+
+fn resolve_self_repo_root(repo: Option<PathBuf>) -> Result<PathBuf> {
+    resolve_release_repo_root(repo)
+}
+
+fn resolve_self_absolute_path(path: &Path) -> Result<PathBuf> {
+    if path.is_absolute() {
+        Ok(path.to_path_buf())
+    } else {
+        Ok(std::env::current_dir().context("read current dir")?.join(path))
+    }
+}
+
+fn resolve_self_install_path(path: Option<PathBuf>) -> Result<PathBuf> {
+    if let Some(path) = path {
+        return resolve_self_absolute_path(&path);
+    }
+    if let Some(path_env) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path_env) {
+            let candidate = dir.join("si");
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if !exe.as_os_str().is_empty() {
+            return Ok(exe);
+        }
+    }
+    let home = std::env::var("HOME")
+        .map(PathBuf::from)
+        .map_err(|_| anyhow!("cannot determine install path; set --install-path"))?;
+    Ok(home.join(".local").join("bin").join("si"))
+}
+
+fn resolve_self_build_target(
+    repo_root: &Path,
+    install_path: Option<PathBuf>,
+    output: Option<PathBuf>,
+    no_upgrade: bool,
+) -> Result<SelfBuildTarget> {
+    if install_path.is_some() && (no_upgrade || output.is_some()) {
+        return Err(anyhow!(
+            "--install-path cannot be used with --no-upgrade or --output"
+        ));
+    }
+    if no_upgrade || output.is_some() {
+        let target = if let Some(path) = output {
+            resolve_self_absolute_path(&path)?
+        } else {
+            repo_root.join("si")
+        };
+        return Ok(SelfBuildTarget {
+            target,
+            upgrade: false,
+        });
+    }
+    Ok(SelfBuildTarget {
+        target: resolve_self_install_path(install_path)?,
+        upgrade: true,
+    })
+}
+
+fn build_self_binary(repo_root: &Path, output: &Path, quiet: bool) -> Result<()> {
+    let dir = output
+        .parent()
+        .ok_or_else(|| anyhow!("invalid output path {}", output.display()))?;
+    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    let cargo_target_dir = tempfile::tempdir().context("create temp cargo target dir")?;
+    if !quiet {
+        println!(
+            "running: cargo build --release --locked --manifest-path rust/crates/si-cli/Cargo.toml --bin si-rs"
+        );
+    }
+    let status = StdCommand::new("cargo")
+        .current_dir(repo_root)
+        .env("CARGO_TARGET_DIR", cargo_target_dir.path())
+        .arg("build")
+        .arg("--release")
+        .arg("--locked")
+        .arg("--manifest-path")
+        .arg("rust/crates/si-cli/Cargo.toml")
+        .arg("--bin")
+        .arg("si-rs")
+        .status()
+        .context("run cargo build for self build")?;
+    if !status.success() {
+        return Err(anyhow!("build failed: {}", status));
+    }
+    let built_binary = cargo_target_dir.path().join("release").join(if cfg!(windows) {
+        "si-rs.exe"
+    } else {
+        "si-rs"
+    });
+    let tmp = tempfile::Builder::new()
+        .prefix("si-self-build-")
+        .tempfile_in(dir)
+        .with_context(|| format!("create temp output in {}", dir.display()))?;
+    let tmp_path = tmp.path().to_path_buf();
+    drop(tmp);
+    fs::copy(&built_binary, &tmp_path).with_context(|| {
+        format!(
+            "copy built binary {} to {}",
+            built_binary.display(),
+            tmp_path.display()
+        )
+    })?;
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(&tmp_path)
+            .with_context(|| format!("stat {}", tmp_path.display()))?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&tmp_path, perms)
+            .with_context(|| format!("chmod {}", tmp_path.display()))?;
+    }
+    fs::rename(&tmp_path, output).or_else(|err| {
+        if err.kind() == io::ErrorKind::AlreadyExists {
+            let _ = fs::remove_file(output);
+            fs::rename(&tmp_path, output)
+        } else {
+            Err(err)
+        }
+    })
+    .with_context(|| format!("install {}", output.display()))?;
+    Ok(())
+}
+
+fn run_build_self_build(
+    repo: Option<PathBuf>,
+    install_path: Option<PathBuf>,
+    output: Option<PathBuf>,
+    no_upgrade: bool,
+    quiet: bool,
+) -> Result<()> {
+    let repo_root = resolve_self_repo_root(repo)?;
+    let target = resolve_self_build_target(&repo_root, install_path, output, no_upgrade)?;
+    build_self_binary(&repo_root, &target.target, quiet)?;
+    if target.upgrade {
+        println!("upgraded si binary: {}", target.target.display());
+    } else {
+        println!("built si binary: {}", target.target.display());
+    }
+    Ok(())
+}
+
+fn run_build_self_upgrade(repo: Option<PathBuf>, install_path: Option<PathBuf>, quiet: bool) -> Result<()> {
+    let repo_root = resolve_self_repo_root(repo)?;
+    let target = resolve_self_install_path(install_path)?;
+    build_self_binary(&repo_root, &target, quiet)?;
+    println!("upgraded si binary: {}", target.display());
+    Ok(())
+}
+
+fn run_build_self_run(repo: Option<PathBuf>, args: Vec<String>) -> Result<()> {
+    let repo_root = resolve_self_repo_root(repo)?;
+    let mut command = StdCommand::new("cargo");
+    command
+        .current_dir(repo_root)
+        .arg("run")
+        .arg("--locked")
+        .arg("--manifest-path")
+        .arg("rust/crates/si-cli/Cargo.toml")
+        .arg("--bin")
+        .arg("si-rs")
+        .arg("--");
+    for arg in args {
+        command.arg(arg);
+    }
+    let status = command.status().context("run cargo run for self run")?;
+    if !status.success() {
+        return Err(anyhow!("cargo run failed: {}", status));
+    }
+    Ok(())
+}
+
 fn resolve_release_repo_root(repo: Option<PathBuf>) -> Result<PathBuf> {
     let start = match repo {
         Some(path) if path.is_absolute() => path,
@@ -18447,6 +18658,19 @@ fn main() -> Result<()> {
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
         Command::Build { command } => match command {
             BuildCommand::Self_ { command } => match command {
+                BuildSelfCommand::Build {
+                    repo,
+                    no_upgrade,
+                    output,
+                    install_path,
+                    quiet,
+                } => run_build_self_build(repo, install_path, output, no_upgrade, quiet)?,
+                BuildSelfCommand::Upgrade {
+                    repo,
+                    install_path,
+                    quiet,
+                } => run_build_self_upgrade(repo, install_path, quiet)?,
+                BuildSelfCommand::Run { repo, args } => run_build_self_run(repo, args)?,
                 BuildSelfCommand::ReleaseAsset {
                     repo_root,
                     version,
