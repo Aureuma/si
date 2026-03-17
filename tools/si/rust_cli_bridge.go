@@ -1605,6 +1605,14 @@ func runGoogleYouTubeCommand(args []string) (bool, error) {
 		return runGoogleYouTubeDoctorCommand(args[1:])
 	case "search":
 		return runGoogleYouTubeSearchCommand(args[1:])
+	case "channel":
+		return runGoogleYouTubeChannelCommand(args[1:])
+	case "video":
+		return runGoogleYouTubeVideoCommand(args[1:])
+	case "playlist":
+		return runGoogleYouTubePlaylistCommand(args[1:])
+	case "playlist-item":
+		return runGoogleYouTubePlaylistItemCommand(args[1:])
 	case "support":
 		return runGoogleYouTubeSupportCommand(args[1:])
 	case "raw":
@@ -1656,6 +1664,54 @@ func runGoogleYouTubeSearchCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "list":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "search", "list"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeChannelCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get", "mine":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "channel", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeVideoCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubePlaylistCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubePlaylistItemCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist-item", "list"}, args[1:]...)...)
 	default:
 		return false, nil
 	}

@@ -4001,6 +4001,40 @@ func TestRunGoogleYouTubeSupportDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGoogleYouTubeResourceDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-youtube-resource'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGoogleYouTubeCommand([]string{"channel", "list", "--id", "c1", "--json"})
+		if err != nil {
+			t.Fatalf("runGoogleYouTubeCommand(channel): %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google youtube channel list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-youtube-resource" {
+		t.Fatalf("expected delegated Rust google youtube resource output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nyoutube\nchannel\nlist\n--id\nc1\n--json" {
+		t.Fatalf("expected Rust CLI args to be google youtube channel list + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGoogleCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
