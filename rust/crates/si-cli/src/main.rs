@@ -138,7 +138,9 @@ use si_rs_provider_google::{
     resolve_places_auth_status, resolve_places_current_context, resolve_places_runtime,
     GoogleYouTubeAPIRequest, GoogleYouTubeAPIResponse, GoogleYouTubeAuthStatus,
     GoogleYouTubeContextListEntry, GoogleYouTubeCurrentContext,
-    GoogleYouTubeOverrides, GoogleYouTubeRuntime, execute_youtube_api_request,
+    GoogleYouTubeOverrides, GoogleYouTubeRuntime, download_youtube_caption,
+    execute_youtube_api_request, set_youtube_thumbnail, upload_youtube_caption,
+    upload_youtube_video,
     list_youtube_contexts, render_youtube_context_list_text,
     resolve_youtube_auth_status, resolve_youtube_current_context, resolve_youtube_runtime,
 };
@@ -8175,6 +8177,14 @@ enum GoogleYouTubeCommand {
         #[command(subcommand)]
         command: GoogleYouTubeVideoCommand,
     },
+    Caption {
+        #[command(subcommand)]
+        command: GoogleYouTubeCaptionCommand,
+    },
+    Thumbnail {
+        #[command(subcommand)]
+        command: GoogleYouTubeThumbnailCommand,
+    },
     Playlist {
         #[command(subcommand)]
         command: GoogleYouTubePlaylistCommand,
@@ -8715,6 +8725,10 @@ enum GoogleYouTubeVideoCommand {
         #[command(flatten)]
         command: GoogleYouTubeVideoGetArgs,
     },
+    Upload {
+        #[command(flatten)]
+        command: GoogleYouTubeVideoUploadArgs,
+    },
     Update {
         #[command(flatten)]
         command: GoogleYouTubeVideoUpdateArgs,
@@ -8789,6 +8803,28 @@ struct GoogleYouTubeVideoGetArgs {
     raw: bool,
     #[arg(long, default_value = "text")]
     format: OutputFormat,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeVideoUploadArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    file: Option<PathBuf>,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    description: Option<String>,
+    #[arg(long, default_value = "private")]
+    privacy: String,
+    #[arg(long)]
+    tags: Option<String>,
+    #[arg(long, default_value = "22")]
+    category: String,
+    #[arg(long, default_value = "snippet,status")]
+    part: String,
+    #[arg(long, default_value_t = true)]
+    resumable: bool,
 }
 
 #[derive(Debug, clap::Args)]
@@ -8907,6 +8943,168 @@ enum GoogleYouTubePlaylistCommand {
         #[command(flatten)]
         command: GoogleYouTubePlaylistDeleteArgs,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeCaptionCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet")]
+        part: String,
+        #[arg(long)]
+        video_id: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Upload {
+        #[command(flatten)]
+        command: GoogleYouTubeCaptionUploadArgs,
+    },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubeCaptionUpdateArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeIdMutationArgs,
+    },
+    Download {
+        #[command(flatten)]
+        command: GoogleYouTubeCaptionDownloadArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeCaptionUploadArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    video_id: Option<String>,
+    #[arg(long)]
+    file: Option<PathBuf>,
+    #[arg(long, default_value = "en")]
+    language: String,
+    #[arg(long)]
+    name: Option<String>,
+    #[arg(long, default_value_t = false)]
+    draft: bool,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeCaptionUpdateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeCaptionDownloadArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "mode")]
+    auth_mode: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    region: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    client_secret: Option<String>,
+    #[arg(long)]
+    redirect_uri: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    refresh_token: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long)]
+    output: Option<PathBuf>,
+    #[arg(long = "format")]
+    caption_format: Option<String>,
+    #[arg(long = "translate")]
+    translate_language: Option<String>,
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeThumbnailCommand {
+    Set {
+        #[command(flatten)]
+        command: GoogleYouTubeThumbnailSetArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeThumbnailSetArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    video_id: Option<String>,
+    #[arg(long)]
+    file: Option<PathBuf>,
+    #[arg(long, default_value = "image/jpeg")]
+    content_type: String,
 }
 
 #[derive(Debug, clap::Args)]
@@ -21324,6 +21522,19 @@ fn main() -> Result<()> {
                             command.home, command.settings_file, format, command.raw,
                         )?
                     }
+                    GoogleYouTubeVideoCommand::Upload { command } => {
+                        run_google_youtube_video_upload(
+                            command.runtime,
+                            command.file,
+                            command.title,
+                            command.description,
+                            command.privacy,
+                            command.tags,
+                            command.category,
+                            command.part,
+                            command.resumable,
+                        )?
+                    }
                     GoogleYouTubeVideoCommand::Update { command } => {
                         run_google_youtube_video_update(
                             command.runtime,
@@ -21348,6 +21559,75 @@ fn main() -> Result<()> {
                             command.runtime,
                             command.ids,
                             command.params,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Caption { command } => match command {
+                    GoogleYouTubeCaptionCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, video_id, params, home, settings_file, json, raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_caption_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, video_id, params, home, settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubeCaptionCommand::Upload { command } => {
+                        run_google_youtube_caption_upload(
+                            command.runtime,
+                            command.video_id,
+                            command.file,
+                            command.language,
+                            command.name,
+                            command.draft,
+                            command.part,
+                        )?
+                    }
+                    GoogleYouTubeCaptionCommand::Update { command } => {
+                        run_google_youtube_caption_update(
+                            command.runtime, command.part, command.body, command.params,
+                        )?
+                    }
+                    GoogleYouTubeCaptionCommand::Delete { command } => {
+                        run_google_youtube_caption_delete(command.runtime, command.id, command.params)?
+                    }
+                    GoogleYouTubeCaptionCommand::Download { command } => {
+                        run_google_youtube_caption_download(
+                            command.account,
+                            command.env,
+                            command.auth_mode,
+                            command.api_key,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.project_id,
+                            command.language,
+                            command.region,
+                            command.client_id,
+                            command.client_secret,
+                            command.redirect_uri,
+                            command.access_token,
+                            command.refresh_token,
+                            command.home,
+                            command.settings_file,
+                            if command.json { OutputFormat::Json } else { OutputFormat::Text },
+                            command.id,
+                            command.output,
+                            command.caption_format,
+                            command.translate_language,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Thumbnail { command } => match command {
+                    GoogleYouTubeThumbnailCommand::Set { command } => {
+                        run_google_youtube_thumbnail_set(
+                            command.runtime,
+                            command.video_id,
+                            command.file,
+                            command.content_type,
                         )?
                     }
                 },
@@ -36691,6 +36971,53 @@ fn run_google_youtube_video_get_rating(
     )
 }
 
+fn run_google_youtube_video_upload(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    file: Option<PathBuf>,
+    title: Option<String>,
+    description: Option<String>,
+    privacy: String,
+    tags: Option<String>,
+    category: String,
+    part: String,
+    resumable: bool,
+) -> Result<()> {
+    let file = file.ok_or_else(|| anyhow::anyhow!("video upload requires --file <path>"))?;
+    let (runtime, format, raw) = load_google_youtube_runtime_from_command(command)?;
+    require_google_youtube_oauth(&runtime, "video upload")?;
+    let mut snippet = serde_json::json!({
+        "title": title.unwrap_or_default().trim(),
+        "description": description.unwrap_or_default().trim(),
+        "categoryId": category.trim(),
+    });
+    if let Some(tags) = tags {
+        let tags = tags
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if !tags.is_empty() {
+            snippet["tags"] = serde_json::json!(tags);
+        }
+    }
+    let metadata = serde_json::json!({
+        "snippet": snippet,
+        "status": {
+            "privacyStatus": privacy.trim(),
+        }
+    });
+    let response = upload_youtube_video(
+        &runtime,
+        file.to_string_lossy().as_ref(),
+        &metadata,
+        part.trim(),
+        resumable,
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
 fn run_google_youtube_playlist_create(
     command: GoogleYouTubeMutationRuntimeArgs,
     title: Option<String>,
@@ -37231,6 +37558,196 @@ fn run_google_youtube_comment_delete(
         params,
         None,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_caption_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    video_id: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    require_google_youtube_oauth(&runtime, "caption list")?;
+    let video_id = video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(video_id) = video_id else {
+        anyhow::bail!("caption list requires --video-id <id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    params.insert("videoId".to_owned(), video_id);
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/captions".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_caption_upload(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    video_id: Option<String>,
+    file: Option<PathBuf>,
+    language: String,
+    name: Option<String>,
+    draft: bool,
+    part: String,
+) -> Result<()> {
+    let video_id = video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(video_id) = video_id else {
+        anyhow::bail!("caption upload requires --video-id <id>");
+    };
+    let file = file.ok_or_else(|| anyhow::anyhow!("caption upload requires --file <path>"))?;
+    let (runtime, format, raw) = load_google_youtube_runtime_from_command(command)?;
+    require_google_youtube_oauth(&runtime, "caption upload")?;
+    let metadata = serde_json::json!({
+        "snippet": {
+            "videoId": video_id,
+            "language": language.trim(),
+            "name": name.unwrap_or_default().trim(),
+            "isDraft": draft,
+        }
+    });
+    let response = upload_youtube_caption(
+        &runtime,
+        file.to_string_lossy().as_ref(),
+        &metadata,
+        part.trim(),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_caption_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("caption update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "caption update", "PUT", "/youtube/v3/captions", params, Some(body))
+}
+
+fn run_google_youtube_caption_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("caption delete requires --id <caption-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(command, "caption delete", "DELETE", "/youtube/v3/captions", params, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_caption_download(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    id: Option<String>,
+    output: Option<PathBuf>,
+    caption_format: Option<String>,
+    translate_language: Option<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("caption download requires --id <caption-id>");
+    };
+    let output = output.ok_or_else(|| anyhow::anyhow!("caption download requires --output <path>"))?;
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    require_google_youtube_oauth(&runtime, "caption download")?;
+    let (bytes_written, content_type) = download_youtube_caption(
+        &runtime,
+        &id,
+        caption_format.as_deref(),
+        translate_language.as_deref(),
+        &output,
+    )
+    .map_err(anyhow::Error::msg)?;
+    let payload = serde_json::json!({
+        "output": output,
+        "bytes_written": bytes_written,
+        "content_type": content_type,
+    });
+    match format {
+        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
+}
+
+fn run_google_youtube_thumbnail_set(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    video_id: Option<String>,
+    file: Option<PathBuf>,
+    content_type: String,
+) -> Result<()> {
+    let video_id = video_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(video_id) = video_id else {
+        anyhow::bail!("thumbnail set requires --video-id <id>");
+    };
+    let file = file.ok_or_else(|| anyhow::anyhow!("thumbnail set requires --file <path>"))?;
+    let (runtime, format, raw) = load_google_youtube_runtime_from_command(command)?;
+    require_google_youtube_oauth(&runtime, "thumbnail set")?;
+    let response = set_youtube_thumbnail(
+        &runtime,
+        &video_id,
+        file.to_string_lossy().as_ref(),
+        content_type.trim(),
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
 }
 
 fn resolve_google_youtube_log_path(home: &std::path::Path, settings: &Settings) -> PathBuf {

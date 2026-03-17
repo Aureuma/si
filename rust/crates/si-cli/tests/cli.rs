@@ -1029,6 +1029,231 @@ project_id = "yt-core"
 }
 
 #[test]
+fn google_youtube_video_upload_json_resumable_uploads_file() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    let upload_path = home.path().join("video.mp4");
+    fs::write(&upload_path, b"video-bytes").expect("write video");
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+upload_base_url = "{base_url}"
+default_auth_mode = "oauth"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut init_stream, _) = listener.accept().expect("accept init");
+        let mut init_buffer = [0_u8; 8192];
+        let init_read = init_stream.read(&mut init_buffer).expect("read init");
+        let init_request = String::from_utf8_lossy(&init_buffer[..init_read]);
+        assert!(init_request.contains("POST /youtube/v3/videos?"));
+        assert!(init_request.contains("uploadType=resumable"));
+        let init_response = format!(
+            "HTTP/1.1 200 OK\r\nConnection: close\r\nLocation: http://{}/upload-session\r\nContent-Length: 0\r\n\r\n",
+            addr
+        );
+        init_stream
+            .write_all(init_response.as_bytes())
+            .expect("write init response");
+
+        let (mut upload_stream, _) = listener.accept().expect("accept upload");
+        let mut upload_buffer = [0_u8; 8192];
+        let upload_read = upload_stream.read(&mut upload_buffer).expect("read upload");
+        let upload_request = String::from_utf8_lossy(&upload_buffer[..upload_read]);
+        assert!(upload_request.contains("PUT /upload-session "));
+        assert!(upload_request.contains("video-bytes"));
+        let body = r#"{"id":"v-upload"}"#;
+        let upload_response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        upload_stream
+            .write_all(upload_response.as_bytes())
+            .expect("write upload response");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "google",
+            "youtube",
+            "video",
+            "upload",
+            "--file",
+        ])
+        .arg(&upload_path)
+        .args(["--title", "Launch", "--home"])
+        .arg(home.path())
+        .args(["--access-token", "token-123", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["id"], "v-upload");
+}
+
+#[test]
+fn google_youtube_caption_download_json_writes_file() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    let output_path = home.path().join("captions.vtt");
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+default_auth_mode = "oauth"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("GET /youtube/v3/captions/cap1?"));
+        assert!(request.contains("tfmt=vtt"));
+        let body = "WEBVTT\n\n00:00.000 --> 00:01.000\nhello\n";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/vtt\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "google",
+            "youtube",
+            "caption",
+            "download",
+            "--id",
+            "cap1",
+            "--output",
+        ])
+        .arg(&output_path)
+        .args(["--format", "vtt", "--home"])
+        .arg(home.path())
+        .args(["--access-token", "token-123", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert!(parsed["bytes_written"].as_i64().unwrap_or_default() > 0);
+    assert_eq!(fs::read_to_string(&output_path).expect("caption output"), "WEBVTT\n\n00:00.000 --> 00:01.000\nhello\n");
+}
+
+#[test]
+fn google_youtube_thumbnail_set_json_uploads_media() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let base_url = format!("http://{}", addr);
+    let file_path = home.path().join("thumb.jpg");
+    fs::write(&file_path, b"jpeg-bytes").expect("write thumb");
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "core"
+
+[google.youtube]
+api_base_url = "{base_url}"
+upload_base_url = "{base_url}"
+default_auth_mode = "oauth"
+
+[google.youtube.accounts.core]
+project_id = "yt-core"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("POST /youtube/v3/thumbnails/set?"));
+        assert!(request.contains("uploadType=media"));
+        assert!(request.contains("videoId=vthumb"));
+        assert!(request.contains("jpeg-bytes"));
+        let body = r#"{"kind":"youtube#thumbnailSetResponse"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args([
+            "google",
+            "youtube",
+            "thumbnail",
+            "set",
+            "--video-id",
+            "vthumb",
+            "--file",
+        ])
+        .arg(&file_path)
+        .args(["--home"])
+        .arg(home.path())
+        .args(["--access-token", "token-123", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["kind"], "youtube#thumbnailSetResponse");
+}
+
+#[test]
 fn google_youtube_playlist_list_json_reads_api() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

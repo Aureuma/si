@@ -824,6 +824,187 @@ pub fn execute_youtube_api_request(
     normalize_youtube_api_response(response)
 }
 
+pub fn upload_youtube_video(
+    runtime: &GoogleYouTubeRuntime,
+    file_path: &str,
+    metadata: &Value,
+    part: &str,
+    resumable: bool,
+) -> Result<GoogleYouTubeAPIResponse, String> {
+    if !resumable {
+        return upload_youtube_multipart(
+            runtime,
+            "/youtube/v3/videos",
+            BTreeMap::from([
+                ("uploadType".to_owned(), "multipart".to_owned()),
+                ("part".to_owned(), part.trim().to_owned()),
+            ]),
+            file_path,
+            "application/octet-stream",
+            metadata,
+        );
+    }
+    let file_bytes = std::fs::read(file_path)
+        .map_err(|err| format!("failed to read youtube upload file {:?}: {err}", file_path))?;
+    let metadata_raw =
+        serde_json::to_vec(metadata).map_err(|err| format!("invalid youtube video metadata: {err}"))?;
+    let token = resolve_youtube_bearer_token(runtime)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|err| format!("failed to build google youtube upload client: {err}"))?;
+    let init_url = format!(
+        "{}{}",
+        runtime.upload_base_url.trim_end_matches('/'),
+        normalize_path("/youtube/v3/videos")
+    );
+    let init_response = client
+        .post(init_url)
+        .bearer_auth(token.clone())
+        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .header("X-Upload-Content-Length", file_bytes.len().to_string())
+        .header("X-Upload-Content-Type", detect_youtube_content_type(file_path, "application/octet-stream"))
+        .query(&[("uploadType", "resumable"), ("part", part.trim())])
+        .body(metadata_raw)
+        .send()
+        .map_err(|err| format!("google youtube resumable init failed: {err}"))?;
+    let init_status = init_response.status();
+    let init_headers = init_response.headers().clone();
+    let init_body = init_response
+        .text()
+        .map_err(|err| format!("failed to read google youtube resumable init response: {err}"))?;
+    if !init_status.is_success() {
+        return Err(format!(
+            "google youtube resumable init failed: {} {}: {}",
+            init_status.as_u16(),
+            response_status_text(init_status),
+            init_body.trim()
+        ));
+    }
+    let location = init_headers
+        .get("location")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    if location.is_empty() {
+        return Err("google youtube resumable init missing location header".to_owned());
+    }
+    let upload_response = client
+        .put(location)
+        .bearer_auth(token)
+        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            detect_youtube_content_type(file_path, "application/octet-stream"),
+        )
+        .header(reqwest::header::CONTENT_LENGTH, file_bytes.len().to_string())
+        .body(file_bytes)
+        .send()
+        .map_err(|err| format!("google youtube resumable upload failed: {err}"))?;
+    normalize_youtube_api_response(upload_response)
+}
+
+pub fn upload_youtube_caption(
+    runtime: &GoogleYouTubeRuntime,
+    file_path: &str,
+    metadata: &Value,
+    part: &str,
+) -> Result<GoogleYouTubeAPIResponse, String> {
+    upload_youtube_multipart(
+        runtime,
+        "/youtube/v3/captions",
+        BTreeMap::from([
+            ("uploadType".to_owned(), "multipart".to_owned()),
+            ("part".to_owned(), part.trim().to_owned()),
+        ]),
+        file_path,
+        "application/octet-stream",
+        metadata,
+    )
+}
+
+pub fn set_youtube_thumbnail(
+    runtime: &GoogleYouTubeRuntime,
+    video_id: &str,
+    file_path: &str,
+    content_type: &str,
+) -> Result<GoogleYouTubeAPIResponse, String> {
+    upload_youtube_media(
+        runtime,
+        "/youtube/v3/thumbnails/set",
+        BTreeMap::from([
+            ("uploadType".to_owned(), "media".to_owned()),
+            ("videoId".to_owned(), video_id.trim().to_owned()),
+        ]),
+        file_path,
+        content_type,
+    )
+}
+
+pub fn download_youtube_caption(
+    runtime: &GoogleYouTubeRuntime,
+    id: &str,
+    tfmt: Option<&str>,
+    tlang: Option<&str>,
+    output: &std::path::Path,
+) -> Result<(i64, String), String> {
+    let token = resolve_youtube_bearer_token(runtime)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|err| format!("failed to build google youtube download client: {err}"))?;
+    let url = format!(
+        "{}{}",
+        runtime.base_url.trim_end_matches('/'),
+        normalize_path(&format!("/youtube/v3/captions/{}", id.trim()))
+    );
+    let mut params: Vec<(&str, String)> = Vec::new();
+    if let Some(tfmt) = tfmt.map(str::trim).filter(|value| !value.is_empty()) {
+        params.push(("tfmt", tfmt.to_owned()));
+    }
+    if let Some(tlang) = tlang.map(str::trim).filter(|value| !value.is_empty()) {
+        params.push(("tlang", tlang.to_owned()));
+    }
+    let response = client
+        .get(url)
+        .bearer_auth(token)
+        .header("User-Agent", "si-rs-provider-google/1.0")
+        .query(&params)
+        .send()
+        .map_err(|err| format!("google youtube caption download failed: {err}"))?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let content_type = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let bytes = response
+        .bytes()
+        .map_err(|err| format!("failed to read google youtube caption download body: {err}"))?;
+    if !status.is_success() {
+        let body = String::from_utf8_lossy(&bytes);
+        return Err(format!(
+            "google youtube caption download failed: {} {}: {}",
+            status.as_u16(),
+            response_status_text(status),
+            body.trim()
+        ));
+    }
+    if let Some(parent) = output.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .map_err(|err| format!("failed to create caption output directory {:?}: {err}", parent))?;
+        }
+    }
+    std::fs::write(output, &bytes)
+        .map_err(|err| format!("failed to write youtube caption output {:?}: {err}", output))?;
+    Ok((bytes.len() as i64, content_type))
+}
+
 pub fn list_play_contexts(settings: &GoogleSettings) -> Vec<GooglePlayContextListEntry> {
     let mut rows = Vec::with_capacity(settings.play.accounts.len());
     for (alias, account) in &settings.play.accounts {
@@ -1229,6 +1410,119 @@ fn normalize_youtube_api_response(
         data,
         body,
     })
+}
+
+fn upload_youtube_multipart(
+    runtime: &GoogleYouTubeRuntime,
+    path: &str,
+    params: BTreeMap<String, String>,
+    file_path: &str,
+    content_type: &str,
+    metadata: &Value,
+) -> Result<GoogleYouTubeAPIResponse, String> {
+    let token = resolve_youtube_bearer_token(runtime)?;
+    let file_bytes = std::fs::read(file_path)
+        .map_err(|err| format!("failed to read youtube upload file {:?}: {err}", file_path))?;
+    let metadata_raw =
+        serde_json::to_vec(metadata).map_err(|err| format!("invalid youtube upload metadata: {err}"))?;
+    let boundary = format!("si-rs-youtube-{}", std::process::id());
+    let mut body = Vec::new();
+    body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+    body.extend_from_slice(b"Content-Type: application/json; charset=UTF-8\r\n\r\n");
+    body.extend_from_slice(&metadata_raw);
+    body.extend_from_slice(b"\r\n");
+    body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+    body.extend_from_slice(
+        format!(
+            "Content-Type: {}\r\n\r\n",
+            detect_youtube_content_type(file_path, content_type)
+        )
+        .as_bytes(),
+    );
+    body.extend_from_slice(&file_bytes);
+    body.extend_from_slice(b"\r\n");
+    body.extend_from_slice(format!("--{}--\r\n", boundary).as_bytes());
+    let client = Client::builder()
+        .timeout(Duration::from_secs(10 * 60))
+        .build()
+        .map_err(|err| format!("failed to build google youtube multipart client: {err}"))?;
+    let url = format!(
+        "{}{}",
+        runtime.upload_base_url.trim_end_matches('/'),
+        normalize_path(path)
+    );
+    let response = client
+        .post(url)
+        .bearer_auth(token)
+        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            format!("multipart/related; boundary={boundary}"),
+        )
+        .query(&params)
+        .body(body)
+        .send()
+        .map_err(|err| format!("google youtube multipart upload failed: {err}"))?;
+    normalize_youtube_api_response(response)
+}
+
+fn upload_youtube_media(
+    runtime: &GoogleYouTubeRuntime,
+    path: &str,
+    params: BTreeMap<String, String>,
+    file_path: &str,
+    content_type: &str,
+) -> Result<GoogleYouTubeAPIResponse, String> {
+    let token = resolve_youtube_bearer_token(runtime)?;
+    let file_bytes = std::fs::read(file_path)
+        .map_err(|err| format!("failed to read youtube media upload file {:?}: {err}", file_path))?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(5 * 60))
+        .build()
+        .map_err(|err| format!("failed to build google youtube media client: {err}"))?;
+    let url = format!(
+        "{}{}",
+        runtime.upload_base_url.trim_end_matches('/'),
+        normalize_path(path)
+    );
+    let response = client
+        .post(url)
+        .bearer_auth(token)
+        .header("User-Agent", "si-rs-provider-google/1.0")
+        .header(
+            reqwest::header::CONTENT_TYPE,
+            detect_youtube_content_type(file_path, content_type),
+        )
+        .header(reqwest::header::CONTENT_LENGTH, file_bytes.len().to_string())
+        .query(&params)
+        .body(file_bytes)
+        .send()
+        .map_err(|err| format!("google youtube media upload failed: {err}"))?;
+    normalize_youtube_api_response(response)
+}
+
+fn detect_youtube_content_type(file_path: &str, fallback: &str) -> String {
+    match std::path::Path::new(file_path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "jpg" | "jpeg" => "image/jpeg".to_owned(),
+        "png" => "image/png".to_owned(),
+        "gif" => "image/gif".to_owned(),
+        "webp" => "image/webp".to_owned(),
+        "mp4" => "video/mp4".to_owned(),
+        "mov" => "video/quicktime".to_owned(),
+        "webm" => "video/webm".to_owned(),
+        "mkv" => "video/x-matroska".to_owned(),
+        "srt" => "application/x-subrip".to_owned(),
+        "vtt" => "text/vtt".to_owned(),
+        "sbv" => "text/plain".to_owned(),
+        _ => fallback.to_owned(),
+    }
 }
 
 fn normalize_play_api_response(

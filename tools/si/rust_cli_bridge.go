@@ -1609,6 +1609,10 @@ func runGoogleYouTubeCommand(args []string) (bool, error) {
 		return runGoogleYouTubeChannelCommand(args[1:])
 	case "video":
 		return runGoogleYouTubeVideoCommand(args[1:])
+	case "caption":
+		return runGoogleYouTubeCaptionCommand(args[1:])
+	case "thumbnail":
+		return runGoogleYouTubeThumbnailCommand(args[1:])
 	case "playlist":
 		return runGoogleYouTubePlaylistCommand(args[1:])
 	case "playlist-item":
@@ -1694,12 +1698,42 @@ func runGoogleYouTubeVideoCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list", "get", "update", "rate":
+	case "list", "get", "update", "rate", "upload":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
 	case "delete", "remove", "rm":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", "delete"}, args[1:]...)...)
 	case "get-rating", "rating":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", "get-rating"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeCaptionCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "upload", "update":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "caption", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "caption", "upload"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "caption", "delete"}, args[1:]...)...)
+	case "download", "get":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "caption", "download"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeThumbnailCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "set":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "thumbnail", "set"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
