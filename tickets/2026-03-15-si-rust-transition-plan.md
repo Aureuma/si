@@ -154,6 +154,7 @@ Progress notes:
 
 - completed: the first Phase 9 cutover slice now flips the Homebrew core formula renderer to build and install the Rust CLI as the primary `si` binary from `rust/crates/si-cli`, replacing the prior Go `./tools/si` source-build path while leaving the release-asset/tap lane as the next adjacent cutover surface
 - completed: the Rust CLI now dispatches the remaining explicit public-doctor compatibility paths (`apple appstore doctor --public`, `aws doctor --public`, and `oci doctor --public`) through a packaged or env-overridden Go adapter instead of hard-failing, establishing the first runtime Go-compat seam needed before the release-asset cutover can ship Rust as the primary `si` binary
+- completed: the Rust-owned installer now also builds and installs the Rust CLI itself as the primary `si` binary via `cargo build --release --locked --bin si-rs`, replacing the previous internal `go build ./tools/si` step while keeping the existing installer flag surface stable as a compatibility layer for the cutover
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
