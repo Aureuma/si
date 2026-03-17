@@ -225,6 +225,17 @@ fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
 
+fn write_executable_shell_script(path: &Path, body: &str) {
+    fs::write(path, body).expect("write shell script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(path).expect("stat shell script").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(path, perms).expect("chmod shell script");
+    }
+}
+
 #[test]
 fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
     let repo = tempdir().expect("repo tempdir");
@@ -633,6 +644,54 @@ fn build_installer_smoke_docker_reports_run_output_on_failure() {
     assert!(stderr.contains("docker failed:"));
     assert!(stderr.contains("stdout:\nroot smoke failed"));
     assert!(stderr.contains("stderr:\npermission denied"));
+}
+
+#[test]
+fn aws_doctor_public_uses_go_compat_adapter() {
+    let dir = tempdir().expect("tempdir");
+    let go_compat = dir.path().join("si-go");
+    write_executable_shell_script(&go_compat, "#!/bin/sh\nprintf 'go compat %s\\n' \"$*\"\n");
+    let stdout = cargo_bin()
+        .args(["aws", "doctor", "--public", "true"])
+        .env("SI_GO_COMPAT_BIN", &go_compat)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8_lossy(&stdout).contains("go compat aws doctor --public true"));
+}
+
+#[test]
+fn apple_appstore_doctor_public_uses_go_compat_adapter() {
+    let dir = tempdir().expect("tempdir");
+    let go_compat = dir.path().join("si-go");
+    write_executable_shell_script(&go_compat, "#!/bin/sh\nprintf 'go compat %s\\n' \"$*\"\n");
+    let stdout = cargo_bin()
+        .args(["apple", "appstore", "doctor", "--public", "true"])
+        .env("SI_GO_COMPAT_BIN", &go_compat)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8_lossy(&stdout).contains("go compat apple appstore doctor --public true"));
+}
+
+#[test]
+fn oci_doctor_public_uses_go_compat_adapter() {
+    let dir = tempdir().expect("tempdir");
+    let go_compat = dir.path().join("si-go");
+    write_executable_shell_script(&go_compat, "#!/bin/sh\nprintf 'go compat %s\\n' \"$*\"\n");
+    let stdout = cargo_bin()
+        .args(["oci", "doctor", "--public", "true"])
+        .env("SI_GO_COMPAT_BIN", &go_compat)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    assert!(String::from_utf8_lossy(&stdout).contains("go compat oci doctor --public true"));
 }
 
 #[test]
