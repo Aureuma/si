@@ -1613,8 +1613,14 @@ func runGoogleYouTubeCommand(args []string) (bool, error) {
 		return runGoogleYouTubePlaylistCommand(args[1:])
 	case "playlist-item":
 		return runGoogleYouTubePlaylistItemCommand(args[1:])
+	case "subscription":
+		return runGoogleYouTubeSubscriptionCommand(args[1:])
+	case "comment":
+		return runGoogleYouTubeCommentCommand(args[1:])
 	case "support":
 		return runGoogleYouTubeSupportCommand(args[1:])
+	case "report":
+		return runGoogleYouTubeReportCommand(args[1:])
 	case "raw":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "raw"}, args[1:]...)...)
 	default:
@@ -1740,6 +1746,66 @@ func runGoogleYouTubeSupportCommand(args []string) (bool, error) {
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "support", "regions"}, args[1:]...)...)
 	case "categories", "category":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "support", "categories"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeSubscriptionCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "create":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "subscription", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "subscription", "create"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "subscription", "delete"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeCommentCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get", "create", "update":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "comment", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "comment", "create"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "comment", "delete"}, args[1:]...)...)
+	case "thread", "threads":
+		return runGoogleYouTubeCommentThreadCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeCommentThreadCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "create":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "comment", "thread", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "comment", "thread", "create"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeReportCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "usage":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "report", "usage"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
