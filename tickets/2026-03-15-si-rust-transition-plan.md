@@ -580,7 +580,7 @@ Progress notes:
 
 ### Phase 10: Go retirement
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -596,6 +596,10 @@ Testing:
 Exit criteria:
 
 - no production `si` command depends on the retired Go implementation.
+
+Progress notes:
+
+- completed: retired the dead Go release/install helper binaries that the repo no longer calls (`tools/si/cmd/releasectl`, `install-si`, `install-si-settings-helper`, `test-install-si`, `test-install-si-npm`, and `test-install-si-docker`), leaving the Rust-owned shell entrypoints as the only live release/install helpers on those paths
 
 ## Test Strategy by Layer
 
