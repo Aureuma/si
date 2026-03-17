@@ -447,6 +447,7 @@ pub struct GoogleSettings {
     pub api_base_url: Option<String>,
     pub vault_file: Option<String>,
     pub log_file: Option<String>,
+    pub youtube: GoogleYouTubeSettings,
     #[serde(default)]
     pub accounts: BTreeMap<String, GoogleAccountEntry>,
 }
@@ -458,6 +459,7 @@ impl GoogleSettings {
         normalize_option_string(&mut self.api_base_url);
         normalize_option_string(&mut self.vault_file);
         normalize_option_string(&mut self.log_file);
+        self.youtube.normalize();
         let mut normalized = BTreeMap::new();
         for (key, mut entry) in std::mem::take(&mut self.accounts) {
             let key = key.trim().to_owned();
@@ -468,6 +470,71 @@ impl GoogleSettings {
             normalized.insert(key, entry);
         }
         self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GoogleYouTubeSettings {
+    pub api_base_url: Option<String>,
+    pub upload_base_url: Option<String>,
+    pub default_auth_mode: Option<String>,
+    pub upload_chunk_size_mb: Option<i64>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, GoogleYouTubeAccountEntry>,
+}
+
+impl GoogleYouTubeSettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.upload_base_url);
+        normalize_option_string(&mut self.default_auth_mode);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GoogleYouTubeAccountEntry {
+    pub name: Option<String>,
+    pub project_id: Option<String>,
+    pub project_id_env: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub youtube_api_key_env: Option<String>,
+    pub prod_youtube_api_key_env: Option<String>,
+    pub staging_youtube_api_key_env: Option<String>,
+    pub dev_youtube_api_key_env: Option<String>,
+    pub youtube_client_id_env: Option<String>,
+    pub youtube_client_secret_env: Option<String>,
+    pub youtube_redirect_uri_env: Option<String>,
+    pub youtube_refresh_token_env: Option<String>,
+    pub default_region_code: Option<String>,
+    pub default_language_code: Option<String>,
+}
+
+impl GoogleYouTubeAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.project_id);
+        normalize_option_string(&mut self.project_id_env);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.youtube_api_key_env);
+        normalize_option_string(&mut self.prod_youtube_api_key_env);
+        normalize_option_string(&mut self.staging_youtube_api_key_env);
+        normalize_option_string(&mut self.dev_youtube_api_key_env);
+        normalize_option_string(&mut self.youtube_client_id_env);
+        normalize_option_string(&mut self.youtube_client_secret_env);
+        normalize_option_string(&mut self.youtube_redirect_uri_env);
+        normalize_option_string(&mut self.youtube_refresh_token_env);
+        normalize_option_string(&mut self.default_region_code);
+        normalize_option_string(&mut self.default_language_code);
     }
 }
 
