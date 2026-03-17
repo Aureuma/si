@@ -255,10 +255,8 @@ build:
   si build image [--skip-preflight] [--preflight-only]
   si build self [--repo <path>] [--install-path <path>] [--no-upgrade] [--output <path>]
   si build self upgrade [--repo <path>] [--install-path <path>]
-  si build self release-assets [--repo <path>] [--version <vX.Y.Z>] [--out-dir <path>]
   si build self run [--repo <path>] [--] [si args...]
     Note: image builds use buildx directly when available, else classic docker build.
-    Release maintainers: use "si build self release-assets" to produce all CLI release archives + checksums.
 
   Typical workflows:
     Stable use: run si build self to upgrade installed si from your checkout.
