@@ -6032,12 +6032,12 @@ func TestRunWorkOSCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
 
-	delegated, err := runWorkOSCommand([]string{"organization", "list", "--json"})
+	delegated, err := runWorkOSCommand([]string{"doctor", "--public", "--json"})
 	if err != nil {
 		t.Fatalf("runWorkOSCommand: %v", err)
 	}
 	if delegated {
-		t.Fatalf("expected Go workos root path for non-migrated subtree")
+		t.Fatalf("expected Go workos root path for public doctor probe")
 	}
 }
 
@@ -6072,6 +6072,108 @@ func TestRunWorkOSCommandDelegatesToRustCLIForMigratedReadPath(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "workos\ncontext\nlist\n--json" {
 		t.Fatalf("expected Rust CLI args to be workos root + args, got %q", string(argsData))
+	}
+}
+
+func TestRunWorkOSCommandDelegatesToRustCLIForDoctor(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-workos-doctor'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runWorkOSCommand([]string{"doctor", "--json"})
+		if err != nil {
+			t.Fatalf("runWorkOSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected workos doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-workos-doctor" {
+		t.Fatalf("expected delegated Rust workos doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "workos\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be workos doctor + args, got %q", string(argsData))
+	}
+}
+
+func TestRunWorkOSCommandDelegatesToRustCLIForResourceLane(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-workos-resource'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runWorkOSCommand([]string{"organization", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runWorkOSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected workos resource lane to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-workos-resource" {
+		t.Fatalf("expected delegated Rust workos resource output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "workos\norganization\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be workos organization + args, got %q", string(argsData))
+	}
+}
+
+func TestRunWorkOSCommandDelegatesToRustCLIForRaw(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-workos-raw'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runWorkOSCommand([]string{"raw", "--path", "/organizations", "--json"})
+		if err != nil {
+			t.Fatalf("runWorkOSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected workos raw to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-workos-raw" {
+		t.Fatalf("expected delegated Rust workos raw output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "workos\nraw\n--path\n/organizations\n--json" {
+		t.Fatalf("expected Rust CLI args to be workos raw + args, got %q", string(argsData))
 	}
 }
 func TestRunGitHubContextListCommandDefaultsToGo(t *testing.T) {

@@ -3383,6 +3383,163 @@ organization_id = "org_123"
 }
 
 #[test]
+fn workos_doctor_json_verifies_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /organizations?limit=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_workos_prod\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_workos_doctor")],
+            r#"{"data":[{"id":"org_123"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "workos",
+            "doctor",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk_workos_prod",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["provider"], "workos");
+    assert_eq!(parsed["checks"][2]["detail"], "200 200 OK");
+    server.join();
+}
+
+#[test]
+fn workos_raw_json_fetches_with_headers_and_query_params() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /organizations?limit=2 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_workos_prod\r\n"));
+        assert!(request.contains("x-test: alpha\r\n") || request.contains("X-Test: alpha\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_workos_raw")],
+            r#"{"data":[{"id":"org_123"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "workos",
+            "raw",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk_workos_prod",
+            "--method",
+            "GET",
+            "--path",
+            "/organizations",
+            "--param",
+            "limit=2",
+            "--header",
+            "x-test=alpha",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_workos_raw");
+    assert_eq!(parsed["data"]["data"][0]["id"], "org_123");
+    server.join();
+}
+
+#[test]
+fn workos_organization_list_json_fetches_from_api() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /organizations?limit=2 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk_workos_prod\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_workos_org_list")],
+            r#"{"data":[{"id":"org_123"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "workos",
+            "organization",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk_workos_prod",
+            "--limit",
+            "2",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_workos_org_list");
+    assert_eq!(parsed["data"]["data"][0]["id"], "org_123");
+    server.join();
+}
+
+#[test]
+fn workos_invitation_revoke_json_posts_empty_body() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with(
+            "POST /user_management/invitations/inv_123/revoke HTTP/1.1\r\n"
+        ));
+        assert!(request.contains("authorization: Bearer sk_workos_prod\r\n"));
+        assert!(request.contains("content-type: application/json\r\n"));
+        assert!(request.contains("\r\n\r\n{}"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_workos_revoke")],
+            r#"{"id":"inv_123","status":"revoked"}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "workos",
+            "invitation",
+            "revoke",
+            "inv_123",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk_workos_prod",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["data"]["status"], "revoked");
+    server.join();
+}
+
+#[test]
 fn cloudflare_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

@@ -1571,9 +1571,41 @@ func runWorkOSCommand(args []string) (bool, error) {
 		return runWorkOSAuthCommand(args[1:])
 	case "context":
 		return runWorkOSContextCommand(args[1:])
+	case "doctor":
+		return runWorkOSDoctorCommand(args[1:])
+	case "organization", "org":
+		return maybeDispatchRustCLIReadOnly("workos", append([]string{"organization"}, args[1:]...)...)
+	case "user", "users":
+		return maybeDispatchRustCLIReadOnly("workos", append([]string{"user"}, args[1:]...)...)
+	case "membership", "memberships":
+		return maybeDispatchRustCLIReadOnly("workos", append([]string{"membership"}, args[1:]...)...)
+	case "invitation", "invitations", "invite":
+		return maybeDispatchRustCLIReadOnly("workos", append([]string{"invitation"}, args[1:]...)...)
+	case "directory", "directories":
+		return maybeDispatchRustCLIReadOnly("workos", append([]string{"directory"}, args[1:]...)...)
+	case "raw":
+		return maybeDispatchRustCLIReadOnly("workos", append([]string{"raw"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
+}
+
+func runWorkOSDoctorCommand(args []string) (bool, error) {
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--public", arg == "--public=true", arg == "--public=1":
+			return false, nil
+		case arg == "--public=false", arg == "--public=0":
+		case arg == "--public" && idx+1 < len(args):
+			next := strings.TrimSpace(args[idx+1])
+			if next == "true" || next == "1" {
+				return false, nil
+			}
+			idx++
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("workos", append([]string{"doctor"}, args...)...)
 }
 
 func runGitHubContextListCommand(args []string) (bool, error) {
