@@ -2032,6 +2032,108 @@ func TestRunAWSECRCommandDelegatesRepositoryListToRustCLIWhenConfigured(t *testi
 	}
 }
 
+func TestRunAWSS3CommandDelegatesObjectListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-s3-object'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"s3", "object", "list", "--bucket", "demo", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws s3 object list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-s3-object" {
+		t.Fatalf("expected delegated Rust aws s3 object output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ns3\nobject\nlist\n--bucket\ndemo\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws s3 object + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSSecretsCommandDelegatesListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-secrets'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"secrets", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws secrets list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-secrets" {
+		t.Fatalf("expected delegated Rust aws secrets output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nsecrets\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws secrets + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSKMSCommandDelegatesKeyListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-kms'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"kms", "key", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws kms key list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-kms" {
+		t.Fatalf("expected delegated Rust aws kms output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nkms\nkey\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws kms key + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

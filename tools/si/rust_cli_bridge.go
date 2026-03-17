@@ -785,6 +785,10 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSIAMCommand(args[1:])
 	case "s3":
 		return runAWSS3Command(args[1:])
+	case "secrets", "secretsmanager", "secret":
+		return runAWSSecretsCommand(args[1:])
+	case "kms":
+		return runAWSKMSCommand(args[1:])
 	case "ec2":
 		return runAWSEC2Command(args[1:])
 	case "lambda":
@@ -872,23 +876,61 @@ func runAWSS3Command(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
 	}
-	if strings.ToLower(strings.TrimSpace(args[0])) != "bucket" {
-		return false, nil
-	}
-	if len(args) < 2 {
-		return false, nil
-	}
-	switch strings.ToLower(strings.TrimSpace(args[1])) {
-	case "list", "create":
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
-	case "delete", "remove", "rm":
-		if !awsForceEnabled(args[2:]) {
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "bucket":
+		if len(args) < 2 {
 			return false, nil
 		}
-		return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "create":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+		case "delete", "remove", "rm":
+			if !awsForceEnabled(args[2:]) {
+				return false, nil
+			}
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+		default:
+			return false, nil
+		}
+	case "object":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "get", "put", "set", "upload":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+		case "delete", "remove", "rm":
+			if !awsForceEnabled(args[2:]) {
+				return false, nil
+			}
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+		default:
+			return false, nil
+		}
 	default:
 		return false, nil
 	}
+}
+
+func runAWSSecretsCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get", "create", "put", "set", "update":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"secrets"}, args...)...)
+	case "delete", "remove", "rm":
+		if !awsForceEnabled(args[1:]) {
+			return false, nil
+		}
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"secrets"}, args...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runAWSKMSCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"kms"}, args...)...)
 }
 
 func runAWSEC2Command(args []string) (bool, error) {

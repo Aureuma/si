@@ -1704,6 +1704,14 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSS3Command,
     },
+    Secrets {
+        #[command(subcommand)]
+        command: AWSSecretsCommand,
+    },
+    Kms {
+        #[command(subcommand)]
+        command: AWSKmsCommand,
+    },
     Ec2 {
         #[command(subcommand)]
         command: AWSEC2Command,
@@ -1962,6 +1970,10 @@ enum AWSS3Command {
         #[command(subcommand)]
         command: AWSS3BucketCommand,
     },
+    Object {
+        #[command(subcommand)]
+        command: AWSS3ObjectCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -2042,6 +2054,392 @@ enum AWSS3BucketCommand {
         #[arg(long)]
         json: bool,
         #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSS3ObjectCommand {
+    List {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        prefix: Option<String>,
+        #[arg(long, default_value_t = 100)]
+        max_keys: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Put {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        file: Option<PathBuf>,
+        #[arg(long, default_value = "application/octet-stream")]
+        content_type: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSSecretsCommand {
+    List {
+        #[arg(long, default_value_t = 100)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        value: String,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Put {
+        id: String,
+        #[arg(long)]
+        value: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        id: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long, default_value_t = true, action = ArgAction::Set)]
+        force_delete: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSKmsCommand {
+    Key {
+        #[command(subcommand)]
+        command: AWSKmsKeyCommand,
+    },
+    Encrypt {
+        #[arg(long)]
+        key_id: String,
+        #[arg(long)]
+        plaintext: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Decrypt {
+        #[arg(long)]
+        ciphertext: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSKmsKeyCommand {
+    List {
+        #[arg(long, default_value_t = 100)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Describe {
+        id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
         raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
@@ -11503,6 +11901,167 @@ fn main() -> Result<()> {
                         )?
                     }
                 }
+                AWSS3Command::Object { command } => match command {
+                    AWSS3ObjectCommand::List {
+                        bucket,
+                        prefix,
+                        max_keys,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_object_list(
+                            bucket, prefix, max_keys, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSS3ObjectCommand::Get {
+                        bucket,
+                        key,
+                        output,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_object_get(
+                            bucket, key, output, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSS3ObjectCommand::Put {
+                        bucket,
+                        key,
+                        body,
+                        file,
+                        content_type,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_object_put(
+                            bucket, key, body, file, content_type, account, region, base_url,
+                            access_key, secret_key, session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSS3ObjectCommand::Delete {
+                        bucket,
+                        key,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_object_delete(
+                            bucket, key, force, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                }
+            },
+            AWSCommand::Secrets { command } => match command {
+                AWSSecretsCommand::List {
+                    limit, account, region, base_url, access_key, secret_key, session_token,
+                    home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_secrets_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+                AWSSecretsCommand::Get {
+                    id, account, region, base_url, access_key, secret_key, session_token,
+                    home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_secrets_get(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+                AWSSecretsCommand::Create {
+                    name, value, description, account, region, base_url, access_key, secret_key,
+                    session_token, home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_secrets_create(name, value, description, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+                AWSSecretsCommand::Put {
+                    id, value, account, region, base_url, access_key, secret_key, session_token,
+                    home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_secrets_put(id, value, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+                AWSSecretsCommand::Delete {
+                    id, force, force_delete, account, region, base_url, access_key, secret_key,
+                    session_token, home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_secrets_delete(id, force, force_delete, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+            },
+            AWSCommand::Kms { command } => match command {
+                AWSKmsCommand::Key { command } => match command {
+                    AWSKmsKeyCommand::List {
+                        limit, account, region, base_url, access_key, secret_key, session_token,
+                        home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_kms_key_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSKmsKeyCommand::Describe {
+                        id, account, region, base_url, access_key, secret_key, session_token,
+                        home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_kms_key_describe(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+                AWSKmsCommand::Encrypt {
+                    key_id, plaintext, account, region, base_url, access_key, secret_key,
+                    session_token, home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_kms_encrypt(key_id, plaintext, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+                AWSKmsCommand::Decrypt {
+                    ciphertext, account, region, base_url, access_key, secret_key, session_token,
+                    home, settings_file, json, raw, format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_kms_decrypt(ciphertext, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
             },
             AWSCommand::Ec2 { command } => match command {
                 AWSEC2Command::Instance { command } => match command {
@@ -20352,6 +20911,10 @@ fn execute_aws_json(
     )
 }
 
+fn aws_s3_object_path(bucket: &str, key: &str) -> String {
+    format!("/{}/{}", bucket.trim(), key.trim_start_matches('/'))
+}
+
 fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
@@ -20799,6 +21362,367 @@ fn run_aws_lambda_function_list(
             }
             execute_aws_rest(&runtime, "lambda", "GET", "/2015-03-31/functions/", &params, "", "")
         },
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_object_list(
+    bucket: String,
+    prefix: Option<String>,
+    max_keys: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    params.insert("list-type".to_owned(), "2".to_owned());
+    if let Some(value) = prefix.filter(|value| !value.trim().is_empty()) {
+        params.insert("prefix".to_owned(), value.trim().to_owned());
+    }
+    if max_keys > 0 {
+        params.insert("max-keys".to_owned(), max_keys.to_string());
+    }
+    let response = execute_aws_service_request(
+        "s3",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "s3", "GET", &format!("/{}", bucket.trim()), &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_object_get(
+    bucket: String,
+    key: String,
+    output: Option<PathBuf>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "s3",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "s3", "GET", &aws_s3_object_path(&bucket, &key), &BTreeMap::new(), "", ""),
+    )?;
+    if let Some(output) = output {
+        std::fs::write(&output, response.body.as_bytes())?;
+        match format {
+            OutputFormat::Json => println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "status_code": response.status_code,
+                    "output": output,
+                }))?
+            ),
+            OutputFormat::Text => println!("wrote object to {}", output.display()),
+        }
+        return Ok(());
+    }
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_object_put(
+    bucket: String,
+    key: String,
+    body: Option<String>,
+    file: Option<PathBuf>,
+    content_type: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if let Some(file) = file {
+        String::from_utf8(std::fs::read(file)?).map_err(anyhow::Error::msg)?
+    } else {
+        body.unwrap_or_default()
+    };
+    let response = execute_aws_service_request(
+        "s3",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "s3", "PUT", &aws_s3_object_path(&bucket, &key), &BTreeMap::new(), &payload, &content_type),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_object_delete(
+    bucket: String,
+    key: String,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("aws s3 object delete requires --force on the Rust path");
+    }
+    let response = execute_aws_service_request(
+        "s3",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "s3", "DELETE", &aws_s3_object_path(&bucket, &key), &BTreeMap::new(), "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_secrets_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if limit > 0 {
+        serde_json::json!({ "MaxResults": limit })
+    } else {
+        serde_json::json!({})
+    };
+    let response = execute_aws_service_request(
+        "secretsmanager",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.ListSecrets", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_secrets_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "SecretId": id.trim() });
+    let response = execute_aws_service_request(
+        "secretsmanager",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.GetSecretValue", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_secrets_create(
+    name: String,
+    value: String,
+    description: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut payload = serde_json::json!({ "Name": name.trim(), "SecretString": value });
+    if let Some(description) = description.filter(|value| !value.trim().is_empty()) {
+        payload["Description"] = Value::String(description.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "secretsmanager",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.CreateSecret", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_secrets_put(
+    id: String,
+    value: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "SecretId": id.trim(), "SecretString": value });
+    let response = execute_aws_service_request(
+        "secretsmanager",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.PutSecretValue", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_secrets_delete(
+    id: String,
+    force: bool,
+    force_delete: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("aws secrets delete requires --force on the Rust path");
+    }
+    let payload = serde_json::json!({
+        "SecretId": id.trim(),
+        "ForceDeleteWithoutRecovery": force_delete,
+    });
+    let response = execute_aws_service_request(
+        "secretsmanager",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "secretsmanager", "secretsmanager.DeleteSecret", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_kms_key_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if limit > 0 {
+        serde_json::json!({ "Limit": limit })
+    } else {
+        serde_json::json!({})
+    };
+    let response = execute_aws_service_request(
+        "kms",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "kms", "TrentService.ListKeys", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_kms_key_describe(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "KeyId": id.trim() });
+    let response = execute_aws_service_request(
+        "kms",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "kms", "TrentService.DescribeKey", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_kms_encrypt(
+    key_id: String,
+    plaintext: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({
+        "KeyId": key_id.trim(),
+        "Plaintext": base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes()),
+    });
+    let response = execute_aws_service_request(
+        "kms",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "kms", "TrentService.Encrypt", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_kms_decrypt(
+    ciphertext: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "CiphertextBlob": ciphertext.trim() });
+    let response = execute_aws_service_request(
+        "kms",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "kms", "TrentService.Decrypt", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
 }
