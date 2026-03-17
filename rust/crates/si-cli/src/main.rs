@@ -3526,6 +3526,28 @@ enum OpenAICommand {
         #[command(subcommand)]
         command: OpenAIContextCommand,
     },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        admin_api_key: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Model {
         #[command(subcommand)]
         command: OpenAIModelCommand,
@@ -11813,6 +11835,31 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            OpenAICommand::Doctor {
+                account,
+                base_url,
+                api_key,
+                admin_api_key,
+                org_id,
+                project_id,
+                home,
+                settings_file,
+                json,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                run_openai_doctor(
+                    account,
+                    base_url,
+                    api_key,
+                    admin_api_key,
+                    org_id,
+                    project_id,
+                    home,
+                    settings_file,
+                    format,
+                )?
+            }
             OpenAICommand::Model { command } => match command {
                 OpenAIModelCommand::List {
                     account,
@@ -22107,6 +22154,101 @@ fn show_openai_auth_status(
             "{}",
             payload.verify_error.unwrap_or_else(|| "openai auth verification failed".to_owned())
         );
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_openai_doctor(
+    account: Option<String>,
+    base_url: Option<String>,
+    api_key: Option<String>,
+    admin_api_key: Option<String>,
+    org_id: Option<String>,
+    project_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    fn or_dash(value: &str) -> &str {
+        if value.trim().is_empty() { "-" } else { value }
+    }
+
+    let (runtime, checks) = execute_openai_request(
+        account,
+        base_url,
+        api_key,
+        admin_api_key,
+        org_id,
+        project_id,
+        home,
+        settings_file,
+        |runtime| {
+            let verify = openai_list_models(&runtime, Some(1));
+            let request_detail = match &verify {
+                Ok(response) => format!("{} {}", response.status_code, response.status),
+                Err(err) => err.clone(),
+            };
+            let checks = vec![
+                DoctorCheckPayload {
+                    name: "api-key".to_owned(),
+                    ok: !runtime.api_key.trim().is_empty(),
+                    detail: preview_secret(&runtime.api_key),
+                },
+                DoctorCheckPayload {
+                    name: "base-url".to_owned(),
+                    ok: !runtime.base_url.trim().is_empty(),
+                    detail: runtime.base_url.clone(),
+                },
+                DoctorCheckPayload {
+                    name: "request".to_owned(),
+                    ok: verify.is_ok(),
+                    detail: request_detail,
+                },
+            ];
+            Ok::<(OpenAIRuntime, Vec<DoctorCheckPayload>), String>((runtime, checks))
+        },
+    )?;
+    let ok = checks.iter().all(|check| check.ok);
+    let payload = serde_json::json!({
+        "ok": ok,
+        "provider": "openai",
+        "base_url": runtime.base_url.clone(),
+        "account_alias": runtime.account_alias.clone(),
+        "organization_id": runtime.organization_id.clone(),
+        "project_id": runtime.project_id.clone(),
+        "checks": checks,
+    });
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => {
+            let account = if runtime.account_alias.trim().is_empty() {
+                "(default)"
+            } else {
+                runtime.account_alias.as_str()
+            };
+            println!("OpenAI doctor: {}", if ok { "ok" } else { "issues found" });
+            println!(
+                "Context: account={} base={} org={} project={}",
+                account,
+                runtime.base_url,
+                or_dash(&runtime.organization_id),
+                or_dash(&runtime.project_id)
+            );
+            for check in &checks {
+                println!(
+                    "  {}  {}  {}",
+                    if check.ok { "OK" } else { "ERR" },
+                    check.name,
+                    or_dash(&check.detail)
+                );
+            }
+        }
+    }
+
+    if !ok {
+        anyhow::bail!("openai doctor failed");
     }
     Ok(())
 }

@@ -6708,6 +6708,43 @@ fn openai_auth_status_json_verifies_request() {
 }
 
 #[test]
+fn openai_doctor_json_verifies_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /v1/models?limit=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: Bearer sk-test\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("x-request-id", "req_doctor")],
+            r#"{"data":[{"id":"gpt-4.1-mini","object":"model"}]}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "openai",
+            "doctor",
+            "--base-url",
+            &server.base_url,
+            "--api-key",
+            "sk-test",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["provider"], "openai");
+    assert_eq!(parsed["checks"][2]["name"], "request");
+    assert_eq!(parsed["checks"][2]["ok"], true);
+    assert_eq!(parsed["checks"][2]["detail"], "200 200 OK");
+    server.join();
+}
+
+#[test]
 fn openai_model_list_json_fetches_from_api() {
     let server = start_one_shot_http_server(|request| {
         assert!(request.starts_with("GET /v1/models?limit=1 HTTP/1.1\r\n"));
