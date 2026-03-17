@@ -3669,6 +3669,121 @@ func TestRunGoogleCommandDefaultsToGoForNonMigratedSubtree(t *testing.T) {
 	}
 }
 
+func TestRunGoogleCommandDelegatesToRustCLIForPlayReadPath(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-play-root'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGoogleCommand([]string{"play", "context", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runGoogleCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google root to delegate play context list to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-play-root" {
+		t.Fatalf("expected delegated Rust google play root output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplay\ncontext\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be google play context list + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlayDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runGooglePlayDoctorCommand([]string{"--public", "--json"})
+	if err != nil {
+		t.Fatalf("runGooglePlayDoctorCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go google play doctor path for --public")
+	}
+}
+
+func TestRunGooglePlayDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-play-doctor'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlayDoctorCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlayDoctorCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google play doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-play-doctor" {
+		t.Fatalf("expected delegated Rust google play doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplay\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be google play doctor + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlayAppCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-play-app'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlayCommand([]string{"app", "create", "--title", "Acme", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlayCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google play app create to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-play-app" {
+		t.Fatalf("expected delegated Rust google play app output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplay\napp\ncreate\n--title\nAcme\n--json" {
+		t.Fatalf("expected Rust CLI args to be google play app create + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGoogleCommandDelegatesToRustCLIForYouTubeReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
