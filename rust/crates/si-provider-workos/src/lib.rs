@@ -1,6 +1,8 @@
+use reqwest::blocking::Client;
 use serde::Serialize;
+use serde_json::Value;
 use si_rs_config::settings::{WorkOSAccountEntry, WorkOSSettings};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct WorkOSContextListEntry {
@@ -41,6 +43,25 @@ pub struct WorkOSAuthStatus {
     pub source: String,
     pub base_url: String,
     pub key_preview: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct WorkOSAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub params: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
+    pub raw_body: Option<String>,
+    pub json_body: Option<Value>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct WorkOSAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub body: String,
+    pub data: Value,
 }
 
 pub fn list_contexts(settings: &WorkOSSettings) -> Vec<WorkOSContextListEntry> {
@@ -128,14 +149,89 @@ pub fn resolve_auth_status(
     })
 }
 
-struct WorkOSRuntimeContext {
-    account_alias: String,
-    environment: String,
-    base_url: String,
-    api_key: String,
-    client_id: String,
-    organization_id: String,
-    source: String,
+pub struct WorkOSRuntimeContext {
+    pub account_alias: String,
+    pub environment: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub client_id: String,
+    pub organization_id: String,
+    pub source: String,
+}
+
+pub fn resolve_runtime(
+    settings: &WorkOSSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &WorkOSAuthOverrides,
+) -> Result<WorkOSRuntimeContext, String> {
+    resolve_runtime_context(settings, env, overrides)
+}
+
+pub fn execute_api_request(
+    runtime: &WorkOSRuntimeContext,
+    request: &WorkOSAPIRequest,
+) -> Result<WorkOSAPIResponse, String> {
+    let method = reqwest::Method::from_bytes(
+        request
+            .method
+            .trim()
+            .to_ascii_uppercase()
+            .as_bytes(),
+    )
+    .map_err(|err| format!("invalid WorkOS method: {err}"))?;
+    let url = if request.path.trim().starts_with("http://")
+        || request.path.trim().starts_with("https://")
+    {
+        request.path.trim().to_owned()
+    } else if request.path.trim().starts_with('/') {
+        format!("{}{}", runtime.base_url.trim_end_matches('/'), request.path.trim())
+    } else {
+        format!("{}/{}", runtime.base_url.trim_end_matches('/'), request.path.trim())
+    };
+    let client = Client::builder()
+        .timeout(Duration::from_secs(45))
+        .build()
+        .map_err(|err| format!("build WorkOS client: {err}"))?;
+    let mut builder = client.request(method, &url).bearer_auth(runtime.api_key.trim());
+    if !request.params.is_empty() {
+        builder = builder.query(&request.params);
+    }
+    for (key, value) in &request.headers {
+        if !key.trim().is_empty() && !value.trim().is_empty() {
+            builder = builder.header(key.trim(), value.trim());
+        }
+    }
+    if let Some(json_body) = &request.json_body {
+        builder = builder.json(json_body);
+    } else if let Some(raw_body) = &request.raw_body {
+        builder = builder.body(raw_body.clone());
+    }
+    let response = builder.send().map_err(|err| format!("workos request failed: {err}"))?;
+    let status = response.status();
+    let request_id = first_header(response.headers(), &["x-request-id"]);
+    let body = response
+        .text()
+        .map_err(|err| format!("read WorkOS response body: {err}"))?;
+    let data = if body.trim().is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_str(body.trim()).unwrap_or_else(|_| Value::String(body.clone()))
+    };
+    if !status.is_success() {
+        return Err(format!(
+            "workos request failed: status={} request_id={} body={}",
+            status.as_u16(),
+            if request_id.trim().is_empty() { "-" } else { request_id.trim() },
+            body.trim()
+        ));
+    }
+    Ok(WorkOSAPIResponse {
+        status_code: status.as_u16(),
+        status: status.to_string(),
+        request_id,
+        body,
+        data,
+    })
 }
 
 fn resolve_runtime_context(
@@ -473,6 +569,20 @@ fn preview_secret(secret: &str) -> String {
     }
     let preview: String = trimmed.chars().take(8).collect();
     if trimmed.chars().count() <= 10 { preview } else { format!("{preview}...") }
+}
+
+fn first_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> String {
+    for name in names {
+        if let Some(value) = headers.get(*name) {
+            if let Ok(value) = value.to_str() {
+                let trimmed = value.trim();
+                if !trimmed.is_empty() {
+                    return trimmed.to_owned();
+                }
+            }
+        }
+    }
+    String::new()
 }
 
 fn join_sources(values: &[String]) -> String {
