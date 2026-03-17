@@ -1440,10 +1440,113 @@ func runGoogleCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "play":
+		return runGooglePlayCommand(args[1:])
 	case "places":
 		return runGooglePlacesCommand(args[1:])
 	case "youtube", "yt", "youtube-data", "youtube_data":
 		return runGoogleYouTubeCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runGooglePlayAuthCommand(args[1:])
+	case "context":
+		return runGooglePlayContextCommand(args[1:])
+	case "doctor":
+		return runGooglePlayDoctorCommand(args[1:])
+	case "app", "application":
+		return runGooglePlayAppCommand(args[1:])
+	case "listing", "listings":
+		return runGooglePlayListingCommand(args[1:])
+	case "details", "detail":
+		return runGooglePlayDetailsCommand(args[1:])
+	case "raw":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "raw"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "auth", "status"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "context", "list"}, args[1:]...)...)
+	case "current":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "context", "current"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayDoctorCommand(args []string) (bool, error) {
+	for _, arg := range args {
+		if strings.EqualFold(strings.TrimSpace(arg), "--public") {
+			return false, nil
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "doctor"}, args...)...)
+}
+
+func runGooglePlayAppCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "create":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "app", "create"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayListingCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "get":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "listing", "get"}, args[1:]...)...)
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "listing", "list"}, args[1:]...)...)
+	case "update", "set", "patch":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "listing", "update"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayDetailsCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "get":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "details", "get"}, args[1:]...)...)
+	case "update", "set", "patch":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "details", "update"}, args[1:]...)...)
 	default:
 		return false, nil
 	}

@@ -447,7 +447,10 @@ pub struct GoogleSettings {
     pub api_base_url: Option<String>,
     pub vault_file: Option<String>,
     pub log_file: Option<String>,
+    #[serde(default)]
     pub youtube: GoogleYouTubeSettings,
+    #[serde(default)]
+    pub play: GooglePlaySettings,
     #[serde(default)]
     pub accounts: BTreeMap<String, GoogleAccountEntry>,
 }
@@ -460,6 +463,7 @@ impl GoogleSettings {
         normalize_option_string(&mut self.vault_file);
         normalize_option_string(&mut self.log_file);
         self.youtube.normalize();
+        self.play.normalize();
         let mut normalized = BTreeMap::new();
         for (key, mut entry) in std::mem::take(&mut self.accounts) {
             let key = key.trim().to_owned();
@@ -470,6 +474,68 @@ impl GoogleSettings {
             normalized.insert(key, entry);
         }
         self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GooglePlaySettings {
+    pub api_base_url: Option<String>,
+    pub upload_base_url: Option<String>,
+    pub custom_app_base_url: Option<String>,
+    #[serde(default)]
+    pub accounts: BTreeMap<String, GooglePlayAccountEntry>,
+}
+
+impl GooglePlaySettings {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.api_base_url);
+        normalize_option_string(&mut self.upload_base_url);
+        normalize_option_string(&mut self.custom_app_base_url);
+        let mut normalized = BTreeMap::new();
+        for (key, mut entry) in std::mem::take(&mut self.accounts) {
+            let key = key.trim().to_owned();
+            if key.is_empty() {
+                continue;
+            }
+            entry.normalize();
+            normalized.insert(key, entry);
+        }
+        self.accounts = normalized;
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq, Eq)]
+pub struct GooglePlayAccountEntry {
+    pub name: Option<String>,
+    pub project_id: Option<String>,
+    pub project_id_env: Option<String>,
+    pub vault_prefix: Option<String>,
+    pub developer_account_id: Option<String>,
+    pub default_package_name: Option<String>,
+    pub default_language_code: Option<String>,
+    pub service_account_json_env: Option<String>,
+    pub prod_service_account_json_env: Option<String>,
+    pub staging_service_account_json_env: Option<String>,
+    pub dev_service_account_json_env: Option<String>,
+    pub service_account_file: Option<String>,
+    pub service_account_file_env: Option<String>,
+}
+
+impl GooglePlayAccountEntry {
+    fn normalize(&mut self) {
+        normalize_option_string(&mut self.name);
+        normalize_option_string(&mut self.project_id);
+        normalize_option_string(&mut self.project_id_env);
+        normalize_option_string(&mut self.vault_prefix);
+        normalize_option_string(&mut self.developer_account_id);
+        normalize_option_string(&mut self.default_package_name);
+        normalize_option_string(&mut self.default_language_code);
+        normalize_option_string(&mut self.service_account_json_env);
+        normalize_option_string(&mut self.prod_service_account_json_env);
+        normalize_option_string(&mut self.staging_service_account_json_env);
+        normalize_option_string(&mut self.dev_service_account_json_env);
+        normalize_option_string(&mut self.service_account_file);
+        normalize_option_string(&mut self.service_account_file_env);
     }
 }
 
