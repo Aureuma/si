@@ -380,6 +380,103 @@ fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
     assert!(tap_dir.join("Formula/si.rb").exists());
 }
 
+#[test]
+fn build_installer_run_dry_run_reports_go_usage() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n").expect("write go.mod");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let go_path = bin_dir.path().join("go");
+    fs::write(&go_path, "#!/bin/sh\necho go version go1.22.0 linux/amd64\n").expect("write fake go");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&go_path).expect("stat go").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&go_path, perms).expect("chmod go");
+    }
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    let output = cargo_bin()
+        .args([
+            "build",
+            "installer",
+            "run",
+            "--dry-run",
+            "--source-dir",
+            repo.path().to_str().expect("repo"),
+            "--force",
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    assert!(String::from_utf8_lossy(&output).contains("go: using system go"));
+}
+
+#[test]
+fn build_installer_run_installs_fake_binary() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n").expect("write go.mod");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let go_path = bin_dir.path().join("go");
+    fs::write(
+        &go_path,
+        "#!/bin/sh\nif [ \"$1\" = \"version\" ]; then\n  echo go version go1.22.0 linux/amd64\n  exit 0\nfi\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho installed\\n' > \"$out\"\nchmod 755 \"$out\"\n",
+    )
+    .expect("write fake go");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&go_path).expect("stat go").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&go_path, perms).expect("chmod go");
+    }
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let install_dir = repo.path().join("bin");
+
+    cargo_bin()
+        .args([
+            "build",
+            "installer",
+            "run",
+            "--source-dir",
+            repo.path().to_str().expect("repo"),
+            "--install-dir",
+            install_dir.to_str().expect("install dir"),
+            "--force",
+            "--quiet",
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+
+    let installed = install_dir.join("si");
+    assert!(installed.exists());
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(
+            fs::metadata(&installed).expect("stat installed").permissions().mode() & 0o111,
+            0o111
+        );
+    }
+}
+
 fn test_app_private_key_pem() -> &'static str {
     "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
 }
