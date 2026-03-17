@@ -47,10 +47,12 @@ use si_rs_provider_apple::{
     run_api_request as run_apple_appstore_api_request,
 };
 use si_rs_provider_aws::{
-    AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry, AWSCurrentContext,
+    AWSAPIRequest, AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry, AWSCurrentContext,
+    AWSRuntimeContext, execute_api_request as execute_aws_api_request,
     list_contexts as list_aws_contexts, render_context_list_text as render_aws_context_list_text,
-    resolve_auth_status as resolve_aws_auth_status,
-    resolve_current_context as resolve_aws_current_context,
+    preview_access_key as preview_aws_access_key,
+    resolve_current_context as resolve_aws_current_context, resolve_runtime as resolve_aws_runtime,
+    verify_auth_status as verify_aws_auth_status,
 };
 use si_rs_provider_catalog::{default_ids, find as find_provider, parse_id as parse_provider_id};
 use si_rs_provider_cloudflare::{
@@ -1689,6 +1691,30 @@ enum AWSCommand {
     Auth {
         #[command(subcommand)]
         command: AWSAuthCommand,
+    },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        public: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
     },
     Context {
         #[command(subcommand)]
@@ -8969,27 +8995,6 @@ impl From<AWSCurrentContext> for AWSCurrentContextPayload {
 }
 
 #[derive(Debug, Serialize)]
-struct AWSAuthStatusPayload {
-    account_alias: String,
-    region: String,
-    base_url: String,
-    source: String,
-    access_key: String,
-}
-
-impl From<AWSAuthStatus> for AWSAuthStatusPayload {
-    fn from(value: AWSAuthStatus) -> Self {
-        Self {
-            account_alias: value.account_alias,
-            region: value.region,
-            base_url: value.base_url,
-            source: value.source,
-            access_key: value.access_key,
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
 struct GCPContextListPayload {
     contexts: Vec<GCPContextListEntry>,
 }
@@ -10647,6 +10652,33 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            AWSCommand::Doctor {
+                account,
+                region,
+                base_url,
+                access_key,
+                secret_key,
+                session_token,
+                public,
+                home,
+                settings_file,
+                json,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                run_aws_doctor(
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    public,
+                    home,
+                    settings_file,
+                    format,
+                )?
+            }
             AWSCommand::Context { command } => match command {
                 AWSContextCommand::List { home, settings_file, json, format } => {
                     let format = if json { OutputFormat::Json } else { format };
@@ -18961,37 +18993,29 @@ fn show_aws_auth_status(
     settings_file: Option<PathBuf>,
     format: OutputFormat,
 ) -> Result<()> {
-    fn or_dash(value: &str) -> &str {
-        if value.trim().is_empty() { "-" } else { value }
-    }
-
-    let home = home.unwrap_or_else(default_home_dir);
-    let settings = Settings::load(&home, settings_file.as_deref())?;
-    let env = std::env::vars().collect();
-    let payload = AWSAuthStatusPayload::from(
-        resolve_aws_auth_status(
-            &settings.aws,
-            &env,
-            &AWSAuthOverrides {
-                account: account.unwrap_or_default(),
-                region: region.unwrap_or_default(),
-                base_url: base_url.unwrap_or_default(),
-                access_key: access_key.unwrap_or_default(),
-                secret_key: secret_key.unwrap_or_default(),
-                session_token: session_token.unwrap_or_default(),
-            },
-        )
-        .map_err(anyhow::Error::msg)?,
-    );
+    let payload = execute_aws_request(
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| Ok::<AWSAuthStatus, String>(verify_aws_auth_status(&runtime)),
+    )?;
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
         OutputFormat::Text => {
+            fn or_dash(value: &str) -> &str {
+                if value.trim().is_empty() { "-" } else { value }
+            }
             let account = if payload.account_alias.trim().is_empty() {
                 "(default)"
             } else {
                 payload.account_alias.as_str()
             };
-            println!("AWS auth: ready");
+            println!("AWS auth: {}", payload.status);
             println!(
                 "Context: account={} region={} base={}",
                 account, payload.region, payload.base_url
@@ -18999,6 +19023,115 @@ fn show_aws_auth_status(
             println!("Source: {}", or_dash(&payload.source));
             println!("Access key: {}", or_dash(&payload.access_key));
         }
+    }
+    if payload.status != "ready" {
+        anyhow::bail!(
+            "{}",
+            payload.verify_error.unwrap_or_else(|| "aws auth verification failed".to_owned())
+        );
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_aws_request<T, F>(
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: F,
+) -> Result<T>
+where
+    F: FnOnce(AWSRuntimeContext) -> std::result::Result<T, String>,
+{
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_aws_runtime(
+        &settings.aws,
+        &env,
+        &AWSAuthOverrides {
+            account: account.unwrap_or_default(),
+            region: region.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            access_key: access_key.unwrap_or_default(),
+            secret_key: secret_key.unwrap_or_default(),
+            session_token: session_token.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    request(runtime).map_err(anyhow::Error::msg)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_doctor(
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    public: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    if public {
+        anyhow::bail!("aws doctor --public remains on the Go compatibility path");
+    }
+    let payload = execute_aws_request(
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            let mut form = BTreeMap::new();
+            form.insert("Action".to_owned(), "GetUser".to_owned());
+            form.insert("Version".to_owned(), "2010-05-08".to_owned());
+            let verify = execute_aws_api_request(
+                &runtime,
+                &AWSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: "/".to_owned(),
+                    service: "iam".to_owned(),
+                    body: url::form_urlencoded::Serializer::new(String::new())
+                        .extend_pairs(form.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+                        .finish(),
+                    ..AWSAPIRequest::default()
+                },
+            );
+            let request_detail = match &verify {
+                Ok(response) => format!("{} {}", response.status_code, response.status),
+                Err(err) => err.clone(),
+            };
+            Ok::<Value, String>(serde_json::json!({
+                "ok": verify.is_ok(),
+                "provider": "aws_iam",
+                "base_url": runtime.base_url,
+                "account_alias": runtime.account_alias,
+                "region": runtime.region,
+                "checks": [
+                    {"name": "access-key", "ok": !runtime.access_key.trim().is_empty(), "detail": preview_aws_access_key(&runtime.access_key)},
+                    {"name": "region", "ok": !runtime.region.trim().is_empty(), "detail": runtime.region},
+                    {"name": "request", "ok": verify.is_ok(), "detail": request_detail}
+                ]
+            }))
+        },
+    )?;
+    let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
+    match format {
+        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    if !ok {
+        anyhow::bail!("aws doctor failed");
     }
     Ok(())
 }
