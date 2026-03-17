@@ -1442,6 +1442,93 @@ func runGoogleCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "places":
 		return runGooglePlacesCommand(args[1:])
+	case "youtube", "yt", "youtube-data", "youtube_data":
+		return runGoogleYouTubeCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "auth":
+		return runGoogleYouTubeAuthCommand(args[1:])
+	case "context":
+		return runGoogleYouTubeContextCommand(args[1:])
+	case "doctor":
+		return runGoogleYouTubeDoctorCommand(args[1:])
+	case "search":
+		return runGoogleYouTubeSearchCommand(args[1:])
+	case "support":
+		return runGoogleYouTubeSupportCommand(args[1:])
+	case "raw":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "raw"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeAuthCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "status":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "auth", "status"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeContextCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "context", "list"}, args[1:]...)...)
+	case "current":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "context", "current"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeDoctorCommand(args []string) (bool, error) {
+	for _, arg := range args {
+		if strings.EqualFold(strings.TrimSpace(arg), "--public") {
+			return false, nil
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "doctor"}, args...)...)
+}
+
+func runGoogleYouTubeSearchCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "search", "list"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeSupportCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "languages", "language":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "support", "languages"}, args[1:]...)...)
+	case "regions", "region":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "support", "regions"}, args[1:]...)...)
+	case "categories", "category":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "support", "categories"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
