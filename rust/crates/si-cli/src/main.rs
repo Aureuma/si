@@ -355,8 +355,8 @@ enum SettingsCommand {
 enum BuildCommand {
     #[command(name = "self")]
     Self_ {
-        #[command(subcommand)]
-        command: BuildSelfCommand,
+        #[command(flatten)]
+        args: BuildSelfArgs,
     },
     #[command(name = "installer")]
     Installer {
@@ -375,37 +375,54 @@ enum BuildCommand {
     },
 }
 
+#[derive(Debug, Args)]
+struct BuildSelfBuildArgs {
+    #[arg(long)]
+    repo: Option<PathBuf>,
+    #[arg(long = "no-upgrade")]
+    no_upgrade: bool,
+    #[arg(long = "output")]
+    output: Option<PathBuf>,
+    #[arg(long = "install-path")]
+    install_path: Option<PathBuf>,
+    #[arg(long)]
+    quiet: bool,
+}
+
+#[derive(Debug, Args)]
+struct BuildSelfUpgradeArgs {
+    #[arg(long)]
+    repo: Option<PathBuf>,
+    #[arg(long = "install-path")]
+    install_path: Option<PathBuf>,
+    #[arg(long)]
+    quiet: bool,
+}
+
+#[derive(Debug, Args)]
+struct BuildSelfRunArgs {
+    #[arg(long)]
+    repo: Option<PathBuf>,
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    args: Vec<String>,
+}
+
+#[derive(Debug, Args)]
+struct BuildSelfArgs {
+    #[command(subcommand)]
+    command: Option<BuildSelfCommand>,
+    #[command(flatten)]
+    default_build: BuildSelfBuildArgs,
+}
+
 #[derive(Debug, Subcommand)]
 enum BuildSelfCommand {
     #[command(name = "build")]
-    Build {
-        #[arg(long)]
-        repo: Option<PathBuf>,
-        #[arg(long = "no-upgrade")]
-        no_upgrade: bool,
-        #[arg(long = "output")]
-        output: Option<PathBuf>,
-        #[arg(long = "install-path")]
-        install_path: Option<PathBuf>,
-        #[arg(long)]
-        quiet: bool,
-    },
+    Build(BuildSelfBuildArgs),
     #[command(name = "upgrade")]
-    Upgrade {
-        #[arg(long)]
-        repo: Option<PathBuf>,
-        #[arg(long = "install-path")]
-        install_path: Option<PathBuf>,
-        #[arg(long)]
-        quiet: bool,
-    },
+    Upgrade(BuildSelfUpgradeArgs),
     #[command(name = "run")]
-    Run {
-        #[arg(long)]
-        repo: Option<PathBuf>,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        args: Vec<String>,
-    },
+    Run(BuildSelfRunArgs),
     #[command(name = "release-asset")]
     ReleaseAsset {
         #[arg(long)]
@@ -18657,39 +18674,48 @@ fn main() -> Result<()> {
         }
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
         Command::Build { command } => match command {
-            BuildCommand::Self_ { command } => match command {
-                BuildSelfCommand::Build {
+            BuildCommand::Self_ { args } => match args.command {
+                Some(BuildSelfCommand::Build(BuildSelfBuildArgs {
                     repo,
                     no_upgrade,
                     output,
                     install_path,
                     quiet,
-                } => run_build_self_build(repo, install_path, output, no_upgrade, quiet)?,
-                BuildSelfCommand::Upgrade {
+                })) => run_build_self_build(repo, install_path, output, no_upgrade, quiet)?,
+                Some(BuildSelfCommand::Upgrade(BuildSelfUpgradeArgs {
                     repo,
                     install_path,
                     quiet,
-                } => run_build_self_upgrade(repo, install_path, quiet)?,
-                BuildSelfCommand::Run { repo, args } => run_build_self_run(repo, args)?,
-                BuildSelfCommand::ReleaseAsset {
+                })) => run_build_self_upgrade(repo, install_path, quiet)?,
+                Some(BuildSelfCommand::Run(BuildSelfRunArgs { repo, args })) => {
+                    run_build_self_run(repo, args)?
+                }
+                Some(BuildSelfCommand::ReleaseAsset {
                     repo_root,
                     version,
                     goos,
                     goarch,
                     goarm,
                     out_dir,
-                } => run_build_self_release_asset(repo_root, version, goos, goarch, goarm, out_dir)?,
-                BuildSelfCommand::ReleaseAssets {
+                }) => run_build_self_release_asset(repo_root, version, goos, goarch, goarm, out_dir)?,
+                Some(BuildSelfCommand::ReleaseAssets {
                     repo,
                     version,
                     out_dir,
-                } => run_build_self_release_assets(repo, version, out_dir)?,
-                BuildSelfCommand::ValidateReleaseVersion { tag } => {
+                }) => run_build_self_release_assets(repo, version, out_dir)?,
+                Some(BuildSelfCommand::ValidateReleaseVersion { tag }) => {
                     run_validate_release_version(tag)?
                 }
-                BuildSelfCommand::VerifyReleaseAssets { version, out_dir } => {
+                Some(BuildSelfCommand::VerifyReleaseAssets { version, out_dir }) => {
                     run_build_self_verify_release_assets(version, out_dir)?
                 }
+                None => run_build_self_build(
+                    args.default_build.repo,
+                    args.default_build.install_path,
+                    args.default_build.output,
+                    args.default_build.no_upgrade,
+                    args.default_build.quiet,
+                )?,
             },
             BuildCommand::Installer { command } => match command {
                 BuildInstallerCommand::SettingsHelper {
