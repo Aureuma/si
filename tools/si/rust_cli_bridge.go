@@ -789,6 +789,12 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSSecretsCommand(args[1:])
 	case "kms":
 		return runAWSKMSCommand(args[1:])
+	case "dynamodb":
+		return runAWSDynamoDBCommand(args[1:])
+	case "ssm":
+		return runAWSSSMCommand(args[1:])
+	case "logs", "cloudwatch-logs":
+		return runAWSLogsCommand(args[1:])
 	case "ec2":
 		return runAWSEC2Command(args[1:])
 	case "lambda":
@@ -931,6 +937,72 @@ func runAWSSecretsCommand(args []string) (bool, error) {
 
 func runAWSKMSCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"kms"}, args...)...)
+}
+
+func runAWSDynamoDBCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "table":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"dynamodb"}, args...)...)
+	case "item":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "get", "put":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"dynamodb"}, args...)...)
+		case "delete", "remove", "rm":
+			if !awsForceEnabled(args[2:]) {
+				return false, nil
+			}
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"dynamodb"}, args...)...)
+		default:
+			return false, nil
+		}
+	default:
+		return false, nil
+	}
+}
+
+func runAWSSSMCommand(args []string) (bool, error) {
+	if len(args) == 0 || !strings.EqualFold(strings.TrimSpace(args[0]), "parameter") {
+		return false, nil
+	}
+	if len(args) < 2 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[1])) {
+	case "list", "get", "put":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ssm"}, args...)...)
+	case "delete", "remove", "rm":
+		if !awsForceEnabled(args[2:]) {
+			return false, nil
+		}
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ssm"}, args...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runAWSLogsCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "group":
+		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "list") {
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
+		}
+	case "stream":
+		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "list") {
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
+		}
+	case "events":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
+	}
+	return false, nil
 }
 
 func runAWSEC2Command(args []string) (bool, error) {
