@@ -1724,6 +1724,10 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSLogsCommand,
     },
+    Cloudwatch {
+        #[command(subcommand)]
+        command: AWSCloudWatchCommand,
+    },
     Ec2 {
         #[command(subcommand)]
         command: AWSEC2Command,
@@ -2826,6 +2830,38 @@ enum AWSLogsStreamCommand {
         group: String,
         #[arg(long, default_value_t = 50)]
         limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSCloudWatchCommand {
+    Metric {
+        #[arg(long)]
+        namespace: Option<String>,
+        #[arg(long)]
+        name: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -12530,6 +12566,12 @@ fn main() -> Result<()> {
                 AWSLogsCommand::Events { group, stream, filter_pattern, start, end, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
                     let format = if json { OutputFormat::Json } else { format };
                     run_aws_logs_events(group, stream, filter_pattern, start, end, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+            },
+            AWSCommand::Cloudwatch { command } => match command {
+                AWSCloudWatchCommand::Metric { namespace, name, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_cloudwatch_metric_list(namespace, name, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
                 }
             },
             AWSCommand::Ec2 { command } => match command {
@@ -22517,6 +22559,36 @@ fn run_aws_logs_events(
         "logs",
         account, region, base_url, access_key, secret_key, session_token, home, settings_file,
         |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.FilterLogEvents", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_cloudwatch_metric_list(
+    namespace: Option<String>,
+    name: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if let Some(namespace) = namespace.filter(|value| !value.trim().is_empty()) {
+        params.insert("Namespace".to_owned(), namespace.trim().to_owned());
+    }
+    if let Some(name) = name.filter(|value| !value.trim().is_empty()) {
+        params.insert("MetricName".to_owned(), name.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "monitoring",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_query(&runtime, "monitoring", "2010-08-01", "ListMetrics", &params),
     )?;
     print_aws_api_response(&response, format, raw)
 }
