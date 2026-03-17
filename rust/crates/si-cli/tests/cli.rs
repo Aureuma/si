@@ -5826,6 +5826,47 @@ fn aws_logs_events_json_executes_signed_json_target_request() {
 }
 
 #[test]
+fn aws_cloudwatch_metric_list_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("Action=ListMetrics"));
+        assert!(request.contains("Version=2010-08-01"));
+        assert!(request.contains("Namespace=AWS%2FEC2"));
+        assert!(request.contains("MetricName=CPUUtilization"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_cloudwatch_metrics")],
+            r#"<ListMetricsResponse><ResponseMetadata><RequestId>req_aws_cloudwatch_metrics</RequestId></ResponseMetadata></ListMetricsResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "cloudwatch", "metric",
+            "--namespace", "AWS/EC2",
+            "--name", "CPUUtilization",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_cloudwatch_metrics");
+    assert_eq!(parsed["data"]["response"], "ListMetricsResponse");
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

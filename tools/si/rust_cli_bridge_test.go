@@ -2236,6 +2236,40 @@ func TestRunAWSLogsCommandDelegatesGroupListToRustCLIWhenConfigured(t *testing.T
 	}
 }
 
+func TestRunAWSCloudWatchCommandDelegatesMetricListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-cloudwatch'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"cloudwatch", "metric", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws cloudwatch metric to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-cloudwatch" {
+		t.Fatalf("expected delegated Rust aws cloudwatch output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ncloudwatch\nmetric\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws cloudwatch + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
