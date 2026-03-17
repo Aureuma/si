@@ -1468,6 +1468,12 @@ func runGooglePlayCommand(args []string) (bool, error) {
 		return runGooglePlayListingCommand(args[1:])
 	case "details", "detail":
 		return runGooglePlayDetailsCommand(args[1:])
+	case "asset", "assets":
+		return runGooglePlayAssetCommand(args[1:])
+	case "release", "releases":
+		return runGooglePlayReleaseCommand(args[1:])
+	case "apply":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "apply"}, args[1:]...)...)
 	case "raw":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "raw"}, args[1:]...)...)
 	default:
@@ -1547,6 +1553,40 @@ func runGooglePlayDetailsCommand(args []string) (bool, error) {
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "details", "get"}, args[1:]...)...)
 	case "update", "set", "patch":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "details", "update"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayAssetCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "asset", "list"}, args[1:]...)...)
+	case "upload":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "asset", "upload"}, args[1:]...)...)
+	case "clear", "deleteall":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "asset", "clear"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGooglePlayReleaseCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "upload":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "release", "upload"}, args[1:]...)...)
+	case "status":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "release", "status"}, args[1:]...)...)
+	case "promote":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "release", "promote"}, args[1:]...)...)
+	case "set-status", "halt", "resume":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"play", "release", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
 	default:
 		return false, nil
 	}

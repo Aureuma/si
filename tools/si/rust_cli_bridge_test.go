@@ -3784,6 +3784,108 @@ func TestRunGooglePlayAppCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunGooglePlayAssetCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-play-asset'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlayCommand([]string{"asset", "upload", "--type", "phone", "--file", "shot.png", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlayCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google play asset upload to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-play-asset" {
+		t.Fatalf("expected delegated Rust google play asset output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplay\nasset\nupload\n--type\nphone\n--file\nshot.png\n--json" {
+		t.Fatalf("expected Rust CLI args to be google play asset upload + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlayReleaseCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-play-release'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlayCommand([]string{"release", "status", "--track", "internal", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlayCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google play release status to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-play-release" {
+		t.Fatalf("expected delegated Rust google play release output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplay\nrelease\nstatus\n--track\ninternal\n--json" {
+		t.Fatalf("expected Rust CLI args to be google play release status + args, got %q", string(argsData))
+	}
+}
+
+func TestRunGooglePlayApplyCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-google-play-apply'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runGooglePlayCommand([]string{"apply", "--metadata-dir", "play-store", "--json"})
+		if err != nil {
+			t.Fatalf("runGooglePlayCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected google play apply to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-google-play-apply" {
+		t.Fatalf("expected delegated Rust google play apply output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "google\nplay\napply\n--metadata-dir\nplay-store\n--json" {
+		t.Fatalf("expected Rust CLI args to be google play apply + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGoogleCommandDelegatesToRustCLIForYouTubeReadPath(t *testing.T) {
 	dir := t.TempDir()
 	argsPath := filepath.Join(dir, "args.txt")
