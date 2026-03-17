@@ -795,6 +795,8 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSSSMCommand(args[1:])
 	case "logs", "cloudwatch-logs":
 		return runAWSLogsCommand(args[1:])
+	case "cloudwatch":
+		return runAWSCloudWatchCommand(args[1:])
 	case "ec2":
 		return runAWSEC2Command(args[1:])
 	case "lambda":
@@ -1001,6 +1003,16 @@ func runAWSLogsCommand(args []string) (bool, error) {
 		}
 	case "events":
 		return maybeDispatchRustCLIReadOnly("aws", append([]string{"logs"}, args...)...)
+	}
+	return false, nil
+}
+
+func runAWSCloudWatchCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(args[0]), "metric") || strings.EqualFold(strings.TrimSpace(args[0]), "metrics") {
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"cloudwatch"}, args...)...)
 	}
 	return false, nil
 }
