@@ -5867,6 +5867,70 @@ fn aws_cloudwatch_metric_list_json_executes_signed_query_request() {
 }
 
 #[test]
+fn aws_bedrock_foundation_model_list_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /foundation-models?byProvider=anthropic HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_models")], r#"{"modelSummaries":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "foundation-model", "list",
+            "--provider", "anthropic",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_models");
+    assert_eq!(parsed["data"]["modelSummaries"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_bedrock_guardrail_get_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /guardrails/gr-123?guardrailVersion=1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_guardrail")], r#"{"guardrailId":"gr-123"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "guardrail", "get", "gr-123",
+            "--version", "1",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_guardrail");
+    assert_eq!(parsed["data"]["guardrailId"], "gr-123");
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

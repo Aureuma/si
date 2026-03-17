@@ -797,6 +797,8 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSLogsCommand(args[1:])
 	case "cloudwatch":
 		return runAWSCloudWatchCommand(args[1:])
+	case "bedrock", "ai":
+		return runAWSBedrockCommand(args[1:])
 	case "ec2":
 		return runAWSEC2Command(args[1:])
 	case "lambda":
@@ -1013,6 +1015,22 @@ func runAWSCloudWatchCommand(args []string) (bool, error) {
 	}
 	if strings.EqualFold(strings.TrimSpace(args[0]), "metric") || strings.EqualFold(strings.TrimSpace(args[0]), "metrics") {
 		return maybeDispatchRustCLIReadOnly("aws", append([]string{"cloudwatch"}, args...)...)
+	}
+	return false, nil
+}
+
+func runAWSBedrockCommand(args []string) (bool, error) {
+	if len(args) < 2 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "foundation-model", "foundation-models", "model", "models",
+		"inference-profile", "inference-profiles", "profile", "profiles",
+		"guardrail", "guardrails":
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "get", "describe":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
+		}
 	}
 	return false, nil
 }

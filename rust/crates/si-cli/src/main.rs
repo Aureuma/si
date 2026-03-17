@@ -1728,6 +1728,10 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSCloudWatchCommand,
     },
+    Bedrock {
+        #[command(subcommand)]
+        command: AWSBedrockCommand,
+    },
     Ec2 {
         #[command(subcommand)]
         command: AWSEC2Command,
@@ -2862,6 +2866,197 @@ enum AWSCloudWatchCommand {
         namespace: Option<String>,
         #[arg(long)]
         name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockCommand {
+    FoundationModel {
+        #[command(subcommand)]
+        command: AWSBedrockFoundationModelCommand,
+    },
+    InferenceProfile {
+        #[command(subcommand)]
+        command: AWSBedrockInferenceProfileCommand,
+    },
+    Guardrail {
+        #[command(subcommand)]
+        command: AWSBedrockGuardrailCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockFoundationModelCommand {
+    List {
+        #[arg(long)]
+        provider: Option<String>,
+        #[arg(long)]
+        output_modality: Option<String>,
+        #[arg(long)]
+        inference_type: Option<String>,
+        #[arg(long)]
+        customization_type: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockInferenceProfileCommand {
+    List {
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long = "type")]
+        type_equals: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockGuardrailCommand {
+    List {
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        version: Option<String>,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -12574,6 +12769,38 @@ fn main() -> Result<()> {
                     run_aws_cloudwatch_metric_list(namespace, name, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
                 }
             },
+            AWSCommand::Bedrock { command } => match command {
+                AWSBedrockCommand::FoundationModel { command } => match command {
+                    AWSBedrockFoundationModelCommand::List { provider, output_modality, inference_type, customization_type, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_foundation_model_list(provider, output_modality, inference_type, customization_type, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSBedrockFoundationModelCommand::Get { id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_foundation_model_get(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+                AWSBedrockCommand::InferenceProfile { command } => match command {
+                    AWSBedrockInferenceProfileCommand::List { limit, type_equals, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_inference_profile_list(limit, type_equals, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSBedrockInferenceProfileCommand::Get { id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_inference_profile_get(id, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+                AWSBedrockCommand::Guardrail { command } => match command {
+                    AWSBedrockGuardrailCommand::List { limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_guardrail_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSBedrockGuardrailCommand::Get { id, version, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_guardrail_get(id, version, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+            },
             AWSCommand::Ec2 { command } => match command {
                 AWSEC2Command::Instance { command } => match command {
                     AWSEC2InstanceCommand::List {
@@ -21430,6 +21657,10 @@ fn parse_json_value(label: &str, input: &str) -> Result<Value> {
     serde_json::from_str(input).map_err(|err| anyhow::anyhow!("invalid {} json: {}", label, err))
 }
 
+fn aws_path_escape(value: &str) -> String {
+    url::form_urlencoded::byte_serialize(value.as_bytes()).collect()
+}
+
 fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
@@ -22589,6 +22820,171 @@ fn run_aws_cloudwatch_metric_list(
         "monitoring",
         account, region, base_url, access_key, secret_key, session_token, home, settings_file,
         |runtime| execute_aws_query(&runtime, "monitoring", "2010-08-01", "ListMetrics", &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_foundation_model_list(
+    provider: Option<String>,
+    output_modality: Option<String>,
+    inference_type: Option<String>,
+    customization_type: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if let Some(provider) = provider.filter(|value| !value.trim().is_empty()) {
+        params.insert("byProvider".to_owned(), provider.trim().to_owned());
+    }
+    if let Some(output_modality) = output_modality.filter(|value| !value.trim().is_empty()) {
+        params.insert("byOutputModality".to_owned(), output_modality.trim().to_owned());
+    }
+    if let Some(inference_type) = inference_type.filter(|value| !value.trim().is_empty()) {
+        params.insert("byInferenceType".to_owned(), inference_type.trim().to_owned());
+    }
+    if let Some(customization_type) = customization_type.filter(|value| !value.trim().is_empty()) {
+        params.insert("byCustomizationType".to_owned(), customization_type.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/foundation-models", &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_foundation_model_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/foundation-models/{}", aws_path_escape(id.trim())), &BTreeMap::new(), "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_inference_profile_list(
+    limit: i32,
+    type_equals: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    if let Some(type_equals) = type_equals.filter(|value| !value.trim().is_empty()) {
+        params.insert("typeEquals".to_owned(), type_equals.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/inference-profiles", &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_inference_profile_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/inference-profiles/{}", aws_path_escape(id.trim())), &BTreeMap::new(), "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_guardrail_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/guardrails", &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_guardrail_get(
+    id: String,
+    version: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if let Some(version) = version.filter(|value| !value.trim().is_empty()) {
+        params.insert("guardrailVersion".to_owned(), version.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", &format!("/guardrails/{}", aws_path_escape(id.trim())), &params, "", ""),
     )?;
     print_aws_api_response(&response, format, raw)
 }
