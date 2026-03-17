@@ -8167,6 +8167,22 @@ enum GoogleYouTubeCommand {
         #[command(subcommand)]
         command: GoogleYouTubeSearchCommand,
     },
+    Channel {
+        #[command(subcommand)]
+        command: GoogleYouTubeChannelCommand,
+    },
+    Video {
+        #[command(subcommand)]
+        command: GoogleYouTubeVideoCommand,
+    },
+    Playlist {
+        #[command(subcommand)]
+        command: GoogleYouTubePlaylistCommand,
+    },
+    PlaylistItem {
+        #[command(subcommand)]
+        command: GoogleYouTubePlaylistItemCommand,
+    },
     Support {
         #[command(subcommand)]
         command: GoogleYouTubeSupportCommand,
@@ -8374,6 +8390,476 @@ enum GoogleYouTubeSearchCommand {
         all: bool,
         #[arg(long, default_value_t = 5)]
         max_pages: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeChannelCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,contentDetails,statistics")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        for_handle: Option<String>,
+        #[arg(long)]
+        for_username: Option<String>,
+        #[arg(long)]
+        mine: bool,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[command(flatten)]
+        command: GoogleYouTubeChannelGetArgs,
+    },
+    Mine {
+        #[command(flatten)]
+        command: GoogleYouTubeChannelMineArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeChannelGetArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "mode")]
+    auth_mode: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    region: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    client_secret: Option<String>,
+    #[arg(long)]
+    redirect_uri: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    refresh_token: Option<String>,
+    #[arg(long, default_value = "id,snippet,contentDetails,statistics")]
+    part: String,
+    #[arg(long = "id")]
+    ids: Option<String>,
+    #[arg(long)]
+    for_handle: Option<String>,
+    #[arg(long)]
+    for_username: Option<String>,
+    #[arg(long)]
+    max_results: Option<usize>,
+    #[arg(long)]
+    page_token: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeChannelMineArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "mode")]
+    auth_mode: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    region: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    client_secret: Option<String>,
+    #[arg(long)]
+    redirect_uri: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    refresh_token: Option<String>,
+    #[arg(long, default_value = "id,snippet,contentDetails,statistics")]
+    part: String,
+    #[arg(long)]
+    max_results: Option<usize>,
+    #[arg(long)]
+    page_token: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeVideoCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,contentDetails,statistics,status")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        chart: Option<String>,
+        #[arg(long)]
+        my_rating: Option<String>,
+        #[arg(long)]
+        region_code: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[command(flatten)]
+        command: GoogleYouTubeVideoGetArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeVideoGetArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "mode")]
+    auth_mode: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    region: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    client_secret: Option<String>,
+    #[arg(long)]
+    redirect_uri: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    refresh_token: Option<String>,
+    #[arg(long, default_value = "id,snippet,contentDetails,statistics,status")]
+    part: String,
+    #[arg(long = "id")]
+    ids: Option<String>,
+    #[arg(long)]
+    chart: Option<String>,
+    #[arg(long)]
+    my_rating: Option<String>,
+    #[arg(long)]
+    region_code: Option<String>,
+    #[arg(long)]
+    max_results: Option<usize>,
+    #[arg(long)]
+    page_token: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubePlaylistCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,contentDetails,status")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        channel_id: Option<String>,
+        #[arg(long)]
+        mine: bool,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistGetArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistGetArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "mode")]
+    auth_mode: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    region: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    client_secret: Option<String>,
+    #[arg(long)]
+    redirect_uri: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    refresh_token: Option<String>,
+    #[arg(long, default_value = "id,snippet,contentDetails,status")]
+    part: String,
+    #[arg(long = "id")]
+    ids: Option<String>,
+    #[arg(long)]
+    channel_id: Option<String>,
+    #[arg(long)]
+    mine: bool,
+    #[arg(long)]
+    max_results: Option<usize>,
+    #[arg(long)]
+    page_token: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubePlaylistItemCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,contentDetails,status")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        playlist_id: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
         #[arg(long = "param")]
         params: Vec<String>,
         #[arg(long)]
@@ -19880,6 +20366,118 @@ fn main() -> Result<()> {
                             settings_file,
                             format,
                             raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Channel { command } => match command {
+                    GoogleYouTubeChannelCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, ids, for_handle, for_username, mine, max_results,
+                        page_token, params, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_channel_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, for_handle, for_username, mine, max_results,
+                            page_token, params, home, settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubeChannelCommand::Get { command } => {
+                        let format = if command.json { OutputFormat::Json } else { command.format };
+                        run_google_youtube_channel_list(
+                            command.account, command.env, command.auth_mode, command.api_key,
+                            command.base_url, command.upload_base_url, command.project_id,
+                            command.language, command.region, command.client_id, command.client_secret,
+                            command.redirect_uri, command.access_token, command.refresh_token,
+                            command.part, command.ids, command.for_handle, command.for_username,
+                            false, command.max_results, command.page_token, command.params,
+                            command.home, command.settings_file, format, command.raw,
+                        )?
+                    }
+                    GoogleYouTubeChannelCommand::Mine { command } => {
+                        let format = if command.json { OutputFormat::Json } else { command.format };
+                        run_google_youtube_channel_list(
+                            command.account, command.env, command.auth_mode, command.api_key,
+                            command.base_url, command.upload_base_url, command.project_id,
+                            command.language, command.region, command.client_id, command.client_secret,
+                            command.redirect_uri, command.access_token, command.refresh_token,
+                            command.part, None, None, None, true, command.max_results,
+                            command.page_token, command.params, command.home, command.settings_file,
+                            format, command.raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Video { command } => match command {
+                    GoogleYouTubeVideoCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, ids, chart, my_rating, region_code, max_results,
+                        page_token, params, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_video_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, chart, my_rating, region_code, max_results,
+                            page_token, params, home, settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubeVideoCommand::Get { command } => {
+                        let format = if command.json { OutputFormat::Json } else { command.format };
+                        run_google_youtube_video_list(
+                            command.account, command.env, command.auth_mode, command.api_key,
+                            command.base_url, command.upload_base_url, command.project_id,
+                            command.language, command.region, command.client_id, command.client_secret,
+                            command.redirect_uri, command.access_token, command.refresh_token,
+                            command.part, command.ids, command.chart, command.my_rating,
+                            command.region_code, command.max_results, command.page_token, command.params,
+                            command.home, command.settings_file, format, command.raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Playlist { command } => match command {
+                    GoogleYouTubePlaylistCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, ids, channel_id, mine, max_results, page_token,
+                        params, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_playlist_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, channel_id, mine, max_results, page_token,
+                            params, home, settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubePlaylistCommand::Get { command } => {
+                        let format = if command.json { OutputFormat::Json } else { command.format };
+                        run_google_youtube_playlist_list(
+                            command.account, command.env, command.auth_mode, command.api_key,
+                            command.base_url, command.upload_base_url, command.project_id,
+                            command.language, command.region, command.client_id, command.client_secret,
+                            command.redirect_uri, command.access_token, command.refresh_token,
+                            command.part, command.ids, command.channel_id, command.mine,
+                            command.max_results, command.page_token, command.params, command.home,
+                            command.settings_file, format, command.raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::PlaylistItem { command } => match command {
+                    GoogleYouTubePlaylistItemCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, ids, playlist_id, max_results, page_token, params,
+                        home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_playlist_item_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, playlist_id, max_results, page_token, params,
+                            home, settings_file, format, raw,
                         )?
                     }
                 },
@@ -34395,6 +34993,32 @@ fn execute_google_youtube_list_all(
     }))
 }
 
+fn parse_google_youtube_ids_csv(raw: Option<String>) -> Option<String> {
+    let raw = raw?;
+    let ids: Vec<String> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect();
+    if ids.is_empty() {
+        None
+    } else {
+        Some(ids.join(","))
+    }
+}
+
+fn require_google_youtube_oauth(runtime: &GoogleYouTubeRuntime, operation: &str) -> Result<()> {
+    if runtime.auth_mode == "oauth" {
+        Ok(())
+    } else {
+        anyhow::bail!(
+            "{} requires oauth mode; run with --mode oauth and login via `si google youtube auth login`",
+            operation
+        )
+    }
+}
+
 fn verify_google_youtube_auth(runtime: &GoogleYouTubeRuntime) -> Result<(), String> {
     let mut params = BTreeMap::new();
     if runtime.auth_mode == "oauth" {
@@ -34426,6 +35050,270 @@ fn verify_google_youtube_auth(runtime: &GoogleYouTubeRuntime) -> Result<(), Stri
         )?;
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_channel_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    for_handle: Option<String>,
+    for_username: Option<String>,
+    mine: bool,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    if mine {
+        require_google_youtube_oauth(&runtime, "channel list --mine")?;
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if let Some(for_handle) = for_handle.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("forHandle".to_owned(), for_handle);
+    }
+    if let Some(for_username) = for_username.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("forUsername".to_owned(), for_username);
+    }
+    if mine {
+        params.insert("mine".to_owned(), "true".to_owned());
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/channels".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_video_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    chart: Option<String>,
+    my_rating: Option<String>,
+    region_code: Option<String>,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    if my_rating.as_ref().map(|v| !v.trim().is_empty()).unwrap_or(false) {
+        require_google_youtube_oauth(&runtime, "video list --my-rating")?;
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if let Some(chart) = chart.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("chart".to_owned(), chart);
+    }
+    if let Some(my_rating) = my_rating.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("myRating".to_owned(), my_rating);
+    }
+    if let Some(region_code) = region_code
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+        .or_else(|| if runtime.region_code.trim().is_empty() { None } else { Some(runtime.region_code.clone()) })
+    {
+        params.insert("regionCode".to_owned(), region_code);
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/videos".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_playlist_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    channel_id: Option<String>,
+    mine: bool,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    if mine {
+        require_google_youtube_oauth(&runtime, "playlist list --mine")?;
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if let Some(channel_id) = channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("channelId".to_owned(), channel_id);
+    }
+    if mine {
+        params.insert("mine".to_owned(), "true".to_owned());
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/playlists".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_playlist_item_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    playlist_id: Option<String>,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if let Some(playlist_id) = playlist_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("playlistId".to_owned(), playlist_id);
+    }
+    if !params.contains_key("id") && !params.contains_key("playlistId") {
+        anyhow::bail!("playlist item list requires --playlist-id or --id");
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/playlistItems".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
