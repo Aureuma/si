@@ -5109,6 +5109,195 @@ fn aws_iam_query_json_executes_signed_query_request() {
 }
 
 #[test]
+fn aws_s3_bucket_list_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amz-request-id", "req_aws_s3_list")],
+            r#"<ListAllMyBucketsResult><Owner><ID>owner</ID></Owner></ListAllMyBucketsResult>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "s3",
+            "bucket",
+            "list",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_s3_list");
+    assert_eq!(parsed["data"]["response"], "ListAllMyBucketsResult");
+    server.join();
+}
+
+#[test]
+fn aws_s3_bucket_create_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PUT /demo-bucket HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("<LocationConstraint>us-west-2</LocationConstraint>"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amz-request-id", "req_aws_s3_create")],
+            r#"<CreateBucketResult/>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "s3",
+            "bucket",
+            "create",
+            "demo-bucket",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_s3_create");
+    assert_eq!(parsed["data"]["response"], "CreateBucketResult");
+    server.join();
+}
+
+#[test]
+fn aws_ec2_instance_list_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("Action=DescribeInstances"));
+        assert!(request.contains("Version=2016-11-15"));
+        assert!(request.contains("InstanceId.1=i-123"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_ec2_list")],
+            r#"<DescribeInstancesResponse><requestId>req_aws_ec2_list</requestId></DescribeInstancesResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "ec2",
+            "instance",
+            "list",
+            "--id",
+            "i-123",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_ec2_list");
+    assert_eq!(parsed["data"]["response"], "DescribeInstancesResponse");
+    server.join();
+}
+
+#[test]
+fn aws_ec2_instance_start_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("Action=StartInstances"));
+        assert!(request.contains("Version=2016-11-15"));
+        assert!(request.contains("InstanceId.1=i-123"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_ec2_start")],
+            r#"<StartInstancesResponse><requestId>req_aws_ec2_start</requestId></StartInstancesResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "ec2",
+            "instance",
+            "start",
+            "--id",
+            "i-123",
+            "--force",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_ec2_start");
+    assert_eq!(parsed["data"]["response"], "StartInstancesResponse");
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

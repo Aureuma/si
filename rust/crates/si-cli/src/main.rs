@@ -1700,6 +1700,14 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSIamCommand,
     },
+    S3 {
+        #[command(subcommand)]
+        command: AWSS3Command,
+    },
+    Ec2 {
+        #[command(subcommand)]
+        command: AWSEC2Command,
+    },
     Doctor {
         #[arg(long)]
         account: Option<String>,
@@ -1935,6 +1943,220 @@ enum AWSIamUserCommand {
         settings_file: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSS3Command {
+    Bucket {
+        #[command(subcommand)]
+        command: AWSS3BucketCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSS3BucketCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        bucket: Option<String>,
+        #[arg(long)]
+        bucket_name: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        bucket: Option<String>,
+        #[arg(long)]
+        bucket_name: Option<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSEC2Command {
+    Instance {
+        #[command(subcommand)]
+        command: AWSEC2InstanceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSEC2InstanceCommand {
+    List {
+        #[arg(long = "id")]
+        ids: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Start {
+        #[arg(long = "id")]
+        ids: Vec<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Stop {
+        #[arg(long = "id")]
+        ids: Vec<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Terminate {
+        #[arg(long = "id")]
+        ids: Vec<String>,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -10985,6 +11207,138 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            AWSCommand::S3 { command } => match command {
+                AWSS3Command::Bucket { command } => match command {
+                    AWSS3BucketCommand::List {
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_bucket_list(
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSS3BucketCommand::Create {
+                        bucket,
+                        bucket_name,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_bucket_create(
+                            bucket.or(bucket_name).unwrap_or_default(),
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSS3BucketCommand::Delete {
+                        bucket,
+                        bucket_name,
+                        force,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_s3_bucket_delete(
+                            bucket.or(bucket_name).unwrap_or_default(),
+                            force,
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                }
+            },
+            AWSCommand::Ec2 { command } => match command {
+                AWSEC2Command::Instance { command } => match command {
+                    AWSEC2InstanceCommand::List {
+                        ids,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ec2_instance_list(
+                            ids, account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSEC2InstanceCommand::Start {
+                        ids, force, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ec2_instance_mutation(
+                            "StartInstances",
+                            ids,
+                            force,
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSEC2InstanceCommand::Stop {
+                        ids, force, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ec2_instance_mutation(
+                            "StopInstances",
+                            ids,
+                            force,
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSEC2InstanceCommand::Terminate {
+                        ids, force, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ec2_instance_mutation(
+                            "TerminateInstances",
+                            ids,
+                            force,
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                }
+            },
             AWSCommand::Doctor {
                 account,
                 region,
@@ -19416,6 +19770,14 @@ fn aws_default_service_endpoint(service: &str, region: &str) -> String {
                 format!("https://sts.{region}.amazonaws.com")
             }
         }
+        "s3" => {
+            if region == "us-east-1" {
+                "https://s3.amazonaws.com".to_owned()
+            } else {
+                format!("https://s3.{region}.amazonaws.com")
+            }
+        }
+        "ec2" => format!("https://ec2.{region}.amazonaws.com"),
         _ => format!("https://{service}.{region}.amazonaws.com"),
     }
 }
@@ -19484,6 +19846,29 @@ fn execute_aws_query(
             path: "/".to_owned(),
             service: service.to_owned(),
             body: aws_query_body(action, version, params),
+            ..AWSAPIRequest::default()
+        },
+    )
+}
+
+fn execute_aws_rest(
+    runtime: &AWSRuntimeContext,
+    service: &str,
+    method: &str,
+    path: &str,
+    params: &BTreeMap<String, String>,
+    body: &str,
+    content_type: &str,
+) -> std::result::Result<AWSAPIResponse, String> {
+    execute_aws_api_request(
+        runtime,
+        &AWSAPIRequest {
+            method: method.to_owned(),
+            path: path.to_owned(),
+            service: service.to_owned(),
+            params: params.clone(),
+            body: body.to_owned(),
+            content_type: content_type.to_owned(),
             ..AWSAPIRequest::default()
         },
     )
@@ -19701,6 +20086,206 @@ fn run_aws_iam_query(
         home,
         settings_file,
         |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", &action, &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_bucket_list(
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "s3",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_rest(&runtime, "s3", "GET", "/", &BTreeMap::new(), "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_bucket_create(
+    bucket: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if bucket.trim().is_empty() {
+        anyhow::bail!("aws s3 bucket create requires a bucket name");
+    }
+    let response = execute_aws_service_request(
+        "s3",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| {
+            let (body, content_type) = if runtime.region.trim().is_empty() || runtime.region.trim() == "us-east-1" {
+                (String::new(), String::new())
+            } else {
+                (
+                    format!(
+                        "<CreateBucketConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><LocationConstraint>{}</LocationConstraint></CreateBucketConfiguration>",
+                        runtime.region
+                    ),
+                    "application/xml".to_owned(),
+                )
+            };
+            execute_aws_rest(
+                &runtime,
+                "s3",
+                "PUT",
+                &format!("/{}", bucket.trim()),
+                &BTreeMap::new(),
+                &body,
+                &content_type,
+            )
+        },
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_s3_bucket_delete(
+    bucket: String,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if bucket.trim().is_empty() {
+        anyhow::bail!("aws s3 bucket delete requires a bucket name");
+    }
+    if !force {
+        anyhow::bail!("aws s3 bucket delete requires --force on the Rust path");
+    }
+    let response = execute_aws_service_request(
+        "s3",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "s3",
+            "DELETE",
+            &format!("/{}", bucket.trim()),
+            &BTreeMap::new(),
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ec2_instance_list(
+    ids: Vec<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    for (idx, id) in ids.into_iter().filter(|id| !id.trim().is_empty()).enumerate() {
+        params.insert(format!("InstanceId.{}", idx + 1), id.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "ec2",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "ec2", "2016-11-15", "DescribeInstances", &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ec2_instance_mutation(
+    action: &str,
+    ids: Vec<String>,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let ids = ids.into_iter().filter(|id| !id.trim().is_empty()).collect::<Vec<_>>();
+    if ids.is_empty() {
+        anyhow::bail!("aws ec2 instance {} requires at least one --id", action);
+    }
+    if !force {
+        anyhow::bail!("aws ec2 instance {} requires --force on the Rust path", action);
+    }
+    let mut params = BTreeMap::new();
+    for (idx, id) in ids.iter().enumerate() {
+        params.insert(format!("InstanceId.{}", idx + 1), id.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "ec2",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "ec2", "2016-11-15", action, &params),
     )?;
     print_aws_api_response(&response, format, raw)
 }
