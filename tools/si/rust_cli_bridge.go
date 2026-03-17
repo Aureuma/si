@@ -1674,7 +1674,7 @@ func runGoogleYouTubeChannelCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list", "get", "mine":
+	case "list", "get", "mine", "update":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "channel", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
 	default:
 		return false, nil
@@ -1686,8 +1686,12 @@ func runGoogleYouTubeVideoCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list", "get":
+	case "list", "get", "update", "rate":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", "delete"}, args[1:]...)...)
+	case "get-rating", "rating":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "video", "get-rating"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
@@ -1698,8 +1702,12 @@ func runGoogleYouTubePlaylistCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list", "get":
+	case "list", "get", "update":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "create", "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist", "create"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist", "delete"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
@@ -1710,8 +1718,12 @@ func runGoogleYouTubePlaylistItemCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
-	case "list":
-		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist-item", "list"}, args[1:]...)...)
+	case "list", "add", "update":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist-item", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "create", "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist-item", "add"}, args[1:]...)...)
+	case "remove", "delete", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "playlist-item", "remove"}, args[1:]...)...)
 	default:
 		return false, nil
 	}

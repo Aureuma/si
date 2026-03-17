@@ -8471,6 +8471,10 @@ enum GoogleYouTubeChannelCommand {
         #[command(flatten)]
         command: GoogleYouTubeChannelMineArgs,
     },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubeChannelUpdateArgs,
+    },
 }
 
 #[derive(Debug, clap::Args)]
@@ -8579,6 +8583,60 @@ struct GoogleYouTubeChannelMineArgs {
     format: OutputFormat,
 }
 
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeMutationRuntimeArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "mode")]
+    auth_mode: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    region: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    client_secret: Option<String>,
+    #[arg(long)]
+    redirect_uri: Option<String>,
+    #[arg(long)]
+    access_token: Option<String>,
+    #[arg(long)]
+    refresh_token: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeChannelUpdateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet,brandingSettings,status")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
 #[derive(Debug, Subcommand)]
 enum GoogleYouTubeVideoCommand {
     List {
@@ -8641,6 +8699,22 @@ enum GoogleYouTubeVideoCommand {
         #[command(flatten)]
         command: GoogleYouTubeVideoGetArgs,
     },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubeVideoUpdateArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeVideoDeleteArgs,
+    },
+    Rate {
+        #[command(flatten)]
+        command: GoogleYouTubeVideoRateArgs,
+    },
+    GetRating {
+        #[command(flatten)]
+        command: GoogleYouTubeVideoGetRatingArgs,
+    },
 }
 
 #[derive(Debug, clap::Args)]
@@ -8699,6 +8773,50 @@ struct GoogleYouTubeVideoGetArgs {
     raw: bool,
     #[arg(long, default_value = "text")]
     format: OutputFormat,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeVideoUpdateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet,status,recordingDetails")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeVideoDeleteArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeVideoRateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long)]
+    rating: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeVideoGetRatingArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    ids: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -8761,6 +8879,18 @@ enum GoogleYouTubePlaylistCommand {
         #[command(flatten)]
         command: GoogleYouTubePlaylistGetArgs,
     },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistCreateArgs,
+    },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistUpdateArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistDeleteArgs,
+    },
 }
 
 #[derive(Debug, clap::Args)]
@@ -8819,6 +8949,46 @@ struct GoogleYouTubePlaylistGetArgs {
     format: OutputFormat,
 }
 
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistCreateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    title: Option<String>,
+    #[arg(long)]
+    description: Option<String>,
+    #[arg(long, default_value = "private")]
+    privacy: String,
+    #[arg(long, default_value = "snippet,status")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistUpdateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet,status")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistDeleteArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
 #[derive(Debug, Subcommand)]
 enum GoogleYouTubePlaylistItemCommand {
     List {
@@ -8873,6 +9043,58 @@ enum GoogleYouTubePlaylistItemCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+    Add {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistItemAddArgs,
+    },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistItemUpdateArgs,
+    },
+    Remove {
+        #[command(flatten)]
+        command: GoogleYouTubePlaylistItemRemoveArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistItemAddArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    playlist_id: Option<String>,
+    #[arg(long)]
+    video_id: Option<String>,
+    #[arg(long)]
+    position: Option<usize>,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistItemUpdateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubePlaylistItemRemoveArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -20408,6 +20630,14 @@ fn main() -> Result<()> {
                             format, command.raw,
                         )?
                     }
+                    GoogleYouTubeChannelCommand::Update { command } => {
+                        run_google_youtube_channel_update(
+                            command.runtime,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
                 },
                 GoogleYouTubeCommand::Video { command } => match command {
                     GoogleYouTubeVideoCommand::List {
@@ -20434,6 +20664,32 @@ fn main() -> Result<()> {
                             command.part, command.ids, command.chart, command.my_rating,
                             command.region_code, command.max_results, command.page_token, command.params,
                             command.home, command.settings_file, format, command.raw,
+                        )?
+                    }
+                    GoogleYouTubeVideoCommand::Update { command } => {
+                        run_google_youtube_video_update(
+                            command.runtime,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubeVideoCommand::Delete { command } => {
+                        run_google_youtube_video_delete(command.runtime, command.id, command.params)?
+                    }
+                    GoogleYouTubeVideoCommand::Rate { command } => {
+                        run_google_youtube_video_rate(
+                            command.runtime,
+                            command.id,
+                            command.rating,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubeVideoCommand::GetRating { command } => {
+                        run_google_youtube_video_get_rating(
+                            command.runtime,
+                            command.ids,
+                            command.params,
                         )?
                     }
                 },
@@ -20464,6 +20720,28 @@ fn main() -> Result<()> {
                             command.settings_file, format, command.raw,
                         )?
                     }
+                    GoogleYouTubePlaylistCommand::Create { command } => {
+                        run_google_youtube_playlist_create(
+                            command.runtime,
+                            command.title,
+                            command.description,
+                            command.privacy,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubePlaylistCommand::Update { command } => {
+                        run_google_youtube_playlist_update(
+                            command.runtime,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubePlaylistCommand::Delete { command } => {
+                        run_google_youtube_playlist_delete(command.runtime, command.id, command.params)?
+                    }
                 },
                 GoogleYouTubeCommand::PlaylistItem { command } => match command {
                     GoogleYouTubePlaylistItemCommand::List {
@@ -20478,6 +20756,32 @@ fn main() -> Result<()> {
                             language, region, client_id, client_secret, redirect_uri, access_token,
                             refresh_token, part, ids, playlist_id, max_results, page_token, params,
                             home, settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubePlaylistItemCommand::Add { command } => {
+                        run_google_youtube_playlist_item_add(
+                            command.runtime,
+                            command.playlist_id,
+                            command.video_id,
+                            command.position,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubePlaylistItemCommand::Update { command } => {
+                        run_google_youtube_playlist_item_update(
+                            command.runtime,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubePlaylistItemCommand::Remove { command } => {
+                        run_google_youtube_playlist_item_remove(
+                            command.runtime,
+                            command.id,
+                            command.params,
                         )?
                     }
                 },
@@ -35008,6 +35312,20 @@ fn parse_google_youtube_ids_csv(raw: Option<String>) -> Option<String> {
     }
 }
 
+fn parse_google_youtube_body(value: Option<String>) -> Result<String> {
+    let Some(value) = value else {
+        return Ok(String::new());
+    };
+    let value = value.trim().to_owned();
+    if value.is_empty() {
+        return Ok(String::new());
+    }
+    if let Some(path) = value.strip_prefix('@') {
+        return Ok(std::fs::read_to_string(path)?.trim().to_owned());
+    }
+    Ok(value)
+}
+
 fn require_google_youtube_oauth(runtime: &GoogleYouTubeRuntime, operation: &str) -> Result<()> {
     if runtime.auth_mode == "oauth" {
         Ok(())
@@ -35017,6 +35335,60 @@ fn require_google_youtube_oauth(runtime: &GoogleYouTubeRuntime, operation: &str)
             operation
         )
     }
+}
+
+fn load_google_youtube_runtime_from_command(
+    command: GoogleYouTubeMutationRuntimeArgs,
+) -> Result<(GoogleYouTubeRuntime, OutputFormat, bool)> {
+    let format = if command.json {
+        OutputFormat::Json
+    } else {
+        command.format
+    };
+    let raw = command.raw;
+    let runtime = load_google_youtube_runtime(
+        command.account,
+        command.env,
+        command.auth_mode,
+        command.api_key,
+        command.base_url,
+        command.upload_base_url,
+        command.project_id,
+        command.language,
+        command.region,
+        command.client_id,
+        command.client_secret,
+        command.redirect_uri,
+        command.access_token,
+        command.refresh_token,
+        command.home,
+        command.settings_file,
+    )?;
+    Ok((runtime, format, raw))
+}
+
+fn run_google_youtube_oauth_request(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    operation: &str,
+    method: &str,
+    path: &str,
+    params: BTreeMap<String, String>,
+    body: Option<String>,
+) -> Result<()> {
+    let (runtime, format, raw) = load_google_youtube_runtime_from_command(command)?;
+    require_google_youtube_oauth(&runtime, operation)?;
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: method.to_owned(),
+            path: path.to_owned(),
+            params,
+            raw_body: body.unwrap_or_default(),
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
 }
 
 fn verify_google_youtube_auth(runtime: &GoogleYouTubeRuntime) -> Result<(), String> {
@@ -35314,6 +35686,296 @@ fn run_google_youtube_playlist_item_list(
     )
     .map_err(anyhow::Error::msg)?;
     print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_channel_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("channel update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "channel update",
+        "PUT",
+        "/youtube/v3/channels",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_video_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("video update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "video update",
+        "PUT",
+        "/youtube/v3/videos",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_video_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("video delete requires --id <video-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(
+        command,
+        "video delete",
+        "DELETE",
+        "/youtube/v3/videos",
+        params,
+        None,
+    )
+}
+
+fn run_google_youtube_video_rate(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    rating: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let rating = rating
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty());
+    let (Some(id), Some(rating)) = (id, rating) else {
+        anyhow::bail!("video rate requires --id <video-id> --rating <like|dislike|none>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    params.insert("rating".to_owned(), rating);
+    run_google_youtube_oauth_request(
+        command,
+        "video rate",
+        "POST",
+        "/youtube/v3/videos/rate",
+        params,
+        None,
+    )
+}
+
+fn run_google_youtube_video_get_rating(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    ids: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let Some(ids) = parse_google_youtube_ids_csv(ids) else {
+        anyhow::bail!("video get-rating requires --id <video-id[,video-id]>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), ids);
+    run_google_youtube_oauth_request(
+        command,
+        "video get-rating",
+        "GET",
+        "/youtube/v3/videos/getRating",
+        params,
+        None,
+    )
+}
+
+fn run_google_youtube_playlist_create(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    title: Option<String>,
+    description: Option<String>,
+    privacy: String,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = {
+        let raw = parse_google_youtube_body(body)?;
+        if raw.trim().is_empty() {
+            let title = title.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+            let Some(title) = title else {
+                anyhow::bail!("playlist create requires --title <title> or --body <json|@file>");
+            };
+            serde_json::to_string(&serde_json::json!({
+                "snippet": {
+                    "title": title,
+                    "description": description.unwrap_or_default().trim().to_owned(),
+                },
+                "status": {
+                    "privacyStatus": privacy.trim(),
+                }
+            }))?
+        } else {
+            raw
+        }
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "playlist create",
+        "POST",
+        "/youtube/v3/playlists",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_playlist_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("playlist update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "playlist update",
+        "PUT",
+        "/youtube/v3/playlists",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_playlist_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("playlist delete requires --id <playlist-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(
+        command,
+        "playlist delete",
+        "DELETE",
+        "/youtube/v3/playlists",
+        params,
+        None,
+    )
+}
+
+fn run_google_youtube_playlist_item_add(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    playlist_id: Option<String>,
+    video_id: Option<String>,
+    position: Option<usize>,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = {
+        let raw = parse_google_youtube_body(body)?;
+        if raw.trim().is_empty() {
+            let playlist_id = playlist_id
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let video_id = video_id
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let (Some(playlist_id), Some(video_id)) = (playlist_id, video_id) else {
+                anyhow::bail!(
+                    "playlist-item add requires --playlist-id <id> --video-id <id> or --body <json|@file>"
+                );
+            };
+            let mut payload = serde_json::json!({
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {
+                        "kind": "youtube#video",
+                        "videoId": video_id,
+                    }
+                }
+            });
+            if let Some(position) = position {
+                payload["snippet"]["position"] = serde_json::json!(position);
+            }
+            serde_json::to_string(&payload)?
+        } else {
+            raw
+        }
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "playlist-item add",
+        "POST",
+        "/youtube/v3/playlistItems",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_playlist_item_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("playlist-item update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "playlist-item update",
+        "PUT",
+        "/youtube/v3/playlistItems",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_playlist_item_remove(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("playlist-item remove requires --id <playlist-item-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(
+        command,
+        "playlist-item remove",
+        "DELETE",
+        "/youtube/v3/playlistItems",
+        params,
+        None,
+    )
 }
 
 #[allow(clippy::too_many_arguments)]
