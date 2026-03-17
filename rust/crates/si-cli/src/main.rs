@@ -406,6 +406,13 @@ enum BuildSelfCommand {
         #[arg(long)]
         tag: String,
     },
+    #[command(name = "verify-release-assets")]
+    VerifyReleaseAssets {
+        #[arg(long)]
+        version: String,
+        #[arg(long = "out-dir")]
+        out_dir: PathBuf,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -480,6 +487,8 @@ enum BuildInstallerCommand {
     SmokeNpm,
     #[command(name = "smoke-docker")]
     SmokeDocker,
+    #[command(name = "smoke-homebrew")]
+    SmokeHomebrew,
 }
 
 #[derive(Debug, Subcommand)]
@@ -17833,6 +17842,104 @@ fn run_installer_smoke_docker() -> Result<()> {
     Ok(())
 }
 
+fn run_installer_smoke_homebrew() -> Result<()> {
+    let root = std::env::current_dir().context("resolve repo root")?;
+    if StdCommand::new("brew").arg("--version").output().is_err() {
+        eprintln!("SKIP: brew is not available; skipping Homebrew installer smoke");
+        return Ok(());
+    }
+
+    let version = read_si_version(&root)?;
+    let tmp = tempfile::tempdir().context("create temp dir")?;
+    let assets_dir = tmp.path().join("assets");
+    let formula_dir = tmp.path().join("Formula");
+    let formula_path = formula_dir.join("si-smoke.rb");
+    let cache_dir = tmp.path().join("homebrew-cache");
+    let keg_prefix = tmp.path().join("si-smoke-prefix");
+    fs::create_dir_all(&assets_dir).with_context(|| format!("create {}", assets_dir.display()))?;
+    fs::create_dir_all(&formula_dir).with_context(|| format!("create {}", formula_dir.display()))?;
+    fs::create_dir_all(&cache_dir).with_context(|| format!("create {}", cache_dir.display()))?;
+
+    run_path_command_checked(
+        &root,
+        &root.join("tools").join("release").join("build-cli-release-assets.sh"),
+        &["--version", &version, "--out-dir", assets_dir.to_str().unwrap_or_default()],
+    )?;
+
+    let checksums_path = assets_dir.join("checksums.txt");
+    let base_url = format!("file://{}", assets_dir.display());
+    render_tap_formula_with_base_url(
+        &version,
+        &checksums_path,
+        &formula_path,
+        "Aureuma/si",
+        Some(&base_url),
+    )?;
+    let rendered = fs::read_to_string(&formula_path)
+        .with_context(|| format!("read {}", formula_path.display()))?
+        .replacen("class Si < Formula", "class SiSmoke < Formula", 1);
+    fs::write(&formula_path, rendered).with_context(|| format!("write {}", formula_path.display()))?;
+
+    let cache_dir_value = cache_dir.display().to_string();
+    let keg_prefix_value = keg_prefix.display().to_string();
+    let brew_env = [
+        ("HOMEBREW_NO_AUTO_UPDATE", "1"),
+        ("HOMEBREW_NO_INSTALL_CLEANUP", "1"),
+        ("HOMEBREW_NO_ENV_HINTS", "1"),
+        ("HOMEBREW_CACHE", cache_dir_value.as_str()),
+        ("SI_HOMEBREW_SMOKE_PREFIX", keg_prefix_value.as_str()),
+    ];
+
+    let mut install = StdCommand::new("brew");
+    install
+        .current_dir(&root)
+        .args(["install", "--formula", formula_path.to_str().unwrap_or_default()]);
+    for (key, value) in &brew_env {
+        install.env(key, value);
+    }
+    let install_status = install.status().context("run brew install")?;
+    if !install_status.success() {
+        return Err(anyhow!("brew install failed: {}", install_status));
+    }
+
+    let mut prefix_cmd = StdCommand::new("brew");
+    prefix_cmd.current_dir(&root).args(["--prefix", "si-smoke"]);
+    for (key, value) in &brew_env {
+        prefix_cmd.env(key, value);
+    }
+    let prefix_output = prefix_cmd.output().context("run brew --prefix si-smoke")?;
+    if !prefix_output.status.success() {
+        return Err(anyhow!("brew --prefix si-smoke failed: {}", prefix_output.status));
+    }
+    let prefix = String::from_utf8_lossy(&prefix_output.stdout).trim().to_owned();
+    if prefix.is_empty() {
+        return Err(anyhow!("brew --prefix si-smoke returned empty output"));
+    }
+
+    let installed = PathBuf::from(&prefix).join("bin").join("si");
+    let installed_go = PathBuf::from(&prefix).join("bin").join("si-go");
+    if !installed.exists() {
+        return Err(anyhow!("expected installed binary at {}", installed.display()));
+    }
+    if !installed_go.exists() {
+        return Err(anyhow!("expected installed Go adapter at {}", installed_go.display()));
+    }
+    run_path_command_checked(&root, &installed, &["version"])?;
+
+    let mut uninstall = StdCommand::new("brew");
+    uninstall.current_dir(&root).args(["uninstall", "--force", "si-smoke"]);
+    for (key, value) in &brew_env {
+        uninstall.env(key, value);
+    }
+    let uninstall_status = uninstall.status().context("run brew uninstall")?;
+    if !uninstall_status.success() {
+        return Err(anyhow!("brew uninstall failed: {}", uninstall_status));
+    }
+
+    println!("homebrew install smoke passed");
+    Ok(())
+}
+
 fn docker_build_image(image: &str, dockerfile: &Path, context: &Path) -> Result<()> {
     if StdCommand::new("docker")
         .arg("buildx")
@@ -18061,7 +18168,7 @@ fn run_homebrew_render_tap_formula(
     output: PathBuf,
     repo: String,
 ) -> Result<()> {
-    render_tap_formula(&version, &checksums, &output, &repo)
+    render_tap_formula_with_base_url(&version, &checksums, &output, &repo, None)
 }
 
 fn run_homebrew_update_tap_repo(
@@ -18079,7 +18186,7 @@ fn run_homebrew_update_tap_repo(
     let formula_dir = tap_dir.join("Formula");
     fs::create_dir_all(&formula_dir).with_context(|| format!("create {}", formula_dir.display()))?;
     let formula_path = formula_dir.join("si.rb");
-    render_tap_formula(&version, &checksums, &formula_path, &repo)?;
+    render_tap_formula_with_base_url(&version, &checksums, &formula_path, &repo, None)?;
     if !do_commit {
         return Ok(());
     }
@@ -18145,6 +18252,86 @@ fn run_validate_release_version(tag: String) -> Result<()> {
     Ok(())
 }
 
+fn expected_release_asset_names(version: &str) -> Vec<String> {
+    let version_no_v = version.trim().trim_start_matches('v');
+    vec![
+        format!("si_{version_no_v}_linux_amd64.tar.gz"),
+        format!("si_{version_no_v}_linux_arm64.tar.gz"),
+        format!("si_{version_no_v}_linux_armv7.tar.gz"),
+        format!("si_{version_no_v}_darwin_amd64.tar.gz"),
+        format!("si_{version_no_v}_darwin_arm64.tar.gz"),
+    ]
+}
+
+fn verify_release_archive_contents(path: &Path) -> Result<()> {
+    let file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut archive = tar::Archive::new(decoder);
+    let mut names = archive
+        .entries()
+        .with_context(|| format!("read archive entries from {}", path.display()))?
+        .map(|entry| {
+            entry
+                .with_context(|| format!("read archive entry from {}", path.display()))
+                .and_then(|entry| {
+                    entry.path()
+                        .map(|value| value.display().to_string())
+                        .with_context(|| format!("read archive path from {}", path.display()))
+                })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    names.sort();
+
+    let has_si = names.iter().any(|name| name == "si" || name.ends_with("/si"));
+    let has_adapter = names.iter().any(|name| name == "si-go" || name.ends_with("/si-go"));
+    let has_readme = names.iter().any(|name| name == "README.md" || name.ends_with("/README.md"));
+    let has_license = names.iter().any(|name| name == "LICENSE" || name.ends_with("/LICENSE"));
+
+    if !has_si {
+        return Err(anyhow!("archive missing si binary: {}", path.display()));
+    }
+    if !has_adapter {
+        return Err(anyhow!("archive missing si-go adapter: {}", path.display()));
+    }
+    if !has_readme {
+        return Err(anyhow!("archive missing README.md: {}", path.display()));
+    }
+    if !has_license {
+        return Err(anyhow!("archive missing LICENSE: {}", path.display()));
+    }
+    Ok(())
+}
+
+fn run_build_self_verify_release_assets(version: String, out_dir: PathBuf) -> Result<()> {
+    validate_release_version(&version)?;
+    if !out_dir.is_dir() {
+        return Err(anyhow!("release output dir does not exist: {}", out_dir.display()));
+    }
+    let checksums_path = out_dir.join("checksums.txt");
+    let checksums = parse_checksums_file(&checksums_path)?;
+    for asset_name in expected_release_asset_names(&version) {
+        let asset_path = out_dir.join(&asset_name);
+        if !asset_path.exists() {
+            return Err(anyhow!("missing release asset: {}", asset_path.display()));
+        }
+        let expected_sha = checksums
+            .get(&asset_name)
+            .ok_or_else(|| anyhow!("checksum missing for {}", asset_name))?;
+        let actual_sha = sha256_file(&asset_path)?;
+        if actual_sha != *expected_sha {
+            return Err(anyhow!(
+                "checksum mismatch for {}: expected {}, got {}",
+                asset_name,
+                expected_sha,
+                actual_sha
+            ));
+        }
+        verify_release_archive_contents(&asset_path)?;
+    }
+    println!("verified release assets in {}", out_dir.display());
+    Ok(())
+}
+
 fn download_file(url: &str, output: &Path) -> Result<()> {
     let response = BlockingHttpClient::new()
         .get(url)
@@ -18158,7 +18345,13 @@ fn download_file(url: &str, output: &Path) -> Result<()> {
     Ok(())
 }
 
-fn render_tap_formula(version: &str, checksums_path: &Path, output_path: &Path, repo: &str) -> Result<()> {
+fn render_tap_formula_with_base_url(
+    version: &str,
+    checksums_path: &Path,
+    output_path: &Path,
+    repo: &str,
+    base_url_override: Option<&str>,
+) -> Result<()> {
     validate_release_version(version)?;
     if !checksums_path.exists() {
         return Err(anyhow!("checksums file not found: {}", checksums_path.display()));
@@ -18176,7 +18369,9 @@ fn render_tap_formula(version: &str, checksums_path: &Path, output_path: &Path, 
     let asset_darwin_amd64 = format!("si_{version_no_v}_darwin_amd64.tar.gz");
     let asset_linux_arm64 = format!("si_{version_no_v}_linux_arm64.tar.gz");
     let asset_linux_amd64 = format!("si_{version_no_v}_linux_amd64.tar.gz");
-    let base_url = format!("https://github.com/{}/releases/download/{}", repo, version);
+    let base_url = base_url_override
+        .map(|value| value.trim_end_matches('/').to_owned())
+        .unwrap_or_else(|| format!("https://github.com/{}/releases/download/{}", repo, version));
     let content = format!(
         "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    adapter = Dir[\"#{{stage}}/si_*/si-go\"].first\n    adapter = (stage/\"si-go\").to_s if adapter.nil? && (stage/\"si-go\").exist?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n    unless adapter.nil? || adapter.empty?\n      bin.install adapter => \"si-go\"\n      chmod 0o755, bin/\"si-go\"\n    end\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
         lookup(&asset_darwin_arm64)?,
@@ -18296,6 +18491,9 @@ fn main() -> Result<()> {
                 BuildSelfCommand::ValidateReleaseVersion { tag } => {
                     run_validate_release_version(tag)?
                 }
+                BuildSelfCommand::VerifyReleaseAssets { version, out_dir } => {
+                    run_build_self_verify_release_assets(version, out_dir)?
+                }
             },
             BuildCommand::Installer { command } => match command {
                 BuildInstallerCommand::SettingsHelper {
@@ -18351,6 +18549,7 @@ fn main() -> Result<()> {
                 BuildInstallerCommand::SmokeHost => run_installer_smoke_host()?,
                 BuildInstallerCommand::SmokeNpm => run_installer_smoke_npm()?,
                 BuildInstallerCommand::SmokeDocker => run_installer_smoke_docker()?,
+                BuildInstallerCommand::SmokeHomebrew => run_installer_smoke_homebrew()?,
             },
             BuildCommand::Npm { command } => match command {
                 BuildNpmCommand::BuildPackage {

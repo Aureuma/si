@@ -388,6 +388,87 @@ fn build_homebrew_render_tap_formula_writes_formula() {
 }
 
 #[test]
+fn build_self_verify_release_assets_checks_archives() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(
+        repo.path().join("go.mod"),
+        "module example.com/si\n\ngo 1.22.0\n",
+    )
+    .expect("write go.mod");
+    fs::write(repo.path().join("README.md"), "readme\n").expect("write readme");
+    fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+    fs::write(
+        repo.path().join("tools/si/main.go"),
+        "package main\n\nfunc main() {}\n",
+    )
+    .expect("write main");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
+    let go_path = bin_dir.path().join("go");
+    fs::write(
+        &go_path,
+        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
+    )
+    .expect("write fake go");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&go_path).expect("stat fake go").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&go_path, perms).expect("chmod fake go");
+    }
+
+    let out_dir = repo.path().join("out");
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "self",
+            "release-assets",
+            "--repo",
+            repo.path().to_str().expect("repo path"),
+            "--out-dir",
+            out_dir.to_str().expect("out path"),
+        ])
+        .env("PATH", &path_env)
+        .assert()
+        .success();
+
+    cargo_bin()
+        .current_dir(repo.path())
+        .args([
+            "build",
+            "self",
+            "verify-release-assets",
+            "--version",
+            "v1.2.3",
+            "--out-dir",
+            out_dir.to_str().expect("out path"),
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+}
+
+#[test]
 fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
     let dir = tempdir().expect("tempdir");
     let tap_dir = dir.path().join("homebrew-si");
@@ -664,6 +745,62 @@ fn build_installer_smoke_docker_reports_run_output_on_failure() {
     assert!(stderr.contains("docker failed:"));
     assert!(stderr.contains("stdout:\nroot smoke failed"));
     assert!(stderr.contains("stderr:\npermission denied"));
+}
+
+#[test]
+fn build_installer_smoke_homebrew_runs_fake_brew() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/release")).expect("mkdir release");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+    let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
+    fs::write(
+        &build_assets,
+        "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\ncat > \"$out/checksums.txt\" <<'EOF'\nsha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\nEOF\nexit 0\n",
+    )
+    .expect("write assets script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&build_assets).expect("stat assets script").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&build_assets, perms).expect("chmod assets script");
+    }
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let brew_prefix = repo.path().join("fake-brew-prefix");
+    let brew = bin_dir.path().join("brew");
+    fs::write(
+        &brew,
+        format!(
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"install\" ]; then formula=\"$3\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q 'file://' \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si-go\"; chmod 755 \"$prefix/bin/si-go\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"si-smoke\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ]; then rm -rf \"$prefix\"; exit 0; fi\nexit 1\n",
+            prefix = shell_escape_for_test(&brew_prefix)
+        ),
+    )
+    .expect("write brew");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&brew).expect("stat brew").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&brew, perms).expect("chmod brew");
+    }
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    cargo_bin()
+        .current_dir(repo.path())
+        .args(["build", "installer", "smoke-homebrew"])
+        .env("PATH", path_env)
+        .assert()
+        .success();
 }
 
 #[test]
