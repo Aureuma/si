@@ -477,6 +477,123 @@ fn build_installer_run_installs_fake_binary() {
     }
 }
 
+#[test]
+fn build_installer_smoke_host_runs_wrapped_scripts() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
+    let installer = repo.path().join("tools/install-si.sh");
+    let settings = repo.path().join("tools/test-install-si-settings.sh");
+    fs::write(
+        &installer,
+        "#!/bin/sh\nprev=\nbackend=\nsource_dir=\ninstall_dir=\ninstall_path=\nuninstall=0\ndry_run=0\nfor i in \"$@\"; do\n  if [ \"$prev\" = \"--backend\" ]; then backend=\"$i\"; fi\n  if [ \"$prev\" = \"--source-dir\" ]; then source_dir=\"$i\"; fi\n  if [ \"$prev\" = \"--install-dir\" ]; then install_dir=\"$i\"; fi\n  if [ \"$prev\" = \"--install-path\" ]; then install_path=\"$i\"; fi\n  [ \"$i\" = \"--uninstall\" ] && uninstall=1\n  [ \"$i\" = \"--dry-run\" ] && dry_run=1\n  [ \"$i\" = \"--help\" ] && exit 0\n  prev=\"$i\"\ndone\nif [ -n \"$backend\" ] && [ \"$backend\" != \"local\" ]; then exit 1; fi\nif [ -n \"$install_dir\" ] && [ -n \"$install_path\" ]; then exit 1; fi\nif [ -n \"$source_dir\" ] && [ ! -d \"$source_dir\" ]; then exit 1; fi\nif printf '%s' \"$source_dir\" | grep -q 'missing-source'; then exit 1; fi\nif [ -n \"$install_dir\" ]; then target=\"$install_dir/si\"; else target=\"$install_path\"; fi\nif [ \"$uninstall\" = 1 ]; then rm -f \"$target\"; exit 0; fi\nif [ \"$dry_run\" = 1 ]; then exit 0; fi\nmkdir -p \"$(dirname \"$target\")\"\nprintf '#!/bin/sh\\nexit 0\\n' > \"$target\"\nchmod 755 \"$target\"\n",
+    )
+    .expect("write installer");
+    fs::write(&settings, "#!/bin/sh\nexit 0\n").expect("write settings");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&installer, &settings] {
+            let mut perms = fs::metadata(path).expect("stat path").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("chmod path");
+        }
+    }
+    let bin_dir = tempdir().expect("bin tempdir");
+    let git_path = bin_dir.path().join("git");
+    fs::write(&git_path, "#!/bin/sh\nexit 0\n").expect("write git");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&git_path).expect("stat git").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&git_path, perms).expect("chmod git");
+    }
+    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    cargo_bin()
+        .current_dir(repo.path())
+        .args(["build", "installer", "smoke-host"])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+}
+
+#[test]
+fn build_installer_smoke_npm_runs_release_scripts() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/release/npm")).expect("mkdir npm scripts");
+    fs::write(repo.path().join("tools/si/version.go"), "package main\n\nconst siVersion = \"v1.2.3\"\n").unwrap_or(());
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::write(repo.path().join("tools/si/version.go"), "package main\n\nconst siVersion = \"v1.2.3\"\n").expect("write version");
+    let build_assets = repo.path().join("tools/release/build-cli-release-assets.sh");
+    let build_npm = repo.path().join("tools/release/npm/build-npm-package.sh");
+    fs::create_dir_all(build_assets.parent().expect("assets parent")).expect("mkdir assets parent");
+    fs::write(&build_assets, "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\nexit 0\n").expect("write assets script");
+    fs::write(&build_npm, "#!/bin/sh\nout=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--out-dir\" ]; then out=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$out\"\ntouch \"$out/aureuma-si-1.2.3.tgz\"\nexit 0\n").expect("write npm script");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&build_assets, &build_npm] {
+            let mut perms = fs::metadata(path).expect("stat script").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("chmod script");
+        }
+    }
+    let bin_dir = tempdir().expect("bin tempdir");
+    let npm_path = bin_dir.path().join("npm");
+    fs::write(&npm_path, "#!/bin/sh\nprefix=\nprev=\nfor i in \"$@\"; do if [ \"$prev\" = \"--prefix\" ]; then prefix=\"$i\"; fi; prev=\"$i\"; done\nmkdir -p \"$prefix/bin\"\nprintf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"\nchmod 755 \"$prefix/bin/si\"\nexit 0\n").expect("write npm");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&npm_path).expect("stat npm").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&npm_path, perms).expect("chmod npm");
+    }
+    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    cargo_bin()
+        .current_dir(repo.path())
+        .args(["build", "installer", "smoke-npm"])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+}
+
+#[test]
+fn build_installer_smoke_docker_runs_fake_docker() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/docker/install-sh-smoke")).expect("mkdir smoke");
+    fs::create_dir_all(repo.path().join("tools/docker/install-sh-nonroot")).expect("mkdir nonroot");
+    fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
+    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n").expect("write installer");
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("docker-args.txt");
+    let docker = bin_dir.path().join("docker");
+    fs::write(
+        &docker,
+        format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" >> {}\nif [ \"$1\" = \"buildx\" ] && [ \"$2\" = \"version\" ]; then exit 0; fi\nexit 0\n",
+            shell_escape_for_test(&args_file)
+        ),
+    )
+    .expect("write docker");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker).expect("stat docker").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&docker, perms).expect("chmod docker");
+    }
+    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    cargo_bin()
+        .current_dir(repo.path())
+        .args(["build", "installer", "smoke-docker"])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+    let args = fs::read_to_string(args_file).expect("read args");
+    assert!(args.contains("buildx"));
+    assert!(args.contains("run"));
+}
+
 fn test_app_private_key_pem() -> &'static str {
     "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
 }
