@@ -1712,6 +1712,18 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSKmsCommand,
     },
+    Dynamodb {
+        #[command(subcommand)]
+        command: AWSDynamoDbCommand,
+    },
+    Ssm {
+        #[command(subcommand)]
+        command: AWSSsmCommand,
+    },
+    Logs {
+        #[command(subcommand)]
+        command: AWSLogsCommand,
+    },
     Ec2 {
         #[command(subcommand)]
         command: AWSEC2Command,
@@ -2421,6 +2433,399 @@ enum AWSKmsKeyCommand {
     },
     Describe {
         id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSDynamoDbCommand {
+    Table {
+        #[command(subcommand)]
+        command: AWSDynamoDbTableCommand,
+    },
+    Item {
+        #[command(subcommand)]
+        command: AWSDynamoDbItemCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSDynamoDbTableCommand {
+    List {
+        #[arg(long, default_value_t = 100)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Describe {
+        table: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSDynamoDbItemCommand {
+    Get {
+        #[arg(long)]
+        table: String,
+        #[arg(long)]
+        key_json: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Put {
+        #[arg(long)]
+        table: String,
+        #[arg(long)]
+        item_json: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        #[arg(long)]
+        table: String,
+        #[arg(long)]
+        key_json: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSSsmCommand {
+    Parameter {
+        #[command(subcommand)]
+        command: AWSSsmParameterCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSSsmParameterCommand {
+    List {
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        name: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        decrypt: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Put {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        value: String,
+        #[arg(long, default_value = "String")]
+        r#type: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        overwrite: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Delete {
+        name: String,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSLogsCommand {
+    Group {
+        #[command(subcommand)]
+        command: AWSLogsGroupCommand,
+    },
+    Stream {
+        #[command(subcommand)]
+        command: AWSLogsStreamCommand,
+    },
+    Events {
+        #[arg(long)]
+        group: String,
+        #[arg(long)]
+        stream: Option<String>,
+        #[arg(long = "filter")]
+        filter_pattern: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        start: i64,
+        #[arg(long, default_value_t = 0)]
+        end: i64,
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSLogsGroupCommand {
+    List {
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
+        #[arg(long)]
+        prefix: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSLogsStreamCommand {
+    List {
+        #[arg(long)]
+        group: String,
+        #[arg(long, default_value_t = 50)]
+        limit: i32,
         #[arg(long)]
         account: Option<String>,
         #[arg(long)]
@@ -12063,6 +12468,70 @@ fn main() -> Result<()> {
                     run_aws_kms_decrypt(ciphertext, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
                 }
             },
+            AWSCommand::Dynamodb { command } => match command {
+                AWSDynamoDbCommand::Table { command } => match command {
+                    AWSDynamoDbTableCommand::List { limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_dynamodb_table_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSDynamoDbTableCommand::Describe { table, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_dynamodb_table_describe(table, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+                AWSDynamoDbCommand::Item { command } => match command {
+                    AWSDynamoDbItemCommand::Get { table, key_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_dynamodb_item_get(table, key_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSDynamoDbItemCommand::Put { table, item_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_dynamodb_item_put(table, item_json, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSDynamoDbItemCommand::Delete { table, key_json, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_dynamodb_item_delete(table, key_json, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                }
+            },
+            AWSCommand::Ssm { command } => match command {
+                AWSSsmCommand::Parameter { command } => match command {
+                    AWSSsmParameterCommand::List { limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ssm_parameter_list(limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSSsmParameterCommand::Get { name, decrypt, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ssm_parameter_get(name, decrypt, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSSsmParameterCommand::Put { name, value, r#type, overwrite, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ssm_parameter_put(name, value, r#type, overwrite, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                    AWSSsmParameterCommand::Delete { name, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_ssm_parameter_delete(name, force, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                }
+            },
+            AWSCommand::Logs { command } => match command {
+                AWSLogsCommand::Group { command } => match command {
+                    AWSLogsGroupCommand::List { limit, prefix, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_logs_group_list(limit, prefix, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+                AWSLogsCommand::Stream { command } => match command {
+                    AWSLogsStreamCommand::List { group, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_logs_stream_list(group, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                    }
+                },
+                AWSLogsCommand::Events { group, stream, filter_pattern, start, end, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, json, raw, format } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_logs_events(group, stream, filter_pattern, start, end, limit, account, region, base_url, access_key, secret_key, session_token, home, settings_file, format, raw)?
+                }
+            },
             AWSCommand::Ec2 { command } => match command {
                 AWSEC2Command::Instance { command } => match command {
                     AWSEC2InstanceCommand::List {
@@ -20915,6 +21384,10 @@ fn aws_s3_object_path(bucket: &str, key: &str) -> String {
     format!("/{}/{}", bucket.trim(), key.trim_start_matches('/'))
 }
 
+fn parse_json_value(label: &str, input: &str) -> Result<Value> {
+    serde_json::from_str(input).map_err(|err| anyhow::anyhow!("invalid {} json: {}", label, err))
+}
+
 fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
@@ -21723,6 +22196,327 @@ fn run_aws_kms_decrypt(
         "kms",
         account, region, base_url, access_key, secret_key, session_token, home, settings_file,
         |runtime| execute_aws_json(&runtime, "kms", "TrentService.Decrypt", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_dynamodb_table_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if limit > 0 { serde_json::json!({ "Limit": limit }) } else { serde_json::json!({}) };
+    let response = execute_aws_service_request(
+        "dynamodb",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.ListTables", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_dynamodb_table_describe(
+    table: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "TableName": table.trim() });
+    let response = execute_aws_service_request(
+        "dynamodb",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.DescribeTable", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_dynamodb_item_get(
+    table: String,
+    key_json: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let key = parse_json_value("dynamodb key", &key_json)?;
+    let payload = serde_json::json!({ "TableName": table.trim(), "Key": key });
+    let response = execute_aws_service_request(
+        "dynamodb",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.GetItem", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_dynamodb_item_put(
+    table: String,
+    item_json: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let item = parse_json_value("dynamodb item", &item_json)?;
+    let payload = serde_json::json!({ "TableName": table.trim(), "Item": item });
+    let response = execute_aws_service_request(
+        "dynamodb",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.PutItem", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_dynamodb_item_delete(
+    table: String,
+    key_json: String,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("aws dynamodb item delete requires --force on the Rust path");
+    }
+    let key = parse_json_value("dynamodb key", &key_json)?;
+    let payload = serde_json::json!({ "TableName": table.trim(), "Key": key });
+    let response = execute_aws_service_request(
+        "dynamodb",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "dynamodb", "DynamoDB_20120810.DeleteItem", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ssm_parameter_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if limit > 0 { serde_json::json!({ "MaxResults": limit }) } else { serde_json::json!({}) };
+    let response = execute_aws_service_request(
+        "ssm",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.DescribeParameters", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ssm_parameter_get(
+    name: String,
+    decrypt: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "Name": name.trim(), "WithDecryption": decrypt });
+    let response = execute_aws_service_request(
+        "ssm",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.GetParameter", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ssm_parameter_put(
+    name: String,
+    value: String,
+    param_type: String,
+    overwrite: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({
+        "Name": name.trim(),
+        "Value": value,
+        "Type": param_type.trim(),
+        "Overwrite": overwrite,
+    });
+    let response = execute_aws_service_request(
+        "ssm",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.PutParameter", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_ssm_parameter_delete(
+    name: String,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("aws ssm parameter delete requires --force on the Rust path");
+    }
+    let payload = serde_json::json!({ "Name": name.trim() });
+    let response = execute_aws_service_request(
+        "ssm",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "ssm", "AmazonSSM.DeleteParameter", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_logs_group_list(
+    limit: i32,
+    prefix: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut payload = serde_json::json!({ "limit": limit });
+    if let Some(prefix) = prefix.filter(|value| !value.trim().is_empty()) {
+        payload["logGroupNamePrefix"] = Value::String(prefix.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "logs",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.DescribeLogGroups", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_logs_stream_list(
+    group: String,
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = serde_json::json!({ "logGroupName": group.trim(), "limit": limit });
+    let response = execute_aws_service_request(
+        "logs",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.DescribeLogStreams", &payload),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_logs_events(
+    group: String,
+    stream: Option<String>,
+    filter_pattern: Option<String>,
+    start: i64,
+    end: i64,
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut payload = serde_json::json!({ "logGroupName": group.trim(), "limit": limit });
+    if let Some(stream) = stream.filter(|value| !value.trim().is_empty()) {
+        payload["logStreamNames"] = serde_json::json!([stream.trim()]);
+    }
+    if let Some(filter_pattern) = filter_pattern.filter(|value| !value.trim().is_empty()) {
+        payload["filterPattern"] = Value::String(filter_pattern.trim().to_owned());
+    }
+    if start > 0 {
+        payload["startTime"] = Value::Number(start.into());
+    }
+    if end > 0 {
+        payload["endTime"] = Value::Number(end.into());
+    }
+    let response = execute_aws_service_request(
+        "logs",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_json(&runtime, "logs", "Logs_20140328.FilterLogEvents", &payload),
     )?;
     print_aws_api_response(&response, format, raw)
 }
