@@ -18122,6 +18122,40 @@ fn run_command_checked<const N: usize>(dir: &Path, name: &str, args: [&str; N]) 
     Ok(())
 }
 
+fn run_go_compat_with_current_args() -> Result<()> {
+    let cwd = std::env::current_dir().context("read current dir")?;
+    let args = std::env::args_os().skip(1).collect::<Vec<_>>();
+    let (program, prefix_args): (std::ffi::OsString, Vec<std::ffi::OsString>) =
+        if let Some(path) = std::env::var_os("SI_GO_COMPAT_BIN").filter(|value| !value.is_empty()) {
+            (path, Vec::new())
+        } else {
+            let current_exe = std::env::current_exe().context("resolve current executable")?;
+            let sibling = current_exe.with_file_name(if cfg!(windows) { "si-go.exe" } else { "si-go" });
+            if sibling.exists() {
+                (sibling.into_os_string(), Vec::new())
+            } else if cwd.join("tools").join("si").join("go.mod").exists() {
+                (
+                    "go".into(),
+                    vec!["run".into(), "-trimpath".into(), "-buildvcs=false".into(), "./tools/si".into()],
+                )
+            } else {
+                return Err(anyhow!(
+                    "Go compatibility adapter not found; set SI_GO_COMPAT_BIN or install sibling si-go"
+                ));
+            }
+        };
+    let status = StdCommand::new(&program)
+        .current_dir(&cwd)
+        .args(&prefix_args)
+        .args(&args)
+        .status()
+        .with_context(|| format!("run Go compatibility adapter {}", PathBuf::from(&program).display()))?;
+    match status.code() {
+        Some(code) => std::process::exit(code),
+        None => Err(anyhow!("Go compatibility adapter terminated by signal")),
+    }
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -29533,9 +29567,7 @@ fn show_apple_appstore_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     if public {
-        anyhow::bail!(
-            "apple appstore doctor --public is not yet implemented in Rust; use the Go fallback"
-        );
+        return run_go_compat_with_current_args();
     }
     show_apple_appstore_auth_status(
         account,
@@ -33478,7 +33510,7 @@ fn run_aws_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     if public {
-        anyhow::bail!("aws doctor --public remains on the Go compatibility path");
+        return run_go_compat_with_current_args();
     }
     let payload = execute_aws_request(
         account,
@@ -43593,7 +43625,7 @@ fn show_oci_doctor(
     format: OutputFormat,
 ) -> Result<()> {
     if public {
-        anyhow::bail!("oci doctor --public is not yet implemented in Rust; use the Go fallback");
+        return run_go_compat_with_current_args();
     }
 
     let home = home.unwrap_or_else(default_home_dir);
