@@ -6001,6 +6001,196 @@ fn aws_bedrock_runtime_count_tokens_json_executes_signed_rest_request() {
 }
 
 #[test]
+fn aws_bedrock_job_create_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /model-invocation-job HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("\"jobName\":\"nightly-batch\""));
+        assert!(request.contains("\"timeoutDurationInHours\":2"));
+        assert!(request.contains("\"tags\":[{\"key\":\"env\",\"value\":\"prod\"},{\"key\":\"team\",\"value\":\"platform\"}]"));
+        http_json_response("201 Created", &[("x-amzn-requestid", "req_aws_bedrock_job_create")], r#"{"jobArn":"arn:aws:bedrock:job/nightly-batch"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "job", "create",
+            "--name", "nightly-batch",
+            "--role-arn", "arn:aws:iam::123456789012:role/bedrock-batch",
+            "--model-id", "anthropic.claude-v2",
+            "--input-s3-uri", "s3://bucket/input.jsonl",
+            "--output-s3-uri", "s3://bucket/output/",
+            "--timeout-hours", "2",
+            "--tag", "team=platform",
+            "--tag", "env=prod",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 201);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_job_create");
+    assert_eq!(parsed["data"]["jobArn"], "arn:aws:bedrock:job/nightly-batch");
+    server.join();
+}
+
+#[test]
+fn aws_bedrock_agent_alias_get_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /agents/agent-1/agentAliases/alias-1 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_agent_alias")], r#"{"agentAlias":{"agentAliasId":"alias-1"}}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "agent", "alias", "get",
+            "--agent-id", "agent-1",
+            "--alias-id", "alias-1",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_agent_alias");
+    assert_eq!(parsed["data"]["agentAlias"]["agentAliasId"], "alias-1");
+    server.join();
+}
+
+#[test]
+fn aws_bedrock_knowledge_base_data_source_list_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /knowledgebases/kb-1/datasources?maxResults=5 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_datasources")], r#"{"dataSourceSummaries":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "knowledge-base", "data-source", "list",
+            "--knowledge-base-id", "kb-1",
+            "--limit", "5",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_datasources");
+    assert_eq!(parsed["data"]["dataSourceSummaries"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_bedrock_agent_runtime_invoke_agent_json_executes_signed_rest_request() {
+    let home = tempdir().expect("tempdir");
+    let session_state_path = home.path().join("session-state.json");
+    fs::write(&session_state_path, r#"{"promptSessionAttributes":{"mode":"debug"}}"#).expect("write session state");
+
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /agents/agent-1/agentAliases/alias-1/sessions/sess-1/text HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("\"inputText\":\"hello\""));
+        assert!(request.contains("\"enableTrace\":true"));
+        assert!(request.contains("\"sessionState\":{\"promptSessionAttributes\":{\"mode\":\"debug\"}}"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_agent_runtime")], r#"{"completion":"ok"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "agent-runtime", "invoke-agent",
+            "--agent-id", "agent-1",
+            "--agent-alias-id", "alias-1",
+            "--session-id", "sess-1",
+            "--input-text", "hello",
+            "--enable-trace",
+            "--session-state-file",
+            session_state_path.to_str().expect("session state path"),
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_agent_runtime");
+    assert_eq!(parsed["data"]["completion"], "ok");
+    server.join();
+}
+
+#[test]
+fn aws_bedrock_agent_runtime_retrieve_and_generate_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /retrieveAndGenerate HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("\"knowledgeBaseId\":\"kb-1\""));
+        assert!(request.contains("\"text\":\"hello\""));
+        assert!(request.contains("\"numberOfResults\":3"));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_bedrock_rag")], r#"{"output":{"text":"answer"}}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "bedrock", "agent-runtime", "retrieve-and-generate",
+            "--knowledge-base-id", "kb-1",
+            "--query", "hello",
+            "--results", "3",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_bedrock_rag");
+    assert_eq!(parsed["data"]["output"]["text"], "answer");
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

@@ -1036,6 +1036,46 @@ func runAWSBedrockCommand(args []string) (bool, error) {
 		case "invoke", "converse", "count-tokens", "count", "tokens":
 			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
 		}
+	case "job", "jobs":
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "get", "describe":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
+		case "create":
+			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
+		case "stop", "cancel":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
+			}
+		}
+	case "agent", "agents":
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "get", "describe":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
+		case "alias", "aliases":
+			if len(args) >= 3 {
+				switch strings.ToLower(strings.TrimSpace(args[2])) {
+				case "list", "get", "describe":
+					return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
+				}
+			}
+		}
+	case "knowledge-base", "knowledge-bases", "kb":
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "get", "describe":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
+		case "data-source", "datasource", "datasources":
+			if len(args) >= 3 {
+				switch strings.ToLower(strings.TrimSpace(args[2])) {
+				case "list", "get", "describe":
+					return maybeDispatchRustCLIReadOnly("aws", append([]string{"bedrock"}, args...)...)
+				}
+			}
+		}
+	case "agent-runtime", "agentruntime":
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "invoke-agent", "invoke", "retrieve", "retrieve-and-generate", "rag":
+			return maybeDispatchRustCLICompat("aws", append([]string{"bedrock"}, args...)...)
+		}
 	}
 	return false, nil
 }

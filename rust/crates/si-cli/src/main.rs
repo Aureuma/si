@@ -2912,6 +2912,26 @@ enum AWSBedrockCommand {
         #[command(subcommand)]
         command: AWSBedrockRuntimeCommand,
     },
+    #[command(alias = "jobs")]
+    Job {
+        #[command(subcommand)]
+        command: AWSBedrockJobCommand,
+    },
+    #[command(alias = "agents")]
+    Agent {
+        #[command(subcommand)]
+        command: AWSBedrockAgentCommand,
+    },
+    #[command(alias = "knowledge-bases", alias = "kb")]
+    KnowledgeBase {
+        #[command(subcommand)]
+        command: AWSBedrockKnowledgeBaseCommand,
+    },
+    #[command(alias = "agentruntime")]
+    AgentRuntime {
+        #[command(subcommand)]
+        command: AWSBedrockAgentRuntimeCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -3176,6 +3196,505 @@ enum AWSBedrockRuntimeCommand {
         model: Option<String>,
         #[arg(long)]
         prompt: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockJobCommand {
+    Create {
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        role_arn: Option<String>,
+        #[arg(long)]
+        model_id: Option<String>,
+        #[arg(long)]
+        input_s3_uri: Option<String>,
+        #[arg(long)]
+        output_s3_uri: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        timeout_hours: i32,
+        #[arg(long)]
+        client_request_token: Option<String>,
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        id: Option<String>,
+        job: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    List {
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        sort_by: Option<String>,
+        #[arg(long)]
+        sort_order: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "cancel")]
+    Stop {
+        #[arg(long)]
+        id: Option<String>,
+        job: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockAgentCommand {
+    List {
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        id: Option<String>,
+        agent: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "aliases")]
+    Alias {
+        #[command(subcommand)]
+        command: AWSBedrockAgentAliasCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockAgentAliasCommand {
+    List {
+        #[arg(long)]
+        agent_id: String,
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        agent_id: String,
+        #[arg(long = "alias-id")]
+        alias_id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockKnowledgeBaseCommand {
+    List {
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        id: Option<String>,
+        knowledge_base: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "datasource", alias = "datasources")]
+    DataSource {
+        #[command(subcommand)]
+        command: AWSBedrockKnowledgeBaseDataSourceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockKnowledgeBaseDataSourceCommand {
+    List {
+        #[arg(long)]
+        knowledge_base_id: String,
+        #[arg(long, default_value_t = 25)]
+        limit: i32,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        knowledge_base_id: String,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSBedrockAgentRuntimeCommand {
+    #[command(alias = "invoke")]
+    InvokeAgent {
+        #[arg(long)]
+        agent_id: String,
+        #[arg(long)]
+        agent_alias_id: String,
+        #[arg(long)]
+        session_id: String,
+        #[arg(long)]
+        input_text: Option<String>,
+        #[arg(long)]
+        enable_trace: bool,
+        #[arg(long)]
+        session_state: Option<String>,
+        #[arg(long)]
+        session_state_file: Option<PathBuf>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Retrieve {
+        #[arg(long)]
+        knowledge_base_id: String,
+        #[arg(long)]
+        query: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        results: i32,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        body_file: Option<PathBuf>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::SetTrue)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    #[command(alias = "rag")]
+    RetrieveAndGenerate {
+        #[arg(long)]
+        knowledge_base_id: Option<String>,
+        #[arg(long)]
+        query: Option<String>,
+        #[arg(long)]
+        model_arn: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        results: i32,
         #[arg(long)]
         body: Option<String>,
         #[arg(long)]
@@ -12963,6 +13482,186 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+                AWSBedrockCommand::Job { command } => match command {
+                    AWSBedrockJobCommand::Create {
+                        name, role_arn, model_id, input_s3_uri, output_s3_uri, timeout_hours,
+                        client_request_token, tags, body, body_file, account, region, base_url,
+                        access_key, secret_key, session_token, home, settings_file, json, raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_job_create(
+                            name, role_arn, model_id, input_s3_uri, output_s3_uri,
+                            timeout_hours, client_request_token, tags, body, body_file, account,
+                            region, base_url, access_key, secret_key, session_token, home,
+                            settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockJobCommand::Get {
+                        id, job, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_job_get(
+                            id.or(job).unwrap_or_default(),
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockJobCommand::List {
+                        limit, status, sort_by, sort_order, account, region, base_url,
+                        access_key, secret_key, session_token, home, settings_file, json, raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_job_list(
+                            limit, status, sort_by, sort_order, account, region, base_url,
+                            access_key, secret_key, session_token, home, settings_file, format,
+                            raw,
+                        )?
+                    }
+                    AWSBedrockJobCommand::Stop {
+                        id, job, force, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_job_stop(
+                            id.or(job).unwrap_or_default(),
+                            force, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                },
+                AWSBedrockCommand::Agent { command } => match command {
+                    AWSBedrockAgentCommand::List {
+                        limit, account, region, base_url, access_key, secret_key, session_token,
+                        home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_agent_list(
+                            limit, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockAgentCommand::Get {
+                        id, agent, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_agent_get(
+                            id.or(agent).unwrap_or_default(),
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockAgentCommand::Alias { command } => match command {
+                        AWSBedrockAgentAliasCommand::List {
+                            agent_id, limit, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_aws_bedrock_agent_alias_list(
+                                agent_id, limit, account, region, base_url, access_key,
+                                secret_key, session_token, home, settings_file, format, raw,
+                            )?
+                        }
+                        AWSBedrockAgentAliasCommand::Get {
+                            agent_id, alias_id, account, region, base_url, access_key,
+                            secret_key, session_token, home, settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_aws_bedrock_agent_alias_get(
+                                agent_id, alias_id, account, region, base_url, access_key,
+                                secret_key, session_token, home, settings_file, format, raw,
+                            )?
+                        }
+                    },
+                },
+                AWSBedrockCommand::KnowledgeBase { command } => match command {
+                    AWSBedrockKnowledgeBaseCommand::List {
+                        limit, account, region, base_url, access_key, secret_key, session_token,
+                        home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_knowledge_base_list(
+                            limit, account, region, base_url, access_key, secret_key,
+                            session_token, home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockKnowledgeBaseCommand::Get {
+                        id, knowledge_base, account, region, base_url, access_key, secret_key,
+                        session_token, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_knowledge_base_get(
+                            id.or(knowledge_base).unwrap_or_default(),
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                    AWSBedrockKnowledgeBaseCommand::DataSource { command } => match command {
+                        AWSBedrockKnowledgeBaseDataSourceCommand::List {
+                            knowledge_base_id, limit, account, region, base_url, access_key,
+                            secret_key, session_token, home, settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_aws_bedrock_knowledge_base_data_source_list(
+                                knowledge_base_id, limit, account, region, base_url, access_key,
+                                secret_key, session_token, home, settings_file, format, raw,
+                            )?
+                        }
+                        AWSBedrockKnowledgeBaseDataSourceCommand::Get {
+                            knowledge_base_id, id, account, region, base_url, access_key,
+                            secret_key, session_token, home, settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_aws_bedrock_knowledge_base_data_source_get(
+                                knowledge_base_id, id, account, region, base_url, access_key,
+                                secret_key, session_token, home, settings_file, format, raw,
+                            )?
+                        }
+                    },
+                },
+                AWSBedrockCommand::AgentRuntime { command } => match command {
+                    AWSBedrockAgentRuntimeCommand::InvokeAgent {
+                        agent_id, agent_alias_id, session_id, input_text, enable_trace,
+                        session_state, session_state_file, body, body_file, account, region,
+                        base_url, access_key, secret_key, session_token, home, settings_file,
+                        json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_agent_runtime_invoke_agent(
+                            agent_id, agent_alias_id, session_id, input_text, enable_trace,
+                            session_state, session_state_file, body, body_file, account, region,
+                            base_url, access_key, secret_key, session_token, home, settings_file,
+                            format, raw,
+                        )?
+                    }
+                    AWSBedrockAgentRuntimeCommand::Retrieve {
+                        knowledge_base_id, query, results, body, body_file, account, region,
+                        base_url, access_key, secret_key, session_token, home, settings_file,
+                        json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_agent_runtime_retrieve(
+                            knowledge_base_id, query, results, body, body_file, account, region,
+                            base_url, access_key, secret_key, session_token, home, settings_file,
+                            format, raw,
+                        )?
+                    }
+                    AWSBedrockAgentRuntimeCommand::RetrieveAndGenerate {
+                        knowledge_base_id, query, model_arn, results, body, body_file, account,
+                        region, base_url, access_key, secret_key, session_token, home,
+                        settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_bedrock_agent_runtime_retrieve_and_generate(
+                            knowledge_base_id, query, model_arn, results, body, body_file,
+                            account, region, base_url, access_key, secret_key, session_token,
+                            home, settings_file, format, raw,
+                        )?
+                    }
+                },
             },
             AWSCommand::Ec2 { command } => match command {
                 AWSEC2Command::Instance { command } => match command {
@@ -21844,6 +22543,36 @@ fn resolve_aws_json_body(
     anyhow::bail!("provide --prompt, --body, or --body-file")
 }
 
+fn resolve_aws_json_body_if_present(
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+) -> Result<Option<String>> {
+    if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        return Ok(Some(body));
+    }
+    if let Some(path) = body_file {
+        let contents = std::fs::read_to_string(path)?;
+        if !contents.trim().is_empty() {
+            return Ok(Some(contents));
+        }
+    }
+    Ok(None)
+}
+
+fn parse_aws_key_value_pairs(params: Vec<String>, flag_name: &str) -> Result<BTreeMap<String, String>> {
+    let mut parsed = BTreeMap::new();
+    for raw in params {
+        let (key, value) = raw
+            .split_once('=')
+            .ok_or_else(|| anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value")))?;
+        if key.trim().is_empty() {
+            return Err(anyhow::Error::msg(format!("invalid --{flag_name}: expected key=value")));
+        }
+        parsed.insert(key.trim().to_owned(), value.to_owned());
+    }
+    Ok(parsed)
+}
+
 fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
@@ -23319,6 +24048,644 @@ fn run_aws_bedrock_runtime_count_tokens(
                 accept: "application/json".to_owned(),
                 ..AWSAPIRequest::default()
             },
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_job_create(
+    name: Option<String>,
+    role_arn: Option<String>,
+    model_id: Option<String>,
+    input_s3_uri: Option<String>,
+    output_s3_uri: Option<String>,
+    timeout_hours: i32,
+    client_request_token: Option<String>,
+    tags: Vec<String>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if let Some(payload) = resolve_aws_json_body_if_present(body, body_file)? {
+        payload
+    } else {
+        let name = name.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --body/--body-file or required flags: --name --role-arn --model-id --input-s3-uri --output-s3-uri",
+        ))?;
+        let role_arn = role_arn.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --body/--body-file or required flags: --name --role-arn --model-id --input-s3-uri --output-s3-uri",
+        ))?;
+        let model_id = model_id.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --body/--body-file or required flags: --name --role-arn --model-id --input-s3-uri --output-s3-uri",
+        ))?;
+        let input_s3_uri = input_s3_uri.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --body/--body-file or required flags: --name --role-arn --model-id --input-s3-uri --output-s3-uri",
+        ))?;
+        let output_s3_uri = output_s3_uri.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --body/--body-file or required flags: --name --role-arn --model-id --input-s3-uri --output-s3-uri",
+        ))?;
+
+        let mut request = serde_json::Map::new();
+        request.insert("jobName".to_owned(), Value::String(name.trim().to_owned()));
+        request.insert("roleArn".to_owned(), Value::String(role_arn.trim().to_owned()));
+        request.insert("modelId".to_owned(), Value::String(model_id.trim().to_owned()));
+        request.insert(
+            "inputDataConfig".to_owned(),
+            serde_json::json!({
+                "s3InputDataConfig": { "s3Uri": input_s3_uri.trim() }
+            }),
+        );
+        request.insert(
+            "outputDataConfig".to_owned(),
+            serde_json::json!({
+                "s3OutputDataConfig": { "s3Uri": output_s3_uri.trim() }
+            }),
+        );
+        if timeout_hours > 0 {
+            request.insert(
+                "timeoutDurationInHours".to_owned(),
+                Value::Number(timeout_hours.into()),
+            );
+        }
+        if let Some(client_request_token) = client_request_token.filter(|value| !value.trim().is_empty()) {
+            request.insert(
+                "clientRequestToken".to_owned(),
+                Value::String(client_request_token.trim().to_owned()),
+            );
+        }
+        let parsed_tags = parse_aws_key_value_pairs(tags, "tag")?;
+        if !parsed_tags.is_empty() {
+            request.insert(
+                "tags".to_owned(),
+                Value::Array(
+                    parsed_tags
+                        .into_iter()
+                        .map(|(key, value)| serde_json::json!({ "key": key, "value": value }))
+                        .collect(),
+                ),
+            );
+        }
+        Value::Object(request).to_string()
+    };
+
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "POST", "/model-invocation-job", &BTreeMap::new(), &payload, "application/json"),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_job_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock",
+            "GET",
+            &format!("/model-invocation-job/{}", aws_path_escape(id.trim())),
+            &BTreeMap::new(),
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_job_list(
+    limit: i32,
+    status: Option<String>,
+    sort_by: Option<String>,
+    sort_order: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    if let Some(status) = status.filter(|value| !value.trim().is_empty()) {
+        params.insert("statusEquals".to_owned(), status.trim().to_owned());
+    }
+    if let Some(sort_by) = sort_by.filter(|value| !value.trim().is_empty()) {
+        params.insert("sortBy".to_owned(), sort_by.trim().to_owned());
+    }
+    if let Some(sort_order) = sort_order.filter(|value| !value.trim().is_empty()) {
+        params.insert("sortOrder".to_owned(), sort_order.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock", "GET", "/model-invocation-jobs", &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_job_stop(
+    id: String,
+    force: bool,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("aws bedrock job stop requires --force on the Rust path");
+    }
+    let response = execute_aws_service_request(
+        "bedrock",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock",
+            "POST",
+            &format!("/model-invocation-job/{}/stop", aws_path_escape(id.trim())),
+            &BTreeMap::new(),
+            "{}",
+            "application/json",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock-agent", "GET", "/agents", &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent",
+            "GET",
+            &format!("/agents/{}", aws_path_escape(id.trim())),
+            &BTreeMap::new(),
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_alias_list(
+    agent_id: String,
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent",
+            "GET",
+            &format!("/agents/{}/agentAliases", aws_path_escape(agent_id.trim())),
+            &params,
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_alias_get(
+    agent_id: String,
+    alias_id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent",
+            "GET",
+            &format!(
+                "/agents/{}/agentAliases/{}",
+                aws_path_escape(agent_id.trim()),
+                aws_path_escape(alias_id.trim())
+            ),
+            &BTreeMap::new(),
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_knowledge_base_list(
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(&runtime, "bedrock-agent", "GET", "/knowledgebases", &params, "", ""),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_knowledge_base_get(
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent",
+            "GET",
+            &format!("/knowledgebases/{}", aws_path_escape(id.trim())),
+            &BTreeMap::new(),
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_knowledge_base_data_source_list(
+    knowledge_base_id: String,
+    limit: i32,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    if limit > 0 {
+        params.insert("maxResults".to_owned(), limit.to_string());
+    }
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent",
+            "GET",
+            &format!(
+                "/knowledgebases/{}/datasources",
+                aws_path_escape(knowledge_base_id.trim())
+            ),
+            &params,
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_knowledge_base_data_source_get(
+    knowledge_base_id: String,
+    id: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "bedrock-agent",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent",
+            "GET",
+            &format!(
+                "/knowledgebases/{}/datasources/{}",
+                aws_path_escape(knowledge_base_id.trim()),
+                aws_path_escape(id.trim())
+            ),
+            &BTreeMap::new(),
+            "",
+            "",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_runtime_invoke_agent(
+    agent_id: String,
+    agent_alias_id: String,
+    session_id: String,
+    input_text: Option<String>,
+    enable_trace: bool,
+    session_state: Option<String>,
+    session_state_file: Option<PathBuf>,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if let Some(payload) = resolve_aws_json_body_if_present(body, body_file)? {
+        payload
+    } else {
+        let mut request = serde_json::Map::new();
+        if let Some(input_text) = input_text.filter(|value| !value.trim().is_empty()) {
+            request.insert("inputText".to_owned(), Value::String(input_text.trim().to_owned()));
+        }
+        if enable_trace {
+            request.insert("enableTrace".to_owned(), Value::Bool(true));
+        }
+        if let Some(session_state_raw) = resolve_aws_json_body_if_present(session_state, session_state_file)? {
+            request.insert(
+                "sessionState".to_owned(),
+                parse_json_value("session-state", &session_state_raw)?,
+            );
+        }
+        Value::Object(request).to_string()
+    };
+    let response = execute_aws_service_request(
+        "bedrock-agent-runtime",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent-runtime",
+            "POST",
+            &format!(
+                "/agents/{}/agentAliases/{}/sessions/{}/text",
+                aws_path_escape(agent_id.trim()),
+                aws_path_escape(agent_alias_id.trim()),
+                aws_path_escape(session_id.trim())
+            ),
+            &BTreeMap::new(),
+            &payload,
+            "application/json",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_runtime_retrieve(
+    knowledge_base_id: String,
+    query: Option<String>,
+    results: i32,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if let Some(payload) = resolve_aws_json_body_if_present(body, body_file)? {
+        payload
+    } else {
+        let query = query.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --query or --body/--body-file",
+        ))?;
+        let mut request = serde_json::Map::new();
+        request.insert(
+            "retrievalQuery".to_owned(),
+            serde_json::json!({ "text": query.trim() }),
+        );
+        if results > 0 {
+            request.insert(
+                "retrievalConfiguration".to_owned(),
+                serde_json::json!({
+                    "vectorSearchConfiguration": { "numberOfResults": results }
+                }),
+            );
+        }
+        Value::Object(request).to_string()
+    };
+    let response = execute_aws_service_request(
+        "bedrock-agent-runtime",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent-runtime",
+            "POST",
+            &format!(
+                "/knowledgebases/{}/retrieve",
+                aws_path_escape(knowledge_base_id.trim())
+            ),
+            &BTreeMap::new(),
+            &payload,
+            "application/json",
+        ),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_bedrock_agent_runtime_retrieve_and_generate(
+    knowledge_base_id: Option<String>,
+    query: Option<String>,
+    model_arn: Option<String>,
+    results: i32,
+    body: Option<String>,
+    body_file: Option<PathBuf>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let payload = if let Some(payload) = resolve_aws_json_body_if_present(body, body_file)? {
+        payload
+    } else {
+        let knowledge_base_id = knowledge_base_id.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --knowledge-base-id and --query, or provide --body/--body-file",
+        ))?;
+        let query = query.filter(|value| !value.trim().is_empty()).ok_or_else(|| anyhow::Error::msg(
+            "provide --knowledge-base-id and --query, or provide --body/--body-file",
+        ))?;
+        let mut kb_config = serde_json::Map::new();
+        kb_config.insert(
+            "knowledgeBaseId".to_owned(),
+            Value::String(knowledge_base_id.trim().to_owned()),
+        );
+        if let Some(model_arn) = model_arn.filter(|value| !value.trim().is_empty()) {
+            kb_config.insert("modelArn".to_owned(), Value::String(model_arn.trim().to_owned()));
+        }
+        if results > 0 {
+            kb_config.insert(
+                "retrievalConfiguration".to_owned(),
+                serde_json::json!({
+                    "vectorSearchConfiguration": { "numberOfResults": results }
+                }),
+            );
+        }
+        serde_json::json!({
+            "input": { "text": query.trim() },
+            "retrieveAndGenerateConfiguration": {
+                "type": "KNOWLEDGE_BASE",
+                "knowledgeBaseConfiguration": Value::Object(kb_config),
+            }
+        })
+        .to_string()
+    };
+    let response = execute_aws_service_request(
+        "bedrock-agent-runtime",
+        account, region, base_url, access_key, secret_key, session_token, home, settings_file,
+        |runtime| execute_aws_rest(
+            &runtime,
+            "bedrock-agent-runtime",
+            "POST",
+            "/retrieveAndGenerate",
+            &BTreeMap::new(),
+            &payload,
+            "application/json",
         ),
     )?;
     print_aws_api_response(&response, format, raw)

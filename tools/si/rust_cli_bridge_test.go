@@ -2338,6 +2338,155 @@ func TestRunAWSBedrockCommandDelegatesRuntimeInvokeToRustCLIWhenConfigured(t *te
 	}
 }
 
+func TestRunAWSBedrockCommandDelegatesJobListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-bedrock-job'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"bedrock", "job", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws bedrock job list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-bedrock-job" {
+		t.Fatalf("expected delegated Rust aws bedrock job output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nbedrock\njob\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws bedrock job + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSBedrockCommandDefaultsToGoForJobStopWithoutForce(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSCommand([]string{"bedrock", "job", "stop", "job-1", "--json"})
+	if err != nil {
+		t.Fatalf("runAWSCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected aws bedrock job stop without --force to stay on Go")
+	}
+}
+
+func TestRunAWSBedrockCommandDelegatesJobStopToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-bedrock-job-stop'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"bedrock", "job", "stop", "job-1", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws bedrock job stop with --force to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-bedrock-job-stop" {
+		t.Fatalf("expected delegated Rust aws bedrock job stop output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nbedrock\njob\nstop\njob-1\n--force\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws bedrock job stop + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSBedrockCommandDelegatesKnowledgeBaseDataSourceListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-bedrock-kb'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"bedrock", "knowledge-base", "data-source", "list", "--knowledge-base-id", "kb-1", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws bedrock knowledge-base data-source list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-bedrock-kb" {
+		t.Fatalf("expected delegated Rust aws bedrock knowledge-base output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nbedrock\nknowledge-base\ndata-source\nlist\n--knowledge-base-id\nkb-1\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws bedrock knowledge-base data-source + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSBedrockCommandDelegatesAgentRuntimeRetrieveAndGenerateToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-bedrock-agent-runtime'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"bedrock", "agent-runtime", "retrieve-and-generate", "--knowledge-base-id", "kb-1", "--query", "hello", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws bedrock agent-runtime retrieve-and-generate to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-bedrock-agent-runtime" {
+		t.Fatalf("expected delegated Rust aws bedrock agent-runtime output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nbedrock\nagent-runtime\nretrieve-and-generate\n--knowledge-base-id\nkb-1\n--query\nhello\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws bedrock agent-runtime + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
