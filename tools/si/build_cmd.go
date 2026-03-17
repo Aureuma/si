@@ -26,6 +26,13 @@ func cmdBuild(args []string) {
 }
 
 func cmdBuildSelf(args []string) {
+	delegated, err := runBuildSelfCommand(args)
+	if err != nil {
+		fatal(err)
+	}
+	if delegated {
+		return
+	}
 	if len(args) == 0 {
 		// Default: upgrade installed si from the current checkout.
 		cmdSelfBuild(nil)
