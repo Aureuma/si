@@ -8183,9 +8183,21 @@ enum GoogleYouTubeCommand {
         #[command(subcommand)]
         command: GoogleYouTubePlaylistItemCommand,
     },
+    Subscription {
+        #[command(subcommand)]
+        command: GoogleYouTubeSubscriptionCommand,
+    },
+    Comment {
+        #[command(subcommand)]
+        command: GoogleYouTubeCommentCommand,
+    },
     Support {
         #[command(subcommand)]
         command: GoogleYouTubeSupportCommand,
+    },
+    Report {
+        #[command(subcommand)]
+        command: GoogleYouTubeReportCommand,
     },
     Raw {
         #[arg(long)]
@@ -9236,6 +9248,356 @@ enum GoogleYouTubeSupportCommand {
         json: bool,
         #[arg(long)]
         raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeSubscriptionCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,contentDetails,subscriberSnippet")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        channel_id: Option<String>,
+        #[arg(long, default_value_t = true)]
+        mine: bool,
+        #[arg(long)]
+        for_channel_id: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubeSubscriptionCreateArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeSubscriptionDeleteArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeSubscriptionCreateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    channel_id: Option<String>,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeSubscriptionDeleteArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeCommentCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,replies")]
+        part: String,
+        #[arg(long)]
+        video_id: Option<String>,
+        #[arg(long)]
+        channel_id: Option<String>,
+        #[arg(long)]
+        all_threads_related_to_channel_id: Option<String>,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        order: Option<String>,
+        #[arg(long)]
+        search_terms: Option<String>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Get {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubeCommentCreateArgs,
+    },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubeCommentUpdateArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeCommentDeleteArgs,
+    },
+    Thread {
+        #[command(subcommand)]
+        command: GoogleYouTubeCommentThreadCommand,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeCommentCreateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    video_id: Option<String>,
+    #[arg(long)]
+    text: Option<String>,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeCommentUpdateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeCommentDeleteArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeCommentThreadCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,replies")]
+        part: String,
+        #[arg(long)]
+        video_id: Option<String>,
+        #[arg(long)]
+        channel_id: Option<String>,
+        #[arg(long)]
+        all_threads_related_to_channel_id: Option<String>,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        order: Option<String>,
+        #[arg(long)]
+        search_terms: Option<String>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubeCommentCreateArgs,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeReportCommand {
+    Usage {
+        #[arg(long)]
+        since: Option<String>,
+        #[arg(long)]
+        until: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
@@ -20785,6 +21147,123 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+                GoogleYouTubeCommand::Subscription { command } => match command {
+                    GoogleYouTubeSubscriptionCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, ids, channel_id, mine, for_channel_id, max_results,
+                        page_token, params, home, settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_subscription_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, channel_id, mine, for_channel_id, max_results,
+                            page_token, params, home, settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubeSubscriptionCommand::Create { command } => {
+                        run_google_youtube_subscription_create(
+                            command.runtime,
+                            command.channel_id,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubeSubscriptionCommand::Delete { command } => {
+                        run_google_youtube_subscription_delete(
+                            command.runtime,
+                            command.id,
+                            command.params,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Comment { command } => match command {
+                    GoogleYouTubeCommentCommand::List {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
+                        ids, max_results, order, search_terms, page_token, params, home,
+                        settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_comment_thread_list(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
+                            ids, max_results, order, search_terms, page_token, params, home,
+                            settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubeCommentCommand::Get {
+                        account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                        language, region, client_id, client_secret, redirect_uri, access_token,
+                        refresh_token, part, ids, max_results, page_token, params, home,
+                        settings_file, json, raw, format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_comment_get(
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, max_results, page_token, params, home,
+                            settings_file, format, raw,
+                        )?
+                    }
+                    GoogleYouTubeCommentCommand::Create { command } => {
+                        run_google_youtube_comment_thread_create(
+                            command.runtime,
+                            command.video_id,
+                            command.text,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubeCommentCommand::Update { command } => {
+                        run_google_youtube_comment_update(
+                            command.runtime,
+                            command.part,
+                            command.body,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubeCommentCommand::Delete { command } => {
+                        run_google_youtube_comment_delete(
+                            command.runtime,
+                            command.id,
+                            command.params,
+                        )?
+                    }
+                    GoogleYouTubeCommentCommand::Thread { command } => match command {
+                        GoogleYouTubeCommentThreadCommand::List {
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
+                            ids, max_results, order, search_terms, page_token, params, home,
+                            settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_google_youtube_comment_thread_list(
+                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                                language, region, client_id, client_secret, redirect_uri, access_token,
+                                refresh_token, part, video_id, channel_id, all_threads_related_to_channel_id,
+                                ids, max_results, order, search_terms, page_token, params, home,
+                                settings_file, format, raw,
+                            )?
+                        }
+                        GoogleYouTubeCommentThreadCommand::Create { command } => {
+                            run_google_youtube_comment_thread_create(
+                                command.runtime,
+                                command.video_id,
+                                command.text,
+                                command.part,
+                                command.body,
+                                command.params,
+                            )?
+                        }
+                    },
+                },
                 GoogleYouTubeCommand::Support { command } => match command {
                     GoogleYouTubeSupportCommand::Languages {
                         account,
@@ -20949,6 +21428,23 @@ fn main() -> Result<()> {
                             settings_file,
                             format,
                             raw,
+                        )?
+                    }
+                },
+                GoogleYouTubeCommand::Report { command } => match command {
+                    GoogleYouTubeReportCommand::Usage {
+                        since,
+                        until,
+                        account,
+                        env,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_youtube_report_usage(
+                            since, until, account, env, home, settings_file, format,
                         )?
                     }
                 },
@@ -35976,6 +36472,520 @@ fn run_google_youtube_playlist_item_remove(
         params,
         None,
     )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_subscription_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    channel_id: Option<String>,
+    mine: bool,
+    for_channel_id: Option<String>,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    require_google_youtube_oauth(&runtime, "subscription list")?;
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if let Some(channel_id) = channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("channelId".to_owned(), channel_id);
+    }
+    if let Some(for_channel_id) = for_channel_id
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+    {
+        params.insert("forChannelId".to_owned(), for_channel_id);
+    }
+    if mine {
+        params.insert("mine".to_owned(), "true".to_owned());
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/subscriptions".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_subscription_create(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    channel_id: Option<String>,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = {
+        let raw = parse_google_youtube_body(body)?;
+        if raw.trim().is_empty() {
+            let channel_id = channel_id
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let Some(channel_id) = channel_id else {
+                anyhow::bail!("subscription create requires --channel-id <id> or --body <json|@file>");
+            };
+            serde_json::to_string(&serde_json::json!({
+                "snippet": {
+                    "resourceId": {
+                        "kind": "youtube#channel",
+                        "channelId": channel_id,
+                    }
+                }
+            }))?
+        } else {
+            raw
+        }
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "subscription create",
+        "POST",
+        "/youtube/v3/subscriptions",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_subscription_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("subscription delete requires --id <subscription-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(
+        command,
+        "subscription delete",
+        "DELETE",
+        "/youtube/v3/subscriptions",
+        params,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_comment_thread_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    video_id: Option<String>,
+    channel_id: Option<String>,
+    all_threads_related_to_channel_id: Option<String>,
+    ids: Option<String>,
+    max_results: Option<usize>,
+    order: Option<String>,
+    search_terms: Option<String>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(video_id) = video_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("videoId".to_owned(), video_id);
+    }
+    if let Some(channel_id) = channel_id.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("channelId".to_owned(), channel_id);
+    }
+    if let Some(channel_id) = all_threads_related_to_channel_id
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+    {
+        params.insert("allThreadsRelatedToChannelId".to_owned(), channel_id);
+    }
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if !params.contains_key("videoId")
+        && !params.contains_key("channelId")
+        && !params.contains_key("allThreadsRelatedToChannelId")
+        && !params.contains_key("id")
+    {
+        anyhow::bail!(
+            "comment thread list requires --video-id <id>, --channel-id <id>, --all-threads-related-to-channel-id <id>, or --id <thread-id>"
+        );
+    }
+    if let Some(order) = order.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("order".to_owned(), order);
+    }
+    if let Some(search_terms) = search_terms
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
+    {
+        params.insert("searchTerms".to_owned(), search_terms);
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(20).clamp(1, 100).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/commentThreads".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_comment_get(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    let Some(ids) = parse_google_youtube_ids_csv(ids) else {
+        anyhow::bail!("comment get requires --id <comment-id[,comment-id]>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    params.insert("id".to_owned(), ids);
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(20).clamp(1, 100).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/comments".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_comment_thread_create(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    video_id: Option<String>,
+    text: Option<String>,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = {
+        let raw = parse_google_youtube_body(body)?;
+        if raw.trim().is_empty() {
+            let video_id = video_id
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let text = text
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let (Some(video_id), Some(text)) = (video_id, text) else {
+                anyhow::bail!(
+                    "comment thread create requires --video-id <id> --text <message> or --body <json|@file>"
+                );
+            };
+            serde_json::to_string(&serde_json::json!({
+                "snippet": {
+                    "videoId": video_id,
+                    "topLevelComment": {
+                        "snippet": {
+                            "textOriginal": text,
+                        }
+                    }
+                }
+            }))?
+        } else {
+            raw
+        }
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "comment thread create",
+        "POST",
+        "/youtube/v3/commentThreads",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_comment_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("comment update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(
+        command,
+        "comment update",
+        "PUT",
+        "/youtube/v3/comments",
+        params,
+        Some(body),
+    )
+}
+
+fn run_google_youtube_comment_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("comment delete requires --id <comment-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(
+        command,
+        "comment delete",
+        "DELETE",
+        "/youtube/v3/comments",
+        params,
+        None,
+    )
+}
+
+fn resolve_google_youtube_log_path(home: &std::path::Path, settings: &Settings) -> PathBuf {
+    if let Ok(value) = std::env::var("SI_GOOGLE_YOUTUBE_LOG_FILE") {
+        if !value.trim().is_empty() {
+            return PathBuf::from(value);
+        }
+    }
+    if let Some(value) = settings.google.log_file.as_deref() {
+        if !value.trim().is_empty() {
+            return PathBuf::from(value);
+        }
+    }
+    home.join(".si").join("logs").join("google-youtube.log")
+}
+
+fn run_google_youtube_report_usage(
+    since: Option<String>,
+    until: Option<String>,
+    account: Option<String>,
+    env: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let (since, until) = parse_google_report_window(since, until)?;
+    let account = account.unwrap_or_default().trim().to_owned();
+    let env = env.unwrap_or_default().trim().to_lowercase();
+    let log_path = resolve_google_youtube_log_path(&home, &settings);
+    let mut requests = 0usize;
+    let mut responses = 0usize;
+    let mut errors = 0usize;
+    let mut total_duration = 0i64;
+    let mut duration_count = 0i64;
+    let mut status_buckets: BTreeMap<String, usize> = BTreeMap::new();
+    let mut top_endpoints: BTreeMap<String, usize> = BTreeMap::new();
+    let mut unique_request_ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    if log_path.exists() {
+        let file = std::fs::File::open(&log_path)?;
+        let reader = std::io::BufReader::new(file);
+        use std::io::BufRead as _;
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+            let entry: Value = match serde_json::from_str(&line) {
+                Ok(entry) => entry,
+                Err(_) => continue,
+            };
+            let ts = entry
+                .get("ts")
+                .and_then(Value::as_str)
+                .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                .map(|value| value.with_timezone(&chrono::Utc));
+            let Some(ts) = ts else { continue };
+            if !in_google_report_range(ts, &since, &until) {
+                continue;
+            }
+            if !account.is_empty()
+                && entry
+                    .get("ctx_account_alias")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim()
+                    != account
+            {
+                continue;
+            }
+            if !env.is_empty()
+                && entry
+                    .get("ctx_environment")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_lowercase()
+                    != env
+            {
+                continue;
+            }
+            let event = entry.get("event").and_then(Value::as_str).unwrap_or_default();
+            let method = entry.get("method").and_then(Value::as_str).unwrap_or_default().trim().to_uppercase();
+            let path = entry.get("path").and_then(Value::as_str).unwrap_or_default().trim().to_owned();
+            let endpoint = format!("{method} {}", if path.is_empty() { "-" } else { &path });
+            match event {
+                "request" => {
+                    requests += 1;
+                    *top_endpoints.entry(endpoint).or_default() += 1;
+                }
+                "response" => {
+                    responses += 1;
+                    let status = entry.get("status").and_then(Value::as_i64).unwrap_or_default();
+                    let bucket = match status {
+                        500..=599 => "5xx",
+                        400..=499 => "4xx",
+                        300..=399 => "3xx",
+                        200..=299 => "2xx",
+                        100..=199 => "1xx",
+                        _ => "unknown",
+                    };
+                    *status_buckets.entry(bucket.to_owned()).or_default() += 1;
+                    if status >= 400 {
+                        errors += 1;
+                    }
+                    if let Some(duration) = entry.get("duration_ms").and_then(Value::as_i64) {
+                        total_duration += duration;
+                        duration_count += 1;
+                    }
+                    if let Some(request_id) = entry.get("request_id").and_then(Value::as_str) {
+                        if !request_id.trim().is_empty() {
+                            unique_request_ids.insert(request_id.trim().to_owned());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let mut endpoints = top_endpoints
+        .into_iter()
+        .map(|(endpoint, count)| serde_json::json!({"endpoint": endpoint, "count": count}))
+        .collect::<Vec<_>>();
+    endpoints.sort_by(|left, right| {
+        right["count"]
+            .as_u64()
+            .unwrap_or_default()
+            .cmp(&left["count"].as_u64().unwrap_or_default())
+            .then_with(|| left["endpoint"].as_str().unwrap_or_default().cmp(right["endpoint"].as_str().unwrap_or_default()))
+    });
+    endpoints.truncate(10);
+    let payload = serde_json::json!({
+        "log_path": log_path,
+        "requests": requests,
+        "responses": responses,
+        "errors": errors,
+        "average_ms": if duration_count > 0 { total_duration / duration_count } else { 0 },
+        "status_buckets": status_buckets,
+        "unique_request_ids": unique_request_ids.len(),
+        "top_endpoints": endpoints,
+        "filter_account": account,
+        "filter_environment": env,
+        "window_since": since.map(|value| value.to_rfc3339()).unwrap_or_default(),
+        "window_until": until.map(|value| value.to_rfc3339()).unwrap_or_default(),
+    });
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&payload)?),
+        OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
