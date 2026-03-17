@@ -17683,6 +17683,8 @@ fn run_installer_smoke_docker() -> Result<()> {
             &format!("{source_dir}:/workspace/si:ro"),
             "-e",
             "SI_INSTALL_SOURCE_DIR=/workspace/si",
+            "-e",
+            "CARGO_TARGET_DIR=/tmp/si-cargo-target",
             &smoke_image,
         ],
     )?;
@@ -17709,6 +17711,8 @@ fn run_installer_smoke_docker() -> Result<()> {
             &format!("{source_dir}:/workspace/si:ro"),
             "-e",
             "SI_INSTALL_SOURCE_DIR=/workspace/si",
+            "-e",
+            "CARGO_TARGET_DIR=/tmp/si-cargo-target",
             &nonroot_image,
         ],
     )?;
@@ -18098,10 +18102,21 @@ fn run_command_checked<const N: usize>(dir: &Path, name: &str, args: [&str; N]) 
         .output()
         .with_context(|| format!("run {}", name))?;
     if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        let mut details = Vec::new();
+        if !stdout.is_empty() {
+            details.push(format!("stdout:\n{stdout}"));
+        }
+        if !stderr.is_empty() {
+            details.push(format!("stderr:\n{stderr}"));
+        }
         return Err(anyhow!(
-            "{} failed: {}",
+            "{} failed: {}{}{}",
             name,
-            String::from_utf8_lossy(&output.stderr).trim()
+            output.status,
+            if details.is_empty() { "" } else { "\n" },
+            details.join("\n")
         ));
     }
     Ok(())
