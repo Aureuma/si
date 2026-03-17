@@ -1,15 +1,19 @@
 class Si < Formula
   desc "AI-first CLI for orchestrating coding agents and provider operations"
   homepage "https://github.com/Aureuma/si"
-  url "https://github.com/Aureuma/si/archive/refs/tags/v0.48.0.tar.gz"
-  sha256 "a09760ec0b221a644f22115f6a4879e1e575e5e02933233191bbbead6aa1cab8"
+  url "https://github.com/Aureuma/si/archive/refs/tags/v0.54.0.tar.gz"
+  sha256 "c67ee221ca3aade89595005aadfabf8fc8de829903d22359bef956cfd7e9dfa7"
   license "AGPL-3.0-only"
   head "https://github.com/Aureuma/si.git", branch: "main"
 
+  depends_on "rust" => :build
   depends_on "go" => :build
 
   def install
-    system "go", "build", *std_go_args(ldflags: "-s -w"), "./tools/si"
+    system "cargo", "install", "--locked", *std_cargo_args(path: "rust/crates/si-cli"), "--bin", "si-rs"
+    mv bin/"si-rs", bin/"si"
+    system "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w", "-o", bin/"si-go", "./tools/si"
+    chmod 0o755, bin/"si-go"
   end
 
   test do
