@@ -1878,7 +1878,9 @@ dependencies = [
 name = "si-rs-provider-workos"
 version = "0.54.0"
 dependencies = [
+ "reqwest",
  "serde",
+ "serde_json",
  "si-rs-config",
 ]
 

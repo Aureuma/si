@@ -182,11 +182,12 @@ use si_rs_provider_stripe::{
     resolve_current_context as resolve_stripe_current_context,
 };
 use si_rs_provider_workos::{
-    WorkOSAuthOverrides, WorkOSAuthStatus, WorkOSContextListEntry, WorkOSCurrentContext,
-    list_contexts as list_workos_contexts,
+    WorkOSAPIRequest, WorkOSAPIResponse, WorkOSAuthOverrides, WorkOSAuthStatus,
+    WorkOSContextListEntry, WorkOSCurrentContext, WorkOSRuntimeContext,
+    execute_api_request as execute_workos_api_request, list_contexts as list_workos_contexts,
     render_context_list_text as render_workos_context_list_text,
     resolve_auth_status as resolve_workos_auth_status,
-    resolve_current_context as resolve_workos_current_context,
+    resolve_current_context as resolve_workos_current_context, resolve_runtime as resolve_workos_runtime,
 };
 use si_rs_runtime::HostMountContext;
 use si_rs_vault::TrustStore;
@@ -5374,6 +5375,82 @@ enum WorkOSCommand {
         #[command(subcommand)]
         command: WorkOSContextCommand,
     },
+    Doctor {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Organization {
+        #[command(subcommand)]
+        command: WorkOSResourceCommand,
+    },
+    User {
+        #[command(subcommand)]
+        command: WorkOSResourceCommand,
+    },
+    Membership {
+        #[command(subcommand)]
+        command: WorkOSResourceCommand,
+    },
+    Invitation {
+        #[command(subcommand)]
+        command: WorkOSInvitationCommand,
+    },
+    Directory {
+        #[command(subcommand)]
+        command: WorkOSDirectoryCommand,
+    },
+    Raw {
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long = "header")]
+        headers: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -5423,6 +5500,359 @@ enum WorkOSContextCommand {
         json: bool,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkOSResourceCommand {
+    List {
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Get {
+        id: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Update {
+        id: String,
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Delete {
+        id: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Args)]
+struct WorkOSResourceListOnly {
+    #[arg(long, default_value_t = 50)]
+    limit: usize,
+    #[arg(long = "param")]
+    params: Vec<String>,
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long)]
+    api_key: Option<String>,
+    #[arg(long)]
+    client_id: Option<String>,
+    #[arg(long)]
+    org_id: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkOSInvitationCommand {
+    List {
+        #[command(flatten)]
+        command: WorkOSResourceListOnly,
+    },
+    Get {
+        id: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Create {
+        #[arg(long)]
+        json_body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Revoke {
+        invitation_id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WorkOSDirectoryCommand {
+    List {
+        #[command(flatten)]
+        command: WorkOSResourceListOnly,
+    },
+    Get {
+        id: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Users {
+        directory_id: String,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Groups {
+        directory_id: String,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+    },
+    Sync {
+        directory_id: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        org_id: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
     },
 }
 
@@ -13494,6 +13924,280 @@ fn main() -> Result<()> {
                     show_workos_context_current(home, settings_file, format)?
                 }
             },
+            WorkOSCommand::Doctor {
+                account,
+                env,
+                api_key,
+                client_id,
+                org_id,
+                base_url,
+                home,
+                settings_file,
+                json,
+                format,
+            } => {
+                let format = if json { OutputFormat::Json } else { format };
+                run_workos_doctor(
+                    account, env, api_key, client_id, org_id, base_url, home, settings_file,
+                    format,
+                )?
+            }
+            WorkOSCommand::Organization { command } => {
+                run_workos_resource_command(workos_organization_spec(), command)?
+            }
+            WorkOSCommand::User { command } => run_workos_resource_command(workos_user_spec(), command)?,
+            WorkOSCommand::Membership { command } => {
+                run_workos_resource_command(workos_membership_spec(), command)?
+            }
+            WorkOSCommand::Invitation { command } => match command {
+                WorkOSInvitationCommand::List { command } => run_workos_resource_list(
+                    workos_invitation_spec(),
+                    command.limit,
+                    command.params,
+                    command.account,
+                    command.env,
+                    command.api_key,
+                    command.client_id,
+                    command.org_id,
+                    command.base_url,
+                    command.home,
+                    command.settings_file,
+                    command.json,
+                    command.raw,
+                )?,
+                WorkOSInvitationCommand::Get {
+                    id,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_resource_get(
+                    workos_invitation_spec(),
+                    id,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                WorkOSInvitationCommand::Create {
+                    json_body,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_resource_create(
+                    workos_invitation_spec(),
+                    json_body,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                WorkOSInvitationCommand::Revoke {
+                    invitation_id,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_invitation_revoke(
+                    invitation_id,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
+            WorkOSCommand::Directory { command } => match command {
+                WorkOSDirectoryCommand::List { command } => run_workos_resource_list(
+                    workos_directory_spec(),
+                    command.limit,
+                    command.params,
+                    command.account,
+                    command.env,
+                    command.api_key,
+                    command.client_id,
+                    command.org_id,
+                    command.base_url,
+                    command.home,
+                    command.settings_file,
+                    command.json,
+                    command.raw,
+                )?,
+                WorkOSDirectoryCommand::Get {
+                    id,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_resource_get(
+                    workos_directory_spec(),
+                    id,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                WorkOSDirectoryCommand::Users {
+                    directory_id,
+                    limit,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_directory_collection(
+                    "/directory_users",
+                    directory_id,
+                    limit,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                WorkOSDirectoryCommand::Groups {
+                    directory_id,
+                    limit,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_directory_collection(
+                    "/directory_groups",
+                    directory_id,
+                    limit,
+                    params,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+                WorkOSDirectoryCommand::Sync {
+                    directory_id,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                } => run_workos_directory_sync(
+                    directory_id,
+                    account,
+                    env,
+                    api_key,
+                    client_id,
+                    org_id,
+                    base_url,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                )?,
+            },
+            WorkOSCommand::Raw {
+                method,
+                path,
+                body,
+                json_body,
+                params,
+                headers,
+                account,
+                env,
+                api_key,
+                client_id,
+                org_id,
+                base_url,
+                home,
+                settings_file,
+                json,
+                raw,
+            } => run_workos_raw(
+                method, path, body, json_body, params, headers, account, env, api_key, client_id,
+                org_id, base_url, home, settings_file, json, raw,
+            )?,
         },
         Command::GitHub { command } => match command {
             GitHubCommand::Auth { command } => match command {
@@ -27674,6 +28378,712 @@ fn show_workos_auth_status(
         }
     }
     Ok(())
+}
+
+#[derive(Clone, Copy)]
+struct WorkOSResourceSpec {
+    collection_path: &'static str,
+    uses_organization_id: bool,
+}
+
+fn workos_organization_spec() -> WorkOSResourceSpec {
+    WorkOSResourceSpec { collection_path: "/organizations", uses_organization_id: false }
+}
+
+fn workos_user_spec() -> WorkOSResourceSpec {
+    WorkOSResourceSpec {
+        collection_path: "/user_management/users",
+        uses_organization_id: true,
+    }
+}
+
+fn workos_membership_spec() -> WorkOSResourceSpec {
+    WorkOSResourceSpec {
+        collection_path: "/organization_memberships",
+        uses_organization_id: true,
+    }
+}
+
+fn workos_invitation_spec() -> WorkOSResourceSpec {
+    WorkOSResourceSpec {
+        collection_path: "/user_management/invitations",
+        uses_organization_id: true,
+    }
+}
+
+fn workos_directory_spec() -> WorkOSResourceSpec {
+    WorkOSResourceSpec { collection_path: "/directories", uses_organization_id: false }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_workos_request<T, F>(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: F,
+) -> Result<T>
+where
+    F: FnOnce(WorkOSRuntimeContext) -> std::result::Result<T, String>,
+{
+    let home = home.unwrap_or_else(default_home_dir);
+    let settings = Settings::load(&home, settings_file.as_deref())?;
+    let env = std::env::vars().collect();
+    let runtime = resolve_workos_runtime(
+        &settings.workos,
+        &env,
+        &WorkOSAuthOverrides {
+            account: account.unwrap_or_default(),
+            environment: environment.unwrap_or_default(),
+            base_url: base_url.unwrap_or_default(),
+            api_key: api_key.unwrap_or_default(),
+            client_id: client_id.unwrap_or_default(),
+            organization_id: organization_id.unwrap_or_default(),
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    request(runtime).map_err(anyhow::Error::msg)
+}
+
+fn parse_workos_pairs(values: Vec<String>) -> Result<std::collections::BTreeMap<String, String>> {
+    let mut out = std::collections::BTreeMap::new();
+    for raw in values {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let mut parts = trimmed.splitn(2, '=');
+        let key = parts.next().unwrap_or("").trim();
+        let value = parts.next().unwrap_or("").trim();
+        if key.is_empty() {
+            anyhow::bail!("expected key=value, got {:?}", trimmed);
+        }
+        out.insert(key.to_owned(), value.to_owned());
+    }
+    Ok(out)
+}
+
+fn parse_workos_json_value(value: Option<String>, params: Vec<String>, empty_error: &str) -> Result<Value> {
+    if let Some(value) = value.filter(|value| !value.trim().is_empty()) {
+        return serde_json::from_str(value.trim()).map_err(anyhow::Error::msg);
+    }
+    let mut map = serde_json::Map::new();
+    for (key, value) in parse_workos_pairs(params)? {
+        let parsed =
+            serde_json::from_str(value.trim()).unwrap_or_else(|_| Value::String(value));
+        map.insert(key, parsed);
+    }
+    if map.is_empty() {
+        anyhow::bail!("{}", empty_error);
+    }
+    Ok(Value::Object(map))
+}
+
+fn inject_workos_organization_param(
+    spec: WorkOSResourceSpec,
+    runtime: &WorkOSRuntimeContext,
+    params: &mut std::collections::BTreeMap<String, String>,
+) {
+    if spec.uses_organization_id
+        && !runtime.organization_id.trim().is_empty()
+        && !params.contains_key("organization_id")
+    {
+        params.insert("organization_id".to_owned(), runtime.organization_id.clone());
+    }
+}
+
+fn inject_workos_organization_body(
+    spec: WorkOSResourceSpec,
+    runtime: &WorkOSRuntimeContext,
+    body: &mut Value,
+) {
+    if !spec.uses_organization_id || runtime.organization_id.trim().is_empty() {
+        return;
+    }
+    if let Some(object) = body.as_object_mut() {
+        object.entry("organization_id".to_owned()).or_insert_with(|| {
+            Value::String(runtime.organization_id.clone())
+        });
+    }
+}
+
+fn print_workos_api_response(response: WorkOSAPIResponse, json: bool, raw: bool) -> Result<()> {
+    if raw && !json {
+        print!("{}", response.body);
+        return Ok(());
+    }
+    if json {
+        let payload = serde_json::json!({
+            "status_code": response.status_code,
+            "status": response.status,
+            "request_id": response.request_id,
+            "body": response.body,
+            "data": response.data,
+        });
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+        return Ok(());
+    }
+    println!("Status: {} {}", response.status_code, response.status);
+    if !response.request_id.trim().is_empty() {
+        println!("Request ID: {}", response.request_id);
+    }
+    if !response.body.trim().is_empty() {
+        println!("{}", response.body.trim());
+    }
+    Ok(())
+}
+
+fn run_workos_resource_command(spec: WorkOSResourceSpec, command: WorkOSResourceCommand) -> Result<()> {
+    match command {
+        WorkOSResourceCommand::List {
+            limit,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
+        } => run_workos_resource_list(
+            spec, limit, params, account, env, api_key, client_id, org_id, base_url, home,
+            settings_file, json, raw,
+        ),
+        WorkOSResourceCommand::Get {
+            id,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
+        } => run_workos_resource_get(
+            spec, id, params, account, env, api_key, client_id, org_id, base_url, home,
+            settings_file, json, raw,
+        ),
+        WorkOSResourceCommand::Create {
+            json_body,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
+        } => run_workos_resource_create(
+            spec, json_body, params, account, env, api_key, client_id, org_id, base_url, home,
+            settings_file, json, raw,
+        ),
+        WorkOSResourceCommand::Update {
+            id,
+            json_body,
+            params,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
+        } => run_workos_resource_update(
+            spec, id, json_body, params, account, env, api_key, client_id, org_id, base_url,
+            home, settings_file, json, raw,
+        ),
+        WorkOSResourceCommand::Delete {
+            id,
+            force,
+            account,
+            env,
+            api_key,
+            client_id,
+            org_id,
+            base_url,
+            home,
+            settings_file,
+            json,
+            raw,
+        } => run_workos_resource_delete(
+            spec, id, force, account, env, api_key, client_id, org_id, base_url, home,
+            settings_file, json, raw,
+        ),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_doctor(
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let payload = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            let verify = execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "GET".to_owned(),
+                    path: "/organizations".to_owned(),
+                    params: std::collections::BTreeMap::from([("limit".to_owned(), "1".to_owned())]),
+                    ..WorkOSAPIRequest::default()
+                },
+            );
+            let request_detail = match &verify {
+                Ok(response) => format!("{} {}", response.status_code, response.status),
+                Err(err) => err.clone(),
+            };
+            Ok::<Value, String>(serde_json::json!({
+                "ok": verify.is_ok(),
+                "provider": "workos",
+                "base_url": runtime.base_url,
+                "account_alias": runtime.account_alias,
+                "environment": runtime.environment,
+                "organization_id": runtime.organization_id,
+                "checks": [
+                    {"name": "api-key", "ok": !runtime.api_key.trim().is_empty(), "detail": preview_secret(&runtime.api_key)},
+                    {"name": "base-url", "ok": !runtime.base_url.trim().is_empty(), "detail": runtime.base_url},
+                    {"name": "request", "ok": verify.is_ok(), "detail": request_detail}
+                ]
+            }))
+        },
+    )?;
+    let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
+    match format {
+        OutputFormat::Json | OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
+    }
+    if !ok {
+        anyhow::bail!("workos doctor failed");
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_resource_list(
+    spec: WorkOSResourceSpec,
+    limit: usize,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            let mut query = parse_workos_pairs(params).map_err(|err| err.to_string())?;
+            if limit > 0 {
+                query.insert("limit".to_owned(), limit.to_string());
+            }
+            inject_workos_organization_param(spec, &runtime, &mut query);
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "GET".to_owned(),
+                    path: spec.collection_path.to_owned(),
+                    params: query,
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_resource_get(
+    spec: WorkOSResourceSpec,
+    id: String,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "GET".to_owned(),
+                    path: format!("{}/{}", spec.collection_path, id.trim()),
+                    params: parse_workos_pairs(params).map_err(|err| err.to_string())?,
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_resource_create(
+    spec: WorkOSResourceSpec,
+    json_body: Option<String>,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            let mut body = parse_workos_json_value(
+                json_body,
+                params,
+                "create body is empty; provide --param key=value or --json-body",
+            )
+            .map_err(|err| err.to_string())?;
+            inject_workos_organization_body(spec, &runtime, &mut body);
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: spec.collection_path.to_owned(),
+                    json_body: Some(body),
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_resource_update(
+    spec: WorkOSResourceSpec,
+    id: String,
+    json_body: Option<String>,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            let mut body = parse_workos_json_value(
+                json_body,
+                params,
+                "update body is empty; provide --param key=value or --json-body",
+            )
+            .map_err(|err| err.to_string())?;
+            inject_workos_organization_body(spec, &runtime, &mut body);
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "PUT".to_owned(),
+                    path: format!("{}/{}", spec.collection_path, id.trim()),
+                    json_body: Some(body),
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_resource_delete(
+    spec: WorkOSResourceSpec,
+    id: String,
+    force: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("delete requires --force");
+    }
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "DELETE".to_owned(),
+                    path: format!("{}/{}", spec.collection_path, id.trim()),
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_invitation_revoke(
+    invitation_id: String,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("{}/{}/revoke", workos_invitation_spec().collection_path, invitation_id.trim()),
+                    json_body: Some(serde_json::json!({})),
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_directory_collection(
+    path: &str,
+    directory_id: String,
+    limit: usize,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            let mut query = parse_workos_pairs(params).map_err(|err| err.to_string())?;
+            query.insert("directory".to_owned(), directory_id.trim().to_owned());
+            if limit > 0 {
+                query.insert("limit".to_owned(), limit.to_string());
+            }
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "GET".to_owned(),
+                    path: path.to_owned(),
+                    params: query,
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_directory_sync(
+    directory_id: String,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("{}/{}/sync", workos_directory_spec().collection_path, directory_id.trim()),
+                    json_body: Some(serde_json::json!({})),
+                    ..WorkOSAPIRequest::default()
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_workos_raw(
+    method: String,
+    path: String,
+    body: Option<String>,
+    json_body: Option<String>,
+    params: Vec<String>,
+    headers: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    api_key: Option<String>,
+    client_id: Option<String>,
+    organization_id: Option<String>,
+    base_url: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    json: bool,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_workos_request(
+        account,
+        environment,
+        api_key,
+        client_id,
+        organization_id,
+        base_url,
+        home,
+        settings_file,
+        |runtime| {
+            let json_body = if json_body.as_deref().unwrap_or_default().trim().is_empty() {
+                None
+            } else {
+                Some(
+                    serde_json::from_str(json_body.as_deref().unwrap_or_default().trim())
+                        .map_err(|err| err.to_string())?,
+                )
+            };
+            let raw_body = body.filter(|value| !value.trim().is_empty());
+            execute_workos_api_request(
+                &runtime,
+                &WorkOSAPIRequest {
+                    method,
+                    path,
+                    params: parse_workos_pairs(params).map_err(|err| err.to_string())?,
+                    headers: parse_workos_pairs(headers).map_err(|err| err.to_string())?,
+                    raw_body,
+                    json_body,
+                },
+            )
+        },
+    )?;
+    print_workos_api_response(response, json, raw)
 }
 
 fn show_github_context_current(
