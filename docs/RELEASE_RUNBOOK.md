@@ -49,6 +49,7 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 
 - Run:
   - `si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight`
+  - `tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight`
 - Confirms archive packaging/checksum generation before publishing a GitHub Release.
 
 ## 6. Publish GitHub release
@@ -83,15 +84,19 @@ This repo uses Git tags + GitHub Releases. Follow this order to avoid broken/par
 - npm package:
   - `npm view @aureuma/si version`
   - Expect returned version to match `X.Y.Z`.
+  - `npm install --global --prefix "$RUNNER_TEMP/si-npm-verify" @aureuma/si@X.Y.Z`
+  - `SI_NPM_RELEASE_BASE_URL="https://github.com/Aureuma/si/releases/download/vX.Y.Z" "$RUNNER_TEMP/si-npm-verify/bin/si" version`
 - npm publish using SI vault-managed token:
   - `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z`
   - default token key: `NPM_GAT_AUREUMA_VANGUARDA`
 - Homebrew tap:
   - `curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si.rb | grep 'version \"'`
   - Formula version should match `X.Y.Z`.
+  - local smoke: `./tools/test-install-si-homebrew.sh`
 
 Workflow `.github/workflows/cli-release-assets.yml` now performs a final
 distribution verification job that checks:
+- locally built release archives pass Rust-owned archive/checksum/content verification before upload
 - required GitHub release assets are present
-- npm package visibility/version (when `NPM_TOKEN` is configured)
+- npm package visibility/version plus installed-launcher verification against the published release assets (when `NPM_TOKEN` is configured)
 - Homebrew tap version sync (when `HOMEBREW_TAP_PUSH_TOKEN` or fallback `GH_PAT_AUREUMA` is configured)

@@ -73,6 +73,12 @@ To validate the npm launcher package end-to-end, run:
 ./tools/test-install-si-npm.sh
 ```
 
+To validate the Homebrew tap install path end-to-end, run:
+
+```bash
+./tools/test-install-si-homebrew.sh
+```
+
 ## Vault strict suite
 Run the dedicated strict vault suite:
 
