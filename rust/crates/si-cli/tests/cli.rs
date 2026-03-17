@@ -5663,6 +5663,169 @@ fn aws_kms_encrypt_json_executes_signed_json_target_request() {
 }
 
 #[test]
+fn aws_dynamodb_table_list_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: DynamoDB_20120810.ListTables\r\n"));
+        assert!(request.contains(r#""Limit":100"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_dynamodb_list")], r#"{"TableNames":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "dynamodb", "table", "list",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_dynamodb_list");
+    assert_eq!(parsed["data"]["TableNames"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_dynamodb_item_get_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: DynamoDB_20120810.GetItem\r\n"));
+        assert!(request.contains(r#""TableName":"demo-table""#));
+        assert!(request.contains(r#""Key":{"id":{"S":"123"}}"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_dynamodb_get")], r#"{"Item":{"id":{"S":"123"}}}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "dynamodb", "item", "get",
+            "--table", "demo-table",
+            "--key-json", r#"{"id":{"S":"123"}}"#,
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_dynamodb_get");
+    assert_eq!(parsed["data"]["Item"]["id"]["S"], "123");
+    server.join();
+}
+
+#[test]
+fn aws_ssm_parameter_get_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: AmazonSSM.GetParameter\r\n"));
+        assert!(request.contains(r#""Name":"demo-param""#));
+        assert!(request.contains(r#""WithDecryption":true"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_ssm_get")], r#"{"Parameter":{"Name":"demo-param"}}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "ssm", "parameter", "get", "demo-param",
+            "--decrypt",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_ssm_get");
+    assert_eq!(parsed["data"]["Parameter"]["Name"], "demo-param");
+    server.join();
+}
+
+#[test]
+fn aws_logs_group_list_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: Logs_20140328.DescribeLogGroups\r\n"));
+        assert!(request.contains(r#""limit":50"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_logs_group")], r#"{"logGroups":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "logs", "group", "list",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_logs_group");
+    assert_eq!(parsed["data"]["logGroups"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_logs_events_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: Logs_20140328.FilterLogEvents\r\n"));
+        assert!(request.contains(r#""logGroupName":"demo-group""#));
+        assert!(request.contains(r#""logStreamNames":["demo-stream"]"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_logs_events")], r#"{"events":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "logs", "events",
+            "--group", "demo-group",
+            "--stream", "demo-stream",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_logs_events");
+    assert_eq!(parsed["data"]["events"][0], Value::Null);
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
