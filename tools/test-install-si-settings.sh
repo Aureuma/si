@@ -3,4 +3,4 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT}"
-exec go test ./tools/si/cmd/install-si-settings-helper -count=1 "$@"
+exec cargo test -p si-rs-cli build_installer_settings_helper_ "$@"

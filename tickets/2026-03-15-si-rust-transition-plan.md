@@ -157,6 +157,7 @@ Progress notes:
 - completed: the Rust-owned installer now also builds and installs the Rust CLI itself as the primary `si` binary via `cargo build --release --locked --bin si-rs`, replacing the previous internal `go build ./tools/si` step while keeping the existing installer flag surface stable as a compatibility layer for the cutover
 - completed: the cutover consumers are now adapter-ready too, with the Rust-owned installer installing sibling `si-go`, both Homebrew formula renderers installing `si-go` when present, and the npm runtime caching `si-go` alongside `si`, so the remaining compatibility flows have a consistent packaged adapter path across the primary install surfaces before the release-asset builder itself flips over
 - completed: the release-asset builder now ships the Rust CLI as the primary `si` binary and includes sibling `si-go` inside every generated archive, replacing the previous Go-primary tarball layout while keeping the compatibility adapter packaged for the remaining fallback flows across npm and Homebrew consumers
+- completed: the installer settings smoke wrapper now validates the Rust-owned settings-helper tests directly via `cargo test`, removing the last obvious Go-era release/install helper test entrypoint from the local runbook
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`
