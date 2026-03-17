@@ -592,6 +592,43 @@ fn build_installer_smoke_docker_runs_fake_docker() {
     let args = fs::read_to_string(args_file).expect("read args");
     assert!(args.contains("buildx"));
     assert!(args.contains("run"));
+    assert!(args.contains("CARGO_TARGET_DIR=/tmp/si-cargo-target"));
+}
+
+#[test]
+fn build_installer_smoke_docker_reports_run_output_on_failure() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join("tools/docker/install-sh-smoke")).expect("mkdir smoke");
+    fs::create_dir_all(repo.path().join("tools")).expect("mkdir tools");
+    fs::write(repo.path().join("tools/install-si.sh"), "#!/bin/sh\nexit 0\n").expect("write installer");
+    let bin_dir = tempdir().expect("bin tempdir");
+    let docker = bin_dir.path().join("docker");
+    fs::write(
+        &docker,
+        "#!/bin/sh\nif [ \"$1\" = \"buildx\" ] && [ \"$2\" = \"version\" ]; then exit 0; fi\nif [ \"$1\" = \"buildx\" ] && [ \"$2\" = \"build\" ]; then exit 0; fi\nprintf 'root smoke failed\\n'\nprintf 'permission denied\\n' >&2\nexit 1\n",
+    )
+    .expect("write docker");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&docker).expect("stat docker").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&docker, perms).expect("chmod docker");
+    }
+    let path_env = format!("{}:{}", bin_dir.path().display(), std::env::var("PATH").unwrap_or_default());
+    let stderr = cargo_bin()
+        .current_dir(repo.path())
+        .args(["build", "installer", "smoke-docker"])
+        .env("PATH", path_env)
+        .assert()
+        .failure()
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&stderr);
+    assert!(stderr.contains("docker failed:"));
+    assert!(stderr.contains("stdout:\nroot smoke failed"));
+    assert!(stderr.contains("stderr:\npermission denied"));
 }
 
 #[test]
