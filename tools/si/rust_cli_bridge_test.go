@@ -1700,6 +1700,40 @@ func TestRunAWSCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunAWSCommandDelegatesToRustCLIForDoctor(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-doctor'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"doctor", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-doctor" {
+		t.Fatalf("expected delegated Rust aws doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws doctor + args, got %q", string(argsData))
+	}
+}
+
 func TestRunAWSAuthStatusCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
@@ -1744,6 +1778,53 @@ func TestRunAWSAuthStatusCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 	if strings.TrimSpace(string(argsData)) != "aws\nauth\nstatus\n--json" {
 		t.Fatalf("expected Rust CLI args to be aws auth status + flags, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSDoctorCommandDefaultsToGoForPublicProbe(t *testing.T) {
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	t.Setenv(siRustCLIBinEnv, "")
+
+	delegated, err := runAWSDoctorCommand([]string{"--public", "--json"})
+	if err != nil {
+		t.Fatalf("runAWSDoctorCommand: %v", err)
+	}
+	if delegated {
+		t.Fatalf("expected Go aws doctor path for public probe")
+	}
+}
+
+func TestRunAWSDoctorCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-doctor-command'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSDoctorCommand([]string{"--json"})
+		if err != nil {
+			t.Fatalf("runAWSDoctorCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws doctor to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-doctor-command" {
+		t.Fatalf("expected delegated Rust aws doctor output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ndoctor\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws doctor + flags, got %q", string(argsData))
 	}
 }
 

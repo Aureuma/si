@@ -1,6 +1,11 @@
+use chrono::Utc;
+use hmac::{Hmac, Mac};
+use reqwest::blocking::Client;
 use serde::Serialize;
+use serde_json::Value;
+use sha2::{Digest, Sha256};
 use si_rs_config::settings::{AWSAccountEntry, AWSSettings};
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, time::Duration};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct AWSContextListEntry {
@@ -37,6 +42,35 @@ pub struct AWSAuthStatus {
     pub base_url: String,
     pub source: String,
     pub access_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_status: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verify_error: Option<String>,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AWSAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub service: String,
+    pub params: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
+    pub content_type: String,
+    pub accept: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AWSAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub headers: BTreeMap<String, String>,
+    pub body: String,
+    pub data: Value,
 }
 
 pub fn list_contexts(settings: &AWSSettings) -> Vec<AWSContextListEntry> {
@@ -118,15 +152,21 @@ pub fn resolve_auth_status(
         base_url: runtime.base_url,
         source: runtime.source,
         access_key: preview_access_key(&runtime.access_key),
+        verify_status: None,
+        verify: None,
+        verify_error: None,
+        status: "ready".to_owned(),
     })
 }
 
-struct AWSRuntimeContext {
-    account_alias: String,
-    region: String,
-    base_url: String,
-    access_key: String,
-    source: String,
+pub struct AWSRuntimeContext {
+    pub account_alias: String,
+    pub region: String,
+    pub base_url: String,
+    pub access_key: String,
+    pub secret_key: String,
+    pub session_token: String,
+    pub source: String,
 }
 
 fn resolve_runtime_context(
@@ -157,7 +197,7 @@ fn resolve_runtime_context(
         resolve_access_key(&alias, &account, env, &overrides.access_key);
     let (secret_key, secret_source) =
         resolve_secret_key(&alias, &account, env, &overrides.secret_key);
-    let (_session_token, session_source) =
+    let (session_token, session_source) =
         resolve_session_token(&alias, &account, env, &overrides.session_token);
 
     if access_key.trim().is_empty() || secret_key.trim().is_empty() {
@@ -173,6 +213,8 @@ fn resolve_runtime_context(
         region,
         base_url,
         access_key,
+        secret_key,
+        session_token,
         source: join_sources(&[access_source, secret_source, session_source]),
     })
 }
@@ -296,7 +338,7 @@ fn resolve_session_token(
     (String::new(), String::new())
 }
 
-fn preview_access_key(value: &str) -> String {
+pub fn preview_access_key(value: &str) -> String {
     let value = value.trim();
     if value.is_empty() {
         return "-".to_owned();
@@ -369,6 +411,353 @@ fn join_sources(parts: &[String]) -> String {
         })
         .collect::<Vec<_>>()
         .join(",")
+}
+
+fn sign_request(
+    url: &str,
+    method: &str,
+    body: &str,
+    runtime: &AWSRuntimeContext,
+    service: &str,
+    headers: &mut BTreeMap<String, String>,
+) -> Result<(), String> {
+    if runtime.access_key.trim().is_empty() || runtime.secret_key.trim().is_empty() {
+        return Err("aws access key and secret key are required for signing".to_owned());
+    }
+    let parsed = reqwest::Url::parse(url).map_err(|err| format!("parse AWS url: {err}"))?;
+    let host = parsed.host_str().unwrap_or_default().trim().to_ascii_lowercase();
+    if host.is_empty() {
+        return Err("request host is required for aws signing".to_owned());
+    }
+    let now = Utc::now();
+    let amz_date = now.format("%Y%m%dT%H%M%SZ").to_string();
+    let date_stamp = now.format("%Y%m%d").to_string();
+    let payload_hash = hex::encode(Sha256::digest(body.as_bytes()));
+    headers.insert("host".to_owned(), host.clone());
+    headers.insert("x-amz-date".to_owned(), amz_date.clone());
+    headers.insert("x-amz-content-sha256".to_owned(), payload_hash.clone());
+    if !runtime.session_token.trim().is_empty() {
+        headers.insert("x-amz-security-token".to_owned(), runtime.session_token.clone());
+    }
+    let mut signed_header_names = headers
+        .keys()
+        .filter(|name| {
+            matches!(
+                name.as_str(),
+                "host" | "x-amz-content-sha256" | "x-amz-date" | "x-amz-security-token"
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    signed_header_names.sort();
+    let canonical_headers = signed_header_names
+        .iter()
+        .map(|name| {
+            format!(
+                "{name}:{}",
+                canonical_header_value(headers.get(name).map(String::as_str).unwrap_or_default())
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let signed_headers = signed_header_names.join(";");
+    let canonical_request = [
+        method.trim().to_ascii_uppercase(),
+        canonical_uri(&parsed),
+        canonical_query(parsed.query().unwrap_or_default()),
+        canonical_headers,
+        String::new(),
+        signed_headers.clone(),
+        payload_hash,
+    ]
+    .join("\n");
+    let canonical_request_hash = hex::encode(Sha256::digest(canonical_request.as_bytes()));
+    let credential_scope = format!(
+        "{}/{}/{}/aws4_request",
+        date_stamp,
+        runtime.region.trim(),
+        service.trim()
+    );
+    let string_to_sign = [
+        "AWS4-HMAC-SHA256".to_owned(),
+        amz_date,
+        credential_scope.clone(),
+        canonical_request_hash,
+    ]
+    .join("\n");
+    let signature = hex::encode(signature_key(
+        runtime.secret_key.trim(),
+        &date_stamp,
+        runtime.region.trim(),
+        service.trim(),
+        &string_to_sign,
+    )?);
+    headers.insert(
+        "authorization".to_owned(),
+        format!(
+            "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
+            runtime.access_key.trim(),
+            credential_scope,
+            signed_headers,
+            signature
+        ),
+    );
+    Ok(())
+}
+
+fn canonical_uri(url: &reqwest::Url) -> String {
+    let path = url.path();
+    if path.trim().is_empty() { "/".to_owned() } else { path.to_owned() }
+}
+
+fn canonical_query(raw: &str) -> String {
+    if raw.trim().is_empty() {
+        return String::new();
+    }
+    let mut parsed = url::form_urlencoded::parse(raw.as_bytes())
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect::<Vec<_>>();
+    parsed.sort();
+    parsed
+        .into_iter()
+        .map(|(k, v)| format!("{}={}", percent_encode(&k), percent_encode(&v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+fn percent_encode(value: &str) -> String {
+    let encoded = url::form_urlencoded::byte_serialize(value.as_bytes()).collect::<String>();
+    encoded.replace('+', "%20").replace('*', "%2A").replace("%7E", "~")
+}
+
+fn canonical_header_value(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn signature_key(
+    secret_key: &str,
+    date: &str,
+    region: &str,
+    service: &str,
+    string_to_sign: &str,
+) -> Result<Vec<u8>, String> {
+    let k_date = hmac_sha256(format!("AWS4{secret_key}").as_bytes(), date)?;
+    let k_region = hmac_sha256(&k_date, region)?;
+    let k_service = hmac_sha256(&k_region, service)?;
+    let k_signing = hmac_sha256(&k_service, "aws4_request")?;
+    hmac_sha256(&k_signing, string_to_sign)
+}
+
+fn hmac_sha256(key: &[u8], payload: &str) -> Result<Vec<u8>, String> {
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(key).map_err(|err| format!("build hmac: {err}"))?;
+    mac.update(payload.as_bytes());
+    Ok(mac.finalize().into_bytes().to_vec())
+}
+
+fn url_encode_params(params: &BTreeMap<String, String>) -> String {
+    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+    for (key, value) in params {
+        serializer.append_pair(key, value);
+    }
+    serializer.finish()
+}
+
+fn normalize_response(
+    status_code: u16,
+    status: String,
+    headers: &reqwest::header::HeaderMap,
+    body: &str,
+) -> AWSAPIResponse {
+    let mut header_map = BTreeMap::new();
+    for (key, value) in headers {
+        if let Ok(value) = value.to_str() {
+            header_map.insert(key.as_str().to_owned(), value.to_owned());
+        }
+    }
+    let request_id = first_header(headers, &["x-amzn-requestid", "x-amz-request-id"]);
+    let data = parse_body_data(body, &request_id);
+    AWSAPIResponse {
+        status_code,
+        status,
+        request_id,
+        headers: header_map,
+        body: body.trim().to_owned(),
+        data,
+    }
+}
+
+fn normalize_http_error(
+    status_code: u16,
+    headers: &reqwest::header::HeaderMap,
+    body: &str,
+) -> String {
+    let request_id = first_header(headers, &["x-amzn-requestid", "x-amz-request-id"]);
+    format!(
+        "aws iam api error: status_code={}, request_id={}, message={}",
+        status_code,
+        if request_id.trim().is_empty() { "-" } else { request_id.trim() },
+        if body.trim().is_empty() { "request failed" } else { body.trim() }
+    )
+}
+
+fn first_header(headers: &reqwest::header::HeaderMap, names: &[&str]) -> String {
+    for name in names {
+        if let Some(value) = headers.get(*name) {
+            if let Ok(value) = value.to_str() {
+                let trimmed = value.trim();
+                if !trimmed.is_empty() {
+                    return trimmed.to_owned();
+                }
+            }
+        }
+    }
+    String::new()
+}
+
+fn parse_body_data(body: &str, request_id: &str) -> Value {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return Value::Null;
+    }
+    if let Ok(value) = serde_json::from_str::<Value>(trimmed) {
+        return value;
+    }
+    let response_name = xml_root_name(trimmed).unwrap_or_default();
+    let mut map = serde_json::Map::new();
+    if !response_name.trim().is_empty() {
+        map.insert("response".to_owned(), Value::String(response_name));
+    }
+    if !request_id.trim().is_empty() {
+        map.insert("request_id".to_owned(), Value::String(request_id.to_owned()));
+    }
+    if map.is_empty() {
+        Value::String(trimmed.to_owned())
+    } else {
+        Value::Object(map)
+    }
+}
+
+fn xml_root_name(body: &str) -> Option<String> {
+    let start = body.find('<')?;
+    let rest = &body[start + 1..];
+    let end = rest.find([' ', '>'])?;
+    Some(rest[..end].trim_matches('/').to_owned())
+}
+
+pub fn resolve_runtime(
+    settings: &AWSSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &AWSAuthOverrides,
+) -> Result<AWSRuntimeContext, String> {
+    resolve_runtime_context(settings, env, overrides)
+}
+
+pub fn execute_api_request(
+    runtime: &AWSRuntimeContext,
+    request: &AWSAPIRequest,
+) -> Result<AWSAPIResponse, String> {
+    let method = request.method.trim().to_ascii_uppercase();
+    if method.is_empty() {
+        return Err("aws method is required".to_owned());
+    }
+    let service = if request.service.trim().is_empty() {
+        "iam".to_owned()
+    } else {
+        request.service.trim().to_ascii_lowercase()
+    };
+    let base = runtime.base_url.trim_end_matches('/');
+    let url = if request.path.trim().starts_with("http://")
+        || request.path.trim().starts_with("https://")
+    {
+        request.path.trim().to_owned()
+    } else if request.path.trim().is_empty() || request.path.trim() == "/" {
+        format!("{base}/")
+    } else if request.path.trim().starts_with('/') {
+        format!("{base}{}", request.path.trim())
+    } else {
+        format!("{base}/{}", request.path.trim())
+    };
+    let client = Client::builder()
+        .timeout(Duration::from_secs(45))
+        .build()
+        .map_err(|err| format!("build AWS client: {err}"))?;
+    let mut headers = request.headers.clone();
+    let accept = if request.accept.trim().is_empty() {
+        "application/xml"
+    } else {
+        request.accept.trim()
+    };
+    let content_type = if request.content_type.trim().is_empty() {
+        "application/x-www-form-urlencoded; charset=utf-8"
+    } else {
+        request.content_type.trim()
+    };
+    headers.insert("accept".to_owned(), accept.to_owned());
+    headers.insert("content-type".to_owned(), content_type.to_owned());
+    sign_request(&url, &method, &request.body, runtime, &service, &mut headers)?;
+
+    let mut req = client
+        .request(
+            reqwest::Method::from_bytes(method.as_bytes())
+                .map_err(|err| format!("invalid AWS method: {err}"))?,
+            &url,
+        )
+        .body(request.body.clone());
+    if !request.params.is_empty() {
+        req = req.query(&request.params);
+    }
+    for (key, value) in &headers {
+        req = req.header(key, value);
+    }
+
+    let response = req.send().map_err(|err| format!("aws request failed: {err}"))?;
+    let status = response.status();
+    let headers = response.headers().clone();
+    let body = response.text().map_err(|err| format!("read AWS response body: {err}"))?;
+    if !status.is_success() {
+        return Err(normalize_http_error(status.as_u16(), &headers, &body));
+    }
+    Ok(normalize_response(status.as_u16(), status.to_string(), &headers, &body))
+}
+
+pub fn verify_auth_status(runtime: &AWSRuntimeContext) -> AWSAuthStatus {
+    let mut form = BTreeMap::new();
+    form.insert("Action".to_owned(), "GetUser".to_owned());
+    form.insert("Version".to_owned(), "2010-05-08".to_owned());
+    match execute_api_request(
+        runtime,
+        &AWSAPIRequest {
+            method: "POST".to_owned(),
+            path: "/".to_owned(),
+            service: "iam".to_owned(),
+            body: url_encode_params(&form),
+            ..AWSAPIRequest::default()
+        },
+    ) {
+        Ok(response) => AWSAuthStatus {
+            account_alias: runtime.account_alias.clone(),
+            region: runtime.region.clone(),
+            base_url: runtime.base_url.clone(),
+            source: runtime.source.clone(),
+            access_key: preview_access_key(&runtime.access_key),
+            verify_status: Some(response.status_code),
+            verify: Some(response.data),
+            verify_error: None,
+            status: "ready".to_owned(),
+        },
+        Err(err) => AWSAuthStatus {
+            account_alias: runtime.account_alias.clone(),
+            region: runtime.region.clone(),
+            base_url: runtime.base_url.clone(),
+            source: runtime.source.clone(),
+            access_key: preview_access_key(&runtime.access_key),
+            verify_status: None,
+            verify: None,
+            verify_error: Some(err),
+            status: "error".to_owned(),
+        },
+    }
 }
 
 fn trim_or_empty(value: Option<&str>) -> String {
