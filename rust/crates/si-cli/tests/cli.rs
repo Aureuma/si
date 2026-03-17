@@ -154,6 +154,74 @@ fn build_self_build_no_upgrade_writes_binary() {
 }
 
 #[test]
+fn build_self_default_writes_path_binary() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("rust/crates/si-cli")).expect("mkdir cli crate");
+    let bin_dir = tempdir().expect("bin tempdir");
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho upgraded\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
+    let si_path = bin_dir.path().join("si");
+    write_executable_shell_script(&si_path, "#!/bin/sh\necho old\n");
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    cargo_bin()
+        .args([
+            "build",
+            "self",
+            "--repo",
+            repo.path().to_str().expect("repo"),
+            "--quiet",
+        ])
+        .env("PATH", &path_env)
+        .assert()
+        .success();
+    let rendered = fs::read_to_string(&si_path).expect("read upgraded si");
+    assert!(rendered.contains("upgraded"));
+}
+
+#[test]
+fn build_self_flag_first_no_upgrade_writes_binary() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("rust/crates/si-cli")).expect("mkdir cli crate");
+    let bin_dir = tempdir().expect("bin tempdir");
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho flagfirst\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let out = repo.path().join("custom/si");
+    cargo_bin()
+        .args([
+            "build",
+            "self",
+            "--repo",
+            repo.path().to_str().expect("repo"),
+            "--no-upgrade",
+            "--output",
+            out.to_str().expect("out"),
+            "--quiet",
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+    let rendered = fs::read_to_string(&out).expect("read built binary");
+    assert!(rendered.contains("flagfirst"));
+}
+
+#[test]
 fn build_self_run_forwards_args_to_cargo() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
