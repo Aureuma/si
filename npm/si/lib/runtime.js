@@ -172,6 +172,7 @@ async function ensureBinaryAsync() {
   const ctx = buildAssetContext();
   const cacheDir = path.join(CACHE_ROOT, ctx.version, `${ctx.target.goos}-${ctx.target.label}`);
   const binaryPath = path.join(cacheDir, 'si');
+  const compatBinaryPath = path.join(cacheDir, 'si-go');
 
   if (fs.existsSync(binaryPath)) {
     return binaryPath;
@@ -205,6 +206,11 @@ async function ensureBinaryAsync() {
       `si_${ctx.version}_${ctx.target.goos}_${ctx.target.label}`,
       'si'
     );
+    const extractedCompatBinary = path.join(
+      tmpDir,
+      `si_${ctx.version}_${ctx.target.goos}_${ctx.target.label}`,
+      'si-go'
+    );
 
     if (!fs.existsSync(extractedBinary)) {
       throw new Error(`extracted archive missing binary at ${extractedBinary}`);
@@ -214,6 +220,12 @@ async function ensureBinaryAsync() {
     await fsp.copyFile(extractedBinary, targetTmp);
     await fsp.chmod(targetTmp, 0o755);
     await fsp.rename(targetTmp, binaryPath);
+    if (fs.existsSync(extractedCompatBinary)) {
+      const compatTmp = `${compatBinaryPath}.tmp-${process.pid}`;
+      await fsp.copyFile(extractedCompatBinary, compatTmp);
+      await fsp.chmod(compatTmp, 0o755);
+      await fsp.rename(compatTmp, compatBinaryPath);
+    }
 
     return binaryPath;
   } finally {

@@ -17040,8 +17040,8 @@ struct InstallerRunConfig {
     force: bool,
     uninstall: bool,
     go_mode: String,
-    _build_tags: Option<String>,
-    _build_ldflags: String,
+    build_tags: Option<String>,
+    build_ldflags: String,
     os_override: Option<String>,
     arch_override: Option<String>,
     dry_run: bool,
@@ -17052,18 +17052,23 @@ struct InstallerRunConfig {
 fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     validate_installer_config(&cfg)?;
     let install_path = resolve_installer_install_path(&cfg)?;
+    let go_adapter_path = install_path.with_file_name(if cfg!(windows) { "si-go.exe" } else { "si-go" });
     if cfg.uninstall {
         if cfg.dry_run {
             if !cfg.quiet {
                 println!("dry-run: uninstall {}", install_path.display());
+                println!("dry-run: uninstall {}", go_adapter_path.display());
             }
             return Ok(());
         }
-        match fs::remove_file(&install_path) {
-            Ok(_) => return Ok(()),
-            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
-            Err(err) => return Err(err).with_context(|| format!("uninstall {}", install_path.display())),
+        for path in [&install_path, &go_adapter_path] {
+            match fs::remove_file(path) {
+                Ok(_) => {}
+                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err).with_context(|| format!("uninstall {}", path.display())),
+            }
         }
+        return Ok(());
     }
 
     if cfg.backend.trim() != "local" {
@@ -17075,14 +17080,17 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
 
     let (source_dir, _cleanup) = resolve_installer_source_dir(&cfg)?;
     let cargo_bin = ensure_installer_cargo_toolchain(&cfg.go_mode)?;
+    let go_bin = ensure_installer_go_toolchain(&cfg.go_mode)?;
     if cfg.dry_run {
         if !cfg.quiet {
             println!("rust: using system cargo ({cargo_bin})");
+            println!("go: using system go ({go_bin})");
         }
         return Ok(());
     }
 
     ensure_installer_install_writable(&install_path, cfg.force)?;
+    ensure_installer_install_writable(&go_adapter_path, cfg.force)?;
     let install_dir = install_path
         .parent()
         .ok_or_else(|| anyhow!("invalid install path {}", install_path.display()))?;
@@ -17093,6 +17101,12 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         .with_context(|| format!("create temp output in {}", install_dir.display()))?;
     let tmp_output_path = tmp_output.path().to_path_buf();
     drop(tmp_output);
+    let tmp_go_output = tempfile::Builder::new()
+        .prefix("si-go-build-")
+        .tempfile_in(install_dir)
+        .with_context(|| format!("create temp Go adapter output in {}", install_dir.display()))?;
+    let tmp_go_output_path = tmp_go_output.path().to_path_buf();
+    drop(tmp_go_output);
 
     let mut command = StdCommand::new(&cargo_bin);
     command
@@ -17121,15 +17135,37 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
             tmp_output_path.display()
         )
     })?;
+    let mut go_command = StdCommand::new(&go_bin);
+    go_command
+        .current_dir(&source_dir)
+        .arg("build")
+        .arg("-trimpath")
+        .arg("-buildvcs=false")
+        .arg("-o")
+        .arg(&tmp_go_output_path);
+    if let Some(tags) = cfg.build_tags.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        go_command.arg("-tags").arg(tags);
+    }
+    let ldflags = cfg.build_ldflags.trim();
+    if !ldflags.is_empty() {
+        go_command.arg("-ldflags").arg(ldflags);
+    }
+    go_command.arg("./tools/si");
+    let status = go_command.status().context("run go build for installer adapter")?;
+    if !status.success() {
+        return Err(anyhow!("build failed: {}", status));
+    }
 
     #[cfg(unix)]
     {
-        let mut perms = fs::metadata(&tmp_output_path)
-            .with_context(|| format!("stat {}", tmp_output_path.display()))?
-            .permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&tmp_output_path, perms)
-            .with_context(|| format!("chmod {}", tmp_output_path.display()))?;
+        for path in [&tmp_output_path, &tmp_go_output_path] {
+            let mut perms = fs::metadata(path)
+                .with_context(|| format!("stat {}", path.display()))?
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms)
+                .with_context(|| format!("chmod {}", path.display()))?;
+        }
     }
     fs::rename(&tmp_output_path, &install_path).or_else(|err| {
         if err.kind() == io::ErrorKind::AlreadyExists {
@@ -17140,6 +17176,15 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
         }
     })
     .with_context(|| format!("install {}", install_path.display()))?;
+    fs::rename(&tmp_go_output_path, &go_adapter_path).or_else(|err| {
+        if err.kind() == io::ErrorKind::AlreadyExists {
+            let _ = fs::remove_file(&go_adapter_path);
+            fs::rename(&tmp_go_output_path, &go_adapter_path)
+        } else {
+            Err(err)
+        }
+    })
+    .with_context(|| format!("install {}", go_adapter_path.display()))?;
 
     if !cfg.no_path_hint {
         warn_if_installer_path_missing(install_dir);
@@ -17263,6 +17308,17 @@ fn ensure_installer_cargo_toolchain(go_mode: &str) -> Result<String> {
         Ok(_) => Err(anyhow!("cargo toolchain probe failed")),
         Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("cargo toolchain not found on PATH")),
         Err(err) => Err(err).context("probe cargo toolchain"),
+    }
+}
+
+fn ensure_installer_go_toolchain(go_mode: &str) -> Result<String> {
+    let output = StdCommand::new("go").arg("version").output();
+    match output {
+        Ok(output) if output.status.success() => Ok("go".to_owned()),
+        Ok(_) | Err(_) if go_mode.trim() == "system" => Err(anyhow!("go is required for --go-mode system")),
+        Ok(_) => Err(anyhow!("go toolchain probe failed")),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("go toolchain not found on PATH")),
+        Err(err) => Err(err).context("probe go toolchain"),
     }
 }
 
@@ -17939,7 +17995,7 @@ fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: Stri
     download_file(&source_url, temp.path())?;
     let digest = sha256_file(temp.path())?;
     let content = format!(
-        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si-rs\"\n    mv bin/\"si-rs\", bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n  depends_on \"go\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si-rs\"\n    mv bin/\"si-rs\", bin/\"si\"\n    system \"go\", \"build\", \"-trimpath\", \"-buildvcs=false\", \"-ldflags\", \"-s -w\", \"-o\", bin/\"si-go\", \"./tools/si\"\n    chmod 0o755, bin/\"si-go\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
     );
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
@@ -18072,7 +18128,7 @@ fn render_tap_formula(version: &str, checksums_path: &Path, output_path: &Path, 
     let asset_linux_amd64 = format!("si_{version_no_v}_linux_amd64.tar.gz");
     let base_url = format!("https://github.com/{}/releases/download/{}", repo, version);
     let content = format!(
-        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    adapter = Dir[\"#{{stage}}/si_*/si-go\"].first\n    adapter = (stage/\"si-go\").to_s if adapter.nil? && (stage/\"si-go\").exist?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n    unless adapter.nil? || adapter.empty?\n      bin.install adapter => \"si-go\"\n      chmod 0o755, bin/\"si-go\"\n    end\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
         lookup(&asset_darwin_arm64)?,
         lookup(&asset_darwin_amd64)?,
         lookup(&asset_linux_arm64)?,
@@ -18234,8 +18290,8 @@ fn main() -> Result<()> {
                     force,
                     uninstall,
                     go_mode,
-                    _build_tags: build_tags,
-                    _build_ldflags: build_ldflags,
+                    build_tags,
+                    build_ldflags,
                     os_override,
                     arch_override,
                     dry_run,
