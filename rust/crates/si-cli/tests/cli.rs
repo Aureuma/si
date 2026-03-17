@@ -4818,34 +4818,39 @@ secret_access_key_env = "CORE_AWS_SECRET_ACCESS_KEY"
 }
 
 #[test]
-fn aws_auth_status_json_resolves_selected_account() {
-    let home = tempdir().expect("tempdir");
-    let settings_dir = home.path().join(".si");
-    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
-    fs::write(
-        settings_dir.join("settings.toml"),
-        r#"
-schema_version = 1
-
-[aws]
-default_account = "core"
-
-[aws.accounts.core]
-region = "us-west-2"
-access_key_id_env = "CORE_AWS_ACCESS_KEY_ID"
-secret_access_key_env = "CORE_AWS_SECRET_ACCESS_KEY"
-session_token_env = "CORE_AWS_SESSION_TOKEN"
-"#,
-    )
-    .expect("write settings");
+fn aws_auth_status_json_verifies_signed_get_user_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("content-type: application/x-www-form-urlencoded; charset=utf-8\r\n"));
+        assert!(request.contains("x-amz-date: "));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token"));
+        assert!(request.contains("\r\n\r\nAction=GetUser&Version=2010-05-08"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_auth")],
+            r#"<GetUserResponse><ResponseMetadata><RequestId>req_aws_auth</RequestId></ResponseMetadata></GetUserResponse>"#,
+        )
+    });
 
     let output = cargo_bin()
-        .env("CORE_AWS_ACCESS_KEY_ID", "AKIA1234567890ABCD")
-        .env("CORE_AWS_SECRET_ACCESS_KEY", "secret")
-        .env("CORE_AWS_SESSION_TOKEN", "session")
-        .args(["aws", "auth", "status", "--home"])
-        .arg(home.path())
-        .args(["--format", "json"])
+        .args([
+            "aws",
+            "auth",
+            "status",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
         .assert()
         .success()
         .get_output()
@@ -4853,13 +4858,54 @@ session_token_env = "CORE_AWS_SESSION_TOKEN"
         .clone();
 
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
-    assert_eq!(parsed["account_alias"], "core");
-    assert_eq!(parsed["region"], "us-west-2");
-    assert_eq!(
-        parsed["source"],
-        "env:CORE_AWS_ACCESS_KEY_ID,env:CORE_AWS_SECRET_ACCESS_KEY,env:CORE_AWS_SESSION_TOKEN"
-    );
-    assert_eq!(parsed["access_key"], "AKIA**********ABCD");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["verify_status"], 200);
+    assert_eq!(parsed["verify"]["response"], "GetUserResponse");
+    assert_eq!(parsed["verify"]["request_id"], "req_aws_auth");
+    server.join();
+}
+
+#[test]
+fn aws_doctor_json_verifies_signed_get_user_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("\r\n\r\nAction=GetUser&Version=2010-05-08"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_doctor")],
+            r#"<GetUserResponse><ResponseMetadata><RequestId>req_aws_doctor</RequestId></ResponseMetadata></GetUserResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "doctor",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["ok"], true);
+    assert_eq!(parsed["provider"], "aws_iam");
+    assert_eq!(parsed["checks"][2]["detail"], "200 200 OK");
+    server.join();
 }
 
 #[test]
@@ -10550,6 +10596,19 @@ where
 fn http_json_response(status: &str, headers: &[(&str, &str)], body: &str) -> String {
     let mut response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\n",
+        body.len()
+    );
+    for (key, value) in headers {
+        response.push_str(&format!("{key}: {value}\r\n"));
+    }
+    response.push_str("\r\n");
+    response.push_str(body);
+    response
+}
+
+fn http_xml_response(status: &str, headers: &[(&str, &str)], body: &str) -> String {
+    let mut response = format!(
+        "HTTP/1.1 {status}\r\nContent-Type: application/xml\r\nContent-Length: {}\r\n",
         body.len()
     );
     for (key, value) in headers {
