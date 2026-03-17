@@ -1000,6 +1000,8 @@ func runOpenAICommand(args []string) (bool, error) {
 		return runOpenAIAuthCommand(args[1:])
 	case "context":
 		return runOpenAIContextCommand(args[1:])
+	case "doctor":
+		return runOpenAIDoctorCommand(args[1:])
 	case "model", "models":
 		return runOpenAIModelCommand(args[1:])
 	case "project", "projects":
@@ -1025,6 +1027,9 @@ func runOpenAIAuthCommand(args []string) (bool, error) {
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "status":
+		if value, ok := rustCLIFlagValue(args[1:], "--auth-mode"); ok && normalizeOpenAIAuthMode(value) == "codex" {
+			return false, nil
+		}
 		return runOpenAIAuthStatusCommand(args[1:])
 	default:
 		return false, nil
@@ -1055,6 +1060,24 @@ func runOpenAIContextCommand(args []string) (bool, error) {
 
 func runOpenAIAuthStatusCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("openai", append([]string{"auth", "status"}, args...)...)
+}
+
+func runOpenAIDoctorCommand(args []string) (bool, error) {
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--public", arg == "--public=true", arg == "--public=1":
+			return false, nil
+		case arg == "--public=false", arg == "--public=0":
+		case arg == "--public" && idx+1 < len(args):
+			next := strings.TrimSpace(args[idx+1])
+			if next == "true" || next == "1" {
+				return false, nil
+			}
+			idx++
+		}
+	}
+	return maybeDispatchRustCLIReadOnly("openai", append([]string{"doctor"}, args...)...)
 }
 
 func runOpenAIModelCommand(args []string) (bool, error) {
