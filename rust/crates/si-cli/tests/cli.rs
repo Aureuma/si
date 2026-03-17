@@ -4909,6 +4909,206 @@ fn aws_doctor_json_verifies_signed_get_user_request() {
 }
 
 #[test]
+fn aws_sts_get_caller_identity_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("\r\n\r\nAction=GetCallerIdentity&Version=2011-06-15"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_sts_identity")],
+            r#"<GetCallerIdentityResponse><ResponseMetadata><RequestId>req_aws_sts_identity</RequestId></ResponseMetadata></GetCallerIdentityResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "sts",
+            "get-caller-identity",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_sts_identity");
+    assert_eq!(parsed["data"]["response"], "GetCallerIdentityResponse");
+    server.join();
+}
+
+#[test]
+fn aws_sts_assume_role_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("Action=AssumeRole"));
+        assert!(request.contains("Version=2011-06-15"));
+        assert!(request.contains("RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fdemo"));
+        assert!(request.contains("RoleSessionName=session-demo"));
+        assert!(request.contains("DurationSeconds=900"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_sts_assume")],
+            r#"<AssumeRoleResponse><ResponseMetadata><RequestId>req_aws_sts_assume</RequestId></ResponseMetadata></AssumeRoleResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "sts",
+            "assume-role",
+            "--role-arn",
+            "arn:aws:iam::123456789012:role/demo",
+            "--session-name",
+            "session-demo",
+            "--duration-seconds",
+            "900",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_sts_assume");
+    assert_eq!(parsed["data"]["response"], "AssumeRoleResponse");
+    server.join();
+}
+
+#[test]
+fn aws_iam_user_create_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("Action=CreateUser"));
+        assert!(request.contains("Version=2010-05-08"));
+        assert!(request.contains("UserName=deploy-bot"));
+        assert!(request.contains("Path=%2Fsystem%2F"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_iam_create")],
+            r#"<CreateUserResponse><ResponseMetadata><RequestId>req_aws_iam_create</RequestId></ResponseMetadata></CreateUserResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "iam",
+            "user",
+            "create",
+            "--name",
+            "deploy-bot",
+            "--path",
+            "/system/",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_iam_create");
+    assert_eq!(parsed["data"]["response"], "CreateUserResponse");
+    server.join();
+}
+
+#[test]
+fn aws_iam_query_json_executes_signed_query_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        assert!(request.contains("Action=ListUsers"));
+        assert!(request.contains("Version=2010-05-08"));
+        assert!(request.contains("MaxItems=25"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amzn-RequestId", "req_aws_iam_query")],
+            r#"<ListUsersResponse><ResponseMetadata><RequestId>req_aws_iam_query</RequestId></ResponseMetadata></ListUsersResponse>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws",
+            "iam",
+            "query",
+            "--action",
+            "ListUsers",
+            "--param",
+            "MaxItems=25",
+            "--base-url",
+            &server.base_url,
+            "--access-key",
+            "AKIA1234567890ABCD",
+            "--secret-key",
+            "secret",
+            "--session-token",
+            "session",
+            "--region",
+            "us-west-2",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_iam_query");
+    assert_eq!(parsed["data"]["response"], "ListUsersResponse");
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

@@ -779,6 +779,10 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSAuthCommand(args[1:])
 	case "context":
 		return runAWSContextCommand(args[1:])
+	case "sts":
+		return runAWSSTSCommand(args[1:])
+	case "iam":
+		return runAWSIAMCommand(args[1:])
 	case "doctor":
 		return runAWSDoctorCommand(args[1:])
 	default:
@@ -828,6 +832,14 @@ func runAWSDoctorCommand(args []string) (bool, error) {
 		}
 	}
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"doctor"}, args...)...)
+}
+
+func runAWSSTSCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"sts"}, args...)...)
+}
+
+func runAWSIAMCommand(args []string) (bool, error) {
+	return maybeDispatchRustCLIReadOnly("aws", append([]string{"iam"}, args...)...)
 }
 
 func runGCPAuthCommand(args []string) (bool, error) {
