@@ -356,6 +356,11 @@ enum BuildCommand {
         #[command(subcommand)]
         command: BuildSelfCommand,
     },
+    #[command(name = "npm")]
+    Npm {
+        #[command(subcommand)]
+        command: BuildNpmCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -368,6 +373,32 @@ enum BuildSelfCommand {
         version: Option<String>,
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BuildNpmCommand {
+    #[command(name = "build-package")]
+    BuildPackage {
+        #[arg(long = "repo-root")]
+        repo_root: Option<PathBuf>,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long = "out-dir")]
+        out_dir: Option<PathBuf>,
+    },
+    #[command(name = "publish-package")]
+    PublishPackage {
+        #[arg(long = "repo-root")]
+        repo_root: Option<PathBuf>,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long = "out-dir")]
+        out_dir: Option<PathBuf>,
+        #[arg(long = "token-env", default_value = "NPM_TOKEN")]
+        token_env: String,
+        #[arg(long = "dry-run", action = ArgAction::SetTrue)]
+        dry_run: bool,
     },
 }
 
@@ -16584,6 +16615,236 @@ fn sha256_file(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+fn run_build_npm_package(
+    repo_root: Option<PathBuf>,
+    version: Option<String>,
+    out_dir: Option<PathBuf>,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let version = resolve_release_version(&repo_root, version)?;
+    let out_dir = match out_dir {
+        Some(path) if path.is_absolute() => path,
+        Some(path) => std::env::current_dir().context("read current dir")?.join(path),
+        None => repo_root.join("dist").join("npm"),
+    };
+    let package = build_npm_package(&repo_root, &version, &out_dir)?;
+    println!("created npm package: {}", package.display());
+    Ok(())
+}
+
+fn run_publish_npm_package(
+    repo_root: Option<PathBuf>,
+    version: Option<String>,
+    out_dir: Option<PathBuf>,
+    token_env: String,
+    dry_run: bool,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let version = resolve_release_version(&repo_root, version)?;
+    let out_dir = match out_dir {
+        Some(path) if path.is_absolute() => path,
+        Some(path) => std::env::current_dir().context("read current dir")?.join(path),
+        None => repo_root.join("dist").join("npm"),
+    };
+
+    let token_env = if token_env.trim() == "NPM_TOKEN"
+        && std::env::var("NPM_TOKEN").unwrap_or_default().trim().is_empty()
+        && !std::env::var("NPM_GAT_AUREUMA_VANGUARDA")
+            .unwrap_or_default()
+            .trim()
+            .is_empty()
+    {
+        "NPM_GAT_AUREUMA_VANGUARDA".to_owned()
+    } else {
+        token_env.trim().to_owned()
+    };
+
+    let npm_version = version.trim_start_matches('v');
+    let package_version = format!("@aureuma/si@{npm_version}");
+    if npm_package_exists(&package_version)? {
+        println!("{package_version} already published; skipping");
+        return Ok(());
+    }
+
+    let package = build_npm_package(&repo_root, &version, &out_dir)?;
+    let token = std::env::var(&token_env).unwrap_or_default();
+    if token.trim().is_empty() {
+        return Err(anyhow!("token environment variable {} is required", token_env));
+    }
+
+    let npmrc = tempfile::NamedTempFile::new().context("create npmrc temp file")?;
+    fs::write(
+        npmrc.path(),
+        format!("//registry.npmjs.org/:_authToken={}\nalways-auth=true\n", token.trim()),
+    )
+    .with_context(|| format!("write {}", npmrc.path().display()))?;
+
+    let mut command = StdCommand::new("npm");
+    command
+        .current_dir(&repo_root)
+        .env("NPM_CONFIG_USERCONFIG", npmrc.path())
+        .arg("publish")
+        .arg(&package)
+        .arg("--access")
+        .arg("public");
+    if dry_run {
+        command.arg("--dry-run");
+    }
+    let output = command
+        .output()
+        .with_context(|| format!("run npm publish for {}", package.display()))?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "npm publish failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    if dry_run {
+        println!("dry-run complete: {}", package.display());
+        return Ok(());
+    }
+
+    if !wait_for_npm_package(&package_version, 18, std::time::Duration::from_secs(10))? {
+        return Err(anyhow!("package publish appears to have failed verification"));
+    }
+    println!("published {package_version}");
+    Ok(())
+}
+
+fn build_npm_package(repo_root: &Path, version: &str, out_dir: &Path) -> Result<PathBuf> {
+    let version_path = repo_root.join("tools").join("si").join("version.go");
+    if !version_path.exists() {
+        return Err(anyhow!("tools/si/version.go not found"));
+    }
+    let package_root = repo_root.join("npm").join("si");
+    if !package_root.exists() {
+        return Err(anyhow!("npm/si not found"));
+    }
+    if !repo_root.join("LICENSE").exists() {
+        return Err(anyhow!("LICENSE not found"));
+    }
+    ensure_command_exists("node")?;
+    ensure_command_exists("npm")?;
+
+    fs::create_dir_all(out_dir).with_context(|| format!("create {}", out_dir.display()))?;
+    let stage = tempfile::tempdir().context("create npm package temp dir")?;
+    copy_dir_recursive(&package_root, stage.path())?;
+    fs::copy(repo_root.join("LICENSE"), stage.path().join("LICENSE"))
+        .with_context(|| format!("copy LICENSE into {}", stage.path().display()))?;
+    rewrite_package_version(&stage.path().join("package.json"), version.trim_start_matches('v'))?;
+
+    let output = StdCommand::new("npm")
+        .current_dir(stage.path())
+        .arg("pack")
+        .arg("--silent")
+        .output()
+        .context("run npm pack")?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "npm pack failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let mut matches = fs::read_dir(stage.path())
+        .with_context(|| format!("read {}", stage.path().display()))?
+        .filter_map(|entry| entry.ok().map(|item| item.path()))
+        .filter(|path| path.extension().and_then(|value| value.to_str()) == Some("tgz"))
+        .collect::<Vec<_>>();
+    matches.sort();
+    let src = matches
+        .pop()
+        .ok_or_else(|| anyhow!("npm pack did not produce a tarball"))?;
+    let dst = out_dir.join(
+        src.file_name()
+            .ok_or_else(|| anyhow!("invalid npm tarball path {}", src.display()))?,
+    );
+    move_file(&src, &dst)?;
+    Ok(dst)
+}
+
+fn ensure_command_exists(command: &str) -> Result<()> {
+    match StdCommand::new(command).arg("--version").output() {
+        Ok(_) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => {
+            Err(anyhow!("missing required command: {command}"))
+        }
+        Err(err) => Err(err).with_context(|| format!("check command {}", command)),
+    }
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+    fs::create_dir_all(dst).with_context(|| format!("create {}", dst.display()))?;
+    for entry in fs::read_dir(src).with_context(|| format!("read {}", src.display()))? {
+        let entry = entry.with_context(|| format!("read entry in {}", src.display()))?;
+        let path = entry.path();
+        let target = dst.join(entry.file_name());
+        if path.is_dir() {
+            copy_dir_recursive(&path, &target)?;
+        } else {
+            fs::copy(&path, &target)
+                .with_context(|| format!("copy {} to {}", path.display(), target.display()))?;
+        }
+    }
+    Ok(())
+}
+
+fn rewrite_package_version(path: &Path, version: &str) -> Result<()> {
+    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let mut value: Value =
+        serde_json::from_str(&raw).with_context(|| format!("parse {}", path.display()))?;
+    let object = value
+        .as_object_mut()
+        .ok_or_else(|| anyhow!("package.json must be a JSON object"))?;
+    object.insert("version".to_owned(), Value::String(version.to_owned()));
+    fs::write(
+        path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&value).context("render package.json")?
+        ),
+    )
+    .with_context(|| format!("write {}", path.display()))?;
+    Ok(())
+}
+
+fn move_file(src: &Path, dst: &Path) -> Result<()> {
+    match fs::rename(src, dst) {
+        Ok(_) => Ok(()),
+        Err(err) if err.kind() == io::ErrorKind::CrossesDevices => {
+            fs::copy(src, dst)
+                .with_context(|| format!("copy {} to {}", src.display(), dst.display()))?;
+            fs::remove_file(src).with_context(|| format!("remove {}", src.display()))?;
+            Ok(())
+        }
+        Err(err) => Err(err).with_context(|| format!("move {} to {}", src.display(), dst.display())),
+    }
+}
+
+fn npm_package_exists(package_version: &str) -> Result<bool> {
+    let output = StdCommand::new("npm")
+        .arg("view")
+        .arg(package_version)
+        .arg("version")
+        .output()
+        .with_context(|| format!("run npm view for {package_version}"))?;
+    Ok(output.status.success() && !String::from_utf8_lossy(&output.stdout).trim().is_empty())
+}
+
+fn wait_for_npm_package(
+    package_version: &str,
+    attempts: usize,
+    delay: std::time::Duration,
+) -> Result<bool> {
+    for _ in 0..attempts {
+        if npm_package_exists(package_version)? {
+            return Ok(true);
+        }
+        std::thread::sleep(delay);
+    }
+    Ok(false)
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -16599,6 +16860,20 @@ fn main() -> Result<()> {
                     version,
                     out_dir,
                 } => run_build_self_release_assets(repo, version, out_dir)?,
+            },
+            BuildCommand::Npm { command } => match command {
+                BuildNpmCommand::BuildPackage {
+                    repo_root,
+                    version,
+                    out_dir,
+                } => run_build_npm_package(repo_root, version, out_dir)?,
+                BuildNpmCommand::PublishPackage {
+                    repo_root,
+                    version,
+                    out_dir,
+                    token_env,
+                    dry_run,
+                } => run_publish_npm_package(repo_root, version, out_dir, token_env, dry_run)?,
             },
         },
         Command::Commands { command } => match command {

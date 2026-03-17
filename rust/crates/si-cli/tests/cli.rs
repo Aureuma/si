@@ -87,6 +87,144 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     assert_eq!(checksums.lines().count(), 5);
 }
 
+#[test]
+fn build_npm_build_package_creates_tarball() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::create_dir_all(repo.path().join("npm/si")).expect("mkdir npm/si");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+    fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
+    fs::write(
+        repo.path().join("npm/si/package.json"),
+        "{\n  \"name\": \"@aureuma/si\",\n  \"version\": \"0.0.0\"\n}\n",
+    )
+    .expect("write package");
+    fs::write(repo.path().join("npm/si/index.js"), "console.log('si');\n").expect("write js");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let node_path = bin_dir.path().join("node");
+    let npm_path = bin_dir.path().join("npm");
+    fs::write(&node_path, "#!/bin/sh\necho v20.0.0\n").expect("write node");
+    fs::write(
+        &npm_path,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 10.0.0\n  exit 0\nfi\nif [ \"$1\" = \"pack\" ]; then\n  touch aureuma-si-1.2.3.tgz\n  exit 0\nfi\nexit 1\n",
+    )
+    .expect("write npm");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&node_path, &npm_path] {
+            let mut perms = fs::metadata(path).expect("stat tool").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("chmod tool");
+        }
+    }
+
+    let out_dir = repo.path().join("out");
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    cargo_bin()
+        .args([
+            "build",
+            "npm",
+            "build-package",
+            "--repo-root",
+            repo.path().to_str().expect("repo path"),
+            "--out-dir",
+            out_dir.to_str().expect("out path"),
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+
+    assert!(out_dir.join("aureuma-si-1.2.3.tgz").exists());
+}
+
+#[test]
+fn build_npm_publish_package_dry_run_uses_generated_tarball() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+    fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
+    fs::create_dir_all(repo.path().join("npm/si")).expect("mkdir npm/si");
+    fs::write(
+        repo.path().join("tools/si/version.go"),
+        "package main\n\nconst siVersion = \"v1.2.3\"\n",
+    )
+    .expect("write version");
+    fs::write(repo.path().join("LICENSE"), "license\n").expect("write license");
+    fs::write(
+        repo.path().join("npm/si/package.json"),
+        "{\n  \"name\": \"@aureuma/si\",\n  \"version\": \"0.0.0\"\n}\n",
+    )
+    .expect("write package");
+    fs::write(repo.path().join("npm/si/index.js"), "console.log('si');\n").expect("write js");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("publish-args.txt");
+    let node_path = bin_dir.path().join("node");
+    let npm_path = bin_dir.path().join("npm");
+    fs::write(&node_path, "#!/bin/sh\necho v20.0.0\n").expect("write node");
+    fs::write(
+        &npm_path,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 10.0.0\n  exit 0\nfi\nif [ \"$1\" = \"view\" ]; then\n  exit 1\nfi\nif [ \"$1\" = \"pack\" ]; then\n  touch aureuma-si-1.2.3.tgz\n  exit 0\nfi\nif [ \"$1\" = \"publish\" ]; then\n  printf '%s\\n' \"$@\" > {}\n  exit 0\nfi\nexit 1\n",
+            shell_escape_for_test(&args_file)
+        ),
+    )
+    .expect("write npm");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for path in [&node_path, &npm_path] {
+            let mut perms = fs::metadata(path).expect("stat tool").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("chmod tool");
+        }
+    }
+
+    let out_dir = repo.path().join("out");
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    cargo_bin()
+        .args([
+            "build",
+            "npm",
+            "publish-package",
+            "--repo-root",
+            repo.path().to_str().expect("repo path"),
+            "--out-dir",
+            out_dir.to_str().expect("out path"),
+            "--dry-run",
+        ])
+        .env("PATH", path_env)
+        .env("NPM_TOKEN", "token-123")
+        .assert()
+        .success();
+
+    let publish_args = fs::read_to_string(args_file).expect("read publish args");
+    assert!(publish_args.contains("publish"));
+    assert!(publish_args.contains("--access"));
+    assert!(publish_args.contains("--dry-run"));
+    assert!(publish_args.contains("aureuma-si-1.2.3.tgz"));
+}
+
+fn shell_escape_for_test(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
+}
+
 fn test_app_private_key_pem() -> &'static str {
     "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
 }
