@@ -8191,6 +8191,10 @@ enum GoogleYouTubeCommand {
         #[command(subcommand)]
         command: GoogleYouTubeCommentCommand,
     },
+    Live {
+        #[command(subcommand)]
+        command: GoogleYouTubeLiveCommand,
+    },
     Support {
         #[command(subcommand)]
         command: GoogleYouTubeSupportCommand,
@@ -9601,6 +9605,298 @@ enum GoogleYouTubeReportCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeLiveCommand {
+    Broadcast {
+        #[command(subcommand)]
+        command: GoogleYouTubeLiveBroadcastCommand,
+    },
+    Stream {
+        #[command(subcommand)]
+        command: GoogleYouTubeLiveStreamCommand,
+    },
+    Chat {
+        #[command(subcommand)]
+        command: GoogleYouTubeLiveChatCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeLiveBroadcastCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,contentDetails,status")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long = "type")]
+        broadcast_type: Option<String>,
+        #[arg(long, default_value_t = true)]
+        mine: bool,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveMutationBodyArgs,
+    },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveMutationBodyArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeIdMutationArgs,
+    },
+    Bind {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveBroadcastBindArgs,
+    },
+    Transition {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveBroadcastTransitionArgs,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeLiveStreamCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,cdn,status")]
+        part: String,
+        #[arg(long = "id")]
+        ids: Option<String>,
+        #[arg(long, default_value_t = true)]
+        mine: bool,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveMutationBodyArgs,
+    },
+    Update {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveMutationBodyArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeIdMutationArgs,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GoogleYouTubeLiveChatCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "mode")]
+        auth_mode: Option<String>,
+        #[arg(long)]
+        api_key: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        client_id: Option<String>,
+        #[arg(long)]
+        client_secret: Option<String>,
+        #[arg(long)]
+        redirect_uri: Option<String>,
+        #[arg(long)]
+        access_token: Option<String>,
+        #[arg(long)]
+        refresh_token: Option<String>,
+        #[arg(long, default_value = "id,snippet,authorDetails")]
+        part: String,
+        #[arg(long)]
+        live_chat_id: Option<String>,
+        #[arg(long)]
+        max_results: Option<usize>,
+        #[arg(long)]
+        page_token: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Create {
+        #[command(flatten)]
+        command: GoogleYouTubeLiveChatCreateArgs,
+    },
+    Delete {
+        #[command(flatten)]
+        command: GoogleYouTubeIdMutationArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeLiveMutationBodyArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long, default_value = "snippet,status,contentDetails")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeIdMutationArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeLiveBroadcastBindArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long)]
+    stream_id: Option<String>,
+    #[arg(long, default_value = "id,snippet,contentDetails,status")]
+    part: String,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeLiveBroadcastTransitionArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long = "id")]
+    id: Option<String>,
+    #[arg(long, default_value = "live")]
+    status: String,
+    #[arg(long, default_value = "id,snippet,contentDetails,status")]
+    part: String,
+    #[arg(long = "param")]
+    params: Vec<String>,
+}
+
+#[derive(Debug, clap::Args)]
+struct GoogleYouTubeLiveChatCreateArgs {
+    #[command(flatten)]
+    runtime: GoogleYouTubeMutationRuntimeArgs,
+    #[arg(long)]
+    live_chat_id: Option<String>,
+    #[arg(long)]
+    text: Option<String>,
+    #[arg(long, default_value = "snippet")]
+    part: String,
+    #[arg(long)]
+    body: Option<String>,
+    #[arg(long = "param")]
+    params: Vec<String>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -21260,6 +21556,106 @@ fn main() -> Result<()> {
                                 command.part,
                                 command.body,
                                 command.params,
+                            )?
+                        }
+                    },
+                },
+                GoogleYouTubeCommand::Live { command } => match command {
+                    GoogleYouTubeLiveCommand::Broadcast { command } => match command {
+                        GoogleYouTubeLiveBroadcastCommand::List {
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, status, broadcast_type, mine, max_results,
+                            page_token, params, home, settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_google_youtube_live_broadcast_list(
+                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                                language, region, client_id, client_secret, redirect_uri, access_token,
+                                refresh_token, part, ids, status, broadcast_type, mine, max_results,
+                                page_token, params, home, settings_file, format, raw,
+                            )?
+                        }
+                        GoogleYouTubeLiveBroadcastCommand::Create { command } => {
+                            run_google_youtube_live_broadcast_create(
+                                command.runtime, command.part, command.body, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveBroadcastCommand::Update { command } => {
+                            run_google_youtube_live_broadcast_update(
+                                command.runtime, command.part, command.body, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveBroadcastCommand::Delete { command } => {
+                            run_google_youtube_live_broadcast_delete(
+                                command.runtime, command.id, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveBroadcastCommand::Bind { command } => {
+                            run_google_youtube_live_broadcast_bind(
+                                command.runtime, command.id, command.stream_id, command.part, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveBroadcastCommand::Transition { command } => {
+                            run_google_youtube_live_broadcast_transition(
+                                command.runtime, command.id, command.status, command.part, command.params,
+                            )?
+                        }
+                    },
+                    GoogleYouTubeLiveCommand::Stream { command } => match command {
+                        GoogleYouTubeLiveStreamCommand::List {
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, ids, mine, max_results, page_token, params, home,
+                            settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_google_youtube_live_stream_list(
+                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                                language, region, client_id, client_secret, redirect_uri, access_token,
+                                refresh_token, part, ids, mine, max_results, page_token, params, home,
+                                settings_file, format, raw,
+                            )?
+                        }
+                        GoogleYouTubeLiveStreamCommand::Create { command } => {
+                            run_google_youtube_live_stream_create(
+                                command.runtime, command.part, command.body, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveStreamCommand::Update { command } => {
+                            run_google_youtube_live_stream_update(
+                                command.runtime, command.part, command.body, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveStreamCommand::Delete { command } => {
+                            run_google_youtube_live_stream_delete(
+                                command.runtime, command.id, command.params,
+                            )?
+                        }
+                    },
+                    GoogleYouTubeLiveCommand::Chat { command } => match command {
+                        GoogleYouTubeLiveChatCommand::List {
+                            account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                            language, region, client_id, client_secret, redirect_uri, access_token,
+                            refresh_token, part, live_chat_id, max_results, page_token, params, home,
+                            settings_file, json, raw, format,
+                        } => {
+                            let format = if json { OutputFormat::Json } else { format };
+                            run_google_youtube_live_chat_list(
+                                account, env, auth_mode, api_key, base_url, upload_base_url, project_id,
+                                language, region, client_id, client_secret, redirect_uri, access_token,
+                                refresh_token, part, live_chat_id, max_results, page_token, params, home,
+                                settings_file, format, raw,
+                            )?
+                        }
+                        GoogleYouTubeLiveChatCommand::Create { command } => {
+                            run_google_youtube_live_chat_create(
+                                command.runtime, command.live_chat_id, command.text, command.part, command.body, command.params,
+                            )?
+                        }
+                        GoogleYouTubeLiveChatCommand::Delete { command } => {
+                            run_google_youtube_live_chat_delete(
+                                command.runtime, command.id, command.params,
                             )?
                         }
                     },
@@ -36986,6 +37382,363 @@ fn run_google_youtube_report_usage(
         OutputFormat::Text => println!("{}", serde_json::to_string_pretty(&payload)?),
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_live_broadcast_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    status: Option<String>,
+    broadcast_type: Option<String>,
+    mine: bool,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    require_google_youtube_oauth(&runtime, "live broadcast list")?;
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if mine {
+        params.insert("mine".to_owned(), "true".to_owned());
+    }
+    if let Some(status) = status.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("broadcastStatus".to_owned(), status);
+    }
+    if let Some(broadcast_type) = broadcast_type.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("broadcastType".to_owned(), broadcast_type);
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/liveBroadcasts".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_live_broadcast_create(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("live broadcast create requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live broadcast create", "POST", "/youtube/v3/liveBroadcasts", params, Some(body))
+}
+
+fn run_google_youtube_live_broadcast_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("live broadcast update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live broadcast update", "PUT", "/youtube/v3/liveBroadcasts", params, Some(body))
+}
+
+fn run_google_youtube_live_broadcast_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("live broadcast delete requires --id <broadcast-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(command, "live broadcast delete", "DELETE", "/youtube/v3/liveBroadcasts", params, None)
+}
+
+fn run_google_youtube_live_broadcast_bind(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    stream_id: Option<String>,
+    part: String,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let stream_id = stream_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let (Some(id), Some(stream_id)) = (id, stream_id) else {
+        anyhow::bail!("live broadcast bind requires --id <broadcast-id> --stream-id <stream-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    params.insert("streamId".to_owned(), stream_id);
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live broadcast bind", "POST", "/youtube/v3/liveBroadcasts/bind", params, None)
+}
+
+fn run_google_youtube_live_broadcast_transition(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    status: String,
+    part: String,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("live broadcast transition requires --id <broadcast-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    params.insert("broadcastStatus".to_owned(), status.trim().to_owned());
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live broadcast transition", "POST", "/youtube/v3/liveBroadcasts/transition", params, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_live_stream_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    ids: Option<String>,
+    mine: bool,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    require_google_youtube_oauth(&runtime, "live stream list")?;
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    if let Some(ids) = parse_google_youtube_ids_csv(ids) {
+        params.insert("id".to_owned(), ids);
+    }
+    if mine {
+        params.insert("mine".to_owned(), "true".to_owned());
+    }
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 50).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/liveStreams".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_live_stream_create(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("live stream create requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live stream create", "POST", "/youtube/v3/liveStreams", params, Some(body))
+}
+
+fn run_google_youtube_live_stream_update(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = parse_google_youtube_body(body)?;
+    if body.trim().is_empty() {
+        anyhow::bail!("live stream update requires --body <json|@file>");
+    }
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live stream update", "PUT", "/youtube/v3/liveStreams", params, Some(body))
+}
+
+fn run_google_youtube_live_stream_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("live stream delete requires --id <stream-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(command, "live stream delete", "DELETE", "/youtube/v3/liveStreams", params, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_youtube_live_chat_list(
+    account: Option<String>,
+    environment: Option<String>,
+    auth_mode: Option<String>,
+    api_key: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    project_id: Option<String>,
+    language: Option<String>,
+    region: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    redirect_uri: Option<String>,
+    access_token: Option<String>,
+    refresh_token: Option<String>,
+    part: String,
+    live_chat_id: Option<String>,
+    max_results: Option<usize>,
+    page_token: Option<String>,
+    params: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_youtube_runtime(
+        account, environment, auth_mode, api_key, base_url, upload_base_url, project_id,
+        language, region, client_id, client_secret, redirect_uri, access_token, refresh_token,
+        home, settings_file,
+    )?;
+    require_google_youtube_oauth(&runtime, "live chat list")?;
+    let live_chat_id = live_chat_id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(live_chat_id) = live_chat_id else {
+        anyhow::bail!("live chat list requires --live-chat-id <id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    params.insert("liveChatId".to_owned(), live_chat_id);
+    params.insert("maxResults".to_owned(), max_results.unwrap_or(10).clamp(1, 2000).to_string());
+    if let Some(page_token) = page_token.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty()) {
+        params.insert("pageToken".to_owned(), page_token);
+    }
+    let response = execute_youtube_api_request(
+        &runtime,
+        &GoogleYouTubeAPIRequest {
+            method: "GET".to_owned(),
+            path: "/youtube/v3/liveChat/messages".to_owned(),
+            params,
+            ..GoogleYouTubeAPIRequest::default()
+        },
+    )
+    .map_err(anyhow::Error::msg)?;
+    print_google_youtube_api_response(&response, format, raw)
+}
+
+fn run_google_youtube_live_chat_create(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    live_chat_id: Option<String>,
+    text: Option<String>,
+    part: String,
+    body: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let body = {
+        let raw = parse_google_youtube_body(body)?;
+        if raw.trim().is_empty() {
+            let live_chat_id = live_chat_id
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let text = text
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty());
+            let (Some(live_chat_id), Some(text)) = (live_chat_id, text) else {
+                anyhow::bail!("live chat create requires --live-chat-id <id> --text <message> or --body <json|@file>");
+            };
+            serde_json::to_string(&serde_json::json!({
+                "snippet": {
+                    "liveChatId": live_chat_id,
+                    "type": "textMessageEvent",
+                    "textMessageDetails": {
+                        "messageText": text,
+                    }
+                }
+            }))?
+        } else {
+            raw
+        }
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("part".to_owned(), part.trim().to_owned());
+    run_google_youtube_oauth_request(command, "live chat create", "POST", "/youtube/v3/liveChat/messages", params, Some(body))
+}
+
+fn run_google_youtube_live_chat_delete(
+    command: GoogleYouTubeMutationRuntimeArgs,
+    id: Option<String>,
+    params: Vec<String>,
+) -> Result<()> {
+    let id = id.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let Some(id) = id else {
+        anyhow::bail!("live chat delete requires --id <message-id>");
+    };
+    let mut params = parse_google_youtube_params(params)?;
+    params.insert("id".to_owned(), id);
+    run_google_youtube_oauth_request(command, "live chat delete", "DELETE", "/youtube/v3/liveChat/messages", params, None)
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -1617,6 +1617,8 @@ func runGoogleYouTubeCommand(args []string) (bool, error) {
 		return runGoogleYouTubeSubscriptionCommand(args[1:])
 	case "comment":
 		return runGoogleYouTubeCommentCommand(args[1:])
+	case "live":
+		return runGoogleYouTubeLiveCommand(args[1:])
 	case "support":
 		return runGoogleYouTubeSupportCommand(args[1:])
 	case "report":
@@ -1806,6 +1808,72 @@ func runGoogleYouTubeReportCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "usage":
 		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "report", "usage"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeLiveCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "broadcast", "broadcasts":
+		return runGoogleYouTubeLiveBroadcastCommand(args[1:])
+	case "stream", "streams":
+		return runGoogleYouTubeLiveStreamCommand(args[1:])
+	case "chat":
+		return runGoogleYouTubeLiveChatCommand(args[1:])
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeLiveBroadcastCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get", "create", "update", "bind", "transition":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "broadcast", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "broadcast", "create"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "broadcast", "delete"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeLiveStreamCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list", "get", "create", "update":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "stream", strings.ToLower(strings.TrimSpace(args[0]))}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "stream", "create"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "stream", "delete"}, args[1:]...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runGoogleYouTubeLiveChatCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "list":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "chat", "list"}, args[1:]...)...)
+	case "create", "post":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "chat", "create"}, args[1:]...)...)
+	case "insert":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "chat", "create"}, args[1:]...)...)
+	case "delete", "remove", "rm":
+		return maybeDispatchRustCLIReadOnly("google", append([]string{"youtube", "live", "chat", "delete"}, args[1:]...)...)
 	default:
 		return false, nil
 	}
