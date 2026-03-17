@@ -787,6 +787,10 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSS3Command(args[1:])
 	case "ec2":
 		return runAWSEC2Command(args[1:])
+	case "lambda":
+		return runAWSLambdaCommand(args[1:])
+	case "ecr":
+		return runAWSECRCommand(args[1:])
 	case "doctor":
 		return runAWSDoctorCommand(args[1:])
 	default:
@@ -905,6 +909,59 @@ func runAWSEC2Command(args []string) (bool, error) {
 			return false, nil
 		}
 		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ec2"}, args...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runAWSLambdaCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	if strings.ToLower(strings.TrimSpace(args[0])) != "function" {
+		return false, nil
+	}
+	if len(args) < 2 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[1])) {
+	case "list", "get":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"lambda"}, args...)...)
+	case "delete", "remove", "rm":
+		if !awsForceEnabled(args[2:]) {
+			return false, nil
+		}
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"lambda"}, args...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runAWSECRCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "repository":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list", "create":
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"ecr"}, args...)...)
+		case "delete", "remove", "rm":
+			if !awsForceEnabled(args[2:]) {
+				return false, nil
+			}
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"ecr"}, args...)...)
+		default:
+			return false, nil
+		}
+	case "image":
+		if len(args) >= 2 && strings.EqualFold(strings.TrimSpace(args[1]), "list") {
+			return maybeDispatchRustCLIReadOnly("aws", append([]string{"ecr"}, args...)...)
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
