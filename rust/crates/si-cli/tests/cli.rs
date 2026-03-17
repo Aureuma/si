@@ -4639,6 +4639,134 @@ fn cloudflare_tls_cert_create_json_posts_zone_resource() {
 }
 
 #[test]
+fn cloudflare_token_verify_json_fetches_global_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /user/tokens/verify HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_token_verify")],
+            r#"{"success":true,"result":{"status":"active"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "token", "verify"])
+        .args([
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_token_verify");
+    assert_eq!(parsed["data"]["status"], "active");
+    server.join();
+}
+
+#[test]
+fn cloudflare_workers_secret_set_json_puts_account_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("PUT /accounts/acct_123/workers/scripts/core-worker/secrets HTTP/1.1\r\n"));
+        assert!(request.contains("\"name\":\"API_TOKEN\""));
+        assert!(request.contains("\"text\":\"secret-value\""));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_worker_secret")],
+            r#"{"success":true,"result":{"name":"API_TOKEN"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "workers", "secret", "set"])
+        .args([
+            "--script", "core-worker",
+            "--name", "API_TOKEN",
+            "--text", "secret-value",
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_worker_secret");
+    assert_eq!(parsed["data"]["name"], "API_TOKEN");
+    server.join();
+}
+
+#[test]
+fn cloudflare_tunnel_token_json_fetches_account_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /accounts/acct_123/cfd_tunnel/tun_123/token HTTP/1.1\r\n"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_tunnel_token")],
+            r#"{"success":true,"result":{"token":"tok_123"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "tunnel", "token"])
+        .args([
+            "--tunnel", "tun_123",
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--account-id", "acct_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_tunnel_token");
+    assert_eq!(parsed["data"]["token"], "tok_123");
+    server.join();
+}
+
+#[test]
+fn cloudflare_cache_purge_json_posts_zone_endpoint() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST /zones/zone_123/purge_cache HTTP/1.1\r\n"));
+        assert!(request.contains("\"purge_everything\":true"));
+        http_json_response(
+            "200 OK",
+            &[("cf-ray", "req_cloudflare_cache_purge")],
+            r#"{"success":true,"result":{"id":"purge_123"}}"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args(["cloudflare", "cache", "purge"])
+        .args([
+            "--everything",
+            "--force",
+            "--api-token", "cf-test-token",
+            "--base-url", &server.base_url,
+            "--zone-id", "zone_123",
+            "--json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["request_id"], "req_cloudflare_cache_purge");
+    assert_eq!(parsed["data"]["id"], "purge_123");
+    server.join();
+}
+
+#[test]
 fn apple_appstore_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");

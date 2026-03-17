@@ -890,6 +890,78 @@ func TestRunCloudflareCommandDelegatesToRustCLIForResourceFamilies(t *testing.T)
 	}
 }
 
+func TestRunCloudflareCommandDelegatesToRustCLIForTokenVerify(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-token-verify'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"token", "verify", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare token verify to delegate to Rust")
+		}
+	})
+	if strings.TrimSpace(out) != "rust-cloudflare-token-verify" {
+		t.Fatalf("expected delegated Rust cloudflare token verify output, got %q", out)
+	}
+}
+
+func TestRunCloudflareCommandDelegatesToRustCLIForTunnelToken(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-tunnel-token'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"tunnel", "token", "--tunnel", "tun_123", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare tunnel token to delegate to Rust")
+		}
+	})
+	if strings.TrimSpace(out) != "rust-cloudflare-tunnel-token" {
+		t.Fatalf("expected delegated Rust cloudflare tunnel token output, got %q", out)
+	}
+}
+
+func TestRunCloudflareCommandDelegatesToRustCLIForCachePurge(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-cloudflare-cache-purge'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+	out := captureOutputForTest(t, func() {
+		delegated, err := runCloudflareCommand([]string{"cache", "purge", "--everything", "--force", "--json"})
+		if err != nil {
+			t.Fatalf("runCloudflareCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected cloudflare cache purge to delegate to Rust")
+		}
+	})
+	if strings.TrimSpace(out) != "rust-cloudflare-cache-purge" {
+		t.Fatalf("expected delegated Rust cloudflare cache purge output, got %q", out)
+	}
+}
+
 func TestRunAppleAppStoreContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")

@@ -464,6 +464,23 @@ func runCloudflareEmailCommand(args []string) (bool, error) {
 		return runCloudflareResourceAtPath([]string{"email", "rule"}, args[1:])
 	case "address", "addresses", "destination", "destinations":
 		return runCloudflareResourceAtPath([]string{"email", "address"}, args[1:])
+	case "settings":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "get":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"email", "settings", "get"}, args[2:]...)...)
+		case "enable":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"email", "settings", "enable"}, args[2:]...)...)
+			}
+		case "disable":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"email", "settings", "disable"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -478,6 +495,19 @@ func runCloudflareWorkersCommand(args []string) (bool, error) {
 		return runCloudflareResourceAtPath([]string{"workers", "script"}, args[1:])
 	case "route", "routes":
 		return runCloudflareResourceAtPath([]string{"workers", "route"}, args[1:])
+	case "secret", "secrets":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "set", "create", "update":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"workers", "secret", "set"}, args[2:]...)...)
+		case "delete", "remove", "rm":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"workers", "secret", "delete"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -490,6 +520,38 @@ func runCloudflarePagesCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "project", "projects":
 		return runCloudflareResourceAtPath([]string{"pages", "project"}, args[1:])
+	case "deploy", "deployment", "deployments":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"pages", "deploy", "list"}, args[2:]...)...)
+		case "trigger", "create":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"pages", "deploy", "trigger"}, args[2:]...)...)
+		case "rollback":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"pages", "deploy", "rollback"}, args[2:]...)...)
+			}
+		}
+		return false, nil
+	case "domain", "domains":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"pages", "domain", "list"}, args[2:]...)...)
+		case "get":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"pages", "domain", "get"}, args[2:]...)...)
+		case "create":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"pages", "domain", "create"}, args[2:]...)...)
+		case "delete", "remove", "rm":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"pages", "domain", "delete"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -502,6 +564,23 @@ func runCloudflareR2Command(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "bucket", "buckets":
 		return runCloudflareResourceAtPath([]string{"r2", "bucket"}, args[1:])
+	case "object", "objects":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"r2", "object", "list"}, args[2:]...)...)
+		case "get":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"r2", "object", "get"}, args[2:]...)...)
+		case "put", "create":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"r2", "object", "put"}, args[2:]...)...)
+		case "delete", "remove", "rm":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"r2", "object", "delete"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -514,6 +593,21 @@ func runCloudflareD1Command(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "db", "database", "databases":
 		return runCloudflareResourceAtPath([]string{"d1", "db"}, args[1:])
+	case "query":
+		return maybeDispatchRustCLICompat("cloudflare", append([]string{"d1", "query"}, args[1:]...)...)
+	case "migration", "migrations":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"d1", "migration", "list"}, args[2:]...)...)
+		case "apply":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"d1", "migration", "apply"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -526,6 +620,25 @@ func runCloudflareKVCommand(args []string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
 	case "namespace", "namespaces":
 		return runCloudflareResourceAtPath([]string{"kv", "namespace"}, args[1:])
+	case "key", "keys":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"kv", "key", "list"}, args[2:]...)...)
+		case "get":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"kv", "key", "get"}, args[2:]...)...)
+		case "put", "set", "create", "update":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"kv", "key", "put"}, args[2:]...)...)
+		case "bulk":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"kv", "key", "bulk"}, args[2:]...)...)
+		case "delete", "remove", "rm":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"kv", "key", "delete"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
@@ -550,11 +663,92 @@ func runCloudflareTLSCommand(args []string) (bool, error) {
 		return false, nil
 	}
 	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "get":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"tls", "get"}, args[1:]...)...)
+	case "set":
+		return maybeDispatchRustCLICompat("cloudflare", append([]string{"tls", "set"}, args[1:]...)...)
 	case "cert", "certs", "certificate", "certificates":
 		return runCloudflareResourceAtPath([]string{"tls", "cert"}, args[1:])
+	case "origin-cert", "origin", "originca":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "list":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"tls", "origin-cert", "list"}, args[2:]...)...)
+		case "create":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"tls", "origin-cert", "create"}, args[2:]...)...)
+		case "revoke", "delete", "remove", "rm":
+			if awsForceEnabled(args[2:]) {
+				return maybeDispatchRustCLICompat("cloudflare", append([]string{"tls", "origin-cert", "revoke"}, args[2:]...)...)
+			}
+		}
+		return false, nil
 	default:
 		return false, nil
 	}
+}
+
+func runCloudflareTokenCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "verify":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"token", "verify"}, args[1:]...)...)
+	case "permission-groups", "permissions", "permission-group":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"token", "permission-groups"}, args[1:]...)...)
+	default:
+		return runCloudflareResourceAtPath([]string{"token"}, args)
+	}
+}
+
+func runCloudflareTunnelCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "token", "issue":
+		return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"tunnel", "token"}, args[1:]...)...)
+	default:
+		return runCloudflareResourceAtPath([]string{"tunnel"}, args)
+	}
+}
+
+func runCloudflareLBCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "pool", "pools":
+		return runCloudflareResourceAtPath([]string{"lb", "pool"}, args[1:])
+	default:
+		return runCloudflareResourceAtPath([]string{"lb"}, args)
+	}
+}
+
+func runCloudflareCacheCommand(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[0])) {
+	case "purge":
+		if awsForceEnabled(args[1:]) {
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"cache", "purge"}, args[1:]...)...)
+		}
+		return false, nil
+	case "settings":
+		if len(args) < 2 {
+			return false, nil
+		}
+		switch strings.ToLower(strings.TrimSpace(args[1])) {
+		case "get":
+			return maybeDispatchRustCLIReadOnly("cloudflare", append([]string{"cache", "settings", "get"}, args[2:]...)...)
+		case "set":
+			return maybeDispatchRustCLICompat("cloudflare", append([]string{"cache", "settings", "set"}, args[2:]...)...)
+		}
+	}
+	return false, nil
 }
 
 func runCloudflareAuthCommand(args []string) (bool, error) {
@@ -591,7 +785,7 @@ func runCloudflareCommand(args []string) (bool, error) {
 	case "email":
 		return runCloudflareEmailCommand(args[1:])
 	case "token", "tokens":
-		return runCloudflareResourceAtPath([]string{"token"}, args[1:])
+		return runCloudflareTokenCommand(args[1:])
 	case "ruleset":
 		return runCloudflareResourceAtPath([]string{"ruleset"}, args[1:])
 	case "firewall":
@@ -615,9 +809,13 @@ func runCloudflareCommand(args []string) (bool, error) {
 	case "access":
 		return runCloudflareAccessCommand(args[1:])
 	case "tunnel", "tunnels":
-		return runCloudflareResourceAtPath([]string{"tunnel"}, args[1:])
+		return runCloudflareTunnelCommand(args[1:])
 	case "tls":
 		return runCloudflareTLSCommand(args[1:])
+	case "lb":
+		return runCloudflareLBCommand(args[1:])
+	case "cache":
+		return runCloudflareCacheCommand(args[1:])
 	case "logs":
 		return runCloudflareLogsCommand(args[1:])
 	case "raw", "api":
