@@ -600,6 +600,7 @@ Exit criteria:
 Progress notes:
 
 - completed: retired the dead Go release/install helper binaries that the repo no longer calls (`tools/si/cmd/releasectl`, `install-si`, `install-si-settings-helper`, `test-install-si`, `test-install-si-npm`, and `test-install-si-docker`), leaving the Rust-owned shell entrypoints as the only live release/install helpers on those paths
+- completed: retired the last Go-backed Docker install smoke helpers too by inlining their behavior into `tools/docker/install-sh-smoke/run.sh` and `tools/docker/install-sh-nonroot/run.sh`, so the install smoke lane no longer shells out through `go run ./tools/si/cmd/install-smoke-*`
 
 ## Test Strategy by Layer
 
