@@ -535,6 +535,7 @@ Exit criteria:
 Progress notes:
 
 - completed: the live Go `si build self release-assets` path now delegates into a Rust-owned packager implementation that rebuilds the shipping Go `./tools/si` binary across the release target matrix, archives `README.md` and `LICENSE`, and emits `checksums.txt`, giving Phase 8 its first executable release-packaging slice behind the Rust compatibility boundary with focused Rust CLI and Go bridge proofs
+- completed: the npm release helper lane now also runs through Rust for `build-package` and `publish-package`, with Rust-owned package staging/version rewriting, tarball handoff, npm publish dry-run/live flow, and updated release scripts so the main npm packaging path no longer depends on the Go `releasectl` implementation while the vault-assisted wrapper remains the next adjacent slice
 
 ### Phase 9: Primary binary cutover
 
