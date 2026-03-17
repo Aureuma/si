@@ -6763,6 +6763,70 @@ enum GooglePlayCommand {
         #[command(subcommand)]
         command: GooglePlayDetailsCommand,
     },
+    Asset {
+        #[command(subcommand)]
+        command: GooglePlayAssetCommand,
+    },
+    Release {
+        #[command(subcommand)]
+        command: GooglePlayReleaseCommand,
+    },
+    Apply {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long, default_value = "play-store")]
+        metadata_dir: String,
+        #[arg(long)]
+        aab: Option<String>,
+        #[arg(long)]
+        apk: Option<String>,
+        #[arg(long)]
+        track: Option<String>,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        user_fraction: Option<f64>,
+        #[arg(long)]
+        release_name: Option<String>,
+        #[arg(long)]
+        validate: bool,
+        #[arg(long)]
+        changes_not_sent_for_review: bool,
+        #[arg(long = "release-note")]
+        release_notes: Vec<String>,
+        #[arg(long = "version-code")]
+        version_codes: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
     Raw {
         #[arg(long)]
         account: Option<String>,
@@ -6800,6 +6864,8 @@ enum GooglePlayCommand {
         json_body: Option<String>,
         #[arg(long)]
         content_type: Option<String>,
+        #[arg(long)]
+        media_file: Option<String>,
         #[arg(long)]
         upload: bool,
         #[arg(long)]
@@ -7147,6 +7213,374 @@ enum GooglePlayDetailsCommand {
         #[arg(long, default_value = "text")]
         format: OutputFormat,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlayAssetCommand {
+    List {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long = "type")]
+        image_type: String,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Upload {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long = "type")]
+        image_type: String,
+        #[arg(long = "file")]
+        files: Vec<String>,
+        #[arg(long)]
+        clear_first: bool,
+        #[arg(long)]
+        validate: bool,
+        #[arg(long)]
+        changes_not_sent_for_review: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Clear {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long = "type")]
+        image_type: String,
+        #[arg(long)]
+        validate: bool,
+        #[arg(long)]
+        changes_not_sent_for_review: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum GooglePlayReleaseCommand {
+    Upload {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long)]
+        aab: Option<String>,
+        #[arg(long)]
+        apk: Option<String>,
+        #[arg(long, default_value = "internal")]
+        track: String,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        user_fraction: Option<f64>,
+        #[arg(long)]
+        release_name: Option<String>,
+        #[arg(long)]
+        in_app_update_priority: Option<i64>,
+        #[arg(long)]
+        validate: bool,
+        #[arg(long)]
+        changes_not_sent_for_review: bool,
+        #[arg(long = "version-code")]
+        version_codes: Vec<String>,
+        #[arg(long = "release-note")]
+        release_notes: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Status {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long)]
+        track: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Promote {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long, default_value = "internal")]
+        from: String,
+        #[arg(long, default_value = "production")]
+        to: String,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        user_fraction: Option<f64>,
+        #[arg(long)]
+        release_name: Option<String>,
+        #[arg(long)]
+        validate: bool,
+        #[arg(long)]
+        changes_not_sent_for_review: bool,
+        #[arg(long = "release-note")]
+        release_notes: Vec<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    SetStatus {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long = "package")]
+        package_name: Option<String>,
+        #[arg(long)]
+        language: Option<String>,
+        #[arg(long)]
+        project_id: Option<String>,
+        #[arg(long)]
+        developer_account: Option<String>,
+        #[arg(long)]
+        service_account_json: Option<String>,
+        #[arg(long)]
+        service_account_file: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        upload_base_url: Option<String>,
+        #[arg(long)]
+        custom_app_base_url: Option<String>,
+        #[arg(long, default_value = "production")]
+        track: String,
+        #[arg(long)]
+        status: Option<String>,
+        #[arg(long)]
+        user_fraction: Option<f64>,
+        #[arg(long)]
+        validate: bool,
+        #[arg(long)]
+        changes_not_sent_for_review: bool,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    Halt {
+        #[command(flatten)]
+        command: GooglePlayReleaseStatusMutationArgs,
+    },
+    Resume {
+        #[command(flatten)]
+        command: GooglePlayReleaseStatusMutationArgs,
+    },
+}
+
+#[derive(Debug, clap::Args)]
+struct GooglePlayReleaseStatusMutationArgs {
+    #[arg(long)]
+    account: Option<String>,
+    #[arg(long)]
+    env: Option<String>,
+    #[arg(long = "package")]
+    package_name: Option<String>,
+    #[arg(long)]
+    language: Option<String>,
+    #[arg(long)]
+    project_id: Option<String>,
+    #[arg(long)]
+    developer_account: Option<String>,
+    #[arg(long)]
+    service_account_json: Option<String>,
+    #[arg(long)]
+    service_account_file: Option<String>,
+    #[arg(long)]
+    base_url: Option<String>,
+    #[arg(long)]
+    upload_base_url: Option<String>,
+    #[arg(long)]
+    custom_app_base_url: Option<String>,
+    #[arg(long, default_value = "production")]
+    track: String,
+    #[arg(long)]
+    status: Option<String>,
+    #[arg(long)]
+    user_fraction: Option<f64>,
+    #[arg(long)]
+    validate: bool,
+    #[arg(long)]
+    changes_not_sent_for_review: bool,
+    #[arg(long)]
+    home: Option<PathBuf>,
+    #[arg(long)]
+    settings_file: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
+    #[arg(long)]
+    raw: bool,
+    #[arg(long, default_value = "text")]
+    format: OutputFormat,
 }
 
 #[derive(Debug, Subcommand)]
@@ -18232,6 +18666,449 @@ fn main() -> Result<()> {
                         )?
                     }
                 },
+                GooglePlayCommand::Asset { command } => match command {
+                    GooglePlayAssetCommand::List {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        image_type,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_asset_list(
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            image_type,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlayAssetCommand::Upload {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        image_type,
+                        files,
+                        clear_first,
+                        validate,
+                        changes_not_sent_for_review,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_asset_upload(
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            image_type,
+                            files,
+                            clear_first,
+                            validate,
+                            changes_not_sent_for_review,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlayAssetCommand::Clear {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        image_type,
+                        validate,
+                        changes_not_sent_for_review,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_asset_clear(
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            image_type,
+                            validate,
+                            changes_not_sent_for_review,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                },
+                GooglePlayCommand::Release { command } => match command {
+                    GooglePlayReleaseCommand::Upload {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        aab,
+                        apk,
+                        track,
+                        status,
+                        user_fraction,
+                        release_name,
+                        in_app_update_priority,
+                        validate,
+                        changes_not_sent_for_review,
+                        version_codes,
+                        release_notes,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_release_upload(
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            aab,
+                            apk,
+                            track,
+                            status,
+                            user_fraction,
+                            release_name,
+                            in_app_update_priority,
+                            validate,
+                            changes_not_sent_for_review,
+                            version_codes,
+                            release_notes,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlayReleaseCommand::Status {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        track,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_release_status(
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            track,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlayReleaseCommand::Promote {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        from,
+                        to,
+                        status,
+                        user_fraction,
+                        release_name,
+                        validate,
+                        changes_not_sent_for_review,
+                        release_notes,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_release_promote(
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            from,
+                            to,
+                            status,
+                            user_fraction,
+                            release_name,
+                            validate,
+                            changes_not_sent_for_review,
+                            release_notes,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlayReleaseCommand::SetStatus {
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        track,
+                        status,
+                        user_fraction,
+                        validate,
+                        changes_not_sent_for_review,
+                        home,
+                        settings_file,
+                        json,
+                        raw,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_google_play_release_set_status(
+                            "set-status",
+                            account,
+                            env,
+                            package_name,
+                            language,
+                            project_id,
+                            developer_account,
+                            service_account_json,
+                            service_account_file,
+                            base_url,
+                            upload_base_url,
+                            custom_app_base_url,
+                            track,
+                            status,
+                            user_fraction,
+                            validate,
+                            changes_not_sent_for_review,
+                            home,
+                            settings_file,
+                            format,
+                            raw,
+                        )?
+                    }
+                    GooglePlayReleaseCommand::Halt { command } => {
+                        let format = if command.json { OutputFormat::Json } else { command.format };
+                        run_google_play_release_set_status(
+                            "halt",
+                            command.account,
+                            command.env,
+                            command.package_name,
+                            command.language,
+                            command.project_id,
+                            command.developer_account,
+                            command.service_account_json,
+                            command.service_account_file,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.custom_app_base_url,
+                            command.track,
+                            command.status,
+                            command.user_fraction,
+                            command.validate,
+                            command.changes_not_sent_for_review,
+                            command.home,
+                            command.settings_file,
+                            format,
+                            command.raw,
+                        )?
+                    }
+                    GooglePlayReleaseCommand::Resume { command } => {
+                        let format = if command.json { OutputFormat::Json } else { command.format };
+                        run_google_play_release_set_status(
+                            "resume",
+                            command.account,
+                            command.env,
+                            command.package_name,
+                            command.language,
+                            command.project_id,
+                            command.developer_account,
+                            command.service_account_json,
+                            command.service_account_file,
+                            command.base_url,
+                            command.upload_base_url,
+                            command.custom_app_base_url,
+                            command.track,
+                            command.status,
+                            command.user_fraction,
+                            command.validate,
+                            command.changes_not_sent_for_review,
+                            command.home,
+                            command.settings_file,
+                            format,
+                            command.raw,
+                        )?
+                    }
+                },
+                GooglePlayCommand::Apply {
+                    account,
+                    env,
+                    package_name,
+                    language,
+                    project_id,
+                    developer_account,
+                    service_account_json,
+                    service_account_file,
+                    base_url,
+                    upload_base_url,
+                    custom_app_base_url,
+                    metadata_dir,
+                    aab,
+                    apk,
+                    track,
+                    status,
+                    user_fraction,
+                    release_name,
+                    validate,
+                    changes_not_sent_for_review,
+                    release_notes,
+                    version_codes,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_google_play_apply(
+                        account,
+                        env,
+                        package_name,
+                        language,
+                        project_id,
+                        developer_account,
+                        service_account_json,
+                        service_account_file,
+                        base_url,
+                        upload_base_url,
+                        custom_app_base_url,
+                        metadata_dir,
+                        aab,
+                        apk,
+                        track,
+                        status,
+                        user_fraction,
+                        release_name,
+                        validate,
+                        changes_not_sent_for_review,
+                        release_notes,
+                        version_codes,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
                 GooglePlayCommand::Raw {
                     account,
                     env,
@@ -18251,6 +19128,7 @@ fn main() -> Result<()> {
                     body,
                     json_body,
                     content_type,
+                    media_file,
                     upload,
                     custom_app,
                     home,
@@ -18279,6 +19157,7 @@ fn main() -> Result<()> {
                         body,
                         json_body,
                         content_type,
+                        media_file,
                         upload,
                         custom_app,
                         home,
@@ -31219,6 +32098,255 @@ fn parse_google_play_json_body(value: Option<String>) -> Result<Option<Value>> {
     }
 }
 
+fn parse_google_play_version_codes(values: Vec<String>) -> Result<Vec<i64>> {
+    let mut out = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for raw in values {
+        for token in raw.split(',') {
+            let token = token.trim();
+            if token.is_empty() {
+                continue;
+            }
+            let value = token
+                .parse::<i64>()
+                .map_err(|_| anyhow::anyhow!("invalid version code {token:?}"))?;
+            if value <= 0 {
+                anyhow::bail!("invalid version code {token:?}");
+            }
+            if seen.insert(value) {
+                out.push(value);
+            }
+        }
+    }
+    out.sort_unstable();
+    Ok(out)
+}
+
+fn parse_google_play_release_notes(values: Vec<String>) -> Result<Vec<Value>> {
+    let mut notes = Vec::new();
+    for entry in values {
+        let entry = entry.trim();
+        if entry.is_empty() {
+            continue;
+        }
+        let Some((language, text)) = entry.split_once('=') else {
+            anyhow::bail!("invalid release note {entry:?} (expected <language>=<text>)");
+        };
+        let language = language.trim();
+        let text = text.trim();
+        if language.is_empty() || text.is_empty() {
+            anyhow::bail!("invalid release note {entry:?} (language and text required)");
+        }
+        notes.push(serde_json::json!({"language": language, "text": text}));
+    }
+    Ok(notes)
+}
+
+fn normalize_google_play_release_status(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "" | "statusunspecified" | "unspecified" => String::new(),
+        "draft" => "draft".to_owned(),
+        "inprogress" | "in_progress" | "rollout" | "rolling" => "inProgress".to_owned(),
+        "halted" | "paused" => "halted".to_owned(),
+        "completed" | "full" | "published" | "production" => "completed".to_owned(),
+        _ => String::new(),
+    }
+}
+
+fn normalize_google_play_image_type(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "phonescreenshots" | "phone" | "phone_screenshots" | "phone-screenshots" => "phoneScreenshots".to_owned(),
+        "seveninchscreenshots" | "7inch" | "7-inch" | "seven_inch" | "seven-inch" | "seven_inch_screenshots" | "seven-inch-screenshots" => "sevenInchScreenshots".to_owned(),
+        "teninchscreenshots" | "10inch" | "10-inch" | "ten_inch" | "ten-inch" | "ten_inch_screenshots" | "ten-inch-screenshots" => "tenInchScreenshots".to_owned(),
+        "tvscreenshots" | "tv" | "tv_screenshots" | "tv-screenshots" => "tvScreenshots".to_owned(),
+        "wearscreenshots" | "wear" | "wear_screenshots" | "wear-screenshots" => "wearScreenshots".to_owned(),
+        "icon" | "appicon" | "app_icon" | "app-icon" => "icon".to_owned(),
+        "featuregraphic" | "feature_graphic" | "feature-graphic" => "featureGraphic".to_owned(),
+        "tvbanner" | "tv_banner" | "tv-banner" => "tvBanner".to_owned(),
+        _ => String::new(),
+    }
+}
+
+fn detect_google_play_media_content_type(path: &str, fallback: &str) -> String {
+    let path = path.trim().to_ascii_lowercase();
+    if path.ends_with(".png") {
+        "image/png".to_owned()
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg".to_owned()
+    } else if path.ends_with(".webp") {
+        "image/webp".to_owned()
+    } else if path.ends_with(".apk") {
+        "application/vnd.android.package-archive".to_owned()
+    } else {
+        fallback.to_owned()
+    }
+}
+
+fn parse_google_play_version_code_value(value: &Value) -> i64 {
+    match value {
+        Value::Number(number) => number.as_i64().filter(|value| *value > 0).unwrap_or_default(),
+        Value::String(text) => text.trim().parse::<i64>().ok().filter(|value| *value > 0).unwrap_or_default(),
+        _ => 0,
+    }
+}
+
+fn unique_sorted_google_play_version_codes(values: Vec<i64>) -> Vec<i64> {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out = Vec::new();
+    for value in values {
+        if value > 0 && seen.insert(value) {
+            out.push(value);
+        }
+    }
+    out.sort_unstable();
+    out
+}
+
+fn google_play_version_codes_to_strings(values: &[i64]) -> Vec<String> {
+    values.iter().map(|value| value.to_string()).collect()
+}
+
+fn extract_google_play_track_version_codes(track: &Value) -> Vec<i64> {
+    let Some(releases) = track.get("releases").and_then(Value::as_array) else {
+        return Vec::new();
+    };
+    let mut codes = Vec::new();
+    for release in releases {
+        let Some(version_codes) = release.get("versionCodes").and_then(Value::as_array) else {
+            continue;
+        };
+        for code in version_codes {
+            let parsed = parse_google_play_version_code_value(code);
+            if parsed > 0 {
+                codes.push(parsed);
+            }
+        }
+    }
+    unique_sorted_google_play_version_codes(codes)
+}
+
+fn collect_google_play_image_uploads(images_root: &Path) -> Result<Option<std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<String>>>>> {
+    if !images_root.exists() {
+        return Ok(None);
+    }
+    if !images_root.is_dir() {
+        anyhow::bail!("images path must be a directory: {}", images_root.display());
+    }
+    let mut result = std::collections::BTreeMap::new();
+    for lang_entry in std::fs::read_dir(images_root)? {
+        let lang_entry = lang_entry?;
+        if !lang_entry.file_type()?.is_dir() {
+            continue;
+        }
+        let lang = lang_entry.file_name().to_string_lossy().trim().to_owned();
+        if lang.is_empty() {
+            continue;
+        }
+        for type_entry in std::fs::read_dir(lang_entry.path())? {
+            let type_entry = type_entry?;
+            if !type_entry.file_type()?.is_dir() {
+                continue;
+            }
+            let image_type = normalize_google_play_image_type(&type_entry.file_name().to_string_lossy());
+            if image_type.is_empty() {
+                continue;
+            }
+            let mut files = Vec::new();
+            for file in std::fs::read_dir(type_entry.path())? {
+                let file = file?;
+                if !file.file_type()?.is_file() {
+                    continue;
+                }
+                let path = file.path();
+                let lower = path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().to_ascii_lowercase())
+                    .unwrap_or_default();
+                if lower.ends_with(".png")
+                    || lower.ends_with(".jpg")
+                    || lower.ends_with(".jpeg")
+                    || lower.ends_with(".webp")
+                {
+                    files.push(path.display().to_string());
+                }
+            }
+            files.sort();
+            if !files.is_empty() {
+                result
+                    .entry(lang.clone())
+                    .or_insert_with(std::collections::BTreeMap::new)
+                    .insert(image_type, files);
+            }
+        }
+    }
+    if result.is_empty() { Ok(None) } else { Ok(Some(result)) }
+}
+
+fn load_google_play_metadata_bundle(
+    metadata_dir: &str,
+) -> Result<(
+    Option<Value>,
+    Option<std::collections::BTreeMap<String, Value>>,
+    Option<std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<String>>>>,
+)> {
+    let metadata_dir = metadata_dir.trim();
+    let metadata_dir = if metadata_dir.is_empty() { "play-store" } else { metadata_dir };
+    let metadata_path = PathBuf::from(metadata_dir);
+    if !metadata_path.exists() {
+        return Ok((None, None, None));
+    }
+    if !metadata_path.is_dir() {
+        anyhow::bail!("metadata dir is not a directory: {}", metadata_path.display());
+    }
+
+    let details_path = metadata_path.join("details.json");
+    let details = if details_path.exists() {
+        Some(serde_json::from_slice::<Value>(&std::fs::read(&details_path)?)?)
+    } else {
+        None
+    };
+
+    let listings_dir = metadata_path.join("listings");
+    let mut listings = std::collections::BTreeMap::new();
+    if listings_dir.is_dir() {
+        for entry in std::fs::read_dir(&listings_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let path = entry.path();
+            let lower = path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            if !lower.ends_with(".json") {
+                continue;
+            }
+            let mut payload = serde_json::from_slice::<Value>(&std::fs::read(&path)?)?;
+            let language = payload
+                .get("language")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+                .or_else(|| path.file_stem().map(|stem| stem.to_string_lossy().trim().to_owned()))
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| anyhow::anyhow!("listing file {} missing language", path.display()))?;
+            if let Some(object) = payload.as_object_mut() {
+                object.remove("language");
+            }
+            listings.insert(language, payload);
+        }
+    }
+
+    let images = collect_google_play_image_uploads(&metadata_path.join("images"))?;
+    Ok((
+        details,
+        if listings.is_empty() { None } else { Some(listings) },
+        images,
+    ))
+}
+
 fn resolve_google_play_package(runtime: &GooglePlayRuntime, package_name: Option<String>) -> Result<String> {
     if let Some(value) = package_name.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty()) {
         return Ok(value);
@@ -31458,6 +32586,7 @@ fn run_google_play_raw(
     body: Option<String>,
     json_body: Option<String>,
     content_type: Option<String>,
+    media_file: Option<String>,
     upload: bool,
     custom_app: bool,
     home: Option<PathBuf>,
@@ -31494,6 +32623,7 @@ fn run_google_play_raw(
             headers: parse_google_play_headers(headers)?,
             json_body,
             raw_body: parse_google_play_body(body)?,
+            media_path: media_file.unwrap_or_default(),
             content_type: content_type.unwrap_or_default(),
             upload,
             custom_app_base: custom_app,
@@ -31874,6 +33004,935 @@ fn run_google_play_details_update(
         },
     )?;
     print_google_play_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_asset_list(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    image_type: String,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language.clone(),
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let lang = resolve_google_play_language(&runtime, language);
+    let image_type = normalize_google_play_image_type(&image_type);
+    if image_type.is_empty() {
+        anyhow::bail!("invalid image type");
+    }
+    let response = google_play_run_edit(&runtime, &package_name, false, false, false, |edit_id| {
+        execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "GET".to_owned(),
+                path: format!(
+                    "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+                    package_name, edit_id, lang, image_type
+                ),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)
+    })?;
+    print_google_play_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_asset_clear(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    image_type: String,
+    validate: bool,
+    changes_not_sent_for_review: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language.clone(),
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let lang = resolve_google_play_language(&runtime, language);
+    let image_type = normalize_google_play_image_type(&image_type);
+    if image_type.is_empty() {
+        anyhow::bail!("invalid image type");
+    }
+    let response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
+        execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "DELETE".to_owned(),
+                path: format!(
+                    "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+                    package_name, edit_id, lang, image_type
+                ),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)
+    })?;
+    print_google_play_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_asset_upload(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    image_type: String,
+    files: Vec<String>,
+    clear_first: bool,
+    validate: bool,
+    changes_not_sent_for_review: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language.clone(),
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let lang = resolve_google_play_language(&runtime, language);
+    let image_type = normalize_google_play_image_type(&image_type);
+    if image_type.is_empty() {
+        anyhow::bail!("invalid image type");
+    }
+    let mut file_paths = Vec::new();
+    for file in files {
+        let file = file.trim();
+        if file.is_empty() {
+            continue;
+        }
+        let metadata = std::fs::metadata(file)
+            .map_err(|err| anyhow::anyhow!("invalid --file {:?}: {err}", file))?;
+        if !metadata.is_file() {
+            anyhow::bail!("invalid --file {:?}: not a file", file);
+        }
+        file_paths.push(file.to_owned());
+    }
+    if file_paths.is_empty() {
+        anyhow::bail!("at least one valid --file is required");
+    }
+    file_paths.sort();
+    let response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
+        let base_path = format!(
+            "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+            package_name, edit_id, lang, image_type
+        );
+        if clear_first {
+            execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "DELETE".to_owned(),
+                    path: base_path.clone(),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+        }
+        for file in &file_paths {
+            execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("/upload{base_path}"),
+                    params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                    media_path: file.clone(),
+                    content_type: detect_google_play_media_content_type(file, "image/*"),
+                    upload: true,
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+        }
+        Ok(GooglePlayAPIResponse {
+            status_code: 200,
+            status: "OK".to_owned(),
+            request_id: String::new(),
+            content_type: "application/json".to_owned(),
+            data: None,
+            body: String::new(),
+        })
+    })?;
+    print_google_play_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_release_upload(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    aab: Option<String>,
+    apk: Option<String>,
+    track: String,
+    status: Option<String>,
+    user_fraction: Option<f64>,
+    release_name: Option<String>,
+    in_app_update_priority: Option<i64>,
+    validate: bool,
+    changes_not_sent_for_review: bool,
+    version_codes: Vec<String>,
+    release_notes: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language,
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let aab = aab.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let apk = apk.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    if aab.is_some() && apk.is_some() {
+        anyhow::bail!("use either --aab or --apk in a single release upload");
+    }
+    if let Some(file) = &aab {
+        if !std::fs::metadata(file)?.is_file() {
+            anyhow::bail!("{file} is not a file");
+        }
+    }
+    if let Some(file) = &apk {
+        if !std::fs::metadata(file)?.is_file() {
+            anyhow::bail!("{file} is not a file");
+        }
+    }
+    let version_codes = parse_google_play_version_codes(version_codes)?;
+    let release_notes = parse_google_play_release_notes(release_notes)?;
+    if aab.is_none() && apk.is_none() && version_codes.is_empty() {
+        anyhow::bail!("provide --aab, --apk, or at least one --version-code");
+    }
+    let user_fraction = user_fraction.unwrap_or_default();
+    if !(0.0..=1.0).contains(&user_fraction) {
+        anyhow::bail!("--user-fraction must be between 0 and 1");
+    }
+    let mut status = normalize_google_play_release_status(status.as_deref().unwrap_or_default());
+    if status.is_empty() {
+        status = if user_fraction > 0.0 { "inProgress".to_owned() } else { "completed".to_owned() };
+    }
+    let update_priority = in_app_update_priority.unwrap_or(-1);
+    if update_priority > 5 {
+        anyhow::bail!("--in-app-update-priority must be between 0 and 5");
+    }
+    let mut track_response: Option<GooglePlayAPIResponse> = None;
+    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
+        let mut codes = version_codes.clone();
+        if let Some(file) = &aab {
+            let upload = execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/bundles", package_name, edit_id),
+                    params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                    media_path: file.clone(),
+                    content_type: "application/octet-stream".to_owned(),
+                    upload: true,
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            if let Some(data) = &upload.data {
+                let code = parse_google_play_version_code_value(&data["versionCode"]);
+                if code > 0 {
+                    codes.push(code);
+                }
+            }
+        }
+        if let Some(file) = &apk {
+            let upload = execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "POST".to_owned(),
+                    path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/apks", package_name, edit_id),
+                    params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                    media_path: file.clone(),
+                    content_type: "application/vnd.android.package-archive".to_owned(),
+                    upload: true,
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            if let Some(data) = &upload.data {
+                let code = parse_google_play_version_code_value(&data["versionCode"]);
+                if code > 0 {
+                    codes.push(code);
+                }
+            }
+        }
+        codes = unique_sorted_google_play_version_codes(codes);
+        if codes.is_empty() {
+            anyhow::bail!("no version codes resolved for release");
+        }
+        let mut release = serde_json::json!({
+            "status": status,
+            "versionCodes": google_play_version_codes_to_strings(&codes),
+        });
+        if user_fraction > 0.0 {
+            release["userFraction"] = serde_json::json!(user_fraction);
+        }
+        if let Some(name) = release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+            release["name"] = Value::String(name.to_owned());
+        }
+        if !release_notes.is_empty() {
+            release["releaseNotes"] = Value::Array(release_notes.clone());
+        }
+        if update_priority >= 0 {
+            release["inAppUpdatePriority"] = serde_json::json!(update_priority);
+        }
+        let response = execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "PUT".to_owned(),
+                path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track.trim()),
+                json_body: Some(serde_json::json!({
+                    "track": track.trim(),
+                    "releases": [release],
+                })),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        track_response = Some(response);
+        Ok(GooglePlayAPIResponse {
+            status_code: 200,
+            status: "OK".to_owned(),
+            request_id: String::new(),
+            content_type: "application/json".to_owned(),
+            data: None,
+            body: String::new(),
+        })
+    })?;
+    if matches!(format, OutputFormat::Json) {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "track_update": track_response,
+                "edit_result": commit_response,
+            }))?
+        );
+        return Ok(());
+    }
+    if let Some(track_response) = track_response.as_ref() {
+        print_google_play_api_response(track_response, format, raw)?;
+    }
+    print_google_play_api_response(&commit_response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_release_status(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    track: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language,
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let track = track.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let response = google_play_run_edit(&runtime, &package_name, false, false, false, |edit_id| {
+        execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "GET".to_owned(),
+                path: if let Some(track) = &track {
+                    format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track)
+                } else {
+                    format!("/androidpublisher/v3/applications/{}/edits/{}/tracks", package_name, edit_id)
+                },
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)
+    })?;
+    print_google_play_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_release_promote(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    from_track: String,
+    to_track: String,
+    status: Option<String>,
+    user_fraction: Option<f64>,
+    release_name: Option<String>,
+    validate: bool,
+    changes_not_sent_for_review: bool,
+    release_notes: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language,
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let release_notes = parse_google_play_release_notes(release_notes)?;
+    let mut status = normalize_google_play_release_status(status.as_deref().unwrap_or("completed"));
+    if status.is_empty() {
+        status = "completed".to_owned();
+    }
+    let user_fraction = user_fraction.unwrap_or_default();
+    if !(0.0..=1.0).contains(&user_fraction) {
+        anyhow::bail!("--user-fraction must be between 0 and 1");
+    }
+    let mut track_response: Option<GooglePlayAPIResponse> = None;
+    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
+        let source = execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "GET".to_owned(),
+                path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, from_track.trim()),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        let codes = source
+            .data
+            .as_ref()
+            .map(extract_google_play_track_version_codes)
+            .unwrap_or_default();
+        if codes.is_empty() {
+            anyhow::bail!("source track {} has no releases/version codes", from_track.trim());
+        }
+        let mut release = serde_json::json!({
+            "status": status,
+            "versionCodes": google_play_version_codes_to_strings(&codes),
+        });
+        if user_fraction > 0.0 {
+            release["userFraction"] = serde_json::json!(user_fraction);
+        }
+        if let Some(name) = release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+            release["name"] = Value::String(name.to_owned());
+        }
+        if !release_notes.is_empty() {
+            release["releaseNotes"] = Value::Array(release_notes.clone());
+        }
+        let response = execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "PUT".to_owned(),
+                path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, to_track.trim()),
+                json_body: Some(serde_json::json!({
+                    "track": to_track.trim(),
+                    "releases": [release],
+                })),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        track_response = Some(response);
+        Ok(GooglePlayAPIResponse {
+            status_code: 200,
+            status: "OK".to_owned(),
+            request_id: String::new(),
+            content_type: "application/json".to_owned(),
+            data: None,
+            body: String::new(),
+        })
+    })?;
+    if matches!(format, OutputFormat::Json) {
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"track_update": track_response, "edit_result": commit_response}))?);
+        return Ok(());
+    }
+    if let Some(track_response) = track_response.as_ref() {
+        print_google_play_api_response(track_response, format, raw)?;
+    }
+    print_google_play_api_response(&commit_response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_release_set_status(
+    mode: &str,
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    track: String,
+    status: Option<String>,
+    user_fraction: Option<f64>,
+    validate: bool,
+    changes_not_sent_for_review: bool,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language,
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let mut status = normalize_google_play_release_status(status.as_deref().unwrap_or_default());
+    if status.is_empty() {
+        status = match mode {
+            "halt" => "halted".to_owned(),
+            "resume" => "inProgress".to_owned(),
+            _ => anyhow::bail!("--status is required"),
+        };
+    }
+    let user_fraction = user_fraction.unwrap_or_default();
+    if !(0.0..=1.0).contains(&user_fraction) {
+        anyhow::bail!("--user-fraction must be between 0 and 1");
+    }
+    let mut track_response: Option<GooglePlayAPIResponse> = None;
+    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
+        let path = format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track.trim());
+        let current = execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "GET".to_owned(),
+                path: path.clone(),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        let mut releases = current
+            .data
+            .as_ref()
+            .and_then(|data| data.get("releases"))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if releases.is_empty() {
+            anyhow::bail!("track {} has no releases", track.trim());
+        }
+        for release in &mut releases {
+            if let Some(object) = release.as_object_mut() {
+                object.insert("status".to_owned(), Value::String(status.clone()));
+                if status == "inProgress" && user_fraction > 0.0 {
+                    object.insert("userFraction".to_owned(), serde_json::json!(user_fraction));
+                } else {
+                    object.remove("userFraction");
+                }
+            }
+        }
+        let response = execute_play_api_request(
+            &runtime,
+            &GooglePlayAPIRequest {
+                method: "PUT".to_owned(),
+                path,
+                json_body: Some(serde_json::json!({
+                    "track": track.trim(),
+                    "releases": releases,
+                })),
+                ..GooglePlayAPIRequest::default()
+            },
+        )
+        .map_err(anyhow::Error::msg)?;
+        track_response = Some(response);
+        Ok(GooglePlayAPIResponse {
+            status_code: 200,
+            status: "OK".to_owned(),
+            request_id: String::new(),
+            content_type: "application/json".to_owned(),
+            data: None,
+            body: String::new(),
+        })
+    })?;
+    if matches!(format, OutputFormat::Json) {
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"track_update": track_response, "edit_result": commit_response}))?);
+        return Ok(());
+    }
+    if let Some(track_response) = track_response.as_ref() {
+        print_google_play_api_response(track_response, format, raw)?;
+    }
+    print_google_play_api_response(&commit_response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_google_play_apply(
+    account: Option<String>,
+    environment: Option<String>,
+    package_name: Option<String>,
+    language: Option<String>,
+    project_id: Option<String>,
+    developer_account: Option<String>,
+    service_account_json: Option<String>,
+    service_account_file: Option<String>,
+    base_url: Option<String>,
+    upload_base_url: Option<String>,
+    custom_app_base_url: Option<String>,
+    metadata_dir: String,
+    aab: Option<String>,
+    apk: Option<String>,
+    track: Option<String>,
+    status: Option<String>,
+    user_fraction: Option<f64>,
+    release_name: Option<String>,
+    validate: bool,
+    changes_not_sent_for_review: bool,
+    release_notes: Vec<String>,
+    version_codes: Vec<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let runtime = load_google_play_runtime(
+        account,
+        environment,
+        package_name.clone(),
+        language,
+        project_id,
+        developer_account,
+        service_account_json,
+        service_account_file,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        home,
+        settings_file,
+    )?;
+    let package_name = resolve_google_play_package(&runtime, package_name)?;
+    let mut version_codes = parse_google_play_version_codes(version_codes)?;
+    let release_notes = parse_google_play_release_notes(release_notes)?;
+    let (details_payload, listing_payloads, image_uploads) = load_google_play_metadata_bundle(&metadata_dir)?;
+    let aab = aab.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let apk = apk.map(|value| value.trim().to_owned()).filter(|value| !value.is_empty());
+    let artifact_track = track
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+        .or_else(|| if aab.is_some() || apk.is_some() { Some("internal".to_owned()) } else { None });
+    let user_fraction = user_fraction.unwrap_or_default();
+    if !(0.0..=1.0).contains(&user_fraction) {
+        anyhow::bail!("--user-fraction must be between 0 and 1");
+    }
+    let mut status = normalize_google_play_release_status(status.as_deref().unwrap_or_default());
+    if status.is_empty() && artifact_track.is_some() {
+        status = if user_fraction > 0.0 { "inProgress".to_owned() } else { "completed".to_owned() };
+    }
+    let mut summary = serde_json::json!({
+        "details_updated": false,
+        "listings_updated": 0,
+        "images_uploaded": 0,
+        "track_updated": false,
+    });
+    let commit_response = google_play_run_edit(&runtime, &package_name, validate, changes_not_sent_for_review, true, |edit_id| {
+        if let Some(details_payload) = details_payload.as_ref() {
+            execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "PATCH".to_owned(),
+                    path: format!("/androidpublisher/v3/applications/{}/edits/{}/details", package_name, edit_id),
+                    json_body: Some(details_payload.clone()),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            summary["details_updated"] = Value::Bool(true);
+        }
+        if let Some(listing_payloads) = listing_payloads.as_ref() {
+            for (lang, payload) in listing_payloads {
+                execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "PATCH".to_owned(),
+                        path: format!("/androidpublisher/v3/applications/{}/edits/{}/listings/{}", package_name, edit_id, lang),
+                        json_body: Some(payload.clone()),
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+            }
+            summary["listings_updated"] = serde_json::json!(listing_payloads.len());
+        }
+        if let Some(image_uploads) = image_uploads.as_ref() {
+            let mut uploaded = 0;
+            for (lang, image_types) in image_uploads {
+                for (image_type, files) in image_types {
+                    let base_path = format!(
+                        "/androidpublisher/v3/applications/{}/edits/{}/listings/{}/{}",
+                        package_name, edit_id, lang, image_type
+                    );
+                    execute_play_api_request(
+                        &runtime,
+                        &GooglePlayAPIRequest {
+                            method: "DELETE".to_owned(),
+                            path: base_path.clone(),
+                            ..GooglePlayAPIRequest::default()
+                        },
+                    )
+                    .map_err(anyhow::Error::msg)?;
+                    for file in files {
+                        execute_play_api_request(
+                            &runtime,
+                            &GooglePlayAPIRequest {
+                                method: "POST".to_owned(),
+                                path: format!("/upload{base_path}"),
+                                params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                                media_path: file.clone(),
+                                content_type: detect_google_play_media_content_type(file, "image/*"),
+                                upload: true,
+                                ..GooglePlayAPIRequest::default()
+                            },
+                        )
+                        .map_err(anyhow::Error::msg)?;
+                        uploaded += 1;
+                    }
+                }
+            }
+            summary["images_uploaded"] = serde_json::json!(uploaded);
+        }
+        if let Some(track) = artifact_track.as_ref() {
+            if let Some(file) = &aab {
+                let upload = execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "POST".to_owned(),
+                        path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/bundles", package_name, edit_id),
+                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                        media_path: file.clone(),
+                        content_type: "application/octet-stream".to_owned(),
+                        upload: true,
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+                if let Some(data) = &upload.data {
+                    let code = parse_google_play_version_code_value(&data["versionCode"]);
+                    if code > 0 {
+                        version_codes.push(code);
+                    }
+                }
+            }
+            if let Some(file) = &apk {
+                let upload = execute_play_api_request(
+                    &runtime,
+                    &GooglePlayAPIRequest {
+                        method: "POST".to_owned(),
+                        path: format!("/upload/androidpublisher/v3/applications/{}/edits/{}/apks", package_name, edit_id),
+                        params: BTreeMap::from([("uploadType".to_owned(), "media".to_owned())]),
+                        media_path: file.clone(),
+                        content_type: "application/vnd.android.package-archive".to_owned(),
+                        upload: true,
+                        ..GooglePlayAPIRequest::default()
+                    },
+                )
+                .map_err(anyhow::Error::msg)?;
+                if let Some(data) = &upload.data {
+                    let code = parse_google_play_version_code_value(&data["versionCode"]);
+                    if code > 0 {
+                        version_codes.push(code);
+                    }
+                }
+            }
+            version_codes = unique_sorted_google_play_version_codes(version_codes.clone());
+            if version_codes.is_empty() {
+                anyhow::bail!("artifact track requested but no version codes resolved");
+            }
+            let mut release = serde_json::json!({
+                "status": if status.is_empty() { "completed" } else { status.as_str() },
+                "versionCodes": google_play_version_codes_to_strings(&version_codes),
+            });
+            if user_fraction > 0.0 {
+                release["userFraction"] = serde_json::json!(user_fraction);
+            }
+            if let Some(name) = release_name.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+                release["name"] = Value::String(name.to_owned());
+            }
+            if !release_notes.is_empty() {
+                release["releaseNotes"] = Value::Array(release_notes.clone());
+            }
+            execute_play_api_request(
+                &runtime,
+                &GooglePlayAPIRequest {
+                    method: "PUT".to_owned(),
+                    path: format!("/androidpublisher/v3/applications/{}/edits/{}/tracks/{}", package_name, edit_id, track),
+                    json_body: Some(serde_json::json!({
+                        "track": track,
+                        "releases": [release],
+                    })),
+                    ..GooglePlayAPIRequest::default()
+                },
+            )
+            .map_err(anyhow::Error::msg)?;
+            summary["track_updated"] = Value::Bool(true);
+            summary["track"] = Value::String(track.clone());
+            summary["version_codes"] = serde_json::json!(google_play_version_codes_to_strings(&version_codes));
+        }
+        let no_changes = !summary["details_updated"].as_bool().unwrap_or(false)
+            && summary["listings_updated"].as_i64().unwrap_or_default() == 0
+            && summary["images_uploaded"].as_i64().unwrap_or_default() == 0
+            && !summary["track_updated"].as_bool().unwrap_or(false);
+        if no_changes {
+            anyhow::bail!("no changes detected in metadata/apply inputs");
+        }
+        Ok(GooglePlayAPIResponse {
+            status_code: 200,
+            status: "OK".to_owned(),
+            request_id: String::new(),
+            content_type: "application/json".to_owned(),
+            data: None,
+            body: String::new(),
+        })
+    })?;
+    if matches!(format, OutputFormat::Json) {
+        println!("{}", serde_json::to_string_pretty(&serde_json::json!({"summary": summary, "edit_result": commit_response}))?);
+        return Ok(());
+    }
+    println!(
+        "Apply summary: details_updated={} listings_updated={} images_uploaded={} track_updated={}",
+        summary["details_updated"].as_bool().unwrap_or(false),
+        summary["listings_updated"].as_i64().unwrap_or_default(),
+        summary["images_uploaded"].as_i64().unwrap_or_default(),
+        summary["track_updated"].as_bool().unwrap_or(false),
+    );
+    print_google_play_api_response(&commit_response, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]

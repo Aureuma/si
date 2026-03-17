@@ -302,6 +302,7 @@ pub struct GooglePlayAPIRequest {
     pub headers: BTreeMap<String, String>,
     pub json_body: Option<Value>,
     pub raw_body: String,
+    pub media_path: String,
     pub content_type: String,
     pub upload: bool,
     pub custom_app_base: bool,
