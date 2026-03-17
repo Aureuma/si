@@ -65,15 +65,18 @@ Update release version constants:
 ./tools/test.sh
 ./tools/test-install-si.sh
 ./tools/test-install-si-npm.sh
+./tools/test-install-si-homebrew.sh
 ./tools/test-install-si-docker.sh
 ./si analyze --module tools/si
 ./si build self release-assets --version vX.Y.Z --out-dir .artifacts/release-preflight
+tools/release/verify-cli-release-assets.sh --version vX.Y.Z --out-dir .artifacts/release-preflight
 git add CHANGELOG.md tools/si/version.go
 git commit -m "Bump version to vX.Y.Z"
 ```
 - Keep release prep changes in a dedicated commit.
 - The release-assets preflight confirms archive packaging before publishing a GitHub Release.
 - Include the npm smoke lane so user-owned global-prefix installs stay verified before release.
+- Include the Homebrew smoke lane so the tap formula still installs the Rust-primary binary plus `si-go`.
 
 ### 5) Create an annotated tag for the release commit
 ```
@@ -173,8 +176,9 @@ curl -fsSL https://raw.githubusercontent.com/Aureuma/homebrew-si/main/Formula/si
 
 Notes:
 - The workflow validates that `tools/si/version.go` matches the release tag.
-- The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path.
+- The workflow uses `tools/release/build-cli-release-assets.sh` as the single build path and `tools/release/verify-cli-release-assets.sh` as the local archive verification path before upload.
 - A failed workflow means release notes/tag were published, but binary assets were not fully attached.
+- npm verification now includes a real installed-launcher check against the published release assets, not just registry visibility.
 - Use `tools/release/npm/publish-npm-package.sh --version vX.Y.Z --dry-run` for local npm publish rehearsal.
 - Use `tools/release/npm/publish-npm-from-vault.sh -- --version vX.Y.Z` for vault-backed publish (default key: `NPM_GAT_AUREUMA_VANGUARDA`).
 - Use `tools/release/homebrew/render-core-formula.sh --version vX.Y.Z --output packaging/homebrew-core/si.rb` to refresh core-submission formula metadata.

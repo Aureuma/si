@@ -27,7 +27,7 @@ This updates:
 1. Ensure release tag `vX.Y.Z` is published.
 2. Regenerate `packaging/homebrew-core/si.rb`.
 3. Validate formula style/audit in a Homebrew-enabled environment.
-4. Confirm `go build ./tools/si` succeeds from the source tarball context.
+4. Confirm the source tarball formula can build the Rust primary binary from `rust/crates/si-cli` and the Go compatibility adapter from `./tools/si`.
 5. Open PR to `Homebrew/homebrew-core` with `si.rb` and test evidence.
 
 ## Current tap formula automation
