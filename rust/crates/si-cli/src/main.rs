@@ -17040,8 +17040,8 @@ struct InstallerRunConfig {
     force: bool,
     uninstall: bool,
     go_mode: String,
-    build_tags: Option<String>,
-    build_ldflags: String,
+    _build_tags: Option<String>,
+    _build_ldflags: String,
     os_override: Option<String>,
     arch_override: Option<String>,
     dry_run: bool,
@@ -17074,10 +17074,10 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     }
 
     let (source_dir, _cleanup) = resolve_installer_source_dir(&cfg)?;
-    let go_bin = ensure_installer_go_toolchain(&cfg.go_mode)?;
+    let cargo_bin = ensure_installer_cargo_toolchain(&cfg.go_mode)?;
     if cfg.dry_run {
         if !cfg.quiet {
-            println!("go: using system go ({go_bin})");
+            println!("rust: using system cargo ({cargo_bin})");
         }
         return Ok(());
     }
@@ -17086,6 +17086,7 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     let install_dir = install_path
         .parent()
         .ok_or_else(|| anyhow!("invalid install path {}", install_path.display()))?;
+    let cargo_target_dir = tempfile::tempdir().context("create temp cargo target dir")?;
     let tmp_output = tempfile::Builder::new()
         .prefix("si-build-")
         .tempfile_in(install_dir)
@@ -17093,26 +17094,33 @@ fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
     let tmp_output_path = tmp_output.path().to_path_buf();
     drop(tmp_output);
 
-    let mut command = StdCommand::new(&go_bin);
+    let mut command = StdCommand::new(&cargo_bin);
     command
         .current_dir(&source_dir)
+        .env("CARGO_TARGET_DIR", cargo_target_dir.path())
         .arg("build")
-        .arg("-trimpath")
-        .arg("-buildvcs=false")
-        .arg("-o")
-        .arg(&tmp_output_path);
-    if let Some(tags) = cfg.build_tags.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-        command.arg("-tags").arg(tags);
-    }
-    let ldflags = cfg.build_ldflags.trim();
-    if !ldflags.is_empty() {
-        command.arg("-ldflags").arg(ldflags);
-    }
-    command.arg("./tools/si");
-    let status = command.status().context("run go build for installer")?;
+        .arg("--release")
+        .arg("--locked")
+        .arg("--manifest-path")
+        .arg("rust/crates/si-cli/Cargo.toml")
+        .arg("--bin")
+        .arg("si-rs");
+    let status = command.status().context("run cargo build for installer")?;
     if !status.success() {
         return Err(anyhow!("build failed: {}", status));
     }
+    let built_binary = cargo_target_dir.path().join("release").join(if cfg!(windows) {
+        "si-rs.exe"
+    } else {
+        "si-rs"
+    });
+    fs::copy(&built_binary, &tmp_output_path).with_context(|| {
+        format!(
+            "copy built installer binary {} to {}",
+            built_binary.display(),
+            tmp_output_path.display()
+        )
+    })?;
 
     #[cfg(unix)]
     {
@@ -17247,14 +17255,14 @@ fn validate_installer_source_dir(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn ensure_installer_go_toolchain(go_mode: &str) -> Result<String> {
-    let output = StdCommand::new("go").arg("version").output();
+fn ensure_installer_cargo_toolchain(go_mode: &str) -> Result<String> {
+    let output = StdCommand::new("cargo").arg("--version").output();
     match output {
-        Ok(output) if output.status.success() => Ok("go".to_owned()),
-        Ok(_) | Err(_) if go_mode.trim() == "system" => Err(anyhow!("go is required for --go-mode system")),
-        Ok(_) => Err(anyhow!("go toolchain probe failed")),
-        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("go toolchain not found on PATH")),
-        Err(err) => Err(err).context("probe go toolchain"),
+        Ok(output) if output.status.success() => Ok("cargo".to_owned()),
+        Ok(_) | Err(_) if go_mode.trim() == "system" => Err(anyhow!("cargo is required for --go-mode system")),
+        Ok(_) => Err(anyhow!("cargo toolchain probe failed")),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("cargo toolchain not found on PATH")),
+        Err(err) => Err(err).context("probe cargo toolchain"),
     }
 }
 
@@ -18226,8 +18234,8 @@ fn main() -> Result<()> {
                     force,
                     uninstall,
                     go_mode,
-                    build_tags,
-                    build_ldflags,
+                    _build_tags: build_tags,
+                    _build_ldflags: build_ldflags,
                     os_override,
                     arch_override,
                     dry_run,

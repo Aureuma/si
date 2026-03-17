@@ -396,21 +396,14 @@ fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
 }
 
 #[test]
-fn build_installer_run_dry_run_reports_go_usage() {
+fn build_installer_run_dry_run_reports_rust_usage() {
     let repo = tempdir().expect("repo tempdir");
     fs::create_dir_all(repo.path().join("tools/si")).expect("mkdir tools/si");
     fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n").expect("write go.mod");
 
     let bin_dir = tempdir().expect("bin tempdir");
-    let go_path = bin_dir.path().join("go");
-    fs::write(&go_path, "#!/bin/sh\necho go version go1.22.0 linux/amd64\n").expect("write fake go");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&go_path).expect("stat go").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&go_path, perms).expect("chmod go");
-    }
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(&cargo_path, "#!/bin/sh\necho cargo 1.86.0\n");
     let path_env = format!(
         "{}:{}",
         bin_dir.path().display(),
@@ -434,7 +427,7 @@ fn build_installer_run_dry_run_reports_go_usage() {
         .stdout
         .clone();
 
-    assert!(String::from_utf8_lossy(&output).contains("go: using system go"));
+    assert!(String::from_utf8_lossy(&output).contains("rust: using system cargo"));
 }
 
 #[test]
@@ -444,19 +437,11 @@ fn build_installer_run_installs_fake_binary() {
     fs::write(repo.path().join("tools/si/go.mod"), "module example.com/si\n").expect("write go.mod");
 
     let bin_dir = tempdir().expect("bin tempdir");
-    let go_path = bin_dir.path().join("go");
-    fs::write(
-        &go_path,
-        "#!/bin/sh\nif [ \"$1\" = \"version\" ]; then\n  echo go version go1.22.0 linux/amd64\n  exit 0\nfi\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho installed\\n' > \"$out\"\nchmod 755 \"$out\"\n",
-    )
-    .expect("write fake go");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&go_path).expect("stat go").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&go_path, perms).expect("chmod go");
-    }
+    let cargo_path = bin_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.86.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
     let path_env = format!(
         "{}:{}",
         bin_dir.path().display(),
