@@ -92,8 +92,8 @@ Planned follow-on crates:
 | 4. Runtime substrate migration | in_progress | Docker/process/runtime primitives move under Rust ownership | process runner, Docker wrappers, network/image abstractions | integration tests with Docker, error-path tests, log/stream tests |
 | 5. Security/runtime migration | in_progress | Fort/vault/session lifecycle moves to Rust with explicit state machines | Fort runtime agent, token state, locks, vault file handling | Fort integration matrix, concurrent refresh tests, teardown tests |
 | 6. Codex/dyad lifecycle migration | completed | core container lifecycle ports to Rust | spawn/respawn/status/run/remove, tmux/dyad orchestration | container lifecycle matrix, regression parity suite, multi-profile smoke tests |
-| 7. Provider migration | in_progress | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
-| 8. Release/install migration | planned | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
+| 7. Provider migration | completed | provider families port incrementally | GitHub first, then low-complexity providers, then high-complexity providers | API contract tests, auth tests, fixture-based command parity |
+| 8. Release/install migration | in_progress | release stack becomes Rust-native | packaging, install, npm/homebrew integration, release helpers | runbook dry run, installer smoke, release-preflight artifact checks |
 | 9. Primary binary cutover | planned | Rust binary becomes default `si` | Go compatibility shell, packaging switch, release notes, rollback plan | full CI green, release candidate soak, Homebrew/npm/manual install verification |
 | 10. Go retirement | planned | remove obsolete Go code paths | delete migrated Go modules and scripts, simplify repo | no runtime references left, docs updated, release published from Rust path |
 
@@ -129,7 +129,7 @@ Exit criteria:
 
 ### Phase 2: Shared config/runtime foundations
 
-Status: in_progress
+Status: completed
 
 Implementation:
 
@@ -511,10 +511,11 @@ Progress notes:
 - completed: the GCP provider slice now also owns the full IAM lane (`iam service-account`, `iam service-account-key`, `iam policy`, and `iam role`), with Rust-owned IAM and Cloud Resource Manager request routing, service-account/resource normalization, policy default-resource fallback, and Go wrapper delegation while preserving the existing `--force` safety gates on destructive IAM operations
 - completed: the GCP provider slice now also owns the full Gemini lane (`gemini models`, `generate`, `embed`, `count-tokens`, `batch-embed`, `image generate`, and `raw`), with Rust-owned Gemini API-key resolution and OAuth fallback, model-name normalization, inline image extraction/writes, and Go wrapper delegation for both direct `gcp gemini` and `gcp ai gemini` entry points
 - completed: the GCP provider slice now also owns the full Vertex lane (`vertex model`, `endpoint`, `batch`, `pipeline`, `operation`, and `raw`), with Rust-owned location/base-url resolution, Vertex resource-name normalization, request-body shaping, force-gated destructive operations, and Go wrapper delegation for direct `gcp vertex` entry points
+- completed: the practical provider families now all sit behind provider-specific Rust crates plus explicit Go compatibility shims, satisfying the Phase 7 exit criterion that provider surfaces are no longer monolithic in the main Go CLI package even though a few public-probe and prompt-gated fallbacks still intentionally remain on the Go side
 
 ### Phase 8: Release/install migration
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
@@ -530,6 +531,10 @@ Testing:
 Exit criteria:
 
 - release runbook is executable without the old Go/shell implementation path.
+
+Progress notes:
+
+- completed: the live Go `si build self release-assets` path now delegates into a Rust-owned packager implementation that rebuilds the shipping Go `./tools/si` binary across the release target matrix, archives `README.md` and `LICENSE`, and emits `checksums.txt`, giving Phase 8 its first executable release-packaging slice behind the Rust compatibility boundary with focused Rust CLI and Go bridge proofs
 
 ### Phase 9: Primary binary cutover
 

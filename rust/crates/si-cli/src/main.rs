@@ -1,10 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result, anyhow};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use si_rs_codex::{
     RespawnRequest, SpawnContainerOptions, SpawnRequest, build_container_spec,
     build_remove_artifacts, build_respawn_plan, build_spawn_plan, build_tmux_command_for_container,
@@ -213,11 +216,15 @@ use si_rs_warmup::{
     write_autostart_marker as write_rust_warmup_autostart_marker,
 };
 use std::fs;
+use std::fs::File;
 use std::collections::BTreeMap;
 use std::fmt;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
+use tar::Builder as TarBuilder;
 
 #[derive(Debug, Parser)]
 #[command(name = "si-rs", disable_version_flag = true, disable_help_subcommand = true)]
@@ -234,6 +241,10 @@ enum Command {
         command: Option<String>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+    Build {
+        #[command(subcommand)]
+        command: BuildCommand,
     },
     Commands {
         #[command(subcommand)]
@@ -335,6 +346,28 @@ enum SettingsCommand {
         settings_file: Option<PathBuf>,
         #[arg(long, default_value = "text")]
         format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BuildCommand {
+    #[command(name = "self")]
+    Self_ {
+        #[command(subcommand)]
+        command: BuildSelfCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BuildSelfCommand {
+    #[command(name = "release-assets", alias = "release")]
+    ReleaseAssets {
+        #[arg(long)]
+        repo: Option<PathBuf>,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long = "out-dir")]
+        out_dir: Option<PathBuf>,
     },
 }
 
@@ -16344,6 +16377,213 @@ struct AppConfig {
     model_reasoning_effort: Option<String>,
 }
 
+fn run_build_self_release_assets(
+    repo: Option<PathBuf>,
+    version: Option<String>,
+    out_dir: Option<PathBuf>,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo)?;
+    let resolved_version = resolve_release_version(&repo_root, version)?;
+    let resolved_out_dir = resolve_release_output_dir(out_dir, &repo_root)?;
+    fs::create_dir_all(&resolved_out_dir)
+        .with_context(|| format!("create release output dir {}", resolved_out_dir.display()))?;
+
+    let targets = [
+        ("linux", "amd64", None),
+        ("linux", "arm64", None),
+        ("linux", "arm", Some("7")),
+        ("darwin", "amd64", None),
+        ("darwin", "arm64", None),
+    ];
+
+    let mut archive_names = Vec::new();
+    for (goos, goarch, goarm) in targets {
+        let archive_path =
+            build_release_asset(&repo_root, &resolved_out_dir, &resolved_version, goos, goarch, goarm)?;
+        let archive_name = archive_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| anyhow!("invalid release archive path {}", archive_path.display()))?;
+        archive_names.push(archive_name.to_owned());
+    }
+
+    let checksums_path = resolved_out_dir.join("checksums.txt");
+    let mut checksums = File::create(&checksums_path)
+        .with_context(|| format!("create {}", checksums_path.display()))?;
+    for name in &archive_names {
+        let digest = sha256_file(&resolved_out_dir.join(name))?;
+        writeln!(checksums, "{digest}  {name}")
+            .with_context(|| format!("write {}", checksums_path.display()))?;
+    }
+
+    println!("created release archives:");
+    for name in &archive_names {
+        println!("  - {}", resolved_out_dir.join(name).display());
+    }
+    println!("created checksums:");
+    println!("  - {}", checksums_path.display());
+    Ok(())
+}
+
+fn resolve_release_repo_root(repo: Option<PathBuf>) -> Result<PathBuf> {
+    let start = match repo {
+        Some(path) if path.is_absolute() => path,
+        Some(path) => std::env::current_dir()
+            .context("read current dir")?
+            .join(path),
+        None => std::env::current_dir().context("read current dir")?,
+    };
+    git_repo_root_from(&start)
+        .with_context(|| format!("resolve repo root from {}", start.display()))
+}
+
+fn resolve_release_version(repo_root: &Path, version: Option<String>) -> Result<String> {
+    let value = if let Some(version) = version {
+        let trimmed = version.trim();
+        if trimmed.is_empty() {
+            read_si_version(repo_root)?
+        } else {
+            trimmed.to_owned()
+        }
+    } else {
+        read_si_version(repo_root)?
+    };
+    if !value.starts_with('v') {
+        return Err(anyhow!("version must include v prefix, got: {value}"));
+    }
+    if value == "v" {
+        return Err(anyhow!("invalid version"));
+    }
+    Ok(value)
+}
+
+fn resolve_release_output_dir(out_dir: Option<PathBuf>, repo_root: &Path) -> Result<PathBuf> {
+    match out_dir {
+        Some(path) if path.is_absolute() => Ok(path),
+        Some(path) => Ok(std::env::current_dir()
+            .context("read current dir")?
+            .join(path)),
+        None => Ok(repo_root.join("dist")),
+    }
+}
+
+fn read_si_version(repo_root: &Path) -> Result<String> {
+    let version_path = repo_root.join("tools").join("si").join("version.go");
+    let raw = fs::read_to_string(&version_path)
+        .with_context(|| format!("read {}", version_path.display()))?;
+    let marker = "const siVersion = \"";
+    let start = raw
+        .find(marker)
+        .ok_or_else(|| anyhow!("si version constant not found in {}", version_path.display()))?;
+    let remainder = &raw[start + marker.len()..];
+    let end = remainder
+        .find('"')
+        .ok_or_else(|| anyhow!("si version constant not terminated in {}", version_path.display()))?;
+    Ok(remainder[..end].to_owned())
+}
+
+fn build_release_asset(
+    repo_root: &Path,
+    out_dir: &Path,
+    version: &str,
+    goos: &str,
+    goarch: &str,
+    goarm: Option<&str>,
+) -> Result<PathBuf> {
+    for required in ["README.md", "LICENSE"] {
+        let path = repo_root.join(required);
+        if !path.exists() {
+            return Err(anyhow!("{required} not found in repo root"));
+        }
+    }
+
+    let temp = tempfile::tempdir().context("create release temp dir")?;
+    let version_no_v = version.trim_start_matches('v');
+    let arch_label = if goarch == "arm" {
+        format!("armv{}", goarm.unwrap_or("7"))
+    } else {
+        goarch.to_owned()
+    };
+    let artifact_stem = format!("si_{version_no_v}_{goos}_{arch_label}");
+    let staging_dir = temp.path().join(&artifact_stem);
+    fs::create_dir_all(&staging_dir)
+        .with_context(|| format!("create {}", staging_dir.display()))?;
+
+    let output_path = staging_dir.join("si");
+    let mut command = StdCommand::new("go");
+    command
+        .current_dir(repo_root)
+        .env("CGO_ENABLED", "0")
+        .env("GOOS", goos)
+        .env("GOARCH", goarch)
+        .arg("build")
+        .arg("-trimpath")
+        .arg("-buildvcs=false")
+        .arg("-ldflags")
+        .arg("-s -w")
+        .arg("-o")
+        .arg(&output_path)
+        .arg("./tools/si");
+    if let Some(goarm) = goarm {
+        command.env("GOARM", goarm);
+    }
+    let output = command.output().context("run go build for release asset")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(anyhow!(
+            "go build failed for {goos}/{goarch}: {}{}{}",
+            output.status,
+            if stdout.trim().is_empty() { "" } else { "\nstdout:\n" },
+            if stdout.trim().is_empty() { stderr.trim().to_owned() } else { format!("{}\nstderr:\n{}", stdout.trim(), stderr.trim()) },
+        ));
+    }
+
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(&output_path)
+            .with_context(|| format!("stat {}", output_path.display()))?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&output_path, perms)
+            .with_context(|| format!("chmod {}", output_path.display()))?;
+    }
+
+    for required in ["README.md", "LICENSE"] {
+        let src = repo_root.join(required);
+        let dst = staging_dir.join(required);
+        fs::copy(&src, &dst)
+            .with_context(|| format!("copy {} to {}", src.display(), dst.display()))?;
+    }
+
+    let archive_path = out_dir.join(format!("{artifact_stem}.tar.gz"));
+    let archive_file = File::create(&archive_path)
+        .with_context(|| format!("create {}", archive_path.display()))?;
+    let encoder = GzEncoder::new(archive_file, Compression::default());
+    let mut builder = TarBuilder::new(encoder);
+    builder
+        .append_dir_all(&artifact_stem, &staging_dir)
+        .with_context(|| format!("archive {}", archive_path.display()))?;
+    builder.finish().context("finish tar archive")?;
+    Ok(archive_path)
+}
+
+fn sha256_file(path: &Path) -> Result<String> {
+    let mut file = File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = file
+            .read(&mut buffer)
+            .with_context(|| format!("read {}", path.display()))?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -16352,6 +16592,15 @@ fn main() -> Result<()> {
             println!("{}", si_rs_core::version::current_version());
         }
         Command::Help { command, format } => show_help(command.as_deref(), format)?,
+        Command::Build { command } => match command {
+            BuildCommand::Self_ { command } => match command {
+                BuildSelfCommand::ReleaseAssets {
+                    repo,
+                    version,
+                    out_dir,
+                } => run_build_self_release_assets(repo, version, out_dir)?,
+            },
+        },
         Command::Commands { command } => match command {
             CommandsCommand::List { format } => show_help(None, format)?,
         },
