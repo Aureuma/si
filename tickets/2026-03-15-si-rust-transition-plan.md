@@ -649,7 +649,74 @@ Progress notes:
 
 Status: in_progress
 
-1. Expand `si-config` from `[paths]` into broader settings parity with Go fixtures.
-2. Add a Rust command-manifest crate and snapshot-tested help metadata.
-3. Introduce a compatibility dispatch boundary for the first migrated read-only command path.
-4. Keep the current Go CLI unchanged until parity harnesses exist for the delegated commands.
+1. Complete full real-host command matrix execution for transition-critical lanes (build/release/install/npm/homebrew/installer smoke).
+2. Capture expected-vs-actual results for each command in this ticket directory so future contributors can run the same matrix.
+3. Resolve any command/argument mismatches discovered during execution and land minimal fixes before declaring phase completion.
+
+## Real-Host E2E Test Plan (for Phase 9/10 validation)
+
+Status: in_progress
+
+### Test artifacts
+
+- `/tmp/si-e2e-command-log.txt` (initial full matrix from prior run)
+- `/tmp/si-e2e-realhost-runs2.log` (parallelized batch before timeout cancellations)
+- `/tmp/si-hosttest-final.log` (cleaned command run with explicit options)
+- `/tmp/si-hosttest-final2.log` (verify/smoke follow-up attempts)
+
+### Execution plan and expected behavior
+
+| Command | Expected result | Actual (2026-03-17) | Notes |
+| --- | --- | --- | --- |
+| `si-rs version` | prints `v0.54.0` | PASS | Confirmed |
+| `si-rs build self validate-release-version --tag v0.54.0` | success with aligned tag message | PASS | Confirmed |
+| `si-rs build self validate-release-version --tag 0.54.0` | validation error (missing leading `v`) | PASS | Confirmed explicit error path |
+| `si-rs build self release-asset --version v0.54.0 --goos linux --goarch amd64` | produces single tarball + checksum side file if configured | **BLOCKED** | command did not complete in the current clean room run (terminated while compiling/working); earlier run had PASS before timeout |
+| `si-rs build self release-assets --version v0.54.0` | multi-arch tarballs + `checksums.txt` | **BLOCKED** | previous long run hit timeout around 7+ minutes before completion |
+| `si-rs build self verify-release-assets --version v0.54.0 --out-dir <dir>` | succeeds only when all expected artifacts exist in `<dir>` | PASS/FAIL | FAIL when running against `/tmp/si-e2e/releases/multi` because `si_0.54.0_darwin_arm64.tar.gz` missing from interrupted build |
+| `si-rs build self run -- --help` | forwards args to built binary and prints top-level help | PASS | Verified |
+
+#### Installer lane
+
+| Command | Expected result | Actual (2026-03-17) | Notes |
+| --- | --- | --- | --- |
+| `si-rs build installer settings-helper --print` | prints default-browser stanza from settings | PASS | Verified |
+| `si-rs build installer settings-helper --default-browser safari` | writes/validates settings file | PASS | Write+check round trip succeeded |
+| `si-rs build installer smoke-homebrew` | runs if Homebrew available, otherwise explicit skip message | PASS | `SKIP` on this host (brew unavailable) |
+| `si-rs build installer smoke-host` | completes non-root workflow with `SI_INSTALL_SMOKE_SKIP_NONROOT=1` | BLOCKED | hangs in host smoke execution in this environment; requires environment-specific install inputs |
+| `si-rs build installer smoke-npm` | executes npm install smoke | BLOCKED | requires updated invocation (no `--version` flag) and host-side NPM tooling, not yet fully validated here |
+| `si-rs build installer smoke-docker` | executes docker smoke path (or explicit non-root skip behavior) | BLOCKED | requires source dir with installer scripts and docker runtime; this run reported missing installer dir from `/tmp/si-e2e` |
+
+#### Homebrew lane
+
+| Command | Expected result | Actual (2026-03-17) | Notes |
+| --- | --- | --- | --- |
+| `si-rs build homebrew render-core-formula --version v0.54.0 --output ...` | renders formula file | PASS | Verified |
+| `si-rs build homebrew render-tap-formula --version v0.54.0 --checksums ... --output ...` | renders tap formula | PASS | Verified |
+| `si-rs build homebrew update-tap-repo --version v0.54.0 --checksums ... --tap-dir ...` | updates tap repo formula file | PASS (commit mode) | `--dry-run` is not a supported flag |
+| `si-rs build homebrew update-tap-repo --version ... --checksums ... --tap-dir ... --dry-run` | expected dry-run path | FAIL | CLI does not define `--dry-run` |
+
+#### npm lane
+
+| Command | Expected result | Actual (2026-03-17) | Notes |
+| --- | --- | --- | --- |
+| `si-rs build npm build-package --repo-root <repo> --version v0.54.0 --out-dir <dir>` | builds `aureuma-si-0.54.0.tgz` | PASS | Verified |
+| `si-rs build npm build-package` | usage error | PASS | confirmed `--repo-root/--version/--out-dir` required |
+| `si-rs build npm publish-package --repo-root <repo> --version v0.54.0 --dry-run` | dry-run publish plan | PASS | already-published path handled |
+| `si-rs build npm publish-from-vault --repo-root <repo> --version v0.54.0 --dry-run` | vault lookup path (or env failure) | PASS | returns expected Vault access error |
+
+#### Release wrapper scripts (Rust CLI bridge)
+
+| Script | Expected invocation | Actual (2026-03-17) | Notes |
+| --- | --- | --- | --- |
+| `tools/release/validate-release-version.sh --tag v0.54.0` | forwards to `si-rs build self validate-release-version --tag ...` | PASS | Uses `--tag` argument |
+| `tools/release/build-cli-release-asset.sh` | forwards to `build self release-asset` | BLOCKED | command requires long-running compile and did not complete in this run |
+| `tools/release/build-cli-release-assets.sh` | forwards to `build self release-assets` | BLOCKED | not fully completed in this run |
+| `tools/release/verify-cli-release-assets.sh` | forwards to `build self verify-release-assets` | BLOCKED | not reached due preceding wrapper compile timeout |
+
+### Next actions from this plan run
+
+1. Re-run `self release-asset` and `self release-assets` with a warm `target` cache on CI or a non-time-constrained host to remove current timeout blocker and confirm full end-to-end artifact parity.
+2. Re-run installer smoke lanes from repo root with a prepared install directory and explicit expected runtime prerequisites (`docker` + network + non-root policy) before final green on phase 9.
+3. Keep `update-tap-repo` dry-run expectation aligned in docs/tests (no `--dry-run` flag exists).
+4. Add a small, documented matrix entrypoint script under `tickets/` so this command matrix can be replayed deterministically.
