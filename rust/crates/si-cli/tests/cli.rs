@@ -5458,6 +5458,211 @@ fn aws_ecr_image_list_json_executes_signed_json_target_request() {
 }
 
 #[test]
+fn aws_s3_object_list_json_executes_signed_rest_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /demo-bucket?list-type=2&max-keys=100 HTTP/1.1\r\n"));
+        assert!(request.contains("authorization: AWS4-HMAC-SHA256 Credential=AKIA1234567890ABCD/"));
+        http_xml_response(
+            "200 OK",
+            &[("x-amz-request-id", "req_aws_s3_object_list")],
+            r#"<ListBucketResult/>"#,
+        )
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "s3", "object", "list",
+            "--bucket", "demo-bucket",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_s3_object_list");
+    assert_eq!(parsed["data"]["response"], "ListBucketResult");
+    server.join();
+}
+
+#[test]
+fn aws_s3_object_get_output_writes_file() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("GET /demo-bucket/nested/key.txt HTTP/1.1\r\n"));
+        http_xml_response("200 OK", &[("x-amz-request-id", "req_aws_s3_object_get")], "hello object")
+    });
+    let dir = tempdir().expect("tempdir");
+    let output_path = dir.path().join("object.txt");
+
+    let output = cargo_bin()
+        .args([
+            "aws", "s3", "object", "get",
+            "--bucket", "demo-bucket",
+            "--key", "nested/key.txt",
+            "--output",
+        ])
+        .arg(&output_path)
+        .args([
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["output"], output_path.to_string_lossy().to_string());
+    assert_eq!(fs::read_to_string(&output_path).expect("read output file"), "hello object");
+    server.join();
+}
+
+#[test]
+fn aws_secrets_list_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.starts_with("POST / HTTP/1.1\r\n"));
+        assert!(request.contains("x-amz-target: secretsmanager.ListSecrets\r\n"));
+        assert!(request.contains(r#""MaxResults":100"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_secrets_list")], r#"{"SecretList":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "secrets", "list",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_secrets_list");
+    assert_eq!(parsed["data"]["SecretList"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_secrets_create_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: secretsmanager.CreateSecret\r\n"));
+        assert!(request.contains(r#""Name":"demo-secret""#));
+        assert!(request.contains(r#""SecretString":"super-secret""#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_secrets_create")], r#"{"ARN":"arn:aws:secretsmanager:demo"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "secrets", "create",
+            "--name", "demo-secret",
+            "--value", "super-secret",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_secrets_create");
+    assert_eq!(parsed["data"]["ARN"], "arn:aws:secretsmanager:demo");
+    server.join();
+}
+
+#[test]
+fn aws_kms_key_list_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: TrentService.ListKeys\r\n"));
+        assert!(request.contains(r#""Limit":100"#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_kms_list")], r#"{"Keys":[]}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "kms", "key", "list",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_kms_list");
+    assert_eq!(parsed["data"]["Keys"][0], Value::Null);
+    server.join();
+}
+
+#[test]
+fn aws_kms_encrypt_json_executes_signed_json_target_request() {
+    let server = start_one_shot_http_server(|request| {
+        assert!(request.contains("x-amz-target: TrentService.Encrypt\r\n"));
+        assert!(request.contains(r#""KeyId":"key-123""#));
+        assert!(request.contains(r#""Plaintext":"aGVsbG8=""#));
+        http_json_response("200 OK", &[("x-amzn-requestid", "req_aws_kms_encrypt")], r#"{"CiphertextBlob":"cipher"}"#)
+    });
+
+    let output = cargo_bin()
+        .args([
+            "aws", "kms", "encrypt",
+            "--key-id", "key-123",
+            "--plaintext", "hello",
+            "--base-url", &server.base_url,
+            "--access-key", "AKIA1234567890ABCD",
+            "--secret-key", "secret",
+            "--session-token", "session",
+            "--region", "us-west-2",
+            "--format", "json",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status_code"], 200);
+    assert_eq!(parsed["request_id"], "req_aws_kms_encrypt");
+    assert_eq!(parsed["data"]["CiphertextBlob"], "cipher");
+    server.join();
+}
+
+#[test]
 fn gcp_context_list_json_reads_settings_accounts() {
     let home = tempdir().expect("tempdir");
     let settings_dir = home.path().join(".si");
