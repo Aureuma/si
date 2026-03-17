@@ -783,6 +783,10 @@ func runAWSCommand(args []string) (bool, error) {
 		return runAWSSTSCommand(args[1:])
 	case "iam":
 		return runAWSIAMCommand(args[1:])
+	case "s3":
+		return runAWSS3Command(args[1:])
+	case "ec2":
+		return runAWSEC2Command(args[1:])
 	case "doctor":
 		return runAWSDoctorCommand(args[1:])
 	default:
@@ -840,6 +844,70 @@ func runAWSSTSCommand(args []string) (bool, error) {
 
 func runAWSIAMCommand(args []string) (bool, error) {
 	return maybeDispatchRustCLIReadOnly("aws", append([]string{"iam"}, args...)...)
+}
+
+func awsForceEnabled(args []string) bool {
+	for idx := 0; idx < len(args); idx++ {
+		arg := strings.TrimSpace(args[idx])
+		switch {
+		case arg == "--force", arg == "--force=true", arg == "--force=1":
+			return true
+		case arg == "--force=false", arg == "--force=0":
+		case arg == "--force" && idx+1 < len(args):
+			next := strings.TrimSpace(args[idx+1])
+			if next == "true" || next == "1" {
+				return true
+			}
+			idx++
+		}
+	}
+	return false
+}
+
+func runAWSS3Command(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	if strings.ToLower(strings.TrimSpace(args[0])) != "bucket" {
+		return false, nil
+	}
+	if len(args) < 2 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[1])) {
+	case "list", "create":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+	case "delete", "remove", "rm":
+		if !awsForceEnabled(args[2:]) {
+			return false, nil
+		}
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"s3"}, args...)...)
+	default:
+		return false, nil
+	}
+}
+
+func runAWSEC2Command(args []string) (bool, error) {
+	if len(args) == 0 {
+		return false, nil
+	}
+	if strings.ToLower(strings.TrimSpace(args[0])) != "instance" {
+		return false, nil
+	}
+	if len(args) < 2 {
+		return false, nil
+	}
+	switch strings.ToLower(strings.TrimSpace(args[1])) {
+	case "list", "describe":
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ec2"}, args...)...)
+	case "start", "stop", "terminate", "delete", "remove", "rm":
+		if !awsForceEnabled(args[2:]) {
+			return false, nil
+		}
+		return maybeDispatchRustCLIReadOnly("aws", append([]string{"ec2"}, args...)...)
+	default:
+		return false, nil
+	}
 }
 
 func runGCPAuthCommand(args []string) (bool, error) {

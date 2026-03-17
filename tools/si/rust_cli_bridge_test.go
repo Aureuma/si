@@ -1896,6 +1896,74 @@ func TestRunAWSIAMCommandDelegatesToRustCLIWhenConfigured(t *testing.T) {
 	}
 }
 
+func TestRunAWSS3CommandDelegatesBucketListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-s3'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"s3", "bucket", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws s3 bucket list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-s3" {
+		t.Fatalf("expected delegated Rust aws s3 output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\ns3\nbucket\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws s3 bucket + args, got %q", string(argsData))
+	}
+}
+
+func TestRunAWSEC2CommandDelegatesInstanceListToRustCLIWhenConfigured(t *testing.T) {
+	dir := t.TempDir()
+	argsPath := filepath.Join(dir, "args.txt")
+	scriptPath := filepath.Join(dir, "si-rs")
+	script := "#!/bin/sh\nprintf '%s\\n' 'rust-aws-ec2'\nprintf '%s\\n' \"$@\" >" + shellSingleQuote(argsPath) + "\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o700); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	t.Setenv(siRustCLIBinEnv, scriptPath)
+	t.Setenv(siExperimentalRustCLIEnv, "")
+
+	out := captureOutputForTest(t, func() {
+		delegated, err := runAWSCommand([]string{"ec2", "instance", "list", "--json"})
+		if err != nil {
+			t.Fatalf("runAWSCommand: %v", err)
+		}
+		if !delegated {
+			t.Fatalf("expected aws ec2 instance list to delegate to Rust")
+		}
+	})
+
+	if strings.TrimSpace(out) != "rust-aws-ec2" {
+		t.Fatalf("expected delegated Rust aws ec2 output, got %q", out)
+	}
+	argsData, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatalf("read args file: %v", err)
+	}
+	if strings.TrimSpace(string(argsData)) != "aws\nec2\ninstance\nlist\n--json" {
+		t.Fatalf("expected Rust CLI args to be aws ec2 instance + args, got %q", string(argsData))
+	}
+}
+
 func TestRunGCPContextListCommandDefaultsToGo(t *testing.T) {
 	t.Setenv(siExperimentalRustCLIEnv, "")
 	t.Setenv(siRustCLIBinEnv, "")
