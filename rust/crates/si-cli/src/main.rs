@@ -357,6 +357,11 @@ enum BuildCommand {
         #[command(subcommand)]
         command: BuildSelfCommand,
     },
+    #[command(name = "installer")]
+    Installer {
+        #[command(subcommand)]
+        command: BuildInstallerCommand,
+    },
     #[command(name = "npm")]
     Npm {
         #[command(subcommand)]
@@ -379,6 +384,63 @@ enum BuildSelfCommand {
         version: Option<String>,
         #[arg(long = "out-dir")]
         out_dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BuildInstallerCommand {
+    #[command(name = "run")]
+    Run {
+        #[arg(long, default_value = "local")]
+        backend: String,
+        #[arg(long = "source-dir")]
+        source_dir: Option<PathBuf>,
+        #[arg(long, default_value = "Aureuma/si")]
+        repo: String,
+        #[arg(long = "repo-url")]
+        repo_url: Option<String>,
+        #[arg(long, default_value = "main")]
+        ref_: String,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long = "install-dir")]
+        install_dir: Option<PathBuf>,
+        #[arg(long = "install-path")]
+        install_path: Option<PathBuf>,
+        #[arg(long, action = ArgAction::SetTrue)]
+        force: bool,
+        #[arg(long, action = ArgAction::SetTrue)]
+        uninstall: bool,
+        #[arg(long = "go-mode", default_value = "auto")]
+        go_mode: String,
+        #[arg(long = "go-version")]
+        go_version: Option<String>,
+        #[arg(long = "build-tags")]
+        build_tags: Option<String>,
+        #[arg(long = "build-ldflags", default_value = "-s -w")]
+        build_ldflags: String,
+        #[arg(long = "link-go", action = ArgAction::SetTrue)]
+        link_go: bool,
+        #[arg(long = "no-link-go", action = ArgAction::SetTrue)]
+        no_link_go: bool,
+        #[arg(long = "with-buildx", action = ArgAction::SetTrue)]
+        with_buildx: bool,
+        #[arg(long = "no-buildx", action = ArgAction::SetTrue)]
+        no_buildx: bool,
+        #[arg(long = "os")]
+        os_override: Option<String>,
+        #[arg(long = "arch")]
+        arch_override: Option<String>,
+        #[arg(long = "tmp-dir")]
+        tmp_dir: Option<PathBuf>,
+        #[arg(short = 'y', long = "yes", action = ArgAction::SetTrue)]
+        yes: bool,
+        #[arg(long = "dry-run", action = ArgAction::SetTrue)]
+        dry_run: bool,
+        #[arg(long, action = ArgAction::SetTrue)]
+        quiet: bool,
+        #[arg(long = "no-path-hint", action = ArgAction::SetTrue)]
+        no_path_hint: bool,
     },
 }
 
@@ -16905,6 +16967,268 @@ fn wait_for_npm_package(
     Ok(false)
 }
 
+#[derive(Debug)]
+struct InstallerRunConfig {
+    backend: String,
+    source_dir: Option<PathBuf>,
+    repo_url: Option<String>,
+    ref_name: String,
+    install_dir: Option<PathBuf>,
+    install_path: Option<PathBuf>,
+    force: bool,
+    uninstall: bool,
+    go_mode: String,
+    build_tags: Option<String>,
+    build_ldflags: String,
+    os_override: Option<String>,
+    arch_override: Option<String>,
+    dry_run: bool,
+    quiet: bool,
+    no_path_hint: bool,
+}
+
+fn run_installer(cfg: InstallerRunConfig) -> Result<()> {
+    validate_installer_config(&cfg)?;
+    let install_path = resolve_installer_install_path(&cfg)?;
+    if cfg.uninstall {
+        if cfg.dry_run {
+            if !cfg.quiet {
+                println!("dry-run: uninstall {}", install_path.display());
+            }
+            return Ok(());
+        }
+        match fs::remove_file(&install_path) {
+            Ok(_) => return Ok(()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(err).with_context(|| format!("uninstall {}", install_path.display())),
+        }
+    }
+
+    if cfg.backend.trim() != "local" {
+        return Err(anyhow!(
+            "invalid --backend {} (expected local)",
+            cfg.backend.trim()
+        ));
+    }
+
+    let (source_dir, _cleanup) = resolve_installer_source_dir(&cfg)?;
+    let go_bin = ensure_installer_go_toolchain(&cfg.go_mode)?;
+    if cfg.dry_run {
+        if !cfg.quiet {
+            println!("go: using system go ({go_bin})");
+        }
+        return Ok(());
+    }
+
+    ensure_installer_install_writable(&install_path, cfg.force)?;
+    let install_dir = install_path
+        .parent()
+        .ok_or_else(|| anyhow!("invalid install path {}", install_path.display()))?;
+    let tmp_output = tempfile::Builder::new()
+        .prefix("si-build-")
+        .tempfile_in(install_dir)
+        .with_context(|| format!("create temp output in {}", install_dir.display()))?;
+    let tmp_output_path = tmp_output.path().to_path_buf();
+    drop(tmp_output);
+
+    let mut command = StdCommand::new(&go_bin);
+    command
+        .current_dir(&source_dir)
+        .arg("build")
+        .arg("-trimpath")
+        .arg("-buildvcs=false")
+        .arg("-o")
+        .arg(&tmp_output_path);
+    if let Some(tags) = cfg.build_tags.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        command.arg("-tags").arg(tags);
+    }
+    let ldflags = cfg.build_ldflags.trim();
+    if !ldflags.is_empty() {
+        command.arg("-ldflags").arg(ldflags);
+    }
+    command.arg("./tools/si");
+    let status = command.status().context("run go build for installer")?;
+    if !status.success() {
+        return Err(anyhow!("build failed: {}", status));
+    }
+
+    #[cfg(unix)]
+    {
+        let mut perms = fs::metadata(&tmp_output_path)
+            .with_context(|| format!("stat {}", tmp_output_path.display()))?
+            .permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&tmp_output_path, perms)
+            .with_context(|| format!("chmod {}", tmp_output_path.display()))?;
+    }
+    fs::rename(&tmp_output_path, &install_path).or_else(|err| {
+        if err.kind() == io::ErrorKind::AlreadyExists {
+            let _ = fs::remove_file(&install_path);
+            fs::rename(&tmp_output_path, &install_path)
+        } else {
+            Err(err)
+        }
+    })
+    .with_context(|| format!("install {}", install_path.display()))?;
+
+    if !cfg.no_path_hint {
+        warn_if_installer_path_missing(install_dir);
+    }
+    Ok(())
+}
+
+fn validate_installer_config(cfg: &InstallerRunConfig) -> Result<()> {
+    if cfg.install_dir.is_some() && cfg.install_path.is_some() {
+        return Err(anyhow!("--install-dir and --install-path are mutually exclusive"));
+    }
+    match cfg.go_mode.trim() {
+        "auto" | "system" => {}
+        value => return Err(anyhow!("invalid --go-mode {} (expected auto or system)", value)),
+    }
+    if (cfg.os_override.is_some() || cfg.arch_override.is_some()) && !cfg.dry_run {
+        return Err(anyhow!("--os/--arch overrides require --dry-run"));
+    }
+    if let Some(value) = cfg.os_override.as_deref() {
+        match value.trim() {
+            "linux" | "darwin" => {}
+            other => return Err(anyhow!("invalid --os {} (expected linux or darwin)", other)),
+        }
+    }
+    if let Some(value) = cfg.arch_override.as_deref() {
+        match value.trim() {
+            "amd64" | "x86_64" | "arm64" | "aarch64" => {}
+            other => return Err(anyhow!("invalid --arch {} (expected amd64 or arm64)", other)),
+        }
+    }
+    Ok(())
+}
+
+fn resolve_installer_install_path(cfg: &InstallerRunConfig) -> Result<PathBuf> {
+    if let Some(path) = cfg.install_path.as_ref() {
+        return Ok(path.clone());
+    }
+    let install_dir = if let Some(path) = cfg.install_dir.as_ref() {
+        path.clone()
+    } else if is_effective_root() {
+        PathBuf::from("/usr/local/bin")
+    } else {
+        let home = std::env::var("HOME")
+            .map(PathBuf::from)
+            .map_err(|_| anyhow!("unable to resolve home directory for default install path"))?;
+        home.join(".local").join("bin")
+    };
+    Ok(install_dir.join("si"))
+}
+
+fn is_effective_root() -> bool {
+    #[cfg(unix)]
+    {
+        unsafe { libc::geteuid() == 0 }
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
+fn resolve_installer_source_dir(cfg: &InstallerRunConfig) -> Result<(PathBuf, Option<tempfile::TempDir>)> {
+    if let Some(path) = cfg.source_dir.as_ref() {
+        validate_installer_source_dir(path)?;
+        return Ok((path.clone(), None));
+    }
+    if let Some(repo_url) = cfg.repo_url.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+        let path = PathBuf::from(repo_url);
+        if path.is_dir() {
+            validate_installer_source_dir(&path)?;
+            return Ok((path, None));
+        }
+        ensure_command_exists("git")?;
+        let temp = tempfile::tempdir().context("create temp clone dir")?;
+        let status = StdCommand::new("git")
+            .arg("clone")
+            .arg(repo_url)
+            .arg(temp.path())
+            .status()
+            .context("run git clone")?;
+        if !status.success() {
+            return Err(anyhow!("git clone failed: {}", status));
+        }
+        if !cfg.ref_name.trim().is_empty() {
+            let status = StdCommand::new("git")
+                .arg("-C")
+                .arg(temp.path())
+                .arg("checkout")
+                .arg(cfg.ref_name.trim())
+                .status()
+                .context("run git checkout")?;
+            if !status.success() {
+                return Err(anyhow!("git checkout failed: {}", status));
+            }
+        }
+        validate_installer_source_dir(temp.path())?;
+        return Ok((temp.path().to_path_buf(), Some(temp)));
+    }
+    let cwd = std::env::current_dir().context("read current dir")?;
+    if validate_installer_source_dir(&cwd).is_ok() {
+        return Ok((cwd, None));
+    }
+    Err(anyhow!("source directory required; pass --source-dir"))
+}
+
+fn validate_installer_source_dir(path: &Path) -> Result<()> {
+    if !path.is_dir() {
+        return Err(anyhow!("source directory not found: {}", path.display()));
+    }
+    if !path.join("tools").join("si").join("go.mod").exists() {
+        return Err(anyhow!("source directory is not an si checkout: {}", path.display()));
+    }
+    Ok(())
+}
+
+fn ensure_installer_go_toolchain(go_mode: &str) -> Result<String> {
+    let output = StdCommand::new("go").arg("version").output();
+    match output {
+        Ok(output) if output.status.success() => Ok("go".to_owned()),
+        Ok(_) | Err(_) if go_mode.trim() == "system" => Err(anyhow!("go is required for --go-mode system")),
+        Ok(_) => Err(anyhow!("go toolchain probe failed")),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Err(anyhow!("go toolchain not found on PATH")),
+        Err(err) => Err(err).context("probe go toolchain"),
+    }
+}
+
+fn ensure_installer_install_writable(install_path: &Path, force: bool) -> Result<()> {
+    if let Ok(metadata) = fs::metadata(install_path) {
+        if metadata.is_dir() {
+            return Err(anyhow!("install path is a directory: {}", install_path.display()));
+        }
+        if !force {
+            return Err(anyhow!(
+                "install target already exists: {} (use --force)",
+                install_path.display()
+            ));
+        }
+    }
+    let dir = install_path
+        .parent()
+        .ok_or_else(|| anyhow!("invalid install path {}", install_path.display()))?;
+    fs::create_dir_all(dir).with_context(|| format!("create {}", dir.display()))?;
+    let probe = dir.join(".si-write-test");
+    fs::write(&probe, "ok").with_context(|| format!("write {}", probe.display()))?;
+    let _ = fs::remove_file(&probe);
+    Ok(())
+}
+
+fn warn_if_installer_path_missing(dir: &Path) {
+    let path_env = std::env::var_os("PATH").unwrap_or_default();
+    let on_path = std::env::split_paths(&path_env).any(|entry| entry == dir);
+    if !on_path {
+        eprintln!(
+            "WARNING: install dir is not on PATH for this shell: {}",
+            dir.display()
+        );
+    }
+}
+
 fn run_publish_npm_from_vault(
     repo_root: Option<PathBuf>,
     version: Option<String>,
@@ -17191,6 +17515,52 @@ fn main() -> Result<()> {
                     version,
                     out_dir,
                 } => run_build_self_release_assets(repo, version, out_dir)?,
+            },
+            BuildCommand::Installer { command } => match command {
+                BuildInstallerCommand::Run {
+                    backend,
+                    source_dir,
+                    repo: _repo,
+                    repo_url,
+                    ref_,
+                    version: _version,
+                    install_dir,
+                    install_path,
+                    force,
+                    uninstall,
+                    go_mode,
+                    go_version: _go_version,
+                    build_tags,
+                    build_ldflags,
+                    link_go: _link_go,
+                    no_link_go: _no_link_go,
+                    with_buildx: _with_buildx,
+                    no_buildx: _no_buildx,
+                    os_override,
+                    arch_override,
+                    tmp_dir: _tmp_dir,
+                    yes: _yes,
+                    dry_run,
+                    quiet,
+                    no_path_hint,
+                } => run_installer(InstallerRunConfig {
+                    backend,
+                    source_dir,
+                    repo_url,
+                    ref_name: ref_,
+                    install_dir,
+                    install_path,
+                    force,
+                    uninstall,
+                    go_mode,
+                    build_tags,
+                    build_ldflags,
+                    os_override,
+                    arch_override,
+                    dry_run,
+                    quiet,
+                    no_path_hint,
+                })?,
             },
             BuildCommand::Npm { command } => match command {
                 BuildNpmCommand::BuildPackage {
