@@ -515,7 +515,7 @@ Progress notes:
 
 ### Phase 8: Release/install migration
 
-Status: in_progress
+Status: completed
 
 Implementation:
 
@@ -541,10 +541,11 @@ Progress notes:
 - completed: the installer smoke driver lane now runs through Rust too, with Rust-owned host, npm, and docker smoke orchestration plus updated `tools/test-install-si*.sh` wrappers, so the practical Phase 8 install verification surface no longer depends on the Go smoke-driver binaries
 - completed: the remaining release-preflight script gap now runs through Rust too, with the shipping `build-cli-release-assets.sh` and `validate-release-version.sh` wrappers invoking Rust-owned implementations for archive preflight generation and tag/version alignment checks, so the core local release runbook path no longer depends on the Go `releasectl` binary
 - completed: the last two release/install helper stragglers now run through Rust too, with the single-target `build-cli-release-asset.sh` wrapper invoking a Rust-owned one-target archive builder and `tools/install-si-settings.sh` invoking a Rust-owned settings helper, closing the remaining Go-only script seams inside the Phase 8 release/install lane
+- completed: the full Phase 8 validation gate is now green through the Rust-owned path too, with `validate-release-version`, targeted release-asset CLI proofs, host/npm/docker installer smokes, and Docker smoke image updates for Rust 1.86 plus writable Cargo target dirs, so the release runbook is executable without the old Go release/install path
 
 ### Phase 9: Primary binary cutover
 
-Status: planned
+Status: in_progress
 
 Implementation:
 
