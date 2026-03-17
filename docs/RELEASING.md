@@ -146,6 +146,7 @@ builds and uploads CLI archives automatically, then:
 - publishes npm package `@aureuma/si` (when `NPM_TOKEN` secret is configured)
 - updates Homebrew tap formula in `Aureuma/homebrew-si` (when `HOMEBREW_TAP_PUSH_TOKEN` is configured, or by fallback to `GH_PAT_AUREUMA` when that token has tap push access)
 - verifies release assets + npm + Homebrew sync in a final gate job
+- runs a macOS Homebrew smoke install lane through `./tools/test-install-si-homebrew.sh`
 
 Supported targets:
 - `linux/amd64`
