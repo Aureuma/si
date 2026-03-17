@@ -7,13 +7,9 @@ class Si < Formula
   head "https://github.com/Aureuma/si.git", branch: "main"
 
   depends_on "rust" => :build
-  depends_on "go" => :build
-
   def install
     system "cargo", "install", "--locked", *std_cargo_args(path: "rust/crates/si-cli"), "--bin", "si-rs"
     mv bin/"si-rs", bin/"si"
-    system "go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w", "-o", bin/"si-go", "./tools/si"
-    chmod 0o755, bin/"si-go"
   end
 
   test do

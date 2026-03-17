@@ -15,6 +15,26 @@ fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
 }
 
+fn spawn_single_response_server(status: &str, body: &str) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind test listener");
+    let addr = listener.local_addr().expect("listener addr");
+    let status = status.to_owned();
+    let body = body.to_owned();
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept test connection");
+        let mut buffer = [0_u8; 4096];
+        let _ = stream.read(&mut buffer);
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream
+            .write_all(response.as_bytes())
+            .expect("write test response");
+    });
+    format!("http://{}", addr)
+}
+
 #[test]
 fn build_self_release_assets_writes_archives_and_checksums() {
     let repo = tempdir().expect("repo tempdir");
@@ -44,20 +64,6 @@ fn build_self_release_assets_writes_archives_and_checksums() {
         &cargo_path,
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
-    let go_path = go_dir.path().join("go");
-    fs::write(
-        &go_path,
-        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
-    )
-    .expect("write fake go");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&go_path).expect("stat fake go").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&go_path, perms).expect("chmod fake go");
-    }
-
     let out_dir = repo.path().join("out");
     let path_env = format!(
         "{}:{}",
@@ -101,7 +107,6 @@ fn build_self_release_assets_writes_archives_and_checksums() {
         .collect::<Vec<_>>();
     names.sort();
     assert!(names.iter().any(|name| name.ends_with("/si")));
-    assert!(names.iter().any(|name| name.ends_with("/si-go")));
 }
 
 #[test]
@@ -346,12 +351,9 @@ fn build_homebrew_render_core_formula_writes_formula() {
     assert!(rendered.contains("url \"http://"));
     assert!(rendered.contains("sha256 \""));
     assert!(rendered.contains("depends_on \"rust\" => :build"));
-    assert!(rendered.contains("depends_on \"go\" => :build"));
     assert!(rendered.contains("cargo\", \"install\", \"--locked\""));
     assert!(rendered.contains("std_cargo_args(path: \"rust/crates/si-cli\")"));
     assert!(rendered.contains("mv bin/\"si-rs\", bin/\"si\""));
-    assert!(rendered.contains("system \"go\", \"build\""));
-    assert!(rendered.contains("bin/\"si-go\""));
 }
 
 #[test]
@@ -383,8 +385,7 @@ fn build_homebrew_render_tap_formula_writes_formula() {
     let rendered = fs::read_to_string(output).expect("read formula");
     assert!(rendered.contains("si_1.2.3_linux_amd64.tar.gz"));
     assert!(rendered.contains("sha4"));
-    assert!(rendered.contains("adapter = Dir["));
-    assert!(rendered.contains("bin.install adapter => \"si-go\""));
+    assert!(rendered.contains("bin.install binary => \"si\""));
 }
 
 #[test]
@@ -416,20 +417,6 @@ fn build_self_verify_release_assets_checks_archives() {
         &cargo_path,
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
-    let go_path = bin_dir.path().join("go");
-    fs::write(
-        &go_path,
-        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
-    )
-    .expect("write fake go");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&go_path).expect("stat fake go").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&go_path, perms).expect("chmod fake go");
-    }
-
     let out_dir = repo.path().join("out");
     let path_env = format!(
         "{}:{}",
@@ -534,7 +521,6 @@ fn build_installer_run_dry_run_reports_rust_usage() {
 
     let output = String::from_utf8_lossy(&output);
     assert!(output.contains("rust: using system cargo"));
-    assert!(output.contains("go: using system go"));
 }
 
 #[test]
@@ -548,11 +534,6 @@ fn build_installer_run_installs_fake_binary() {
     write_executable_shell_script(
         &cargo_path,
         "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo cargo 1.86.0\n  exit 0\nfi\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho installed\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
-    );
-    let go_path = bin_dir.path().join("go");
-    write_executable_shell_script(
-        &go_path,
-        "#!/bin/sh\nif [ \"$1\" = \"version\" ]; then\n  echo go version go1.22.0 linux/amd64\n  exit 0\nfi\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
     );
     let path_env = format!(
         "{}:{}",
@@ -578,18 +559,14 @@ fn build_installer_run_installs_fake_binary() {
         .success();
 
     let installed = install_dir.join("si");
-    let installed_go = install_dir.join("si-go");
     assert!(installed.exists());
-    assert!(installed_go.exists());
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        for path in [&installed, &installed_go] {
-            assert_eq!(
-                fs::metadata(path).expect("stat installed").permissions().mode() & 0o111,
-                0o111
-            );
-        }
+        assert_eq!(
+            fs::metadata(&installed).expect("stat installed").permissions().mode() & 0o111,
+            0o111
+        );
     }
 }
 
@@ -777,7 +754,7 @@ fn build_installer_smoke_homebrew_runs_fake_brew() {
     fs::write(
         &brew,
         format!(
-            "#!/bin/sh\nset -eu\nprefix={prefix}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"install\" ]; then formula=\"$3\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q 'file://' \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si-go\"; chmod 755 \"$prefix/bin/si-go\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"si-smoke\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ]; then rm -rf \"$prefix\"; exit 0; fi\nexit 1\n",
+            "#!/bin/sh\nset -eu\nprefix={prefix}\nif [ \"$1\" = \"--version\" ]; then echo Homebrew 4.0.0; exit 0; fi\nif [ \"$1\" = \"install\" ]; then formula=\"$3\"; grep -q 'class SiSmoke < Formula' \"$formula\"; grep -q 'file://' \"$formula\"; mkdir -p \"$prefix/bin\"; printf '#!/bin/sh\\nexit 0\\n' > \"$prefix/bin/si\"; chmod 755 \"$prefix/bin/si\"; exit 0; fi\nif [ \"$1\" = \"--prefix\" ] && [ \"$2\" = \"si-smoke\" ]; then printf '%s\\n' \"$prefix\"; exit 0; fi\nif [ \"$1\" = \"uninstall\" ]; then rm -rf \"$prefix\"; exit 0; fi\nexit 1\n",
             prefix = shell_escape_for_test(&brew_prefix)
         ),
     )
@@ -804,51 +781,56 @@ fn build_installer_smoke_homebrew_runs_fake_brew() {
 }
 
 #[test]
-fn aws_doctor_public_uses_go_compat_adapter() {
-    let dir = tempdir().expect("tempdir");
-    let go_compat = dir.path().join("si-go");
-    write_executable_shell_script(&go_compat, "#!/bin/sh\nprintf 'go compat %s\\n' \"$*\"\n");
+fn aws_doctor_public_runs_rust_probe() {
+    let base_url = spawn_single_response_server("200 OK", "<ok/>");
     let stdout = cargo_bin()
-        .args(["aws", "doctor", "--public", "true"])
-        .env("SI_GO_COMPAT_BIN", &go_compat)
+        .args(["aws", "doctor", "--public", "true", "--base-url", &base_url, "--format", "json"])
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
-    assert!(String::from_utf8_lossy(&stdout).contains("go compat aws doctor --public true"));
+    let payload: Value = serde_json::from_slice(&stdout).expect("parse json");
+    assert_eq!(payload["provider"], "aws_iam");
+    assert_eq!(payload["base_url"], base_url);
+    assert_eq!(payload["checks"][0]["name"], "public.probe");
+    assert_eq!(payload["checks"][0]["ok"], true);
 }
 
 #[test]
-fn apple_appstore_doctor_public_uses_go_compat_adapter() {
-    let dir = tempdir().expect("tempdir");
-    let go_compat = dir.path().join("si-go");
-    write_executable_shell_script(&go_compat, "#!/bin/sh\nprintf 'go compat %s\\n' \"$*\"\n");
+fn apple_appstore_doctor_public_runs_rust_probe() {
+    let url = format!(
+        "{}/sample-code/app-store-connect/app-store-connect-openapi-specification.zip",
+        spawn_single_response_server("200 OK", "zip")
+    );
     let stdout = cargo_bin()
-        .args(["apple", "appstore", "doctor", "--public", "true"])
-        .env("SI_GO_COMPAT_BIN", &go_compat)
+        .args(["apple", "appstore", "doctor", "--public", "true", "--format", "json"])
+        .env("SI_RUST_APPLE_APPSTORE_PUBLIC_PROBE_URL", &url)
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
-    assert!(String::from_utf8_lossy(&stdout).contains("go compat apple appstore doctor --public true"));
+    let payload: Value = serde_json::from_slice(&stdout).expect("parse json");
+    assert_eq!(payload["ok"], true);
+    assert_eq!(payload["probe"], url);
+    assert_eq!(payload["status_code"], 200);
 }
 
 #[test]
-fn oci_doctor_public_uses_go_compat_adapter() {
-    let dir = tempdir().expect("tempdir");
-    let go_compat = dir.path().join("si-go");
-    write_executable_shell_script(&go_compat, "#!/bin/sh\nprintf 'go compat %s\\n' \"$*\"\n");
+fn oci_doctor_public_runs_rust_probe() {
+    let base_url = spawn_single_response_server("200 OK", "{\"items\":[]}");
     let stdout = cargo_bin()
-        .args(["oci", "doctor", "--public", "true"])
-        .env("SI_GO_COMPAT_BIN", &go_compat)
+        .args(["oci", "doctor", "--public", "true", "--base-url", &base_url, "--format", "json"])
         .assert()
         .success()
         .get_output()
         .stdout
         .clone();
-    assert!(String::from_utf8_lossy(&stdout).contains("go compat oci doctor --public true"));
+    let payload: Value = serde_json::from_slice(&stdout).expect("parse json");
+    assert_eq!(payload["provider"], "oci_core");
+    assert_eq!(payload["base_url"], base_url);
+    assert_eq!(payload["checks"][0]["ok"], true);
 }
 
 #[test]
@@ -917,20 +899,12 @@ fn build_self_release_asset_creates_single_archive() {
         &cargo_path,
         "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
     );
-    let go_path = go_dir.path().join("go");
-    fs::write(
-        &go_path,
-        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then out=\"$2\"; shift 2; continue; fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
-    )
-    .expect("write fake go");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        for path in [&cargo_path, &go_path] {
-            let mut perms = fs::metadata(path).expect("stat tool").permissions();
-            perms.set_mode(0o755);
-            fs::set_permissions(path, perms).expect("chmod tool");
-        }
+        let mut perms = fs::metadata(&cargo_path).expect("stat tool").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&cargo_path, perms).expect("chmod tool");
     }
     let out_dir = repo.path().join("out");
     let path_env = format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
@@ -958,7 +932,6 @@ fn build_self_release_asset_creates_single_archive() {
         .collect::<Vec<_>>();
     names.sort();
     assert!(names.iter().any(|name| name.ends_with("/si")));
-    assert!(names.iter().any(|name| name.ends_with("/si-go")));
 }
 
 #[test]
