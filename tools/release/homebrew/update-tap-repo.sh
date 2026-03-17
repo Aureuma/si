@@ -3,4 +3,8 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "${ROOT}"
-exec cargo run -q -p si-rs-cli -- build homebrew update-tap-repo "$@"
+BIN="${ROOT}/.artifacts/cargo-target/release/si-rs"
+if [[ -x "${BIN}" ]]; then
+  exec "${BIN}" build homebrew update-tap-repo "$@"
+fi
+exec cargo run --locked --release -q -p si-rs-cli -- build homebrew update-tap-repo "$@"

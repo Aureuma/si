@@ -663,6 +663,8 @@ Status: in_progress
 - `/tmp/si-e2e-realhost-runs2.log` (parallelized batch before timeout cancellations)
 - `/tmp/si-hosttest-final.log` (cleaned command run with explicit options)
 - `/tmp/si-hosttest-final2.log` (verify/smoke follow-up attempts)
+- `/tmp/si-phase9-10-final-matrix.log` (latest partial matrix run with corrected root/context)
+- `/tmp/si-phase9-10-clean-matrix{2,3}.log` (full command matrix attempts with command-context cleanup)
 
 ### Execution plan and expected behavior
 
@@ -672,8 +674,8 @@ Status: in_progress
 | `si-rs build self validate-release-version --tag v0.54.0` | success with aligned tag message | PASS | Confirmed |
 | `si-rs build self validate-release-version --tag 0.54.0` | validation error (missing leading `v`) | PASS | Confirmed explicit error path |
 | `si-rs build self release-asset --version v0.54.0 --goos linux --goarch amd64` | produces single tarball + checksum side file if configured | **BLOCKED** | command did not complete in the current clean room run (terminated while compiling/working); earlier run had PASS before timeout |
-| `si-rs build self release-assets --version v0.54.0` | multi-arch tarballs + `checksums.txt` | **BLOCKED** | previous long run hit timeout around 7+ minutes before completion |
-| `si-rs build self verify-release-assets --version v0.54.0 --out-dir <dir>` | succeeds only when all expected artifacts exist in `<dir>` | PASS/FAIL | FAIL when running against `/tmp/si-e2e/releases/multi` because `si_0.54.0_darwin_arm64.tar.gz` missing from interrupted build |
+| `si-rs build self release-assets --version v0.54.0` | multi-arch tarballs + `checksums.txt` | **BLOCKED** | command was terminated during heavy compile on this host (~3.5+ archive targets produced before termination) |
+| `si-rs build self verify-release-assets --version v0.54.0 --out-dir <dir>` | succeeds only when all expected artifacts exist in `<dir>` | FAIL | missing `/tmp/si-e2e/releases/multi/checksums.txt` due incomplete `release-assets` run |
 | `si-rs build self run -- --help` | forwards args to built binary and prints top-level help | PASS | Verified |
 
 #### Installer lane
@@ -683,17 +685,17 @@ Status: in_progress
 | `si-rs build installer settings-helper --print` | prints default-browser stanza from settings | PASS | Verified |
 | `si-rs build installer settings-helper --default-browser safari` | writes/validates settings file | PASS | Write+check round trip succeeded |
 | `si-rs build installer smoke-homebrew` | runs if Homebrew available, otherwise explicit skip message | PASS | `SKIP` on this host (brew unavailable) |
-| `si-rs build installer smoke-host` | completes non-root workflow with `SI_INSTALL_SMOKE_SKIP_NONROOT=1` | BLOCKED | hangs in host smoke execution in this environment; requires environment-specific install inputs |
-| `si-rs build installer smoke-npm` | executes npm install smoke | BLOCKED | requires updated invocation (no `--version` flag) and host-side NPM tooling, not yet fully validated here |
-| `si-rs build installer smoke-docker` | executes docker smoke path (or explicit non-root skip behavior) | BLOCKED | requires source dir with installer scripts and docker runtime; this run reported missing installer dir from `/tmp/si-e2e` |
+| `SI_INSTALL_SMOKE_SKIP_NONROOT=1 si-rs build installer smoke-host` | completes non-root workflow | PASS | command passes at least through dry-run validation path in this environment |
+| `SI_INSTALL_SMOKE_SKIP_NONROOT=1 si-rs build installer smoke-npm` | executes npm install smoke | FAIL (timeout) | timed out after 600s; command appears to hang pending npm/tooling/network interactions |
+| `SI_INSTALL_SMOKE_SKIP_NONROOT=1 si-rs build installer smoke-docker` | executes docker smoke path (or non-root skip behavior) | FAIL (timeout) | timed out after 600s while waiting on docker path in this environment |
 
 #### Homebrew lane
 
 | Command | Expected result | Actual (2026-03-17) | Notes |
 | --- | --- | --- | --- |
 | `si-rs build homebrew render-core-formula --version v0.54.0 --output ...` | renders formula file | PASS | Verified |
-| `si-rs build homebrew render-tap-formula --version v0.54.0 --checksums ... --output ...` | renders tap formula | PASS | Verified |
-| `si-rs build homebrew update-tap-repo --version v0.54.0 --checksums ... --tap-dir ...` | updates tap repo formula file | PASS (commit mode) | `--dry-run` is not a supported flag |
+| `si-rs build homebrew render-tap-formula --version v0.54.0 --checksums ... --output ...` | renders tap formula | FAIL | missing checksums file because `release-assets` was not completed in this run |
+| `si-rs build homebrew update-tap-repo --version v0.54.0 --checksums ... --tap-dir ...` | updates tap repo formula file | FAIL | missing checksums file because `release-assets` step did not complete |
 | `si-rs build homebrew update-tap-repo --version ... --checksums ... --tap-dir ... --dry-run` | expected dry-run path | FAIL | CLI does not define `--dry-run` |
 
 #### npm lane
@@ -710,9 +712,10 @@ Status: in_progress
 | Script | Expected invocation | Actual (2026-03-17) | Notes |
 | --- | --- | --- | --- |
 | `tools/release/validate-release-version.sh --tag v0.54.0` | forwards to `si-rs build self validate-release-version --tag ...` | PASS | Uses `--tag` argument |
-| `tools/release/build-cli-release-asset.sh` | forwards to `build self release-asset` | BLOCKED | command requires long-running compile and did not complete in this run |
+| `tools/release/build-cli-release-asset.sh` | forwards to `build self release-asset` with `--out-dir` | BLOCKED | command invocation updated to pass `--out-dir`; still heavy and subject to long compile on first run |
 | `tools/release/build-cli-release-assets.sh` | forwards to `build self release-assets` | BLOCKED | not fully completed in this run |
-| `tools/release/verify-cli-release-assets.sh` | forwards to `build self verify-release-assets` | BLOCKED | not reached due preceding wrapper compile timeout |
+| `tools/release/verify-cli-release-assets.sh` | forwards to `build self verify-release-assets` with `--out-dir` | PASS / FAIL | requires a complete artifact directory; fails with checksums missing in `/tmp/.../wrapper-multi2` |
+| `tools/release/*.sh` | execute release-mode helper via release CLI | PASS | updated to prefer `${ROOT}/.artifacts/cargo-target/release/si-rs` when present, fallback to `cargo run --locked --release` |
 
 ### Next actions from this plan run
 
