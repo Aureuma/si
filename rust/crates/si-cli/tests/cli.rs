@@ -225,6 +225,161 @@ fn shell_escape_for_test(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "'\"'\"'"))
 }
 
+#[test]
+fn build_npm_publish_from_vault_uses_si_vault_wrapper() {
+    let repo = tempdir().expect("repo tempdir");
+    fs::create_dir_all(repo.path().join(".git")).expect("mkdir git dir");
+
+    let bin_dir = tempdir().expect("bin tempdir");
+    let args_file = bin_dir.path().join("vault-args.txt");
+    let si_path = bin_dir.path().join("si");
+    fs::write(
+        &si_path,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"vault\" ] && [ \"$2\" = \"check\" ]; then\n  exit 0\nfi\nif [ \"$1\" = \"vault\" ] && [ \"$2\" = \"list\" ]; then\n  echo 'NPM_GAT_AUREUMA_VANGUARDA masked'\n  exit 0\nfi\nif [ \"$1\" = \"vault\" ] && [ \"$2\" = \"run\" ]; then\n  printf '%s\\n' \"$@\" > {}\n  exit 0\nfi\nexit 1\n",
+            shell_escape_for_test(&args_file)
+        ),
+    )
+    .expect("write si");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(&si_path).expect("stat si").permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(&si_path, perms).expect("chmod si");
+    }
+
+    let path_env = format!(
+        "{}:{}",
+        bin_dir.path().display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+
+    cargo_bin()
+        .args([
+            "build",
+            "npm",
+            "publish-from-vault",
+            "--repo-root",
+            repo.path().to_str().expect("repo path"),
+            "--dry-run",
+        ])
+        .env("PATH", path_env)
+        .assert()
+        .success();
+
+    let args = fs::read_to_string(args_file).expect("read vault args");
+    assert!(args.contains("vault"));
+    assert!(args.contains("run"));
+    assert!(args.contains("build"));
+    assert!(args.contains("publish-package"));
+    assert!(args.contains("--dry-run"));
+}
+
+#[test]
+fn build_homebrew_render_core_formula_writes_formula() {
+    let dir = tempdir().expect("repo tempdir");
+    let out = dir.path().join("Formula/si.rb");
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let addr = listener.local_addr().expect("local addr");
+    let url = format!("http://{}", addr);
+
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("GET /Aureuma/si/archive/refs/tags/v1.2.3.tar.gz"));
+        let body = b"archive";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).expect("write head");
+        stream.write_all(body).expect("write body");
+    });
+
+    cargo_bin()
+        .args([
+            "build",
+            "homebrew",
+            "render-core-formula",
+            "--version",
+            "v1.2.3",
+            "--output",
+            out.to_str().expect("out"),
+        ])
+        .env("SI_RUST_HOMEBREW_SOURCE_BASE_URL", url)
+        .assert()
+        .success();
+
+    let rendered = fs::read_to_string(out).expect("read formula");
+    assert!(rendered.contains("homepage \"https://github.com/Aureuma/si\""));
+    assert!(rendered.contains("url \"http://"));
+    assert!(rendered.contains("sha256 \""));
+}
+
+#[test]
+fn build_homebrew_render_tap_formula_writes_formula() {
+    let dir = tempdir().expect("tempdir");
+    let checksums = dir.path().join("checksums.txt");
+    fs::write(
+        &checksums,
+        "sha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\n",
+    )
+    .expect("write checksums");
+    let output = dir.path().join("Formula/si.rb");
+
+    cargo_bin()
+        .args([
+            "build",
+            "homebrew",
+            "render-tap-formula",
+            "--version",
+            "v1.2.3",
+            "--checksums",
+            checksums.to_str().expect("checksums"),
+            "--output",
+            output.to_str().expect("output"),
+        ])
+        .assert()
+        .success();
+
+    let rendered = fs::read_to_string(output).expect("read formula");
+    assert!(rendered.contains("si_1.2.3_linux_amd64.tar.gz"));
+    assert!(rendered.contains("sha4"));
+}
+
+#[test]
+fn build_homebrew_update_tap_repo_writes_formula_without_commit() {
+    let dir = tempdir().expect("tempdir");
+    let tap_dir = dir.path().join("homebrew-si");
+    fs::create_dir_all(&tap_dir).expect("mkdir tap dir");
+    let checksums = dir.path().join("checksums.txt");
+    fs::write(
+        &checksums,
+        "sha1  si_1.2.3_darwin_arm64.tar.gz\nsha2  si_1.2.3_darwin_amd64.tar.gz\nsha3  si_1.2.3_linux_arm64.tar.gz\nsha4  si_1.2.3_linux_amd64.tar.gz\n",
+    )
+    .expect("write checksums");
+
+    cargo_bin()
+        .args([
+            "build",
+            "homebrew",
+            "update-tap-repo",
+            "--version",
+            "v1.2.3",
+            "--checksums",
+            checksums.to_str().expect("checksums"),
+            "--tap-dir",
+            tap_dir.to_str().expect("tap dir"),
+        ])
+        .assert()
+        .success();
+
+    assert!(tap_dir.join("Formula/si.rb").exists());
+}
+
 fn test_app_private_key_pem() -> &'static str {
     "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
 }

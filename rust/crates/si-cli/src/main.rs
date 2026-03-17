@@ -5,6 +5,7 @@ use chrono::{TimeZone, Utc};
 use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use flate2::Compression;
 use flate2::write::GzEncoder;
+use reqwest::blocking::Client as BlockingHttpClient;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -361,6 +362,11 @@ enum BuildCommand {
         #[command(subcommand)]
         command: BuildNpmCommand,
     },
+    #[command(name = "homebrew")]
+    Homebrew {
+        #[command(subcommand)]
+        command: BuildHomebrewCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -399,6 +405,60 @@ enum BuildNpmCommand {
         token_env: String,
         #[arg(long = "dry-run", action = ArgAction::SetTrue)]
         dry_run: bool,
+    },
+    #[command(name = "publish-from-vault")]
+    PublishFromVault {
+        #[arg(long = "repo-root")]
+        repo_root: Option<PathBuf>,
+        #[arg(long)]
+        version: Option<String>,
+        #[arg(long = "out-dir")]
+        out_dir: Option<PathBuf>,
+        #[arg(long = "token-env", default_value = "NPM_GAT_AUREUMA_VANGUARDA")]
+        token_env: String,
+        #[arg(long = "file")]
+        file: Option<PathBuf>,
+        #[arg(long = "dry-run", action = ArgAction::SetTrue)]
+        dry_run: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum BuildHomebrewCommand {
+    #[command(name = "render-core-formula")]
+    RenderCoreFormula {
+        #[arg(long)]
+        version: String,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long, default_value = "Aureuma/si")]
+        repo: String,
+    },
+    #[command(name = "render-tap-formula")]
+    RenderTapFormula {
+        #[arg(long)]
+        version: String,
+        #[arg(long)]
+        checksums: PathBuf,
+        #[arg(long)]
+        output: PathBuf,
+        #[arg(long, default_value = "Aureuma/si")]
+        repo: String,
+    },
+    #[command(name = "update-tap-repo")]
+    UpdateTapRepo {
+        #[arg(long)]
+        version: String,
+        #[arg(long)]
+        checksums: PathBuf,
+        #[arg(long = "tap-dir")]
+        tap_dir: PathBuf,
+        #[arg(long, default_value = "Aureuma/si")]
+        repo: String,
+        #[arg(long = "commit", action = ArgAction::SetTrue)]
+        commit: bool,
+        #[arg(long = "push", action = ArgAction::SetTrue)]
+        push: bool,
     },
 }
 
@@ -16845,6 +16905,277 @@ fn wait_for_npm_package(
     Ok(false)
 }
 
+fn run_publish_npm_from_vault(
+    repo_root: Option<PathBuf>,
+    version: Option<String>,
+    out_dir: Option<PathBuf>,
+    token_env: String,
+    vault_file: Option<PathBuf>,
+    dry_run: bool,
+) -> Result<()> {
+    let repo_root = resolve_release_repo_root(repo_root)?;
+    let si_cmd = resolve_si_command(&repo_root)?;
+    let token_env = token_env.trim().to_owned();
+    if token_env.is_empty() {
+        return Err(anyhow!("--token-env must not be empty"));
+    }
+
+    let mut vault_args = Vec::new();
+    if let Some(file) = vault_file {
+        vault_args.push("--file".to_owned());
+        vault_args.push(file.display().to_string());
+    }
+
+    let status = StdCommand::new(&si_cmd)
+        .current_dir(&repo_root)
+        .arg("vault")
+        .arg("check")
+        .args(&vault_args)
+        .status()
+        .with_context(|| format!("run {} vault check", si_cmd.display()))?;
+    if !status.success() {
+        return Err(anyhow!("vault check failed"));
+    }
+
+    let output = StdCommand::new(&si_cmd)
+        .current_dir(&repo_root)
+        .arg("vault")
+        .arg("list")
+        .args(&vault_args)
+        .output()
+        .with_context(|| format!("run {} vault list", si_cmd.display()))?;
+    if !output.status.success() {
+        return Err(anyhow!("vault list failed"));
+    }
+    if !vault_key_exists(&String::from_utf8_lossy(&output.stdout), &token_env) {
+        return Err(anyhow!("vault key {} not found", token_env));
+    }
+
+    let current_exe = std::env::current_exe().context("resolve current executable")?;
+    let mut nested_args = vec![
+        "build".to_owned(),
+        "npm".to_owned(),
+        "publish-package".to_owned(),
+        "--repo-root".to_owned(),
+        repo_root.display().to_string(),
+        "--token-env".to_owned(),
+        token_env.clone(),
+    ];
+    if let Some(version) = version {
+        nested_args.push("--version".to_owned());
+        nested_args.push(version);
+    }
+    if let Some(out_dir) = out_dir {
+        nested_args.push("--out-dir".to_owned());
+        nested_args.push(out_dir.display().to_string());
+    }
+    if dry_run {
+        nested_args.push("--dry-run".to_owned());
+    }
+
+    let status = StdCommand::new(&si_cmd)
+        .current_dir(&repo_root)
+        .arg("vault")
+        .arg("run")
+        .args(&vault_args)
+        .arg("--")
+        .arg(&current_exe)
+        .args(&nested_args)
+        .status()
+        .with_context(|| format!("run {} vault run", si_cmd.display()))?;
+    if !status.success() {
+        return Err(anyhow!("vault-run npm publish failed"));
+    }
+    Ok(())
+}
+
+fn resolve_si_command(repo_root: &Path) -> Result<PathBuf> {
+    let local = repo_root.join("si");
+    if local.exists() {
+        return Ok(local);
+    }
+    let path = std::env::var_os("PATH").ok_or_else(|| anyhow!("PATH is not set"))?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join("si");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err(anyhow!("si CLI not found (expected <repo>/si or si in PATH)"))
+}
+
+fn vault_key_exists(output: &str, key: &str) -> bool {
+    output.lines().any(|line| {
+        line.split_whitespace()
+            .next()
+            .map(|value| value == key)
+            .unwrap_or(false)
+    })
+}
+
+fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: String) -> Result<()> {
+    validate_release_version(&version)?;
+    let source_base = std::env::var("SI_RUST_HOMEBREW_SOURCE_BASE_URL")
+        .unwrap_or_else(|_| "https://github.com".to_owned());
+    let source_url = format!(
+        "{}/{}/archive/refs/tags/{}.tar.gz",
+        source_base.trim_end_matches('/'),
+        repo.trim(),
+        version.trim()
+    );
+    let temp = tempfile::NamedTempFile::new().context("create temp homebrew source archive")?;
+    download_file(&source_url, temp.path())?;
+    let digest = sha256_file(temp.path())?;
+    let content = format!(
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"go\" => :build\n\n  def install\n    system \"go\", \"build\", *std_go_args(ldflags: \"-s -w\"), \"./tools/si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
+    );
+    if let Some(parent) = output.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    fs::write(&output, content).with_context(|| format!("write {}", output.display()))?;
+    println!("rendered {}", output.display());
+    Ok(())
+}
+
+fn run_homebrew_render_tap_formula(
+    version: String,
+    checksums: PathBuf,
+    output: PathBuf,
+    repo: String,
+) -> Result<()> {
+    render_tap_formula(&version, &checksums, &output, &repo)
+}
+
+fn run_homebrew_update_tap_repo(
+    version: String,
+    checksums: PathBuf,
+    tap_dir: PathBuf,
+    repo: String,
+    do_commit: bool,
+    do_push: bool,
+) -> Result<()> {
+    validate_release_version(&version)?;
+    if !tap_dir.is_dir() {
+        return Err(anyhow!("tap dir does not exist: {}", tap_dir.display()));
+    }
+    let formula_dir = tap_dir.join("Formula");
+    fs::create_dir_all(&formula_dir).with_context(|| format!("create {}", formula_dir.display()))?;
+    let formula_path = formula_dir.join("si.rb");
+    render_tap_formula(&version, &checksums, &formula_path, &repo)?;
+    if !do_commit {
+        return Ok(());
+    }
+    run_command_checked(&tap_dir, "git", ["add", "Formula/si.rb"])?;
+    let status = StdCommand::new("git")
+        .current_dir(&tap_dir)
+        .args(["diff", "--cached", "--quiet"])
+        .status()
+        .context("run git diff --cached --quiet")?;
+    if status.success() {
+        println!("no formula changes to commit");
+        return Ok(());
+    }
+    run_command_checked(
+        &tap_dir,
+        "git",
+        ["commit", "-m", &format!("chore: update si formula to {}", version.trim())],
+    )?;
+    if do_push {
+        run_command_checked(&tap_dir, "git", ["push"])?;
+    }
+    Ok(())
+}
+
+fn validate_release_version(version: &str) -> Result<()> {
+    if !version.trim().starts_with('v') {
+        return Err(anyhow!("version must include v prefix, got: {}", version.trim()));
+    }
+    if version.trim() == "v" {
+        return Err(anyhow!("invalid version"));
+    }
+    Ok(())
+}
+
+fn download_file(url: &str, output: &Path) -> Result<()> {
+    let response = BlockingHttpClient::new()
+        .get(url)
+        .send()
+        .with_context(|| format!("download {}", url))?;
+    let response = response
+        .error_for_status()
+        .with_context(|| format!("download {}", url))?;
+    let bytes = response.bytes().context("read download body")?;
+    fs::write(output, &bytes).with_context(|| format!("write {}", output.display()))?;
+    Ok(())
+}
+
+fn render_tap_formula(version: &str, checksums_path: &Path, output_path: &Path, repo: &str) -> Result<()> {
+    validate_release_version(version)?;
+    if !checksums_path.exists() {
+        return Err(anyhow!("checksums file not found: {}", checksums_path.display()));
+    }
+    let version_no_v = version.trim_start_matches('v');
+    let sha_by_asset = parse_checksums_file(checksums_path)?;
+    let lookup = |name: &str| -> Result<String> {
+        sha_by_asset
+            .get(name)
+            .filter(|value| !value.trim().is_empty())
+            .cloned()
+            .ok_or_else(|| anyhow!("checksum not found for {}", name))
+    };
+    let asset_darwin_arm64 = format!("si_{version_no_v}_darwin_arm64.tar.gz");
+    let asset_darwin_amd64 = format!("si_{version_no_v}_darwin_amd64.tar.gz");
+    let asset_linux_arm64 = format!("si_{version_no_v}_linux_arm64.tar.gz");
+    let asset_linux_amd64 = format!("si_{version_no_v}_linux_amd64.tar.gz");
+    let base_url = format!("https://github.com/{}/releases/download/{}", repo, version);
+    let content = format!(
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  version \"{version_no_v}\"\n  license \"AGPL-3.0-only\"\n\n  on_macos do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_darwin_arm64}\"\n      sha256 \"{}\"\n    else\n      url \"{base_url}/{asset_darwin_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  on_linux do\n    if Hardware::CPU.arm?\n      url \"{base_url}/{asset_linux_arm64}\"\n      sha256 \"{}\"\n    elsif Hardware::CPU.intel?\n      url \"{base_url}/{asset_linux_amd64}\"\n      sha256 \"{}\"\n    end\n  end\n\n  def install\n    stage = buildpath/\"si-stage\"\n    stage.mkpath\n    system \"tar\", \"-xzf\", cached_download, \"-C\", stage\n\n    binary = Dir[\"#{{stage}}/si_*/si\"].first\n    binary = (stage/\"si\").to_s if binary.nil? && (stage/\"si\").exist?\n    raise \"si binary not found in release archive\" if binary.nil? || binary.empty?\n\n    bin.install binary => \"si\"\n    chmod 0o755, bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n",
+        lookup(&asset_darwin_arm64)?,
+        lookup(&asset_darwin_amd64)?,
+        lookup(&asset_linux_arm64)?,
+        lookup(&asset_linux_amd64)?,
+    );
+    if let Some(parent) = output_path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    fs::write(output_path, content)
+        .with_context(|| format!("write {}", output_path.display()))?;
+    println!("rendered {}", output_path.display());
+    Ok(())
+}
+
+fn parse_checksums_file(path: &Path) -> Result<std::collections::HashMap<String, String>> {
+    let raw = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
+    let mut out = std::collections::HashMap::new();
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let mut parts = trimmed.split_whitespace();
+        let sha = parts.next().ok_or_else(|| anyhow!("invalid checksum line"))?;
+        let name = parts.next().ok_or_else(|| anyhow!("invalid checksum line"))?;
+        out.insert(name.to_owned(), sha.to_owned());
+    }
+    Ok(out)
+}
+
+fn run_command_checked<const N: usize>(dir: &Path, name: &str, args: [&str; N]) -> Result<()> {
+    let output = StdCommand::new(name)
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .with_context(|| format!("run {}", name))?;
+    if !output.status.success() {
+        return Err(anyhow!(
+            "{} failed: {}",
+            name,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -16874,6 +17205,42 @@ fn main() -> Result<()> {
                     token_env,
                     dry_run,
                 } => run_publish_npm_package(repo_root, version, out_dir, token_env, dry_run)?,
+                BuildNpmCommand::PublishFromVault {
+                    repo_root,
+                    version,
+                    out_dir,
+                    token_env,
+                    file,
+                    dry_run,
+                } => run_publish_npm_from_vault(
+                    repo_root,
+                    version,
+                    out_dir,
+                    token_env,
+                    file,
+                    dry_run,
+                )?,
+            },
+            BuildCommand::Homebrew { command } => match command {
+                BuildHomebrewCommand::RenderCoreFormula {
+                    version,
+                    output,
+                    repo,
+                } => run_homebrew_render_core_formula(version, output, repo)?,
+                BuildHomebrewCommand::RenderTapFormula {
+                    version,
+                    checksums,
+                    output,
+                    repo,
+                } => run_homebrew_render_tap_formula(version, checksums, output, repo)?,
+                BuildHomebrewCommand::UpdateTapRepo {
+                    version,
+                    checksums,
+                    tap_dir,
+                    repo,
+                    commit,
+                    push,
+                } => run_homebrew_update_tap_repo(version, checksums, tap_dir, repo, commit, push)?,
             },
         },
         Command::Commands { command } => match command {
