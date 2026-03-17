@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
+use tar::Archive;
 use std::thread;
 use tempfile::tempdir;
 
@@ -38,10 +39,15 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     .expect("write main");
 
     let go_dir = tempdir().expect("go tempdir");
+    let cargo_path = go_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
     let go_path = go_dir.path().join("go");
     fs::write(
         &go_path,
-        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho si\\n' > \"$out\"\nchmod 755 \"$out\"\n",
+        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then\n    out=\"$2\"\n    shift 2\n    continue\n  fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
     )
     .expect("write fake go");
     #[cfg(unix)]
@@ -85,6 +91,17 @@ fn build_self_release_assets_writes_archives_and_checksums() {
     let checksums = fs::read_to_string(out_dir.join("checksums.txt")).expect("read checksums");
     assert!(checksums.contains("si_1.2.3_linux_amd64.tar.gz"));
     assert_eq!(checksums.lines().count(), 5);
+    let file = File::open(out_dir.join("si_1.2.3_linux_amd64.tar.gz")).expect("open archive");
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+    let mut names = archive
+        .entries()
+        .expect("archive entries")
+        .map(|entry| entry.expect("entry").path().expect("entry path").display().to_string())
+        .collect::<Vec<_>>();
+    names.sort();
+    assert!(names.iter().any(|name| name.ends_with("/si")));
+    assert!(names.iter().any(|name| name.ends_with("/si-go")));
 }
 
 #[test]
@@ -758,18 +775,25 @@ fn build_self_release_asset_creates_single_archive() {
     .expect("write version");
     fs::write(repo.path().join("tools/si/main.go"), "package main\n\nfunc main() {}\n").expect("write main");
     let go_dir = tempdir().expect("go tempdir");
+    let cargo_path = go_dir.path().join("cargo");
+    write_executable_shell_script(
+        &cargo_path,
+        "#!/bin/sh\nmkdir -p \"$CARGO_TARGET_DIR/release\"\nprintf '#!/bin/sh\\necho si\\n' > \"$CARGO_TARGET_DIR/release/si-rs\"\nchmod 755 \"$CARGO_TARGET_DIR/release/si-rs\"\n",
+    );
     let go_path = go_dir.path().join("go");
     fs::write(
         &go_path,
-        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then out=\"$2\"; shift 2; continue; fi\n  shift\ndone\nprintf '#!/bin/sh\\necho si\\n' > \"$out\"\nchmod 755 \"$out\"\n",
+        "#!/bin/sh\nout=\"\"\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = \"-o\" ]; then out=\"$2\"; shift 2; continue; fi\n  shift\ndone\nprintf '#!/bin/sh\\necho compat\\n' > \"$out\"\nchmod 755 \"$out\"\n",
     )
     .expect("write fake go");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = fs::metadata(&go_path).expect("stat go").permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&go_path, perms).expect("chmod go");
+        for path in [&cargo_path, &go_path] {
+            let mut perms = fs::metadata(path).expect("stat tool").permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms).expect("chmod tool");
+        }
     }
     let out_dir = repo.path().join("out");
     let path_env = format!("{}:{}", go_dir.path().display(), std::env::var("PATH").unwrap_or_default());
@@ -785,7 +809,19 @@ fn build_self_release_asset_creates_single_archive() {
         .env("PATH", path_env)
         .assert()
         .success();
-    assert!(out_dir.join("si_1.2.3_linux_amd64.tar.gz").exists());
+    let archive = out_dir.join("si_1.2.3_linux_amd64.tar.gz");
+    assert!(archive.exists());
+    let file = File::open(&archive).expect("open archive");
+    let decoder = flate2::read::GzDecoder::new(file);
+    let mut archive = Archive::new(decoder);
+    let mut names = archive
+        .entries()
+        .expect("archive entries")
+        .map(|entry| entry.expect("entry").path().expect("entry path").display().to_string())
+        .collect::<Vec<_>>();
+    names.sort();
+    assert!(names.iter().any(|name| name.ends_with("/si")));
+    assert!(names.iter().any(|name| name.ends_with("/si-go")));
 }
 
 #[test]

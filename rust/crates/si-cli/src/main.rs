@@ -16724,7 +16724,55 @@ fn build_release_asset(
     fs::create_dir_all(&staging_dir)
         .with_context(|| format!("create {}", staging_dir.display()))?;
 
+    let cargo_target_dir = temp.path().join("cargo-target");
     let output_path = staging_dir.join("si");
+    let mut cargo_command = StdCommand::new("cargo");
+    cargo_command
+        .current_dir(repo_root)
+        .env("CARGO_TARGET_DIR", &cargo_target_dir)
+        .env("GOOS", goos)
+        .env("GOARCH", goarch)
+        .arg("build")
+        .arg("--release")
+        .arg("--locked")
+        .arg("--manifest-path")
+        .arg("rust/crates/si-cli/Cargo.toml")
+        .arg("--bin")
+        .arg("si-rs");
+    if let Some(goarm) = goarm {
+        cargo_command.env("GOARM", goarm);
+    }
+    let output = cargo_command
+        .output()
+        .context("run cargo build for release asset")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        return Err(anyhow!(
+            "cargo build failed for {goos}/{goarch}: {}{}{}",
+            output.status,
+            if stdout.trim().is_empty() { "" } else { "\nstdout:\n" },
+            if stdout.trim().is_empty() {
+                stderr.trim().to_owned()
+            } else {
+                format!("{}\nstderr:\n{}", stdout.trim(), stderr.trim())
+            },
+        ));
+    }
+    let built_binary = cargo_target_dir.join("release").join(if cfg!(windows) {
+        "si-rs.exe"
+    } else {
+        "si-rs"
+    });
+    fs::copy(&built_binary, &output_path).with_context(|| {
+        format!(
+            "copy built release binary {} to {}",
+            built_binary.display(),
+            output_path.display()
+        )
+    })?;
+
+    let go_output_path = staging_dir.join("si-go");
     let mut command = StdCommand::new("go");
     command
         .current_dir(repo_root)
@@ -16737,7 +16785,7 @@ fn build_release_asset(
         .arg("-ldflags")
         .arg("-s -w")
         .arg("-o")
-        .arg(&output_path)
+        .arg(&go_output_path)
         .arg("./tools/si");
     if let Some(goarm) = goarm {
         command.env("GOARM", goarm);
@@ -16756,12 +16804,14 @@ fn build_release_asset(
 
     #[cfg(unix)]
     {
-        let mut perms = fs::metadata(&output_path)
-            .with_context(|| format!("stat {}", output_path.display()))?
-            .permissions();
-        perms.set_mode(0o755);
-        fs::set_permissions(&output_path, perms)
-            .with_context(|| format!("chmod {}", output_path.display()))?;
+        for path in [&output_path, &go_output_path] {
+            let mut perms = fs::metadata(path)
+                .with_context(|| format!("stat {}", path.display()))?
+                .permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(path, perms)
+                .with_context(|| format!("chmod {}", path.display()))?;
+        }
     }
 
     for required in ["README.md", "LICENSE"] {
