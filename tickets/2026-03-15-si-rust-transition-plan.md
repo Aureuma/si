@@ -152,6 +152,7 @@ Exit criteria:
 
 Progress notes:
 
+- completed: the first Phase 9 cutover slice now flips the Homebrew core formula renderer to build and install the Rust CLI as the primary `si` binary from `rust/crates/si-cli`, replacing the prior Go `./tools/si` source-build path while leaving the release-asset/tap lane as the next adjacent cutover surface
 - completed: initial Rust command manifest crate with parity tests against Go root command registration
 - completed: Rust read-only `help` and `commands list` surface backed by the manifest
 - completed: core settings subset for `schema_version`, `paths`, `codex`, and `dyad`

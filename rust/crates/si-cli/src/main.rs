@@ -17931,7 +17931,7 @@ fn run_homebrew_render_core_formula(version: String, output: PathBuf, repo: Stri
     download_file(&source_url, temp.path())?;
     let digest = sha256_file(temp.path())?;
     let content = format!(
-        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"go\" => :build\n\n  def install\n    system \"go\", \"build\", *std_go_args(ldflags: \"-s -w\"), \"./tools/si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
+        "class Si < Formula\n  desc \"AI-first CLI for orchestrating coding agents and provider operations\"\n  homepage \"https://github.com/{repo}\"\n  url \"{source_url}\"\n  sha256 \"{digest}\"\n  license \"AGPL-3.0-only\"\n  head \"https://github.com/{repo}.git\", branch: \"main\"\n\n  depends_on \"rust\" => :build\n\n  def install\n    system \"cargo\", \"install\", \"--locked\", *std_cargo_args(path: \"rust/crates/si-cli\"), \"--bin\", \"si-rs\"\n    mv bin/\"si-rs\", bin/\"si\"\n  end\n\n  test do\n    output = shell_output(\"#{{bin}}/si version\")\n    assert_match \"si version\", output\n  end\nend\n"
     );
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
