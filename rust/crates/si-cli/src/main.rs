@@ -47,8 +47,8 @@ use si_rs_provider_apple::{
     run_api_request as run_apple_appstore_api_request,
 };
 use si_rs_provider_aws::{
-    AWSAPIRequest, AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry, AWSCurrentContext,
-    AWSRuntimeContext, execute_api_request as execute_aws_api_request,
+    AWSAPIRequest, AWSAPIResponse, AWSAuthOverrides, AWSAuthStatus, AWSContextListEntry,
+    AWSCurrentContext, AWSRuntimeContext, execute_api_request as execute_aws_api_request,
     list_contexts as list_aws_contexts, render_context_list_text as render_aws_context_list_text,
     preview_access_key as preview_aws_access_key,
     resolve_current_context as resolve_aws_current_context, resolve_runtime as resolve_aws_runtime,
@@ -1692,6 +1692,14 @@ enum AWSCommand {
         #[command(subcommand)]
         command: AWSAuthCommand,
     },
+    Sts {
+        #[command(subcommand)]
+        command: AWSStsCommand,
+    },
+    Iam {
+        #[command(subcommand)]
+        command: AWSIamCommand,
+    },
     Doctor {
         #[arg(long)]
         account: Option<String>,
@@ -1761,6 +1769,166 @@ enum AWSContextCommand {
         format: OutputFormat,
     },
     Current {
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSStsCommand {
+    GetCallerIdentity {
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    AssumeRole {
+        #[arg(long)]
+        role_arn: String,
+        #[arg(long)]
+        session_name: Option<String>,
+        #[arg(long, default_value_t = 3600)]
+        duration_seconds: i32,
+        #[arg(long)]
+        external_id: Option<String>,
+        #[arg(long)]
+        source_identity: Option<String>,
+        #[arg(long)]
+        serial_number: Option<String>,
+        #[arg(long)]
+        token_code: Option<String>,
+        #[arg(long)]
+        policy: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSIamCommand {
+    User {
+        #[command(subcommand)]
+        command: AWSIamUserCommand,
+    },
+    Query {
+        #[arg(long)]
+        action: String,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value_t = false, action = ArgAction::Set)]
+        raw: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum AWSIamUserCommand {
+    Create {
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        path: Option<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long, default_value = "text")]
+        format: OutputFormat,
+    },
+    AttachPolicy {
+        #[arg(long)]
+        user: String,
+        #[arg(long)]
+        policy_arn: String,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        region: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        access_key: Option<String>,
+        #[arg(long)]
+        secret_key: Option<String>,
+        #[arg(long)]
+        session_token: Option<String>,
         #[arg(long)]
         home: Option<PathBuf>,
         #[arg(long)]
@@ -10652,6 +10820,171 @@ fn main() -> Result<()> {
                     )?
                 }
             },
+            AWSCommand::Sts { command } => match command {
+                AWSStsCommand::GetCallerIdentity {
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_sts_get_caller_identity(
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+                AWSStsCommand::AssumeRole {
+                    role_arn,
+                    session_name,
+                    duration_seconds,
+                    external_id,
+                    source_identity,
+                    serial_number,
+                    token_code,
+                    policy,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_sts_assume_role(
+                        role_arn,
+                        session_name,
+                        duration_seconds,
+                        external_id,
+                        source_identity,
+                        serial_number,
+                        token_code,
+                        policy,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+            },
+            AWSCommand::Iam { command } => match command {
+                AWSIamCommand::User { command } => match command {
+                    AWSIamUserCommand::Create {
+                        name,
+                        path,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_iam_user_create(
+                            name,
+                            path,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                    AWSIamUserCommand::AttachPolicy {
+                        user,
+                        policy_arn,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        json,
+                        format,
+                    } => {
+                        let format = if json { OutputFormat::Json } else { format };
+                        run_aws_iam_user_attach_policy(
+                            user,
+                            policy_arn,
+                            account,
+                            region,
+                            base_url,
+                            access_key,
+                            secret_key,
+                            session_token,
+                            home,
+                            settings_file,
+                            format,
+                        )?
+                    }
+                },
+                AWSIamCommand::Query {
+                    action,
+                    params,
+                    account,
+                    region,
+                    base_url,
+                    access_key,
+                    secret_key,
+                    session_token,
+                    home,
+                    settings_file,
+                    json,
+                    raw,
+                    format,
+                } => {
+                    let format = if json { OutputFormat::Json } else { format };
+                    run_aws_iam_query(
+                        action,
+                        params,
+                        account,
+                        region,
+                        base_url,
+                        access_key,
+                        secret_key,
+                        session_token,
+                        home,
+                        settings_file,
+                        format,
+                        raw,
+                    )?
+                }
+            },
             AWSCommand::Doctor {
                 account,
                 region,
@@ -19065,6 +19398,311 @@ where
     )
     .map_err(anyhow::Error::msg)?;
     request(runtime).map_err(anyhow::Error::msg)
+}
+
+fn aws_default_service_endpoint(service: &str, region: &str) -> String {
+    let service = service.trim().to_ascii_lowercase();
+    let region = if region.trim().is_empty() {
+        "us-east-1"
+    } else {
+        region.trim()
+    };
+    match service.as_str() {
+        "iam" => "https://iam.amazonaws.com".to_owned(),
+        "sts" => {
+            if region == "us-east-1" {
+                "https://sts.amazonaws.com".to_owned()
+            } else {
+                format!("https://sts.{region}.amazonaws.com")
+            }
+        }
+        _ => format!("https://{service}.{region}.amazonaws.com"),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_aws_service_request<T, F>(
+    service: &str,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    request: F,
+) -> Result<T>
+where
+    F: FnOnce(AWSRuntimeContext) -> std::result::Result<T, String>,
+{
+    let explicit_base_url = base_url.clone();
+    execute_aws_request(
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |mut runtime| {
+            if explicit_base_url.as_deref().unwrap_or_default().trim().is_empty() {
+                runtime.base_url = aws_default_service_endpoint(service, &runtime.region);
+            }
+            request(runtime)
+        },
+    )
+}
+
+fn aws_query_body(action: &str, version: &str, params: &BTreeMap<String, String>) -> String {
+    let mut encoded = BTreeMap::new();
+    encoded.insert("Action".to_owned(), action.trim().to_owned());
+    encoded.insert("Version".to_owned(), version.trim().to_owned());
+    for (key, value) in params {
+        if key.trim().is_empty() {
+            continue;
+        }
+        encoded.insert(key.trim().to_owned(), value.trim().to_owned());
+    }
+    url::form_urlencoded::Serializer::new(String::new())
+        .extend_pairs(encoded.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+        .finish()
+}
+
+fn execute_aws_query(
+    runtime: &AWSRuntimeContext,
+    service: &str,
+    version: &str,
+    action: &str,
+    params: &BTreeMap<String, String>,
+) -> std::result::Result<AWSAPIResponse, String> {
+    execute_aws_api_request(
+        runtime,
+        &AWSAPIRequest {
+            method: "POST".to_owned(),
+            path: "/".to_owned(),
+            service: service.to_owned(),
+            body: aws_query_body(action, version, params),
+            ..AWSAPIRequest::default()
+        },
+    )
+}
+
+fn print_aws_api_response(response: &AWSAPIResponse, format: OutputFormat, raw: bool) -> Result<()> {
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(response)?),
+        OutputFormat::Text => {
+            fn or_dash(value: &str) -> &str {
+                if value.trim().is_empty() { "-" } else { value }
+            }
+            if raw {
+                println!("{}", response.body);
+                return Ok(());
+            }
+            println!("Status: {} {}", response.status_code, or_dash(&response.status));
+            if !response.request_id.trim().is_empty() {
+                println!("Request ID: {}", response.request_id);
+            }
+            if response.data != Value::Null {
+                println!("{}", serde_json::to_string_pretty(&response.data)?);
+            } else if !response.body.trim().is_empty() {
+                println!("{}", response.body);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_sts_get_caller_identity(
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let response = execute_aws_service_request(
+        "sts",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "sts", "2011-06-15", "GetCallerIdentity", &BTreeMap::new()),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_sts_assume_role(
+    role_arn: String,
+    session_name: Option<String>,
+    duration_seconds: i32,
+    external_id: Option<String>,
+    source_identity: Option<String>,
+    serial_number: Option<String>,
+    token_code: Option<String>,
+    policy: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let session_name = session_name.unwrap_or_else(|| format!("si-{}", Utc::now().timestamp()));
+    let mut params = BTreeMap::new();
+    params.insert("RoleArn".to_owned(), role_arn);
+    params.insert("RoleSessionName".to_owned(), session_name);
+    if duration_seconds > 0 {
+        params.insert("DurationSeconds".to_owned(), duration_seconds.to_string());
+    }
+    if let Some(value) = external_id.filter(|value| !value.trim().is_empty()) {
+        params.insert("ExternalId".to_owned(), value.trim().to_owned());
+    }
+    if let Some(value) = source_identity.filter(|value| !value.trim().is_empty()) {
+        params.insert("SourceIdentity".to_owned(), value.trim().to_owned());
+    }
+    if let Some(value) = serial_number.filter(|value| !value.trim().is_empty()) {
+        params.insert("SerialNumber".to_owned(), value.trim().to_owned());
+    }
+    if let Some(value) = token_code.filter(|value| !value.trim().is_empty()) {
+        params.insert("TokenCode".to_owned(), value.trim().to_owned());
+    }
+    if let Some(value) = policy.filter(|value| !value.trim().is_empty()) {
+        params.insert("Policy".to_owned(), value.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "sts",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "sts", "2011-06-15", "AssumeRole", &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_iam_user_create(
+    name: String,
+    path: Option<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    params.insert("UserName".to_owned(), name);
+    if let Some(value) = path.filter(|value| !value.trim().is_empty()) {
+        params.insert("Path".to_owned(), value.trim().to_owned());
+    }
+    let response = execute_aws_service_request(
+        "iam",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", "CreateUser", &params),
+    )?;
+    print_aws_api_response(&response, format, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_iam_user_attach_policy(
+    user: String,
+    policy_arn: String,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+) -> Result<()> {
+    let mut params = BTreeMap::new();
+    params.insert("UserName".to_owned(), user);
+    params.insert("PolicyArn".to_owned(), policy_arn);
+    let response = execute_aws_service_request(
+        "iam",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", "AttachUserPolicy", &params),
+    )?;
+    print_aws_api_response(&response, format, false)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_aws_iam_query(
+    action: String,
+    params: Vec<String>,
+    account: Option<String>,
+    region: Option<String>,
+    base_url: Option<String>,
+    access_key: Option<String>,
+    secret_key: Option<String>,
+    session_token: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+    format: OutputFormat,
+    raw: bool,
+) -> Result<()> {
+    let params = params.into_iter().filter_map(|entry| {
+        let (key, value) = entry.split_once('=')?;
+        let key = key.trim().to_owned();
+        if key.is_empty() {
+            None
+        } else {
+            Some((key, value.trim().to_owned()))
+        }
+    }).collect::<BTreeMap<_, _>>();
+    let response = execute_aws_service_request(
+        "iam",
+        account,
+        region,
+        base_url,
+        access_key,
+        secret_key,
+        session_token,
+        home,
+        settings_file,
+        |runtime| execute_aws_query(&runtime, "iam", "2010-05-08", &action, &params),
+    )?;
+    print_aws_api_response(&response, format, raw)
 }
 
 #[allow(clippy::too_many_arguments)]
