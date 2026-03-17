@@ -75,7 +75,7 @@ Core:
   si oci <auth|context|doctor|identity|network|compute|oracular|raw>
   si providers <characteristics|health> [--provider <id>] [--json]
   si orbits <list|info|install|update|uninstall|enable|disable|doctor|register|scaffold|policy>
-  si build <image|self>
+  si build <image>
   si mintlify <init|dev|validate|broken-links|openapi-check|a11y|rename|update|upgrade|migrate-mdx|version|raw> [args...]
   si viva [--repo <path>] [--bin <path>] [--build] -- <viva-args...>
   si viva node <list|show|set|delete|set-default|doctor|ssh|mosh|rsync|bootstrap> [args]
@@ -89,7 +89,6 @@ Core:
 
 Build:
   si build image [--skip-preflight] [--preflight-only]   (runs codex compatibility preflight, then builds aureuma/si:local)
-  si build self                   (upgrades installed si by default; see "build" below)
 
 Profiles:
   si status [profile]      (codex profiles)
@@ -253,14 +252,7 @@ codex:
 
 build:
   si build image [--skip-preflight] [--preflight-only]
-  si build self [--repo <path>] [--install-path <path>] [--no-upgrade] [--output <path>]
-  si build self upgrade [--repo <path>] [--install-path <path>]
-  si build self run [--repo <path>] [--] [si args...]
     Note: image builds use buildx directly when available, else classic docker build.
-
-  Typical workflows:
-    Stable use: run si build self to upgrade installed si from your checkout.
-    Active dev: run si build self --no-upgrade --output ./si or si build self run -- <args...> from your checkout.
 
 mintlify:
   si mintlify init [--repo <path>] [--docs-dir <path>] [--name <site>] [--site-url <url>] [--force]
