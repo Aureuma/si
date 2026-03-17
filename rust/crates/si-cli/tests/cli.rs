@@ -14,6 +14,10 @@ fn cargo_bin() -> Command {
     Command::cargo_bin("si-rs").expect("si-rs binary should build")
 }
 
+fn test_app_private_key_pem() -> &'static str {
+    "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----"
+}
+
 #[test]
 fn google_youtube_context_current_json_reads_settings() {
     let home = tempdir().expect("tempdir");
@@ -317,6 +321,282 @@ default_language_code = "en"
     let parsed: Value = serde_json::from_slice(&output).expect("json output");
     assert_eq!(parsed["ok"], true);
     assert_eq!(parsed["checks"].as_array().expect("checks").len(), 3);
+}
+
+#[test]
+fn google_play_context_current_json_reads_settings() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let service_json = format!(
+        r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"https://oauth2.googleapis.com/token"}}"#,
+        test_app_private_key_pem().replace('\n', "\\n")
+    );
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "test"
+
+[google.play.accounts.test]
+project_id = "acme-project"
+developer_account_id = "dev-123"
+default_package_name = "com.acme.app"
+default_language_code = "en-US"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    let output = cargo_bin()
+        .args(["google", "play", "context", "current", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["account_alias"], "test");
+    assert_eq!(parsed["developer_account_id"], "dev-123");
+    assert_eq!(parsed["default_package_name"], "com.acme.app");
+}
+
+#[test]
+fn google_play_auth_status_json_verifies_package() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let token_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let token_addr = token_listener.local_addr().expect("local addr");
+    let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let api_addr = api_listener.local_addr().expect("local addr");
+    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "test"
+
+[google.play]
+api_base_url = "http://{api_addr}"
+
+[google.play.accounts.test]
+project_id = "acme-project"
+default_package_name = "com.acme.app"
+"#
+        ),
+    )
+    .expect("write settings");
+
+    thread::spawn(move || {
+        for _ in 0..2 {
+            let (mut stream, _) = token_listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let _ = stream.read(&mut buffer).expect("read request");
+            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).expect("write response");
+        }
+    });
+    thread::spawn(move || {
+        for body in [r#"{"id":"edit-1"}"#, ""] {
+            let (mut stream, _) = api_listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let read = stream.read(&mut buffer).expect("read request");
+            let request = String::from_utf8_lossy(&buffer[..read]);
+            if body.is_empty() {
+                assert!(request.contains("DELETE /androidpublisher/v3/applications/com.acme.app/edits/edit-1"));
+                let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string();
+                stream.write_all(response.as_bytes()).expect("write response");
+            } else {
+                assert!(request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits"));
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).expect("write response");
+            }
+        }
+    });
+
+    let output = cargo_bin()
+        .args(["google", "play", "auth", "status", "--home"])
+        .arg(home.path())
+        .args(["--verify-package", "com.acme.app"])
+        .args(["--json"])
+        .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["status"], "ready");
+    assert_eq!(parsed["verify"]["ok"], true);
+}
+
+#[test]
+fn google_play_listing_get_json_reads_listing() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let token_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let token_addr = token_listener.local_addr().expect("local addr");
+    let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let api_addr = api_listener.local_addr().expect("local addr");
+    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "test"
+
+[google.play]
+api_base_url = "http://{api_addr}"
+
+[google.play.accounts.test]
+default_package_name = "com.acme.app"
+default_language_code = "en-US"
+"#
+        ),
+    )
+    .expect("write settings");
+    thread::spawn(move || {
+        for _ in 0..3 {
+            let (mut stream, _) = token_listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let _ = stream.read(&mut buffer).expect("read request");
+            let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).expect("write response");
+        }
+    });
+    thread::spawn(move || {
+        let bodies = [r#"{"id":"edit-9"}"#, r#"{"language":"en-US","title":"Acme"}"#, ""];
+        for body in bodies {
+            let (mut stream, _) = api_listener.accept().expect("accept");
+            let mut buffer = [0_u8; 4096];
+            let read = stream.read(&mut buffer).expect("read request");
+            let request = String::from_utf8_lossy(&buffer[..read]);
+            if body == r#"{"id":"edit-9"}"# {
+                assert!(request.contains("POST /androidpublisher/v3/applications/com.acme.app/edits"));
+            } else if body.is_empty() {
+                assert!(request.contains("DELETE /androidpublisher/v3/applications/com.acme.app/edits/edit-9"));
+            } else {
+                assert!(request.contains("GET /androidpublisher/v3/applications/com.acme.app/edits/edit-9/listings/en-US"));
+            }
+            let response = if body.is_empty() {
+                "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n".to_string()
+            } else {
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                )
+            };
+            stream.write_all(response.as_bytes()).expect("write response");
+        }
+    });
+
+    let output = cargo_bin()
+        .args(["google", "play", "listing", "get", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["title"], "Acme");
+}
+
+#[test]
+fn google_play_app_create_json_hits_custom_app_api() {
+    let home = tempdir().expect("tempdir");
+    let settings_dir = home.path().join(".si");
+    fs::create_dir_all(&settings_dir).expect("mkdir settings dir");
+    let settings_path = settings_dir.join("settings.toml");
+    let token_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let token_addr = token_listener.local_addr().expect("local addr");
+    let api_listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    let api_addr = api_listener.local_addr().expect("local addr");
+    let service_json = format!(r#"{{"type":"service_account","project_id":"acme-project","private_key":"{}","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"http://{}/token"}}"#, test_app_private_key_pem().replace('\n', "\\n"), token_addr);
+    fs::write(
+        &settings_path,
+        format!(
+            r#"
+[google]
+default_account = "test"
+
+[google.play]
+custom_app_base_url = "http://{api_addr}"
+
+[google.play.accounts.test]
+developer_account_id = "dev-123"
+"#
+        ),
+    )
+    .expect("write settings");
+    thread::spawn(move || {
+        let (mut stream, _) = token_listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let _ = stream.read(&mut buffer).expect("read request");
+        let body = r#"{"access_token":"ya29.play-token","expires_in":3600,"token_type":"Bearer"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+    thread::spawn(move || {
+        let (mut stream, _) = api_listener.accept().expect("accept");
+        let mut buffer = [0_u8; 4096];
+        let read = stream.read(&mut buffer).expect("read request");
+        let request = String::from_utf8_lossy(&buffer[..read]);
+        assert!(request.contains("POST /playcustomapp/v1/accounts/dev-123/customApps"));
+        let body = r#"{"customApp":"apps/123"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).expect("write response");
+    });
+
+    let output = cargo_bin()
+        .args(["google", "play", "app", "create", "--title", "Acme", "--home"])
+        .arg(home.path())
+        .args(["--json"])
+        .env("GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON", service_json)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let parsed: Value = serde_json::from_slice(&output).expect("json output");
+    assert_eq!(parsed["data"]["customApp"], "apps/123");
 }
 
 #[test]

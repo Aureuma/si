@@ -1,9 +1,18 @@
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use reqwest::blocking::Client;
 use reqwest::Method;
+use rsa::RsaPrivateKey;
+use rsa::pkcs1::DecodeRsaPrivateKey;
+use rsa::pkcs1v15::SigningKey;
+use rsa::pkcs8::DecodePrivateKey;
+use rsa::rand_core::OsRng;
+use rsa::signature::{RandomizedSigner, SignatureEncoding};
 use serde::{Deserialize, Serialize};
+use sha2::Sha256;
 use serde_json::Value;
 use si_rs_config::settings::{
-    GoogleAccountEntry, GoogleSettings, GoogleYouTubeAccountEntry,
+    GoogleAccountEntry, GooglePlayAccountEntry, GoogleSettings, GoogleYouTubeAccountEntry,
 };
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -198,6 +207,108 @@ pub struct GoogleYouTubeAPIRequest {
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct GoogleYouTubeAPIResponse {
+    pub status_code: u16,
+    pub status: String,
+    pub request_id: String,
+    pub content_type: String,
+    pub data: Option<Value>,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GooglePlayContextListEntry {
+    pub alias: String,
+    pub name: String,
+    pub project: String,
+    pub default: String,
+    pub developer_account: String,
+    pub default_package: String,
+    pub default_language: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GooglePlayOverrides {
+    pub account: String,
+    pub environment: String,
+    pub package_name: String,
+    pub language: String,
+    pub project_id: String,
+    pub developer_account: String,
+    pub service_account_json: String,
+    pub service_account_file: String,
+    pub base_url: String,
+    pub upload_base_url: String,
+    pub custom_app_base_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GooglePlayCurrentContext {
+    pub account_alias: String,
+    pub project_id: String,
+    pub environment: String,
+    pub source: String,
+    pub token_source: String,
+    pub service_account_email: String,
+    pub developer_account_id: String,
+    pub default_package_name: String,
+    pub default_language_code: String,
+    pub base_url: String,
+    pub upload_base_url: String,
+    pub custom_app_base_url: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct GooglePlayAuthStatus {
+    pub status: String,
+    pub account_alias: String,
+    pub project_id: String,
+    pub environment: String,
+    pub source: String,
+    pub token_source: String,
+    pub service_account_email: String,
+    pub token_uri: String,
+    pub developer_account_id: String,
+    pub default_package_name: String,
+    pub default_language_code: String,
+    pub base_url: String,
+    pub upload_base_url: String,
+    pub custom_app_base_url: String,
+    pub token_expires_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GooglePlayRuntime {
+    pub account_alias: String,
+    pub project_id: String,
+    pub environment: String,
+    pub source: String,
+    pub token_source: String,
+    pub base_url: String,
+    pub upload_base_url: String,
+    pub custom_app_base_url: String,
+    pub developer_account_id: String,
+    pub default_package_name: String,
+    pub default_language_code: String,
+    pub service_account_json: String,
+    pub service_account_email: String,
+    pub token_uri: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GooglePlayAPIRequest {
+    pub method: String,
+    pub path: String,
+    pub params: BTreeMap<String, String>,
+    pub headers: BTreeMap<String, String>,
+    pub json_body: Option<Value>,
+    pub raw_body: String,
+    pub content_type: String,
+    pub upload: bool,
+    pub custom_app_base: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct GooglePlayAPIResponse {
     pub status_code: u16,
     pub status: String,
     pub request_id: String,
@@ -712,6 +823,257 @@ pub fn execute_youtube_api_request(
     normalize_youtube_api_response(response)
 }
 
+pub fn list_play_contexts(settings: &GoogleSettings) -> Vec<GooglePlayContextListEntry> {
+    let mut rows = Vec::with_capacity(settings.play.accounts.len());
+    for (alias, account) in &settings.play.accounts {
+        let alias = alias.trim();
+        if alias.is_empty() {
+            continue;
+        }
+        rows.push(GooglePlayContextListEntry {
+            alias: alias.to_owned(),
+            name: trim_or_empty(account.name.as_deref()),
+            project: trim_or_empty(account.project_id.as_deref()),
+            default: bool_string(
+                alias == settings.default_account.as_deref().unwrap_or_default().trim(),
+            ),
+            developer_account: trim_or_empty(account.developer_account_id.as_deref()),
+            default_package: trim_or_empty(account.default_package_name.as_deref()),
+            default_language: trim_or_empty(account.default_language_code.as_deref()),
+        });
+    }
+    rows.sort_by(|left, right| left.alias.cmp(&right.alias));
+    rows
+}
+
+pub fn render_play_context_list_text(rows: &[GooglePlayContextListEntry]) -> String {
+    if rows.is_empty() {
+        return "no google play accounts configured in settings\n".to_owned();
+    }
+    let headers = ["ALIAS", "DEFAULT", "PROJECT", "DEV ACCOUNT", "PACKAGE", "LANG", "NAME"];
+    let mut widths = headers.map(str::len);
+    for row in rows {
+        widths[0] = widths[0].max(row.alias.len());
+        widths[1] = widths[1].max(row.default.len());
+        widths[2] = widths[2].max(or_dash(&row.project).len());
+        widths[3] = widths[3].max(or_dash(&row.developer_account).len());
+        widths[4] = widths[4].max(or_dash(&row.default_package).len());
+        widths[5] = widths[5].max(or_dash(&row.default_language).len());
+        widths[6] = widths[6].max(or_dash(&row.name).len());
+    }
+    let mut out = String::new();
+    out.push_str(&format_row(&headers, &widths));
+    for row in rows {
+        let cols = [
+            row.alias.as_str(),
+            row.default.as_str(),
+            or_dash(&row.project),
+            or_dash(&row.developer_account),
+            or_dash(&row.default_package),
+            or_dash(&row.default_language),
+            or_dash(&row.name),
+        ];
+        out.push_str(&format_row(&cols, &widths));
+    }
+    out
+}
+
+pub fn resolve_play_current_context(
+    settings: &GoogleSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GooglePlayOverrides,
+) -> Result<GooglePlayCurrentContext, String> {
+    let runtime = resolve_play_runtime_context(settings, env, overrides)?;
+    Ok(GooglePlayCurrentContext {
+        account_alias: runtime.account_alias,
+        project_id: runtime.project_id,
+        environment: runtime.environment,
+        source: runtime.source,
+        token_source: runtime.token_source,
+        service_account_email: runtime.service_account_email,
+        developer_account_id: runtime.developer_account_id,
+        default_package_name: runtime.default_package_name,
+        default_language_code: runtime.default_language_code,
+        base_url: runtime.base_url,
+        upload_base_url: runtime.upload_base_url,
+        custom_app_base_url: runtime.custom_app_base_url,
+    })
+}
+
+pub fn resolve_play_auth_status(
+    settings: &GoogleSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GooglePlayOverrides,
+) -> Result<GooglePlayAuthStatus, String> {
+    let runtime = resolve_play_runtime_context(settings, env, overrides)?;
+    let token = exchange_google_play_access_token(&runtime)?;
+    Ok(GooglePlayAuthStatus {
+        status: "ready".to_owned(),
+        account_alias: runtime.account_alias,
+        project_id: runtime.project_id,
+        environment: runtime.environment,
+        source: runtime.source,
+        token_source: runtime.token_source,
+        service_account_email: runtime.service_account_email,
+        token_uri: runtime.token_uri,
+        developer_account_id: runtime.developer_account_id,
+        default_package_name: runtime.default_package_name,
+        default_language_code: runtime.default_language_code,
+        base_url: runtime.base_url,
+        upload_base_url: runtime.upload_base_url,
+        custom_app_base_url: runtime.custom_app_base_url,
+        token_expires_at: token.expires_at,
+    })
+}
+
+fn resolve_play_runtime_context(
+    settings: &GoogleSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GooglePlayOverrides,
+) -> Result<GooglePlayRuntime, String> {
+    let (alias, account) = resolve_play_account_selection(settings, env, &overrides.account);
+    let generic_account = settings.accounts.get(&alias).cloned().unwrap_or_default();
+    let environment = parse_environment(&first_non_empty(&[
+        Some(overrides.environment.as_str()),
+        settings.default_env.as_deref(),
+        env.get("GOOGLE_DEFAULT_ENV").map(String::as_str),
+        Some("prod"),
+    ]))?;
+    let base_url = first_non_empty(&[
+        Some(overrides.base_url.as_str()),
+        settings.play.api_base_url.as_deref(),
+        Some("https://androidpublisher.googleapis.com"),
+    ])
+    .trim_end_matches('/')
+    .to_owned();
+    let upload_base_url = first_non_empty(&[
+        Some(overrides.upload_base_url.as_str()),
+        settings.play.upload_base_url.as_deref(),
+        Some("https://androidpublisher.googleapis.com"),
+    ])
+    .trim_end_matches('/')
+    .to_owned();
+    let custom_app_base_url = first_non_empty(&[
+        Some(overrides.custom_app_base_url.as_str()),
+        settings.play.custom_app_base_url.as_deref(),
+        Some("https://playcustomapp.googleapis.com"),
+    ])
+    .trim_end_matches('/')
+    .to_owned();
+    let (project_id, project_source) =
+        resolve_play_project_id(&alias, &account, &generic_account, env, &overrides.project_id);
+    let (service_account_json, token_source) = resolve_play_service_account_json(
+        &alias,
+        &account,
+        env,
+        &environment,
+        &overrides.service_account_json,
+        &overrides.service_account_file,
+    )?;
+    if service_account_json.trim().is_empty() {
+        let prefix = play_account_env_prefix(&alias, &account);
+        let hint = if prefix.is_empty() { "GOOGLE_<ACCOUNT>_".to_owned() } else { prefix };
+        return Err(format!(
+            "google play service account not found (set --service-account-json, --service-account-file, {hint}PLAY_SERVICE_ACCOUNT_JSON, or GOOGLE_PLAY_SERVICE_ACCOUNT_JSON)"
+        ));
+    }
+    let creds = parse_google_service_account_credentials(&service_account_json)?;
+    let (developer_account_id, developer_source) =
+        resolve_play_developer_account_id(&alias, &account, env, &overrides.developer_account);
+    let (default_package_name, package_source) =
+        resolve_play_default_package_name(&alias, &account, env, &overrides.package_name);
+    let (default_language_code, language_source) =
+        resolve_play_default_language_code(&alias, &account, env, &overrides.language);
+    let project_id = if project_id.trim().is_empty() && !creds.project_id.trim().is_empty() {
+        creds.project_id.clone()
+    } else {
+        project_id
+    };
+    let source = if project_source.trim().is_empty() && !creds.project_id.trim().is_empty() {
+        join_sources(&[
+            "service_account.project_id".to_owned(),
+            developer_source,
+            package_source,
+            language_source,
+        ])
+    } else {
+        join_sources(&[project_source, developer_source, package_source, language_source])
+    };
+    Ok(GooglePlayRuntime {
+        account_alias: alias,
+        project_id,
+        environment,
+        source,
+        token_source,
+        base_url,
+        upload_base_url,
+        custom_app_base_url,
+        developer_account_id,
+        default_package_name,
+        default_language_code,
+        service_account_json,
+        service_account_email: creds.client_email,
+        token_uri: creds.token_uri,
+    })
+}
+
+pub fn resolve_play_runtime(
+    settings: &GoogleSettings,
+    env: &BTreeMap<String, String>,
+    overrides: &GooglePlayOverrides,
+) -> Result<GooglePlayRuntime, String> {
+    resolve_play_runtime_context(settings, env, overrides)
+}
+
+pub fn execute_play_api_request(
+    runtime: &GooglePlayRuntime,
+    request: &GooglePlayAPIRequest,
+) -> Result<GooglePlayAPIResponse, String> {
+    let method = Method::from_bytes(request.method.trim().as_bytes())
+        .map_err(|err| format!("invalid google play method {:?}: {err}", request.method))?;
+    let base = if request.custom_app_base {
+        runtime.custom_app_base_url.trim_end_matches('/')
+    } else if request.upload {
+        runtime.upload_base_url.trim_end_matches('/')
+    } else {
+        runtime.base_url.trim_end_matches('/')
+    };
+    let url = format!("{}{}", base, normalize_path(&request.path));
+    let token = exchange_google_play_access_token(runtime)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(60))
+        .build()
+        .map_err(|err| format!("failed to build google play client: {err}"))?;
+    let mut builder = client
+        .request(method, &url)
+        .bearer_auth(token.value)
+        .header("User-Agent", "si-rs-provider-google/1.0");
+    if !request.params.is_empty() {
+        builder = builder.query(&request.params);
+    }
+    for (key, value) in &request.headers {
+        let key = key.trim();
+        if key.is_empty() {
+            continue;
+        }
+        builder = builder.header(key, value.trim());
+    }
+    if let Some(body) = &request.json_body {
+        builder = builder.json(body);
+    } else if !request.raw_body.trim().is_empty() {
+        let content_type = if request.content_type.trim().is_empty() {
+            "application/json"
+        } else {
+            request.content_type.trim()
+        };
+        builder = builder.header(reqwest::header::CONTENT_TYPE, content_type).body(request.raw_body.clone());
+    }
+    let response = builder
+        .send()
+        .map_err(|err| format!("google play request failed: {err}"))?;
+    normalize_play_api_response(response)
+}
+
 fn response_request_id(headers: &reqwest::header::HeaderMap) -> String {
     headers
         .get("x-request-id")
@@ -868,6 +1230,56 @@ fn normalize_youtube_api_response(
     })
 }
 
+fn normalize_play_api_response(
+    response: reqwest::blocking::Response,
+) -> Result<GooglePlayAPIResponse, String> {
+    let status = response.status();
+    let headers = response.headers().clone();
+    let request_id = response_request_id(&headers);
+    let content_type = headers
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .trim()
+        .to_owned();
+    let bytes = response
+        .bytes()
+        .map_err(|err| format!("failed to read google play response body: {err}"))?;
+    let body = String::from_utf8_lossy(&bytes).into_owned();
+    if !status.is_success() {
+        let mut message = format!(
+            "google play request failed: {} {}",
+            status.as_u16(),
+            response_status_text(status)
+        );
+        if !request_id.is_empty() {
+            message.push_str(&format!(" [request_id={request_id}]"));
+        }
+        let trimmed_body = body.trim();
+        if !trimmed_body.is_empty() {
+            message.push_str(": ");
+            message.push_str(trimmed_body);
+        }
+        return Err(message);
+    }
+    let data = if content_type.contains("json")
+        || body.trim_start().starts_with('{')
+        || body.trim_start().starts_with('[')
+    {
+        serde_json::from_slice(&bytes).ok()
+    } else {
+        None
+    };
+    Ok(GooglePlayAPIResponse {
+        status_code: status.as_u16(),
+        status: response_status_text(status),
+        request_id,
+        content_type,
+        data,
+        body,
+    })
+}
+
 fn resolve_account_selection(
     settings: &GoogleSettings,
     env: &BTreeMap<String, String>,
@@ -907,6 +1319,27 @@ fn resolve_youtube_account_selection(
         return (String::new(), GoogleYouTubeAccountEntry::default());
     }
     let account = settings.youtube.accounts.get(&selected).cloned().unwrap_or_default();
+    (selected, account)
+}
+
+fn resolve_play_account_selection(
+    settings: &GoogleSettings,
+    env: &BTreeMap<String, String>,
+    override_account: &str,
+) -> (String, GooglePlayAccountEntry) {
+    let mut selected = first_non_empty(&[
+        Some(override_account),
+        settings.default_account.as_deref(),
+        env.get("GOOGLE_DEFAULT_ACCOUNT").map(String::as_str),
+    ])
+    .to_owned();
+    if selected.is_empty() && settings.play.accounts.len() == 1 {
+        selected = settings.play.accounts.keys().next().cloned().unwrap_or_default();
+    }
+    if selected.is_empty() {
+        return (String::new(), GooglePlayAccountEntry::default());
+    }
+    let account = settings.play.accounts.get(&selected).cloned().unwrap_or_default();
     (selected, account)
 }
 
@@ -983,6 +1416,67 @@ fn resolve_project_id_from_youtube(
             env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
         {
             return (value.to_owned(), format!("env:{key}"));
+        }
+    }
+    if let Some(value) = env
+        .get("GOOGLE_PROJECT_ID")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return (value.to_owned(), "env:GOOGLE_PROJECT_ID".to_owned());
+    }
+    (String::new(), String::new())
+}
+
+fn resolve_play_project_id(
+    alias: &str,
+    account: &GooglePlayAccountEntry,
+    generic_account: &GoogleAccountEntry,
+    env: &BTreeMap<String, String>,
+    override_value: &str,
+) -> (String, String) {
+    if !override_value.trim().is_empty() {
+        return (override_value.trim().to_owned(), "flag:--project-id".to_owned());
+    }
+    if let Some(value) =
+        account.project_id.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        return (value.to_owned(), "settings.play.project_id".to_owned());
+    }
+    if let Some(reference) =
+        account.project_id_env.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        if let Some(value) =
+            env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return (value.to_owned(), format!("env:{reference}"));
+        }
+    }
+    let prefix = play_account_env_prefix(alias, account);
+    if !prefix.is_empty() {
+        let key = format!("{prefix}PROJECT_ID");
+        if let Some(value) =
+            env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return (value.to_owned(), format!("env:{key}"));
+        }
+    }
+    if let Some(value) =
+        generic_account.project_id.as_deref().map(str::trim).filter(|value| !value.is_empty())
+    {
+        return (value.to_owned(), "settings.project_id".to_owned());
+    }
+    if let Some(reference) = generic_account
+        .project_id_env
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(value) =
+            env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return (value.to_owned(), format!("env:{reference}"));
         }
     }
     if let Some(value) = env
@@ -1133,6 +1627,131 @@ fn resolve_youtube_api_key(
     (String::new(), String::new())
 }
 
+fn resolve_play_service_account_json(
+    alias: &str,
+    account: &GooglePlayAccountEntry,
+    env: &BTreeMap<String, String>,
+    environment: &str,
+    override_json: &str,
+    override_file: &str,
+) -> Result<(String, String), String> {
+    if !override_json.trim().is_empty() {
+        return Ok((
+            resolve_play_json_input(override_json)?,
+            "flag:--service-account-json".to_owned(),
+        ));
+    }
+    if !override_file.trim().is_empty() {
+        return Ok((
+            resolve_play_json_file(override_file)?,
+            "flag:--service-account-file".to_owned(),
+        ));
+    }
+    let prefix = play_account_env_prefix(alias, account);
+    let env_specific = match environment {
+        "prod" => account.prod_service_account_json_env.as_deref(),
+        "staging" => account.staging_service_account_json_env.as_deref(),
+        "dev" => account.dev_service_account_json_env.as_deref(),
+        _ => None,
+    };
+    if let Some(reference) = env_specific.map(str::trim).filter(|value| !value.is_empty()) {
+        if let Some(value) =
+            env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return Ok((resolve_play_json_input(value)?, format!("env:{reference}")));
+        }
+    }
+    if !prefix.is_empty() {
+        let key = match environment {
+            "prod" => format!("{prefix}PROD_PLAY_SERVICE_ACCOUNT_JSON"),
+            "staging" => format!("{prefix}STAGING_PLAY_SERVICE_ACCOUNT_JSON"),
+            "dev" => format!("{prefix}DEV_PLAY_SERVICE_ACCOUNT_JSON"),
+            _ => String::new(),
+        };
+        if !key.is_empty() {
+            if let Some(value) =
+                env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+            {
+                return Ok((resolve_play_json_input(value)?, format!("env:{key}")));
+            }
+        }
+    }
+    if let Some(reference) = account
+        .service_account_json_env
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(value) =
+            env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return Ok((resolve_play_json_input(value)?, format!("env:{reference}")));
+        }
+    }
+    if !prefix.is_empty() {
+        let key = format!("{prefix}PLAY_SERVICE_ACCOUNT_JSON");
+        if let Some(value) =
+            env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return Ok((resolve_play_json_input(value)?, format!("env:{key}")));
+        }
+    }
+    if let Some(value) = account
+        .service_account_file
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok((
+            resolve_play_json_file(value)?,
+            "settings.play.service_account_file".to_owned(),
+        ));
+    }
+    if let Some(reference) = account
+        .service_account_file_env
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if let Some(value) =
+            env.get(reference).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return Ok((resolve_play_json_file(value)?, format!("env:{reference}")));
+        }
+    }
+    if !prefix.is_empty() {
+        let key = format!("{prefix}PLAY_SERVICE_ACCOUNT_FILE");
+        if let Some(value) =
+            env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return Ok((resolve_play_json_file(value)?, format!("env:{key}")));
+        }
+    }
+    if let Some(value) = env
+        .get("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok((
+            resolve_play_json_input(value)?,
+            "env:GOOGLE_PLAY_SERVICE_ACCOUNT_JSON".to_owned(),
+        ));
+    }
+    if let Some(value) = env
+        .get("GOOGLE_PLAY_SERVICE_ACCOUNT_FILE")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Ok((
+            resolve_play_json_file(value)?,
+            "env:GOOGLE_PLAY_SERVICE_ACCOUNT_FILE".to_owned(),
+        ));
+    }
+    Ok((String::new(), String::new()))
+}
+
 fn resolve_language_code(
     alias: &str,
     account: &GoogleAccountEntry,
@@ -1197,6 +1816,35 @@ fn resolve_youtube_language_code(
         .filter(|value| !value.is_empty())
     {
         return (value.to_owned(), "env:GOOGLE_DEFAULT_LANGUAGE_CODE".to_owned());
+    }
+    (String::new(), String::new())
+}
+
+fn resolve_play_default_language_code(
+    alias: &str,
+    account: &GooglePlayAccountEntry,
+    env: &BTreeMap<String, String>,
+    override_value: &str,
+) -> (String, String) {
+    if !override_value.trim().is_empty() {
+        return (override_value.trim().to_owned(), "flag:--language".to_owned());
+    }
+    if let Some(value) = account
+        .default_language_code
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return (value.to_owned(), "settings.play.default_language_code".to_owned());
+    }
+    let prefix = play_account_env_prefix(alias, account);
+    if !prefix.is_empty() {
+        let key = format!("{prefix}DEFAULT_LANGUAGE_CODE");
+        if let Some(value) =
+            env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return (value.to_owned(), format!("env:{key}"));
+        }
     }
     (String::new(), String::new())
 }
@@ -1269,6 +1917,64 @@ fn resolve_youtube_region_code(
     (String::new(), String::new())
 }
 
+fn resolve_play_developer_account_id(
+    alias: &str,
+    account: &GooglePlayAccountEntry,
+    env: &BTreeMap<String, String>,
+    override_value: &str,
+) -> (String, String) {
+    if !override_value.trim().is_empty() {
+        return (override_value.trim().to_owned(), "flag:--developer-account".to_owned());
+    }
+    if let Some(value) = account
+        .developer_account_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return (value.to_owned(), "settings.play.developer_account_id".to_owned());
+    }
+    let prefix = play_account_env_prefix(alias, account);
+    if !prefix.is_empty() {
+        let key = format!("{prefix}PLAY_DEVELOPER_ACCOUNT_ID");
+        if let Some(value) =
+            env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return (value.to_owned(), format!("env:{key}"));
+        }
+    }
+    (String::new(), String::new())
+}
+
+fn resolve_play_default_package_name(
+    alias: &str,
+    account: &GooglePlayAccountEntry,
+    env: &BTreeMap<String, String>,
+    override_value: &str,
+) -> (String, String) {
+    if !override_value.trim().is_empty() {
+        return (override_value.trim().to_owned(), "flag:--package".to_owned());
+    }
+    if let Some(value) = account
+        .default_package_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return (value.to_owned(), "settings.play.default_package_name".to_owned());
+    }
+    let prefix = play_account_env_prefix(alias, account);
+    if !prefix.is_empty() {
+        let key = format!("{prefix}PLAY_PACKAGE_NAME");
+        if let Some(value) =
+            env.get(&key).map(String::as_str).map(str::trim).filter(|value| !value.is_empty())
+        {
+            return (value.to_owned(), format!("env:{key}"));
+        }
+    }
+    (String::new(), String::new())
+}
+
 fn parse_environment(value: &str) -> Result<String, String> {
     let normalized = value.trim().to_lowercase();
     match normalized.as_str() {
@@ -1303,6 +2009,23 @@ fn account_env_prefix(alias: &str, account: &GoogleAccountEntry) -> String {
 }
 
 fn youtube_account_env_prefix(alias: &str, account: &GoogleYouTubeAccountEntry) -> String {
+    if let Some(prefix) = account
+        .vault_prefix
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let mut candidate = prefix.replace('-', "_").to_uppercase();
+        if !candidate.ends_with('_') {
+            candidate.push('_');
+        }
+        return candidate;
+    }
+    let candidate = alias.trim().replace('-', "_").to_uppercase();
+    if candidate.is_empty() { String::new() } else { format!("GOOGLE_{candidate}_") }
+}
+
+fn play_account_env_prefix(alias: &str, account: &GooglePlayAccountEntry) -> String {
     if let Some(prefix) = account
         .vault_prefix
         .as_deref()
@@ -1576,6 +2299,153 @@ fn load_youtube_oauth_token_entry(
     store.tokens.get(&key).cloned()
 }
 
+fn resolve_play_json_input(value: &str) -> Result<String, String> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(String::new());
+    }
+    if let Some(path) = value.strip_prefix('@') {
+        return resolve_play_json_file(path);
+    }
+    if value.starts_with('{') {
+        return Ok(value.to_owned());
+    }
+    if value.to_lowercase().ends_with(".json") && std::path::Path::new(value).exists() {
+        return resolve_play_json_file(value);
+    }
+    Ok(value.to_owned())
+}
+
+fn resolve_play_json_file(path: &str) -> Result<String, String> {
+    std::fs::read_to_string(path.trim())
+        .map(|raw| raw.trim().to_owned())
+        .map_err(|err| format!("failed to read google play service account file {:?}: {err}", path.trim()))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct GoogleServiceAccountCredentials {
+    #[serde(default)]
+    project_id: String,
+    #[serde(default)]
+    private_key_id: String,
+    #[serde(default)]
+    private_key: String,
+    #[serde(default)]
+    client_email: String,
+    #[serde(default)]
+    token_uri: String,
+}
+
+fn parse_google_service_account_credentials(raw: &str) -> Result<GoogleServiceAccountCredentials, String> {
+    let mut creds: GoogleServiceAccountCredentials =
+        serde_json::from_str(raw.trim()).map_err(|err| format!("invalid service account json: {err}"))?;
+    creds.private_key = creds.private_key.trim().replace("\\n", "\n");
+    if creds.client_email.trim().is_empty() {
+        return Err("service account json missing client_email".to_owned());
+    }
+    if creds.private_key.trim().is_empty() {
+        return Err("service account json missing private_key".to_owned());
+    }
+    if creds.token_uri.trim().is_empty() {
+        creds.token_uri = "https://oauth2.googleapis.com/token".to_owned();
+    }
+    parse_google_rsa_private_key(&creds.private_key)?;
+    Ok(creds)
+}
+
+fn parse_google_rsa_private_key(value: &str) -> Result<RsaPrivateKey, String> {
+    RsaPrivateKey::from_pkcs1_pem(value.trim())
+        .or_else(|_| RsaPrivateKey::from_pkcs8_pem(value.trim()))
+        .map_err(|err| format!("parse service account private key: {err}"))
+}
+
+#[derive(Debug, Clone)]
+struct GooglePlayAccessToken {
+    value: String,
+    expires_at: String,
+}
+
+fn exchange_google_play_access_token(runtime: &GooglePlayRuntime) -> Result<GooglePlayAccessToken, String> {
+    let creds = parse_google_service_account_credentials(&runtime.service_account_json)?;
+    let assertion = sign_google_service_account_jwt(&creds)?;
+    let client = Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|err| format!("failed to build google oauth client: {err}"))?;
+    let params = [
+        ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+        ("assertion", assertion.as_str()),
+    ];
+    let response = client
+        .post(creds.token_uri.trim())
+        .header(reqwest::header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .form(&params)
+        .send()
+        .map_err(|err| format!("google play token exchange failed: {err}"))?;
+    let status = response.status();
+    let body = response
+        .text()
+        .map_err(|err| format!("failed to read google play token response: {err}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "google play token exchange failed: {} {}: {}",
+            status.as_u16(),
+            response_status_text(status),
+            body.trim()
+        ));
+    }
+    #[derive(Deserialize)]
+    struct TokenResponse {
+        #[serde(default)]
+        access_token: String,
+        #[serde(default)]
+        expires_in: i64,
+    }
+    let payload: TokenResponse =
+        serde_json::from_str(&body).map_err(|err| format!("invalid google oauth token response: {err}"))?;
+    if payload.access_token.trim().is_empty() {
+        return Err("google oauth token response missing access_token".to_owned());
+    }
+    let expires_at = if payload.expires_in > 0 {
+        chrono::Utc::now() + chrono::Duration::seconds(payload.expires_in)
+    } else {
+        chrono::Utc::now()
+    };
+    Ok(GooglePlayAccessToken {
+        value: payload.access_token.trim().to_owned(),
+        expires_at: expires_at.to_rfc3339(),
+    })
+}
+
+fn sign_google_service_account_jwt(creds: &GoogleServiceAccountCredentials) -> Result<String, String> {
+    let key = parse_google_rsa_private_key(&creds.private_key)?;
+    let now = chrono::Utc::now();
+    let header = if creds.private_key_id.trim().is_empty() {
+        serde_json::json!({"alg":"RS256","typ":"JWT"})
+    } else {
+        serde_json::json!({"alg":"RS256","typ":"JWT","kid":creds.private_key_id.trim()})
+    };
+    let claims = serde_json::json!({
+        "iss": creds.client_email.trim(),
+        "scope": "https://www.googleapis.com/auth/androidpublisher",
+        "aud": creds.token_uri.trim(),
+        "iat": (now - chrono::Duration::seconds(30)).timestamp(),
+        "exp": (now + chrono::Duration::minutes(59)).timestamp(),
+    });
+    let signing_input = format!(
+        "{}.{}",
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).map_err(|err| err.to_string())?),
+        URL_SAFE_NO_PAD.encode(serde_json::to_vec(&claims).map_err(|err| err.to_string())?)
+    );
+    let signing_key = SigningKey::<Sha256>::new(key);
+    let signature = signing_key.sign_with_rng(&mut OsRng, signing_input.as_bytes());
+    Ok(format!(
+        "{}.{}",
+        signing_input,
+        URL_SAFE_NO_PAD.encode(signature.to_vec())
+    ))
+}
+
 #[derive(Debug, Deserialize)]
 struct GoogleRefreshTokenResponse {
     #[serde(default)]
@@ -1757,5 +2627,27 @@ mod tests {
         .expect("youtube current context");
         assert_eq!(current.account_alias, "core");
         assert_eq!(current.auth_mode, "api-key");
+    }
+
+    #[test]
+    fn play_runtime_resolves_service_account_from_env() {
+        let mut env = BTreeMap::new();
+        env.insert(
+            "GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON".to_owned(),
+            r#"{"type":"service_account","project_id":"acme-project","private_key":"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCaJZkLuu/uJGz1\n4cxlZ3d7H5b88tcXH0qPZmkCUPWHA4aumx36BErkorXukYD0IRhRaJe8shsgRC4c\nw5TkjrXcG9Kigh3HvifRnA1kCbmwceANdww6J8ggtFDFO026VIEx2R8tjtYLs+pU\n+Xb6llxixE+QWSXQVHqHy67KvWDeRu6es8OZb8klxFejwdTBC0UDxNLwdr+hDV3b\nEDduxm+pnnmTi7ciwDbrO8D/GXkYi7YLXwqcfHLhVqZeVXrs5JPc+7pOHJCf1fZO\n9BBUOVO9qDUqfQk7CWBF3MKyNtx/wv+Mzg5ztl4VMPRgdnbnU8B2en+rPYZg7KTF\nN2n0ORH/AgMBAAECggEAAfNDfkZVXnN1Mh/duKi4S8VTYTbnVBe6we60mb68JIL9\nvhF2AyGbxaHDYIB/G6zxhFIo8qO5kSJxB5R35UkNnE/OeJeMgz2bflzq6cmaYP+d\nKz5xgqjZ24QR2N+jtPL4bCYy7UjMhNBiwMQj5mQRnimdV2uxUp3xq5cpn89ekuFY\n1C48pXicl8OLgdzhNAROk2edrYo+DJl+5VaSPSN5L+dz67pBqAZ4gcUj4ZdmofmB\ninHw83zTvQfSFaykC98TJEpQppaC8gK+mxQF6bWotfxq/Gd2MBhNwJAF1WnJ2cq/\np2vuDCqliKbt40M33qUVIavhY6C50dUQ3VeERxmvyQKBgQDSlBBZJ2auZHgJeR/U\nIYUPOypo8mBBVMh6axbRR5yrpTfGDHqc4Zx4nC3kxRjqnA+sfdZBESOgvj7FdWUj\nf3fEM+RPQLW0zu2F+wmJ2w28kncOFVxHrrrxJToKtBSfR3YIjCnZmy6pxn8WOimM\nabOm5hmSRLgMcRSvptw6crOOtwKBgQC7ZXCuTgnod+Cf25PvKNxSLJOy9lephPYO\nqU7LWywilQEgj7VWrmVKP+6HC3L615++cLlKxoozlvT0dxjfhzgdZxXKLOUf4x3d\n72FXx/sKFFtOCgeDeR2Ln+hSLbGsCLkyOo5zFFCidmE4z0DitiPmSRtJdHt1VthO\n8KW10yTO+QKBgCBZhrlriCa6YIZ0CSO5kotod3dv5MGkmLfVw8eazMLBuvO97wgy\n0Krms1Y1wUIpf27sVgHg9Cw5jcMf6c2uQ2Ps5OIX+tIwB+VRT4HSGSYjCg8r0OVi\nPm3VXjlOuOxPOh7OCY/Yey6xw8xSWxerFWJKbxs9W1jt9lOVurdv7425AoGBAKIU\nQ5hOoN0yydIZjWK92YktSvXvgLR67oKRxze1fH/Qlm/+O55kKfFFSF3+9gyk8GI7\nhtd4ztF+EBFc7ONwRYWQwlTh7a5dtlhdEbllmugF4U6m+Aare3Vm8f4ZzWD5Doy1\n/rzj5jYN41rKTtmHJZeoxXQLzjgXy/DCzOBtZZmpAoGABacst96WKng6XE5MkZpo\nacIEMOPpPYnyc4VgqHPft4D45ARP4wFZryxZ58Ya6194Z9PUzL5N7yKgsQZlnGR8\nL6W4ulLYfyhkWfi592cIKS7eDjWijbcIUzgvuIzCWvme08KQSPkgYNFXomlg4EZv\n9HrWPhpFaH+jHJsVKmD/Qyo=\n-----END PRIVATE KEY-----","client_email":"si-test@acme-project.iam.gserviceaccount.com","token_uri":"https://oauth2.googleapis.com/token"}"#.to_owned(),
+        );
+        let runtime = resolve_play_runtime(
+            &GoogleSettings::default(),
+            &env,
+            &GooglePlayOverrides {
+                account: "test".to_owned(),
+                environment: "prod".to_owned(),
+                ..GooglePlayOverrides::default()
+            },
+        )
+        .expect("play runtime");
+        assert_eq!(runtime.account_alias, "test");
+        assert_eq!(runtime.token_source, "env:GOOGLE_TEST_PLAY_SERVICE_ACCOUNT_JSON");
+        assert!(runtime.service_account_email.contains('@'));
     }
 }
