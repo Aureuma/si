@@ -148,6 +148,18 @@ jobs:
           )
           ls -lah dist
 
+      - name: Verify locally built release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ needs.resolve-tag.outputs.tag }}"
+          if [[ -x "tools/release/verify-cli-release-assets.sh" ]]; then
+            tools/release/verify-cli-release-assets.sh --version "${tag}" --out-dir dist
+            exit 0
+          fi
+
+          echo "tools/release/verify-cli-release-assets.sh is missing on this checkout; skipping local archive verification."
+
       - name: Upload assets to GitHub Release
         shell: bash
         env:
@@ -369,6 +381,13 @@ jobs:
               exit 1
             fi
             echo "npm package verified: @aureuma/si@${npm_version}"
+            npm_prefix="${RUNNER_TEMP}/si-npm-verify"
+            rm -rf "${npm_prefix}"
+            mkdir -p "${npm_prefix}"
+            npm install --silent --global --prefix "${npm_prefix}" "@aureuma/si@${version}"
+            SI_NPM_RELEASE_BASE_URL="https://github.com/${{ github.repository }}/releases/download/${tag}" \
+              "${npm_prefix}/bin/si" version >/dev/null
+            echo "npm install verification passed for @aureuma/si@${version}"
           else
             echo "NPM_TOKEN is not configured; skipping npm verification."
           fi
