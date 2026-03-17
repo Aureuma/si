@@ -574,6 +574,7 @@ Progress notes:
 
 - completed: release-archive verification now also runs through a Rust-owned `build self verify-release-assets` path, and the release workflow uses it to verify archive presence, checksums, and packaged `si` contents before upload, closing the local artifact-verification seam inside the Phase 9 cutover lane
 - completed: the final production Go-compat dependency is gone from the primary package/install path, with `apple appstore doctor --public`, `aws doctor --public`, and `oci doctor --public` now handled natively in Rust and no release/install surface still staging `si-go`
+- completed: the remaining release-workflow archive staging now also matches the Rust-only layout, dropping the last in-workflow `go build ./tools/si` step from the Homebrew smoke asset-prep path so the macOS/tap verification lane no longer rebuilds or packages a Go adapter
 - completed: the missing Homebrew install smoke now exists as a Rust-owned installer verification path (`build installer smoke-homebrew`) plus wrapper, and the release workflow now upgrades npm verification from version visibility to a real installed-launcher check against published release assets
 - completed: the CLI release workflow now also runs the Rust-owned Homebrew smoke path on a real macOS runner before the final distribution gate, so the Homebrew cutover lane is no longer only covered by local/manual smoke guidance
 
