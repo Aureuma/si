@@ -317,6 +317,10 @@ fn build_homebrew_render_core_formula_writes_formula() {
     assert!(rendered.contains("homepage \"https://github.com/Aureuma/si\""));
     assert!(rendered.contains("url \"http://"));
     assert!(rendered.contains("sha256 \""));
+    assert!(rendered.contains("depends_on \"rust\" => :build"));
+    assert!(rendered.contains("cargo\", \"install\", \"--locked\""));
+    assert!(rendered.contains("std_cargo_args(path: \"rust/crates/si-cli\")"));
+    assert!(rendered.contains("mv bin/\"si-rs\", bin/\"si\""));
 }
 
 #[test]
