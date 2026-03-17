@@ -528,11 +528,19 @@ enum CloudflareCommand {
     },
     Tunnel {
         #[command(subcommand)]
-        command: CloudflareResourceCommand,
+        command: CloudflareTunnelCommand,
     },
     TLS {
         #[command(subcommand)]
         command: CloudflareTLSCommand,
+    },
+    LB {
+        #[command(subcommand)]
+        command: CloudflareLBCommand,
+    },
+    Cache {
+        #[command(subcommand)]
+        command: CloudflareCacheCommand,
     },
 }
 
@@ -579,6 +587,10 @@ enum CloudflareEmailCommand {
     Address {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
+    },
+    Settings {
+        #[command(subcommand)]
+        command: CloudflareEmailSettingsCommand,
     },
 }
 
@@ -727,6 +739,54 @@ enum CloudflareTokenCommand {
         #[arg(long)]
         settings_file: Option<PathBuf>,
     },
+    Verify {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    PermissionGroups {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -739,6 +799,10 @@ enum CloudflareWorkersCommand {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
+    Secret {
+        #[command(subcommand)]
+        command: CloudflareWorkersSecretCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -746,6 +810,14 @@ enum CloudflarePagesCommand {
     Project {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
+    },
+    Deploy {
+        #[command(subcommand)]
+        command: CloudflarePagesDeployCommand,
+    },
+    Domain {
+        #[command(subcommand)]
+        command: CloudflarePagesDomainCommand,
     },
 }
 
@@ -992,6 +1064,10 @@ enum CloudflareR2Command {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
+    Object {
+        #[command(subcommand)]
+        command: CloudflareR2ObjectCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1000,6 +1076,38 @@ enum CloudflareD1Command {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
     },
+    Query {
+        #[arg(long)]
+        db: String,
+        #[arg(long)]
+        sql: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Migration {
+        #[command(subcommand)]
+        command: CloudflareD1MigrationCommand,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1007,6 +1115,10 @@ enum CloudflareKVCommand {
     Namespace {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
+    },
+    Key {
+        #[command(subcommand)]
+        command: CloudflareKVKeyCommand,
     },
 }
 
@@ -1023,10 +1135,1284 @@ enum CloudflareAccessCommand {
 }
 
 #[derive(Debug, Subcommand)]
+enum CloudflareTunnelCommand {
+    List {
+        #[arg(long, default_value_t = 10)]
+        max_pages: usize,
+        #[arg(long, default_value_t = 100)]
+        limit: i64,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Create {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Update {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        force: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Token {
+        #[arg(long)]
+        tunnel: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 enum CloudflareTLSCommand {
+    Get {
+        #[arg(long, default_value = "ssl")]
+        setting: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Set {
+        #[arg(long, default_value = "ssl")]
+        setting: String,
+        #[arg(long)]
+        value: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
     Cert {
         #[command(subcommand)]
         command: CloudflareResourceCommand,
+    },
+    OriginCert {
+        #[command(subcommand)]
+        command: CloudflareOriginCertCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareWorkersSecretCommand {
+    Set {
+        #[arg(long)]
+        script: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        text: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        #[arg(long)]
+        script: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflarePagesDeployCommand {
+    List {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Trigger {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Rollback {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        deployment: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflarePagesDomainCommand {
+    List {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Create {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        domain: Option<String>,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        #[arg(long)]
+        project: String,
+        #[arg(long)]
+        domain: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareR2ObjectCommand {
+    List {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Put {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long, default_value = "")]
+        body: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        #[arg(long)]
+        bucket: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareD1MigrationCommand {
+    List {
+        #[arg(long)]
+        db: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Apply {
+        #[arg(long)]
+        db: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareKVKeyCommand {
+    List {
+        #[arg(long)]
+        namespace: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        #[arg(long)]
+        namespace: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Put {
+        #[arg(long)]
+        namespace: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long, default_value = "")]
+        value: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Bulk {
+        #[arg(long)]
+        namespace: String,
+        #[arg(long)]
+        body: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        #[arg(long)]
+        namespace: String,
+        #[arg(long)]
+        key: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareEmailSettingsCommand {
+    Get {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Enable {
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Disable {
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareOriginCertCommand {
+    List {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Create {
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Revoke {
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareLBCommand {
+    List {
+        #[arg(long, default_value_t = 10)]
+        max_pages: usize,
+        #[arg(long, default_value_t = 100)]
+        limit: i64,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Get {
+        id: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Create {
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Update {
+        id: String,
+        #[arg(long)]
+        body: Option<String>,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Delete {
+        id: String,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long = "param")]
+        params: Vec<String>,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Pool {
+        #[command(subcommand)]
+        command: CloudflareResourceCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareCacheCommand {
+    Purge {
+        #[arg(long)]
+        everything: bool,
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+        #[arg(long = "host")]
+        hosts: Vec<String>,
+        #[arg(long = "prefix")]
+        prefixes: Vec<String>,
+        #[arg(long)]
+        force: bool,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Settings {
+        #[command(subcommand)]
+        command: CloudflareCacheSettingsCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum CloudflareCacheSettingsCommand {
+    Get {
+        #[arg(long)]
+        setting: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
+    },
+    Set {
+        #[arg(long)]
+        setting: String,
+        #[arg(long)]
+        value: String,
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        raw: bool,
+        #[arg(long)]
+        account: Option<String>,
+        #[arg(long)]
+        env: Option<String>,
+        #[arg(long)]
+        zone_id: Option<String>,
+        #[arg(long)]
+        zone: Option<String>,
+        #[arg(long)]
+        api_token: Option<String>,
+        #[arg(long)]
+        base_url: Option<String>,
+        #[arg(long)]
+        account_id: Option<String>,
+        #[arg(long)]
+        home: Option<PathBuf>,
+        #[arg(long)]
+        settings_file: Option<PathBuf>,
     },
 }
 
@@ -12387,6 +13773,53 @@ fn main() -> Result<()> {
                     cloudflare_email_address_spec(),
                     command,
                 )?,
+                CloudflareEmailCommand::Settings { command } => match command {
+                    CloudflareEmailSettingsCommand::Get {
+                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    } => run_cloudflare_email_settings_get(
+                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    )?,
+                    CloudflareEmailSettingsCommand::Enable {
+                        force, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_email_settings_toggle(
+                        "enable",
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                    CloudflareEmailSettingsCommand::Disable {
+                        force, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_email_settings_toggle(
+                        "disable",
+                        force,
+                        json,
+                        raw,
+                        params,
+                        account,
+                        env,
+                        zone_id,
+                        zone,
+                        api_token,
+                        base_url,
+                        account_id,
+                        home,
+                        settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::Token { command } => match command {
                 CloudflareTokenCommand::List {
@@ -12545,6 +13978,38 @@ fn main() -> Result<()> {
                     home,
                     settings_file,
                 )?,
+                CloudflareTokenCommand::Verify {
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                } => run_cloudflare_token_verify(
+                    json, raw, account, env, zone_id, zone, api_token, base_url, account_id,
+                    home, settings_file,
+                )?,
+                CloudflareTokenCommand::PermissionGroups {
+                    json,
+                    raw,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                } => run_cloudflare_token_permission_groups(
+                    json, raw, account, env, zone_id, zone, api_token, base_url, account_id,
+                    home, settings_file,
+                )?,
             },
             CloudflareCommand::Ruleset { command } => run_cloudflare_resource_command(
                 cloudflare_ruleset_spec(),
@@ -12567,12 +14032,81 @@ fn main() -> Result<()> {
                     cloudflare_workers_route_spec(),
                     command,
                 )?,
+                CloudflareWorkersCommand::Secret { command } => match command {
+                    CloudflareWorkersSecretCommand::Set {
+                        script, name, text, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_workers_secret_set(
+                        script, name, text, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareWorkersSecretCommand::Delete {
+                        script, name, force, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_workers_secret_delete(
+                        script, name, force, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::Pages { command } => match command {
                 CloudflarePagesCommand::Project { command } => run_cloudflare_resource_command(
                     cloudflare_pages_project_spec(),
                     command,
                 )?,
+                CloudflarePagesCommand::Deploy { command } => match command {
+                    CloudflarePagesDeployCommand::List {
+                        project, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    } => run_cloudflare_pages_deploy_list(
+                        project, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    )?,
+                    CloudflarePagesDeployCommand::Trigger {
+                        project, body, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_pages_deploy_trigger(
+                        project, body, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflarePagesDeployCommand::Rollback {
+                        project, deployment, force, json, raw, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_pages_deploy_rollback(
+                        project, deployment, force, json, raw, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                },
+                CloudflarePagesCommand::Domain { command } => match command {
+                    CloudflarePagesDomainCommand::List {
+                        project, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_pages_domain_list(
+                        project, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflarePagesDomainCommand::Get {
+                        project, domain, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_pages_domain_get(
+                        project, domain, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflarePagesDomainCommand::Create {
+                        project, domain, body, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_pages_domain_create(
+                        project, domain, body, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflarePagesDomainCommand::Delete {
+                        project, domain, force, json, raw, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_pages_domain_delete(
+                        project, domain, force, json, raw, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::Queue { command } => run_cloudflare_resource_command(
                 cloudflare_queue_spec(),
@@ -12586,18 +14120,108 @@ fn main() -> Result<()> {
                     cloudflare_r2_bucket_spec(),
                     command,
                 )?,
+                CloudflareR2Command::Object { command } => match command {
+                    CloudflareR2ObjectCommand::List {
+                        bucket, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_r2_object_list(
+                        bucket, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareR2ObjectCommand::Get {
+                        bucket, key, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_r2_object_get(
+                        bucket, key, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareR2ObjectCommand::Put {
+                        bucket, key, body, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_r2_object_put(
+                        bucket, key, body, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareR2ObjectCommand::Delete {
+                        bucket, key, force, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_r2_object_delete(
+                        bucket, key, force, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::D1 { command } => match command {
                 CloudflareD1Command::DB { command } => run_cloudflare_resource_command(
                     cloudflare_d1_db_spec(),
                     command,
                 )?,
+                CloudflareD1Command::Query {
+                    db, sql, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_d1_query(
+                    db, sql, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                )?,
+                CloudflareD1Command::Migration { command } => match command {
+                    CloudflareD1MigrationCommand::List {
+                        db, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    } => run_cloudflare_d1_migration_list(
+                        db, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    )?,
+                    CloudflareD1MigrationCommand::Apply {
+                        db, body, force, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_d1_migration_apply(
+                        db, body, force, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::KV { command } => match command {
                 CloudflareKVCommand::Namespace { command } => run_cloudflare_resource_command(
                     cloudflare_kv_namespace_spec(),
                     command,
                 )?,
+                CloudflareKVCommand::Key { command } => match command {
+                    CloudflareKVKeyCommand::List {
+                        namespace, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_kv_key_list(
+                        namespace, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareKVKeyCommand::Get {
+                        namespace, key, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_kv_key_get(
+                        namespace, key, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareKVKeyCommand::Put {
+                        namespace, key, value, body, json, raw, params, account, env, zone_id,
+                        zone, api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_kv_key_put(
+                        namespace, key, value, body, json, raw, params, account, env, zone_id,
+                        zone, api_token, base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareKVKeyCommand::Bulk {
+                        namespace, body, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_kv_key_bulk(
+                        namespace, body, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareKVKeyCommand::Delete {
+                        namespace, key, force, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    } => run_cloudflare_kv_key_delete(
+                        namespace, key, force, json, raw, params, account, env, zone_id, zone,
+                        api_token, base_url, account_id, home, settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::Access { command } => match command {
                 CloudflareAccessCommand::App { command } => run_cloudflare_resource_command(
@@ -12609,15 +14233,284 @@ fn main() -> Result<()> {
                     command,
                 )?,
             },
-            CloudflareCommand::Tunnel { command } => run_cloudflare_resource_command(
-                cloudflare_tunnel_spec(),
-                command,
-            )?,
+            CloudflareCommand::Tunnel { command } => match command {
+                CloudflareTunnelCommand::List {
+                    max_pages, limit, json, raw, params, account, env, zone_id, zone, api_token,
+                    base_url, account_id, home, settings_file,
+                } => run_cloudflare_resource_list(
+                    cloudflare_tunnel_spec(),
+                    max_pages,
+                    limit,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareTunnelCommand::Get {
+                    id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_resource_get(
+                    cloudflare_tunnel_spec(),
+                    id,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareTunnelCommand::Create {
+                    json, raw, body, params, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_resource_create(
+                    cloudflare_tunnel_spec(),
+                    json,
+                    raw,
+                    body,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareTunnelCommand::Update {
+                    id, json, raw, body, params, account, env, zone_id, zone, api_token,
+                    base_url, account_id, home, settings_file,
+                } => run_cloudflare_resource_update(
+                    cloudflare_tunnel_spec(),
+                    id,
+                    json,
+                    raw,
+                    body,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareTunnelCommand::Delete {
+                    id, json, raw, force, params, account, env, zone_id, zone, api_token,
+                    base_url, account_id, home, settings_file,
+                } => run_cloudflare_resource_delete(
+                    cloudflare_tunnel_spec(),
+                    id,
+                    json,
+                    raw,
+                    force,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareTunnelCommand::Token {
+                    tunnel, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_tunnel_token(
+                    tunnel, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                )?,
+            },
             CloudflareCommand::TLS { command } => match command {
+                CloudflareTLSCommand::Get {
+                    setting, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_tls_setting_get(
+                    setting, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                )?,
+                CloudflareTLSCommand::Set {
+                    setting, value, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_tls_setting_set(
+                    setting, value, json, raw, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                )?,
                 CloudflareTLSCommand::Cert { command } => run_cloudflare_resource_command(
                     cloudflare_tls_cert_spec(),
                     command,
                 )?,
+                CloudflareTLSCommand::OriginCert { command } => match command {
+                    CloudflareOriginCertCommand::List {
+                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    } => run_cloudflare_origin_cert_list(
+                        json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    )?,
+                    CloudflareOriginCertCommand::Create {
+                        body, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_origin_cert_create(
+                        body, json, raw, params, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                    CloudflareOriginCertCommand::Revoke {
+                        id, force, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    } => run_cloudflare_origin_cert_revoke(
+                        id, force, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    )?,
+                },
+            },
+            CloudflareCommand::LB { command } => match command {
+                CloudflareLBCommand::List {
+                    max_pages, limit, json, raw, params, account, env, zone_id, zone, api_token,
+                    base_url, account_id, home, settings_file,
+                } => run_cloudflare_resource_list(
+                    cloudflare_lb_spec(),
+                    max_pages,
+                    limit,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareLBCommand::Get {
+                    id, json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_resource_get(
+                    cloudflare_lb_spec(),
+                    id,
+                    json,
+                    raw,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareLBCommand::Create {
+                    body, json, raw, params, account, env, zone_id, zone, api_token, base_url,
+                    account_id, home, settings_file,
+                } => run_cloudflare_resource_create(
+                    cloudflare_lb_spec(),
+                    json,
+                    raw,
+                    body,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareLBCommand::Update {
+                    id, body, json, raw, params, account, env, zone_id, zone, api_token,
+                    base_url, account_id, home, settings_file,
+                } => run_cloudflare_resource_update(
+                    cloudflare_lb_spec(),
+                    id,
+                    json,
+                    raw,
+                    body,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareLBCommand::Delete {
+                    id, force, json, raw, params, account, env, zone_id, zone, api_token,
+                    base_url, account_id, home, settings_file,
+                } => run_cloudflare_resource_delete(
+                    cloudflare_lb_spec(),
+                    id,
+                    json,
+                    raw,
+                    force,
+                    params,
+                    account,
+                    env,
+                    zone_id,
+                    zone,
+                    api_token,
+                    base_url,
+                    account_id,
+                    home,
+                    settings_file,
+                )?,
+                CloudflareLBCommand::Pool { command } => run_cloudflare_resource_command(
+                    cloudflare_lb_pool_spec(),
+                    command,
+                )?,
+            },
+            CloudflareCommand::Cache { command } => match command {
+                CloudflareCacheCommand::Purge {
+                    everything, tags, hosts, prefixes, force, json, raw, account, env, zone_id,
+                    zone, api_token, base_url, account_id, home, settings_file,
+                } => run_cloudflare_cache_purge(
+                    everything, tags, hosts, prefixes, force, json, raw, account, env, zone_id,
+                    zone, api_token, base_url, account_id, home, settings_file,
+                )?,
+                CloudflareCacheCommand::Settings { command } => match command {
+                    CloudflareCacheSettingsCommand::Get {
+                        setting, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    } => run_cloudflare_cache_setting_get(
+                        setting, json, raw, account, env, zone_id, zone, api_token, base_url,
+                        account_id, home, settings_file,
+                    )?,
+                    CloudflareCacheSettingsCommand::Set {
+                        setting, value, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    } => run_cloudflare_cache_setting_set(
+                        setting, value, json, raw, account, env, zone_id, zone, api_token,
+                        base_url, account_id, home, settings_file,
+                    )?,
+                },
             },
             CloudflareCommand::Context { command } => match command {
                 CloudflareContextCommand::List { home, settings_file, json, format } => {
@@ -33303,6 +35196,28 @@ const fn cloudflare_tls_cert_spec() -> CloudflareResourceSpec {
     )
 }
 
+const fn cloudflare_lb_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "load balancer",
+        "/zones/{zone_id}/load_balancers",
+        "/zones/{zone_id}/load_balancers/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
+const fn cloudflare_lb_pool_spec() -> CloudflareResourceSpec {
+    cloudflare_resource_spec(
+        "lb pool",
+        "/accounts/{account_id}/load_balancers/pools",
+        "/accounts/{account_id}/load_balancers/pools/{id}",
+        "POST",
+        "PATCH",
+        "DELETE",
+    )
+}
+
 fn cloudflare_resource_path(spec: CloudflareResourceSpec, id: &str) -> String {
     spec.resource_path.replace("{id}", id.trim())
 }
@@ -34034,6 +35949,1072 @@ fn run_cloudflare_logs_job_delete(
         },
     )?;
     print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_custom_request(
+    request: CloudflareAPIRequest,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let response = execute_cloudflare_request(
+        account,
+        environment,
+        zone_id,
+        zone,
+        api_token,
+        base_url,
+        account_id,
+        home,
+        settings_file,
+        request,
+    )?;
+    print_cloudflare_api_response(&response, json, raw)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_token_verify(
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: "/user/tokens/verify".to_owned(),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_token_permission_groups(
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: "/user/tokens/permission_groups".to_owned(),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_workers_secret_set(
+    script: String,
+    name: String,
+    text: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "PUT".to_owned(),
+            path: format!("/accounts/{{account_id}}/workers/scripts/{}/secrets", script.trim()),
+            json_body: Some(serde_json::json!({ "name": name.trim(), "text": text, "type": "secret_text" })),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_workers_secret_delete(
+    script: String,
+    name: String,
+    force: bool,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("delete workers secret requires --force");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/accounts/{{account_id}}/workers/scripts/{}/secrets/{}", script.trim(), name.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_deploy_list(
+    project: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/deployments", project.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_deploy_trigger(
+    project: String,
+    body: Option<String>,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/deployments", project.trim()),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        }
+    } else {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/deployments", project.trim()),
+            json_body: Some(serde_json::json!({})),
+            ..CloudflareAPIRequest::default()
+        }
+    };
+    run_cloudflare_custom_request(
+        request,
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_deploy_rollback(
+    project: String,
+    deployment: String,
+    force: bool,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("rollback pages deployment requires --force");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/deployments/{}/rollback", project.trim(), deployment.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_domain_list(
+    project: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains", project.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_domain_get(
+    project: String,
+    domain: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains/{}", project.trim(), domain.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_domain_create(
+    project: String,
+    domain: Option<String>,
+    body: Option<String>,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains", project.trim()),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        }
+    } else {
+        let mut payload = parse_cloudflare_body_values(params);
+        if let Some(domain) = domain.filter(|value| !value.trim().is_empty()) {
+            payload["name"] = Value::String(domain.trim().to_owned());
+        }
+        if payload.get("name").and_then(Value::as_str).unwrap_or("").trim().is_empty() {
+            anyhow::bail!("--domain or --param name=<fqdn> is required for create");
+        }
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains", project.trim()),
+            json_body: Some(payload),
+            ..CloudflareAPIRequest::default()
+        }
+    };
+    run_cloudflare_custom_request(
+        request,
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_pages_domain_delete(
+    project: String,
+    domain: String,
+    force: bool,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("delete pages domain requires --force");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/accounts/{{account_id}}/pages/projects/{}/domains/{}", project.trim(), domain.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_r2_object_list(
+    bucket: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects", bucket.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_r2_object_get(
+    bucket: String,
+    key: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects/{}", bucket.trim(), key.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_r2_object_put(
+    bucket: String,
+    key: String,
+    body: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "PUT".to_owned(),
+            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects/{}", bucket.trim(), key.trim()),
+            params: parse_cloudflare_key_values(params),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_r2_object_delete(
+    bucket: String,
+    key: String,
+    force: bool,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("delete r2 object requires --force");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/accounts/{{account_id}}/r2/buckets/{}/objects/{}", bucket.trim(), key.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_d1_query(
+    db: String,
+    sql: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/d1/database/{}/query", db.trim()),
+            json_body: Some(serde_json::json!({ "sql": sql.trim() })),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_d1_migration_list(
+    db: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/d1/database/{}/migrations", db.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_d1_migration_apply(
+    db: String,
+    body: Option<String>,
+    force: bool,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("apply d1 migrations requires --force");
+    }
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/d1/database/{}/migrations", db.trim()),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        }
+    } else {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/accounts/{{account_id}}/d1/database/{}/migrations", db.trim()),
+            json_body: Some(serde_json::json!({})),
+            ..CloudflareAPIRequest::default()
+        }
+    };
+    run_cloudflare_custom_request(
+        request,
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_kv_key_list(
+    namespace: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/keys", namespace.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_kv_key_get(
+    namespace: String,
+    key: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}", namespace.trim(), key.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_kv_key_put(
+    namespace: String,
+    key: String,
+    value: String,
+    body: Option<String>,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "PUT".to_owned(),
+            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}", namespace.trim(), key.trim()),
+            params: parse_cloudflare_key_values(params),
+            raw_body: body.unwrap_or(value),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_kv_key_bulk(
+    namespace: String,
+    body: String,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "PUT".to_owned(),
+            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/bulk", namespace.trim()),
+            params: parse_cloudflare_key_values(params),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_kv_key_delete(
+    namespace: String,
+    key: String,
+    force: bool,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("delete kv key requires --force");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/accounts/{{account_id}}/storage/kv/namespaces/{}/values/{}", namespace.trim(), key.trim()),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_tunnel_token(
+    tunnel: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/accounts/{{account_id}}/cfd_tunnel/{}/token", tunnel.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_tls_setting_get(
+    setting: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: format!("/zones/{{zone_id}}/settings/{}", setting.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_tls_setting_set(
+    setting: String,
+    value: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "PATCH".to_owned(),
+            path: format!("/zones/{{zone_id}}/settings/{}", setting.trim()),
+            json_body: Some(serde_json::json!({ "value": value.trim() })),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_email_settings_get(
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: "/zones/{zone_id}/email/routing".to_owned(),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_email_settings_toggle(
+    action: &str,
+    force: bool,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("email settings {} requires --force", action);
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: format!("/zones/{{zone_id}}/email/routing/{}", action),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_origin_cert_list(
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "GET".to_owned(),
+            path: "/certificates".to_owned(),
+            params: parse_cloudflare_key_values(params),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_origin_cert_create(
+    body: Option<String>,
+    json: bool,
+    raw: bool,
+    params: Vec<String>,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    let request = if let Some(body) = body.filter(|value| !value.trim().is_empty()) {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: "/certificates".to_owned(),
+            raw_body: body,
+            ..CloudflareAPIRequest::default()
+        }
+    } else {
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: "/certificates".to_owned(),
+            json_body: Some(parse_cloudflare_body_values(params)),
+            ..CloudflareAPIRequest::default()
+        }
+    };
+    run_cloudflare_custom_request(
+        request,
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_origin_cert_revoke(
+    id: String,
+    force: bool,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("revoke origin cert requires --force");
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "DELETE".to_owned(),
+            path: format!("/certificates/{}", id.trim()),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_cache_purge(
+    everything: bool,
+    tags: Vec<String>,
+    hosts: Vec<String>,
+    prefixes: Vec<String>,
+    force: bool,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    if !force {
+        anyhow::bail!("purge cache requires --force");
+    }
+    if !everything && tags.is_empty() && hosts.is_empty() && prefixes.is_empty() {
+        anyhow::bail!("specify --everything or at least one --tag/--host/--prefix");
+    }
+    let mut body = serde_json::Map::new();
+    if everything {
+        body.insert("purge_everything".to_owned(), Value::Bool(true));
+    }
+    if !tags.is_empty() {
+        body.insert("tags".to_owned(), Value::Array(tags.into_iter().map(Value::String).collect()));
+    }
+    if !hosts.is_empty() {
+        body.insert("hosts".to_owned(), Value::Array(hosts.into_iter().map(Value::String).collect()));
+    }
+    if !prefixes.is_empty() {
+        body.insert("prefixes".to_owned(), Value::Array(prefixes.into_iter().map(Value::String).collect()));
+    }
+    run_cloudflare_custom_request(
+        CloudflareAPIRequest {
+            method: "POST".to_owned(),
+            path: "/zones/{zone_id}/purge_cache".to_owned(),
+            json_body: Some(Value::Object(body)),
+            ..CloudflareAPIRequest::default()
+        },
+        json, raw, account, environment, zone_id, zone, api_token, base_url, account_id, home,
+        settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_cache_setting_get(
+    setting: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_tls_setting_get(
+        setting, json, raw, account, environment, zone_id, zone, api_token, base_url,
+        account_id, home, settings_file,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_cloudflare_cache_setting_set(
+    setting: String,
+    value: String,
+    json: bool,
+    raw: bool,
+    account: Option<String>,
+    environment: Option<String>,
+    zone_id: Option<String>,
+    zone: Option<String>,
+    api_token: Option<String>,
+    base_url: Option<String>,
+    account_id: Option<String>,
+    home: Option<PathBuf>,
+    settings_file: Option<PathBuf>,
+) -> Result<()> {
+    run_cloudflare_tls_setting_set(
+        setting, value, json, raw, account, environment, zone_id, zone, api_token, base_url,
+        account_id, home, settings_file,
+    )
 }
 
 fn parse_oci_raw_service(value: &str) -> Result<OCIAPIService> {
